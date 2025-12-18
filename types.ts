@@ -53,6 +53,16 @@ export interface Note {
   mentions: string[];
 }
 
+export interface CustomerRequest {
+  id: string;
+  title: string;
+  description: string;
+  customerName: string;
+  createdAt: string;
+  status: 'New' | 'Converted' | 'Rejected';
+  convertedTaskId?: string;
+}
+
 export enum View {
   Tasks,
   Resources,
@@ -60,6 +70,7 @@ export enum View {
   Timeline,
   Kanban,
   Notes,
+  Requests,
 }
 
 export interface UnitLoad {
@@ -89,6 +100,7 @@ export interface ProjectData {
   resources: Resource[];
   workPackages: WorkPackage[];
   notes: Note[];
+  customerRequests?: CustomerRequest[];
   settings: {
     sprintDuration: number;
     projectStartDate: string;

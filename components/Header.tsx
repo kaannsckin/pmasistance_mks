@@ -9,6 +9,7 @@ interface HeaderProps {
   onSaveProject: () => void;
   onLoadProject: (file: File) => void;
   isLocalPersistenceEnabled?: boolean;
+  onOpenAbout?: () => void;
 }
 
 const NavItem: React.FC<{
@@ -31,7 +32,7 @@ const NavItem: React.FC<{
   </button>
 );
 
-const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSettings, onSaveProject, onLoadProject, isLocalPersistenceEnabled = true }) => {
+const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSettings, onSaveProject, onLoadProject, isLocalPersistenceEnabled = true, onOpenAbout }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
@@ -91,8 +92,9 @@ const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSett
 
           {/* Orta Kısım: Navigasyon */}
           <nav className="flex items-center space-x-1">
-            <NavItem view={View.Tasks} currentView={currentView} setCurrentView={setCurrentView} icon="fa-list-check" label="Görevler" />
             <NavItem view={View.Kanban} currentView={currentView} setCurrentView={setCurrentView} icon="fa-columns" label="Pano" />
+            <NavItem view={View.Tasks} currentView={currentView} setCurrentView={setCurrentView} icon="fa-list-check" label="Görevler" />
+            <NavItem view={View.Requests} currentView={currentView} setCurrentView={setCurrentView} icon="fa-users-viewfinder" label="İstekler" />
             <NavItem view={View.Timeline} currentView={currentView} setCurrentView={setCurrentView} icon="fa-chart-pie" label="Analiz" />
             <NavItem view={View.Resources} currentView={currentView} setCurrentView={setCurrentView} icon="fa-users-gear" label="Ekip" />
             <NavItem view={View.WorkPackages} currentView={currentView} setCurrentView={setCurrentView} icon="fa-briefcase" label="Paketler" />
@@ -111,8 +113,12 @@ const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSett
                 </button>
             </div>
 
-            <button onClick={onOpenSettings} className="p-2.5 bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-300 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-all">
+            <button onClick={onOpenSettings} className="p-2.5 bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-300 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-all" title="Ayarlar">
               <i className="fa-solid fa-sliders"></i>
+            </button>
+
+            <button onClick={onOpenAbout} className="p-2.5 bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-300 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-all" title="Hakkında & GitHub Rehberi">
+              <i className="fa-solid fa-circle-info"></i>
             </button>
 
             {deferredPrompt && (

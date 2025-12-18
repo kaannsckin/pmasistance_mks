@@ -1,18 +1,34 @@
 
+# PlanAsistan - Akıllı Proje Planlama Aracı
 
-# Run and deploy your AI Studio app
+PlanAsistan, PERT ve Bulanık Mantık (Fuzzy PERT) yöntemlerini kullanarak proje görevlerini otomatik olarak planlayan, kaynakları yöneten ve sürüm takvimi oluşturan gelişmiş bir web uygulamasıdır.
 
-This contains everything you need to run your app locally.
+## 🚀 GitHub Üzerinden Canlı Kullanım (Deployment)
 
-View your app in AI Studio: https://ai.studio/apps/drive/1YjAju6PulC5z8W-OFz75z2JTxnxp6erx
+Bu uygulamayı GitHub üzerinden canlıya almak ve bir web sitesi gibi kullanmak için şu adımları izleyin:
 
-## Run Locally
+1.  **GitHub Pages'i Etkinleştirin:**
+    - GitHub deponuzun (repository) üst menüsünden **Settings** sekmesine gidin.
+    - Sol sütundan **Pages** seçeneğine tıklayın.
+    - **Branch** kısmından `main` (veya kodlarınızın olduğu ana dal) seçin ve yanındaki klasörü `/(root)` olarak bırakıp **Save** deyin.
+    
+2.  **Erişim:**
+    - Birkaç dakika sonra sayfanın üstünde "Your site is live at..." şeklinde bir link belirecektir. Uygulamanıza bu link üzerinden her yerden erişebilirsiniz.
 
-**Prerequisites:**  Node.js
+## ✨ Temel Özellikler
 
+- **Otomatik Planlama:** PERT algoritması ile görevleri en verimli sürüm (sprint) takvimine yerleştirir.
+- **Kanban Panosu:** Sürüm bazlı, sürükle-bırak destekli görsel görev yönetimi.
+- **Analiz & Zaman Çizelgesi:** Proje bitiş tarihini ve kritik yolu hesaplayan Gantt şeması.
+- **Akıllı Notlar:** `#anımsatıcı` etiketi ile notlarınızdan otomatik hatırlatıcılar oluşturun.
+- **Excel & Jira Desteği:** Verilerinizi Excel veya Jira formatında içe/dışa aktarın.
+- **PWA Desteği:** Bilgisayarınıza veya telefonunuza uygulama olarak yükleyip çevrimdışı kullanabilirsiniz.
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## 🛠️ Yerel Geliştirme
+
+Projeyi kendi bilgisayarınızda çalıştırmak isterseniz:
+1. Depoyu indirin: `git clone https://github.com/kullaniciadi/depo-adi.git`
+2. Bir web sunucusu ile (örn: VS Code Live Server) `index.html` dosyasını açın.
+
+---
+*Bu proje modern web standartları (ES6+, Tailwind CSS) kullanılarak build işlemine gerek kalmadan çalışacak şekilde tasarlanmıştır.*
