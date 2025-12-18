@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Task, Resource, TaskStatus, WorkPackage } from '../types';
 import TaskCard from './TaskCard';
@@ -14,11 +15,12 @@ interface TaskGalleryProps {
   onViewTask: (task: Task) => void;
   onNotifyTask: (task: Task) => void;
   onNewTask: () => void;
+  onDeleteTask: (taskId: string) => void;
   onDataImport: (tasks: Task[], resources: Resource[]) => void;
   onTaskStatusChange: (taskId: string, newStatus: TaskStatus) => void;
 }
 
-const TaskGallery: React.FC<TaskGalleryProps> = ({ tasks, resources, workPackages, onEditTask, onViewTask, onNotifyTask, onNewTask, onDataImport, onTaskStatusChange }) => {
+const TaskGallery: React.FC<TaskGalleryProps> = ({ tasks, resources, workPackages, onEditTask, onViewTask, onNotifyTask, onNewTask, onDeleteTask, onDataImport, onTaskStatusChange }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterUnit, setFilterUnit] = useState('all');
   const [filterResource, setFilterResource] = useState('all');
@@ -269,6 +271,7 @@ const TaskGallery: React.FC<TaskGalleryProps> = ({ tasks, resources, workPackage
               onEdit={onEditTask}
               onView={onViewTask}
               onNotify={onNotifyTask}
+              onDelete={onDeleteTask}
               onStatusChange={onTaskStatusChange}
             />
           ))}

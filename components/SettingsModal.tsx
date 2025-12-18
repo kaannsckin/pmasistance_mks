@@ -5,7 +5,8 @@ interface SettingsModalProps {
   sprintDuration: number;
   projectStartDate: string;
   isLocalPersistenceEnabled: boolean;
-  onSave: (duration: number, date: string, enabled: boolean) => void;
+  isAIEnabled: boolean;
+  onSave: (duration: number, date: string, enabled: boolean, aiEnabled: boolean) => void;
   onClose: () => void;
   onResetData?: () => void;
 }
@@ -14,6 +15,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   sprintDuration,
   projectStartDate,
   isLocalPersistenceEnabled,
+  isAIEnabled,
   onSave,
   onClose,
   onResetData
@@ -21,15 +23,17 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   const [duration, setDuration] = useState(sprintDuration);
   const [startDate, setStartDate] = useState(projectStartDate);
   const [persistenceEnabled, setPersistenceEnabled] = useState(isLocalPersistenceEnabled);
+  const [aiEnabled, setAiEnabled] = useState(isAIEnabled);
 
   useEffect(() => {
     setDuration(sprintDuration);
     setStartDate(projectStartDate);
     setPersistenceEnabled(isLocalPersistenceEnabled);
-  }, [sprintDuration, projectStartDate, isLocalPersistenceEnabled]);
+    setAiEnabled(isAIEnabled);
+  }, [sprintDuration, projectStartDate, isLocalPersistenceEnabled, isAIEnabled]);
 
   const handleSave = () => {
-    onSave(duration, startDate, persistenceEnabled);
+    onSave(duration, startDate, persistenceEnabled, aiEnabled);
   };
 
   const handleReset = () => {
@@ -83,23 +87,39 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
 
           <div className="pt-6 border-t dark:border-gray-700">
-              <h3 className="text-xs font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-4">Veri & Depolama</h3>
+              <h3 className="text-xs font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-4">Özellikler & Veri</h3>
               
-              <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-100 dark:border-gray-700">
-                <div className="flex flex-col">
-                    <span className="text-sm font-bold text-gray-800 dark:text-white">Yerel Kayıt (Persistence)</span>
-                    <span className="text-[10px] text-gray-500 dark:text-gray-400">Verileri tarayıcı hafızasına otomatik kaydet.</span>
+              <div className="space-y-3">
+                {/* AI Toggle */}
+                <div className="flex items-center justify-between p-3 bg-indigo-50/50 dark:bg-indigo-900/10 rounded-xl border border-indigo-100 dark:border-indigo-800/50">
+                  <div className="flex flex-col">
+                      <span className="text-sm font-bold text-indigo-900 dark:text-indigo-200">Yapay Zeka Özelliği</span>
+                      <span className="text-[10px] text-indigo-500 dark:text-indigo-400">Gemini Pro asistanını aktif et.</span>
+                  </div>
+                  <button 
+                    onClick={() => setAiEnabled(!aiEnabled)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${aiEnabled ? 'bg-indigo-600' : 'bg-gray-300 dark:bg-gray-600'}`}
+                  >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${aiEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                  </button>
                 </div>
-                <button 
-                  onClick={() => setPersistenceEnabled(!persistenceEnabled)}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${persistenceEnabled ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'}`}
-                >
-                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${persistenceEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
-                </button>
+
+                {/* Persistence Toggle */}
+                <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-100 dark:border-gray-700">
+                  <div className="flex flex-col">
+                      <span className="text-sm font-bold text-gray-800 dark:text-white">Yerel Kayıt (Persistence)</span>
+                      <span className="text-[10px] text-gray-500 dark:text-gray-400">Verileri tarayıcı hafızasına kaydet.</span>
+                  </div>
+                  <button 
+                    onClick={() => setPersistenceEnabled(!persistenceEnabled)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${persistenceEnabled ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'}`}
+                  >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${persistenceEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                  </button>
+                </div>
               </div>
 
-              <div className="mt-4 space-y-3">
-                  <p className="text-[10px] text-gray-500 italic">Verileriniz bu tarayıcıda yerel olarak saklanmaktadır. Cihaz değiştirirken yedek almayı unutmayın.</p>
+              <div className="mt-6 space-y-3">
                   <button 
                     onClick={handleReset}
                     className="w-full py-2.5 px-4 rounded-xl border border-red-200 dark:border-red-900/30 text-red-600 dark:text-red-400 text-sm font-bold hover:bg-red-50 dark:hover:bg-red-900/10 transition-colors flex items-center justify-center"

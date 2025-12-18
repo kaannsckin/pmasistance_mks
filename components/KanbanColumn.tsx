@@ -9,6 +9,7 @@ interface KanbanColumnProps {
   onDropTask: (taskId: string, newVersion: number) => void;
   onTaskStatusChange: (taskId: string, newStatus: TaskStatus) => void;
   onDelete: (sprint: Sprint) => void;
+  onCollapse?: () => void;
   isDragged: boolean;
   isCompact: boolean;
   onSprintDragStart: (sprintId: number) => void;
@@ -17,9 +18,9 @@ interface KanbanColumnProps {
   onViewTaskDetails: (taskId: string) => void;
 }
 
-const KanbanColumn: React.FC<KanbanColumnProps> = ({ sprint, workPackages, onDropTask, onTaskStatusChange, onDelete, isDragged, isCompact, onSprintDragStart, onSprintDragEnd, onSprintDrop, onViewTaskDetails }) => {
+const KanbanColumn: React.FC<KanbanColumnProps> = ({ sprint, workPackages, onDropTask, onTaskStatusChange, onDelete, onCollapse, isDragged, isCompact, onSprintDragStart, onSprintDragEnd, onSprintDrop, onViewTaskDetails }) => {
   const [isOver, setIsOver] = useState(false);
-  const [isHeaderExpanded, setIsHeaderExpanded] = useState(false); // Değişti: Sürüm detayları varsayılan olarak kapalı gelir
+  const [isHeaderExpanded, setIsHeaderExpanded] = useState(false);
 
   const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); setIsOver(true); };
   const handleDragLeave = () => setIsOver(false);
@@ -52,6 +53,11 @@ const KanbanColumn: React.FC<KanbanColumnProps> = ({ sprint, workPackages, onDro
           </div>
           
           <div className="flex items-center space-x-1">
+            {sprint.id === 0 && onCollapse && (
+              <button onClick={onCollapse} className="text-gray-300 hover:text-amber-500 p-1.5 transition-colors" title="Backlog'u Daralt">
+                <i className="fa-solid fa-chevron-left text-[10px]"></i>
+              </button>
+            )}
             {sprint.id !== 0 && (
               <button onClick={() => onDelete(sprint)} className="text-gray-300 hover:text-red-500 p-1.5 transition-colors" title="Sürümü Sil">
                 <i className="fa-solid fa-trash-can text-[10px]"></i>

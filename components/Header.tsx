@@ -9,6 +9,7 @@ interface HeaderProps {
   onSaveProject: () => void;
   onLoadProject: (file: File) => void;
   isLocalPersistenceEnabled?: boolean;
+  isAIEnabled?: boolean;
   onOpenAbout?: () => void;
 }
 
@@ -18,21 +19,26 @@ const NavItem: React.FC<{
   setCurrentView: (view: View) => void;
   icon: string;
   label: string;
-}> = ({ view, currentView, setCurrentView, icon, label }) => (
+  isSpecial?: boolean;
+}> = ({ view, currentView, setCurrentView, icon, label, isSpecial }) => (
   <button
     onClick={() => setCurrentView(view)}
     className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
       currentView === view
-        ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 dark:shadow-none'
-        : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+        ? isSpecial 
+          ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 dark:shadow-none'
+          : 'bg-blue-600 text-white shadow-lg shadow-blue-200 dark:shadow-none'
+        : isSpecial
+          ? 'text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 font-black'
+          : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
     }`}
   >
-    <i className={`fa-solid ${icon} ${currentView === view ? 'text-white' : 'text-blue-500'}`}></i>
+    <i className={`fa-solid ${icon} ${currentView === view ? 'text-white' : isSpecial ? 'text-indigo-500' : 'text-blue-500'}`}></i>
     <span className="hidden lg:inline">{label}</span>
   </button>
 );
 
-const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSettings, onSaveProject, onLoadProject, isLocalPersistenceEnabled = true, onOpenAbout }) => {
+const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSettings, onSaveProject, onLoadProject, isLocalPersistenceEnabled = true, isAIEnabled = true, onOpenAbout }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
@@ -92,6 +98,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSett
 
           {/* Orta Kısım: Navigasyon */}
           <nav className="flex items-center space-x-1">
+            {isAIEnabled && <NavItem view={View.AI} currentView={currentView} setCurrentView={setCurrentView} icon="fa-wand-magic-sparkles" label="Zekâ" isSpecial />}
             <NavItem view={View.Kanban} currentView={currentView} setCurrentView={setCurrentView} icon="fa-columns" label="Pano" />
             <NavItem view={View.Tasks} currentView={currentView} setCurrentView={setCurrentView} icon="fa-list-check" label="Görevler" />
             <NavItem view={View.Requests} currentView={currentView} setCurrentView={setCurrentView} icon="fa-users-viewfinder" label="İstekler" />

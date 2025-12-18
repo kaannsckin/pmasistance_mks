@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Task, TaskStatus, WorkPackage } from '../types';
 import { STATUS_STYLES, STATUS_LABELS } from '../constants';
@@ -8,6 +9,7 @@ interface TaskCardProps {
   onView: (task: Task) => void;
   onEdit: (task: Task) => void;
   onNotify: (task: Task) => void;
+  onDelete: (taskId: string) => void;
   onStatusChange: (taskId: string, newStatus: TaskStatus) => void;
 }
 
@@ -18,7 +20,7 @@ const PRIORITY_STYLES = {
   Low: 'bg-gray-50 text-gray-700 border-gray-200',
 };
 
-const TaskCard: React.FC<TaskCardProps> = ({ task, workPackages, onView, onEdit, onNotify, onStatusChange }) => {
+const TaskCard: React.FC<TaskCardProps> = ({ task, workPackages, onView, onEdit, onNotify, onDelete, onStatusChange }) => {
     const isDataMissing = task.time.avg === 0;
     const jiraUrl = task.jiraId ? `https://jira.bilgem.tubitak.gov.tr/browse/${task.jiraId}` : '#';
     const workPackage = workPackages.find(wp => wp.id === task.workPackageId);
@@ -109,6 +111,9 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, workPackages, onView, onEdit,
                     </button>
                     <button onClick={() => onEdit(task)} title="Düzenle" className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-green-100 text-gray-500 hover:text-green-600 transition-colors">
                         <i className="fa-solid fa-pencil text-xs"></i>
+                    </button>
+                    <button onClick={() => onDelete(task.id)} title="Sil" className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-red-100 text-gray-500 hover:text-red-600 transition-colors">
+                        <i className="fa-solid fa-trash-can text-xs"></i>
                     </button>
                 </div>
             </div>

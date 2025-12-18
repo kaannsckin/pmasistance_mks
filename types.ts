@@ -33,7 +33,7 @@ export interface Task {
   status: TaskStatus;
   workPackageId?: string;
   labels?: string[];
-  includeInSprints?: boolean; // Default to true if undefined
+  includeInSprints?: boolean;
 }
 
 export interface Resource {
@@ -51,6 +51,7 @@ export interface Note {
   year: number;
   tags: string[];
   mentions: string[];
+  lineUpdates?: Record<number, string>; // Satır indeksi -> Güncelleme metni
 }
 
 export interface CustomerRequest {
@@ -63,6 +64,23 @@ export interface CustomerRequest {
   convertedTaskId?: string;
 }
 
+// Added missing Sprint interface to resolve import errors in Kanban and Exporter modules
+export interface Sprint {
+  id: number;
+  title: string;
+  tasks: Task[];
+  unitLoads: Record<string, UnitLoad>;
+  startDate?: string;
+  endDate?: string;
+  testPeriod?: {
+    startDate: string;
+    endDate: string;
+    responsible?: string;
+    assignedTaskIds?: string[];
+    foundDefects?: string;
+  };
+}
+
 export enum View {
   Tasks,
   Resources,
@@ -71,28 +89,13 @@ export enum View {
   Kanban,
   Notes,
   Requests,
+  AI,
 }
 
 export interface UnitLoad {
   currentLoad: number;
   completedLoad: number;
   capacity: number;
-}
-
-export interface Sprint {
-  id: number;
-  title: string;
-  tasks: Task[];
-  unitLoads: Record<string, UnitLoad>; // Birim bazında yük ve kapasite
-  startDate?: string;
-  endDate?: string;
-  testPeriod?: {
-    startDate?: string;
-    endDate?: string;
-    responsible?: string;
-    assignedTaskIds?: string[];
-    foundDefects?: string;
-  };
 }
 
 export interface ProjectData {
@@ -105,6 +108,8 @@ export interface ProjectData {
     sprintDuration: number;
     projectStartDate: string;
     isLocalPersistenceEnabled?: boolean;
+    isAIEnabled?: boolean;
+    tagColors?: Record<string, string>; // Etiket bazlı renk tanımları
   };
   appVersion: string;
   exportDate: string;

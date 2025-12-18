@@ -1,3 +1,4 @@
+
 import { Task, Resource, TimeEstimate, TaskStatus } from '../types';
 
 // Make Papa and XLSX available from window object
@@ -91,7 +92,7 @@ export const parseJiraCsv = (fileContent: string): { tasks: Task[], resources: R
             predecessor: null,
             time: { best: 0, avg: 0, worst: 0 },
             status: TaskStatus.Backlog,
-            includeInSprints: true,
+            includeInSprints: false, // Default changed to false for imported tasks
         };
         tasks.push(task);
         
@@ -172,7 +173,7 @@ const processDataArray = (data: (string|number)[][]): { tasks: Task[], resources
             jiraId: getCell(colMap.jiraId) || '',
             notes: getCell(colMap.notes) || '',
             status: finalVersion === 0 ? TaskStatus.Backlog : TaskStatus.ToDo,
-            includeInSprints: true,
+            includeInSprints: false, // Default changed to false for imported tasks
         };
         tasks.push(task);
         

@@ -58,10 +58,57 @@ const getNextWorkday = (date: Date): Date => {
     return nextDay;
 };
 
+const BacklogTab: React.FC<{ count: number, onClick: () => void, onDrop: (taskId: string) => void }> = ({ count, onClick, onDrop }) => {
+    const [isOver, setIsOver] = useState(false);
+    return (
+        <div 
+            className={`bg-amber-50 dark:bg-amber-900/20 w-12 rounded-2xl border-2 flex flex-col items-center py-8 cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-all group shrink-0 h-full relative overflow-hidden ${isOver ? 'border-amber-400 bg-amber-100' : 'border-amber-100 dark:border-amber-800/30 shadow-sm'}`}
+            onClick={onClick}
+            onDragOver={(e) => { e.preventDefault(); setIsOver(true); }}
+            onDragLeave={() => setIsOver(false)}
+            onDrop={(e) => {
+                e.preventDefault();
+                setIsOver(false);
+                const taskId = e.dataTransfer.getData('taskId');
+                if (taskId) onDrop(taskId);
+            }}
+        >
+            {/* Arka Plan Dekoru */}
+            <div className="absolute top-0 left-0 w-full h-1 bg-amber-400 opacity-50"></div>
+
+            <div className="flex flex-col items-center justify-center h-full space-y-8">
+                {/* İkon */}
+                <div className="text-amber-600 dark:text-amber-400 text-lg">
+                    <i className="fa-solid fa-box-archive"></i>
+                </div>
+
+                {/* Metin (Dikey Hizalanmış) */}
+                <div 
+                    className="flex items-center font-black text-[11px] tracking-[0.4em] text-amber-600 dark:text-amber-400 uppercase"
+                    style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
+                >
+                    BACKLOG
+                </div>
+
+                {/* Sayaç Rozeti */}
+                <div className="bg-amber-500 text-white w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-black shadow-sm ring-4 ring-amber-50 dark:ring-amber-900/20">
+                    {count}
+                </div>
+            </div>
+
+            {/* Hover İpucu */}
+            <div className="mt-auto pb-4 text-amber-400 animate-pulse group-hover:scale-110 transition-transform">
+                <i className="fa-solid fa-angles-right"></i>
+            </div>
+        </div>
+    );
+};
+
 const KanbanView: React.FC<KanbanViewProps> = ({ tasks, resources, workPackages, sprintDuration, projectStartDate, onPlanGenerated, onTaskSprintChange, onTaskStatusChange, onInsertSprint, onDeleteSprint, onOpenSettings, onViewTaskDetails }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [isFilterExpanded, setIsFilterExpanded] = useState(false);
   const [isCompact, setIsCompact] = useState(true); 
+  const [isBacklogExpanded, setIsBacklogExpanded] = useState(false);
   const [testPeriodDetails, setTestPeriodDetails] = useState<Record<number, { responsible?: string; assignedTaskIds?: string[]; foundDefects?: string }>>({});
   const [sprintToDelete, setSprintToDelete] = useState<Sprint | null>(null);
   const [orderedSprints, setOrderedSprints] = useState<Sprint[]>([]);
@@ -307,33 +354,38 @@ const KanbanView: React.FC<KanbanViewProps> = ({ tasks, resources, workPackages,
           {orderedSprints.map((sprint, idx) => (
             <React.Fragment key={sprint.id}>
               {/* Sütunlar arası ekleme alanı */}
-              <AddSprintColumn onClick={() => handleAddSprint(sprint.id)} />
+              {sprint.id !== 0 && <AddSprintColumn onClick={() => handleAddSprint(sprint.id)} />}
               
               <div className="h-full flex flex-col group/col">
                   <div className="flex items-start h-full">
-                    <KanbanColumn 
-                        sprint={sprint}
-                        workPackages={workPackages}
-                        onDropTask={handleDrop}
-                        onTaskStatusChange={onTaskStatusChange}
-                        onDelete={setSprintToDelete}
-                        isDragged={draggedSprintId === sprint.id}
-                        isCompact={isCompact}
-                        onSprintDragStart={setDraggedSprintId}
-                        onSprintDragEnd={() => setDraggedSprintId(null)}
-                        onSprintDrop={(target) => {
-                        setOrderedSprints(current => {
-                            const idxA = current.findIndex(s => s.id === draggedSprintId);
-                            const idxB = current.findIndex(s => s.id === target);
-                            if (idxA === -1 || idxB === -1) return current;
-                            const result = [...current];
-                            const [removed] = result.splice(idxA, 1);
-                            result.splice(idxB, 0, removed);
-                            return result;
-                        });
-                        }}
-                        onViewTaskDetails={onViewTaskDetails}
-                    />
+                    {sprint.id === 0 && !isBacklogExpanded ? (
+                        <BacklogTab count={sprint.tasks.length} onClick={() => setIsBacklogExpanded(true)} onDrop={(tid) => handleDrop(tid, 0)} />
+                    ) : (
+                        <KanbanColumn 
+                            sprint={sprint}
+                            workPackages={workPackages}
+                            onDropTask={handleDrop}
+                            onTaskStatusChange={onTaskStatusChange}
+                            onDelete={setSprintToDelete}
+                            onCollapse={() => sprint.id === 0 && setIsBacklogExpanded(false)}
+                            isDragged={draggedSprintId === sprint.id}
+                            isCompact={isCompact}
+                            onSprintDragStart={setDraggedSprintId}
+                            onSprintDragEnd={() => setDraggedSprintId(null)}
+                            onSprintDrop={(target) => {
+                            setOrderedSprints(current => {
+                                const idxA = current.findIndex(s => s.id === draggedSprintId);
+                                const idxB = current.findIndex(s => s.id === target);
+                                if (idxA === -1 || idxB === -1) return current;
+                                const result = [...current];
+                                const [removed] = result.splice(idxA, 1);
+                                result.splice(idxB, 0, removed);
+                                return result;
+                            });
+                            }}
+                            onViewTaskDetails={onViewTaskDetails}
+                        />
+                    )}
                     
                     {/* Test Fazı ve Bağımlılık Alanı */}
                     {sprint.id > 0 && (
