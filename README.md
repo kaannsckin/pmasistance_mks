@@ -4,16 +4,13 @@
 PlanAsistan MKS; proje görevlerini PERT/Fuzzy PERT yaklaşımıyla planlayan, sprint bazlı Kanban yönetimi sunan ve ekip/kaynak takibini tek ekranda birleştiren bir web uygulamasıdır. Görevler, kaynaklar, iş paketleri, müşteri istekleri ve notlar birbirine bağlı çalışır; AI asistanı da bu verileri kullanarak içgörü ve özetler üretir.
 
 PlanAsistan, PERT ve Bulanık Mantık (Fuzzy PERT) yöntemlerini kullanarak proje görevlerini otomatik olarak planlayan, kaynakları yöneten ve sürüm takvimi oluşturan gelişmiş bir web uygulamasıdır.
-## ✅ Neden PlanAsistan?
+## 🖼️ Uygulama Görseli
 
 ## 🚀 GitHub Üzerinden Canlı Kullanım (Deployment)
-- **Planlama netliği**: Görevlerin süre tahminleri ve bağımlılıklarıyla daha gerçekçi takvimler.
-- **Sprint görünürlüğü**: Sprint sütunları, test periyodu ve sürükle-bırak kartlar.
-- **Ekip yönetimi**: Kaynak kapasitesi, ünvan bazlı maliyetler ve görev dağılımı.
-- **Tek merkez**: Görevler, istekler, notlar ve iş paketleri aynı arayüzde.
+![PlanAsistan MKS ana ekran](docs/planasistan-home.jpg)
 
 Bu uygulamayı GitHub üzerinden canlıya almak ve bir web sitesi gibi kullanmak için şu adımları izleyin:
-## ✨ Öne Çıkan Özellikler
+## ✅ Neden PlanAsistan?
 
 1.  **GitHub Pages'i Etkinleştirin:**
     - GitHub deponuzun (repository) üst menüsünden **Settings** sekmesine gidin.
@@ -22,6 +19,33 @@ Bu uygulamayı GitHub üzerinden canlıya almak ve bir web sitesi gibi kullanmak
     
 2.  **Erişim:**
     - Birkaç dakika sonra sayfanın üstünde "Your site is live at..." şeklinde bir link belirecektir. Uygulamanıza bu link üzerinden her yerden erişebilirsiniz.
+- **Planlama netliği**: Görevlerin süre tahminleri ve bağımlılıklarıyla daha gerçekçi takvimler.
+- **Sprint görünürlüğü**: Sprint sütunları, test periyodu ve sürükle-bırak kartlar.
+- **Ekip yönetimi**: Kaynak kapasitesi, ünvan bazlı maliyetler ve görev dağılımı.
+- **Tek merkez**: Görevler, istekler, notlar ve iş paketleri aynı arayüzde.
+
+## ✨ Temel Özellikler
+## 🧩 İşlevler ve Faydalar
+
+- **Otomatik Planlama:** PERT algoritması ile görevleri en verimli sürüm (sprint) takvimine yerleştirir.
+- **Kanban Panosu:** Sürüm bazlı, sürükle-bırak destekli görsel görev yönetimi.
+- **Analiz & Zaman Çizelgesi:** Proje bitiş tarihini ve kritik yolu hesaplayan Gantt şeması.
+- **Akıllı Notlar:** `#anımsatıcı` etiketi ile notlarınızdan otomatik hatırlatıcılar oluşturun.
+- **Excel & Jira Desteği:** Verilerinizi Excel veya Jira formatında içe/dışa aktarın.
+- **PWA Desteği:** Bilgisayarınıza veya telefonunuza uygulama olarak yükleyip çevrimdışı kullanabilirsiniz.
+- **PERT/Fuzzy PERT planlama**: Belirsiz süreleri daha doğru ele alarak planlama riskini azaltır.
+- **Kanban + sprint akışı**: Sürüm odaklı ilerleme ile teslim tarihlerini görünür kılar.
+- **Ekip kapasite dengesi**: Kaynak ve ünvan maliyetleri ile gerçekçi planlama yapmanızı sağlar.
+- **Müşteri istekleri yönetimi**: Talepleri hızlıca görevleştirip backlog’a ekleyebilirsiniz.
+- **Notlar ve hatırlatıcılar**: Gündelik kararları tek yerde toplayarak ekip hafızasını güçlendirir.
+- **AI destekli analiz**: Görev/kaynak verilerinden özet, risk ve öncelik önerileri üretir.
+
+## 🛠️ Yerel Geliştirme
+## ✨ Öne Çıkan Özellikler
+
+Projeyi kendi bilgisayarınızda çalıştırmak isterseniz:
+1. Depoyu indirin: `git clone https://github.com/kullaniciadi/depo-adi.git`
+2. Bir web sunucusu ile (örn: VS Code Live Server) `index.html` dosyasını açın.
 - **Akıllı planlama**: PERT tabanlı planlama, kritik yol ve zaman çizelgesi görünümü.
 - **Kanban ve sprint yönetimi**: Sprint sütunları + test dönemi ile release planlama.
 - **Görev galerisi**: Durum/etiket filtreleri, hızlı düzenleme ve detay modalı.
@@ -33,15 +57,10 @@ Bu uygulamayı GitHub üzerinden canlıya almak ve bir web sitesi gibi kullanmak
 - **AI asistanı**: Google Gemini ile proje verilerine dayalı analiz ve öneriler.
 - **PWA desteği**: Manifest + Service Worker ile çevrimdışı kullanım.
 
-## ✨ Temel Özellikler
+---
+*Bu proje modern web standartları (ES6+, Tailwind CSS) kullanılarak build işlemine gerek kalmadan çalışacak şekilde tasarlanmıştır.*
 ## 🧭 Hızlı Başlangıç
 
-- **Otomatik Planlama:** PERT algoritması ile görevleri en verimli sürüm (sprint) takvimine yerleştirir.
-- **Kanban Panosu:** Sürüm bazlı, sürükle-bırak destekli görsel görev yönetimi.
-- **Analiz & Zaman Çizelgesi:** Proje bitiş tarihini ve kritik yolu hesaplayan Gantt şeması.
-- **Akıllı Notlar:** `#anımsatıcı` etiketi ile notlarınızdan otomatik hatırlatıcılar oluşturun.
-- **Excel & Jira Desteği:** Verilerinizi Excel veya Jira formatında içe/dışa aktarın.
-- **PWA Desteği:** Bilgisayarınıza veya telefonunuza uygulama olarak yükleyip çevrimdışı kullanabilirsiniz.
 1. **Bağımlılıkları yükleyin**
    ```bash
    npm install
@@ -52,19 +71,13 @@ Bu uygulamayı GitHub üzerinden canlıya almak ve bir web sitesi gibi kullanmak
    ```
 3. Tarayıcıda `http://localhost:5173` adresine gidin.
 
-## 🛠️ Yerel Geliştirme
 ## 🧰 Teknoloji Yığını
 
-Projeyi kendi bilgisayarınızda çalıştırmak isterseniz:
-1. Depoyu indirin: `git clone https://github.com/kullaniciadi/depo-adi.git`
-2. Bir web sunucusu ile (örn: VS Code Live Server) `index.html` dosyasını açın.
 - **React 19 + TypeScript**
 - **Vite** (geliştirme ve build)
 - **Tailwind CSS** (yardımcı sınıf yaklaşımı)
 - **Google Gemini SDK** (`@google/genai`)
 
----
-*Bu proje modern web standartları (ES6+, Tailwind CSS) kullanılarak build işlemine gerek kalmadan çalışacak şekilde tasarlanmıştır.*
 ## 🚀 Kurulum & Çalıştırma
 
 ### Gereksinimler
