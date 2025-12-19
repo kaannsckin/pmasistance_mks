@@ -3,6 +3,7 @@ import React, { useState, useMemo, useRef } from 'react';
 import { Resource, Task } from '../types';
 import FilterDropdown from './FilterDropdown';
 import CostManager from './CostManager';
+import { exportResourcePlanToExcel } from '../utils/exporter';
 
 declare const XLSX: any;
 
@@ -24,11 +25,27 @@ const formatName = (name: string) => {
   return `${parts.join(' ')} ${last?.charAt(0).toLocaleUpperCase('tr-TR')}.`;
 };
 
+const parseExcelValue = (val: any): number => {
+    if (val === undefined || val === null || val === '') return 0;
+    if (typeof val === 'number') {
+        return val <= 1.0 && val > 0 ? Math.round(val * 100) : Math.round(val);
+    }
+    const clean = String(val).replace('%', '').trim();
+    if (clean === '') return 0;
+    const num = parseFloat(clean);
+    if (isNaN(num)) return 0;
+    if (clean.includes('.') && num <= 1.0 && !String(val).includes('%')) {
+        return Math.round(num * 100);
+    }
+    return Math.round(num);
+};
+
 const ResourceManager: React.FC<ResourceManagerProps> = ({ resources, setResources, tasks, setTasks, titleCosts, setTitleCosts }) => {
   const [activeTab, setActiveTab] = useState<'list' | 'manmonth' | 'costs'>('list');
   const [isFullScreen, setIsFullScreen] = useState(false);
-  const [editingResId, setEditingResId] = useState<string | null>(null);
-  const [tempResName, setTempResName] = useState('');
+  const [editingState, setEditingState] = useState<{ id: string, field: 'name' | 'unit' | 'title' } | null>(null);
+  const [tempValue, setTempValue] = useState('');
+  const [showHelp, setShowHelp] = useState(false);
   
   const [newResourceName, setNewResourceName] = useState('');
   const [newResourceParticipation, setNewResourceParticipation] = useState(100);
@@ -37,8 +54,6 @@ const ResourceManager: React.FC<ResourceManagerProps> = ({ resources, setResourc
   const [filterUnit, setFilterUnit] = useState('all');
   const [isImporting, setIsImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const uniqueUnits = useMemo(() => ['all', ...Array.from(new Set(resources.map(r => r.unit)))], [resources]);
 
   const filteredResources = useMemo(() => {
     if (filterUnit === 'all') return resources;
@@ -55,6 +70,12 @@ const ResourceManager: React.FC<ResourceManagerProps> = ({ resources, setResourc
       return Object.entries(groups).sort();
   }, [resources]);
 
+  const globalMonthlyTotals = useMemo(() => {
+      return Array.from({length: 12}).map((_, mIdx) => 
+          resources.reduce((sum, r) => sum + (r.monthlyPlan?.[mIdx] || 0), 0)
+      );
+  }, [resources]);
+
   const handleUpdateMonthlyValue = (resourceId: string, monthIdx: number, value: string) => {
       const numValue = parseInt(value, 10) || 0;
       setResources(prev => prev.map(r => {
@@ -69,14 +90,32 @@ const ResourceManager: React.FC<ResourceManagerProps> = ({ resources, setResourc
       }));
   };
 
-  const handleSaveName = (id: string, oldName: string) => {
-      if (!tempResName.trim() || tempResName === oldName) {
-          setEditingResId(null);
+  const handleStartEdit = (resource: Resource, field: 'name' | 'unit' | 'title') => {
+      setEditingState({ id: resource.id, field });
+      setTempValue(resource[field] || '');
+  };
+
+  const handleSaveEdit = () => {
+      if (!editingState) return;
+      const { id, field } = editingState;
+      const val = tempValue.trim();
+      if (!val) {
+          setEditingState(null);
           return;
       }
-      setResources(prev => prev.map(r => r.id === id ? { ...r, name: tempResName.trim() } : r));
-      setTasks(prev => prev.map(t => t.resourceName === oldName ? { ...t, resourceName: tempResName.trim() } : t));
-      setEditingResId(null);
+      setResources(prev => prev.map(r => {
+          if (r.id === id) {
+              if (field === 'name' && r.name !== val) {
+                  setTasks(tPrev => tPrev.map(t => t.resourceName === r.name ? { ...t, resourceName: val } : t));
+              }
+              if (field === 'unit' && r.unit !== val) {
+                  setTasks(tPrev => tPrev.map(t => t.resourceName === r.name ? { ...t, unit: val } : t));
+              }
+              return { ...r, [field]: val };
+          }
+          return r;
+      }));
+      setEditingState(null);
   };
 
   const handleImportExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -93,27 +132,63 @@ const ResourceManager: React.FC<ResourceManagerProps> = ({ resources, setResourc
 
               if (data.length < 1) throw new Error('Veri bulunamadı.');
 
-              // Mapping: İsim -> [12 ay verisi]
               const newResources = [...resources];
-              data.slice(1).forEach(row => {
-                  const name = String(row[0] || '').trim();
-                  const targetRes = newResources.find(r => r.name.toLocaleLowerCase('tr-TR') === name.toLocaleLowerCase('tr-TR'));
-                  if (targetRes) {
-                      const newPlan: Record<number, number> = {};
-                      for (let i = 0; i < 12; i++) {
-                          newPlan[i] = parseInt(row[i + 1], 10) || 0;
-                      }
-                      targetRes.monthlyPlan = newPlan;
-                      // Eğer 14. sütunda maliyet varsa ünvan maliyetini de güncelle (Opsiyonel format)
-                      if (row[13]) {
-                          setTitleCosts(prev => ({ ...prev, [targetRes.title]: parseFloat(row[13]) || 0 }));
-                      }
+              let currentUnit = 'Genel';
+              const unitKeywords = ['toplam', 'değişebilir', 'paket', 'birim', 'grup', 'idame', 'tutum', 'bileşen'];
+              const currentMonth = new Date().getMonth();
+
+              data.slice(1).forEach((row) => {
+                  const rawName = String(row[0] || '').trim();
+                  if (!rawName) return;
+
+                  const lowerName = rawName.toLocaleLowerCase('tr-TR');
+                  const isUnitHeader = unitKeywords.some(key => lowerName.includes(key));
+                  
+                  if (isUnitHeader) {
+                      let cleanedUnit = rawName;
+                      unitKeywords.forEach(key => {
+                          const reg = new RegExp(key, 'gi');
+                          cleanedUnit = cleanedUnit.replace(reg, '').trim();
+                      });
+                      currentUnit = cleanedUnit || rawName;
+                      return; 
+                  }
+
+                  const newPlan: Record<number, number> = {};
+                  for (let i = 0; i < 12; i++) {
+                      newPlan[i] = parseExcelValue(row[i + 1]);
+                  }
+
+                  let targetResIdx = newResources.findIndex(r => r.name.toLocaleLowerCase('tr-TR') === lowerName);
+                  
+                  const updatedParticipation = (newPlan[currentMonth] !== undefined && newPlan[currentMonth] !== null) 
+                                               ? newPlan[currentMonth] 
+                                               : 100;
+
+                  if (targetResIdx > -1) {
+                      newResources[targetResIdx] = {
+                          ...newResources[targetResIdx],
+                          monthlyPlan: newPlan,
+                          unit: currentUnit,
+                          participation: updatedParticipation
+                      };
+                  } else {
+                      newResources.push({
+                          id: Date.now().toString() + Math.random(),
+                          name: rawName,
+                          unit: currentUnit,
+                          title: 'Uzman',
+                          participation: updatedParticipation,
+                          monthlyPlan: newPlan
+                      });
                   }
               });
+
               setResources(newResources);
-              alert('Plan verileri başarıyla güncellendi.');
+              alert('Ekip verileri güncellendi. Boş hücreler 0 olarak kabul edildi.');
           } catch (err) {
-              alert('Excel okuma hatası. Lütfen sütunları kontrol edin.');
+              console.error(err);
+              alert('Excel okuma hatası.');
           } finally {
               setIsImporting(false);
               if (fileInputRef.current) fileInputRef.current.value = '';
@@ -125,7 +200,7 @@ const ResourceManager: React.FC<ResourceManagerProps> = ({ resources, setResourc
   const handleAddResource = () => {
     const trimmedName = newResourceName.trim();
     const trimmedUnit = newResourceUnit.trim();
-    const trimmedTitle = newResourceTitle.trim() || 'Ünvan Belirtilmemiş';
+    const trimmedTitle = newResourceTitle.trim() || 'Uzman';
 
     if (trimmedName && trimmedUnit) {
       if (resources.some(r => r.name.toLocaleLowerCase('tr-TR') === trimmedName.toLocaleLowerCase('tr-TR'))) {
@@ -148,12 +223,6 @@ const ResourceManager: React.FC<ResourceManagerProps> = ({ resources, setResourc
     }
   };
 
-  const handleRemoveResource = (id: string) => {
-    if(window.confirm('Bu kaynağı silmek istediğinize emin misiniz?')) {
-        setResources(resources.filter(r => r.id !== id));
-    }
-  };
-
   return (
     <div className={`transition-all duration-500 ease-in-out flex flex-col ${isFullScreen ? 'fixed inset-0 z-[100] bg-white dark:bg-gray-950 p-4 overflow-hidden' : 'max-w-full mx-auto space-y-4'}`}>
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-2">
@@ -166,40 +235,38 @@ const ResourceManager: React.FC<ResourceManagerProps> = ({ resources, setResourc
             </div>
             
             <div className="flex items-center space-x-2">
-                <input type="file" ref={fileInputRef} onChange={handleImportExcel} className="hidden" accept=".xlsx, .xls, .csv" />
-                <button 
-                    onClick={() => fileInputRef.current?.click()}
-                    className="bg-emerald-50 text-emerald-600 border border-emerald-100 hover:bg-emerald-100 h-8 px-4 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all"
-                    title="Excel'den plan verilerini (12 Ay) topluca içe aktar"
-                >
-                    <i className="fa-solid fa-file-import mr-2"></i> {isImporting ? 'YÜKLENİYOR...' : 'EXCEL AKTAR'}
-                </button>
+                <div className="relative">
+                    <button onMouseEnter={() => setShowHelp(true)} onMouseLeave={() => setShowHelp(false)} className="w-8 h-8 flex items-center justify-center text-blue-500 hover:text-blue-700 transition-colors">
+                        <i className="fa-solid fa-circle-question"></i>
+                    </button>
+                    {showHelp && (
+                        <div className="absolute right-0 top-10 w-80 bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 z-[110] text-[11px] animate-fade-in-up">
+                            <h4 className="font-black text-blue-600 uppercase mb-3 flex items-center"><i className="fa-solid fa-lightbulb mr-2"></i> Akıllı İçe Aktarma</h4>
+                            <ul className="space-y-2 text-gray-500 dark:text-gray-400 leading-relaxed">
+                                <li>• <b>Kapasite Kontrolü:</b> Birim toplamları, o birimdeki kişi sayısına göre değerlendirilir. (3 kişi = %300 kapasite)</li>
+                                <li>• <b>Görsel Uyarılar:</b> Kapasite aşımı olduğunda hücreler otomatik olarak <b>Rose</b> tonuna döner.</li>
+                            </ul>
+                        </div>
+                    )}
+                </div>
 
-                <div className="flex space-x-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl border border-gray-200 dark:border-gray-700">
-                    <button
-                        onClick={() => setActiveTab('list')}
-                        className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'list' ? 'bg-white dark:bg-gray-700 text-blue-600 shadow-sm border border-gray-100 dark:border-gray-600' : 'text-gray-500 hover:text-gray-700'}`}
-                    >
-                        Liste
+                <div className="flex bg-emerald-50 dark:bg-emerald-900/20 p-1 rounded-xl border border-emerald-100 dark:border-emerald-800">
+                    <input type="file" ref={fileInputRef} onChange={handleImportExcel} className="hidden" accept=".xlsx, .xls, .csv" />
+                    <button onClick={() => fileInputRef.current?.click()} className="bg-emerald-600 text-white h-8 px-4 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all hover:bg-emerald-700 flex items-center">
+                        <i className="fa-solid fa-file-import mr-2"></i> {isImporting ? 'İŞLENİYOR...' : 'İÇE AKTAR'}
                     </button>
-                    <button
-                        onClick={() => setActiveTab('manmonth')}
-                        className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'manmonth' ? 'bg-white dark:bg-gray-700 text-emerald-600 shadow-sm border border-gray-100 dark:border-gray-600' : 'text-gray-500 hover:text-gray-700'}`}
-                    >
-                        Adam/Ay
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('costs')}
-                        className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'costs' ? 'bg-white dark:bg-gray-700 text-amber-600 shadow-sm border border-gray-100 dark:border-gray-700' : 'text-gray-500 hover:text-gray-700'}`}
-                    >
-                        Maliyet
+                    <button onClick={() => exportResourcePlanToExcel(resources)} className="bg-white dark:bg-emerald-800 text-emerald-600 dark:text-emerald-100 h-8 px-4 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all hover:bg-emerald-50 ml-1 flex items-center">
+                        <i className="fa-solid fa-file-export mr-2"></i> DIŞA AKTAR
                     </button>
                 </div>
 
-                <button 
-                    onClick={() => setIsFullScreen(!isFullScreen)} 
-                    className={`w-8 h-8 rounded-lg transition-all border flex items-center justify-center ${isFullScreen ? 'bg-indigo-50 text-indigo-600 border-indigo-200' : 'bg-white dark:bg-gray-800 text-gray-400 border-gray-200 dark:border-gray-700 hover:bg-gray-50'}`}
-                >
+                <div className="flex space-x-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl border border-gray-200 dark:border-gray-700">
+                    <button onClick={() => setActiveTab('list')} className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'list' ? 'bg-white dark:bg-gray-700 text-blue-600 shadow-sm' : 'text-gray-500'}`}>Liste</button>
+                    <button onClick={() => setActiveTab('manmonth')} className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'manmonth' ? 'bg-white dark:bg-gray-700 text-emerald-600 shadow-sm' : 'text-gray-500'}`}>Adam/Ay</button>
+                    <button onClick={() => setActiveTab('costs')} className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'costs' ? 'bg-white dark:bg-gray-700 text-amber-600 shadow-sm' : 'text-gray-500'}`}>Maliyet</button>
+                </div>
+
+                <button onClick={() => setIsFullScreen(!isFullScreen)} className="w-8 h-8 rounded-lg transition-all border flex items-center justify-center bg-white dark:bg-gray-800 text-gray-400 border-gray-200 dark:border-gray-700 hover:bg-gray-50">
                     <i className={`fa-solid ${isFullScreen ? 'fa-compress' : 'fa-expand'} text-xs`}></i>
                 </button>
             </div>
@@ -233,7 +300,7 @@ const ResourceManager: React.FC<ResourceManagerProps> = ({ resources, setResourc
                                     <th className="px-6 py-3 text-left">İSİM</th>
                                     <th className="px-6 py-3 text-left">BİRİM</th>
                                     <th className="px-6 py-3 text-left">ÜNVAN</th>
-                                    <th className="px-6 py-3 text-left">KATILIM</th>
+                                    <th className="px-6 py-3 text-left">KATILIM (GÜNCEL)</th>
                                     <th className="px-6 py-3 text-right">İŞLEM</th>
                                 </tr>
                             </thead>
@@ -241,36 +308,43 @@ const ResourceManager: React.FC<ResourceManagerProps> = ({ resources, setResourc
                                 {filteredResources.map(resource => (
                                     <tr key={resource.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-700/10 group">
                                         <td className="px-6 py-3">
-                                            {editingResId === resource.id ? (
-                                                <input 
-                                                    autoFocus 
-                                                    value={tempResName} 
-                                                    onChange={e => setTempResName(e.target.value)}
-                                                    onKeyDown={e => e.key === 'Enter' && handleSaveName(resource.id, resource.name)}
-                                                    onBlur={() => handleSaveName(resource.id, resource.name)}
-                                                    className="bg-white border border-blue-400 rounded px-2 py-0.5 text-xs font-bold outline-none"
-                                                />
+                                            {editingState?.id === resource.id && editingState.field === 'name' ? (
+                                                <input autoFocus value={tempValue} onChange={e => setTempValue(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSaveEdit()} onBlur={handleSaveEdit} className="bg-white border border-blue-400 rounded px-2 py-0.5 text-xs font-bold outline-none uppercase w-full max-w-[200px]"/>
                                             ) : (
-                                                <div className="flex items-center space-x-2">
+                                                <div className="flex items-center space-x-2 cursor-pointer" onClick={() => handleStartEdit(resource, 'name')}>
                                                     <span className="text-xs font-bold text-gray-700 dark:text-gray-200 uppercase">{resource.name}</span>
-                                                    <button onClick={() => { setEditingResId(resource.id); setTempResName(resource.name); }} className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-blue-500 transition-all">
-                                                        <i className="fa-solid fa-pencil text-[9px]"></i>
-                                                    </button>
+                                                    <i className="fa-solid fa-pencil text-[8px] text-gray-300 opacity-0 group-hover:opacity-100"></i>
                                                 </div>
                                             )}
                                         </td>
-                                        <td className="px-6 py-3"><span className="bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded text-[9px] font-black text-gray-500 uppercase">{resource.unit}</span></td>
-                                        <td className="px-6 py-3"><span className="text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase">{resource.title}</span></td>
                                         <td className="px-6 py-3">
-                                            <div className="flex items-center space-x-2">
+                                            {editingState?.id === resource.id && editingState.field === 'unit' ? (
+                                                <input autoFocus value={tempValue} onChange={e => setTempValue(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSaveEdit()} onBlur={handleSaveEdit} className="bg-white border border-blue-400 rounded px-2 py-0.5 text-[9px] font-black outline-none uppercase w-full max-w-[120px]"/>
+                                            ) : (
+                                                <span onClick={() => handleStartEdit(resource, 'unit')} className="bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded text-[9px] font-black text-gray-500 uppercase cursor-pointer hover:bg-gray-200 transition-colors">
+                                                    {resource.unit}
+                                                </span>
+                                            )}
+                                        </td>
+                                        <td className="px-6 py-3">
+                                            {editingState?.id === resource.id && editingState.field === 'title' ? (
+                                                <input autoFocus value={tempValue} onChange={e => setTempValue(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSaveEdit()} onBlur={handleSaveEdit} className="bg-white border border-blue-400 rounded px-2 py-0.5 text-[10px] font-bold outline-none uppercase w-full max-w-[150px]"/>
+                                            ) : (
+                                                <span onClick={() => handleStartEdit(resource, 'title')} className="text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase cursor-pointer hover:text-blue-500 transition-colors">
+                                                    {resource.title}
+                                                </span>
+                                            )}
+                                        </td>
+                                        <td className="px-6 py-3">
+                                            <div onClick={() => alert('Lütfen adam/ay planında mevcut ay için değişiklik yapın.')} className="flex items-center space-x-2 cursor-help group/cap">
                                                 <div className="w-16 h-1 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
                                                     <div className="h-full bg-blue-500 rounded-full" style={{ width: `${resource.participation}%` }}></div>
                                                 </div>
-                                                <span className="text-[10px] font-black text-blue-600">%{resource.participation}</span>
+                                                <span className="text-[10px] font-black text-blue-600 group-hover/cap:scale-110 transition-transform">%{resource.participation}</span>
                                             </div>
                                         </td>
                                         <td className="px-6 py-3 text-right">
-                                            <button onClick={() => handleRemoveResource(resource.id)} className="text-gray-300 hover:text-red-500 transition-all opacity-0 group-hover:opacity-100">
+                                            <button onClick={() => { if(window.confirm('Bu kaynağı silmek istediğinize emin misiniz?')) setResources(resources.filter(r => r.id !== resource.id)); }} className="text-gray-300 hover:text-red-500 transition-all opacity-0 group-hover:opacity-100">
                                                 <i className="fa-solid fa-trash-can text-xs"></i>
                                             </button>
                                         </td>
@@ -296,43 +370,65 @@ const ResourceManager: React.FC<ResourceManagerProps> = ({ resources, setResourc
                             </thead>
                             <tbody className="text-[11px]">
                                 {groupedResources.map(([unit, unitResources]) => {
+                                    const unitCapacity = unitResources.length * 100;
                                     const unitTotals = Array.from({length: 12}).map((_, mIdx) => 
                                         unitResources.reduce((sum, r) => sum + (r.monthlyPlan?.[mIdx] || 0), 0)
                                     );
                                     return (
                                         <React.Fragment key={unit}>
-                                            <tr className="bg-blue-50/80 dark:bg-blue-900/30 sticky top-[37px] z-20 shadow-sm">
-                                                <td className="p-1.5 pl-3 font-black text-blue-800 dark:text-blue-300 border border-gray-100 dark:border-gray-700 uppercase truncate">
-                                                    <i className="fa-solid fa-layer-group mr-2 opacity-50 text-[8px]"></i>{unit}
+                                            <tr className="bg-blue-50/80 dark:bg-blue-900/30 sticky top-[37px] z-20 shadow-sm border-b border-blue-100 dark:border-blue-900">
+                                                <td className="p-1.5 pl-3 font-black text-blue-800 dark:text-blue-300 border-r border-blue-100 dark:border-blue-900 uppercase truncate">
+                                                    <i className="fa-solid fa-layer-group mr-2 opacity-50 text-[8px]"></i>{unit} TOPLAM
                                                 </td>
-                                                {unitTotals.map((total, i) => (
-                                                    <td key={i} className={`p-1.5 text-center font-black border border-gray-100 dark:border-gray-700 ${total > 100 ? 'text-red-500' : 'text-blue-700 dark:text-blue-400'}`}>
-                                                        %{total}
-                                                    </td>
-                                                ))}
+                                                {unitTotals.map((total, i) => {
+                                                    const isOverload = total > unitCapacity;
+                                                    return (
+                                                        <td key={i} className={`p-1.5 text-center font-black border-r border-blue-100 dark:border-blue-900 transition-colors ${isOverload ? 'text-rose-600 bg-rose-50/50 dark:text-rose-400 dark:bg-rose-900/20' : 'text-blue-700 dark:text-blue-400'}`}>
+                                                            %{total}
+                                                        </td>
+                                                    );
+                                                })}
                                             </tr>
                                             {unitResources.map(r => (
                                                 <tr key={r.id} className="hover:bg-blue-50/30 dark:hover:bg-blue-900/10 transition-colors group">
-                                                    <td className="p-1.5 pl-4 border border-gray-50 dark:border-gray-800 group-hover:bg-white dark:group-hover:bg-gray-700">
+                                                    <td className="p-1.5 pl-4 border-r border-gray-50 dark:border-gray-800 group-hover:bg-white dark:group-hover:bg-gray-700">
                                                         <p className="font-bold text-gray-700 dark:text-gray-200 leading-tight truncate">{formatName(r.name)}</p>
                                                         <p className="text-[7px] text-gray-400 dark:text-gray-500 font-black uppercase tracking-tighter opacity-70 leading-none mt-0.5">{r.title}</p>
                                                     </td>
-                                                    {MONTHS_SHORT.map((_, mIdx) => (
-                                                        <td key={mIdx} className="p-0 border border-gray-50 dark:border-gray-800">
-                                                            <input 
-                                                                type="text" 
-                                                                value={(r.monthlyPlan?.[mIdx] || 0)}
-                                                                onChange={(e) => handleUpdateMonthlyValue(r.id, mIdx, e.target.value)}
-                                                                className="w-full h-8 text-center bg-transparent border-none outline-none font-bold text-gray-800 dark:text-white p-0 hover:bg-white dark:hover:bg-gray-700 transition-colors focus:bg-white dark:focus:bg-gray-700"
-                                                            />
-                                                        </td>
-                                                    ))}
+                                                    {MONTHS_SHORT.map((_, mIdx) => {
+                                                        const val = r.monthlyPlan?.[mIdx] || 0;
+                                                        const isIndividualOver = val > 100;
+                                                        return (
+                                                            <td key={mIdx} className={`p-0 border-r border-gray-50 dark:border-gray-800 transition-colors ${isIndividualOver ? 'bg-amber-50 dark:bg-amber-900/10' : ''}`}>
+                                                                <input 
+                                                                    type="text" 
+                                                                    value={val}
+                                                                    onChange={(e) => handleUpdateMonthlyValue(r.id, mIdx, e.target.value)}
+                                                                    className={`w-full h-8 text-center bg-transparent border-none outline-none font-bold p-0 hover:bg-white dark:hover:bg-gray-700 transition-colors focus:bg-white dark:focus:bg-gray-700 ${isIndividualOver ? 'text-amber-600 dark:text-amber-400' : 'text-gray-800 dark:text-white'}`}
+                                                                />
+                                                            </td>
+                                                        );
+                                                    })}
                                                 </tr>
                                             ))}
                                         </React.Fragment>
                                     );
                                 })}
                             </tbody>
+                            <tfoot className="sticky bottom-0 z-30">
+                                <tr className="bg-slate-900 text-white font-black shadow-[0_-4px_10px_rgba(0,0,0,0.1)]">
+                                    <td className="p-3 pl-3 uppercase tracking-widest text-[9px] border-r border-slate-700">GENEL TOPLAM</td>
+                                    {globalMonthlyTotals.map((total, i) => {
+                                        const globalCapacity = resources.length * 100;
+                                        const isCritical = total > globalCapacity;
+                                        return (
+                                            <td key={i} className={`p-3 text-center text-[10px] border-r border-slate-700 ${isCritical ? 'text-rose-400 bg-rose-950/40' : 'text-blue-300'}`}>
+                                                %{total}
+                                            </td>
+                                        );
+                                    })}
+                                </tr>
+                            </tfoot>
                         </table>
                     </div>
                 </div>
@@ -340,11 +436,7 @@ const ResourceManager: React.FC<ResourceManagerProps> = ({ resources, setResourc
 
             {activeTab === 'costs' && (
               <div className="animate-fade-in-right">
-                <CostManager 
-                  resources={resources} 
-                  titleCosts={titleCosts} 
-                  setTitleCosts={setTitleCosts} 
-                />
+                <CostManager resources={resources} titleCosts={titleCosts} setTitleCosts={setTitleCosts} />
               </div>
             )}
         </div>

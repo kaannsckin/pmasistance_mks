@@ -172,6 +172,16 @@ const App: React.FC = () => {
     setIsSettingsModalOpen(false);
   };
 
+  // Add the missing onDataImport handler
+  const handleDataImport = useCallback((newTasks: Task[], newResources: Resource[]) => {
+    setTasks(prev => [...prev, ...newTasks]);
+    setResources(prev => {
+      const existingNames = new Set(prev.map(r => r.name.toLowerCase()));
+      const uniqueNew = newResources.filter(r => !existingNames.has(r.name.toLowerCase()));
+      return [...prev, ...uniqueNew];
+    });
+  }, []);
+
   const renderView = () => {
     if (!isInitialized) return <div className="h-[60vh] flex items-center justify-center"><i className="fa-solid fa-spinner fa-spin text-4xl text-blue-500"></i></div>;
     
@@ -184,6 +194,7 @@ const App: React.FC = () => {
             onEditTask={handleOpenForm} onViewTask={handleOpenDetails}
             onNotifyTask={handleOpenTeamsModal} onNewTask={() => handleOpenForm(null)}
             onDeleteTask={handleDeleteTask}
+            onDataImport={handleDataImport}
             onTaskStatusChange={(id, s) => setTasks(tasks.map(t => t.id === id ? { ...t, status: s } : t))}
           />
         );
