@@ -23,167 +23,165 @@ const NavItem: React.FC<{
 }> = ({ view, currentView, setCurrentView, icon, label, isSpecial }) => (
   <button
     onClick={() => setCurrentView(view)}
-    className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-300 ${
+    className={`flex items-center space-x-2 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-tight transition-all duration-300 ${
       currentView === view
-        ? isSpecial 
-          ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 dark:shadow-none translate-y-[-1px]'
-          : 'bg-blue-600 text-white shadow-lg shadow-blue-200 dark:shadow-none translate-y-[-1px]'
+        ? 'bg-primary text-white shadow-lg shadow-blue-200/50 dark:shadow-none translate-y-[-1px]'
         : isSpecial
-          ? 'text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20'
+          ? 'text-primary dark:text-primary hover:bg-accent/40'
           : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700/50'
     }`}
+    style={currentView === view ? { backgroundColor: 'var(--app-primary)' } : {}}
   >
-    <i className={`fa-solid ${icon} ${currentView === view ? 'text-white' : isSpecial ? 'text-indigo-500' : 'text-blue-500/80'}`}></i>
-    <span className="hidden xl:inline">{label}</span>
+    <i className={`fa-solid ${icon} ${currentView === view ? 'text-white' : 'text-primary opacity-80'}`} style={currentView !== view ? { color: 'var(--app-primary)' } : {}}></i>
+    <span className="inline-block">{label}</span>
   </button>
 );
 
 const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSettings, onSaveProject, onLoadProject, isLocalPersistenceEnabled = true, isAIEnabled = true, onOpenAbout }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
-  const [isTilting, setIsTilting] = useState(false);
-  const [isIgniting, setIsIgniting] = useState(false);
-  const [isLaunching, setIsLaunching] = useState(false);
-  const [showBurst, setShowBurst] = useState(false);
+  
+  // Animation States
+  const [status, setStatus] = useState<'idle' | 'igniting' | 'launching'>('idle');
+  const [showVFX, setShowVFX] = useState(false);
+  const [isShaking, setIsShaking] = useState(false);
 
-  const handleLoadClick = () => {
-    fileInputRef.current?.click();
+  const handleLaunch = () => {
+    if (status !== 'idle') return;
+    
+    // Stage 1: Countdown (Rumble & Ignite)
+    setStatus('igniting');
+    
+    // Stage 2: Blast Off
+    setTimeout(() => {
+        setStatus('launching');
+        setShowVFX(true);
+        setIsShaking(true);
+        
+        // Final Stage: Reset
+        setTimeout(() => {
+            setCurrentView(View.Kanban);
+            setStatus('idle');
+            setShowVFX(false);
+            setIsShaking(false);
+        }, 1400);
+    }, 1000);
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) onLoadProject(file);
-    if (fileInputRef.current) fileInputRef.current.value = '';
-  };
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (isLaunching || isIgniting || isTilting) return;
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (status !== 'idle') return;
     const rect = e.currentTarget.getBoundingClientRect();
     const x = (e.clientX - rect.left - rect.width / 2) / 10;
     const y = (e.clientY - rect.top - rect.height / 2) / 10;
     setMousePos({ x, y });
   };
 
-  const handleMouseLeave = () => {
-    if (isLaunching || isIgniting || isTilting) return;
-    setMousePos({ x: 0, y: 0 });
-  };
-
-  const handleLaunch = () => {
-    if (isLaunching || isIgniting || isTilting) return;
-    
-    // 1. Aşama: Tıklama -> 45 Derece Dönüş
-    setIsTilting(true);
-    
-    // 2. Aşama: Ateşlenme (Dikey Yoğun Plazma Efekti)
-    setTimeout(() => {
-        setIsIgniting(true);
-    }, 700);
-
-    // 3. Aşama: Fırlatma
-    setTimeout(() => {
-        setIsIgniting(false);
-        setIsLaunching(true);
-    }, 1900);
-
-    // 4. Aşama: Patlama Efekti
-    setTimeout(() => setShowBurst(true), 2200);
-
-    // 5. Aşama: Reset
-    setTimeout(() => {
-        setCurrentView(View.Kanban);
-        setShowBurst(false);
-        setIsLaunching(false);
-        setIsTilting(false);
-        setMousePos({ x: 0, y: 0 });
-    }, 3600);
-  };
-
   return (
-    <header className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-md sticky top-0 z-50 border-b border-gray-200 dark:border-gray-700 shadow-sm overflow-visible">
+    <header className={`bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl sticky top-0 z-50 border-b border-gray-200 dark:border-gray-700 shadow-sm transition-all duration-300 overflow-visible ${isShaking ? 'animate-shake-figma' : ''}`}>
       
-      {showBurst && (
-        <div className="fixed inset-0 z-[100] pointer-events-none flex items-center justify-center overflow-hidden">
-            <div className="absolute inset-0 bg-white animate-flash-overlay z-[101]"></div>
-            <div className="absolute w-20 h-20 bg-blue-500 rounded-full animate-shockwave-1 opacity-0"></div>
-            <div className="absolute w-20 h-20 border-4 border-indigo-400 rounded-full animate-shockwave-2 opacity-0"></div>
-            {[...Array(30)].map((_, i) => (
+      {/* FULL SCREEN VFX LAYER */}
+      {showVFX && (
+        <div className="fixed inset-0 z-[1000] pointer-events-none overflow-hidden flex items-center justify-center">
+            {/* White Flash */}
+            <div className="absolute inset-0 bg-white animate-hyper-flash z-10"></div>
+            
+            {/* Shockwave */}
+            <div className="absolute w-40 h-40 border-[100px] border-primary rounded-full animate-figma-shockwave" style={{ borderColor: 'var(--app-primary)' }}></div>
+            
+            {/* Hyper-speed Particles (Figma style) */}
+            {[...Array(50)].map((_, i) => (
                 <div 
                     key={i} 
-                    className="absolute w-1 h-1 bg-blue-400 rounded-full animate-particle"
+                    className="absolute w-[2px] h-[100px] bg-white opacity-40 rounded-full animate-star-fly"
                     style={{ 
-                        '--rx': `${Math.random() * 2400 - 1200}px`, 
-                        '--ry': `${Math.random() * 2400 - 1200}px`,
-                        animationDelay: `${Math.random() * 0.3}s`
+                        '--tx': `${Math.random() * 2000 - 1000}px`,
+                        '--ty': `${Math.random() * 2000 - 1000}px`,
+                        animationDelay: `${Math.random() * 0.4}s`
                     } as any}
                 ></div>
             ))}
+
+            {/* Backdrop Bloom */}
+            <div className="absolute w-[1500px] h-[1500px] bg-primary/20 rounded-full blur-[200px]" style={{ backgroundColor: 'var(--app-primary)' }}></div>
         </div>
       )}
 
       <div className="container mx-auto px-4 lg:px-6">
         <div className="flex items-center justify-between h-20">
           
+          {/* INTERACTIVE ROCKET TRIGGER */}
           <div 
-            className="flex items-center group cursor-pointer select-none" 
+            className="flex items-center group cursor-pointer select-none relative" 
             onMouseMove={handleMouseMove}
-            onMouseLeave={handleMouseLeave}
+            onMouseLeave={() => setMousePos({ x: 0, y: 0 })}
             onClick={handleLaunch}
           >
             <div className="relative">
-              <div className={`absolute -inset-2 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl blur-lg transition-all duration-1000 ${isTilting || isLaunching ? 'opacity-100 scale-[2.5]' : 'opacity-10 scale-100'}`}></div>
+              {/* Dynamic Outer Glow */}
+              <div className={`absolute -inset-8 bg-primary rounded-full blur-[40px] transition-all duration-700 
+                ${status === 'igniting' ? 'opacity-100 scale-150 animate-pulse' : 'opacity-10 group-hover:opacity-40'}`} 
+                style={{ backgroundColor: 'var(--app-primary)' }}>
+              </div>
               
+              {/* Main Container */}
               <div 
-                className="relative bg-gradient-to-br from-blue-600 to-indigo-700 p-3.5 rounded-2xl shadow-xl z-10 transition-all duration-300"
+                className={`relative w-16 h-16 bg-primary rounded-[1.4rem] shadow-2xl z-10 flex items-center justify-center overflow-visible transition-all duration-300
+                    ${status === 'igniting' ? 'scale-110' : 'group-hover:scale-105 group-hover:shadow-primary/40'}
+                `}
                 style={{ 
-                    transform: isLaunching || isIgniting || isTilting ? 'none' : `translate(${mousePos.x}px, ${mousePos.y}px)` 
+                    transform: status === 'idle' ? `translate(${mousePos.x}px, ${mousePos.y}px)` : undefined,
+                    backgroundColor: 'var(--app-primary)',
+                    boxShadow: `0 20px 40px -10px var(--app-primary), inset 0 2px 4px rgba(255,255,255,0.4)`
                 }}
               >
-                {/* ROKET KATMANI */}
-                <div className={`relative flex items-center justify-center transition-all duration-700 ease-in-out
-                    ${isTilting && !isIgniting && !isLaunching ? 'rotate-[-45deg]' : ''}
-                    ${isIgniting ? 'animate-rumble-tilted' : ''}
-                    ${isLaunching ? 'animate-rocket-blast' : ''}
+                {/* Internal Rocket Icon & Engine */}
+                <div className={`relative flex items-center justify-center transition-all duration-200 
+                    ${status === 'igniting' ? 'animate-figma-rumble' : ''} 
+                    ${status === 'launching' ? 'animate-figma-launch' : ''}
                 `}>
-                    <i className="fa-solid fa-rocket text-white text-xl"></i>
+                    <i className={`fa-solid fa-rocket text-white text-3xl drop-shadow-lg transition-transform duration-700 
+                        ${status === 'idle' ? 'rotate-0' : 'rotate-[-45deg]'}`}></i>
                     
-                    {/* Yoğun Dikey Ateşleme Efekti (Plasma Huzmesi) */}
-                    {isIgniting && (
-                        <div className="absolute top-[85%] left-1/2 -translate-x-1/2 flex flex-col items-center">
-                            {/* Ana Beyaz Çekirdek */}
-                            <div className="w-2 bg-white rounded-full blur-[1px] animate-plasma-core origin-top shadow-[0_0_15px_rgba(255,255,255,0.8)]"></div>
-                            {/* Dış Mavi/Turuncu Harez */}
-                            <div className="absolute top-0 w-5 bg-gradient-to-b from-blue-400 via-indigo-600 to-transparent rounded-full blur-[4px] animate-plasma-glow origin-top"></div>
+                    {/* High-Performance Exhaust System */}
+                    {status !== 'idle' && (
+                        <div className="absolute top-[80%] left-1/2 -translate-x-1/2 flex flex-col items-center">
+                            {/* Inner Heat Core */}
+                            <div className="absolute top-0 w-8 h-8 bg-white blur-md rounded-full animate-pulse"></div>
+                            
+                            {/* Main Plasma Trail */}
+                            <div className={`absolute top-0 w-16 bg-gradient-to-b from-white via-primary to-transparent rounded-b-full 
+                                ${status === 'launching' ? 'animate-figma-tail' : 'h-32 opacity-100'}
+                            `} style={{ 
+                                '--tw-gradient-via': 'var(--app-primary)',
+                                boxShadow: `0 0 60px var(--app-primary)`
+                            } as any}></div>
+                            
+                            {/* Hyper-Speed Spear */}
+                            <div className="w-1.5 h-64 bg-gradient-to-b from-white to-transparent opacity-60 rounded-full"></div>
                         </div>
-                    )}
-
-                    {/* Fırlatma İzi */}
-                    {isLaunching && (
-                         <div className="absolute top-[85%] left-1/2 -translate-x-1/2 w-10 h-80 bg-gradient-to-b from-white via-blue-400 to-transparent blur-[10px] animate-launch-trail rounded-full origin-top"></div>
                     )}
                 </div>
               </div>
             </div>
 
-            <div className="ml-5 flex flex-col justify-center overflow-hidden">
+            {/* Title & Slogan */}
+            <div className="ml-6 flex flex-col justify-center overflow-hidden">
               <div className="flex items-center space-x-2">
-                  <h1 className="text-xl font-black tracking-tighter leading-none text-gray-800 dark:text-white uppercase transition-transform group-hover:translate-x-1 duration-300">
-                    Plan<span className="text-blue-600 dark:text-blue-400 font-medium lowercase">Asistan</span>
+                  <h1 className="text-2xl font-black tracking-tighter leading-none text-gray-800 dark:text-white uppercase transition-all group-hover:translate-x-1">
+                    Plan<span className="text-primary font-medium lowercase" style={{ color: 'var(--app-primary)' }}>Asistan</span>
                   </h1>
-                  {isLocalPersistenceEnabled && (
-                      <div className="flex items-center space-x-1 bg-emerald-50 dark:bg-emerald-900/30 px-2 py-0.5 rounded-full border border-emerald-100 dark:border-emerald-800">
-                          <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]"></span>
-                          <span className="text-[7px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-tighter">YEREL KAYIT AKTİF</span>
-                      </div>
-                  )}
               </div>
-              <span className="text-[9px] font-black text-blue-500/60 dark:text-blue-400/50 uppercase tracking-[0.5em] leading-none mt-2 transition-all group-hover:tracking-[0.6em] duration-500">
-                MKS
+              <span className={`text-[10px] font-black uppercase tracking-[0.5em] leading-none mt-2 transition-all duration-700
+                ${status !== 'idle' ? 'text-primary translate-x-2 opacity-100' : 'text-gray-400 opacity-60'}`}
+                style={status !== 'idle' ? { color: 'var(--app-primary)' } : {}}
+              >
+                {status === 'igniting' ? 'ATEŞLENİYOR...' : status === 'launching' ? 'MAX-SPEED' : 'MKS SİSTEMİ'}
               </span>
             </div>
           </div>
 
-          <nav className="hidden md:flex items-center bg-gray-100/50 dark:bg-gray-900/30 p-1.5 rounded-2xl border border-gray-200/50 dark:border-gray-700/50 space-x-1">
+          {/* MAIN MENU - Labels visible on mobile and desktop */}
+          <nav className="hidden md:flex items-center bg-gray-100/50 dark:bg-gray-900/30 p-1.5 rounded-2xl border border-gray-200/50 dark:border-gray-700/50 space-x-1 mx-4">
             {isAIEnabled && <NavItem view={View.AI} currentView={currentView} setCurrentView={setCurrentView} icon="fa-wand-magic-sparkles" label="Zekâ" isSpecial />}
             <NavItem view={View.Kanban} currentView={currentView} setCurrentView={setCurrentView} icon="fa-columns" label="Pano" />
             <NavItem view={View.Tasks} currentView={currentView} setCurrentView={setCurrentView} icon="fa-list-check" label="Görevler" />
@@ -193,110 +191,32 @@ const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSett
             <NavItem view={View.Notes} currentView={currentView} setCurrentView={setCurrentView} icon="fa-pen-nib" label="Günlük" />
           </nav>
 
-          <div className="flex items-center space-x-3">
-            <div className="hidden sm:flex items-center bg-white dark:bg-gray-700 p-1 rounded-xl shadow-inner border border-gray-100 dark:border-gray-600">
-                <input type="file" ref={fileInputRef} className="hidden" accept=".json" onChange={handleFileChange} />
-                <button onClick={onSaveProject} className="p-2 text-gray-400 hover:text-blue-600 transition-colors" title="Yedekle">
-                    <i className="fa-solid fa-download text-sm"></i>
+          {/* UTILITY ACTIONS */}
+          <div className="flex items-center space-x-2">
+            <div className="hidden sm:flex items-center bg-white dark:bg-gray-700 p-1 rounded-xl border border-gray-200 dark:border-gray-600 shadow-inner">
+                <input type="file" ref={fileInputRef} className="hidden" accept=".json" onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) onLoadProject(file);
+                    if (fileInputRef.current) fileInputRef.current.value = '';
+                }} />
+                <button onClick={onSaveProject} className="p-2.5 text-gray-400 hover:text-primary transition-colors">
+                    <i className="fa-solid fa-download text-xs"></i>
                 </button>
                 <div className="w-px h-4 bg-gray-200 dark:bg-gray-600 mx-1"></div>
-                <button onClick={handleLoadClick} className="p-2 text-gray-400 hover:text-blue-600 transition-colors" title="Yükle">
-                    <i className="fa-solid fa-upload text-sm"></i>
+                <button onClick={() => fileInputRef.current?.click()} className="p-2.5 text-gray-400 hover:text-primary transition-colors">
+                    <i className="fa-solid fa-upload text-xs"></i>
                 </button>
             </div>
             
-            <div className="flex items-center space-x-2">
-              <button onClick={onOpenSettings} className="w-10 h-10 flex items-center justify-center bg-white dark:bg-gray-700 text-gray-500 dark:text-gray-300 rounded-xl border border-gray-200 dark:border-gray-600 hover:border-blue-300 hover:text-blue-600 transition-all shadow-sm">
+            <button onClick={onOpenSettings} className="w-11 h-11 flex items-center justify-center bg-white dark:bg-gray-700 text-gray-500 dark:text-gray-300 rounded-xl border border-gray-200 dark:border-gray-600 hover:text-primary transition-all">
                 <i className="fa-solid fa-sliders"></i>
-              </button>
-              <button onClick={onOpenAbout} className="w-10 h-10 flex items-center justify-center bg-white dark:bg-gray-700 text-gray-500 dark:text-gray-300 rounded-xl border border-gray-200 dark:border-gray-600 hover:border-blue-300 hover:text-blue-600 transition-all shadow-sm">
+            </button>
+            <button onClick={onOpenAbout} className="w-11 h-11 flex items-center justify-center bg-white dark:bg-gray-700 text-gray-500 dark:text-gray-300 rounded-xl border border-gray-200 dark:border-gray-600 hover:text-primary transition-all">
                 <i className="fa-solid fa-circle-info"></i>
-              </button>
-            </div>
+            </button>
           </div>
-
         </div>
       </div>
-
-<style dangerouslySetInnerHTML={{ __html: `
-        /* Sarsıntı - Roketin -45 derecelik açısını koruyarak titreme yapar */
-        @keyframes rumble-tilted {
-          0%, 100% { transform: rotate(-45deg) translate(0,0); }
-          25% { transform: rotate(-45deg) translate(0.8px, 0.8px); }
-          50% { transform: rotate(-45deg) translate(-0.8px, -0.8px); }
-          75% { transform: rotate(-45deg) translate(0.8px, -0.8px); }
-        }
-        .animate-rumble-tilted { animation: rumble-tilted 0.07s linear infinite; }
-
-        /* Ateşleme Plazma Çekirdeği - Roket doğrultusunda uzama */
-        @keyframes plasma-core {
-          0% { height: 10px; transform: translateX(-50%) scaleX(0.8); opacity: 0.8; }
-          100% { height: 50px; transform: translateX(-50%) scaleX(1.3); opacity: 1; }
-        }
-        /* Ateş elementlerinin roketin altında doğru açıda durması için kapsayıcı */
-        .exhaust-container {
-          position: absolute;
-          bottom: -5px;
-          left: 50%;
-          transform: translateX(-50%);
-          transform-origin: top center;
-        }
-
-        .animate-plasma-core { animation: plasma-core 0.05s ease-in-out infinite alternate; }
-
-        /* Ateşleme Plazma Halesi */
-        @keyframes plasma-glow {
-          0% { height: 15px; opacity: 0.5; filter: blur(4px); }
-          100% { height: 70px; opacity: 0.9; filter: blur(8px); }
-        }
-        .animate-plasma-glow { animation: plasma-glow 0.05s ease-in-out infinite alternate-reverse; }
-
-        /* Fırlatma İzi - Kuyruk efekti */
-        @keyframes launch-trail {
-          0% { transform: translateX(-50%) scaleY(0.5); opacity: 1; }
-          100% { transform: translateX(-50%) scaleY(4); opacity: 0; }
-        }
-        .animate-launch-trail { animation: launch-trail 0.15s linear infinite; }
-
-        /* Fırlatma Hareketi - Tam çapraz (45 derece) rotada çıkış */
-        @keyframes rocket-blast-off {
-          0% { 
-            transform: translate(0, 0) rotate(-45deg) scale(1); 
-            filter: blur(0); 
-          }
-          100% { 
-            /* X ve Y ekseninde eşit hareket tam 45 derece doğrusal gidiş sağlar */
-            transform: translate(150vw, -150vw) rotate(-45deg) scale(4); 
-            filter: blur(10px) brightness(3); 
-          }
-        }
-        .animate-rocket-blast { 
-            animation: rocket-blast-off 1.1s cubic-bezier(0.85, 0, 0.15, 1) forwards; 
-        }
-
-        /* Ekran Parlaması */
-        @keyframes flash-overlay {
-          0% { opacity: 0; }
-          30% { opacity: 1; }
-          100% { opacity: 0; }
-        }
-        .animate-flash-overlay { animation: flash-overlay 1.2s ease-out forwards; }
-
-        /* Şok Dalgaları */
-        @keyframes shockwave-massive {
-          0% { transform: scale(0.1); opacity: 1; border-width: 40px; }
-          100% { transform: scale(100); opacity: 0; border-width: 1px; }
-        }
-        .animate-shockwave-1 { animation: shockwave-massive 1s ease-out forwards; }
-        .animate-shockwave-2 { animation: shockwave-massive 1.4s ease-out 0.1s forwards; }
-
-        /* Partiküller */
-        @keyframes particle-fast {
-          0% { transform: translate(0,0) scale(3); opacity: 1; }
-          100% { transform: translate(var(--rx), var(--ry)) scale(0); opacity: 0; }
-        }
-        .animate-particle { animation: particle-fast 1.8s cubic-bezier(0, 1, 0.3, 1) forwards; }
-      `}} />
     </header>
   );
 };

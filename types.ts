@@ -42,6 +42,7 @@ export interface Resource {
   participation: number; // Percentage
   unit: string;
   title: string; // Ünvan
+  color?: string; // Kaynak rengi
   monthlyPlan?: Record<number, number>; // MonthIndex (0-11) -> Percentage
 }
 
@@ -114,6 +115,10 @@ export interface ProjectData {
     titleCosts?: Record<string, number>; 
     sprintNames?: Record<number, string>; // Özel sürüm isimleri
     globalTestDays?: number; // Genel test günü sayısı
+    manMonthTableColor?: string; // Adam/Ay tablo ana rengi
+    costTableColor?: string; // Maliyet tablo ana rengi
+    theme?: string; // Uygulama teması
+    isDarkMode?: boolean; // Gece modu
   };
   appVersion: string;
   exportDate: string;

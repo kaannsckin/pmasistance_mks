@@ -66,7 +66,8 @@ const BacklogTab: React.FC<{ count: number, onClick: () => void, onDrop: (taskId
     const [isOver, setIsOver] = useState(false);
     return (
         <div 
-            className={`bg-white/60 dark:bg-gray-800/40 backdrop-blur-md w-12 rounded-2xl border flex flex-col items-center py-8 cursor-pointer hover:bg-white dark:hover:bg-gray-800 transition-all group shrink-0 h-full relative overflow-hidden ${isOver ? 'border-blue-400 ring-4 ring-blue-500/10' : 'border-gray-200 dark:border-gray-700 shadow-sm'}`}
+            className={`bg-white/60 dark:bg-gray-800/40 backdrop-blur-md w-12 rounded-2xl border flex flex-col items-center py-8 cursor-pointer hover:bg-white dark:hover:bg-gray-800 transition-all group shrink-0 h-full relative overflow-hidden ${isOver ? 'border-primary ring-4 ring-primary/10' : 'border-gray-200 dark:border-gray-700 shadow-sm'}`}
+            style={isOver ? { borderColor: 'var(--app-primary)' } : {}}
             onClick={onClick}
             onDragOver={(e) => { e.preventDefault(); setIsOver(true); }}
             onDragLeave={() => setIsOver(false)}
@@ -127,42 +128,6 @@ const KanbanView: React.FC<KanbanViewProps> = ({ tasks, resources, workPackages,
     }
   };
 
-  const handleExportPlan = () => {
-      exportSprintPlanToExcel(orderedSprints);
-  };
-
-  const handleAddSprint = useCallback((atPosition: number) => {
-    const tasksForKanban = tasks.filter(t => t.includeInSprints !== false);
-    const maxVersionInTasks = Math.max(0, ...tasksForKanban.map(t => t.version || 0));
-    if (atPosition > maxVersionInTasks) {
-        setExtraSprints(prev => prev + 1);
-    } else {
-        onInsertSprint(atPosition);
-    }
-  }, [tasks, onInsertSprint]);
-
-  const handleUpdateTestPeriod = useCallback((sprintId: number, updatedData: any) => {
-    setTestPeriodDetails(prev => ({ ...prev, [sprintId]: { ...(prev[sprintId] || {}), ...updatedData } }));
-  }, []);
-
-  const uniqueUnits = useMemo(() => ['all', ...Array.from(new Set(tasks.map(t => t.unit)))], [tasks]);
-  const uniqueResources = useMemo(() => ['all', ...Array.from(new Set(tasks.map(t => t.resourceName)))], [tasks]);
-  const uniquePriorities = useMemo(() => ['all', 'Blocker', 'High', 'Medium', 'Low'], []);
-  const uniqueWorkPackages = useMemo(() => ['all', ...workPackages.map(wp => wp.name)], [workPackages]);
-  const workPackageNameToIdMap = useMemo(() => new Map(workPackages.map(wp => [wp.name, wp.id])), [workPackages]);
-
-  const filteredTasks = useMemo(() => {
-    return tasks.filter(task => {
-      const lowerSearch = searchTerm.toLocaleLowerCase('tr-TR');
-      const matchesSearch = task.name.toLocaleLowerCase('tr-TR').includes(lowerSearch) || task.jiraId.toLocaleLowerCase('tr-TR').includes(lowerSearch);
-      const matchesUnit = filterUnit === 'all' || task.unit === filterUnit;
-      const matchesResource = filterResource === 'all' || task.resourceName === filterResource;
-      const matchesPriority = filterPriority === 'all' || task.priority === filterPriority;
-      const matchesWorkPackage = filterWorkPackage === 'all' || task.workPackageId === workPackageNameToIdMap.get(filterWorkPackage);
-      return matchesSearch && matchesUnit && matchesResource && matchesPriority && matchesWorkPackage;
-    });
-  }, [tasks, searchTerm, filterUnit, filterResource, filterPriority, filterWorkPackage, workPackageNameToIdMap]);
-
   const calculatedSprints = useMemo((): Sprint[] => {
     const tasksForKanban = tasks.filter(t => t.includeInSprints !== false);
     const maxVersionFromTasks = Math.max(0, ...tasksForKanban.map(t => t.version || 0));
@@ -182,7 +147,7 @@ const KanbanView: React.FC<KanbanViewProps> = ({ tasks, resources, workPackages,
         capacityPerUnit[unit] = (capacityPerUnit[unit] || 0) + (sprintNetWorkdays * (r.participation / 100));
     });
 
-    filteredTasks.filter(t => t.includeInSprints !== false).forEach(task => {
+    tasks.filter(t => t.includeInSprints !== false).forEach(task => {
         const version = task.version || 0;
         if (sprintMap.has(version)) sprintMap.get(version)!.tasks.push(task);
     });
@@ -226,7 +191,7 @@ const KanbanView: React.FC<KanbanViewProps> = ({ tasks, resources, workPackages,
       }
     });
     return sorted;
-  }, [tasks, filteredTasks, resources, sprintDuration, projectStartDate, testPeriodDetails, extraSprints, sprintNames, globalTestDays]);
+  }, [tasks, resources, sprintDuration, projectStartDate, testPeriodDetails, extraSprints, sprintNames, globalTestDays]);
 
   useEffect(() => {
     setOrderedSprints(calculatedSprints);
@@ -249,148 +214,90 @@ const KanbanView: React.FC<KanbanViewProps> = ({ tasks, resources, workPackages,
       return { totalTasks, completedTasks, progress, activeSprints, totalLoad, totalCap };
   }, [tasks, orderedSprints]);
 
-  const handleDropTask = (taskId: string, newVersion: number) => {
-    onTaskSprintChange(taskId, newVersion);
-  };
-
-  const handleSprintReorder = useCallback((targetSprintId: number) => {
-    if (draggedSprintId === null || draggedSprintId === targetSprintId) return;
-    setOrderedSprints(current => {
-        const result = [...current];
-        const idxA = result.findIndex(s => s.id === draggedSprintId);
-        const idxB = result.findIndex(s => s.id === targetSprintId);
-        if (idxA === -1 || idxB === -1) return current;
-        const [removed] = result.splice(idxA, 1);
-        result.splice(idxB, 0, removed);
-        return result;
-    });
-    setDraggedSprintId(null);
-  }, [draggedSprintId]);
-
-  const resetFilters = () => {
-    setSearchTerm(''); setFilterUnit('all'); setFilterResource('all'); setFilterPriority('all'); setFilterWorkPackage('all');
-  };
-
-  const hasActiveFilters = searchTerm || filterUnit !== 'all' || filterResource !== 'all' || filterPriority !== 'all' || filterWorkPackage !== 'all';
-
   return (
     <div className={`flex flex-col transition-all duration-500 ease-in-out bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 overflow-hidden shadow-2xl ${isFullScreen ? 'fixed inset-0 z-[100] rounded-none' : 'h-[calc(100vh-6rem)] rounded-3xl'}`}>
       <div className="flex-none bg-white dark:bg-gray-900/80 backdrop-blur-md p-4 border-b border-gray-100 dark:border-gray-800 z-20 shadow-sm relative">
         <div className="flex justify-between items-center">
           <div className="flex items-center space-x-4">
-             <div className="w-10 h-10 bg-blue-600 rounded-xl text-white shadow-lg flex items-center justify-center">
+             <div className="w-10 h-10 bg-primary rounded-xl text-white shadow-lg flex items-center justify-center" style={{ backgroundColor: 'var(--app-primary)' }}>
                 <i className="fa-solid fa-layer-group text-sm"></i>
              </div>
              <div>
                 <h2 className="text-base font-black text-gray-800 dark:text-white leading-none">Sürüm Planlama</h2>
                 <div className="flex items-center space-x-3 mt-1.5">
                     <span className="text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest flex items-center">
-                        <i className="fa-solid fa-calendar-day mr-1.5 text-blue-500"></i>{new Date(projectStartDate).toLocaleDateString('tr-TR')}
+                        <i className="fa-solid fa-calendar-day mr-1.5 text-primary" style={{ color: 'var(--app-primary)' }}></i>{new Date(projectStartDate).toLocaleDateString('tr-TR')}
                     </span>
-                    <span className="text-[9px] font-black text-blue-500 uppercase tracking-widest px-2 py-0.5 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                        MKS
+                    <span className="text-[9px] font-black text-primary uppercase tracking-widest px-2 py-0.5 bg-accent rounded-lg" style={{ color: 'var(--app-primary)', backgroundColor: 'var(--app-accent-light)' }}>
+                        MKS SİSTEMİ
                     </span>
-                    <div className="flex items-center space-x-1.5 bg-gray-50 dark:bg-gray-800 px-2 py-0.5 rounded-lg border border-gray-100 dark:border-gray-700">
-                        <i className="fa-solid fa-flask text-emerald-500 text-[8px]"></i>
-                        <input 
-                            type="number" 
-                            value={globalTestDays} 
-                            onChange={e => setGlobalTestDays(parseInt(e.target.value) || 0)}
-                            className="w-8 bg-transparent text-[9px] font-black text-emerald-600 outline-none p-0"
-                            title="Genel Test Günü Sayısı"
-                        />
-                        <span className="text-[7px] font-black text-gray-400 uppercase">GÜN TEST</span>
-                    </div>
                 </div>
              </div>
           </div>
           <div className="flex items-center space-x-2">
-            <button onClick={onNewTask} className="bg-indigo-600 hover:bg-indigo-700 text-white h-9 px-4 rounded-xl shadow-md transition-all font-black text-[10px] uppercase tracking-widest flex items-center">
+            <button onClick={onNewTask} className="bg-primary hover:opacity-90 text-white h-9 px-4 rounded-xl shadow-md transition-all font-black text-[10px] uppercase tracking-widest flex items-center" style={{ backgroundColor: 'var(--app-primary)' }}>
                 <i className="fa-solid fa-plus mr-2"></i> YENİ GÖREV
             </button>
             <div className="bg-gray-50 dark:bg-gray-800 p-1 rounded-xl flex items-center border border-gray-100 dark:border-gray-700">
-                <button onClick={() => setIsCompact(true)} className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${isCompact ? 'bg-white dark:bg-gray-700 text-blue-600 shadow-sm border border-gray-100 dark:border-gray-600' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}>Kompakt</button>
-                <button onClick={() => setIsCompact(false)} className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${!isCompact ? 'bg-white dark:bg-gray-700 text-blue-600 shadow-sm border border-gray-100 dark:border-gray-600' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}>Detaylı</button>
+                <button onClick={() => setIsCompact(true)} className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${isCompact ? 'bg-white dark:bg-gray-700 text-primary shadow-sm border border-gray-100 dark:border-gray-600' : 'text-gray-400 hover:text-gray-600'}`} style={isCompact ? { color: 'var(--app-primary)' } : {}}>Kompakt</button>
+                <button onClick={() => setIsCompact(false)} className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${!isCompact ? 'bg-white dark:bg-gray-700 text-primary shadow-sm border border-gray-100 dark:border-gray-600' : 'text-gray-400 hover:text-gray-600'}`} style={!isCompact ? { color: 'var(--app-primary)' } : {}}>Detaylı</button>
             </div>
-            <button onClick={() => setIsFilterExpanded(!isFilterExpanded)} className={`w-9 h-9 rounded-xl transition-all border flex items-center justify-center ${isFilterExpanded ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-white dark:bg-gray-800 text-gray-500 border-gray-100 dark:border-gray-700 hover:bg-gray-50'}`} title="Filtreler">
-                <i className={`fa-solid ${isFilterExpanded ? 'fa-chevron-up' : 'fa-filter'} text-xs`}></i>
-                {hasActiveFilters && <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border border-white"></span>}
-            </button>
-            <button onClick={() => setIsFullScreen(!isFullScreen)} className={`w-9 h-9 rounded-xl transition-all border flex items-center justify-center ${isFullScreen ? 'bg-indigo-50 text-indigo-600 border-indigo-200' : 'bg-white dark:bg-gray-800 text-gray-400 border-gray-200 dark:border-gray-700 hover:bg-gray-50'}`} title={isFullScreen ? "Tam Ekrandan Çık" : "Tam Ekran (Zen Modu)"}>
-                <i className={`fa-solid ${isFullScreen ? 'fa-compress' : 'fa-expand'} text-xs`}></i>
-            </button>
-            <button onClick={handleExportPlan} className="w-9 h-9 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl shadow-md flex items-center justify-center transition-all" title="Excel Planı İndir">
-                <i className="fa-solid fa-file-excel text-xs"></i>
-            </button>
-            <button onClick={handleGeneratePlan} disabled={isLoading} className="bg-blue-600 hover:bg-blue-700 text-white h-9 px-5 rounded-xl shadow-md transition-all font-black text-[10px] uppercase tracking-widest flex items-center disabled:opacity-50">
+            <button onClick={handleGeneratePlan} disabled={isLoading} className="bg-primary hover:opacity-90 text-white h-9 px-5 rounded-xl shadow-md transition-all font-black text-[10px] uppercase tracking-widest flex items-center disabled:opacity-50" style={{ backgroundColor: 'var(--app-primary)' }}>
               {isLoading ? <i className="fa-solid fa-spinner fa-spin mr-2"></i> : <i className="fa-solid fa-magic mr-2"></i>}
               {isLoading ? 'HESAPLANIYOR' : 'OTOMATİK PLANLA'}
             </button>
+            <button onClick={() => setIsFullScreen(!isFullScreen)} className={`w-9 h-9 rounded-xl transition-all border flex items-center justify-center ${isFullScreen ? 'bg-accent text-primary border-primary/20' : 'bg-white dark:bg-gray-800 text-gray-400 border-gray-100 dark:border-gray-700 hover:bg-gray-50'}`} style={isFullScreen ? { backgroundColor: 'var(--app-accent-light)', color: 'var(--app-primary)' } : {}} title="Tam Ekran">
+                <i className={`fa-solid ${isFullScreen ? 'fa-compress' : 'fa-expand'} text-xs`}></i>
+            </button>
           </div>
-        </div>
-        <div className={`transition-all duration-300 ease-in-out overflow-hidden ${isFilterExpanded ? 'max-h-64 opacity-100 mt-4' : 'max-h-0 opacity-0'}`}>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 pt-4 border-t border-gray-50 dark:border-gray-800">
-                <div className="col-span-1">
-                    <label className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Akıllı Arama</label>
-                    <div className="relative group">
-                        <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-300 text-[10px]"></i>
-                        <input type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Ara..." className="w-full pl-9 pr-3 py-1.5 bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-lg outline-none text-[11px] transition-all focus:border-blue-300"/>
-                    </div>
-                </div>
-                <FilterDropdown label="Birim" value={filterUnit} onChange={setFilterUnit} options={uniqueUnits} />
-                <FilterDropdown label="Kaynak" value={filterResource} onChange={setFilterResource} options={uniqueResources} />
-                <FilterDropdown label="Öncelik" value={filterPriority} onChange={setFilterPriority} options={uniquePriorities} />
-                <FilterDropdown label="İş Paketi" value={filterWorkPackage} onChange={setFilterWorkPackage} options={uniqueWorkPackages} />
-            </div>
-            {hasActiveFilters && (
-                <div className="flex justify-end mt-2">
-                    <button onClick={resetFilters} className="text-[9px] font-black text-red-500 hover:text-red-700 flex items-center">
-                        <i className="fa-solid fa-trash-can mr-1.5"></i> TEMİZLE
-                    </button>
-                </div>
-            )}
         </div>
       </div>
       <div className="flex-grow overflow-x-auto overflow-y-hidden custom-scrollbar bg-[#F9FAFB] dark:bg-gray-950/40">
         <div className="inline-flex h-full items-start px-6 py-6 space-x-4">
           {orderedSprints.map((sprint, idx) => (
             <React.Fragment key={sprint.id}>
-              {sprint.id !== 0 && <AddSprintColumn onClick={() => handleAddSprint(sprint.id)} />}
+              {sprint.id !== 0 && <AddSprintColumn onClick={() => onInsertSprint(sprint.id)} />}
               <div className="h-full flex flex-col">
                   <div className="flex items-start h-full">
                     {sprint.id === 0 && !isBacklogExpanded ? (
-                        <BacklogTab count={sprint.tasks.length} onClick={() => setIsBacklogExpanded(true)} onDrop={handleDropTask} />
+                        <BacklogTab count={sprint.tasks.length} onClick={() => setIsBacklogExpanded(true)} onDrop={onTaskSprintChange} />
                     ) : (
                         <KanbanColumn 
                             sprint={sprint}
                             workPackages={workPackages}
-                            onDropTask={handleDropTask}
+                            onDropTask={onTaskSprintChange}
                             onTaskStatusChange={onTaskStatusChange}
                             onDelete={setSprintToDelete}
                             onCollapse={() => sprint.id === 0 && setIsBacklogExpanded(false)}
                             isDragged={draggedSprintId === sprint.id}
                             isCompact={isCompact}
-                            onSprintDragStart={(id) => setDraggedSprintId(id)}
+                            onSprintDragStart={setDraggedSprintId}
                             onSprintDragEnd={() => setDraggedSprintId(null)}
-                            onSprintDrop={handleSprintReorder}
+                            onSprintDrop={(tid) => {
+                                if (draggedSprintId !== null && draggedSprintId !== tid) {
+                                    setOrderedSprints(curr => {
+                                        const res = [...curr];
+                                        const idxA = res.findIndex(s => s.id === draggedSprintId);
+                                        const idxB = res.findIndex(s => s.id === tid);
+                                        const [rem] = res.splice(idxA, 1);
+                                        res.splice(idxB, 0, rem);
+                                        return res;
+                                    });
+                                }
+                            }}
                             onViewTaskDetails={onViewTaskDetails}
                             onUpdateSprintName={(name) => setSprintNames(prev => ({...prev, [sprint.id]: name}))}
                         />
                     )}
                     {sprint.id > 0 && (
                         <div className="h-full flex items-start mx-1.5">
-                            <TestPeriodColumn 
-                                sprint={sprint} 
-                                allTasks={tasks} 
-                                resources={resources} 
-                                onUpdateTestPeriod={handleUpdateTestPeriod} 
-                            />
+                            <TestPeriodColumn sprint={sprint} allTasks={tasks} resources={resources} onUpdateTestPeriod={(sid, d) => setTestPeriodDetails(prev => ({...prev, [sid]: {...(prev[sid]||{}), ...d}}))} />
                         </div>
                     )}
                   </div>
               </div>
               {idx === orderedSprints.length - 1 && (
-                  <AddSprintColumn onClick={() => handleAddSprint(sprint.id + 1)} />
+                  <AddSprintColumn onClick={() => extraSprints < 10 && setExtraSprints(extraSprints + 1)} />
               )}
             </React.Fragment>
           ))}
@@ -403,36 +310,16 @@ const KanbanView: React.FC<KanbanViewProps> = ({ tasks, resources, workPackages,
                     <span className="text-[8px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1.5">İLERLEME DURUMU</span>
                     <div className="flex items-center space-x-3">
                         <div className="w-40 h-1.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
-                            <div className="h-full bg-blue-500 rounded-full transition-all duration-1000" style={{ width: `${boardStats.progress}%` }}></div>
+                            <div className="h-full bg-primary rounded-full transition-all duration-1000" style={{ width: `${boardStats.progress}%`, backgroundColor: 'var(--app-primary)' }}></div>
                         </div>
-                        <span className="text-[10px] font-black text-blue-600">%{boardStats.progress}</span>
-                    </div>
-                </div>
-                <div className="h-8 w-px bg-gray-100 dark:bg-gray-800"></div>
-                <div className="flex space-x-10">
-                    <div className="flex flex-col">
-                        <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">SÜRÜM</span>
-                        <span className="text-xs font-black text-gray-700 dark:text-white">{boardStats.activeSprints} Aktif</span>
-                    </div>
-                    <div className="flex flex-col">
-                        <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">EFOR/KAPASİTE</span>
-                        <span className="text-xs font-black text-gray-700 dark:text-white">
-                            {Math.round(boardStats.totalLoad)}/{Math.round(boardStats.totalCap)} <span className="text-[9px] opacity-40 uppercase tracking-tighter">GÜN</span>
-                        </span>
+                        <span className="text-[10px] font-black text-primary" style={{ color: 'var(--app-primary)' }}>%{boardStats.progress}</span>
                     </div>
                 </div>
             </div>
             <div className="flex items-center space-x-4 bg-gray-50 dark:bg-gray-800/50 px-3 py-1.5 rounded-xl border border-gray-100 dark:border-gray-700">
-                 <div className="flex -space-x-2">
-                    {resources.slice(0, 5).map(r => (
-                        <div key={r.id} className="w-7 h-7 rounded-lg border-2 border-white dark:border-gray-900 bg-blue-100 text-blue-700 flex items-center justify-center text-[9px] font-black" title={r.name}>
-                            {r.name.split(' ').map(n => n[0]).join('')}
-                        </div>
-                    ))}
-                 </div>
                  <div className="flex flex-col leading-none">
                     <span className="text-[8px] font-black text-gray-400 uppercase">EKİP</span>
-                    <span className="text-[10px] font-black text-blue-600">{resources.length} ÜYE</span>
+                    <span className="text-[10px] font-black text-primary" style={{ color: 'var(--app-primary)' }}>{resources.length} ÜYE</span>
                  </div>
             </div>
          </div>

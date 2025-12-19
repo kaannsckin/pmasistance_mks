@@ -28,7 +28,6 @@ const App: React.FC = () => {
   
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
-  const [pendingRequest, setPendingRequest] = useState<CustomerRequest | null>(null);
   
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [viewingTask, setViewingTask] = useState<Task | null>(null);
@@ -36,6 +35,7 @@ const App: React.FC = () => {
   const [teamsTask, setTeamsTask] = useState<Task | null>(null);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
+  
   const [sprintDuration, setSprintDuration] = useState(3);
   const [projectStartDate, setProjectStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [isLocalPersistenceEnabled, setIsLocalPersistenceEnabled] = useState(true);
@@ -44,6 +44,12 @@ const App: React.FC = () => {
   const [titleCosts, setTitleCosts] = useState<Record<string, number>>({});
   const [sprintNames, setSprintNames] = useState<Record<number, string>>({});
   const [globalTestDays, setGlobalTestDays] = useState(4);
+  const [appTheme, setAppTheme] = useState('classic');
+  const [isDarkMode, setIsDarkMode] = useState(false);
+  
+  const [manMonthTableColor, setManMonthTableColor] = useState('#2563eb');
+  const [costTableColor, setCostTableColor] = useState('#10b981');
+  
   const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
@@ -52,8 +58,7 @@ const App: React.FC = () => {
       try {
         const parsed = JSON.parse(savedData) as ProjectData;
         setTasks(parsed.tasks || []);
-        const resourcesWithTitle = (parsed.resources || []).map(r => ({ ...r, title: r.title || 'Ünvan Belirtilmemiş' }));
-        setResources(resourcesWithTitle);
+        setResources(parsed.resources || []);
         setWorkPackages(parsed.workPackages || []);
         setNotes(parsed.notes || []);
         setCustomerRequests(parsed.customerRequests || []);
@@ -66,6 +71,8 @@ const App: React.FC = () => {
           setTitleCosts(parsed.settings.titleCosts || {});
           setSprintNames(parsed.settings.sprintNames || {});
           setGlobalTestDays(parsed.settings.globalTestDays || 4);
+          setAppTheme(parsed.settings.theme || 'classic');
+          setIsDarkMode(parsed.settings.isDarkMode || false);
         }
       } catch (e) {
         console.error("Yükleme hatası:", e);
@@ -77,6 +84,14 @@ const App: React.FC = () => {
     }
     setIsInitialized(true);
   }, []);
+
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [isDarkMode]);
 
   useEffect(() => {
     if (isInitialized) {
@@ -94,93 +109,33 @@ const App: React.FC = () => {
           tagColors,
           titleCosts,
           sprintNames,
-          globalTestDays
+          globalTestDays,
+          manMonthTableColor,
+          costTableColor,
+          theme: appTheme,
+          isDarkMode
         },
-        appVersion: '1.6.0',
+        appVersion: '1.9.0',
         exportDate: new Date().toISOString()
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
     }
-  }, [tasks, resources, workPackages, notes, customerRequests, sprintDuration, projectStartDate, isLocalPersistenceEnabled, isAIEnabled, tagColors, titleCosts, sprintNames, globalTestDays, isInitialized]);
+  }, [tasks, resources, workPackages, notes, customerRequests, sprintDuration, projectStartDate, isLocalPersistenceEnabled, isAIEnabled, tagColors, titleCosts, sprintNames, globalTestDays, manMonthTableColor, costTableColor, appTheme, isDarkMode, isInitialized]);
 
   const handleResetData = useCallback(() => {
       localStorage.removeItem(STORAGE_KEY);
       window.location.reload(); 
   }, []);
 
-  const handleOpenForm = useCallback((task: Task | null) => {
-    setEditingTask(task);
-    setIsFormModalOpen(true);
-  }, []);
-
-  const handleCloseForm = useCallback(() => {
-    setEditingTask(null);
-    setPendingRequest(null);
-    setIsFormModalOpen(false);
-  }, []);
-
-  const handleSaveTask = useCallback((taskToSave: Task) => {
-    const isExisting = tasks.some(t => t.id === taskToSave.id);
-    if (isExisting) {
-      setTasks(tasks.map(t => t.id === taskToSave.id ? taskToSave : t));
-    } else {
-      setTasks([...tasks, { ...taskToSave, id: taskToSave.id || Date.now().toString() }]);
-    }
-    handleCloseForm();
-  }, [tasks, handleCloseForm]);
-
-  const handleDeleteTask = useCallback((taskId: string) => {
-    if (window.confirm('Bu görevi silmek istediğinize emin misiniz?')) {
-      setTasks(prev => prev.filter(t => t.id !== taskId));
-    }
-  }, []);
-
-  const handleOpenDetails = useCallback((task: Task) => {
-    setViewingTask(task);
-    setIsDetailModalOpen(true);
-  }, []);
-
-  const handleCloseDetails = useCallback(() => {
-    setViewingTask(null);
-    setIsDetailModalOpen(false);
-  }, []);
-
-  const handleEditFromDetails = useCallback((task: Task) => {
-    handleCloseDetails();
-    handleOpenForm(task);
-  }, [handleCloseDetails, handleOpenForm]);
-
-  const handleOpenTeamsModal = useCallback((task: Task) => {
-    setTeamsTask(task);
-    setIsTeamsModalOpen(true);
-  }, []);
-
-  const handleCloseTeamsModal = useCallback(() => {
-    setTeamsTask(null);
-    setIsTeamsModalOpen(false);
-  }, []);
-
-  const handleOpenSettings = useCallback(() => {
-    setIsSettingsModalOpen(true);
-  }, []);
-
-  const handleSaveSettings = (newDuration: number, newDate: string, enabled: boolean, aiEnabled: boolean) => {
+  const handleSaveSettings = (newDuration: number, newDate: string, enabled: boolean, aiEnabled: boolean, newTheme: string, dark: boolean) => {
     setSprintDuration(newDuration);
     setProjectStartDate(newDate);
     setIsLocalPersistenceEnabled(enabled);
     setIsAIEnabled(aiEnabled);
+    setAppTheme(newTheme);
+    setIsDarkMode(dark);
     setIsSettingsModalOpen(false);
   };
-
-  // Add the missing onDataImport handler
-  const handleDataImport = useCallback((newTasks: Task[], newResources: Resource[]) => {
-    setTasks(prev => [...prev, ...newTasks]);
-    setResources(prev => {
-      const existingNames = new Set(prev.map(r => r.name.toLowerCase()));
-      const uniqueNew = newResources.filter(r => !existingNames.has(r.name.toLowerCase()));
-      return [...prev, ...uniqueNew];
-    });
-  }, []);
 
   const renderView = () => {
     if (!isInitialized) return <div className="h-[60vh] flex items-center justify-center"><i className="fa-solid fa-spinner fa-spin text-4xl text-blue-500"></i></div>;
@@ -191,22 +146,20 @@ const App: React.FC = () => {
         return (
           <TaskGallery
             tasks={tasks} resources={resources} workPackages={workPackages}
-            onEditTask={handleOpenForm} onViewTask={handleOpenDetails}
-            onNotifyTask={handleOpenTeamsModal} onNewTask={() => handleOpenForm(null)}
-            onDeleteTask={handleDeleteTask}
-            onDataImport={handleDataImport}
+            onEditTask={(t) => { setEditingTask(t); setIsFormModalOpen(true); }} onViewTask={(t) => { setViewingTask(t); setIsDetailModalOpen(true); }}
+            onNotifyTask={(t) => { setTeamsTask(t); setIsTeamsModalOpen(true); }} onNewTask={() => { setEditingTask(null); setIsFormModalOpen(true); }}
+            onDeleteTask={(taskId) => { if(window.confirm('Emin misiniz?')) setTasks(prev => prev.filter(t => t.id !== taskId)); }}
+            onDataImport={(nt, nr) => { setTasks(prev => [...prev, ...nt]); setResources(prev => [...prev, ...nr]); }}
             onTaskStatusChange={(id, s) => setTasks(tasks.map(t => t.id === id ? { ...t, status: s } : t))}
           />
         );
       case View.Resources:
         return (
           <ResourceManager 
-            resources={resources} 
-            setResources={setResources} 
-            tasks={tasks}
-            setTasks={setTasks}
-            titleCosts={titleCosts}
-            setTitleCosts={setTitleCosts}
+            resources={resources} setResources={setResources} tasks={tasks} setTasks={setTasks}
+            titleCosts={titleCosts} setTitleCosts={setTitleCosts}
+            manMonthTableColor={manMonthTableColor} setManMonthTableColor={setManMonthTableColor}
+            costTableColor={costTableColor} setCostTableColor={setCostTableColor}
           />
         );
       case View.WorkPackages:
@@ -222,52 +175,51 @@ const App: React.FC = () => {
             onTaskStatusChange={(id, s) => setTasks(tasks.map(t => t.id === id ? { ...t, status: s } : t))} 
             onInsertSprint={(n) => setTasks(tasks.map(t => t.version >= n ? { ...t, version: t.version + 1 } : t))}
             onDeleteSprint={(n) => setTasks(tasks.map(t => t.version === n ? { ...t, version: 0, status: TaskStatus.Backlog } : t.version > n ? { ...t, version: t.version - 1 } : t))} 
-            onOpenSettings={handleOpenSettings}
-            onNewTask={() => handleOpenForm(null)}
-            onViewTaskDetails={(taskId) => { const t = tasks.find(x => x.id === taskId); if(t) handleOpenDetails(t); }}
+            onOpenSettings={() => setIsSettingsModalOpen(true)}
+            onNewTask={() => { setEditingTask(null); setIsFormModalOpen(true); }}
+            onViewTaskDetails={(taskId) => { const t = tasks.find(x => x.id === taskId); if(t) { setViewingTask(t); setIsDetailModalOpen(true); } }}
           />
         );
       case View.Notes:
         return (
           <NotesView 
-            notes={notes} resources={resources} 
-            tagColors={tagColors} setTagColors={setTagColors}
-            onAddNote={(n) => setNotes([n, ...notes])}
-            onEditNote={(n) => setNotes(notes.map(x => x.id === n.id ? n : x))} 
-            onDeleteNote={(id) => setNotes(notes.filter(x => x.id !== id))}
+            notes={notes} resources={resources} tagColors={tagColors} setTagColors={setTagColors}
+            onAddNote={(n) => setNotes([n, ...notes])} onEditNote={(n) => setNotes(notes.map(x => x.id === n.id ? n : x))} onDeleteNote={(id) => setNotes(notes.filter(x => x.id !== id))}
           />
         );
       case View.Requests:
         return (
           <CustomerRequestsView 
-            requests={customerRequests} 
-            setRequests={setCustomerRequests} 
-            onConvertToTask={(r) => handleOpenForm({ id: `req-${r.id}`, name: r.title, status: TaskStatus.Backlog, version: 0, priority: 'Medium', unit: 'Müşteri', resourceName: resources[0]?.name || '', time: { best: 0, avg: 0, worst: 0 }, notes: r.description, jiraId: '', availability: false, predecessor: null, includeInSprints: true })}
+            requests={customerRequests} setRequests={setCustomerRequests} 
+            onConvertToTask={(r) => { setEditingTask({ id: `req-${r.id}`, name: r.title, status: TaskStatus.Backlog, version: 0, priority: 'Medium', unit: 'Müşteri', resourceName: resources[0]?.name || '', time: { best: 0, avg: 0, worst: 0 }, notes: r.description, jiraId: '', availability: false, predecessor: null, includeInSprints: true }); setIsFormModalOpen(true); }}
           />
         );
-      default: return <KanbanView {...{tasks, resources, workPackages, sprintDuration, projectStartDate, sprintNames, setSprintNames, globalTestDays, setGlobalTestDays, onPlanGenerated: setTasks, onTaskSprintChange: (id, v) => {}, onTaskStatusChange: (id, s) => {}, onInsertSprint: (n) => {}, onDeleteSprint: (n) => {}, onOpenSettings: handleOpenSettings, onNewTask: () => {}, onViewTaskDetails: (id) => {} }} />;
+      default: return <KanbanView {...{tasks, resources, workPackages, sprintDuration, projectStartDate, sprintNames, setSprintNames, globalTestDays, setGlobalTestDays, onPlanGenerated: setTasks, onTaskSprintChange: (id, v) => {}, onTaskStatusChange: (id, s) => {}, onInsertSprint: (n) => {}, onDeleteSprint: (n) => {}, onOpenSettings: () => setIsSettingsModalOpen(true), onNewTask: () => {}, onViewTaskDetails: (id) => {} }} />;
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans">
+    <div className={`min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans theme-${appTheme}`}>
       <Header 
         currentView={currentView} setCurrentView={setCurrentView} 
-        onOpenSettings={handleOpenSettings} onSaveProject={() => {}} onLoadProject={() => {}}
-        isLocalPersistenceEnabled={isLocalPersistenceEnabled}
-        isAIEnabled={isAIEnabled}
+        onOpenSettings={() => setIsSettingsModalOpen(true)} onSaveProject={() => {}} onLoadProject={() => {}}
+        isLocalPersistenceEnabled={isLocalPersistenceEnabled} isAIEnabled={isAIEnabled}
         onOpenAbout={() => setIsAboutModalOpen(true)}
       />
       <main className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {renderView()}
       </main>
       
-      {isFormModalOpen && <TaskFormModal task={editingTask} resources={resources} tasks={tasks} workPackages={workPackages} onClose={handleCloseForm} onSave={handleSaveTask} />}
-      {isDetailModalOpen && viewingTask && <TaskDetailModal task={viewingTask} workPackages={workPackages} onClose={handleCloseDetails} onEdit={handleEditFromDetails} />}
-      {isTeamsModalOpen && teamsTask && <TeamsMessageModal task={teamsTask} onClose={handleCloseTeamsModal} />}
+      {isFormModalOpen && <TaskFormModal task={editingTask} resources={resources} tasks={tasks} workPackages={workPackages} onClose={() => setIsFormModalOpen(false)} onSave={(t) => {
+          const isEx = tasks.some(x => x.id === t.id);
+          setTasks(isEx ? tasks.map(x => x.id === t.id ? t : x) : [...tasks, t]);
+          setIsFormModalOpen(false);
+      }} />}
+      {isDetailModalOpen && viewingTask && <TaskDetailModal task={viewingTask} workPackages={workPackages} onClose={() => setIsDetailModalOpen(false)} onEdit={(t) => { setIsDetailModalOpen(false); setEditingTask(t); setIsFormModalOpen(true); }} />}
+      {isTeamsModalOpen && teamsTask && <TeamsMessageModal task={teamsTask} onClose={() => setIsTeamsModalOpen(false)} />}
       {isSettingsModalOpen && (
         <SettingsModal 
-          sprintDuration={sprintDuration} projectStartDate={projectStartDate} isLocalPersistenceEnabled={isLocalPersistenceEnabled} isAIEnabled={isAIEnabled}
+          sprintDuration={sprintDuration} projectStartDate={projectStartDate} isLocalPersistenceEnabled={isLocalPersistenceEnabled} isAIEnabled={isAIEnabled} currentTheme={appTheme} isDarkMode={isDarkMode}
           onSave={handleSaveSettings} onClose={() => setIsSettingsModalOpen(false)} onResetData={handleResetData} 
         />
       )}

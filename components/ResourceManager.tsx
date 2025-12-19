@@ -14,9 +14,16 @@ interface ResourceManagerProps {
   setTasks: React.Dispatch<React.SetStateAction<Task[]>>;
   titleCosts: Record<string, number>;
   setTitleCosts: React.Dispatch<React.SetStateAction<Record<string, number>>>;
+  manMonthTableColor: string;
+  setManMonthTableColor: (color: string) => void;
+  costTableColor: string;
+  setCostTableColor: (color: string) => void;
 }
 
 const MONTHS_SHORT = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
+
+const RESOURCE_PALETTE = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#64748b'];
+const TABLE_THEME_PALETTE = ['#2563eb', '#10b981', '#7c3aed', '#db2777', '#ea580c', '#475569'];
 
 const formatName = (name: string) => {
   const parts = name.trim().split(' ');
@@ -40,7 +47,51 @@ const parseExcelValue = (val: any): number => {
     return Math.round(num);
 };
 
-const ResourceManager: React.FC<ResourceManagerProps> = ({ resources, setResources, tasks, setTasks, titleCosts, setTitleCosts }) => {
+const ResourceColorPicker: React.FC<{ currentColor?: string, onSelect: (color: string) => void }> = ({ currentColor, onSelect }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    return (
+        <div className="relative inline-block mr-2">
+            <button 
+                onClick={() => setIsOpen(!isOpen)}
+                className="w-3 h-3 rounded-full border border-gray-200 dark:border-gray-600 shadow-sm transition-transform hover:scale-125"
+                style={{ backgroundColor: currentColor || '#cbd5e1' }}
+            />
+            {isOpen && (
+                <div className="absolute top-full left-0 mt-1 p-2 bg-white dark:bg-gray-800 border dark:border-gray-700 shadow-xl rounded-xl z-50 flex gap-1 animate-fade-in">
+                    {RESOURCE_PALETTE.map(c => (
+                        <button 
+                            key={c} 
+                            onClick={() => { onSelect(c); setIsOpen(false); }}
+                            className="w-4 h-4 rounded-full border border-gray-100 hover:scale-110 transition-transform"
+                            style={{ backgroundColor: c }}
+                        />
+                    ))}
+                    <button onClick={() => { onSelect(''); setIsOpen(false); }} className="w-4 h-4 rounded-full bg-gray-200 flex items-center justify-center text-[8px]"><i className="fa-solid fa-times"></i></button>
+                </div>
+            )}
+        </div>
+    );
+};
+
+const TableThemePicker: React.FC<{ currentColor: string, onSelect: (color: string) => void, label: string }> = ({ currentColor, onSelect, label }) => {
+    return (
+        <div className="flex items-center space-x-2 bg-gray-50 dark:bg-gray-800 p-1 px-2 rounded-xl border border-gray-100 dark:border-gray-700">
+            <span className="text-[8px] font-black text-gray-400 uppercase tracking-tighter">{label}</span>
+            <div className="flex space-x-1">
+                {TABLE_THEME_PALETTE.map(c => (
+                    <button 
+                        key={c} 
+                        onClick={() => onSelect(c)}
+                        className={`w-3.5 h-3.5 rounded-full border transition-all ${currentColor === c ? 'ring-2 ring-offset-1 ring-gray-400 scale-110' : 'border-transparent opacity-60 hover:opacity-100'}`}
+                        style={{ backgroundColor: c }}
+                    />
+                ))}
+            </div>
+        </div>
+    );
+};
+
+const ResourceManager: React.FC<ResourceManagerProps> = ({ resources, setResources, tasks, setTasks, titleCosts, setTitleCosts, manMonthTableColor, setManMonthTableColor, costTableColor, setCostTableColor }) => {
   const [activeTab, setActiveTab] = useState<'list' | 'manmonth' | 'costs'>('list');
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [editingState, setEditingState] = useState<{ id: string, field: 'name' | 'unit' | 'title' } | null>(null);
@@ -88,6 +139,10 @@ const ResourceManager: React.FC<ResourceManagerProps> = ({ resources, setResourc
           }
           return r;
       }));
+  };
+
+  const handleUpdateResourceColor = (id: string, color: string) => {
+      setResources(prev => prev.map(r => r.id === id ? { ...r, color } : r));
   };
 
   const handleStartEdit = (resource: Resource, field: 'name' | 'unit' | 'title') => {
@@ -235,6 +290,13 @@ const ResourceManager: React.FC<ResourceManagerProps> = ({ resources, setResourc
             </div>
             
             <div className="flex items-center space-x-2">
+                {activeTab === 'manmonth' && (
+                    <TableThemePicker label="TABLO TEMASI" currentColor={manMonthTableColor} onSelect={setManMonthTableColor} />
+                )}
+                {activeTab === 'costs' && (
+                    <TableThemePicker label="TABLO TEMASI" currentColor={costTableColor} onSelect={setCostTableColor} />
+                )}
+
                 <div className="relative">
                     <button onMouseEnter={() => setShowHelp(true)} onMouseLeave={() => setShowHelp(false)} className="w-8 h-8 flex items-center justify-center text-blue-500 hover:text-blue-700 transition-colors">
                         <i className="fa-solid fa-circle-question"></i>
@@ -311,9 +373,12 @@ const ResourceManager: React.FC<ResourceManagerProps> = ({ resources, setResourc
                                             {editingState?.id === resource.id && editingState.field === 'name' ? (
                                                 <input autoFocus value={tempValue} onChange={e => setTempValue(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSaveEdit()} onBlur={handleSaveEdit} className="bg-white border border-blue-400 rounded px-2 py-0.5 text-xs font-bold outline-none uppercase w-full max-w-[200px]"/>
                                             ) : (
-                                                <div className="flex items-center space-x-2 cursor-pointer" onClick={() => handleStartEdit(resource, 'name')}>
-                                                    <span className="text-xs font-bold text-gray-700 dark:text-gray-200 uppercase">{resource.name}</span>
-                                                    <i className="fa-solid fa-pencil text-[8px] text-gray-300 opacity-0 group-hover:opacity-100"></i>
+                                                <div className="flex items-center space-x-2">
+                                                    <ResourceColorPicker currentColor={resource.color} onSelect={(c) => handleUpdateResourceColor(resource.id, c)} />
+                                                    <div className="flex items-center space-x-2 cursor-pointer" onClick={() => handleStartEdit(resource, 'name')}>
+                                                        <span className="text-xs font-bold text-gray-700 dark:text-gray-200 uppercase">{resource.name}</span>
+                                                        <i className="fa-solid fa-pencil text-[8px] text-gray-300 opacity-0 group-hover:opacity-100"></i>
+                                                    </div>
                                                 </div>
                                             )}
                                         </td>
@@ -361,10 +426,10 @@ const ResourceManager: React.FC<ResourceManagerProps> = ({ resources, setResourc
                     <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 overflow-hidden overflow-x-auto custom-scrollbar">
                         <table className="w-full border-collapse table-fixed min-w-[900px]">
                             <thead className="sticky top-0 z-30">
-                                <tr className="bg-blue-600 text-white text-[10px] font-black uppercase tracking-widest">
-                                    <th className="p-3 text-left border border-blue-500 w-32 bg-blue-700">EKİP ÜYESİ</th>
+                                <tr className="text-white text-[10px] font-black uppercase tracking-widest" style={{ backgroundColor: manMonthTableColor }}>
+                                    <th className="p-3 text-left border w-32 filter brightness-90" style={{ borderColor: manMonthTableColor, backgroundColor: manMonthTableColor }}>EKİP ÜYESİ</th>
                                     {MONTHS_SHORT.map(m => (
-                                        <th key={m} className="p-2 text-center border border-blue-500 w-14">{m}</th>
+                                        <th key={m} className="p-2 text-center border w-14" style={{ borderColor: manMonthTableColor }}>{m}</th>
                                     ))}
                                 </tr>
                             </thead>
@@ -376,24 +441,29 @@ const ResourceManager: React.FC<ResourceManagerProps> = ({ resources, setResourc
                                     );
                                     return (
                                         <React.Fragment key={unit}>
-                                            <tr className="bg-blue-50/80 dark:bg-blue-900/30 sticky top-[37px] z-20 shadow-sm border-b border-blue-100 dark:border-blue-900">
-                                                <td className="p-1.5 pl-3 font-black text-blue-800 dark:text-blue-300 border-r border-blue-100 dark:border-blue-900 uppercase truncate">
+                                            <tr className="bg-gray-50/80 dark:bg-gray-900/30 sticky top-[37px] z-20 shadow-sm border-b" style={{ borderColor: `${manMonthTableColor}20` }}>
+                                                <td className="p-1.5 pl-3 font-black border-r uppercase truncate" style={{ color: manMonthTableColor, borderRightColor: `${manMonthTableColor}20` }}>
                                                     <i className="fa-solid fa-layer-group mr-2 opacity-50 text-[8px]"></i>{unit} TOPLAM
                                                 </td>
                                                 {unitTotals.map((total, i) => {
                                                     const isOverload = total > unitCapacity;
                                                     return (
-                                                        <td key={i} className={`p-1.5 text-center font-black border-r border-blue-100 dark:border-blue-900 transition-colors ${isOverload ? 'text-rose-600 bg-rose-50/50 dark:text-rose-400 dark:bg-rose-900/20' : 'text-blue-700 dark:text-blue-400'}`}>
+                                                        <td key={i} className={`p-1.5 text-center font-black border-r transition-colors ${isOverload ? 'text-rose-600 bg-rose-50/50 dark:text-rose-400 dark:bg-rose-900/20' : ''}`} style={{ borderRightColor: `${manMonthTableColor}20`, color: !isOverload ? manMonthTableColor : undefined }}>
                                                             %{total}
                                                         </td>
                                                     );
                                                 })}
                                             </tr>
                                             {unitResources.map(r => (
-                                                <tr key={r.id} className="hover:bg-blue-50/30 dark:hover:bg-blue-900/10 transition-colors group">
+                                                <tr key={r.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/10 transition-colors group">
                                                     <td className="p-1.5 pl-4 border-r border-gray-50 dark:border-gray-800 group-hover:bg-white dark:group-hover:bg-gray-700">
-                                                        <p className="font-bold text-gray-700 dark:text-gray-200 leading-tight truncate">{formatName(r.name)}</p>
-                                                        <p className="text-[7px] text-gray-400 dark:text-gray-500 font-black uppercase tracking-tighter opacity-70 leading-none mt-0.5">{r.title}</p>
+                                                        <div className="flex items-center">
+                                                            <ResourceColorPicker currentColor={r.color} onSelect={(c) => handleUpdateResourceColor(r.id, c)} />
+                                                            <div>
+                                                                <p className="font-bold text-gray-700 dark:text-gray-200 leading-tight truncate">{formatName(r.name)}</p>
+                                                                <p className="text-[7px] text-gray-400 dark:text-gray-500 font-black uppercase tracking-tighter opacity-70 leading-none mt-0.5">{r.title}</p>
+                                                            </div>
+                                                        </div>
                                                     </td>
                                                     {MONTHS_SHORT.map((_, mIdx) => {
                                                         const val = r.monthlyPlan?.[mIdx] || 0;
@@ -436,7 +506,13 @@ const ResourceManager: React.FC<ResourceManagerProps> = ({ resources, setResourc
 
             {activeTab === 'costs' && (
               <div className="animate-fade-in-right">
-                <CostManager resources={resources} titleCosts={titleCosts} setTitleCosts={setTitleCosts} />
+                <CostManager 
+                  resources={resources} 
+                  setResources={setResources} 
+                  titleCosts={titleCosts} 
+                  setTitleCosts={setTitleCosts} 
+                  costTableColor={costTableColor} 
+                />
               </div>
             )}
         </div>
