@@ -64,7 +64,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSett
             setStatus('idle');
             setShowVFX(false);
             setIsShaking(false);
-        }, 1400);
+        }, 1700);
     }, 1000);
   };
 
@@ -136,6 +136,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSett
               >
                 {/* Internal Rocket Icon & Engine */}
                 <div className={`relative flex items-center justify-center transition-all duration-200 
+                    ${status === 'idle' ? 'group-hover:animate-rocket-idle' : ''}
                     ${status === 'igniting' ? 'animate-figma-rumble' : ''} 
                     ${status === 'launching' ? 'animate-figma-launch' : ''}
                 `}>
@@ -143,23 +144,27 @@ const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSett
                         ${status === 'idle' ? 'rotate-0' : 'rotate-[-45deg]'}`}></i>
                     
                     {/* High-Performance Exhaust System */}
-                    {status !== 'idle' && (
-                        <div className="absolute top-[80%] left-1/2 -translate-x-1/2 flex flex-col items-center">
-                            {/* Inner Heat Core */}
-                            <div className="absolute top-0 w-8 h-8 bg-white blur-md rounded-full animate-pulse"></div>
-                            
-                            {/* Main Plasma Trail */}
-                            <div className={`absolute top-0 w-16 bg-gradient-to-b from-white via-primary to-transparent rounded-b-full 
-                                ${status === 'launching' ? 'animate-figma-tail' : 'h-32 opacity-100'}
-                            `} style={{ 
-                                '--tw-gradient-via': 'var(--app-primary)',
-                                boxShadow: `0 0 60px var(--app-primary)`
-                            } as any}></div>
-                            
-                            {/* Hyper-Speed Spear */}
-                            <div className="w-1.5 h-64 bg-gradient-to-b from-white to-transparent opacity-60 rounded-full"></div>
-                        </div>
-                    )}
+                    <div className="absolute top-[80%] left-1/2 -translate-x-1/2 flex flex-col items-center">
+                        {/* Inner Heat Core */}
+                        <div className={`absolute top-0 w-8 h-8 bg-white blur-md rounded-full transition-opacity duration-300 
+                            ${status === 'idle' ? 'opacity-0 group-hover:opacity-70 group-hover:animate-rocket-core' : 'opacity-100 animate-pulse'}
+                        `}></div>
+                        
+                        {/* Main Plasma Trail */}
+                        <div className={`absolute top-0 w-16 bg-gradient-to-b from-white via-primary to-transparent rounded-b-full transition-all duration-300 
+                            ${status === 'launching' ? 'animate-figma-tail' : ''}
+                            ${status === 'igniting' ? 'h-32 opacity-100' : ''}
+                            ${status === 'idle' ? 'h-0 opacity-0 group-hover:h-12 group-hover:opacity-80 group-hover:animate-rocket-flame' : ''}
+                        `} style={{ 
+                            '--tw-gradient-via': 'var(--app-primary)',
+                            boxShadow: `0 0 60px var(--app-primary)`
+                        } as any}></div>
+                        
+                        {/* Hyper-Speed Spear */}
+                        <div className={`w-1.5 bg-gradient-to-b from-white to-transparent rounded-full transition-all duration-300 
+                            ${status === 'idle' ? 'h-0 opacity-0 group-hover:h-24 group-hover:opacity-50' : 'h-64 opacity-60'}
+                        `}></div>
+                    </div>
                 </div>
               </div>
             </div>
@@ -175,7 +180,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSett
                 ${status !== 'idle' ? 'text-primary translate-x-2 opacity-100' : 'text-gray-400 opacity-60'}`}
                 style={status !== 'idle' ? { color: 'var(--app-primary)' } : {}}
               >
-                {status === 'igniting' ? 'ATEŞLENİYOR...' : status === 'launching' ? 'MAX-SPEED' : 'MKS SİSTEMİ'}
+                {status === 'igniting' ? 'ATEŞLENİYOR...' : status === 'launching' ? 'MAX-SPEED' : 'MKS'}
               </span>
             </div>
           </div>
