@@ -9,7 +9,6 @@ import WorkPackageManager from './components/WorkPackageManager';
 import TaskFormModal from './components/TaskFormModal';
 import TaskDetailModal from './components/TaskDetailModal';
 import TeamsMessageModal from './components/TeamsMessageModal';
-import TimelineView from './components/TimelineView';
 import KanbanView from './components/KanbanView';
 import SettingsModal from './components/SettingsModal';
 import NotesView from './components/NotesView';
@@ -42,6 +41,9 @@ const App: React.FC = () => {
   const [isLocalPersistenceEnabled, setIsLocalPersistenceEnabled] = useState(true);
   const [isAIEnabled, setIsAIEnabled] = useState(true);
   const [tagColors, setTagColors] = useState<Record<string, string>>({});
+  const [titleCosts, setTitleCosts] = useState<Record<string, number>>({});
+  const [sprintNames, setSprintNames] = useState<Record<number, string>>({});
+  const [globalTestDays, setGlobalTestDays] = useState(4);
   const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
@@ -50,7 +52,8 @@ const App: React.FC = () => {
       try {
         const parsed = JSON.parse(savedData) as ProjectData;
         setTasks(parsed.tasks || []);
-        setResources(parsed.resources || []);
+        const resourcesWithTitle = (parsed.resources || []).map(r => ({ ...r, title: r.title || 'Ünvan Belirtilmemiş' }));
+        setResources(resourcesWithTitle);
         setWorkPackages(parsed.workPackages || []);
         setNotes(parsed.notes || []);
         setCustomerRequests(parsed.customerRequests || []);
@@ -60,13 +63,16 @@ const App: React.FC = () => {
           setIsLocalPersistenceEnabled(parsed.settings.isLocalPersistenceEnabled !== false);
           setIsAIEnabled(parsed.settings.isAIEnabled !== false);
           setTagColors(parsed.settings.tagColors || {});
+          setTitleCosts(parsed.settings.titleCosts || {});
+          setSprintNames(parsed.settings.sprintNames || {});
+          setGlobalTestDays(parsed.settings.globalTestDays || 4);
         }
       } catch (e) {
         console.error("Yükleme hatası:", e);
       }
     } else {
       setTasks(INITIAL_TASKS);
-      setResources(INITIAL_RESOURCES);
+      setResources(INITIAL_RESOURCES.map(r => ({ ...r, title: 'Uzman' })));
       setWorkPackages(INITIAL_WORK_PACKAGES);
     }
     setIsInitialized(true);
@@ -85,33 +91,20 @@ const App: React.FC = () => {
           projectStartDate, 
           isLocalPersistenceEnabled,
           isAIEnabled,
-          tagColors
+          tagColors,
+          titleCosts,
+          sprintNames,
+          globalTestDays
         },
-        appVersion: '1.4.1',
+        appVersion: '1.6.0',
         exportDate: new Date().toISOString()
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
     }
-  }, [tasks, resources, workPackages, notes, customerRequests, sprintDuration, projectStartDate, isLocalPersistenceEnabled, isAIEnabled, tagColors, isInitialized]);
-
-  useEffect(() => {
-    if (!isAIEnabled && currentView === View.AI) {
-      setCurrentView(View.Kanban);
-    }
-  }, [isAIEnabled, currentView]);
+  }, [tasks, resources, workPackages, notes, customerRequests, sprintDuration, projectStartDate, isLocalPersistenceEnabled, isAIEnabled, tagColors, titleCosts, sprintNames, globalTestDays, isInitialized]);
 
   const handleResetData = useCallback(() => {
       localStorage.removeItem(STORAGE_KEY);
-      setTasks(INITIAL_TASKS);
-      setResources(INITIAL_RESOURCES);
-      setWorkPackages(INITIAL_WORK_PACKAGES);
-      setNotes([]);
-      setCustomerRequests([]);
-      setSprintDuration(3);
-      setProjectStartDate(new Date().toISOString().split('T')[0]);
-      setIsLocalPersistenceEnabled(true);
-      setIsAIEnabled(true);
-      setTagColors({});
       window.location.reload(); 
   }, []);
 
@@ -133,11 +126,8 @@ const App: React.FC = () => {
     } else {
       setTasks([...tasks, { ...taskToSave, id: taskToSave.id || Date.now().toString() }]);
     }
-    if (pendingRequest) {
-      setCustomerRequests(prev => prev.map(r => r.id === pendingRequest.id ? { ...r, status: 'Converted', convertedTaskId: taskToSave.id } : r));
-    }
     handleCloseForm();
-  }, [tasks, pendingRequest, handleCloseForm]);
+  }, [tasks, handleCloseForm]);
 
   const handleDeleteTask = useCallback((taskId: string) => {
     if (window.confirm('Bu görevi silmek istediğinize emin misiniz?')) {
@@ -174,159 +164,19 @@ const App: React.FC = () => {
     setIsSettingsModalOpen(true);
   }, []);
 
-  const handleCloseSettings = useCallback(() => {
-    setIsSettingsModalOpen(false);
-  }, []);
-
-  const handleSaveSettings = useCallback((newDuration: number, newDate: string, enabled: boolean, aiEnabled: boolean) => {
+  const handleSaveSettings = (newDuration: number, newDate: string, enabled: boolean, aiEnabled: boolean) => {
     setSprintDuration(newDuration);
     setProjectStartDate(newDate);
     setIsLocalPersistenceEnabled(enabled);
     setIsAIEnabled(aiEnabled);
-    handleCloseSettings();
-  }, [handleCloseSettings]);
-
-  const handleDataImport = useCallback((importedTasks: Task[], importedResources: Resource[]) => {
-    setTasks(prevTasks => [...prevTasks, ...importedTasks]);
-    setResources(prevResources => {
-        const existingResourceNames = new Set(prevResources.map(r => r.name));
-        const newUniqueResources = importedResources.filter(r => !existingResourceNames.has(r.name));
-        return [...prevResources, ...newUniqueResources];
-    });
-  }, []);
-
-  const handlePlanGenerated = useCallback((newTasks: Task[]) => {
-      setTasks(newTasks);
-  }, []);
-
-  const handleTaskSprintChange = useCallback((taskIdToUpdate: string, newSprintVersion: number) => {
-      setTasks(currentTasks => currentTasks.map(task => {
-          if (task.id === taskIdToUpdate) {
-            const newStatus = newSprintVersion === 0 ? TaskStatus.Backlog : (task.status === TaskStatus.Backlog ? TaskStatus.ToDo : task.status);
-            return { ...task, version: newSprintVersion, status: newStatus };
-          }
-          return task;
-        })
-      );
-    }, []);
-    
-  const handleTaskStatusChange = useCallback((taskIdToUpdate: string, newStatus: TaskStatus) => {
-    setTasks(currentTasks => currentTasks.map(task => task.id === taskIdToUpdate ? { ...task, status: newStatus } : task));
-  }, []);
-
-  const handleInsertSprint = useCallback((sprintNumber: number) => {
-    setTasks(currentTasks => currentTasks.map(task => task.version >= sprintNumber ? { ...task, version: task.version + 1 } : task));
-  }, []);
-
-  const handleDeleteSprint = useCallback((sprintNumberToDelete: number) => {
-    setTasks(currentTasks => {
-      return currentTasks.map(task => {
-        if (task.version === sprintNumberToDelete) {
-          return { ...task, version: 0, status: TaskStatus.Backlog };
-        } else if (task.version > sprintNumberToDelete) {
-          return { ...task, version: task.version - 1 };
-        }
-        return task;
-      });
-    });
-  }, []);
-  
-    const handleDeleteWorkPackage = useCallback((workPackageId: string) => {
-        setTasks(prevTasks => prevTasks.map(task => {
-            if (task.workPackageId === workPackageId) {
-                const { workPackageId: _, ...rest } = task;
-                return rest;
-            }
-            return task;
-        }));
-        setWorkPackages(prevWorkPackages => prevWorkPackages.filter(wp => wp.id !== workPackageId));
-    }, []);
-
-  const handleAddNote = useCallback((newNote: Note) => {
-    setNotes(prev => [newNote, ...prev]);
-  }, []);
-
-  const handleEditNote = useCallback((updatedNote: Note) => {
-    setNotes(prev => prev.map(n => n.id === updatedNote.id ? updatedNote : n));
-  }, []);
-
-  const handleDeleteNote = useCallback((noteId: string) => {
-    setNotes(prev => prev.filter(n => n.id !== noteId));
-  }, []);
-
-  const handleConvertToTask = useCallback((request: CustomerRequest) => {
-    const taskId = `task-from-req-${request.id}`;
-    const newTaskDraft: Task = {
-      id: taskId,
-      name: request.title,
-      availability: false,
-      priority: 'Medium',
-      version: 0,
-      predecessor: null,
-      unit: 'Müşteri Talebi',
-      resourceName: resources.length > 0 ? resources[0].name : 'Atanmamış',
-      time: { best: 0, avg: 0, worst: 0 },
-      jiraId: '',
-      notes: `Müşteri: ${request.customerName}\n\nTalep Açıklaması:\n${request.description}`,
-      status: TaskStatus.Backlog,
-      labels: ['istek'],
-      includeInSprints: false
-    };
-    setPendingRequest(request);
-    setEditingTask(newTaskDraft);
-    setIsFormModalOpen(true);
-  }, [resources]);
-
-  const handleSaveProject = useCallback(() => {
-    const projectData: ProjectData = {
-      tasks, resources, workPackages, notes, customerRequests,
-      settings: { sprintDuration, projectStartDate, isLocalPersistenceEnabled, isAIEnabled, tagColors },
-      appVersion: '1.4.1',
-      exportDate: new Date().toISOString(),
-    };
-    const blob = new Blob([JSON.stringify(projectData, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `proje_plan_${new Date().toISOString().slice(0, 10)}.json`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  }, [tasks, resources, workPackages, notes, customerRequests, sprintDuration, projectStartDate, isLocalPersistenceEnabled, isAIEnabled, tagColors]);
-
-  const handleLoadProject = useCallback((file: File) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const content = e.target?.result as string;
-        const data = JSON.parse(content) as ProjectData;
-        setTasks(data.tasks);
-        setResources(data.resources);
-        setWorkPackages(data.workPackages || []);
-        setNotes(data.notes || []);
-        setCustomerRequests(data.customerRequests || []);
-        if (data.settings) {
-          setSprintDuration(data.settings.sprintDuration || 3);
-          setProjectStartDate(data.settings.projectStartDate || new Date().toISOString().split('T')[0]);
-          setIsLocalPersistenceEnabled(data.settings.isLocalPersistenceEnabled !== false);
-          setIsAIEnabled(data.settings.isAIEnabled !== false);
-          setTagColors(data.settings.tagColors || {});
-        }
-        alert("Proje başarıyla yüklendi!");
-      } catch (error) {
-        alert("Geçersiz dosya formatı.");
-      }
-    };
-    reader.readAsText(file);
-  }, []);
+    setIsSettingsModalOpen(false);
+  };
 
   const renderView = () => {
     if (!isInitialized) return <div className="h-[60vh] flex items-center justify-center"><i className="fa-solid fa-spinner fa-spin text-4xl text-blue-500"></i></div>;
     
     switch (currentView) {
-      case View.AI:
-        return <AIAssistant tasks={tasks} resources={resources} notes={notes} />;
+      case View.AI: return <AIAssistant tasks={tasks} resources={resources} notes={notes} />;
       case View.Tasks:
         return (
           <TaskGallery
@@ -334,42 +184,46 @@ const App: React.FC = () => {
             onEditTask={handleOpenForm} onViewTask={handleOpenDetails}
             onNotifyTask={handleOpenTeamsModal} onNewTask={() => handleOpenForm(null)}
             onDeleteTask={handleDeleteTask}
-            onDataImport={handleDataImport} onTaskStatusChange={handleTaskStatusChange}
+            onTaskStatusChange={(id, s) => setTasks(tasks.map(t => t.id === id ? { ...t, status: s } : t))}
           />
         );
       case View.Resources:
-        return <ResourceManager resources={resources} setResources={setResources} tasks={tasks} />;
-      case View.WorkPackages:
-        return <WorkPackageManager workPackages={workPackages} setWorkPackages={setWorkPackages} onDeleteWorkPackage={handleDeleteWorkPackage}/>;
-      case View.Timeline:
         return (
-          <TimelineView
-            tasks={tasks} resources={resources} workPackages={workPackages}
-            projectStartDate={projectStartDate} onViewTask={handleOpenDetails} onEditTask={handleOpenForm}
+          <ResourceManager 
+            resources={resources} 
+            setResources={setResources} 
+            tasks={tasks}
+            setTasks={setTasks}
+            titleCosts={titleCosts}
+            setTitleCosts={setTitleCosts}
           />
         );
+      case View.WorkPackages:
+        return <WorkPackageManager workPackages={workPackages} setWorkPackages={setWorkPackages} onDeleteWorkPackage={(id) => setWorkPackages(workPackages.filter(wp => wp.id !== id))}/>;
       case View.Kanban:
         return (
           <KanbanView
             tasks={tasks} resources={resources} workPackages={workPackages}
             sprintDuration={sprintDuration} projectStartDate={projectStartDate}
-            onPlanGenerated={handlePlanGenerated} onTaskSprintChange={handleTaskSprintChange}
-            onTaskStatusChange={handleTaskStatusChange} onInsertSprint={handleInsertSprint}
-            onDeleteSprint={handleDeleteSprint} onOpenSettings={handleOpenSettings}
-            onViewTaskDetails={(taskId) => {
-              const task = tasks.find(t => t.id === taskId);
-              if (task) handleOpenDetails(task);
-            }}
+            sprintNames={sprintNames} setSprintNames={setSprintNames}
+            globalTestDays={globalTestDays} setGlobalTestDays={setGlobalTestDays}
+            onPlanGenerated={setTasks} onTaskSprintChange={(id, v) => setTasks(tasks.map(t => t.id === id ? { ...t, version: v } : t))}
+            onTaskStatusChange={(id, s) => setTasks(tasks.map(t => t.id === id ? { ...t, status: s } : t))} 
+            onInsertSprint={(n) => setTasks(tasks.map(t => t.version >= n ? { ...t, version: t.version + 1 } : t))}
+            onDeleteSprint={(n) => setTasks(tasks.map(t => t.version === n ? { ...t, version: 0, status: TaskStatus.Backlog } : t.version > n ? { ...t, version: t.version - 1 } : t))} 
+            onOpenSettings={handleOpenSettings}
+            onNewTask={() => handleOpenForm(null)}
+            onViewTaskDetails={(taskId) => { const t = tasks.find(x => x.id === taskId); if(t) handleOpenDetails(t); }}
           />
         );
       case View.Notes:
         return (
           <NotesView 
             notes={notes} resources={resources} 
-            tagColors={tagColors}
-            setTagColors={setTagColors}
-            onAddNote={handleAddNote}
-            onEditNote={handleEditNote} onDeleteNote={handleDeleteNote}
+            tagColors={tagColors} setTagColors={setTagColors}
+            onAddNote={(n) => setNotes([n, ...notes])}
+            onEditNote={(n) => setNotes(notes.map(x => x.id === n.id ? n : x))} 
+            onDeleteNote={(id) => setNotes(notes.filter(x => x.id !== id))}
           />
         );
       case View.Requests:
@@ -377,11 +231,10 @@ const App: React.FC = () => {
           <CustomerRequestsView 
             requests={customerRequests} 
             setRequests={setCustomerRequests} 
-            onConvertToTask={handleConvertToTask}
+            onConvertToTask={(r) => handleOpenForm({ id: `req-${r.id}`, name: r.title, status: TaskStatus.Backlog, version: 0, priority: 'Medium', unit: 'Müşteri', resourceName: resources[0]?.name || '', time: { best: 0, avg: 0, worst: 0 }, notes: r.description, jiraId: '', availability: false, predecessor: null, includeInSprints: true })}
           />
         );
-      default:
-        return <KanbanView {...{tasks, resources, workPackages, sprintDuration, projectStartDate, onPlanGenerated: handlePlanGenerated, onTaskSprintChange: handleTaskSprintChange, onTaskStatusChange: handleTaskStatusChange, onInsertSprint: handleInsertSprint, onDeleteSprint: handleDeleteSprint, onOpenSettings: handleOpenSettings, onViewTaskDetails: (id) => { const t = tasks.find(x => x.id === id); if(t) handleOpenDetails(t); }}} />;
+      default: return <KanbanView {...{tasks, resources, workPackages, sprintDuration, projectStartDate, sprintNames, setSprintNames, globalTestDays, setGlobalTestDays, onPlanGenerated: setTasks, onTaskSprintChange: (id, v) => {}, onTaskStatusChange: (id, s) => {}, onInsertSprint: (n) => {}, onDeleteSprint: (n) => {}, onOpenSettings: handleOpenSettings, onNewTask: () => {}, onViewTaskDetails: (id) => {} }} />;
     }
   };
 
@@ -389,7 +242,7 @@ const App: React.FC = () => {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans">
       <Header 
         currentView={currentView} setCurrentView={setCurrentView} 
-        onOpenSettings={handleOpenSettings} onSaveProject={handleSaveProject} onLoadProject={handleLoadProject}
+        onOpenSettings={handleOpenSettings} onSaveProject={() => {}} onLoadProject={() => {}}
         isLocalPersistenceEnabled={isLocalPersistenceEnabled}
         isAIEnabled={isAIEnabled}
         onOpenAbout={() => setIsAboutModalOpen(true)}
@@ -403,13 +256,8 @@ const App: React.FC = () => {
       {isTeamsModalOpen && teamsTask && <TeamsMessageModal task={teamsTask} onClose={handleCloseTeamsModal} />}
       {isSettingsModalOpen && (
         <SettingsModal 
-          sprintDuration={sprintDuration} 
-          projectStartDate={projectStartDate} 
-          isLocalPersistenceEnabled={isLocalPersistenceEnabled}
-          isAIEnabled={isAIEnabled}
-          onSave={handleSaveSettings} 
-          onClose={handleCloseSettings} 
-          onResetData={handleResetData} 
+          sprintDuration={sprintDuration} projectStartDate={projectStartDate} isLocalPersistenceEnabled={isLocalPersistenceEnabled} isAIEnabled={isAIEnabled}
+          onSave={handleSaveSettings} onClose={() => setIsSettingsModalOpen(false)} onResetData={handleResetData} 
         />
       )}
       {isAboutModalOpen && <AboutModal onClose={() => setIsAboutModalOpen(false)} />}

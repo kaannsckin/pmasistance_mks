@@ -25,7 +25,7 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, tasks, w
     status: TaskStatus.ToDo,
     workPackageId: undefined,
     labels: [],
-    includeInSprints: false, // Default changed to false
+    includeInSprints: true, // Default to true
   });
 
   // Fix: Replaced non-standard `styled-jsx` with Tailwind CSS classes for compatibility.
@@ -47,7 +47,7 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, tasks, w
         status: task.status,
         workPackageId: task.workPackageId,
         labels: task.labels || [],
-        includeInSprints: task.includeInSprints ?? false, // Default fallback to false
+        includeInSprints: task.includeInSprints ?? true, // Default fallback to true
       });
     } else {
         // Reset for new task
@@ -57,7 +57,7 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, tasks, w
             time: { best: 0, avg: 0, worst: 0 }, jiraId: '', notes: '', status: TaskStatus.ToDo,
             workPackageId: undefined,
             labels: [],
-            includeInSprints: false, // Default for new manual tasks
+            includeInSprints: true, // Default for new manual tasks
         });
     }
   }, [task, resources]);

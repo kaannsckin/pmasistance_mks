@@ -1,3 +1,4 @@
+
 import { Task, Resource, TaskStatus, WorkPackage } from './types';
 
 export const TEST_DAYS = 4; // Her sprint için test günü
@@ -17,7 +18,7 @@ export const INITIAL_TASKS: Task[] = [
     version: 3,
     predecessor: null,
     unit: 'EMS',
-    resourceName: 'Osman Çörekçi',
+    resourceName: 'Kaan',
     time: { best: 3, avg: 7, worst: 10 },
     jiraId: 'MPS-4966',
     notes: 'Kayıtlı hata nedeniyle 16.10.2025 Tarihinde Hizmet kesintisi Yaşanmıştır',
@@ -84,10 +85,11 @@ export const INITIAL_TASKS: Task[] = [
   },
 ];
 
+// Added missing 'title' property to satisfy the Resource interface requirements
 export const INITIAL_RESOURCES: Resource[] = [
-  { id: '1', name: 'Osman Çörekçi', participation: 100, unit: 'EMS' },
-  { id: '2', name: 'Ayşe Yılmaz', participation: 75, unit: 'Frontend' },
-  { id: '3', name: 'Ali Veli', participation: 50, unit: 'Backend' },
+  { id: '1', name: 'Kaan', participation: 100, unit: 'EMS', title: 'EMS Uzmanı' },
+  { id: '2', name: 'Ayşe Yılmaz', participation: 75, unit: 'Frontend', title: 'Frontend Geliştirici' },
+  { id: '3', name: 'Ali Veli', participation: 50, unit: 'Backend', title: 'Backend Geliştirici' },
 ];
 
 export const STATUS_STYLES: Record<TaskStatus, string> = {

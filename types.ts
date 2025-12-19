@@ -41,6 +41,8 @@ export interface Resource {
   name: string;
   participation: number; // Percentage
   unit: string;
+  title: string; // Ünvan
+  monthlyPlan?: Record<number, number>; // MonthIndex (0-11) -> Percentage
 }
 
 export interface Note {
@@ -64,7 +66,6 @@ export interface CustomerRequest {
   convertedTaskId?: string;
 }
 
-// Added missing Sprint interface to resolve import errors in Kanban and Exporter modules
 export interface Sprint {
   id: number;
   title: string;
@@ -78,6 +79,7 @@ export interface Sprint {
     responsible?: string;
     assignedTaskIds?: string[];
     foundDefects?: string;
+    duration?: number; // Sürüm bazlı test günü
   };
 }
 
@@ -85,7 +87,6 @@ export enum View {
   Tasks,
   Resources,
   WorkPackages,
-  Timeline,
   Kanban,
   Notes,
   Requests,
@@ -109,7 +110,10 @@ export interface ProjectData {
     projectStartDate: string;
     isLocalPersistenceEnabled?: boolean;
     isAIEnabled?: boolean;
-    tagColors?: Record<string, string>; // Etiket bazlı renk tanımları
+    tagColors?: Record<string, string>; 
+    titleCosts?: Record<string, number>; 
+    sprintNames?: Record<number, string>; // Özel sürüm isimleri
+    globalTestDays?: number; // Genel test günü sayısı
   };
   appVersion: string;
   exportDate: string;

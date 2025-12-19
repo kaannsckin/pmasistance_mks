@@ -92,7 +92,7 @@ export const parseJiraCsv = (fileContent: string): { tasks: Task[], resources: R
             predecessor: null,
             time: { best: 0, avg: 0, worst: 0 },
             status: TaskStatus.Backlog,
-            includeInSprints: false, // Default changed to false for imported tasks
+            includeInSprints: true, // Default set to true so they appear on the board
         };
         tasks.push(task);
         
@@ -101,11 +101,13 @@ export const parseJiraCsv = (fileContent: string): { tasks: Task[], resources: R
         }
     }
     
+    // Added 'title' property to generated resource objects
     const resources: Resource[] = Array.from(resourceMap.entries()).map(([name, data], index) => ({
         id: `jira-res-imported-${Date.now()}-${index}`,
         name,
         unit: data.unit,
         participation: 100,
+        title: 'Uzman',
     }));
     
     return { tasks, resources };
@@ -173,7 +175,7 @@ const processDataArray = (data: (string|number)[][]): { tasks: Task[], resources
             jiraId: getCell(colMap.jiraId) || '',
             notes: getCell(colMap.notes) || '',
             status: finalVersion === 0 ? TaskStatus.Backlog : TaskStatus.ToDo,
-            includeInSprints: false, // Default changed to false for imported tasks
+            includeInSprints: true, // Default set to true so they appear on the board
         };
         tasks.push(task);
         
@@ -182,11 +184,13 @@ const processDataArray = (data: (string|number)[][]): { tasks: Task[], resources
         }
     }
     
+    // Added 'title' property to generated resource objects
     const resources: Resource[] = Array.from(resourceMap.entries()).map(([name, data], index) => ({
         id: `imported-res-${Date.now()}-${index}`,
         name,
         unit: data.unit,
         participation: 100,
+        title: 'Uzman',
     }));
 
     return { tasks, resources };

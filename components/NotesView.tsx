@@ -367,7 +367,7 @@ const NotesView: React.FC<NotesViewProps> = ({ notes, resources, tagColors, setT
                                 ref={lineUpdateRef} value={tempUpdateText} onFocus={() => setActiveTextArea('lineUpdate')}
                                 onChange={(e) => { setTempUpdateText(e.target.value); checkSuggestions(e.target.value, e.target.selectionStart); }}
                                 placeholder="İlerleme notu düşebilirsiniz..."
-                                className="w-full bg-amber-50/30 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-800 rounded-xl p-3 text-xs focus:ring-2 focus:ring-amber-500 outline-none resize-none italic text-amber-900 dark:text-amber-200" rows={3}
+                                className="w-full bg-amber-50/30 dark:bg-amber-900/10 border border-amber-100 border-amber-800 rounded-xl p-3 text-xs focus:ring-2 focus:ring-amber-500 outline-none resize-none italic text-amber-900 dark:text-amber-200" rows={3}
                             />
                         </div>
                         {suggestionType && (activeTextArea === 'lineText' || activeTextArea === 'lineUpdate') && <SuggestionDropdown />}
@@ -425,7 +425,15 @@ const NotesView: React.FC<NotesViewProps> = ({ notes, resources, tagColors, setT
                 <div className="p-6 relative">
                     <div className="flex justify-between items-center mb-3">
                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Yeni Not Yaz</label>
-                        <input type="date" value={creationDate} onChange={(e) => setCreationDate(e.target.value)} className="text-[11px] font-bold p-1 px-3 rounded-full border border-gray-200 dark:border-gray-600 bg-gray-50 text-gray-800 dark:text-white" />
+                        <div className="flex items-center space-x-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 p-1 px-3 rounded-xl shadow-sm">
+                            <i className="fa-solid fa-calendar-day text-blue-500 text-[10px]"></i>
+                            <input 
+                              type="date" 
+                              value={creationDate} 
+                              onChange={(e) => setCreationDate(e.target.value)} 
+                              className="text-[11px] font-black bg-transparent text-gray-800 dark:text-white outline-none border-none p-0 cursor-pointer" 
+                            />
+                        </div>
                     </div>
                     <textarea
                         ref={textareaRef} value={inputValue} onFocus={() => setActiveTextArea('main')}
