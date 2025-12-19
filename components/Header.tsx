@@ -64,7 +64,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSett
             setStatus('idle');
             setShowVFX(false);
             setIsShaking(false);
-        }, 1400);
+        }, 1700);
     }, 1000);
   };
 
