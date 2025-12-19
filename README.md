@@ -1,4 +1,4 @@
-# PlanAsistan MKS
+# PlanAsistan MKS - Google Ai Studio Project
 
 # PlanAsistan - Akıllı Proje Planlama Aracı
 PlanAsistan MKS; proje görevlerini PERT/Fuzzy PERT yaklaşımıyla planlayan, sprint bazlı Kanban yönetimi sunan ve ekip/kaynak takibini tek ekranda birleştiren bir web uygulamasıdır. Görevler, kaynaklar, iş paketleri, müşteri istekleri ve notlar birbirine bağlı çalışır; AI asistanı da bu verileri kullanarak içgörü ve özetler üretir.
