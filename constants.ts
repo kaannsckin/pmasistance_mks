@@ -1,8 +1,31 @@
 
-import { Task, Resource, TaskStatus, WorkPackage } from './types';
+import { Task, Resource, TaskStatus, WorkPackage, Objective } from './types';
 
 export const TEST_DAYS = 4; // Her sprint için test günü
 export const WORK_DAYS_PER_WEEK = 5;
+
+export const INITIAL_OBJECTIVES: Objective[] = [
+    {
+        id: 'obj-1',
+        name: 'Yeni Kullanıcı Arayüzünü Canlıya Almak',
+        description: 'Uygulamanın son kullanıcı deneyimini iyileştirmek için modern ve hızlı bir arayüz sunmak.',
+        quarter: 'Q4 2024',
+        keyResults: [
+            { id: 'kr-1-1', name: 'Giriş ve ana sayfa arayüzünü tamamlama' },
+            { id: 'kr-1-2', name: 'Profil sayfası mobilde %99 çökmesiz çalışma oranı' },
+        ]
+    },
+    {
+        id: 'obj-2',
+        name: 'Altyapı Performansını Artırmak',
+        description: 'Sunucu yanıt sürelerini düşürmek ve sistem stabilitesini garanti altına almak.',
+        quarter: 'Q4 2024',
+        keyResults: [
+            { id: 'kr-2-1', name: 'EMS1 sunucusunun stabilitesini sağlama' },
+            { id: 'kr-2-2', name: 'Veritabanı sorgu optimizasyonu' }
+        ]
+    }
+];
 
 export const INITIAL_WORK_PACKAGES: WorkPackage[] = [
   { id: 'wp-1', name: 'Altyapı İyileştirmeleri', description: 'Sunucu ve sistem altyapısını etkileyen kritik hataların çözümü.' },
@@ -24,6 +47,13 @@ export const INITIAL_TASKS: Task[] = [
     notes: 'Kayıtlı hata nedeniyle 16.10.2025 Tarihinde Hizmet kesintisi Yaşanmıştır',
     status: TaskStatus.InProgress,
     workPackageId: 'wp-1',
+    dueDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    subtasks: [
+      { text: 'Logları analiz et', completed: true },
+      { text: 'Servisi yeniden başlat', completed: true },
+      { text: 'Konfigürasyon dosyasını doğrula', completed: false },
+    ],
+    keyResultId: 'kr-2-1',
   },
   {
     id: '2',
@@ -39,6 +69,12 @@ export const INITIAL_TASKS: Task[] = [
     notes: 'OAuth 2.0 entegrasyonu yapılacak.',
     status: TaskStatus.InProgress,
     workPackageId: 'wp-2',
+    dueDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    subtasks: [
+      { text: 'UI Tasarımı', completed: true },
+      { text: 'Backend entegrasyonu', completed: false },
+    ],
+    keyResultId: 'kr-1-1',
   },
   {
     id: '3',
@@ -53,6 +89,12 @@ export const INITIAL_TASKS: Task[] = [
     jiraId: 'PROJ-102',
     notes: 'PostgreSQL kullanılacak, normalizasyon kurallarına dikkat edilmeli.',
     status: TaskStatus.ToDo,
+    dueDate: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    subtasks: [
+        { text: 'Tabloları oluştur', completed: false },
+        { text: 'İlişkileri tanımla', completed: false },
+    ],
+    keyResultId: 'kr-2-2',
   },
   {
     id: '4',
@@ -67,6 +109,7 @@ export const INITIAL_TASKS: Task[] = [
     jiraId: 'PROJ-103',
     notes: 'Kullanıcı, ürün ve sipariş endpointleri hazırlanacak.',
     status: TaskStatus.ToDo,
+    keyResultId: 'kr-2-2',
   },
   {
     id: '5',
@@ -82,6 +125,8 @@ export const INITIAL_TASKS: Task[] = [
     notes: 'React ve Tailwind CSS kullanılacak.',
     status: TaskStatus.ToDo,
     workPackageId: 'wp-2',
+    dueDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Due soon
+    keyResultId: 'kr-1-1',
   },
 ];
 

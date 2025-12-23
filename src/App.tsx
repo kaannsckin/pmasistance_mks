@@ -1,516 +1,243 @@
 
-import React, { useState, useMemo } from 'react';
-import {
-  DndContext,
-  DragOverlay,
-  closestCorners,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  DragStartEvent,
-  DragOverEvent,
-  DragEndEvent,
-} from '@dnd-kit/core';
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
-  useSortable,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-import { 
-  LayoutDashboard, 
-  FolderKanban, 
-  CheckSquare, 
-  Settings, 
-  Menu, 
-  Plus, 
-  MoreHorizontal,
-  Search,
-  Bell,
-  GripVertical
-} from 'lucide-react';
-import { clsx, type ClassValue } from 'clsx';
-import { twMerge } from 'tailwind-merge';
+import React, { useState, useCallback, useEffect } from 'react';
+import { View, Task, Resource, TaskStatus, WorkPackage, Note, ProjectData, CustomerRequest } from './types';
+import { INITIAL_TASKS, INITIAL_RESOURCES, INITIAL_WORK_PACKAGES } from './constants';
+import Header from './components/Header';
+import TaskGallery from './components/TaskGallery';
+import ResourceManager from './components/ResourceManager';
+import WorkPackageManager from './components/WorkPackageManager';
+import TaskFormModal from './components/TaskFormModal';
+import TaskDetailModal from './components/TaskDetailModal';
+import TeamsMessageModal from './components/TeamsMessageModal';
+import KanbanView from './components/KanbanView';
+import RoadmapView from './components/RoadmapView';
+import SettingsModal from './components/SettingsModal';
+import NotesView from './components/NotesView';
+import AboutModal from './components/AboutModal';
+import CustomerRequestsView from './components/CustomerRequestsView';
+import AIAssistant from './components/AIAssistant';
 
-// --- Utils ---
-function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
+const STORAGE_KEY = 'PROJE_PLANLAMA_DATA';
 
-// --- Types ---
-type Task = {
-  id: string;
-  title: string;
-  tag: 'Design' | 'Dev' | 'Marketing';
-};
+const App: React.FC = () => {
+  const [currentView, setCurrentView] = useState<View>(View.Kanban);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [resources, setResources] = useState<Resource[]>([]);
+  const [workPackages, setWorkPackages] = useState<WorkPackage[]>([]);
+  const [notes, setNotes] = useState<Note[]>([]); 
+  const [customerRequests, setCustomerRequests] = useState<CustomerRequest[]>([]);
+  
+  const [isFormModalOpen, setIsFormModalOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [viewingTask, setViewingTask] = useState<Task | null>(null);
+  const [isTeamsModalOpen, setIsTeamsModalOpen] = useState(false);
+  const [teamsTask, setTeamsTask] = useState<Task | null>(null);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
+  
+  const [sprintDuration, setSprintDuration] = useState(3);
+  const [projectStartDate, setProjectStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [isLocalPersistenceEnabled, setIsLocalPersistenceEnabled] = useState(true);
+  const [isAIEnabled, setIsAIEnabled] = useState(true);
+  const [tagColors, setTagColors] = useState<Record<string, string>>({});
+  const [titleCosts, setTitleCosts] = useState<Record<string, number>>({});
+  const [sprintNames, setSprintNames] = useState<Record<number, string>>({});
+  const [globalTestDays, setGlobalTestDays] = useState(4);
+  const [appTheme, setAppTheme] = useState('classic');
+  const [isDarkMode, setIsDarkMode] = useState(false);
+  
+  const [manMonthTableColor, setManMonthTableColor] = useState('#2563eb');
+  const [costTableColor, setCostTableColor] = useState('#10b981');
+  
+  const [isInitialized, setIsInitialized] = useState(false);
 
-type ColumnType = {
-  id: string;
-  title: string;
-  tasks: Task[];
-};
-
-// --- Mock Data ---
-const INITIAL_DATA: ColumnType[] = [
-  {
-    id: 'todo',
-    title: 'To Do',
-    tasks: [
-      { id: 't1', title: 'Research competitors', tag: 'Marketing' },
-      { id: 't2', title: 'Draft product roadmap', tag: 'Design' },
-    ],
-  },
-  {
-    id: 'inprogress',
-    title: 'In Progress',
-    tasks: [
-      { id: 't3', title: 'Implement Auth Flow', tag: 'Dev' },
-    ],
-  },
-  {
-    id: 'done',
-    title: 'Done',
-    tasks: [
-      { id: 't4', title: 'Design System V1', tag: 'Design' },
-    ],
-  },
-];
-
-const TAG_STYLES = {
-  Design: 'bg-purple-100 text-purple-700',
-  Dev: 'bg-blue-100 text-blue-700',
-  Marketing: 'bg-orange-100 text-orange-700',
-};
-
-// --- Components ---
-
-// 1. Task Card Component
-const TaskCard = ({ task, isOverlay }: { task: Task; isOverlay?: boolean }) => {
-  const {
-    setNodeRef,
-    attributes,
-    listeners,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({
-    id: task.id,
-    data: {
-      type: 'Task',
-      task,
-    },
-  });
-
-  const style = {
-    transform: CSS.Translate.toString(transform),
-    transition,
-  };
-
-  if (isDragging) {
-    return (
-      <div
-        ref={setNodeRef}
-        style={style}
-        className="opacity-30 bg-gray-50 border border-gray-200 rounded-md p-3 h-[80px]"
-      />
-    );
-  }
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      {...attributes}
-      {...listeners}
-      className={cn(
-        "group relative bg-white hover:bg-[#F7F7F5] border border-gray-200 rounded-md p-3 shadow-sm hover:shadow transition-all cursor-grab active:cursor-grabbing",
-        isOverlay && "rotate-2 scale-105 shadow-xl cursor-grabbing border-blue-200"
-      )}
-    >
-      <div className="flex justify-between items-start mb-2">
-        <h4 className="text-sm font-medium text-[#37352F] leading-snug">{task.title}</h4>
-        <button className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-gray-600 transition-opacity">
-          <MoreHorizontal size={14} />
-        </button>
-      </div>
-      <span
-        className={cn(
-          "inline-block text-[10px] px-1.5 py-0.5 rounded-sm font-medium",
-          TAG_STYLES[task.tag]
-        )}
-      >
-        {task.tag}
-      </span>
-    </div>
-  );
-};
-
-// 2. Column Component
-const Column = ({ 
-  column, 
-  tasks, 
-  addTask 
-}: { 
-  column: ColumnType; 
-  tasks: Task[]; 
-  addTask: (colId: string, title: string) => void 
-}) => {
-  const [isAdding, setIsAdding] = useState(false);
-  const [newTaskTitle, setNewTaskTitle] = useState('');
-
-  const { setNodeRef } = useSortable({
-    id: column.id,
-    data: {
-      type: 'Column',
-      column,
-    },
-  });
-
-  const handleAddTask = () => {
-    if (!newTaskTitle.trim()) {
-      setIsAdding(false);
-      return;
-    }
-    addTask(column.id, newTaskTitle);
-    setNewTaskTitle('');
-    setIsAdding(false);
-  };
-
-  return (
-    <div className="flex flex-col w-full min-w-[280px] max-w-[320px]">
-      {/* Column Header */}
-      <div className="flex items-center justify-between px-1 mb-2">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">{column.title}</span>
-          <span className="text-xs text-gray-400 font-normal">{tasks.length}</span>
-        </div>
-        <div className="flex gap-1">
-          <button className="text-gray-400 hover:bg-gray-100 p-1 rounded-sm transition-colors">
-            <Plus size={14} onClick={() => setIsAdding(true)} />
-          </button>
-          <button className="text-gray-400 hover:bg-gray-100 p-1 rounded-sm transition-colors">
-            <MoreHorizontal size={14} />
-          </button>
-        </div>
-      </div>
-
-      {/* Droppable Area */}
-      <div ref={setNodeRef} className="flex-1 flex flex-col gap-2 min-h-[150px]">
-        <SortableContext items={tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
-          {tasks.map((task) => (
-            <TaskCard key={task.id} task={task} />
-          ))}
-        </SortableContext>
-
-        {/* Add Task Input */}
-        {isAdding ? (
-          <div className="bg-white border border-blue-400 rounded-md p-2 shadow-sm">
-            <input
-              autoFocus
-              className="w-full text-sm outline-none placeholder:text-gray-300"
-              placeholder="Type a name..."
-              value={newTaskTitle}
-              onChange={(e) => setNewTaskTitle(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleAddTask();
-                if (e.key === 'Escape') setIsAdding(false);
-              }}
-              onBlur={handleAddTask}
-            />
-          </div>
-        ) : (
-          <button
-            onClick={() => setIsAdding(true)}
-            className="flex items-center gap-2 text-gray-400 hover:bg-gray-100 p-2 rounded-md text-sm transition-colors group mt-1"
-          >
-            <Plus size={14} />
-            <span className="group-hover:text-gray-600">New</span>
-          </button>
-        )}
-      </div>
-    </div>
-  );
-};
-
-// 3. Sidebar Component
-const Sidebar = ({ isOpen, toggle }: { isOpen: boolean; toggle: () => void }) => {
-  const menuItems = [
-    { icon: LayoutDashboard, label: 'Dashboard', active: false },
-    { icon: FolderKanban, label: 'Projects', active: false },
-    { icon: CheckSquare, label: 'Görevler', active: true },
-    { icon: Settings, label: 'Settings', active: false },
-  ];
-
-  return (
-    <>
-      {/* Mobile Overlay */}
-      <div 
-        className={cn(
-          "fixed inset-0 bg-black/20 z-20 md:hidden transition-opacity",
-          isOpen ? "opacity-100" : "opacity-0 pointer-events-none"
-        )}
-        onClick={toggle}
-      />
-      
-      {/* Sidebar */}
-      <aside
-        className={cn(
-          "fixed md:sticky top-0 left-0 h-screen w-64 bg-[#F7F7F5] border-r border-[#E9E9E7] z-30 transform transition-transform duration-200 ease-in-out md:translate-x-0",
-          isOpen ? "translate-x-0" : "-translate-x-full"
-        )}
-      >
-        <div className="p-4 h-full flex flex-col">
-          {/* User Profile / Switcher */}
-          <div className="flex items-center gap-2 mb-6 px-2 py-1 hover:bg-[#EFEFED] rounded cursor-pointer transition-colors">
-            <div className="w-5 h-5 bg-orange-400 rounded text-[10px] flex items-center justify-center text-white font-bold">
-              K
-            </div>
-            <span className="text-sm font-medium text-[#37352F] truncate">Kullanıcı's Notion</span>
-          </div>
-
-          {/* Navigation */}
-          <nav className="flex-1 space-y-0.5">
-            {menuItems.map((item) => (
-              <button
-                key={item.label}
-                className={cn(
-                  "flex items-center gap-3 w-full px-3 py-1.5 text-sm rounded-md transition-colors",
-                  item.active 
-                    ? "bg-[#EFEFED] text-[#37352F] font-medium" 
-                    : "text-[#5F5E5B] hover:bg-[#EFEFED]"
-                )}
-              >
-                <item.icon size={16} className={item.active ? "text-[#37352F]" : "text-[#9B9A97]"} />
-                {item.label}
-              </button>
-            ))}
-          </nav>
-
-          {/* Favorites / Bottom */}
-          <div className="mt-auto pt-4 border-t border-[#E9E9E7]">
-             <div className="text-xs font-medium text-[#9B9A97] px-3 mb-2">Favorites</div>
-             <div className="px-3 py-1 text-sm text-[#5F5E5B] hover:bg-[#EFEFED] rounded-md cursor-pointer flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-purple-400"></span> Roadmap 2024
-             </div>
-          </div>
-        </div>
-      </aside>
-    </>
-  );
-};
-
-// --- Main App Component ---
-function App() {
-  const [columns, setColumns] = useState<ColumnType[]>(INITIAL_DATA);
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-
-  // --- DND Sensors ---
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 5, // Prevents accidental drags
-      },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
-
-  // --- Logic ---
-  const findColumn = (id: string | undefined) => {
-    if (!id) return null;
-    if (columns.find((c) => c.id === id)) return columns.find((c) => c.id === id);
-    return columns.find((c) => c.tasks.find((t) => t.id === id));
-  };
-
-  const handleDragStart = (event: DragStartEvent) => {
-    setActiveId(event.active.id as string);
-  };
-
-  const handleDragOver = (event: DragOverEvent) => {
-    const { active, over } = event;
-    if (!over) return;
-
-    const activeId = active.id;
-    const overId = over.id;
-
-    // Find the containers
-    const activeColumn = findColumn(activeId as string);
-    const overColumn = findColumn(overId as string);
-
-    if (!activeColumn || !overColumn || activeColumn === overColumn) {
-      return;
-    }
-
-    setColumns((prev) => {
-      const activeItems = activeColumn.tasks;
-      const overItems = overColumn.tasks;
-      const activeIndex = activeItems.findIndex((t) => t.id === activeId);
-      const overIndex = overItems.findIndex((t) => t.id === overId);
-
-      let newIndex;
-      if (overItems.find((t) => t.id === overId)) {
-        newIndex = overItems.length + 1;
-      } else {
-        const isBelowOverItem =
-          over &&
-          active.rect.current.translated &&
-          active.rect.current.translated.top > over.rect.top + over.rect.height;
-
-        const modifier = isBelowOverItem ? 1 : 0;
-        newIndex = overIndex >= 0 ? overIndex + modifier : overItems.length + 1;
-      }
-
-      return prev.map((c) => {
-        if (c.id === activeColumn.id) {
-          return {
-            ...c,
-            tasks: activeItems.filter((t) => t.id !== activeId),
-          };
-        } else if (c.id === overColumn.id) {
-          return {
-            ...c,
-            tasks: [
-              ...overItems.slice(0, newIndex),
-              activeItems[activeIndex],
-              ...overItems.slice(newIndex, overItems.length),
-            ],
-          };
+  useEffect(() => {
+    const savedData = localStorage.getItem(STORAGE_KEY);
+    if (savedData) {
+      try {
+        const parsed = JSON.parse(savedData) as ProjectData;
+        setTasks(parsed.tasks || []);
+        setResources(parsed.resources || []);
+        setWorkPackages(parsed.workPackages || []);
+        setNotes(parsed.notes || []);
+        setCustomerRequests(parsed.customerRequests || []);
+        if (parsed.settings) {
+          setSprintDuration(parsed.settings.sprintDuration);
+          setProjectStartDate(parsed.settings.projectStartDate);
+          setIsLocalPersistenceEnabled(parsed.settings.isLocalPersistenceEnabled !== false);
+          setIsAIEnabled(parsed.settings.isAIEnabled !== false);
+          setTagColors(parsed.settings.tagColors || {});
+          setTitleCosts(parsed.settings.titleCosts || {});
+          setSprintNames(parsed.settings.sprintNames || {});
+          setGlobalTestDays(parsed.settings.globalTestDays || 4);
+          setAppTheme(parsed.settings.theme || 'classic');
+          setIsDarkMode(parsed.settings.isDarkMode || false);
         }
-        return c;
-      });
-    });
-  };
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    const activeId = active.id;
-    const overId = over?.id;
-
-    if (!overId) {
-      setActiveId(null);
-      return;
-    }
-
-    const activeColumn = findColumn(activeId as string);
-    const overColumn = findColumn(overId as string);
-
-    if (activeColumn && overColumn && activeColumn.id === overColumn.id) {
-      const activeIndex = activeColumn.tasks.findIndex((t) => t.id === activeId);
-      const overIndex = overColumn.tasks.findIndex((t) => t.id === overId);
-
-      if (activeIndex !== overIndex) {
-        setColumns((prev) => {
-          return prev.map((col) => {
-            if (col.id === activeColumn.id) {
-              return {
-                ...col,
-                tasks: arrayMove(col.tasks, activeIndex, overIndex),
-              };
-            }
-            return col;
-          });
-        });
+      } catch (e) {
+        console.error("Yükleme hatası:", e);
       }
+    } else {
+      setTasks(INITIAL_TASKS);
+      setResources(INITIAL_RESOURCES.map(r => ({ ...r, title: 'Uzman' })));
+      setWorkPackages(INITIAL_WORK_PACKAGES);
     }
+    setIsInitialized(true);
+  }, []);
 
-    setActiveId(null);
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [isDarkMode]);
+
+  useEffect(() => {
+    if (isInitialized) {
+      const dataToSave: ProjectData = {
+        tasks: isLocalPersistenceEnabled ? tasks : [],
+        resources: isLocalPersistenceEnabled ? resources : [],
+        workPackages: isLocalPersistenceEnabled ? workPackages : [],
+        notes: isLocalPersistenceEnabled ? notes : [],
+        customerRequests: isLocalPersistenceEnabled ? customerRequests : [],
+        settings: { 
+          sprintDuration, 
+          projectStartDate, 
+          isLocalPersistenceEnabled,
+          isAIEnabled,
+          tagColors,
+          titleCosts,
+          sprintNames,
+          globalTestDays,
+          manMonthTableColor,
+          costTableColor,
+          theme: appTheme,
+          isDarkMode
+        },
+        appVersion: '1.9.0',
+        exportDate: new Date().toISOString()
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
+    }
+  }, [tasks, resources, workPackages, notes, customerRequests, sprintDuration, projectStartDate, isLocalPersistenceEnabled, isAIEnabled, tagColors, titleCosts, sprintNames, globalTestDays, manMonthTableColor, costTableColor, appTheme, isDarkMode, isInitialized]);
+
+  const handleResetData = useCallback(() => {
+      localStorage.removeItem(STORAGE_KEY);
+      window.location.reload(); 
+  }, []);
+
+  const handleSaveSettings = (newDuration: number, newDate: string, enabled: boolean, aiEnabled: boolean, newTheme: string, dark: boolean) => {
+    setSprintDuration(newDuration);
+    setProjectStartDate(newDate);
+    setIsLocalPersistenceEnabled(enabled);
+    setIsAIEnabled(aiEnabled);
+    setAppTheme(newTheme);
+    setIsDarkMode(dark);
+    setIsSettingsModalOpen(false);
   };
 
-  const addTask = (colId: string, title: string) => {
-    const newTask: Task = {
-      id: Math.random().toString(36).substr(2, 9),
-      title,
-      tag: 'Dev', // Default for now
-    };
-
-    setColumns((prev) =>
-      prev.map((col) => {
-        if (col.id === colId) {
-          return { ...col, tasks: [...col.tasks, newTask] };
-        }
-        return col;
-      })
-    );
+  const renderView = () => {
+    if (!isInitialized) return <div className="h-[60vh] flex items-center justify-center"><i className="fa-solid fa-spinner fa-spin text-4xl text-blue-500"></i></div>;
+    
+    switch (currentView) {
+      case View.AI: return <AIAssistant tasks={tasks} resources={resources} notes={notes} />;
+      case View.Tasks:
+        return (
+          <TaskGallery
+            tasks={tasks} resources={resources} workPackages={workPackages}
+            onEditTask={(t) => { setEditingTask(t); setIsFormModalOpen(true); }} onViewTask={(t) => { setViewingTask(t); setIsDetailModalOpen(true); }}
+            onNotifyTask={(t) => { setTeamsTask(t); setIsTeamsModalOpen(true); }} onNewTask={() => { setEditingTask(null); setIsFormModalOpen(true); }}
+            onDeleteTask={(taskId) => { if(window.confirm('Emin misiniz?')) setTasks(prev => prev.filter(t => t.id !== taskId)); }}
+            onDataImport={(nt, nr) => { setTasks(prev => [...prev, ...nt]); setResources(prev => [...prev, ...nr]); }}
+            onTaskStatusChange={(id, s) => setTasks(tasks.map(t => t.id === id ? { ...t, status: s } : t))}
+          />
+        );
+      case View.Resources:
+        return (
+          <ResourceManager 
+            resources={resources} setResources={setResources} tasks={tasks} setTasks={setTasks}
+            titleCosts={titleCosts} setTitleCosts={setTitleCosts}
+            manMonthTableColor={manMonthTableColor} setManMonthTableColor={setManMonthTableColor}
+            costTableColor={costTableColor} setCostTableColor={setCostTableColor}
+          />
+        );
+      case View.WorkPackages:
+        return <WorkPackageManager workPackages={workPackages} setWorkPackages={setWorkPackages} onDeleteWorkPackage={(id) => setWorkPackages(workPackages.filter(wp => wp.id !== id))}/>;
+      case View.Kanban:
+        return (
+          <KanbanView
+            tasks={tasks} resources={resources} workPackages={workPackages}
+            sprintDuration={sprintDuration} projectStartDate={projectStartDate}
+            sprintNames={sprintNames} setSprintNames={setSprintNames}
+            globalTestDays={globalTestDays} setGlobalTestDays={setGlobalTestDays}
+            onPlanGenerated={setTasks} onTaskSprintChange={(id, v) => setTasks(tasks.map(t => t.id === id ? { ...t, version: v } : t))}
+            onTaskStatusChange={(id, s) => setTasks(tasks.map(t => t.id === id ? { ...t, status: s } : t))} 
+            onInsertSprint={(n) => setTasks(tasks.map(t => t.version >= n ? { ...t, version: t.version + 1 } : t))}
+            onDeleteSprint={(n) => setTasks(tasks.map(t => t.version === n ? { ...t, version: 0, status: TaskStatus.Backlog } : t.version > n ? { ...t, version: t.version - 1 } : t))} 
+            onOpenSettings={() => setIsSettingsModalOpen(true)}
+            onNewTask={() => { setEditingTask(null); setIsFormModalOpen(true); }}
+            onViewTaskDetails={(taskId) => { const t = tasks.find(x => x.id === taskId); if(t) { setViewingTask(t); setIsDetailModalOpen(true); } }}
+          />
+        );
+      case View.Roadmap:
+        return (
+          <RoadmapView
+            tasks={tasks}
+            resources={resources}
+            workPackages={workPackages}
+            onTaskStatusChange={(id, s) => setTasks(tasks.map(t => t.id === id ? { ...t, status: s } : t))}
+            onNewTask={() => { setEditingTask(null); setIsFormModalOpen(true); }}
+            onEditTask={(t) => { setEditingTask(t); setIsFormModalOpen(true); }}
+          />
+        );
+      case View.Notes:
+        return (
+          <NotesView 
+            notes={notes} resources={resources} tagColors={tagColors} setTagColors={setTagColors}
+            onAddNote={(n) => setNotes([n, ...notes])} onEditNote={(n) => setNotes(notes.map(x => x.id === n.id ? n : x))} onDeleteNote={(id) => setNotes(notes.filter(x => x.id !== id))}
+          />
+        );
+      case View.Requests:
+        return (
+          <CustomerRequestsView 
+            requests={customerRequests} setRequests={setCustomerRequests} 
+            onConvertToTask={(r) => { setEditingTask({ id: `req-${r.id}`, name: r.title, status: TaskStatus.Backlog, version: 0, priority: 'Medium', unit: 'Müşteri', resourceName: resources[0]?.name || '', time: { best: 0, avg: 0, worst: 0 }, notes: r.description, jiraId: '', availability: false, predecessor: null, includeInSprints: true }); setIsFormModalOpen(true); }}
+          />
+        );
+      default: return <KanbanView {...{tasks, resources, workPackages, sprintDuration, projectStartDate, sprintNames, setSprintNames, globalTestDays, setGlobalTestDays, onPlanGenerated: setTasks, onTaskSprintChange: (id, v) => {}, onTaskStatusChange: (id, s) => {}, onInsertSprint: (n) => {}, onDeleteSprint: (n) => {}, onOpenSettings: () => setIsSettingsModalOpen(true), onNewTask: () => {}, onViewTaskDetails: (id) => {} }} />;
+    }
   };
-
-  // Find active task for overlay
-  const activeTask = useMemo(() => {
-    if (!activeId) return null;
-    const column = findColumn(activeId);
-    return column?.tasks.find((t) => t.id === activeId);
-  }, [activeId, columns]);
 
   return (
-    <div className="flex h-screen w-full bg-white text-[#37352F] overflow-hidden selection:bg-[#cce9ff]">
-      
-      <Sidebar isOpen={sidebarOpen} toggle={() => setSidebarOpen(false)} />
-
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col min-w-0 h-full overflow-hidden relative">
-        
-        {/* Header */}
-        <header className="h-12 flex items-center justify-between px-4 md:px-8 border-b border-[#E9E9E7] bg-white sticky top-0 z-10">
-          <div className="flex items-center gap-3">
-            <button 
-              className="md:hidden p-1 text-gray-500 hover:bg-gray-100 rounded"
-              onClick={() => setSidebarOpen(true)}
-            >
-              <Menu size={18} />
-            </button>
-            <div className="flex items-center gap-2 text-sm">
-              <span className="text-xl">🏔️</span>
-              <span className="font-semibold truncate">Roadmap</span>
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-3 text-[#9B9A97]">
-            <span className="text-xs hidden sm:inline">Edited 10m ago</span>
-            <Search size={18} className="cursor-pointer hover:text-[#37352F] transition-colors" />
-            <Bell size={18} className="cursor-pointer hover:text-[#37352F] transition-colors" />
-          </div>
-        </header>
-
-        {/* Board Area */}
-        <div className="flex-1 overflow-x-auto overflow-y-hidden">
-          <div className="h-full min-w-fit px-4 md:px-8 py-8">
-            {/* Board Title Area */}
-            <div className="mb-8">
-              <h1 className="text-3xl font-bold mb-2">Görevler</h1>
-              <div className="flex items-center gap-4 text-sm text-gray-500 border-b border-[#E9E9E7] pb-2">
-                <span className="text-black font-medium border-b-2 border-black pb-2 -mb-2.5">Board View</span>
-                <span className="hover:text-black cursor-pointer transition-colors">List View</span>
-                <span className="hover:text-black cursor-pointer transition-colors">Timeline</span>
-              </div>
-            </div>
-
-            {/* The Kanban Board */}
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCorners}
-              onDragStart={handleDragStart}
-              onDragOver={handleDragOver}
-              onDragEnd={handleDragEnd}
-            >
-              <div className="flex items-start gap-6 h-[calc(100%-120px)]">
-                {columns.map((col) => (
-                  <Column key={col.id} column={col} tasks={col.tasks} addTask={addTask} />
-                ))}
-              </div>
-
-              <DragOverlay>
-                {activeTask ? <TaskCard task={activeTask} isOverlay /> : null}
-              </DragOverlay>
-            </DndContext>
-          </div>
-        </div>
+    <div className={`min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans theme-${appTheme}`}>
+      <Header 
+        currentView={currentView} setCurrentView={setCurrentView} 
+        onOpenSettings={() => setIsSettingsModalOpen(true)} onSaveProject={() => {}} onLoadProject={() => {}}
+        isLocalPersistenceEnabled={isLocalPersistenceEnabled} isAIEnabled={isAIEnabled}
+        onOpenAbout={() => setIsAboutModalOpen(true)}
+      />
+      <main className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-6 h-[calc(100vh-5rem)] overflow-hidden">
+        {renderView()}
       </main>
+      
+      {isFormModalOpen && <TaskFormModal task={editingTask} resources={resources} tasks={tasks} workPackages={workPackages} onClose={() => setIsFormModalOpen(false)} onSave={(t) => {
+          const isEx = tasks.some(x => x.id === t.id);
+          setTasks(isEx ? tasks.map(x => x.id === t.id ? t : x) : [...tasks, t]);
+          setIsFormModalOpen(false);
+      }} />}
+      {isDetailModalOpen && viewingTask && <TaskDetailModal task={viewingTask} workPackages={workPackages} onClose={() => setIsDetailModalOpen(false)} onEdit={(t) => { setIsDetailModalOpen(false); setEditingTask(t); setIsFormModalOpen(true); }} />}
+      {isTeamsModalOpen && teamsTask && <TeamsMessageModal task={teamsTask} onClose={() => setIsTeamsModalOpen(false)} />}
+      {isSettingsModalOpen && (
+        <SettingsModal 
+          sprintDuration={sprintDuration} projectStartDate={projectStartDate} isLocalPersistenceEnabled={isLocalPersistenceEnabled} isAIEnabled={isAIEnabled} currentTheme={appTheme} isDarkMode={isDarkMode}
+          onSave={handleSaveSettings} onClose={() => setIsSettingsModalOpen(false)} onResetData={handleResetData} 
+        />
+      )}
+      {isAboutModalOpen && <AboutModal onClose={() => setIsAboutModalOpen(false)} />}
     </div>
   );
-}
+};
 
 export default App;

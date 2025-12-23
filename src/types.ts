@@ -6,19 +6,6 @@ export enum TaskStatus {
   Done = 'Done',
 }
 
-export interface KeyResult {
-  id: string;
-  name: string;
-}
-
-export interface Objective {
-  id: string;
-  name: string;
-  description: string;
-  quarter: string; // e.g., "Q3 2024"
-  keyResults: KeyResult[];
-}
-
 export interface WorkPackage {
   id: string;
   name: string;
@@ -32,7 +19,7 @@ export interface TimeEstimate {
 }
 
 export interface Task {
-  id:string;
+  id: string;
   name: string;
   availability: boolean;
   priority: 'Blocker' | 'High' | 'Medium' | 'Low';
@@ -47,9 +34,6 @@ export interface Task {
   workPackageId?: string;
   labels?: string[];
   includeInSprints?: boolean;
-  dueDate?: string; // ISO string date
-  subtasks?: { text: string; completed: boolean }[];
-  keyResultId?: string;
 }
 
 export interface Resource {
@@ -103,9 +87,9 @@ export interface Sprint {
 export enum View {
   Tasks,
   Resources,
+  WorkPackages,
   Kanban,
   Roadmap,
-  Goals,
   Notes,
   Requests,
   AI,
@@ -123,7 +107,6 @@ export interface ProjectData {
   workPackages: WorkPackage[];
   notes: Note[];
   customerRequests?: CustomerRequest[];
-  objectives?: Objective[];
   settings: {
     sprintDuration: number;
     projectStartDate: string;

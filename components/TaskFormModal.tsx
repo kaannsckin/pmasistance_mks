@@ -1,17 +1,18 @@
 
-import React, { useState, useEffect } from 'react';
-import { Task, Resource, TaskStatus, WorkPackage } from '../types';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Task, Resource, TaskStatus, WorkPackage, Objective } from '../types';
 
 interface TaskFormModalProps {
   task: Task | null;
   resources: Resource[];
   tasks: Task[];
   workPackages: WorkPackage[];
+  objectives: Objective[];
   onClose: () => void;
   onSave: (task: Task) => void;
 }
 
-const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, tasks, workPackages, onClose, onSave }) => {
+const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, tasks, workPackages, objectives, onClose, onSave }) => {
   const [formData, setFormData] = useState<Omit<Task, 'id' | 'availability'>>({
     name: '',
     priority: 'Medium',
@@ -25,10 +26,12 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, tasks, w
     status: TaskStatus.ToDo,
     workPackageId: undefined,
     labels: [],
-    includeInSprints: true, // Default to true
+    includeInSprints: true,
+    keyResultId: undefined,
   });
 
-  // Fix: Replaced non-standard `styled-jsx` with Tailwind CSS classes for compatibility.
+  const [selectedObjectiveId, setSelectedObjectiveId] = useState<string>('');
+
   const inputStyle = "bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-50 sm:text-sm rounded-md focus:ring-blue-500 focus:border-blue-500 focus:outline-none py-2 px-3";
 
 
@@ -47,20 +50,30 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, tasks, w
         status: task.status,
         workPackageId: task.workPackageId,
         labels: task.labels || [],
-        includeInSprints: task.includeInSprints ?? true, // Default fallback to true
+        includeInSprints: task.includeInSprints ?? true,
+        keyResultId: task.keyResultId,
       });
+
+      if (task.keyResultId) {
+        const parentObjective = objectives.find(obj => obj.keyResults.some(kr => kr.id === task.keyResultId));
+        setSelectedObjectiveId(parentObjective?.id || '');
+      } else {
+        setSelectedObjectiveId('');
+      }
+
     } else {
-        // Reset for new task
         setFormData({
             name: '', priority: 'Medium', version: 1, predecessor: null,
             unit: '', resourceName: resources.length > 0 ? resources[0].name : '', 
             time: { best: 0, avg: 0, worst: 0 }, jiraId: '', notes: '', status: TaskStatus.ToDo,
             workPackageId: undefined,
             labels: [],
-            includeInSprints: true, // Default for new manual tasks
+            includeInSprints: true,
+            keyResultId: undefined,
         });
+        setSelectedObjectiveId('');
     }
-  }, [task, resources]);
+  }, [task, resources, objectives]);
 
   useEffect(() => {
     if (formData.resourceName) {
@@ -70,6 +83,13 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, tasks, w
         }
     }
   }, [formData.resourceName, resources]);
+
+  const availableKeyResults = useMemo(() => {
+    if (!selectedObjectiveId) return [];
+    const selectedObjective = objectives.find(obj => obj.id === selectedObjectiveId);
+    return selectedObjective ? selectedObjective.keyResults : [];
+  }, [selectedObjectiveId, objectives]);
+
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -119,25 +139,66 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, tasks, w
             <input type="text" name="name" id="name" value={formData.name} onChange={handleChange} required className={`mt-1 block w-full ${inputStyle}`} />
           </div>
 
-           <div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
               <label htmlFor="workPackageId" className="block text-sm font-medium text-black dark:text-white">İş Paketi</label>
               <select name="workPackageId" id="workPackageId" value={formData.workPackageId || ''} onChange={handleChange} className={`mt-1 block w-full ${inputStyle}`}>
                 <option value="">Yok</option>
                 {workPackages.map(wp => <option key={wp.id} value={wp.id}>{wp.name}</option>)}
               </select>
             </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-             <div>
+            <div>
               <label htmlFor="jiraId" className="block text-sm font-medium text-black dark:text-white">Jira Kayıt No</label>
               <input type="text" name="jiraId" id="jiraId" value={formData.jiraId} onChange={handleChange} className={`mt-1 block w-full ${inputStyle}`} />
             </div>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
              <div>
               <label htmlFor="resourceName" className="block text-sm font-medium text-black dark:text-white">Kaynak Adı</label>
               <select name="resourceName" id="resourceName" value={formData.resourceName} onChange={handleChange} required className={`mt-1 block w-full ${inputStyle}`}>
                 <option value="" disabled>Kaynak Seçin</option>
                 {resources.map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
               </select>
+            </div>
+            <div>
+              <label htmlFor="unit" className="block text-sm font-medium text-black dark:text-white">Birim</label>
+              <input type="text" name="unit" id="unit" value={formData.unit} onChange={handleChange} className={`mt-1 block w-full ${inputStyle}`} />
+            </div>
+          </div>
+
+          <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg space-y-4">
+            <h3 className="text-xs font-bold text-gray-500 dark:text-gray-300">Stratejik Hedef (OKR)</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                  <label htmlFor="objective" className="block text-sm font-medium text-black dark:text-white mb-1">Hedef</label>
+                  <select 
+                    id="objective"
+                    value={selectedObjectiveId}
+                    onChange={(e) => {
+                      setSelectedObjectiveId(e.target.value);
+                      setFormData(prev => ({ ...prev, keyResultId: undefined }));
+                    }}
+                    className={`block w-full ${inputStyle}`}
+                  >
+                      <option value="">Hedefe Bağlı Değil</option>
+                      {objectives.map(obj => <option key={obj.id} value={obj.id}>{obj.name}</option>)}
+                  </select>
+              </div>
+              <div>
+                  <label htmlFor="keyResultId" className="block text-sm font-medium text-black dark:text-white mb-1">Anahtar Sonuç</label>
+                  <select 
+                    name="keyResultId" 
+                    id="keyResultId"
+                    value={formData.keyResultId || ''} 
+                    onChange={handleChange}
+                    disabled={!selectedObjectiveId}
+                    className={`block w-full disabled:bg-gray-100 disabled:cursor-not-allowed ${inputStyle}`}
+                  >
+                      <option value="">Sonuç Seçin</option>
+                      {availableKeyResults.map(kr => <option key={kr.id} value={kr.id}>{kr.name}</option>)}
+                  </select>
+              </div>
             </div>
           </div>
 
@@ -157,12 +218,15 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, tasks, w
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
              <div>
-              <label htmlFor="unit" className="block text-sm font-medium text-black dark:text-white">Birim</label>
-              <input type="text" name="unit" id="unit" value={formData.unit} onChange={handleChange} className={`mt-1 block w-full ${inputStyle}`} />
-            </div>
-             <div>
               <label htmlFor="version" className="block text-sm font-medium text-black dark:text-white">Sürüm</label>
               <input type="number" name="version" id="version" value={formData.version} onChange={handleChange} min="0" className={`mt-1 block w-full ${inputStyle}`} />
+            </div>
+             <div>
+              <label htmlFor="predecessor" className="block text-sm font-medium text-black dark:text-white">Öncül Görev</label>
+              <select name="predecessor" id="predecessor" value={formData.predecessor || ''} onChange={handleChange} className={`mt-1 block w-full ${inputStyle}`}>
+                <option value="">Yok</option>
+                {predecessorOptions.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
             </div>
           </div>
 
@@ -174,14 +238,6 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, tasks, w
                 <input type="number" name="worst" value={formData.time.worst} onChange={handleTimeChange} placeholder="En Kötü" className={`w-full ${inputStyle}`} />
             </div>
           </div>
-          
-           <div>
-              <label htmlFor="predecessor" className="block text-sm font-medium text-black dark:text-white">Öncül Görev</label>
-              <select name="predecessor" id="predecessor" value={formData.predecessor || ''} onChange={handleChange} className={`mt-1 block w-full ${inputStyle}`}>
-                <option value="">Yok</option>
-                {predecessorOptions.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-            </div>
 
           <div>
             <label htmlFor="labels" className="block text-sm font-medium text-black dark:text-white">Etiketler (virgülle ayırın)</label>

@@ -1,33 +1,148 @@
 
 <!DOCTYPE html>
-<html lang="en">
+<html lang="tr">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Notion Style Kanban</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/svg+xml" href="https://cdn-icons-png.flaticon.com/512/2098/2098402.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="theme-color" content="#2563eb" />
+    <link rel="manifest" href="/manifest.json" />
+    <title>Proje Planlama Asistanı | Akıllı Web Aracı</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script type="importmap">
 {
   "imports": {
-    "react/": "https://esm.sh/react@^19.2.3/",
-    "react": "https://esm.sh/react@^19.2.3",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "@google/genai": "https://esm.sh/@google/genai@^1.34.0",
-    "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
-    "@dnd-kit/core": "https://esm.sh/@dnd-kit/core@^6.3.1",
-    "@dnd-kit/utilities": "https://esm.sh/@dnd-kit/utilities@^3.2.2",
-    "tailwind-merge": "https://esm.sh/tailwind-merge@^3.4.0",
-    "@dnd-kit/sortable": "https://esm.sh/@dnd-kit/sortable@^10.0.0",
-    "clsx": "https://esm.sh/clsx@^2.1.1"
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "@google/genai": "https://esm.sh/@google/genai@^1.34.0"
   }
 }
 </script>
+<style>
+  /* --- THEME SYSTEM --- */
+  :root {
+    --app-primary: #2563eb;
+    --app-primary-dark: #1d4ed8;
+    --app-accent: #3b82f6;
+    --app-accent-light: #eff6ff;
+    --app-ring: rgba(37, 99, 235, 0.2);
+  }
+
+  .theme-emerald {
+    --app-primary: #059669;
+    --app-primary-dark: #047857;
+    --app-accent: #10b981;
+    --app-accent-light: #ecfdf5;
+    --app-ring: rgba(5, 150, 105, 0.2);
+  }
+
+  .theme-purple {
+    --app-primary: #7c3aed;
+    --app-primary-dark: #6d28d9;
+    --app-accent: #8b5cf6;
+    --app-accent-light: #f5f3ff;
+    --app-ring: rgba(124, 58, 237, 0.2);
+  }
+
+  .theme-orange {
+    --app-primary: #ea580c;
+    --app-primary-dark: #c2410c;
+    --app-accent: #f59e0b;
+    --app-accent-light: #fff7ed;
+    --app-ring: rgba(234, 88, 12, 0.2);
+  }
+
+  .text-primary { color: var(--app-primary); }
+  .bg-primary { background-color: var(--app-primary); }
+  .bg-accent { background-color: var(--app-accent-light); }
+  .border-primary { border-color: var(--app-primary); }
+  
+  /* --- FIGMA STYLE ROCKET ANIMATIONS --- */
+  
+  @keyframes figma-rumble {
+    0%, 100% { transform: translate(0, 0) rotate(-45deg); }
+    20% { transform: translate(-1.5px, 1.5px) rotate(-46deg); }
+    40% { transform: translate(1.5px, -1.5px) rotate(-44deg); }
+    60% { transform: translate(-2px, -1px) rotate(-45.5deg); }
+    80% { transform: translate(2px, 1px) rotate(-44.5deg); }
+  }
+  .animate-figma-rumble {
+    animation: figma-rumble 0.1s infinite linear;
+  }
+
+  @keyframes figma-launch {
+    0% { transform: translate(0, 0) rotate(-45deg) scale(1); filter: brightness(1); }
+    15% { transform: translate(-30px, 30px) rotate(-45deg) scale(1.1); filter: brightness(1.2); } /* Anticipation */
+    100% { transform: translate(3000px, -3000px) rotate(-45deg) scale(0.1); filter: brightness(10) drop-shadow(0 0 100px #fff); opacity: 0; }
+  }
+  .animate-figma-launch {
+    animation: figma-launch 0.9s cubic-bezier(0.85, 0, 0.15, 1) forwards;
+  }
+
+  @keyframes figma-plasma-tail {
+    0% { height: 0; opacity: 0; transform: translateX(-50%) scaleX(1); }
+    20% { height: 200px; opacity: 1; transform: translateX(-50%) scaleX(2); }
+    60% { height: 800px; opacity: 0.8; transform: translateX(-50%) scaleX(1.5); }
+    100% { height: 2500px; opacity: 0; transform: translateX(-50%) scaleX(0.2); }
+  }
+  .animate-figma-tail {
+    animation: figma-plasma-tail 1s ease-out forwards;
+  }
+
+  @keyframes figma-shockwave {
+    0% { transform: scale(0.5); opacity: 1; border-width: 60px; filter: blur(0px); }
+    100% { transform: scale(40); opacity: 0; border-width: 0px; filter: blur(30px); }
+  }
+  .animate-figma-shockwave {
+    animation: figma-shockwave 1.4s cubic-bezier(0.165, 0.84, 0.44, 1) forwards;
+  }
+
+  @keyframes star-fly {
+    0% { transform: translate(0, 0) scale(1.5); opacity: 0; }
+    10% { opacity: 1; }
+    100% { transform: translate(var(--tx), var(--ty)) scale(0); opacity: 0; }
+  }
+  .animate-star-fly {
+    animation: star-fly 0.8s cubic-bezier(0, 1, 0, 1) forwards;
+  }
+
+  @keyframes screen-shake-figma {
+    0%, 100% { transform: translate(0, 0); }
+    10%, 30%, 50%, 70%, 90% { transform: translate(-4px, -2px); }
+    20%, 40%, 60%, 80% { transform: translate(4px, 2px); }
+  }
+  .animate-shake-figma {
+    animation: screen-shake-figma 0.4s ease-in-out;
+  }
+
+  @keyframes hyper-flash {
+    0% { opacity: 0; }
+    10% { opacity: 0.8; }
+    100% { opacity: 0; }
+  }
+  .animate-hyper-flash {
+    animation: hyper-flash 0.6s ease-out forwards;
+  }
+
+  /* Smooth Transitions */
+  * {
+    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.1s ease;
+  }
+
+  body {
+    overscroll-behavior-y: contain;
+    -webkit-tap-highlight-color: transparent;
+  }
+</style>
 </head>
-  <body>
+  <body class="bg-gray-50 dark:bg-gray-900 text-slate-800 dark:text-slate-100 antialiased selection:bg-blue-100 dark:selection:bg-blue-900">
     <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <script type="module" src="/index.tsx"></script>
   </body>
 </html>
