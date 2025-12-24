@@ -10,7 +10,7 @@ const AboutModal: React.FC<AboutModalProps> = ({ onClose }) => {
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex justify-center items-center p-4">
       <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden animate-fade-in-up flex flex-col max-h-[85vh]">
         {/* Header */}
-        <div className="flex justify-between items-center p-6 border-b dark:border-gray-700 bg-blue-600 text-white">
+        <div className="flex justify-between items-center p-6 border-b dark:border-gray-700 bg-primary text-white">
           <div className="flex items-center space-x-3">
              <div className="bg-white/20 p-2 rounded-xl">
                 <i className="fa-solid fa-rocket text-xl"></i>
@@ -29,24 +29,24 @@ const AboutModal: React.FC<AboutModalProps> = ({ onClose }) => {
         <div className="flex-grow overflow-y-auto p-8 space-y-8 custom-scrollbar">
           <section className="space-y-4">
               <h3 className="text-lg font-black text-gray-800 dark:text-white flex items-center">
-                  <i className="fa-brands fa-github mr-3 text-2xl text-blue-600"></i>
+                  <i className="fa-brands fa-github mr-3 text-2xl text-primary"></i>
                   GitHub'da Nasıl Yayınlanır?
               </h3>
               <div className="space-y-3">
                   <div className="flex items-start space-x-4 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-700">
-                      <div className="bg-blue-100 dark:bg-blue-900/40 text-blue-600 w-6 h-6 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0 mt-0.5">1</div>
+                      <div className="bg-accent text-primary w-6 h-6 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0 mt-0.5">1</div>
                       <p className="text-sm text-gray-600 dark:text-gray-300">
                           GitHub deponuzun <strong>Settings</strong> (Ayarlar) sekmesine gidin.
                       </p>
                   </div>
                   <div className="flex items-start space-x-4 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-700">
-                      <div className="bg-blue-100 dark:bg-blue-900/40 text-blue-600 w-6 h-6 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0 mt-0.5">2</div>
+                      <div className="bg-accent text-primary w-6 h-6 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0 mt-0.5">2</div>
                       <p className="text-sm text-gray-600 dark:text-gray-300">
                           Sol menüden <strong>Pages</strong> seçeneğine tıklayın.
                       </p>
                   </div>
                   <div className="flex items-start space-x-4 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-700">
-                      <div className="bg-blue-100 dark:bg-blue-900/40 text-blue-600 w-6 h-6 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0 mt-0.5">3</div>
+                      <div className="bg-accent text-primary w-6 h-6 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0 mt-0.5">3</div>
                       <p className="text-sm text-gray-600 dark:text-gray-300">
                           <strong>Branch</strong> kısmından <code>main</code> ve <code>/(root)</code> seçerek <strong>Save</strong> butonuna basın.
                       </p>
@@ -65,8 +65,8 @@ const AboutModal: React.FC<AboutModalProps> = ({ onClose }) => {
                   <strong> Akıllı Atama</strong> algoritması ile ekip üyelerinizin kapasitesini en verimli şekilde kullanır.
               </p>
               <div className="grid grid-cols-2 gap-4">
-                  <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-2xl border border-blue-100 dark:border-blue-800">
-                      <h4 className="text-xs font-black text-blue-700 dark:text-blue-400 uppercase tracking-widest mb-2">Veri Güvenliği</h4>
+                  <div className="p-4 bg-accent/50 dark:bg-primary/10 rounded-2xl border border-primary/10">
+                      <h4 className="text-xs font-black text-primary uppercase tracking-widest mb-2">Veri Güvenliği</h4>
                       <p className="text-[11px] text-gray-500 dark:text-gray-400">Verileriniz sadece sizin tarayıcınızda (Local Storage) saklanır, hiçbir sunucuya gönderilmez.</p>
                   </div>
                   <div className="p-4 bg-emerald-50 dark:bg-emerald-900/20 rounded-2xl border border-emerald-100 dark:border-emerald-800">

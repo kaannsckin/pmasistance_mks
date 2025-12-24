@@ -173,7 +173,7 @@ const CustomerRequestsView: React.FC<CustomerRequestsViewProps> = ({ requests, s
                              {request.status === 'Converted' ? (
                                  <span className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-widest border border-emerald-200">GÖREVE DÖNÜŞTÜ</span>
                              ) : (
-                                 <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-widest border border-blue-200">YENİ TALEP</span>
+                                 <span className="bg-purple-100 text-purple-700 px-2 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-widest border border-purple-200">YENİ TALEP</span>
                              )}
                           </div>
                           
@@ -189,7 +189,7 @@ const CustomerRequestsView: React.FC<CustomerRequestsViewProps> = ({ requests, s
                           {request.status !== 'Converted' && (
                               <button 
                                 onClick={() => onConvertToTask(request)}
-                                className="bg-blue-50 hover:bg-blue-600 text-blue-600 hover:text-white px-4 py-2 rounded-xl text-xs font-black transition-all border border-blue-100 hover:border-blue-600 shadow-sm"
+                                className="bg-purple-50 hover:bg-purple-600 text-purple-600 hover:text-white px-4 py-2 rounded-xl text-xs font-black transition-all border border-purple-100 hover:border-purple-600 shadow-sm"
                                 title="Bu talebi yeni bir görev olarak aç"
                               >
                                   GÖREVİ OLUŞTUR

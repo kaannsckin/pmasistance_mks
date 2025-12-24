@@ -13,7 +13,7 @@ interface GoalsViewProps {
 const ProgressBar: React.FC<{ progress: number }> = ({ progress }) => (
     <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
         <div 
-            className="bg-blue-600 h-2 rounded-full transition-all duration-500 ease-out" 
+            className="bg-primary h-2 rounded-full transition-all duration-500 ease-out" 
             style={{ width: `${progress}%` }}
         ></div>
     </div>
@@ -73,12 +73,12 @@ const ObjectiveCard: React.FC<{ objective: Objective; tasks: Task[]; workPackage
         <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-md border border-gray-100 dark:border-gray-700 p-6 space-y-4 transition-all hover:shadow-lg hover:-translate-y-1">
             <div className="flex justify-between items-start">
                 <div>
-                    <span className="text-xs font-bold bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 px-3 py-1 rounded-full">{objective.quarter}</span>
+                    <span className="text-xs font-bold bg-accent text-primary dark:bg-primary/20 dark:text-primary px-3 py-1 rounded-full">{objective.quarter}</span>
                     <h3 className="text-lg font-extrabold text-gray-800 dark:text-white mt-3">{objective.name}</h3>
                     <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{objective.description}</p>
                 </div>
                 <div className="flex flex-col items-end">
-                    <span className="text-2xl font-bold text-blue-600 dark:text-blue-400">{overallProgress.toFixed(0)}%</span>
+                    <span className="text-2xl font-bold text-primary">{overallProgress.toFixed(0)}%</span>
                     <span className="text-xs text-gray-400">Genel İlerleme</span>
                 </div>
             </div>
@@ -127,7 +127,7 @@ const GoalsView: React.FC<GoalsViewProps> = ({ objectives, tasks, workPackages, 
             </button>
             <button 
                 onClick={handleAddObjective}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2"
+                className="bg-primary hover:opacity-90 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2 shadow-lg"
             >
                 <i className="fa-solid fa-plus"></i>
                 <span>Yeni Hedef Ekle</span>

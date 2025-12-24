@@ -32,7 +32,7 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, tasks, w
 
   const [selectedObjectiveId, setSelectedObjectiveId] = useState<string>('');
 
-  const inputStyle = "bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-50 sm:text-sm rounded-md focus:ring-blue-500 focus:border-blue-500 focus:outline-none py-2 px-3";
+  const inputStyle = "bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-50 sm:text-sm rounded-md focus:ring-primary focus:border-primary focus:outline-none py-2 px-3";
 
 
   useEffect(() => {
@@ -264,7 +264,7 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, tasks, w
                 type="checkbox"
                 checked={formData.includeInSprints}
                 onChange={e => setFormData(prev => ({ ...prev, includeInSprints: e.target.checked }))}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
               />
               <label htmlFor="includeInSprints" className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
                 Sürüm planlamasına dahil et
@@ -275,7 +275,7 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, tasks, w
         </form>
         <div className="flex justify-end items-center p-4 border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
           <button type="button" onClick={onClose} className="px-4 py-2 rounded-md border dark:border-gray-600 mr-2 hover:bg-gray-100 dark:hover:bg-gray-700">İptal</button>
-          <button type="submit" onClick={handleSubmit} className="px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700">Kaydet</button>
+          <button type="submit" onClick={handleSubmit} className="px-4 py-2 rounded-md bg-primary text-white hover:opacity-90">Kaydet</button>
         </div>
       </div>
     </div>

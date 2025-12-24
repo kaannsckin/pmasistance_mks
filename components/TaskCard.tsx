@@ -41,7 +41,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, workPackages, onView, onEdit,
                             target="_blank" 
                             rel="noopener noreferrer"
                             onClick={(e) => e.stopPropagation()}
-                            className="font-mono text-xs text-gray-500 hover:text-blue-600 dark:text-gray-400 transition-colors"
+                            className="font-mono text-xs text-gray-500 hover:text-primary dark:text-gray-400 transition-colors"
                         >
                             {task.jiraId}
                             <i className="fa-solid fa-external-link-alt text-[9px] ml-1 opacity-50"></i>
@@ -74,7 +74,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, workPackages, onView, onEdit,
                             </div>
                             <span className="truncate max-w-[100px]">{task.resourceName}</span>
                          </div>
-                         <span className="font-medium bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded">
+                         <span className="font-medium bg-accent dark:bg-primary/20 text-primary dark:text-primary px-1.5 py-0.5 rounded">
                             v{task.version}
                          </span>
                     </div>
@@ -106,7 +106,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, workPackages, onView, onEdit,
                             <i className="fa-solid fa-paper-plane text-xs"></i>
                         </button>
                     )}
-                    <button onClick={() => onView(task)} title="Detay" className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-blue-100 text-gray-500 hover:text-blue-600 transition-colors">
+                    <button onClick={() => onView(task)} title="Detay" className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-accent text-gray-500 hover:text-primary transition-colors">
                         <i className="fa-solid fa-eye text-xs"></i>
                     </button>
                     <button onClick={() => onEdit(task)} title="Düzenle" className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-green-100 text-gray-500 hover:text-green-600 transition-colors">

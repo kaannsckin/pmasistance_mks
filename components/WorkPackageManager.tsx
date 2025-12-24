@@ -85,7 +85,7 @@ const WorkPackageManager: React.FC<WorkPackageManagerProps> = ({ isOpen, onClose
                     value={formData.name}
                     onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))}
                     placeholder="Örn: Raporlama Modülü"
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
                     />
                 </div>
                 <div className="md:col-span-2">
@@ -96,7 +96,7 @@ const WorkPackageManager: React.FC<WorkPackageManagerProps> = ({ isOpen, onClose
                     value={formData.description}
                     onChange={e => setFormData(prev => ({ ...prev, description: e.target.value }))}
                     placeholder="Paketin amacını açıklayın"
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
                     />
                 </div>
                 </div>
@@ -111,7 +111,7 @@ const WorkPackageManager: React.FC<WorkPackageManagerProps> = ({ isOpen, onClose
                 )}
                 <button
                     onClick={handleSave}
-                    className="bg-blue-600 text-white px-4 py-2 rounded-lg shadow-md hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    className="bg-primary text-white px-4 py-2 rounded-lg shadow-md hover:opacity-90 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
                 >
                     <i className={`fa-solid ${editingPackageId ? 'fa-save' : 'fa-plus'} mr-2`}></i>{buttonLabel}
                 </button>
@@ -133,7 +133,7 @@ const WorkPackageManager: React.FC<WorkPackageManagerProps> = ({ isOpen, onClose
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{wp.name}</td>
                         <td className="px-6 py-4 whitespace-normal text-sm text-gray-500 dark:text-gray-300">{wp.description}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-4">
-                            <button onClick={() => setEditingPackageId(wp.id)} className="text-blue-600 hover:text-blue-900 dark:hover:text-blue-400">
+                            <button onClick={() => setEditingPackageId(wp.id)} className="text-primary hover:opacity-80 transition-opacity">
                             <i className="fa-solid fa-pencil mr-1"></i> Düzenle
                             </button>
                             <button onClick={() => onDeleteWorkPackage(wp.id)} className="text-red-600 hover:text-red-900 dark:hover:text-red-400">

@@ -276,8 +276,8 @@ const NotesView: React.FC<NotesViewProps> = ({ notes, resources, tagColors, setT
         </div>
         <ul className="max-h-64 overflow-y-auto custom-scrollbar">
             {suggestionType === 'mention' && resources.filter(r => r.name.toLocaleLowerCase('tr-TR').includes(suggestionQuery.toLocaleLowerCase('tr-TR'))).map(r => (
-                <li key={r.id} onClick={() => insertSuggestion(r.name.replace(/\s/g, ''))} className="px-4 py-3 hover:bg-blue-50 dark:hover:bg-gray-700 cursor-pointer flex items-center space-x-3 text-xs text-gray-700 dark:text-gray-200 border-b last:border-0 dark:border-gray-700/50 transition-colors">
-                    <span className="w-6 h-6 rounded-lg bg-blue-600 text-white flex items-center justify-center text-[10px] font-black shadow-sm">{r.name.charAt(0)}</span>
+                <li key={r.id} onClick={() => insertSuggestion(r.name.replace(/\s/g, ''))} className="px-4 py-3 hover:bg-accent dark:hover:bg-gray-700 cursor-pointer flex items-center space-x-3 text-xs text-gray-700 dark:text-gray-200 border-b last:border-0 dark:border-gray-700/50 transition-colors">
+                    <span className="w-6 h-6 rounded-lg bg-primary text-white flex items-center justify-center text-[10px] font-black shadow-sm">{r.name.charAt(0)}</span>
                     <span className="font-bold">{r.name}</span>
                 </li>
             ))}
@@ -308,7 +308,7 @@ const NotesView: React.FC<NotesViewProps> = ({ notes, resources, tagColors, setT
             <div 
                 className={`group/line relative min-h-[1.5em] flex items-start p-2 rounded-xl transition-all cursor-text ${
                     isExpanded 
-                        ? 'bg-blue-50/20 dark:bg-blue-900/10 ring-1 ring-blue-500/20' 
+                        ? 'bg-accent/50 dark:bg-primary/10 ring-1 ring-primary/20' 
                         : 'hover:bg-gray-50 dark:hover:bg-gray-800/40'
                 }`}
             >
@@ -332,7 +332,7 @@ const NotesView: React.FC<NotesViewProps> = ({ notes, resources, tagColors, setT
                             const tagColor = tagColors[tag];
                             return <span key={i} className="font-black px-1.5 py-0.5 rounded-lg cursor-pointer hover:opacity-80 transition-all text-[10px] uppercase tracking-tighter mx-0.5 no-underline inline-block" style={tagColor ? { color: tagColor, backgroundColor: `${tagColor}15`, border: `1px solid ${tagColor}30` } : { backgroundColor: 'rgba(0,0,0,0.05)' }} onClick={(e) => { e.stopPropagation(); setActiveTagFilter(tag); }}>{part}</span>;
                         }
-                        if (part.startsWith('@')) return <span key={i} className="text-blue-600 dark:text-blue-400 font-black bg-blue-50 dark:bg-blue-900/30 px-1.5 py-0.5 rounded-lg text-[10px] uppercase tracking-tighter mx-0.5 no-underline inline-block">{part}</span>;
+                        if (part.startsWith('@')) return <span key={i} className="text-primary font-black bg-accent dark:bg-primary/20 px-1.5 py-0.5 rounded-lg text-[10px] uppercase tracking-tighter mx-0.5 no-underline inline-block">{part}</span>;
                         return <span key={i} style={currentColor ? { color: currentColor } : {}}>{part}</span>;
                     })}
                 </div>
@@ -346,15 +346,15 @@ const NotesView: React.FC<NotesViewProps> = ({ notes, resources, tagColors, setT
             </div>
 
             {isExpanded && (
-                <div className="my-4 p-5 bg-white dark:bg-gray-800 border border-blue-500/30 rounded-3xl shadow-2xl space-y-4 animate-fade-in-up">
+                <div className="my-4 p-5 bg-white dark:bg-gray-800 border border-primary/30 rounded-3xl shadow-2xl space-y-4 animate-fade-in-up">
                     <FormattingToolbar />
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 relative">
                         <div className="space-y-1">
-                            <label className="text-[9px] font-black text-blue-500 uppercase tracking-widest pl-2">GÜNCEL SATIR</label>
+                            <label className="text-[9px] font-black text-primary uppercase tracking-widest pl-2">GÜNCEL SATIR</label>
                             <textarea 
                                 ref={lineTextRef} value={tempLineText} onFocus={() => setActiveTextArea('lineText')}
                                 onChange={(e) => { setTempLineText(e.target.value); checkSuggestions(e.target.value, e.target.selectionStart); }}
-                                className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl p-4 text-xs focus:ring-2 focus:ring-blue-500 outline-none resize-none" rows={3}
+                                className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl p-4 text-xs focus:ring-2 focus:ring-primary outline-none resize-none" rows={3}
                             />
                         </div>
                         <div className="space-y-1">
@@ -370,7 +370,7 @@ const NotesView: React.FC<NotesViewProps> = ({ notes, resources, tagColors, setT
                     </div>
                     <div className="flex justify-end items-center space-x-3 pt-2">
                         <button onClick={() => setExpandedLineId(null)} className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-4">İptal</button>
-                        <button onClick={() => handleSaveInlineChanges(noteId, lineIdx)} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl text-[10px] font-black shadow-lg transition-all uppercase tracking-widest">GÜNCELLE</button>
+                        <button onClick={() => handleSaveInlineChanges(noteId, lineIdx)} className="bg-primary hover:opacity-90 text-white px-6 py-2.5 rounded-xl text-[10px] font-black shadow-lg transition-all uppercase tracking-widest">GÜNCELLE</button>
                     </div>
                 </div>
             )}
@@ -528,7 +528,7 @@ const NotesView: React.FC<NotesViewProps> = ({ notes, resources, tagColors, setT
                                 </h3>
                                 {isCollapsed && (
                                     <div className="flex items-center space-x-2 animate-fade-in">
-                                        <span className="text-[9px] font-bold bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-lg">{dateNotes.length} Not</span>
+                                        <span className="text-[9px] font-bold bg-accent dark:bg-primary/20 text-primary px-2 py-0.5 rounded-lg">{dateNotes.length} Not</span>
                                         {totalTodos > 0 && <span className="text-[9px] font-bold bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-lg">{totalTodos} Görev</span>}
                                         {uniqueTags.map(tag => (
                                             <span key={tag} className="text-[9px] font-bold text-gray-400 opacity-60">#{tag}</span>

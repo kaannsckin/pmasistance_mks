@@ -189,14 +189,14 @@ const RoadmapView: React.FC<RoadmapViewProps> = ({ tasks, onTaskStatusChange, on
                             placeholder="Akıllı arama..."
                             value={searchTerm}
                             onChange={e => setSearchTerm(e.target.value)}
-                            className="bg-[#27272A] border border-gray-700 rounded-lg pl-8 pr-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none w-48 transition-all"
+                            className="bg-[#27272A] border border-gray-700 rounded-lg pl-8 pr-3 py-1.5 text-sm focus:ring-2 focus:ring-primary outline-none w-48 transition-all"
                         />
                     </div>
                 </div>
                 <div className="flex items-center gap-3">
                     <div className="flex items-center gap-2">
                         {['my-tasks', 'due-soon'].map(filter => (
-                            <button key={filter} onClick={() => toggleFilter(filter)} className={`px-3 py-1 text-xs font-bold rounded-full border transition-colors ${activeFilters.has(filter) ? 'bg-blue-500 border-blue-400 text-white' : 'bg-gray-800 border-gray-700 text-gray-400 hover:bg-gray-700'}`}>
+                            <button key={filter} onClick={() => toggleFilter(filter)} className={`px-3 py-1 text-xs font-bold rounded-full border transition-colors ${activeFilters.has(filter) ? 'bg-primary border-primary/50 text-white' : 'bg-gray-800 border-gray-700 text-gray-400 hover:bg-gray-700'}`}>
                                 {filter === 'my-tasks' ? 'Görevlerim' : 'Yaklaşanlar'}
                             </button>
                         ))}

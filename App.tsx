@@ -20,6 +20,14 @@ import GoalsView from './components/GoalsView';
 
 const STORAGE_KEY = 'PROJE_PLANLAMA_DATA';
 
+const THEME_COLORS: Record<string, string> = {
+  classic: '#2563eb',
+  emerald: '#059669',
+  purple: '#7c3aed',
+  orange: '#ea580c',
+};
+
+
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<View>(View.Roadmap);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -51,7 +59,7 @@ const App: React.FC = () => {
   const [appTheme, setAppTheme] = useState('classic');
   const [isDarkMode, setIsDarkMode] = useState(true);
   
-  const [manMonthTableColor, setManMonthTableColor] = useState('#2563eb');
+  const [manMonthTableColor, setManMonthTableColor] = useState(THEME_COLORS.classic);
   const [costTableColor, setCostTableColor] = useState('#10b981');
   
   const [isInitialized, setIsInitialized] = useState(false);
@@ -97,7 +105,10 @@ const App: React.FC = () => {
     } else {
       document.documentElement.classList.remove('dark');
     }
-  }, [isDarkMode]);
+    // Set theme color for PWA header
+    const themeColor = getComputedStyle(document.documentElement).getPropertyValue('--app-primary').trim();
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', themeColor);
+  }, [isDarkMode, appTheme]);
 
   useEffect(() => {
     if (isInitialized) {
@@ -128,6 +139,98 @@ const App: React.FC = () => {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
     }
   }, [tasks, resources, workPackages, notes, customerRequests, objectives, sprintDuration, projectStartDate, isLocalPersistenceEnabled, isAIEnabled, tagColors, titleCosts, sprintNames, globalTestDays, manMonthTableColor, costTableColor, appTheme, isDarkMode, isInitialized]);
+
+  // Sync table colors with theme
+  useEffect(() => {
+    setManMonthTableColor(THEME_COLORS[appTheme] || THEME_COLORS.classic);
+  }, [appTheme]);
+
+  const handleSaveProject = useCallback(() => {
+    const dataToSave: ProjectData = {
+      tasks,
+      resources,
+      workPackages,
+      notes,
+      customerRequests,
+      objectives,
+      settings: { 
+        sprintDuration, 
+        projectStartDate, 
+        isLocalPersistenceEnabled,
+        isAIEnabled,
+        tagColors,
+        titleCosts,
+        sprintNames,
+        globalTestDays,
+        manMonthTableColor,
+        costTableColor,
+        theme: appTheme,
+        isDarkMode
+      },
+      appVersion: '1.9.0',
+      exportDate: new Date().toISOString()
+    };
+    
+    const jsonString = JSON.stringify(dataToSave, null, 2);
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `plan-asistan-yedek-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [
+      tasks, resources, workPackages, notes, customerRequests, objectives, 
+      sprintDuration, projectStartDate, isLocalPersistenceEnabled, isAIEnabled, 
+      tagColors, titleCosts, sprintNames, globalTestDays, manMonthTableColor, 
+      costTableColor, appTheme, isDarkMode
+  ]);
+
+  const handleLoadProject = useCallback((file: File) => {
+    if (file && file.type === 'application/json') {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const text = e.target?.result;
+          if (typeof text !== 'string') {
+              throw new Error("Dosya içeriği okunamadı.");
+          }
+          const parsed = JSON.parse(text) as ProjectData;
+          
+          setTasks(parsed.tasks || []);
+          setResources(parsed.resources || []);
+          setWorkPackages(parsed.workPackages || []);
+          setNotes(parsed.notes || []);
+          setCustomerRequests(parsed.customerRequests || []);
+          setObjectives(parsed.objectives || []);
+          
+          if (parsed.settings) {
+            setSprintDuration(parsed.settings.sprintDuration || 3);
+            setProjectStartDate(parsed.settings.projectStartDate || new Date().toISOString().split('T')[0]);
+            setIsLocalPersistenceEnabled(parsed.settings.isLocalPersistenceEnabled !== false);
+            setIsAIEnabled(parsed.settings.isAIEnabled !== false);
+            setTagColors(parsed.settings.tagColors || {});
+            setTitleCosts(parsed.settings.titleCosts || {});
+            setSprintNames(parsed.settings.sprintNames || {});
+            setGlobalTestDays(parsed.settings.globalTestDays || 4);
+            setAppTheme(parsed.settings.theme || 'classic');
+            setIsDarkMode(parsed.settings.isDarkMode || false);
+            if(parsed.settings.manMonthTableColor) setManMonthTableColor(parsed.settings.manMonthTableColor);
+            if(parsed.settings.costTableColor) setCostTableColor(parsed.settings.costTableColor);
+          }
+          alert("Proje başarıyla yüklendi!");
+        } catch (err) {
+          console.error("Proje yüklenirken hata oluştu:", err);
+          alert("Proje dosyası yüklenemedi. Dosya formatı bozuk olabilir.");
+        }
+      };
+      reader.readAsText(file);
+    } else {
+      alert("Lütfen geçerli bir JSON proje dosyası seçin.");
+    }
+  }, []);
 
   const handleResetData = useCallback(() => {
       localStorage.removeItem(STORAGE_KEY);
@@ -231,7 +334,9 @@ const App: React.FC = () => {
     <div className={`min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans theme-${appTheme}`}>
       <Header 
         currentView={currentView} setCurrentView={setCurrentView} 
-        onOpenSettings={() => setIsSettingsModalOpen(true)} onSaveProject={() => {}} onLoadProject={() => {}}
+        onOpenSettings={() => setIsSettingsModalOpen(true)} 
+        onSaveProject={handleSaveProject} 
+        onLoadProject={handleLoadProject}
         isLocalPersistenceEnabled={isLocalPersistenceEnabled} isAIEnabled={isAIEnabled}
         onOpenAbout={() => setIsAboutModalOpen(true)}
       />

@@ -298,12 +298,12 @@ const ResourceManager: React.FC<ResourceManagerProps> = ({ resources, setResourc
                 )}
 
                 <div className="relative">
-                    <button onMouseEnter={() => setShowHelp(true)} onMouseLeave={() => setShowHelp(false)} className="w-8 h-8 flex items-center justify-center text-blue-500 hover:text-blue-700 transition-colors">
+                    <button onMouseEnter={() => setShowHelp(true)} onMouseLeave={() => setShowHelp(false)} className="w-8 h-8 flex items-center justify-center text-primary hover:opacity-80 transition-colors">
                         <i className="fa-solid fa-circle-question"></i>
                     </button>
                     {showHelp && (
                         <div className="absolute right-0 top-10 w-80 bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 z-[110] text-[11px] animate-fade-in-up">
-                            <h4 className="font-black text-blue-600 uppercase mb-3 flex items-center"><i className="fa-solid fa-lightbulb mr-2"></i> Akıllı İçe Aktarma</h4>
+                            <h4 className="font-black text-primary uppercase mb-3 flex items-center"><i className="fa-solid fa-lightbulb mr-2"></i> Akıllı İçe Aktarma</h4>
                             <ul className="space-y-2 text-gray-500 dark:text-gray-400 leading-relaxed">
                                 <li>• <b>Kapasite Kontrolü:</b> Birim toplamları, o birimdeki kişi sayısına göre değerlendirilir. (3 kişi = %300 kapasite)</li>
                                 <li>• <b>Görsel Uyarılar:</b> Kapasite aşımı olduğunda hücreler otomatik olarak <b>Rose</b> tonuna döner.</li>
@@ -323,7 +323,7 @@ const ResourceManager: React.FC<ResourceManagerProps> = ({ resources, setResourc
                 </div>
 
                 <div className="flex space-x-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl border border-gray-200 dark:border-gray-700">
-                    <button onClick={() => setActiveTab('list')} className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'list' ? 'bg-white dark:bg-gray-700 text-blue-600 shadow-sm' : 'text-gray-500'}`}>Liste</button>
+                    <button onClick={() => setActiveTab('list')} className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'list' ? 'bg-white dark:bg-gray-700 text-primary shadow-sm' : 'text-gray-500'}`}>Liste</button>
                     <button onClick={() => setActiveTab('manmonth')} className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'manmonth' ? 'bg-white dark:bg-gray-700 text-emerald-600 shadow-sm' : 'text-gray-500'}`}>Adam/Ay</button>
                     <button onClick={() => setActiveTab('costs')} className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'costs' ? 'bg-white dark:bg-gray-700 text-amber-600 shadow-sm' : 'text-gray-500'}`}>Maliyet</button>
                 </div>
@@ -341,17 +341,17 @@ const ResourceManager: React.FC<ResourceManagerProps> = ({ resources, setResourc
                         <div className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
                             <div className="md:col-span-2">
                                 <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Kişi Adı Soyadı</label>
-                                <input type="text" value={newResourceName} onChange={e => setNewResourceName(e.target.value)} placeholder="Örn: Kaan" className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg outline-none text-xs text-gray-800 dark:text-white transition-all focus:border-blue-300"/>
+                                <input type="text" value={newResourceName} onChange={e => setNewResourceName(e.target.value)} placeholder="Örn: Kaan" className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg outline-none text-xs text-gray-800 dark:text-white transition-all focus:border-primary"/>
                             </div>
                             <div>
                                 <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Birim</label>
-                                <input type="text" value={newResourceUnit} onChange={e => setNewResourceUnit(e.target.value)} placeholder="Örn: Geliştirme" className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg outline-none text-xs text-gray-800 dark:text-white transition-all focus:border-blue-300"/>
+                                <input type="text" value={newResourceUnit} onChange={e => setNewResourceUnit(e.target.value)} placeholder="Örn: Geliştirme" className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg outline-none text-xs text-gray-800 dark:text-white transition-all focus:border-primary"/>
                             </div>
                             <div>
                                 <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Ünvan</label>
-                                <input type="text" value={newResourceTitle} onChange={e => setNewResourceTitle(e.target.value)} placeholder="Örn: Senior Geliştirici" className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg outline-none text-xs text-gray-800 dark:text-white transition-all focus:border-blue-300"/>
+                                <input type="text" value={newResourceTitle} onChange={e => setNewResourceTitle(e.target.value)} placeholder="Örn: Senior Geliştirici" className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg outline-none text-xs text-gray-800 dark:text-white transition-all focus:border-primary"/>
                             </div>
-                            <button onClick={handleAddResource} className="bg-blue-600 hover:bg-blue-700 text-white h-8 px-4 rounded-lg text-[10px] font-black uppercase tracking-widest shadow-md transition-all">EKLE</button>
+                            <button onClick={handleAddResource} className="bg-primary hover:opacity-90 text-white h-8 px-4 rounded-lg text-[10px] font-black uppercase tracking-widest shadow-md transition-all">EKLE</button>
                         </div>
                     </div>
 
@@ -371,7 +371,7 @@ const ResourceManager: React.FC<ResourceManagerProps> = ({ resources, setResourc
                                     <tr key={resource.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-700/10 group">
                                         <td className="px-6 py-3">
                                             {editingState?.id === resource.id && editingState.field === 'name' ? (
-                                                <input autoFocus value={tempValue} onChange={e => setTempValue(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSaveEdit()} onBlur={handleSaveEdit} className="bg-white border border-blue-400 rounded px-2 py-0.5 text-xs font-bold outline-none uppercase w-full max-w-[200px]"/>
+                                                <input autoFocus value={tempValue} onChange={e => setTempValue(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSaveEdit()} onBlur={handleSaveEdit} className="bg-white border border-primary rounded px-2 py-0.5 text-xs font-bold outline-none uppercase w-full max-w-[200px]"/>
                                             ) : (
                                                 <div className="flex items-center space-x-2">
                                                     <ResourceColorPicker currentColor={resource.color} onSelect={(c) => handleUpdateResourceColor(resource.id, c)} />
@@ -384,7 +384,7 @@ const ResourceManager: React.FC<ResourceManagerProps> = ({ resources, setResourc
                                         </td>
                                         <td className="px-6 py-3">
                                             {editingState?.id === resource.id && editingState.field === 'unit' ? (
-                                                <input autoFocus value={tempValue} onChange={e => setTempValue(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSaveEdit()} onBlur={handleSaveEdit} className="bg-white border border-blue-400 rounded px-2 py-0.5 text-[9px] font-black outline-none uppercase w-full max-w-[120px]"/>
+                                                <input autoFocus value={tempValue} onChange={e => setTempValue(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSaveEdit()} onBlur={handleSaveEdit} className="bg-white border border-primary rounded px-2 py-0.5 text-[9px] font-black outline-none uppercase w-full max-w-[120px]"/>
                                             ) : (
                                                 <span onClick={() => handleStartEdit(resource, 'unit')} className="bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded text-[9px] font-black text-gray-500 uppercase cursor-pointer hover:bg-gray-200 transition-colors">
                                                     {resource.unit}
@@ -393,9 +393,9 @@ const ResourceManager: React.FC<ResourceManagerProps> = ({ resources, setResourc
                                         </td>
                                         <td className="px-6 py-3">
                                             {editingState?.id === resource.id && editingState.field === 'title' ? (
-                                                <input autoFocus value={tempValue} onChange={e => setTempValue(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSaveEdit()} onBlur={handleSaveEdit} className="bg-white border border-blue-400 rounded px-2 py-0.5 text-[10px] font-bold outline-none uppercase w-full max-w-[150px]"/>
+                                                <input autoFocus value={tempValue} onChange={e => setTempValue(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSaveEdit()} onBlur={handleSaveEdit} className="bg-white border border-primary rounded px-2 py-0.5 text-[10px] font-bold outline-none uppercase w-full max-w-[150px]"/>
                                             ) : (
-                                                <span onClick={() => handleStartEdit(resource, 'title')} className="text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase cursor-pointer hover:text-blue-500 transition-colors">
+                                                <span onClick={() => handleStartEdit(resource, 'title')} className="text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase cursor-pointer hover:text-primary transition-colors">
                                                     {resource.title}
                                                 </span>
                                             )}
@@ -403,9 +403,9 @@ const ResourceManager: React.FC<ResourceManagerProps> = ({ resources, setResourc
                                         <td className="px-6 py-3">
                                             <div onClick={() => alert('Lütfen adam/ay planında mevcut ay için değişiklik yapın.')} className="flex items-center space-x-2 cursor-help group/cap">
                                                 <div className="w-16 h-1 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
-                                                    <div className="h-full bg-blue-500 rounded-full" style={{ width: `${resource.participation}%` }}></div>
+                                                    <div className="h-full bg-primary rounded-full" style={{ width: `${resource.participation}%` }}></div>
                                                 </div>
-                                                <span className="text-[10px] font-black text-blue-600 group-hover/cap:scale-110 transition-transform">%{resource.participation}</span>
+                                                <span className="text-[10px] font-black text-primary group-hover/cap:scale-110 transition-transform">%{resource.participation}</span>
                                             </div>
                                         </td>
                                         <td className="px-6 py-3 text-right">
@@ -492,7 +492,7 @@ const ResourceManager: React.FC<ResourceManagerProps> = ({ resources, setResourc
                                         const globalCapacity = resources.length * 100;
                                         const isCritical = total > globalCapacity;
                                         return (
-                                            <td key={i} className={`p-3 text-center text-[10px] border-r border-slate-700 ${isCritical ? 'text-rose-400 bg-rose-950/40' : 'text-blue-300'}`}>
+                                            <td key={i} className={`p-3 text-center text-[10px] border-r border-slate-700 ${isCritical ? 'text-rose-400 bg-rose-950/40' : 'text-primary'}`}>
                                                 %{total}
                                             </td>
                                         );
