@@ -49,6 +49,7 @@ export interface Task {
   includeInSprints?: boolean;
   dueDate?: string; // ISO string date
   subtasks?: { text: string; completed: boolean }[];
+  comments?: { author: string; text: string; date: string }[];
   keyResultId?: string;
 }
 

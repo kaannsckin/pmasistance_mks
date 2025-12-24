@@ -145,6 +145,10 @@ const App: React.FC = () => {
     setManMonthTableColor(THEME_COLORS[appTheme] || THEME_COLORS.classic);
   }, [appTheme]);
 
+  const handleUpdateTask = (updatedTask: Task) => {
+    setTasks(prev => prev.map(t => t.id === updatedTask.id ? updatedTask : t));
+  };
+
   const handleSaveProject = useCallback(() => {
     const dataToSave: ProjectData = {
       tasks,
@@ -299,7 +303,9 @@ const App: React.FC = () => {
             workPackages={workPackages}
             onTaskStatusChange={(id, s) => setTasks(tasks.map(t => t.id === id ? { ...t, status: s } : t))}
             onNewTask={() => { setEditingTask(null); setIsFormModalOpen(true); }}
+            onViewTask={(t) => { setViewingTask(t); setIsDetailModalOpen(true); }}
             onEditTask={(t) => { setEditingTask(t); setIsFormModalOpen(true); }}
+            onDeleteTask={(taskId) => { if(window.confirm('Emin misiniz?')) setTasks(prev => prev.filter(t => t.id !== taskId)); }}
           />
         );
       case View.Goals:
@@ -358,7 +364,7 @@ const App: React.FC = () => {
           setTasks(isEx ? tasks.map(x => x.id === t.id ? t : x) : [...tasks, t]);
           setIsFormModalOpen(false);
       }} />}
-      {isDetailModalOpen && viewingTask && <TaskDetailModal task={viewingTask} workPackages={workPackages} onClose={() => setIsDetailModalOpen(false)} onEdit={(t) => { setIsDetailModalOpen(false); setEditingTask(t); setIsFormModalOpen(true); }} />}
+      {isDetailModalOpen && viewingTask && <TaskDetailModal task={viewingTask} workPackages={workPackages} onClose={() => setIsDetailModalOpen(false)} onEdit={(t) => { setIsDetailModalOpen(false); setEditingTask(t); setIsFormModalOpen(true); }} onSave={handleUpdateTask} />}
       {isTeamsModalOpen && teamsTask && <TeamsMessageModal task={teamsTask} onClose={() => setIsTeamsModalOpen(false)} />}
       {isSettingsModalOpen && (
         <SettingsModal 

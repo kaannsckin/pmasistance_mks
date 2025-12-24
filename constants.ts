@@ -53,6 +53,10 @@ export const INITIAL_TASKS: Task[] = [
       { text: 'Servisi yeniden başlat', completed: true },
       { text: 'Konfigürasyon dosyasını doğrula', completed: false },
     ],
+    comments: [
+      { author: 'Yönetici', text: 'Bu konuyu acil olarak önceliklendirelim lütfen.', date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString() },
+      { author: 'Kaan', text: 'Logları inceliyorum, ilk bulgulara göre bir bellek sızıntısı olabilir.', date: new Date().toISOString() },
+    ],
     keyResultId: 'kr-2-1',
   },
   {

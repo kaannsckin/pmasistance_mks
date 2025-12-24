@@ -1,4 +1,5 @@
-import React from 'react';
+
+import React, { useState } from 'react';
 import { Task, WorkPackage } from '../types';
 
 interface TaskDetailModalProps {
@@ -6,6 +7,7 @@ interface TaskDetailModalProps {
   workPackages: WorkPackage[];
   onClose: () => void;
   onEdit: (task: Task) => void;
+  onSave: (task: Task) => void;
 }
 
 const DetailItem: React.FC<{ label: string; value: React.ReactNode; icon: string }> = ({ label, value, icon }) => (
@@ -15,9 +17,27 @@ const DetailItem: React.FC<{ label: string; value: React.ReactNode; icon: string
     </div>
 );
 
-const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, workPackages, onClose, onEdit }) => {
+const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, workPackages, onClose, onEdit, onSave }) => {
   const pertTime = task.time.avg > 0 ? ((task.time.best + 4 * task.time.avg + task.time.worst) / 6).toFixed(1) : 'N/A';
   const workPackage = workPackages.find(wp => wp.id === task.workPackageId);
+  const [newComment, setNewComment] = useState('');
+
+  const handleAddComment = () => {
+    if (!newComment.trim()) return;
+    const updatedTask: Task = {
+        ...task,
+        comments: [
+            ...(task.comments || []),
+            {
+                author: 'Siz',
+                text: newComment.trim(),
+                date: new Date().toISOString()
+            }
+        ]
+    };
+    onSave(updatedTask);
+    setNewComment('');
+  };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-60 z-40 flex justify-center items-center p-4">
@@ -45,7 +65,7 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, workPackages, o
           </div>
         </div>
         
-        <div className="overflow-y-auto p-6 space-y-6">
+        <div className="overflow-y-auto p-6 space-y-6 custom-scrollbar">
           <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
             <DetailItem label="İş Paketi" value={workPackage?.name} icon="fa-briefcase" />
             <DetailItem label="Öncelik" value={task.priority} icon="fa-triangle-exclamation" />
@@ -84,6 +104,39 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, workPackages, o
             <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400 flex items-center"><i className="fa-solid fa-file-alt mr-2 w-4 text-center"></i>Açıklama</h4>
             <p className="mt-1 p-3 bg-gray-50 dark:bg-gray-700 rounded-md text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{task.notes || 'Açıklama eklenmemiş.'}</p>
           </div>
+
+          <div className="space-y-4 pt-4 border-t dark:border-gray-700">
+            <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400 flex items-center"><i className="fa-solid fa-comments mr-2 w-4 text-center"></i>Yorumlar ({task.comments?.length || 0})</h4>
+            <div className="space-y-3 max-h-48 overflow-y-auto custom-scrollbar pr-2">
+              {task.comments?.map((comment, index) => (
+                <div key={index} className="flex items-start space-x-3">
+                  <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center text-xs font-bold flex-shrink-0">
+                    {comment.author.charAt(0)}
+                  </div>
+                  <div className="flex-grow bg-gray-50 dark:bg-gray-700 p-3 rounded-lg">
+                    <div className="flex justify-between items-center">
+                      <span className="font-bold text-xs">{comment.author}</span>
+                      <span className="text-xs text-gray-400">{new Date(comment.date).toLocaleDateString('tr-TR')}</span>
+                    </div>
+                    <p className="text-sm mt-1">{comment.text}</p>
+                  </div>
+                </div>
+              ))}
+              {!task.comments?.length && <p className="text-sm text-gray-400 italic text-center py-4">Henüz yorum yapılmamış.</p>}
+            </div>
+            <div className="flex space-x-2">
+              <input 
+                type="text"
+                value={newComment}
+                onChange={e => setNewComment(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleAddComment()}
+                placeholder="Yorumunuzu yazın..."
+                className="flex-grow bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary outline-none"
+              />
+              <button onClick={handleAddComment} className="bg-primary text-white px-4 rounded-lg font-bold text-sm hover:opacity-90">Gönder</button>
+            </div>
+          </div>
+
         </div>
         <div className="p-4 border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 text-right">
             <button type="button" onClick={onClose} className="px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700">Kapat</button>

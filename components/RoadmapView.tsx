@@ -1,5 +1,5 @@
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { Task, TaskStatus, WorkPackage, Resource } from '../types';
 
 interface RoadmapViewProps {
@@ -8,236 +8,213 @@ interface RoadmapViewProps {
   workPackages: WorkPackage[];
   onTaskStatusChange: (taskId: string, newStatus: TaskStatus) => void;
   onNewTask: () => void;
+  onViewTask: (task: Task) => void;
   onEditTask: (task: Task) => void;
+  onDeleteTask: (taskId: string) => void;
 }
 
-// NEW: Vibrant, solid color palette inspired by the image.
-const VIBRANT_PRIORITY_COLORS: Record<Task['priority'], { bg: string, text: string, progressBg: string, progressFill: string }> = {
-  Blocker: { bg: 'bg-red-400', text: 'text-red-950', progressBg: 'bg-black/20', progressFill: 'bg-red-900' },
-  High:    { bg: 'bg-yellow-400', text: 'text-yellow-950', progressBg: 'bg-black/20', progressFill: 'bg-yellow-900' },
-  Medium:  { bg: 'bg-blue-400', text: 'text-blue-950', progressBg: 'bg-black/20', progressFill: 'bg-blue-900' },
-  Low:     { bg: 'bg-green-400', text: 'text-green-950', progressBg: 'bg-black/20', progressFill: 'bg-green-900' },
-};
-
-const COLUMN_INDICATORS: Record<TaskStatus, string> = {
-    [TaskStatus.ToDo]: 'bg-gray-400',
-    [TaskStatus.InProgress]: 'bg-blue-400',
-    [TaskStatus.Done]: 'bg-green-400',
-    [TaskStatus.Backlog]: 'bg-red-400',
-};
-
-
-const columnConfig: { id: TaskStatus, label: string }[] = [
-    { id: TaskStatus.ToDo, label: 'Yapılacaklar' },
-    { id: TaskStatus.InProgress, label: 'Süreçte' },
-    { id: TaskStatus.Done, label: 'Tamamlandı' }
+const columnConfig: { id: TaskStatus, label: string, icon: string, iconColor: string }[] = [
+    { id: TaskStatus.ToDo, label: 'Yapılacaklar', icon: 'fa-list-check', iconColor: 'text-gray-400' },
+    { id: TaskStatus.InProgress, label: 'Süreçte', icon: 'fa-person-digging', iconColor: 'text-blue-400' },
+    { id: TaskStatus.Done, label: 'Tamamlandı', icon: 'fa-circle-check', iconColor: 'text-emerald-400' }
 ];
 
-// --- Helper Functions ---
-const getInitials = (name: string) => name.split(' ').map(n => n[0]).join('').toLocaleUpperCase('tr-TR');
-const isOverdue = (dueDate?: string) => dueDate && new Date(dueDate) < new Date();
-const formatDate = (dateString?: string) => {
-    if (!dateString) return '';
-    return new Date(dateString).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' });
+const PRIORITY_CLASSES: Record<Task['priority'], { border: string, text: string, bg: string }> = {
+  Blocker: { border: 'border-l-red-500', text: 'text-red-700 dark:text-red-300', bg: 'bg-red-100 dark:bg-red-900/40' },
+  High:    { border: 'border-l-orange-500', text: 'text-orange-700 dark:text-orange-300', bg: 'bg-orange-100 dark:bg-orange-900/40' },
+  Medium:  { border: 'border-l-blue-500', text: 'text-blue-700 dark:text-blue-300', bg: 'bg-blue-100 dark:bg-blue-900/40' },
+  Low:     { border: 'border-l-gray-400', text: 'text-gray-700 dark:text-gray-300', bg: 'bg-gray-100 dark:bg-gray-700/40' }
 };
 
-// --- RoadmapCard Component ---
-const RoadmapCard: React.FC<{ task: Task, onEditTask: (task: Task) => void }> = React.memo(({ task, onEditTask }) => {
-    const { bg, text, progressBg, progressFill } = VIBRANT_PRIORITY_COLORS[task.priority];
-    
-    const progress = useMemo(() => {
-        if (!task.subtasks || task.subtasks.length === 0) return null;
-        const completed = task.subtasks.filter(st => st.completed).length;
-        const total = task.subtasks.length;
-        return {
-            percent: (completed / total) * 100,
-            text: `${completed}/${total}`
-        };
-    }, [task.subtasks]);
+const getInitials = (name: string) => name.split(' ').map(n => n[0]).join('').toLocaleUpperCase('tr-TR');
 
-    const overdue = isOverdue(task.dueDate);
+const RoadmapCard: React.FC<{
+    task: Task;
+    workPackage?: WorkPackage;
+    onViewTask: (task: Task) => void;
+    onEditTask: (task: Task) => void;
+    onDeleteTask: (taskId: string) => void;
+}> = React.memo(({ task, workPackage, onViewTask, onEditTask, onDeleteTask }) => {
+    const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const menuRef = useRef<HTMLDivElement>(null);
+    const priorityStyle = PRIORITY_CLASSES[task.priority];
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+                setIsMenuOpen(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
 
     const handleDragStart = (e: React.DragEvent) => {
         e.dataTransfer.setData('taskId', task.id);
-        e.currentTarget.classList.add('opacity-50', 'rotate-3');
-    };
-    
-    const handleDragEnd = (e: React.DragEvent) => {
-        e.currentTarget.classList.remove('opacity-50', 'rotate-3');
+        e.currentTarget.classList.add('opacity-40');
     };
 
     return (
-        <div 
-            draggable 
-            onClick={() => onEditTask(task)}
+        <div
+            draggable
             onDragStart={handleDragStart}
-            onDragEnd={handleDragEnd}
-            className={`rounded-lg shadow-md hover:shadow-lg hover:-translate-y-px cursor-grab active:cursor-grabbing transition-all p-3.5 space-y-3 ${bg} ${text}`}
+            onDragEnd={(e) => e.currentTarget.classList.remove('opacity-40')}
+            onClick={() => onViewTask(task)}
+            className={`group bg-white dark:bg-[#202020] border border-gray-200 dark:border-gray-700/50 rounded-lg shadow-sm hover:shadow-lg hover:-translate-y-px cursor-pointer transition-all relative border-l-4 ${priorityStyle.border}`}
         >
-            <div className="flex justify-between items-start">
-                <h3 className="font-bold text-sm leading-snug pr-2">{task.name}</h3>
-                <div className="w-6 h-6 rounded-full bg-black/10 flex items-center justify-center text-xs font-bold ring-2 ring-black/10 flex-shrink-0" title={task.resourceName}>
-                    {getInitials(task.resourceName)}
+            <div className="p-4 space-y-3">
+                <h3 className="text-sm text-[#37352F] dark:text-gray-200 font-semibold leading-snug">{task.name}</h3>
+                
+                <div className="flex flex-wrap items-center gap-2">
+                    <span className={`text-xs px-2 py-0.5 rounded-md font-medium ${priorityStyle.bg} ${priorityStyle.text}`}>
+                        {task.priority}
+                    </span>
+                    {workPackage && (
+                        <span className="text-xs px-2 py-0.5 rounded-md font-medium bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 truncate max-w-[120px]">
+                           <i className="fa-solid fa-briefcase mr-1.5 opacity-50"></i> {workPackage.name}
+                        </span>
+                    )}
                 </div>
-            </div>
-            
-            {progress && (
-                 <div className="space-y-1.5">
-                    <div className="flex justify-between items-center text-[10px] font-bold opacity-70">
-                        <span>İlerleme</span>
-                        <span>{progress.text}</span>
-                    </div>
-                    <div className={`w-full h-1.5 rounded-full ${progressBg}`}>
-                        <div className={`h-full rounded-full ${progressFill}`} style={{ width: `${progress.percent}%` }}></div>
-                    </div>
-                </div>
-            )}
-            
-            <div className="flex justify-between items-center pt-2 min-h-[26px]">
-                <div className="flex items-center space-x-2">
-                    {task.dueDate && (
-                        <div className={`flex items-center space-x-1.5 text-xs font-semibold px-2 py-0.5 rounded-md ${overdue ? 'bg-red-900/80 text-white' : 'bg-black/10'}`}>
-                            <i className="fa-solid fa-calendar-days text-xs opacity-70"></i>
-                            <span>{formatDate(task.dueDate)}</span>
+
+                <div className="flex justify-between items-center pt-3 border-t border-gray-100 dark:border-gray-700/50">
+                    <div className="text-xs text-gray-400 font-mono">{task.jiraId}</div>
+                    {task.resourceName && (
+                        <div className="flex items-center justify-center w-6 h-6 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 text-xs font-bold border border-gray-200 dark:border-gray-600" title={task.resourceName}>
+                            {getInitials(task.resourceName)}
                         </div>
                     )}
-                     <div className="flex items-center space-x-1 text-xs font-semibold px-2 py-0.5 rounded-md bg-black/10">
-                        <i className="fa-solid fa-comment-dots text-xs opacity-70"></i>
-                        <span>{task.subtasks?.length || 0}</span>
-                    </div>
                 </div>
-                <button className="text-black/30 hover:text-black/70 p-1 rounded-md">
-                  <i className="fa-solid fa-ellipsis-h text-xs"></i>
+            </div>
+
+            <div className="absolute top-2 right-2" ref={menuRef}>
+                <button
+                    onClick={(e) => { e.stopPropagation(); setIsMenuOpen(prev => !prev); }}
+                    className="w-7 h-7 flex items-center justify-center rounded-md text-gray-400 dark:text-gray-500 opacity-0 group-hover:opacity-100 hover:bg-gray-100 dark:hover:bg-gray-700 transition-opacity"
+                >
+                    <i className="fa-solid fa-ellipsis-h text-sm"></i>
                 </button>
+                {isMenuOpen && (
+                    <div className="absolute right-0 mt-1 w-36 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-lg shadow-2xl z-10 animate-fade-in-up">
+                        <button onClick={(e) => { e.stopPropagation(); onEditTask(task); setIsMenuOpen(false); }} className="w-full text-left text-xs px-3 py-2 flex items-center space-x-2 hover:bg-gray-50 dark:hover:bg-gray-700"><i className="fa-solid fa-pencil text-gray-400"></i><span>Düzenle</span></button>
+                        <button onClick={(e) => { e.stopPropagation(); onDeleteTask(task.id); setIsMenuOpen(false); }} className="w-full text-left text-xs px-3 py-2 flex items-center space-x-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30"><i className="fa-solid fa-trash-can"></i><span>Sil</span></button>
+                    </div>
+                )}
             </div>
         </div>
     );
 });
 
-// --- RoadmapView Main Component ---
-const RoadmapView: React.FC<RoadmapViewProps> = ({ tasks, onTaskStatusChange, onNewTask, onEditTask }) => {
-    const [searchTerm, setSearchTerm] = useState('');
-    const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set());
-    const [dragOverColumn, setDragOverColumn] = useState<TaskStatus | null>(null);
+const RoadmapView: React.FC<RoadmapViewProps> = ({ tasks, resources, workPackages, onTaskStatusChange, onNewTask, onViewTask, onEditTask, onDeleteTask }) => {
+  const [dragOverColumn, setDragOverColumn] = useState<TaskStatus | null>(null);
+  const [filterResource, setFilterResource] = useState('all');
+  const [filterWorkPackage, setFilterWorkPackage] = useState('all');
 
-    const CURRENT_USER = 'Kaan'; // Mock current user for "My Tasks"
+  const uniqueResources = useMemo(() => ['all', ...Array.from(new Set(tasks.map(t => t.resourceName).filter(Boolean)))], [tasks]);
+  const uniqueWorkPackages = useMemo(() => ['all', ...workPackages.map(wp => wp.name)], [workPackages]);
+  
+  const filteredTasks = useMemo(() => {
+    return tasks.filter(task => {
+        const matchesResource = filterResource === 'all' || task.resourceName === filterResource;
+        const wpName = workPackages.find(wp => wp.id === task.workPackageId)?.name;
+        const matchesWorkPackage = filterWorkPackage === 'all' || wpName === filterWorkPackage;
+        return matchesResource && matchesWorkPackage;
+    });
+  }, [tasks, filterResource, filterWorkPackage, workPackages]);
 
-    const toggleFilter = (filter: string) => {
-        setActiveFilters(prev => {
-            const newSet = new Set(prev);
-            if (newSet.has(filter)) newSet.delete(filter);
-            else newSet.add(filter);
-            return newSet;
-        });
-    };
+  const columns = useMemo(() => ({
+    [TaskStatus.ToDo]: filteredTasks.filter(t => t.status === TaskStatus.ToDo || t.status === TaskStatus.Backlog),
+    [TaskStatus.InProgress]: filteredTasks.filter(t => t.status === TaskStatus.InProgress),
+    [TaskStatus.Done]: filteredTasks.filter(t => t.status === TaskStatus.Done)
+  }), [filteredTasks]);
 
-    const filteredTasks = useMemo(() => {
-        const lowerSearch = searchTerm.toLocaleLowerCase();
-        const now = new Date();
-        const threeDaysFromNow = new Date(now.setDate(now.getDate() + 3));
+  const stats = useMemo(() => {
+      const total = filteredTasks.length;
+      const done = columns[TaskStatus.Done].length;
+      const progress = total > 0 ? Math.round((done / total) * 100) : 0;
+      return { total, done, progress };
+  }, [filteredTasks, columns]);
 
-        return tasks.filter(task => {
-            if (searchTerm && !task.name.toLocaleLowerCase().includes(lowerSearch)) return false;
-            if (activeFilters.has('my-tasks') && task.resourceName !== CURRENT_USER) return false;
-            if (activeFilters.has('due-soon') && (!task.dueDate || new Date(task.dueDate) > threeDaysFromNow)) return false;
-            return true;
-        });
-    }, [tasks, searchTerm, activeFilters]);
+  const handleDrop = (e: React.DragEvent, status: TaskStatus) => {
+    e.preventDefault();
+    setDragOverColumn(null);
+    const taskId = e.dataTransfer.getData('taskId');
+    if (taskId) {
+      onTaskStatusChange(taskId, status);
+    }
+  };
 
-    const columns = useMemo(() => {
-        const columnMap: Record<TaskStatus, Task[]> = {
-            [TaskStatus.ToDo]: [],
-            [TaskStatus.InProgress]: [],
-            [TaskStatus.Done]: [],
-            [TaskStatus.Backlog]: [],
-        };
-        
-        filteredTasks.forEach(task => {
-            const statusKey = (task.status === TaskStatus.Backlog) ? TaskStatus.ToDo : task.status;
-            if (columnMap[statusKey]) {
-                columnMap[statusKey].push(task);
-            }
-        });
+  return (
+    <div className="h-full bg-gray-50 dark:bg-gray-900/50 p-6 flex flex-col">
+      <header className="flex-none flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+        <div>
+            <h1 className="text-2xl font-black text-gray-800 dark:text-white tracking-tight flex items-center">Yol Haritası</h1>
+            <div className="flex items-center space-x-4 mt-2">
+                <div className="w-48 h-1 bg-gray-200 dark:bg-gray-700 rounded-full"><div className="h-1 bg-primary rounded-full" style={{ width: `${stats.progress}%` }}></div></div>
+                <span className="text-xs font-bold text-gray-400">{stats.done}/{stats.total} Tamamlandı (%{stats.progress})</span>
+            </div>
+        </div>
+        <div className="flex items-center space-x-2">
+            <FilterDropdown label="Kişi" value={filterResource} onChange={setFilterResource} options={uniqueResources} />
+            <FilterDropdown label="Paket" value={filterWorkPackage} onChange={setFilterWorkPackage} options={uniqueWorkPackages} />
+        </div>
+      </header>
 
-        return columnConfig.map(col => ({ ...col, tasks: columnMap[col.id] || [] }));
-    }, [filteredTasks]);
-    
-    const stats = useMemo(() => ({
-        done: tasks.filter(t => t.status === TaskStatus.Done).length,
-        inProgress: tasks.filter(t => t.status === TaskStatus.InProgress).length
-    }), [tasks]);
+      <main className="flex-grow flex h-full space-x-6 overflow-x-auto pb-4">
+        {columnConfig.map((col) => {
+            const tasksInCol = columns[col.id as keyof typeof columns];
+            return (
+              <div 
+                key={col.id} 
+                className={`flex-1 min-w-[340px] flex flex-col rounded-xl transition-colors ${dragOverColumn === col.id ? 'bg-gray-100 dark:bg-gray-800/20' : ''}`}
+                onDragOver={(e) => { e.preventDefault(); setDragOverColumn(col.id); }}
+                onDragLeave={() => setDragOverColumn(null)}
+                onDrop={(e) => handleDrop(e, col.id as TaskStatus)}
+              >
+                <div className="flex-none flex items-center justify-between mb-4 px-2 group">
+                  <div className="flex items-center space-x-2.5">
+                    <i className={`fa-solid ${col.icon} ${col.iconColor} text-sm`}></i>
+                    <span className="font-bold text-gray-600 dark:text-gray-300">{col.label}</span>
+                    <span className="text-xs font-mono bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 px-2 py-0.5 rounded-full">{tasksInCol.length}</span>
+                  </div>
+                  <button onClick={onNewTask} className="text-gray-400 hover:text-primary dark:hover:text-primary p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
+                    <i className="fa-solid fa-plus text-sm"></i>
+                  </button>
+                </div>
 
-    const handleDrop = (e: React.DragEvent, status: TaskStatus) => {
-        e.preventDefault();
-        setDragOverColumn(null);
-        const taskId = e.dataTransfer.getData('taskId');
-        if (taskId) {
-            onTaskStatusChange(taskId, status);
-        }
-    };
-    
-    return (
-        <div className="h-full bg-[#18181B] text-gray-200 flex flex-col font-sans overflow-hidden">
-            {/* Control Bar */}
-            <header className="flex-none p-4 px-6 border-b border-white/10 flex flex-col md:flex-row items-center justify-between gap-4 bg-[#18181B]/80 backdrop-blur-sm sticky top-0 z-20">
-                <div className="flex items-center gap-4">
-                    <h1 className="text-lg font-bold">Yol Haritası</h1>
-                    <div className="relative">
-                        <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-xs"></i>
-                        <input 
-                            type="text"
-                            placeholder="Akıllı arama..."
-                            value={searchTerm}
-                            onChange={e => setSearchTerm(e.target.value)}
-                            className="bg-[#27272A] border border-gray-700 rounded-lg pl-8 pr-3 py-1.5 text-sm focus:ring-2 focus:ring-primary outline-none w-48 transition-all"
+                <div className="flex-grow space-y-3 overflow-y-auto pr-2 pb-20">
+                    {tasksInCol.map((task) => (
+                        <RoadmapCard 
+                            key={task.id} 
+                            task={task} 
+                            workPackage={workPackages.find(w => w.id === task.workPackageId)}
+                            onViewTask={onViewTask}
+                            onEditTask={onEditTask}
+                            onDeleteTask={onDeleteTask}
                         />
-                    </div>
-                </div>
-                <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2">
-                        {['my-tasks', 'due-soon'].map(filter => (
-                            <button key={filter} onClick={() => toggleFilter(filter)} className={`px-3 py-1 text-xs font-bold rounded-full border transition-colors ${activeFilters.has(filter) ? 'bg-primary border-primary/50 text-white' : 'bg-gray-800 border-gray-700 text-gray-400 hover:bg-gray-700'}`}>
-                                {filter === 'my-tasks' ? 'Görevlerim' : 'Yaklaşanlar'}
-                            </button>
-                        ))}
-                    </div>
-                    <div className="w-px h-5 bg-gray-700"></div>
-                    <div className="flex items-center gap-4 text-xs font-semibold text-gray-400">
-                        <span><i className="fa-solid fa-check-circle text-green-500 mr-1.5"></i>{stats.done} Tamamlandı</span>
-                        <span><i className="fa-solid fa-circle-notch text-blue-500 mr-1.5 animate-spin [animation-duration:3s]"></i>{stats.inProgress} Süreçte</span>
-                    </div>
-                </div>
-            </header>
-
-            {/* Kanban Board */}
-            <main className="flex-grow p-4 md:p-6 overflow-x-auto overflow-y-hidden">
-                <div className="flex h-full gap-6">
-                    {columns.map((col) => (
-                        <div 
-                            key={col.id} 
-                            onDragOver={(e) => { e.preventDefault(); setDragOverColumn(col.id); }}
-                            onDragLeave={() => setDragOverColumn(null)}
-                            onDrop={(e) => handleDrop(e, col.id)}
-                            className={`w-full md:w-80 lg:w-96 flex-shrink-0 flex flex-col rounded-xl transition-colors ${dragOverColumn === col.id ? 'bg-white/5' : ''}`}
-                        >
-                            <div className="flex-none flex items-center justify-between p-2 mb-2">
-                                <div className="flex items-center gap-2.5">
-                                    <div className={`w-2 h-2 rounded-full ${COLUMN_INDICATORS[col.id]}`}></div>
-                                    <span className="font-bold text-gray-300">{col.label}</span>
-                                    <span className="text-xs font-semibold bg-gray-700 text-gray-400 px-2 py-0.5 rounded-full">{col.tasks.length}</span>
-                                </div>
-                            </div>
-                            <div className="flex-grow space-y-4 overflow-y-auto pr-2 pb-4">
-                                {col.tasks.map((task) => <RoadmapCard key={task.id} task={task} onEditTask={onEditTask} />)}
-                            </div>
-                             <button onClick={onNewTask} className="flex-none mt-auto w-full text-center p-3 rounded-lg text-sm font-semibold text-gray-500 hover:bg-white/10 hover:text-gray-300 transition-colors">
-                                <i className="fa-solid fa-plus mr-2"></i>
-                                Görev Ekle
-                            </button>
-                        </div>
                     ))}
+                    <button onClick={onNewTask} className="w-full text-sm p-3 rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
+                        <i className="fa-solid fa-plus mr-2"></i> Yeni Görev Ekle
+                    </button>
                 </div>
-            </main>
+              </div>
+            );
+        })}
+      </main>
+    </div>
+  );
+};
+
+const FilterDropdown: React.FC<{ label:string, value: string, onChange: (v: string) => void, options: string[] }> = ({ label, value, onChange, options }) => {
+    return (
+        <div className="flex items-center space-x-2 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-lg px-3 py-1.5 shadow-sm">
+            <label className="text-xs font-bold text-gray-400">{label}:</label>
+            <select
+                value={value}
+                onChange={e => onChange(e.target.value)}
+                className="bg-transparent border-none focus:ring-0 text-xs font-semibold text-gray-700 dark:text-gray-200 p-0 pr-6"
+            >
+                {options.map(opt => <option key={opt} value={opt}>{opt === 'all' ? 'Tümü' : opt}</option>)}
+            </select>
         </div>
     );
 };
