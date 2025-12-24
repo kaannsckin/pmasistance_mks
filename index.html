@@ -63,71 +63,57 @@
   .bg-accent { background-color: var(--app-accent-light); }
   .border-primary { border-color: var(--app-primary); }
   
-  /* --- FIGMA STYLE ROCKET ANIMATIONS --- */
+  /* --- PREMIUM ROCKET ANIMATIONS V2 --- */
+  @keyframes premium-idle-float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-2px); }
+  }
+
+  @keyframes premium-engine-glow {
+    0%, 100% { filter: brightness(1) saturate(1); }
+    50% { filter: brightness(1.5) saturate(1.5); }
+  }
+
+  @keyframes premium-rocket-rumble {
+    0% { transform: translate(0, 0); }
+    25% { transform: translate(1px, -1px); }
+    50% { transform: translate(-1px, 1px); }
+    75% { transform: translate(1px, 1px); }
+    100% { transform: translate(0, 0); }
+  }
   
-  @keyframes figma-rumble {
-    0%, 100% { transform: translate(0, 0) rotate(-45deg); }
-    20% { transform: translate(-1.5px, 1.5px) rotate(-46deg); }
-    40% { transform: translate(1.5px, -1.5px) rotate(-44deg); }
-    60% { transform: translate(-2px, -1px) rotate(-45.5deg); }
-    80% { transform: translate(2px, 1px) rotate(-44.5deg); }
-  }
-  .animate-figma-rumble {
-    animation: figma-rumble 0.1s infinite linear;
+  @keyframes premium-spark-burst {
+    0% { transform: scale(0) translateY(0); opacity: 1; }
+    50% { opacity: 1; }
+    100% { transform: scale(1.5) translateY(var(--y-end)) translateX(var(--x-end)); opacity: 0; }
   }
 
-  @keyframes figma-launch {
-    0% { transform: translate(0, 0) rotate(-45deg) scale(1); filter: brightness(1); }
-    15% { transform: translate(-30px, 30px) rotate(-45deg) scale(1.1); filter: brightness(1.2); } /* Anticipation */
-    100% { transform: translate(3000px, -3000px) rotate(-45deg) scale(0.1); filter: brightness(10) drop-shadow(0 0 100px #fff); opacity: 0; }
-  }
-  .animate-figma-launch {
-    animation: figma-launch 0.9s cubic-bezier(0.85, 0, 0.15, 1) forwards;
+  @keyframes premium-main-shake {
+      0%, 100% { transform: translate(0, 0); }
+      20%, 60% { transform: translate(-2px, 1px); }
+      40%, 80% { transform: translate(2px, -1px); }
   }
 
-  @keyframes figma-plasma-tail {
-    0% { height: 0; opacity: 0; transform: translateX(-50%) scaleX(1); }
-    20% { height: 200px; opacity: 1; transform: translateX(-50%) scaleX(2); }
-    60% { height: 800px; opacity: 0.8; transform: translateX(-50%) scaleX(1.5); }
-    100% { height: 2500px; opacity: 0; transform: translateX(-50%) scaleX(0.2); }
-  }
-  .animate-figma-tail {
-    animation: figma-plasma-tail 1s ease-out forwards;
+  @keyframes premium-liftoff {
+    0% { transform: translateY(0) scale(1); opacity: 1; }
+    5% { transform: translateY(3px) scale(0.98); } /* Anticipation */
+    100% { transform: translateY(-8000px) scale(8) rotate(15deg); opacity: 0; }
   }
 
-  @keyframes figma-shockwave {
-    0% { transform: scale(0.5); opacity: 1; border-width: 60px; filter: blur(0px); }
-    100% { transform: scale(40); opacity: 0; border-width: 0px; filter: blur(30px); }
-  }
-  .animate-figma-shockwave {
-    animation: figma-shockwave 1.4s cubic-bezier(0.165, 0.84, 0.44, 1) forwards;
+  @keyframes premium-exhaust-plume {
+    0% { transform: scaleY(0.5) scaleX(0.5); opacity: 0.8; }
+    100% { transform: scaleY(50) scaleX(10); opacity: 0; }
   }
 
-  @keyframes star-fly {
-    0% { transform: translate(0, 0) scale(1.5); opacity: 0; }
-    10% { opacity: 1; }
-    100% { transform: translate(var(--tx), var(--ty)) scale(0); opacity: 0; }
+  @keyframes premium-blast-flash {
+      0% { opacity: 0; }
+      10% { opacity: 0.8; }
+      100% { opacity: 0; }
   }
-  .animate-star-fly {
-    animation: star-fly 0.8s cubic-bezier(0, 1, 0, 1) forwards;
-  }
-
-  @keyframes screen-shake-figma {
-    0%, 100% { transform: translate(0, 0); }
-    10%, 30%, 50%, 70%, 90% { transform: translate(-4px, -2px); }
-    20%, 40%, 60%, 80% { transform: translate(4px, 2px); }
-  }
-  .animate-shake-figma {
-    animation: screen-shake-figma 0.4s ease-in-out;
-  }
-
-  @keyframes hyper-flash {
-    0% { opacity: 0; }
-    10% { opacity: 0.8; }
-    100% { opacity: 0; }
-  }
-  .animate-hyper-flash {
-    animation: hyper-flash 0.6s ease-out forwards;
+  
+  @keyframes premium-shockwave {
+      0% { transform: scale(0.1); opacity: 1; border-width: 50px; }
+      100% { transform: scale(30); opacity: 0; border-width: 0; }
   }
 
   /* Smooth Transitions */
