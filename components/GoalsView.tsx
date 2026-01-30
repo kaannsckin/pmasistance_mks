@@ -1,16 +1,14 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Objective, KeyResult, Task, TaskStatus, WorkPackage } from '../types';
+import { Objective, KeyResult, Task, TaskStatus } from '../types';
+import UnitSummaryCard from './UnitSummaryCard';
 
 interface GoalsViewProps {
   objectives: Objective[];
   tasks: Task[];
-  workPackages: WorkPackage[];
   onUpdateObjectives: (objectives: Objective[]) => void;
-  onOpenWorkPackageEditor: () => void;
 }
 
-// ... existing components ...
 const ProgressBar: React.FC<{ progress: number }> = ({ progress }) => (
     <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
         <div 
@@ -23,11 +21,10 @@ const ProgressBar: React.FC<{ progress: number }> = ({ progress }) => (
 const KeyResultItem: React.FC<{ 
     kr: KeyResult; 
     tasks: Task[]; 
-    workPackages: WorkPackage[];
     isEditing: boolean;
     onUpdate: (name: string) => void;
     onDelete: () => void;
-}> = ({ kr, tasks, workPackages, isEditing, onUpdate, onDelete }) => {
+}> = ({ kr, tasks, isEditing, onUpdate, onDelete }) => {
     const linkedTasks = useMemo(() => tasks.filter(t => t.keyResultId === kr.id), [tasks, kr.id]);
     const completedTasks = useMemo(() => linkedTasks.filter(t => t.status === TaskStatus.Done), [linkedTasks]);
 
@@ -61,14 +58,13 @@ const KeyResultItem: React.FC<{
 const ObjectiveCard: React.FC<{ 
     objective: Objective; 
     tasks: Task[]; 
-    workPackages: WorkPackage[];
     isEditing: boolean;
     onUpdate: (field: 'name' | 'description' | 'quarter', value: string) => void;
     onUpdateKeyResult: (krId: string, name: string) => void;
     onAddKeyResult: () => void;
     onDeleteKeyResult: (krId: string) => void;
     onDeleteObjective: () => void;
-}> = ({ objective, tasks, workPackages, isEditing, onUpdate, onUpdateKeyResult, onAddKeyResult, onDeleteKeyResult, onDeleteObjective }) => {
+}> = ({ objective, tasks, isEditing, onUpdate, onUpdateKeyResult, onAddKeyResult, onDeleteKeyResult, onDeleteObjective }) => {
     const totalKRs = objective.keyResults.length;
     
     const overallProgress = useMemo(() => {
@@ -113,7 +109,7 @@ const ObjectiveCard: React.FC<{
             <div className="space-y-3 pt-4 border-t border-gray-100 dark:border-gray-700/50">
                 <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Anahtar Sonuçlar</h4>
                 {objective.keyResults.map(kr => (
-                    <KeyResultItem key={kr.id} kr={kr} tasks={tasks} workPackages={workPackages} isEditing={isEditing} 
+                    <KeyResultItem key={kr.id} kr={kr} tasks={tasks} isEditing={isEditing} 
                         onUpdate={(name) => onUpdateKeyResult(kr.id, name)}
                         onDelete={() => onDeleteKeyResult(kr.id)}
                     />
@@ -129,13 +125,15 @@ const ObjectiveCard: React.FC<{
 };
 
 
-const GoalsView: React.FC<GoalsViewProps> = ({ objectives, tasks, workPackages, onUpdateObjectives, onOpenWorkPackageEditor }) => {
+const GoalsView: React.FC<GoalsViewProps> = ({ objectives, tasks, onUpdateObjectives }) => {
     const [isEditing, setIsEditing] = useState(false);
     const [tempObjectives, setTempObjectives] = useState<Objective[]>([]);
 
     useEffect(() => {
         setTempObjectives(JSON.parse(JSON.stringify(objectives)));
     }, [objectives]);
+    
+    const uniqueUnits = useMemo(() => Array.from(new Set(tasks.map(t => t.unit).filter(Boolean))), [tasks]);
 
     const handleSave = () => {
         onUpdateObjectives(tempObjectives);
@@ -189,27 +187,18 @@ const GoalsView: React.FC<GoalsViewProps> = ({ objectives, tasks, workPackages, 
     };
 
   return (
-    <div className="max-w-7xl mx-auto space-y-8">
+    <div className="max-w-7xl mx-auto space-y-12 pb-12">
       <div className="flex items-center justify-between">
         <div>
-            <h2 className="text-3xl font-extrabold text-gray-800 dark:text-white">Hedefler & Kapsam</h2>
-            <p className="text-gray-500 dark:text-gray-400">Stratejik hedeflerin iş paketleri ile ilerlemesini takip edin.</p>
+            <h2 className="text-3xl font-extrabold text-gray-800 dark:text-white">Hedefler & Performans</h2>
+            <p className="text-gray-500 dark:text-gray-400">Stratejik hedeflerin birim bazlı ilerlemesini takip edin.</p>
         </div>
         <div className="flex items-center space-x-2">
             {!isEditing ? (
-                <>
-                    <button 
-                        onClick={onOpenWorkPackageEditor}
-                        className="bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 font-bold py-2 px-4 rounded-lg flex items-center space-x-2"
-                    >
-                        <i className="fa-solid fa-briefcase"></i>
-                        <span>İş Paketleri</span>
-                    </button>
-                    <button onClick={() => setIsEditing(true)} className="bg-primary hover:opacity-90 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2 shadow-lg">
-                        <i className="fa-solid fa-pencil"></i>
-                        <span>Hedefleri Düzenle</span>
-                    </button>
-                </>
+                <button onClick={() => setIsEditing(true)} className="bg-primary hover:opacity-90 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2 shadow-lg">
+                    <i className="fa-solid fa-pencil"></i>
+                    <span>Hedefleri Düzenle</span>
+                </button>
             ) : (
                 <>
                     <button onClick={handleCancel} className="bg-gray-100 hover:bg-gray-200 font-bold py-2 px-4 rounded-lg">İptal</button>
@@ -222,22 +211,34 @@ const GoalsView: React.FC<GoalsViewProps> = ({ objectives, tasks, workPackages, 
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        {(isEditing ? tempObjectives : objectives).map(obj => (
-            <ObjectiveCard 
-                key={obj.id} 
-                objective={obj} 
-                tasks={tasks} 
-                workPackages={workPackages}
-                isEditing={isEditing}
-                onUpdate={(field, value) => handleUpdateObjective(obj.id, field, value)}
-                onUpdateKeyResult={(krId, name) => handleUpdateKeyResult(obj.id, krId, name)}
-                onAddKeyResult={() => handleAddKeyResult(obj.id)}
-                onDeleteKeyResult={(krId) => handleDeleteKeyResult(obj.id, krId)}
-                onDeleteObjective={() => handleDeleteObjective(obj.id)}
-            />
-        ))}
+      <div>
+        <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-4">Stratejik Hedefler (OKR)</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {(isEditing ? tempObjectives : objectives).map(obj => (
+                <ObjectiveCard 
+                    key={obj.id} 
+                    objective={obj} 
+                    tasks={tasks} 
+                    isEditing={isEditing}
+                    onUpdate={(field, value) => handleUpdateObjective(obj.id, field, value)}
+                    onUpdateKeyResult={(krId, name) => handleUpdateKeyResult(obj.id, krId, name)}
+                    onAddKeyResult={() => handleAddKeyResult(obj.id)}
+                    onDeleteKeyResult={(krId) => handleDeleteKeyResult(obj.id, krId)}
+                    onDeleteObjective={() => handleDeleteObjective(obj.id)}
+                />
+            ))}
+        </div>
       </div>
+      
+      <div>
+        <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-4">Birim Performansı</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {uniqueUnits.map(unit => (
+                <UnitSummaryCard key={unit} unit={unit} tasks={tasks} objectives={objectives} />
+            ))}
+        </div>
+      </div>
+
     </div>
   );
 };

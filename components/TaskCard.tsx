@@ -1,11 +1,10 @@
 
 import React from 'react';
-import { Task, TaskStatus, WorkPackage } from '../types';
-import { STATUS_STYLES, STATUS_LABELS } from '../constants';
+import { Task, TaskStatus } from '../types';
+import { STATUS_LABELS } from '../constants';
 
 interface TaskCardProps {
   task: Task;
-  workPackages: WorkPackage[];
   onView: (task: Task) => void;
   onEdit: (task: Task) => void;
   onNotify: (task: Task) => void;
@@ -20,10 +19,9 @@ const PRIORITY_STYLES = {
   Low: 'bg-gray-50 text-gray-700 border-gray-200',
 };
 
-const TaskCard: React.FC<TaskCardProps> = ({ task, workPackages, onView, onEdit, onNotify, onDelete, onStatusChange }) => {
+const TaskCard: React.FC<TaskCardProps> = ({ task, onView, onEdit, onNotify, onDelete, onStatusChange }) => {
     const isDataMissing = task.time.avg === 0;
     const jiraUrl = task.jiraId ? `https://jira.bilgem.tubitak.gov.tr/browse/${task.jiraId}` : '#';
-    const workPackage = workPackages.find(wp => wp.id === task.workPackageId);
 
     return (
         <div className={`bg-white dark:bg-gray-800 rounded-xl shadow-sm hover:shadow-md border border-gray-200 dark:border-gray-700 flex flex-col h-full transition-all duration-300 group`}>
@@ -55,12 +53,6 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, workPackages, onView, onEdit,
                 
                 <div className="mt-auto space-y-2 pt-3">
                     <div className="flex flex-wrap gap-1.5">
-                        {workPackage && (
-                            <span className="inline-flex items-center px-2 py-1 rounded bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-xs font-medium truncate max-w-full">
-                                <i className="fa-solid fa-briefcase mr-1.5 opacity-70"></i>
-                                {workPackage.name}
-                            </span>
-                        )}
                          <span className="inline-flex items-center px-2 py-1 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-xs">
                             <i className="fa-solid fa-cube mr-1.5 opacity-70"></i>
                             {task.unit}

@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { Task, Resource, Sprint, UnitLoad, TaskStatus, WorkPackage } from '../types';
+import { Task, Resource, Sprint, UnitLoad, TaskStatus } from '../types';
 import { planTaskVersions } from '../utils/sprintPlanner';
 import KanbanColumn from './KanbanColumn';
 import { calculatePertFuzzyPert } from '../utils/timeline';
@@ -13,7 +13,6 @@ import { exportSprintPlanToExcel } from '../utils/exporter';
 interface KanbanViewProps {
   tasks: Task[];
   resources: Resource[];
-  workPackages: WorkPackage[];
   sprintDuration: number;
   projectStartDate: string;
   sprintNames: Record<number, string>;
@@ -93,7 +92,7 @@ const BacklogTab: React.FC<{ count: number, onClick: () => void, onDrop: (taskId
     );
 };
 
-const KanbanView: React.FC<KanbanViewProps> = ({ tasks, resources, workPackages, sprintDuration, projectStartDate, sprintNames, setSprintNames, globalTestDays, setGlobalTestDays, onPlanGenerated, onTaskSprintChange, onTaskStatusChange, onInsertSprint, onDeleteSprint, onOpenSettings, onViewTaskDetails, onNewTask }) => {
+const KanbanView: React.FC<KanbanViewProps> = ({ tasks, resources, sprintDuration, projectStartDate, sprintNames, setSprintNames, globalTestDays, setGlobalTestDays, onPlanGenerated, onTaskSprintChange, onTaskStatusChange, onInsertSprint, onDeleteSprint, onOpenSettings, onViewTaskDetails, onNewTask }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [isFilterExpanded, setIsFilterExpanded] = useState(false);
   const [isCompact, setIsCompact] = useState(true); 
@@ -109,7 +108,6 @@ const KanbanView: React.FC<KanbanViewProps> = ({ tasks, resources, workPackages,
   const [filterUnit, setFilterUnit] = useState('all');
   const [filterResource, setFilterResource] = useState('all');
   const [filterPriority, setFilterPriority] = useState('all');
-  const [filterWorkPackage, setFilterWorkPackage] = useState('all');
 
   useEffect(() => {
     setExtraSprints(0);
@@ -264,7 +262,6 @@ const KanbanView: React.FC<KanbanViewProps> = ({ tasks, resources, workPackages,
                     ) : (
                         <KanbanColumn 
                             sprint={sprint}
-                            workPackages={workPackages}
                             onDropTask={onTaskSprintChange}
                             onTaskStatusChange={onTaskStatusChange}
                             onDelete={setSprintToDelete}

@@ -22,6 +22,85 @@ const mapPriority = (priorityStr: string): 'Blocker' | 'High' | 'Medium' | 'Low'
     return 'Low';
 };
 
+export const parseCustomCsv = (fileContent: string): { tasks: Task[], resources: Resource[] } => {
+    // Handle BOM
+    if (fileContent.charCodeAt(0) === 0xFEFF) {
+        fileContent = fileContent.substring(1);
+    }
+    
+    const result = Papa.parse(fileContent, {
+        delimiter: ';',
+        skipEmptyLines: true,
+    });
+    const data = result.data as string[][];
+
+    if (!data || data.length < 2) {
+        throw new Error('CSV dosyasında yeterli veri bulunamadı.');
+    }
+
+    const headerRowIndex = data.findIndex(row => row.some(cell => typeof cell === 'string' && cell.trim().toLocaleLowerCase('tr-TR') === 'tasklar'));
+    if (headerRowIndex === -1) {
+        throw new Error('CSV dosyasında "Tasklar" başlığı içeren satır bulunamadı.');
+    }
+
+    const headers = data[headerRowIndex].map(h => String(h).trim());
+    const colMap = {
+        name: headers.indexOf('Tasklar'),
+        stakeholder: headers.indexOf('Paydaş'),
+        topic: headers.indexOf('Konu'),
+        unit: headers.indexOf('İş Paketi'),
+        priority: headers.indexOf('Öncelik'),
+        manDay: headers.indexOf('Adam/Gün Sayısı'),
+    };
+
+    if (colMap.name === -1 || colMap.priority === -1 || colMap.manDay === -1) {
+        throw new Error('CSV dosyasında gerekli sütunlar (Tasklar, Öncelik, Adam/Gün Sayısı) bulunamadı.');
+    }
+
+    const mapPriorityFromScore = (scoreStr: string): 'Blocker' | 'High' | 'Medium' | 'Low' => {
+        const score = parseInt(scoreStr, 10);
+        if (isNaN(score)) return 'Medium';
+        if (score >= 9) return 'Blocker';
+        if (score >= 7) return 'High';
+        if (score >= 4) return 'Medium';
+        return 'Low';
+    };
+
+    const tasks: Task[] = [];
+
+    for (let i = headerRowIndex + 1; i < data.length; i++) {
+        const row = data[i];
+        if (row.every(cell => !cell || cell.trim() === '')) continue;
+        
+        const taskName = (row[colMap.name] || '').trim();
+        if (!taskName) continue;
+
+        const manDayStr = (row[colMap.manDay] || '0').trim();
+        const manDay = parseInt(manDayStr, 10);
+        const timeValue = isNaN(manDay) ? 0 : manDay;
+
+        const task: Task = {
+            id: `csv-imported-${Date.now()}-${i}`,
+            name: taskName,
+            availability: timeValue > 0,
+            priority: mapPriorityFromScore(row[colMap.priority]),
+            version: 0,
+            predecessor: null,
+            unit: (row[colMap.unit] || 'Genel').trim(),
+            resourceName: 'Atanmamış',
+            time: { best: timeValue, avg: timeValue, worst: timeValue },
+            jiraId: '',
+            notes: `Paydaş: ${(row[colMap.stakeholder] || '').trim()}`,
+            status: TaskStatus.Backlog,
+            labels: [(row[colMap.topic] || '').trim()].filter(Boolean),
+            includeInSprints: true,
+        };
+        tasks.push(task);
+    }
+
+    return { tasks, resources: [] };
+};
+
 export const parseJiraCsv = (fileContent: string): { tasks: Task[], resources: Resource[] } => {
     const result = Papa.parse(fileContent, {
         skipEmptyLines: true,

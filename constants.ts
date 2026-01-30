@@ -1,5 +1,5 @@
 
-import { Task, Resource, TaskStatus, WorkPackage, Objective } from './types';
+import { Task, Resource, TaskStatus, Objective } from './types';
 
 export const TEST_DAYS = 4; // Her sprint için test günü
 export const WORK_DAYS_PER_WEEK = 5;
@@ -27,11 +27,6 @@ export const INITIAL_OBJECTIVES: Objective[] = [
     }
 ];
 
-export const INITIAL_WORK_PACKAGES: WorkPackage[] = [
-  { id: 'wp-1', name: 'Altyapı İyileştirmeleri', description: 'Sunucu ve sistem altyapısını etkileyen kritik hataların çözümü.' },
-  { id: 'wp-2', name: 'Yeni Kullanıcı Arayüzü', description: 'Uygulamanın ön yüzünün modern teknolojilerle yeniden tasarlanması ve geliştirilmesi.' },
-];
-
 export const INITIAL_TASKS: Task[] = [
   {
     id: '1',
@@ -46,7 +41,6 @@ export const INITIAL_TASKS: Task[] = [
     jiraId: 'MPS-4966',
     notes: 'Kayıtlı hata nedeniyle 16.10.2025 Tarihinde Hizmet kesintisi Yaşanmıştır',
     status: TaskStatus.InProgress,
-    workPackageId: 'wp-1',
     dueDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     subtasks: [
       { text: 'Logları analiz et', completed: true },
@@ -72,7 +66,6 @@ export const INITIAL_TASKS: Task[] = [
     jiraId: 'PROJ-101',
     notes: 'OAuth 2.0 entegrasyonu yapılacak.',
     status: TaskStatus.InProgress,
-    workPackageId: 'wp-2',
     dueDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     subtasks: [
       { text: 'UI Tasarımı', completed: true },
@@ -128,7 +121,6 @@ export const INITIAL_TASKS: Task[] = [
     jiraId: 'PROJ-104',
     notes: 'React ve Tailwind CSS kullanılacak.',
     status: TaskStatus.ToDo,
-    workPackageId: 'wp-2',
     dueDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Due soon
     keyResultId: 'kr-1-1',
   },

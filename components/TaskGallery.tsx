@@ -1,16 +1,15 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { Task, Resource, TaskStatus, WorkPackage } from '../types';
+import { Task, Resource, TaskStatus } from '../types';
 import TaskCard from './TaskCard';
 import FilterDropdown from './FilterDropdown';
-import { parseImportedFile, parseJiraCsv } from '../utils/importer';
+import { parseImportedFile, parseJiraCsv, parseCustomCsv } from '../utils/importer';
 import { exportToExcel, exportToJiraCsv, exportToMsProjectCsv } from '../utils/exporter';
 import { STATUS_LABELS } from '../constants';
 
 interface TaskGalleryProps {
   tasks: Task[];
   resources: Resource[];
-  workPackages: WorkPackage[];
   onEditTask: (task: Task) => void;
   onViewTask: (task: Task) => void;
   onNotifyTask: (task: Task) => void;
@@ -20,19 +19,19 @@ interface TaskGalleryProps {
   onTaskStatusChange: (taskId: string, newStatus: TaskStatus) => void;
 }
 
-const TaskGallery: React.FC<TaskGalleryProps> = ({ tasks, resources, workPackages, onEditTask, onViewTask, onNotifyTask, onNewTask, onDeleteTask, onDataImport, onTaskStatusChange }) => {
+const TaskGallery: React.FC<TaskGalleryProps> = ({ tasks, resources, onEditTask, onViewTask, onNotifyTask, onNewTask, onDeleteTask, onDataImport, onTaskStatusChange }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterUnit, setFilterUnit] = useState('all');
   const [filterResource, setFilterResource] = useState('all');
   const [filterVersion, setFilterVersion] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
-  const [filterWorkPackage, setFilterWorkPackage] = useState('all');
   const [isLoading, setIsLoading] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const jiraFileInputRef = useRef<HTMLInputElement>(null);
+  const csvFileInputRef = useRef<HTMLInputElement>(null);
   const exportMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -50,12 +49,6 @@ const TaskGallery: React.FC<TaskGalleryProps> = ({ tasks, resources, workPackage
   const uniqueUnits = useMemo(() => ['all', ...Array.from(new Set(tasks.map(t => t.unit)))], [tasks]);
   const uniqueResources = useMemo(() => ['all', ...Array.from(new Set(tasks.map(t => t.resourceName)))], [tasks]);
   const uniqueVersions = useMemo(() => ['all', ...Array.from(new Set(tasks.map(t => t.version.toString())))].sort(), [tasks]);
-  const uniqueWorkPackages = useMemo(() => ['all', ...workPackages.map(wp => wp.name)], [workPackages]);
-  const workPackageNameToIdMap = useMemo(() => 
-    new Map(workPackages.map(wp => [wp.name, wp.id])), 
-    [workPackages]
-  );
-
 
   const filteredTasks = useMemo(() => {
     return tasks.filter(task => {
@@ -65,10 +58,9 @@ const TaskGallery: React.FC<TaskGalleryProps> = ({ tasks, resources, workPackage
       const matchesResource = filterResource === 'all' || task.resourceName === filterResource;
       const matchesVersion = filterVersion === 'all' || task.version.toString() === filterVersion;
       const matchesStatus = filterStatus === 'all' || task.status === filterStatus;
-      const matchesWorkPackage = filterWorkPackage === 'all' || task.workPackageId === workPackageNameToIdMap.get(filterWorkPackage);
-      return matchesSearch && matchesUnit && matchesResource && matchesVersion && matchesStatus && matchesWorkPackage;
+      return matchesSearch && matchesUnit && matchesResource && matchesVersion && matchesStatus;
     });
-  }, [tasks, searchTerm, filterUnit, filterResource, filterVersion, filterStatus, filterWorkPackage, workPackageNameToIdMap]);
+  }, [tasks, searchTerm, filterUnit, filterResource, filterVersion, filterStatus]);
 
   const handleImportClick = () => {
     fileInputRef.current?.click();
@@ -76,6 +68,10 @@ const TaskGallery: React.FC<TaskGalleryProps> = ({ tasks, resources, workPackage
   
   const handleJiraImportClick = () => {
     jiraFileInputRef.current?.click();
+  };
+  
+  const handleCsvImportClick = () => {
+    csvFileInputRef.current?.click();
   };
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -125,12 +121,37 @@ const TaskGallery: React.FC<TaskGalleryProps> = ({ tasks, resources, workPackage
       }
     }
   };
+  
+  const handleCsvFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setIsLoading(true);
+    setImportError(null);
+    try {
+      const fileContent = await file.text();
+      const { tasks: newTasks, resources: newResources } = parseCustomCsv(fileContent);
+      onDataImport(newTasks, newResources);
+      alert(`${newTasks.length} görev başarıyla aktarıldı.`);
+    } catch (error) {
+        if (error instanceof Error) {
+            setImportError(error.message);
+        } else {
+            setImportError('Bilinmeyen bir CSV işleme hatası oluştu.');
+        }
+    } finally {
+      setIsLoading(false);
+      if(csvFileInputRef.current) {
+          csvFileInputRef.current.value = '';
+      }
+    }
+  };
 
 
   return (
     <div className="space-y-6">
       <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md">
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-7 gap-4 items-end">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
           <div className="lg:col-span-2">
             <label htmlFor="search" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Görev Ara</label>
             <div className="mt-1 relative rounded-md shadow-sm">
@@ -150,7 +171,6 @@ const TaskGallery: React.FC<TaskGalleryProps> = ({ tasks, resources, workPackage
           <FilterDropdown label="Birim" value={filterUnit} onChange={setFilterUnit} options={uniqueUnits} />
           <FilterDropdown label="Kaynak Adı" value={filterResource} onChange={setFilterResource} options={uniqueResources} />
           <FilterDropdown label="Sürüm" value={filterVersion} onChange={setFilterVersion} options={uniqueVersions} />
-          <FilterDropdown label="İş Paketi" value={filterWorkPackage} onChange={setFilterWorkPackage} options={uniqueWorkPackages} />
            <div>
             <label htmlFor="filter-status" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Durum</label>
             <select
@@ -195,6 +215,21 @@ const TaskGallery: React.FC<TaskGalleryProps> = ({ tasks, resources, workPackage
                 onChange={handleJiraFileChange}
                 accept=".csv"
             />
+            <input
+                type="file"
+                ref={csvFileInputRef}
+                className="hidden"
+                onChange={handleCsvFileChange}
+                accept=".csv"
+            />
+             <button
+                onClick={handleCsvImportClick}
+                disabled={isLoading}
+                className="flex items-center space-x-2 bg-gray-600 text-white px-4 py-2 rounded-lg shadow-md hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:bg-gray-400"
+            >
+                {isLoading ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-file-csv"></i>}
+                <span>{isLoading ? 'Yükleniyor...' : "CSV'den Aktar"}</span>
+            </button>
              <button
                 onClick={handleJiraImportClick}
                 disabled={isLoading}
@@ -267,7 +302,6 @@ const TaskGallery: React.FC<TaskGalleryProps> = ({ tasks, resources, workPackage
             <TaskCard
               key={task.id}
               task={task}
-              workPackages={workPackages}
               onEdit={onEditTask}
               onView={onViewTask}
               onNotify={onNotifyTask}

@@ -1,11 +1,10 @@
 
 import React, { useState } from 'react';
-import { Sprint, UnitLoad, TaskStatus, WorkPackage } from '../types';
+import { Sprint, UnitLoad, TaskStatus } from '../types';
 import KanbanCard from './KanbanCard';
 
 interface KanbanColumnProps {
   sprint: Sprint;
-  workPackages: WorkPackage[];
   onDropTask: (taskId: string, newVersion: number) => void;
   onTaskStatusChange: (taskId: string, newStatus: TaskStatus) => void;
   onDelete: (sprint: Sprint) => void;
@@ -19,7 +18,7 @@ interface KanbanColumnProps {
   onUpdateSprintName?: (name: string) => void;
 }
 
-const KanbanColumn: React.FC<KanbanColumnProps> = ({ sprint, workPackages, onDropTask, onTaskStatusChange, onDelete, onCollapse, isDragged, isCompact, onSprintDragStart, onSprintDragEnd, onSprintDrop, onViewTaskDetails, onUpdateSprintName }) => {
+const KanbanColumn: React.FC<KanbanColumnProps> = ({ sprint, onDropTask, onTaskStatusChange, onDelete, onCollapse, isDragged, isCompact, onSprintDragStart, onSprintDragEnd, onSprintDrop, onViewTaskDetails, onUpdateSprintName }) => {
   const [isOver, setIsOver] = useState(false);
   const [isHeaderExpanded, setIsHeaderExpanded] = useState(false);
   const [isSprintDraggable, setIsSprintDraggable] = useState(false);
@@ -146,7 +145,7 @@ const KanbanColumn: React.FC<KanbanColumnProps> = ({ sprint, workPackages, onDro
       </div>
       <div className={`flex-grow p-3 overflow-y-auto custom-scrollbar transition-all ${isCompact ? 'space-y-1.5' : 'space-y-3'}`}>
         {sprint.tasks.map(task => (
-          <KanbanCard key={task.id} task={task} workPackages={workPackages} isCompact={isCompact} onViewTaskDetails={onViewTaskDetails} onStatusChange={onTaskStatusChange} />
+          <KanbanCard key={task.id} task={task} isCompact={isCompact} onViewTaskDetails={onViewTaskDetails} onStatusChange={onTaskStatusChange} />
         ))}
         {sprint.tasks.length === 0 && (
             <div className="h-40 flex flex-col items-center justify-center opacity-20">

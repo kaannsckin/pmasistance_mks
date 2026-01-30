@@ -1,11 +1,10 @@
 
 import React, { useMemo, useState, useRef, useEffect } from 'react';
-import { Task, TaskStatus, WorkPackage, Resource } from '../types';
+import { Task, TaskStatus, Resource } from '../types';
 
 interface RoadmapViewProps {
   tasks: Task[];
   resources: Resource[];
-  workPackages: WorkPackage[];
   onTaskStatusChange: (taskId: string, newStatus: TaskStatus) => void;
   onNewTask: () => void;
   onViewTask: (task: Task) => void;
@@ -30,11 +29,10 @@ const getInitials = (name: string) => name.split(' ').map(n => n[0]).join('').to
 
 const RoadmapCard: React.FC<{
     task: Task;
-    workPackage?: WorkPackage;
     onViewTask: (task: Task) => void;
     onEditTask: (task: Task) => void;
     onDeleteTask: (taskId: string) => void;
-}> = React.memo(({ task, workPackage, onViewTask, onEditTask, onDeleteTask }) => {
+}> = React.memo(({ task, onViewTask, onEditTask, onDeleteTask }) => {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
     const priorityStyle = PRIORITY_CLASSES[task.priority];
@@ -69,11 +67,9 @@ const RoadmapCard: React.FC<{
                     <span className={`text-xs px-2 py-0.5 rounded-md font-medium ${priorityStyle.bg} ${priorityStyle.text}`}>
                         {task.priority}
                     </span>
-                    {workPackage && (
-                        <span className="text-xs px-2 py-0.5 rounded-md font-medium bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 truncate max-w-[120px]">
-                           <i className="fa-solid fa-briefcase mr-1.5 opacity-50"></i> {workPackage.name}
-                        </span>
-                    )}
+                    <span className="text-xs px-2 py-0.5 rounded-md font-medium bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 truncate max-w-[120px]">
+                       <i className="fa-solid fa-cube mr-1.5 opacity-50"></i> {task.unit}
+                    </span>
                 </div>
 
                 <div className="flex justify-between items-center pt-3 border-t border-gray-100 dark:border-gray-700/50">
@@ -104,22 +100,18 @@ const RoadmapCard: React.FC<{
     );
 });
 
-const RoadmapView: React.FC<RoadmapViewProps> = ({ tasks, resources, workPackages, onTaskStatusChange, onNewTask, onViewTask, onEditTask, onDeleteTask }) => {
+const RoadmapView: React.FC<RoadmapViewProps> = ({ tasks, resources, onTaskStatusChange, onNewTask, onViewTask, onEditTask, onDeleteTask }) => {
   const [dragOverColumn, setDragOverColumn] = useState<TaskStatus | null>(null);
   const [filterResource, setFilterResource] = useState('all');
-  const [filterWorkPackage, setFilterWorkPackage] = useState('all');
-
+  
   const uniqueResources = useMemo(() => ['all', ...Array.from(new Set(tasks.map(t => t.resourceName).filter(Boolean)))], [tasks]);
-  const uniqueWorkPackages = useMemo(() => ['all', ...workPackages.map(wp => wp.name)], [workPackages]);
   
   const filteredTasks = useMemo(() => {
     return tasks.filter(task => {
         const matchesResource = filterResource === 'all' || task.resourceName === filterResource;
-        const wpName = workPackages.find(wp => wp.id === task.workPackageId)?.name;
-        const matchesWorkPackage = filterWorkPackage === 'all' || wpName === filterWorkPackage;
-        return matchesResource && matchesWorkPackage;
+        return matchesResource;
     });
-  }, [tasks, filterResource, filterWorkPackage, workPackages]);
+  }, [tasks, filterResource]);
 
   const columns = useMemo(() => ({
     [TaskStatus.ToDo]: filteredTasks.filter(t => t.status === TaskStatus.ToDo || t.status === TaskStatus.Backlog),
@@ -155,7 +147,6 @@ const RoadmapView: React.FC<RoadmapViewProps> = ({ tasks, resources, workPackage
         </div>
         <div className="flex items-center space-x-2">
             <FilterDropdown label="Kişi" value={filterResource} onChange={setFilterResource} options={uniqueResources} />
-            <FilterDropdown label="Paket" value={filterWorkPackage} onChange={setFilterWorkPackage} options={uniqueWorkPackages} />
         </div>
       </header>
 
@@ -186,7 +177,6 @@ const RoadmapView: React.FC<RoadmapViewProps> = ({ tasks, resources, workPackage
                         <RoadmapCard 
                             key={task.id} 
                             task={task} 
-                            workPackage={workPackages.find(w => w.id === task.workPackageId)}
                             onViewTask={onViewTask}
                             onEditTask={onEditTask}
                             onDeleteTask={onDeleteTask}

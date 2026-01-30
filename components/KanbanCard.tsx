@@ -1,10 +1,9 @@
 
 import React from 'react';
-import { Task, TaskStatus, WorkPackage } from '../types';
+import { Task, TaskStatus } from '../types';
 
 interface KanbanCardProps {
   task: Task;
-  workPackages: WorkPackage[];
   isCompact?: boolean;
   onViewTaskDetails: (taskId: string) => void;
   onStatusChange: (taskId: string, newStatus: TaskStatus) => void;
@@ -24,7 +23,7 @@ const PRIORITY_THEMES: Record<string, string> = {
     Low: 'text-gray-600 bg-gray-50 border-gray-200',
 };
 
-const KanbanCard: React.FC<KanbanCardProps> = ({ task, workPackages, isCompact, onViewTaskDetails, onStatusChange }) => {
+const KanbanCard: React.FC<KanbanCardProps> = ({ task, isCompact, onViewTaskDetails, onStatusChange }) => {
   const isDone = task.status === TaskStatus.Done;
 
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>) => {
@@ -36,8 +35,6 @@ const KanbanCard: React.FC<KanbanCardProps> = ({ task, workPackages, isCompact, 
   const handleDragEnd = (e: React.DragEvent<HTMLDivElement>) => {
       e.currentTarget.style.opacity = '1';
   }
-  
-  const wp = workPackages.find(w => w.id === task.workPackageId);
 
   if (isCompact) {
     return (
@@ -74,11 +71,6 @@ const KanbanCard: React.FC<KanbanCardProps> = ({ task, workPackages, isCompact, 
            <span className={`text-[8px] font-black px-1.5 py-0.5 rounded border uppercase tracking-wider ${PRIORITY_THEMES[task.priority]}`}>
               {task.priority}
            </span>
-           {wp && (
-            <span className="text-[8px] bg-purple-50 text-purple-600 px-1.5 py-0.5 rounded font-black border border-purple-100 truncate max-w-[80px] uppercase tracking-wider">
-              {wp.name}
-            </span>
-          )}
         </div>
         {isDone && <i className="fa-solid fa-circle-check text-emerald-500 text-xs"></i>}
       </div>

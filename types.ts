@@ -1,4 +1,3 @@
-
 export enum TaskStatus {
   Backlog = 'Backlog',
   ToDo = 'ToDo',
@@ -19,6 +18,7 @@ export interface Objective {
   keyResults: KeyResult[];
 }
 
+// Fix: Add WorkPackage interface to resolve import errors in components/TimelineView.tsx and components/WorkPackageManager.tsx.
 export interface WorkPackage {
   id: string;
   name: string;
@@ -44,13 +44,14 @@ export interface Task {
   jiraId: string;
   notes: string;
   status: TaskStatus;
-  workPackageId?: string;
   labels?: string[];
   includeInSprints?: boolean;
   dueDate?: string; // ISO string date
   subtasks?: { text: string; completed: boolean }[];
   comments?: { author: string; text: string; date: string }[];
   keyResultId?: string;
+  // Fix: Add workPackageId property to Task interface to resolve error in utils/exporter.ts.
+  workPackageId?: string;
 }
 
 export interface Resource {
@@ -121,7 +122,6 @@ export interface UnitLoad {
 export interface ProjectData {
   tasks: Task[];
   resources: Resource[];
-  workPackages: WorkPackage[];
   notes: Note[];
   customerRequests?: CustomerRequest[];
   objectives?: Objective[];

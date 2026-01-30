@@ -1,10 +1,9 @@
 
 import React, { useState } from 'react';
-import { Task, WorkPackage } from '../types';
+import { Task } from '../types';
 
 interface TaskDetailModalProps {
   task: Task;
-  workPackages: WorkPackage[];
   onClose: () => void;
   onEdit: (task: Task) => void;
   onSave: (task: Task) => void;
@@ -17,9 +16,8 @@ const DetailItem: React.FC<{ label: string; value: React.ReactNode; icon: string
     </div>
 );
 
-const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, workPackages, onClose, onEdit, onSave }) => {
+const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, onEdit, onSave }) => {
   const pertTime = task.time.avg > 0 ? ((task.time.best + 4 * task.time.avg + task.time.worst) / 6).toFixed(1) : 'N/A';
-  const workPackage = workPackages.find(wp => wp.id === task.workPackageId);
   const [newComment, setNewComment] = useState('');
 
   const handleAddComment = () => {
@@ -67,7 +65,6 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, workPackages, o
         
         <div className="overflow-y-auto p-6 space-y-6 custom-scrollbar">
           <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
-            <DetailItem label="İş Paketi" value={workPackage?.name} icon="fa-briefcase" />
             <DetailItem label="Öncelik" value={task.priority} icon="fa-triangle-exclamation" />
             <DetailItem label="Kaynak Adı" value={task.resourceName} icon="fa-user" />
             <DetailItem label="Birim" value={task.unit} icon="fa-cube" />

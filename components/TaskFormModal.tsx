@@ -1,18 +1,17 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Task, Resource, TaskStatus, WorkPackage, Objective } from '../types';
+import { Task, Resource, TaskStatus, Objective } from '../types';
 
 interface TaskFormModalProps {
   task: Task | null;
   resources: Resource[];
   tasks: Task[];
-  workPackages: WorkPackage[];
   objectives: Objective[];
   onClose: () => void;
   onSave: (task: Task) => void;
 }
 
-const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, tasks, workPackages, objectives, onClose, onSave }) => {
+const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, tasks, objectives, onClose, onSave }) => {
   const [formData, setFormData] = useState<Omit<Task, 'id' | 'availability'>>({
     name: '',
     priority: 'Medium',
@@ -24,7 +23,6 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, tasks, w
     jiraId: '',
     notes: '',
     status: TaskStatus.ToDo,
-    workPackageId: undefined,
     labels: [],
     includeInSprints: true,
     keyResultId: undefined,
@@ -48,7 +46,6 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, tasks, w
         jiraId: task.jiraId,
         notes: task.notes,
         status: task.status,
-        workPackageId: task.workPackageId,
         labels: task.labels || [],
         includeInSprints: task.includeInSprints ?? true,
         keyResultId: task.keyResultId,
@@ -66,7 +63,6 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, tasks, w
             name: '', priority: 'Medium', version: 1, predecessor: null,
             unit: '', resourceName: resources.length > 0 ? resources[0].name : '', 
             time: { best: 0, avg: 0, worst: 0 }, jiraId: '', notes: '', status: TaskStatus.ToDo,
-            workPackageId: undefined,
             labels: [],
             includeInSprints: true,
             keyResultId: undefined,
@@ -93,11 +89,7 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, tasks, w
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    if (name === 'workPackageId' && value === '') {
-        setFormData(prev => ({ ...prev, workPackageId: undefined }));
-    } else {
-        setFormData(prev => ({ ...prev, [name]: value }));
-    }
+    setFormData(prev => ({ ...prev, [name]: value }));
   };
   
   const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -139,18 +131,9 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, tasks, w
             <input type="text" name="name" id="name" value={formData.name} onChange={handleChange} required className={`mt-1 block w-full ${inputStyle}`} />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="workPackageId" className="block text-sm font-medium text-black dark:text-white">İş Paketi</label>
-              <select name="workPackageId" id="workPackageId" value={formData.workPackageId || ''} onChange={handleChange} className={`mt-1 block w-full ${inputStyle}`}>
-                <option value="">Yok</option>
-                {workPackages.map(wp => <option key={wp.id} value={wp.id}>{wp.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label htmlFor="jiraId" className="block text-sm font-medium text-black dark:text-white">Jira Kayıt No</label>
-              <input type="text" name="jiraId" id="jiraId" value={formData.jiraId} onChange={handleChange} className={`mt-1 block w-full ${inputStyle}`} />
-            </div>
+          <div>
+            <label htmlFor="jiraId" className="block text-sm font-medium text-black dark:text-white">Jira Kayıt No</label>
+            <input type="text" name="jiraId" id="jiraId" value={formData.jiraId} onChange={handleChange} className={`mt-1 block w-full ${inputStyle}`} />
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
