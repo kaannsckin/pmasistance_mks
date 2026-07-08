@@ -112,6 +112,8 @@ export enum View {
   Requests,
   AI,
   Portfolio,
+  DataPool,
+  Allocations,
 }
 
 export interface UnitLoad {
@@ -207,12 +209,87 @@ export interface WorkspaceSettings {
   isDarkMode?: boolean;
 }
 
+// ---------------------------------------------------------------------------
+// Veri Havuzu (workspace seviyesi master data) — Excel'deki karşılıkları:
+// Personel Listesi / Bölümler / Roller / Diğer Tablolar (Ünvanlar)
+// ---------------------------------------------------------------------------
+
+export interface Person {
+  id: string;
+  sicil?: string;
+  firstName: string;
+  lastName: string;
+  emy?: string; // Üst birim (örn. U300)
+  departmentCode: string; // BÖLÜM (örn. U310)
+  titleCode?: string; // UNVAN kısaltması (ARŞ, UAR, BUA...)
+  availableAA: number; // Kullanılabilir AA / ay (tam zamanlı = 1)
+  roles: string[]; // Kişinin üstlenebileceği roller
+}
+
+export interface Department {
+  code: string; // U310
+  name: string;
+  leadName?: string; // Bölüm Sorumlusu
+}
+
+export interface RoleCatalogEntry {
+  id: string;
+  departmentCode: string;
+  name: string; // "Yazılım Geliştirme Mühendisi" vb.
+}
+
+export interface TitleDef {
+  code: string; // ARŞ
+  name: string; // Araştırmacı
+}
+
+// ---------------------------------------------------------------------------
+// Tahsis (kişi × proje × iş paketi × yıl) — Excel'deki "Veri Girişi" satırı.
+// Aylar 1-12 indeksli; değerler AA cinsinden (0.35 = ayın %35'i).
+// ---------------------------------------------------------------------------
+
+export interface Allocation {
+  id: string;
+  personId: string;
+  projectId: string;
+  workPackageId?: string; // Proje bazlı İP
+  role?: string;
+  year: number;
+  plan: Record<number, number>; // ay (1-12) -> planlanan AA
+  actual: Record<number, number>; // ay (1-12) -> gerçekleşen AA
+}
+
+/**
+ * Plan kilidi (proje × yıl): plan yılbaşında girilir, onaya gönderilir,
+ * yönetici onayıyla kilitlenir. Kilitliyken plan hücreleri salt-okunur;
+ * gerçekleşen hücreleri her zaman girilebilir.
+ */
+export type PlanLockStatus = 'draft' | 'submitted' | 'locked';
+
+export interface PlanLock {
+  projectId: string;
+  year: number;
+  status: PlanLockStatus;
+  submittedAt?: string;
+  submittedByRole?: UserRole;
+  decidedAt?: string;
+  decidedByRole?: UserRole;
+}
+
 export interface WorkspaceData {
-  schemaVersion: number; // 2
+  schemaVersion: number;
   projects: Project[];
   activeProjectId: string | null;
   /** Şimdilik istemci tarafı görünüm anahtarı; SaaS fazında gerçek auth'a bağlanacak */
   currentRole?: UserRole;
+  // Veri havuzu
+  people: Person[];
+  departments: Department[];
+  roleCatalog: RoleCatalogEntry[];
+  titles: TitleDef[];
+  // Tahsis
+  allocations: Allocation[];
+  planLocks: PlanLock[];
   settings: WorkspaceSettings;
   appVersion: string;
   exportDate?: string;

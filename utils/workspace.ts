@@ -1,7 +1,7 @@
 import { Project, ProjectData, ProjectSettings, WorkspaceData } from '../types';
 
-export const APP_VERSION = '2.0.0';
-export const WORKSPACE_SCHEMA_VERSION = 2;
+export const APP_VERSION = '2.1.0';
+export const WORKSPACE_SCHEMA_VERSION = 3; // 3: veri havuzu + tahsis + plan kilidi
 
 /** v2 çalışma alanı anahtarı */
 export const WORKSPACE_STORAGE_KEY = 'PLANASISTAN_WORKSPACE_V2';
@@ -44,6 +44,12 @@ export const createEmptyWorkspace = (): WorkspaceData => ({
     projects: [],
     activeProjectId: null,
     currentRole: 'py',
+    people: [],
+    departments: [],
+    roleCatalog: [],
+    titles: [],
+    allocations: [],
+    planLocks: [],
     settings: {
         isLocalPersistenceEnabled: true,
         isAIEnabled: true,
@@ -117,6 +123,12 @@ export const normalizeWorkspace = (raw: Partial<WorkspaceData>): WorkspaceData =
         schemaVersion: WORKSPACE_SCHEMA_VERSION,
         projects,
         activeProjectId: activeId,
+        people: (raw.people || []).map(p => ({ ...p, roles: p.roles || [], availableAA: p.availableAA ?? 1 })),
+        departments: raw.departments || [],
+        roleCatalog: raw.roleCatalog || [],
+        titles: raw.titles || [],
+        allocations: (raw.allocations || []).map(a => ({ ...a, plan: a.plan || {}, actual: a.actual || {} })),
+        planLocks: raw.planLocks || [],
         settings: { ...base.settings, ...(raw.settings || {}) },
         appVersion: APP_VERSION,
     };

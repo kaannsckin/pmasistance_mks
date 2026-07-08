@@ -1,6 +1,6 @@
 
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import { View, Task, Resource, TaskStatus, Note, CustomerRequest, Objective, Project, WorkspaceData, RagStatus, ProjectStatus } from './types';
+import { View, Task, Resource, TaskStatus, Note, CustomerRequest, Objective, Project, WorkspaceData, RagStatus, ProjectStatus, UserRole, PlanLockStatus } from './types';
 import { INITIAL_TASKS, INITIAL_RESOURCES, INITIAL_OBJECTIVES } from './constants';
 import {
   WORKSPACE_STORAGE_KEY,
@@ -11,6 +11,8 @@ import {
   resolveWorkspaceFromStorage,
   serializeWorkspace,
 } from './utils/workspace';
+import { createAllocation, EffortField, setAllocationCell, upsertPlanLock } from './utils/allocations';
+import { applyPoolImport, PoolImportResult } from './utils/poolImporter';
 import Header from './components/Header';
 import TaskGallery from './components/TaskGallery';
 import ResourceManager from './components/ResourceManager';
@@ -26,6 +28,8 @@ import CustomerRequestsView from './components/CustomerRequestsView';
 import AIAssistant from './components/AIAssistant';
 import GoalsView from './components/GoalsView';
 import PortfolioView from './components/PortfolioView';
+import DataPoolView from './components/DataPoolView';
+import AllocationView from './components/AllocationView';
 
 const THEME_COLORS: Record<string, string> = {
   classic: '#2563eb',
@@ -193,6 +197,52 @@ const App: React.FC = () => {
     }));
   }, [updateWorkspace]);
 
+  // ---- Veri havuzu + tahsis ----
+  const handleChangeRole = useCallback((role: UserRole) => {
+    updateWorkspace(ws => ({ ...ws, currentRole: role }));
+  }, [updateWorkspace]);
+
+  const handleSetAllocationCell = useCallback((allocationId: string, field: EffortField, month: number, value: number | undefined) => {
+    updateWorkspace(ws => setAllocationCell(ws, allocationId, field, month, value));
+  }, [updateWorkspace]);
+
+  const handleAddAllocation = useCallback((personId: string, projectId: string, year: number, workPackageId?: string, role?: string) => {
+    updateWorkspace(ws => {
+      const created = createAllocation(ws.allocations, personId, projectId, year, workPackageId, role);
+      if (!created) {
+        alert('Bu kişi + proje + iş paketi + rol kombinasyonu için bu yılda zaten bir satır var.');
+        return ws;
+      }
+      return { ...ws, allocations: [...ws.allocations, created] };
+    });
+  }, [updateWorkspace]);
+
+  const handleDeleteAllocation = useCallback((allocationId: string) => {
+    updateWorkspace(ws => ({ ...ws, allocations: ws.allocations.filter(a => a.id !== allocationId) }));
+  }, [updateWorkspace]);
+
+  const handleLockAction = useCallback((projectId: string, year: number, status: PlanLockStatus) => {
+    updateWorkspace(ws => ({ ...ws, planLocks: upsertPlanLock(ws.planLocks, projectId, year, status, ws.currentRole) }));
+  }, [updateWorkspace]);
+
+  const handleApplyPoolImport = useCallback((imported: PoolImportResult) => {
+    updateWorkspace(ws => {
+      const { workspace: next, summary } = applyPoolImport(ws, imported);
+      const lines = [
+        `Personel: ${summary.peopleAdded} yeni, ${summary.peopleUpdated} güncellendi`,
+        `Bölüm: ${summary.departmentsAdded} yeni · Rol: ${summary.rolesAdded} yeni · Ünvan: ${summary.titlesAdded} yeni`,
+        `Proje: ${summary.projectsCreated} oluşturuldu, ${summary.projectsMatched} eşleşti · İP: ${summary.workPackagesAdded} yeni`,
+        `Tahsis: ${summary.allocationsAdded} yeni, ${summary.allocationsUpdated} güncellendi`,
+      ];
+      if (summary.warnings.length) {
+        lines.push('', `Uyarılar (${summary.warnings.length}):`, ...summary.warnings.slice(0, 6));
+        if (summary.warnings.length > 6) lines.push(`… ve ${summary.warnings.length - 6} uyarı daha`);
+      }
+      alert(`Excel içe aktarma tamamlandı.\n\n${lines.join('\n')}`);
+      return next;
+    });
+  }, [updateWorkspace]);
+
   // ---- Yedekleme / içe aktarma ----
   const handleSaveProject = useCallback(() => {
     if (!workspace) return;
@@ -285,6 +335,39 @@ const App: React.FC = () => {
   const renderView = () => {
     if (!isInitialized || !workspace) {
       return <div className="h-[60vh] flex items-center justify-center"><i className="fa-solid fa-spinner fa-spin text-4xl text-blue-500"></i></div>;
+    }
+
+    // Çalışma alanı seviyesi ekranlar (aktif proje gerektirmez)
+    if (currentView === View.DataPool) {
+      return (
+        <DataPoolView
+          people={workspace.people}
+          departments={workspace.departments}
+          roleCatalog={workspace.roleCatalog}
+          titles={workspace.titles}
+          currentRole={workspace.currentRole || 'py'}
+          onUpdatePeople={(people) => updateWorkspace(ws => ({ ...ws, people }))}
+          onUpdateDepartments={(departments) => updateWorkspace(ws => ({ ...ws, departments }))}
+          onUpdateRoleCatalog={(roleCatalog) => updateWorkspace(ws => ({ ...ws, roleCatalog }))}
+          onUpdateTitles={(titles) => updateWorkspace(ws => ({ ...ws, titles }))}
+          onApplyImport={handleApplyPoolImport}
+        />
+      );
+    }
+    if (currentView === View.Allocations) {
+      return (
+        <AllocationView
+          allocations={workspace.allocations}
+          people={workspace.people}
+          projects={workspace.projects}
+          planLocks={workspace.planLocks}
+          currentRole={workspace.currentRole || 'py'}
+          onSetCell={handleSetAllocationCell}
+          onAddAllocation={handleAddAllocation}
+          onDeleteAllocation={handleDeleteAllocation}
+          onLockAction={handleLockAction}
+        />
+      );
     }
 
     // Aktif proje yoksa tek anlamlı ekran portföydür
@@ -398,6 +481,8 @@ const App: React.FC = () => {
         projects={workspace?.projects.map(p => ({ id: p.id, name: p.name, rag: p.rag })) || []}
         activeProjectId={activeProject?.id ?? null}
         onSelectProject={handleOpenProject}
+        currentRole={workspace?.currentRole || 'py'}
+        onChangeRole={handleChangeRole}
       />
       <main className={`w-full max-w-[1920px] mx-auto ${isFullWidthView ? 'h-[calc(100vh-5rem)]' : 'px-4 sm:px-6 lg:px-8 py-6 h-[calc(100vh-5rem)] overflow-auto'}`}>
         {renderView()}

@@ -1,6 +1,7 @@
 
 import React, { useRef, useState, useEffect } from 'react';
-import { View, RagStatus } from '../types';
+import { View, RagStatus, UserRole } from '../types';
+import { ROLE_LABELS } from '../utils/allocations';
 
 export interface HeaderProjectSummary {
   id: string;
@@ -20,7 +21,54 @@ interface HeaderProps {
   projects: HeaderProjectSummary[];
   activeProjectId: string | null;
   onSelectProject: (id: string) => void;
+  currentRole: UserRole;
+  onChangeRole: (role: UserRole) => void;
 }
+
+const ROLE_ICONS: Record<UserRole, string> = {
+  mudur: 'fa-user-tie',
+  pyb_sorumlu: 'fa-diagram-project',
+  pyb_destek: 'fa-database',
+  py: 'fa-user-gear',
+  bolum_sorumlu: 'fa-people-group',
+};
+
+const RoleSwitcher: React.FC<{ currentRole: UserRole; onChangeRole: (r: UserRole) => void }> = ({ currentRole, onChangeRole }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="h-11 flex items-center space-x-2 px-3 bg-white dark:bg-gray-700 text-gray-500 dark:text-gray-300 rounded-xl border border-gray-200 dark:border-gray-600 hover:text-primary transition-all"
+        title="Rol değiştir (RBAC önizleme)"
+      >
+        <i className={`fa-solid ${ROLE_ICONS[currentRole]}`} style={{ color: 'var(--app-primary)' }}></i>
+        <span className="hidden xl:inline text-[9px] font-black uppercase tracking-widest">{ROLE_LABELS[currentRole]}</span>
+        <i className={`fa-solid fa-chevron-down text-[8px] transition-transform ${isOpen ? 'rotate-180' : ''}`}></i>
+      </button>
+      {isOpen && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)}></div>
+          <div className="absolute top-full right-0 mt-2 w-56 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl shadow-2xl z-50 py-2">
+            <p className="px-4 py-1 text-[8px] font-black text-gray-400 uppercase tracking-widest">Rol Seç (Görünüm)</p>
+            {(Object.keys(ROLE_LABELS) as UserRole[]).map(r => (
+              <button
+                key={r}
+                onClick={() => { onChangeRole(r); setIsOpen(false); }}
+                className={`w-full flex items-center space-x-3 px-4 py-2.5 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors`}
+                style={r === currentRole ? { backgroundColor: 'var(--app-accent-light)' } : {}}
+              >
+                <i className={`fa-solid ${ROLE_ICONS[r]} text-[10px] w-4`} style={{ color: 'var(--app-primary)' }}></i>
+                <span className="text-[11px] font-bold text-gray-700 dark:text-gray-200">{ROLE_LABELS[r]}</span>
+                {r === currentRole && <i className="fa-solid fa-check text-[9px] ml-auto" style={{ color: 'var(--app-primary)' }}></i>}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
 
 const RAG_DOT: Record<RagStatus, string> = { green: '#10b981', amber: '#f59e0b', red: '#ef4444' };
 
@@ -104,7 +152,7 @@ const NavItem: React.FC<{
   </button>
 );
 
-const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSettings, onSaveProject, onLoadProject, isLocalPersistenceEnabled = true, isAIEnabled = true, onOpenAbout, projects, activeProjectId, onSelectProject }) => {
+const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSettings, onSaveProject, onLoadProject, isLocalPersistenceEnabled = true, isAIEnabled = true, onOpenAbout, projects, activeProjectId, onSelectProject, currentRole, onChangeRole }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   
@@ -233,6 +281,8 @@ const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSett
 
           <nav className="hidden md:flex items-center bg-gray-100/50 dark:bg-gray-900/30 p-1.5 rounded-2xl border border-gray-200/50 dark:border-gray-700/50 space-x-1 mx-4">
             <NavItem view={View.Portfolio} currentView={currentView} setCurrentView={setCurrentView} icon="fa-table-cells-large" label="Portföy" />
+            <NavItem view={View.Allocations} currentView={currentView} setCurrentView={setCurrentView} icon="fa-people-arrows" label="Tahsis" />
+            <NavItem view={View.DataPool} currentView={currentView} setCurrentView={setCurrentView} icon="fa-database" label="Havuz" />
             {activeProjectId && (
               <>
                 {isAIEnabled && <NavItem view={View.AI} currentView={currentView} setCurrentView={setCurrentView} icon="fa-wand-magic-sparkles" label="Zekâ" isSpecial />}
@@ -263,6 +313,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSett
                 </button>
             </div>
             
+            <RoleSwitcher currentRole={currentRole} onChangeRole={onChangeRole} />
             <button onClick={onOpenSettings} className="w-11 h-11 flex items-center justify-center bg-white dark:bg-gray-700 text-gray-500 dark:text-gray-300 rounded-xl border border-gray-200 dark:border-gray-600 hover:text-primary transition-all">
                 <i className="fa-solid fa-sliders"></i>
             </button>
