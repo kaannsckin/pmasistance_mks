@@ -111,6 +111,7 @@ export enum View {
   Notes,
   Requests,
   AI,
+  Portfolio,
 }
 
 export interface UnitLoad {
@@ -119,6 +120,11 @@ export interface UnitLoad {
   capacity: number;
 }
 
+/**
+ * Tek proje yedek dosyalarının (v1.x) formatı. Yalnızca eski yedeklerin içe
+ * aktarılması ve localStorage migration'ı için korunuyor — yeni kod
+ * WorkspaceData kullanmalı.
+ */
 export interface ProjectData {
   tasks: Task[];
   resources: Resource[];
@@ -130,8 +136,8 @@ export interface ProjectData {
     projectStartDate: string;
     isLocalPersistenceEnabled?: boolean;
     isAIEnabled?: boolean;
-    tagColors?: Record<string, string>; 
-    titleCosts?: Record<string, number>; 
+    tagColors?: Record<string, string>;
+    titleCosts?: Record<string, number>;
     sprintNames?: Record<number, string>; // Özel sürüm isimleri
     globalTestDays?: number; // Genel test günü sayısı
     manMonthTableColor?: string; // Adam/Ay tablo ana rengi
@@ -141,4 +147,73 @@ export interface ProjectData {
   };
   appVersion: string;
   exportDate: string;
+}
+
+// ---------------------------------------------------------------------------
+// Çoklu proje / portföy modeli (v2)
+// ---------------------------------------------------------------------------
+
+/**
+ * Kurumsal rol hiyerarşisi (RBAC temeli):
+ *  - mudur: her şeyi görür, girdi yapmaz
+ *  - pyb_sorumlu: program/portföy yöneticisi; projeleri izler, girdi yapmaz
+ *  - pyb_destek: veri havuzu sorumlusu; master veri (personel, bölüm, İP,
+ *    eşleştirmeler) girer ve hiyerarşiyi korur
+ *  - py: proje yöneticisi; kendi projelerinin planını girer
+ *  - bolum_sorumlu: bölüm personelinin tahsisini girer/izler
+ */
+export type UserRole = 'mudur' | 'pyb_sorumlu' | 'pyb_destek' | 'py' | 'bolum_sorumlu';
+
+/** Excel'deki "Proje Durumu" karşılığı + yaşam döngüsü ekleri */
+export type ProjectStatus = 'devam' | 'teklif' | 'beklemede' | 'tamamlandi';
+
+/** Haftalık yönetici durumu (kırmızı/sarı/yeşil) */
+export type RagStatus = 'green' | 'amber' | 'red';
+
+/** Projeye özgü ayarlar (tema/kalıcılık gibi uygulama geneli ayarlar WorkspaceSettings'te) */
+export interface ProjectSettings {
+  sprintDuration: number;
+  projectStartDate: string;
+  tagColors?: Record<string, string>;
+  titleCosts?: Record<string, number>;
+  sprintNames?: Record<number, string>;
+  globalTestDays?: number;
+  manMonthTableColor?: string;
+  costTableColor?: string;
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  code?: string; // SAP / faaliyet kodu
+  status: ProjectStatus;
+  rag?: RagStatus;
+  ragNote?: string; // Haftalık durum açıklaması (PM girer)
+  tasks: Task[];
+  resources: Resource[];
+  notes: Note[];
+  customerRequests: CustomerRequest[];
+  objectives: Objective[];
+  workPackages: WorkPackage[]; // Proje bazlı iş paketleri (İP)
+  settings: ProjectSettings;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WorkspaceSettings {
+  isLocalPersistenceEnabled?: boolean;
+  isAIEnabled?: boolean;
+  theme?: string;
+  isDarkMode?: boolean;
+}
+
+export interface WorkspaceData {
+  schemaVersion: number; // 2
+  projects: Project[];
+  activeProjectId: string | null;
+  /** Şimdilik istemci tarafı görünüm anahtarı; SaaS fazında gerçek auth'a bağlanacak */
+  currentRole?: UserRole;
+  settings: WorkspaceSettings;
+  appVersion: string;
+  exportDate?: string;
 }
