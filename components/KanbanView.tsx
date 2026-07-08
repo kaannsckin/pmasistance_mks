@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { Task, Resource, Sprint, UnitLoad, TaskStatus } from '../types';
-import { planTaskVersions } from '../utils/sprintPlanner';
+import { planTaskVersionsDetailed, PlanWarning } from '../utils/sprintPlanner';
 import KanbanColumn from './KanbanColumn';
 import { calculatePertFuzzyPert } from '../utils/timeline';
 import TestPeriodColumn from './TestPeriodColumn';
@@ -108,6 +108,7 @@ const KanbanView: React.FC<KanbanViewProps> = ({ tasks, resources, sprintDuratio
   const [filterUnit, setFilterUnit] = useState('all');
   const [filterResource, setFilterResource] = useState('all');
   const [filterPriority, setFilterPriority] = useState('all');
+  const [planWarnings, setPlanWarnings] = useState<PlanWarning[]>([]);
 
   useEffect(() => {
     setExtraSprints(0);
@@ -115,15 +116,17 @@ const KanbanView: React.FC<KanbanViewProps> = ({ tasks, resources, sprintDuratio
 
   const handleGeneratePlan = () => {
     setIsLoading(true);
-    try {
-      setTimeout(() => {
-        const newTasks = planTaskVersions(tasks, resources, sprintDuration);
-        onPlanGenerated(newTasks);
+    setTimeout(() => {
+      try {
+        const result = planTaskVersionsDetailed(tasks, resources, sprintDuration, globalTestDays || 4);
+        onPlanGenerated(result.tasks);
+        setPlanWarnings(result.warnings);
+      } catch (e) {
+        alert(e instanceof Error ? e.message : 'Plan oluşturulurken bir hata oluştu.');
+      } finally {
         setIsLoading(false);
-      }, 50);
-    } catch (e) {
-      setIsLoading(false);
-    }
+      }
+    }, 50);
   };
 
   const calculatedSprints = useMemo((): Sprint[] => {
@@ -250,6 +253,31 @@ const KanbanView: React.FC<KanbanViewProps> = ({ tasks, resources, sprintDuratio
           </div>
         </div>
       </div>
+      {planWarnings.length > 0 && (
+        <div className="flex-none bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-800 px-6 py-3 z-10">
+          <div className="flex items-start justify-between">
+            <div className="flex items-start space-x-3 min-w-0">
+              <i className="fa-solid fa-triangle-exclamation text-amber-500 mt-0.5"></i>
+              <div className="min-w-0">
+                <p className="text-[10px] font-black text-amber-700 dark:text-amber-400 uppercase tracking-widest mb-1">
+                  Plan oluşturuldu — {planWarnings.length} uyarı
+                </p>
+                <ul className="space-y-0.5">
+                  {planWarnings.slice(0, 4).map((w, i) => (
+                    <li key={`${w.taskId}-${i}`} className="text-[11px] text-amber-800 dark:text-amber-300 truncate">• {w.message}</li>
+                  ))}
+                  {planWarnings.length > 4 && (
+                    <li className="text-[11px] font-bold text-amber-600 dark:text-amber-400">… ve {planWarnings.length - 4} uyarı daha</li>
+                  )}
+                </ul>
+              </div>
+            </div>
+            <button onClick={() => setPlanWarnings([])} className="flex-none ml-4 w-7 h-7 rounded-lg text-amber-500 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors" title="Uyarıları kapat">
+              <i className="fa-solid fa-times text-xs"></i>
+            </button>
+          </div>
+        </div>
+      )}
       <div className="flex-grow overflow-x-auto overflow-y-hidden custom-scrollbar bg-[#F9FAFB] dark:bg-gray-950/40">
         <div className="inline-flex h-full items-start px-6 py-6 space-x-4">
           {orderedSprints.map((sprint, idx) => (

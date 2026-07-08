@@ -1,6 +1,13 @@
 
 import React, { useRef, useState, useEffect } from 'react';
-import { View } from '../types';
+import { View, RagStatus, UserRole } from '../types';
+import { ROLE_LABELS } from '../utils/allocations';
+
+export interface HeaderProjectSummary {
+  id: string;
+  name: string;
+  rag?: RagStatus;
+}
 
 interface HeaderProps {
   currentView: View;
@@ -11,7 +18,115 @@ interface HeaderProps {
   isLocalPersistenceEnabled?: boolean;
   isAIEnabled?: boolean;
   onOpenAbout?: () => void;
+  projects: HeaderProjectSummary[];
+  activeProjectId: string | null;
+  onSelectProject: (id: string) => void;
+  currentRole: UserRole;
+  onChangeRole: (role: UserRole) => void;
 }
+
+const ROLE_ICONS: Record<UserRole, string> = {
+  mudur: 'fa-user-tie',
+  pyb_sorumlu: 'fa-diagram-project',
+  pyb_destek: 'fa-database',
+  py: 'fa-user-gear',
+  bolum_sorumlu: 'fa-people-group',
+};
+
+const RoleSwitcher: React.FC<{ currentRole: UserRole; onChangeRole: (r: UserRole) => void }> = ({ currentRole, onChangeRole }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="h-11 flex items-center space-x-2 px-3 bg-white dark:bg-gray-700 text-gray-500 dark:text-gray-300 rounded-xl border border-gray-200 dark:border-gray-600 hover:text-primary transition-all"
+        title="Rol değiştir (RBAC önizleme)"
+      >
+        <i className={`fa-solid ${ROLE_ICONS[currentRole]}`} style={{ color: 'var(--app-primary)' }}></i>
+        <span className="hidden xl:inline text-[9px] font-black uppercase tracking-widest">{ROLE_LABELS[currentRole]}</span>
+        <i className={`fa-solid fa-chevron-down text-[8px] transition-transform ${isOpen ? 'rotate-180' : ''}`}></i>
+      </button>
+      {isOpen && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)}></div>
+          <div className="absolute top-full right-0 mt-2 w-56 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl shadow-2xl z-50 py-2">
+            <p className="px-4 py-1 text-[8px] font-black text-gray-400 uppercase tracking-widest">Rol Seç (Görünüm)</p>
+            {(Object.keys(ROLE_LABELS) as UserRole[]).map(r => (
+              <button
+                key={r}
+                onClick={() => { onChangeRole(r); setIsOpen(false); }}
+                className={`w-full flex items-center space-x-3 px-4 py-2.5 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors`}
+                style={r === currentRole ? { backgroundColor: 'var(--app-accent-light)' } : {}}
+              >
+                <i className={`fa-solid ${ROLE_ICONS[r]} text-[10px] w-4`} style={{ color: 'var(--app-primary)' }}></i>
+                <span className="text-[11px] font-bold text-gray-700 dark:text-gray-200">{ROLE_LABELS[r]}</span>
+                {r === currentRole && <i className="fa-solid fa-check text-[9px] ml-auto" style={{ color: 'var(--app-primary)' }}></i>}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
+const RAG_DOT: Record<RagStatus, string> = { green: '#10b981', amber: '#f59e0b', red: '#ef4444' };
+
+const ProjectSwitcher: React.FC<{
+  projects: HeaderProjectSummary[];
+  activeProjectId: string | null;
+  onSelectProject: (id: string) => void;
+  onGoPortfolio: () => void;
+}> = ({ projects, activeProjectId, onSelectProject, onGoPortfolio }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const active = projects.find(p => p.id === activeProjectId);
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center space-x-2 bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 hover:border-primary/40 transition-all max-w-[200px]"
+        title="Proje değiştir"
+      >
+        {active?.rag && <span className="w-2 h-2 rounded-full flex-none" style={{ backgroundColor: RAG_DOT[active.rag] }}></span>}
+        <i className="fa-solid fa-folder-open text-[10px] flex-none" style={{ color: 'var(--app-primary)' }}></i>
+        <span className="text-[10px] font-black uppercase tracking-tight text-gray-700 dark:text-gray-200 truncate">
+          {active ? active.name : 'Proje Seç'}
+        </span>
+        <i className={`fa-solid fa-chevron-down text-[8px] text-gray-400 flex-none transition-transform ${isOpen ? 'rotate-180' : ''}`}></i>
+      </button>
+      {isOpen && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)}></div>
+          <div className="absolute top-full left-0 mt-2 w-64 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-2xl shadow-2xl z-50 py-2 max-h-[60vh] overflow-y-auto">
+            <p className="px-4 py-1 text-[8px] font-black text-gray-400 uppercase tracking-widest">Projeler</p>
+            {projects.map(p => (
+              <button
+                key={p.id}
+                onClick={() => { onSelectProject(p.id); setIsOpen(false); }}
+                className={`w-full flex items-center space-x-2 px-4 py-2.5 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${p.id === activeProjectId ? 'bg-accent/40' : ''}`}
+                style={p.id === activeProjectId ? { backgroundColor: 'var(--app-accent-light)' } : {}}
+              >
+                <span className="w-2 h-2 rounded-full flex-none" style={{ backgroundColor: p.rag ? RAG_DOT[p.rag] : '#cbd5e1' }}></span>
+                <span className="text-[11px] font-bold text-gray-700 dark:text-gray-200 truncate">{p.name}</span>
+                {p.id === activeProjectId && <i className="fa-solid fa-check text-[9px] ml-auto flex-none" style={{ color: 'var(--app-primary)' }}></i>}
+              </button>
+            ))}
+            <div className="border-t border-gray-100 dark:border-gray-700 mt-1 pt-1">
+              <button
+                onClick={() => { onGoPortfolio(); setIsOpen(false); }}
+                className="w-full flex items-center space-x-2 px-4 py-2.5 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+              >
+                <i className="fa-solid fa-table-cells-large text-[10px]" style={{ color: 'var(--app-primary)' }}></i>
+                <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: 'var(--app-primary)' }}>Portföy & Yeni Proje</span>
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
 
 const NavItem: React.FC<{
   view: View;
@@ -37,7 +152,7 @@ const NavItem: React.FC<{
   </button>
 );
 
-const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSettings, onSaveProject, onLoadProject, isLocalPersistenceEnabled = true, isAIEnabled = true, onOpenAbout }) => {
+const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSettings, onSaveProject, onLoadProject, isLocalPersistenceEnabled = true, isAIEnabled = true, onOpenAbout, projects, activeProjectId, onSelectProject, currentRole, onChangeRole }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   
@@ -155,15 +270,31 @@ const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSett
             </div>
           </div>
 
+          <div className="hidden lg:block mx-3">
+            <ProjectSwitcher
+              projects={projects}
+              activeProjectId={activeProjectId}
+              onSelectProject={onSelectProject}
+              onGoPortfolio={() => setCurrentView(View.Portfolio)}
+            />
+          </div>
+
           <nav className="hidden md:flex items-center bg-gray-100/50 dark:bg-gray-900/30 p-1.5 rounded-2xl border border-gray-200/50 dark:border-gray-700/50 space-x-1 mx-4">
-            {isAIEnabled && <NavItem view={View.AI} currentView={currentView} setCurrentView={setCurrentView} icon="fa-wand-magic-sparkles" label="Zekâ" isSpecial />}
-            <NavItem view={View.Kanban} currentView={currentView} setCurrentView={setCurrentView} icon="fa-columns" label="Pano" />
-            <NavItem view={View.Roadmap} currentView={currentView} setCurrentView={setCurrentView} icon="fa-map" label="Yol Haritası" />
-            <NavItem view={View.Goals} currentView={currentView} setCurrentView={setCurrentView} icon="fa-bullseye" label="Hedefler" />
-            <NavItem view={View.Tasks} currentView={currentView} setCurrentView={setCurrentView} icon="fa-list-check" label="Görevler" />
-            <NavItem view={View.Requests} currentView={currentView} setCurrentView={setCurrentView} icon="fa-users-viewfinder" label="İstekler" />
-            <NavItem view={View.Resources} currentView={currentView} setCurrentView={setCurrentView} icon="fa-users-gear" label="Ekip" />
-            <NavItem view={View.Notes} currentView={currentView} setCurrentView={setCurrentView} icon="fa-pen-nib" label="Günlük" />
+            <NavItem view={View.Portfolio} currentView={currentView} setCurrentView={setCurrentView} icon="fa-table-cells-large" label="Portföy" />
+            <NavItem view={View.Allocations} currentView={currentView} setCurrentView={setCurrentView} icon="fa-people-arrows" label="Tahsis" />
+            <NavItem view={View.DataPool} currentView={currentView} setCurrentView={setCurrentView} icon="fa-database" label="Havuz" />
+            {activeProjectId && (
+              <>
+                {isAIEnabled && <NavItem view={View.AI} currentView={currentView} setCurrentView={setCurrentView} icon="fa-wand-magic-sparkles" label="Zekâ" isSpecial />}
+                <NavItem view={View.Kanban} currentView={currentView} setCurrentView={setCurrentView} icon="fa-columns" label="Pano" />
+                <NavItem view={View.Roadmap} currentView={currentView} setCurrentView={setCurrentView} icon="fa-map" label="Yol Haritası" />
+                <NavItem view={View.Goals} currentView={currentView} setCurrentView={setCurrentView} icon="fa-bullseye" label="Hedefler" />
+                <NavItem view={View.Tasks} currentView={currentView} setCurrentView={setCurrentView} icon="fa-list-check" label="Görevler" />
+                <NavItem view={View.Requests} currentView={currentView} setCurrentView={setCurrentView} icon="fa-users-viewfinder" label="İstekler" />
+                <NavItem view={View.Resources} currentView={currentView} setCurrentView={setCurrentView} icon="fa-users-gear" label="Ekip" />
+                <NavItem view={View.Notes} currentView={currentView} setCurrentView={setCurrentView} icon="fa-pen-nib" label="Günlük" />
+              </>
+            )}
           </nav>
 
           <div className="flex items-center space-x-2">
@@ -182,6 +313,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSett
                 </button>
             </div>
             
+            <RoleSwitcher currentRole={currentRole} onChangeRole={onChangeRole} />
             <button onClick={onOpenSettings} className="w-11 h-11 flex items-center justify-center bg-white dark:bg-gray-700 text-gray-500 dark:text-gray-300 rounded-xl border border-gray-200 dark:border-gray-600 hover:text-primary transition-all">
                 <i className="fa-solid fa-sliders"></i>
             </button>

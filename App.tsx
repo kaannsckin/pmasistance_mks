@@ -1,7 +1,18 @@
 
-import React, { useState, useCallback, useEffect } from 'react';
-import { View, Task, Resource, TaskStatus, Note, ProjectData, CustomerRequest, Objective } from './types';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import { View, Task, Resource, TaskStatus, Note, CustomerRequest, Objective, Project, WorkspaceData, RagStatus, ProjectStatus, UserRole, PlanLockStatus } from './types';
 import { INITIAL_TASKS, INITIAL_RESOURCES, INITIAL_OBJECTIVES } from './constants';
+import {
+  WORKSPACE_STORAGE_KEY,
+  LEGACY_STORAGE_KEY,
+  createEmptyWorkspace,
+  createProject,
+  parseImportedJson,
+  resolveWorkspaceFromStorage,
+  serializeWorkspace,
+} from './utils/workspace';
+import { createAllocation, EffortField, setAllocationCell, upsertPlanLock } from './utils/allocations';
+import { applyPoolImport, PoolImportResult } from './utils/poolImporter';
 import Header from './components/Header';
 import TaskGallery from './components/TaskGallery';
 import ResourceManager from './components/ResourceManager';
@@ -16,8 +27,9 @@ import AboutModal from './components/AboutModal';
 import CustomerRequestsView from './components/CustomerRequestsView';
 import AIAssistant from './components/AIAssistant';
 import GoalsView from './components/GoalsView';
-
-const STORAGE_KEY = 'PROJE_PLANLAMA_DATA';
+import PortfolioView from './components/PortfolioView';
+import DataPoolView from './components/DataPoolView';
+import AllocationView from './components/AllocationView';
 
 const THEME_COLORS: Record<string, string> = {
   classic: '#2563eb',
@@ -26,262 +38,392 @@ const THEME_COLORS: Record<string, string> = {
   orange: '#ea580c',
 };
 
+const createSampleProject = (): Project =>
+  createProject('Örnek Proje', {
+    tasks: INITIAL_TASKS,
+    resources: INITIAL_RESOURCES.map(r => ({ ...r, title: r.title || 'Uzman' })),
+    objectives: INITIAL_OBJECTIVES,
+  });
 
 const App: React.FC = () => {
-  const [currentView, setCurrentView] = useState<View>(View.Roadmap);
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [resources, setResources] = useState<Resource[]>([]);
-  const [notes, setNotes] = useState<Note[]>([]); 
-  const [customerRequests, setCustomerRequests] = useState<CustomerRequest[]>([]);
-  const [objectives, setObjectives] = useState<Objective[]>([]);
-  
+  const [currentView, setCurrentView] = useState<View>(View.Portfolio);
+  const [workspace, setWorkspace] = useState<WorkspaceData | null>(null);
+
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
-  
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [viewingTask, setViewingTask] = useState<Task | null>(null);
   const [isTeamsModalOpen, setIsTeamsModalOpen] = useState(false);
   const [teamsTask, setTeamsTask] = useState<Task | null>(null);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
-  
-  const [sprintDuration, setSprintDuration] = useState(3);
-  const [projectStartDate, setProjectStartDate] = useState(new Date().toISOString().split('T')[0]);
-  const [isLocalPersistenceEnabled, setIsLocalPersistenceEnabled] = useState(true);
-  const [isAIEnabled, setIsAIEnabled] = useState(true);
-  const [tagColors, setTagColors] = useState<Record<string, string>>({});
-  const [titleCosts, setTitleCosts] = useState<Record<string, number>>({});
-  const [sprintNames, setSprintNames] = useState<Record<number, string>>({});
-  const [globalTestDays, setGlobalTestDays] = useState(4);
-  const [appTheme, setAppTheme] = useState('classic');
-  const [isDarkMode, setIsDarkMode] = useState(true);
-  
-  const [manMonthTableColor, setManMonthTableColor] = useState(THEME_COLORS.classic);
-  const [costTableColor, setCostTableColor] = useState('#10b981');
-  
+
   const [isInitialized, setIsInitialized] = useState(false);
 
+  // ---- Açılış: v2 workspace → v1 migration → örnek proje sırasıyla çözülür ----
   useEffect(() => {
-    const savedData = localStorage.getItem(STORAGE_KEY);
-    if (savedData) {
-      try {
-        const parsed = JSON.parse(savedData) as ProjectData;
-        setTasks(parsed.tasks || []);
-        setResources(parsed.resources || []);
-        setNotes(parsed.notes || []);
-        setCustomerRequests(parsed.customerRequests || []);
-        setObjectives(parsed.objectives || []);
-        if (parsed.settings) {
-          setSprintDuration(parsed.settings.sprintDuration);
-          setProjectStartDate(parsed.settings.projectStartDate);
-          setIsLocalPersistenceEnabled(parsed.settings.isLocalPersistenceEnabled !== false);
-          setIsAIEnabled(parsed.settings.isAIEnabled !== false);
-          setTagColors(parsed.settings.tagColors || {});
-          setTitleCosts(parsed.settings.titleCosts || {});
-          setSprintNames(parsed.settings.sprintNames || {});
-          setGlobalTestDays(parsed.settings.globalTestDays || 4);
-          setAppTheme(parsed.settings.theme || 'classic');
-          setIsDarkMode(parsed.settings.isDarkMode || false);
-        }
-      } catch (e) {
-        console.error("Yükleme hatası:", e);
-      }
+    const { workspace: resolved } = resolveWorkspaceFromStorage(
+      localStorage.getItem(WORKSPACE_STORAGE_KEY),
+      localStorage.getItem(LEGACY_STORAGE_KEY)
+    );
+    if (resolved) {
+      setWorkspace(resolved);
     } else {
-      setTasks(INITIAL_TASKS);
-      setResources(INITIAL_RESOURCES.map(r => ({ ...r, title: 'Uzman' })));
-      setObjectives(INITIAL_OBJECTIVES);
+      const sample = createSampleProject();
+      setWorkspace({ ...createEmptyWorkspace(), projects: [sample], activeProjectId: sample.id });
     }
     setIsInitialized(true);
   }, []);
 
+  const settings = workspace?.settings;
+  const activeProject = useMemo(
+    () => workspace?.projects.find(p => p.id === workspace.activeProjectId) ?? null,
+    [workspace]
+  );
+
+  // ---- Tema / gece modu ----
   useEffect(() => {
-    if (isDarkMode) {
+    if (settings?.isDarkMode) {
       document.documentElement.classList.add('dark');
     } else {
       document.documentElement.classList.remove('dark');
     }
-    // Set theme color for PWA header
     const themeColor = getComputedStyle(document.documentElement).getPropertyValue('--app-primary').trim();
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', themeColor);
-  }, [isDarkMode, appTheme]);
+  }, [settings?.isDarkMode, settings?.theme]);
 
+  // ---- Kalıcılık ----
   useEffect(() => {
-    if (isInitialized) {
-      const dataToSave: ProjectData = {
-        tasks: isLocalPersistenceEnabled ? tasks : [],
-        resources: isLocalPersistenceEnabled ? resources : [],
-        notes: isLocalPersistenceEnabled ? notes : [],
-        customerRequests: isLocalPersistenceEnabled ? customerRequests : [],
-        objectives: isLocalPersistenceEnabled ? objectives : [],
-        settings: { 
-          sprintDuration, 
-          projectStartDate, 
-          isLocalPersistenceEnabled,
-          isAIEnabled,
-          tagColors,
-          titleCosts,
-          sprintNames,
-          globalTestDays,
-          manMonthTableColor,
-          costTableColor,
-          theme: appTheme,
-          isDarkMode
+    if (!isInitialized || !workspace) return;
+    const toPersist = workspace.settings.isLocalPersistenceEnabled !== false
+      ? workspace
+      : { ...workspace, projects: [], activeProjectId: null };
+    localStorage.setItem(WORKSPACE_STORAGE_KEY, serializeWorkspace(toPersist));
+  }, [workspace, isInitialized]);
+
+  // ---- Merkezi güncelleme yardımcıları ----
+  const updateWorkspace = useCallback((updater: (ws: WorkspaceData) => WorkspaceData) => {
+    setWorkspace(prev => (prev ? updater(prev) : prev));
+  }, []);
+
+  const updateActiveProject = useCallback((updater: (p: Project) => Project) => {
+    updateWorkspace(ws => ({
+      ...ws,
+      projects: ws.projects.map(p =>
+        p.id === ws.activeProjectId ? { ...updater(p), updatedAt: new Date().toISOString() } : p
+      ),
+    }));
+  }, [updateWorkspace]);
+
+  type ListField = 'tasks' | 'resources' | 'notes' | 'customerRequests' | 'objectives';
+  const makeListSetter = <T,>(field: ListField): React.Dispatch<React.SetStateAction<T[]>> =>
+    ((action: React.SetStateAction<T[]>) => {
+      updateActiveProject(p => ({
+        ...p,
+        [field]: typeof action === 'function'
+          ? (action as (prev: T[]) => T[])((p[field] as unknown) as T[])
+          : action,
+      }));
+    }) as React.Dispatch<React.SetStateAction<T[]>>;
+
+  const setTasks = makeListSetter<Task>('tasks');
+  const setResources = makeListSetter<Resource>('resources');
+  const setNotes = makeListSetter<Note>('notes');
+  const setCustomerRequests = makeListSetter<CustomerRequest>('customerRequests');
+  const setObjectives = makeListSetter<Objective>('objectives');
+
+  const makeProjectSettingSetter = <K extends keyof Project['settings']>(key: K): React.Dispatch<React.SetStateAction<Project['settings'][K]>> =>
+    ((action: React.SetStateAction<Project['settings'][K]>) => {
+      updateActiveProject(p => ({
+        ...p,
+        settings: {
+          ...p.settings,
+          [key]: typeof action === 'function'
+            ? (action as (prev: Project['settings'][K]) => Project['settings'][K])(p.settings[key])
+            : action,
         },
-        appVersion: '1.9.0',
-        exportDate: new Date().toISOString()
-      };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
-    }
-  }, [tasks, resources, notes, customerRequests, objectives, sprintDuration, projectStartDate, isLocalPersistenceEnabled, isAIEnabled, tagColors, titleCosts, sprintNames, globalTestDays, manMonthTableColor, costTableColor, appTheme, isDarkMode, isInitialized]);
+      }));
+    }) as React.Dispatch<React.SetStateAction<Project['settings'][K]>>;
 
-  // Sync table colors with theme
-  useEffect(() => {
-    setManMonthTableColor(THEME_COLORS[appTheme] || THEME_COLORS.classic);
-  }, [appTheme]);
+  const setTagColors = makeProjectSettingSetter('tagColors') as React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  const setTitleCosts = makeProjectSettingSetter('titleCosts') as React.Dispatch<React.SetStateAction<Record<string, number>>>;
+  const setSprintNames = makeProjectSettingSetter('sprintNames') as React.Dispatch<React.SetStateAction<Record<number, string>>>;
+  const setGlobalTestDays = makeProjectSettingSetter('globalTestDays') as React.Dispatch<React.SetStateAction<number | undefined>>;
+  const setManMonthTableColor = makeProjectSettingSetter('manMonthTableColor');
+  const setCostTableColor = makeProjectSettingSetter('costTableColor');
+
+  // ---- Proje yaşam döngüsü ----
+  const handleCreateProject = useCallback((name: string) => {
+    const project = createProject(name);
+    project.settings.manMonthTableColor = THEME_COLORS[settings?.theme || 'classic'];
+    updateWorkspace(ws => ({ ...ws, projects: [...ws.projects, project], activeProjectId: project.id }));
+    setCurrentView(View.Roadmap);
+  }, [updateWorkspace, settings?.theme]);
+
+  const handleOpenProject = useCallback((projectId: string) => {
+    updateWorkspace(ws => ({ ...ws, activeProjectId: projectId }));
+    setCurrentView(View.Roadmap);
+  }, [updateWorkspace]);
+
+  const handleDeleteProject = useCallback((projectId: string) => {
+    updateWorkspace(ws => {
+      const projects = ws.projects.filter(p => p.id !== projectId);
+      return {
+        ...ws,
+        projects,
+        activeProjectId: ws.activeProjectId === projectId ? (projects[0]?.id ?? null) : ws.activeProjectId,
+      };
+    });
+  }, [updateWorkspace]);
+
+  const handleRenameProject = useCallback((projectId: string, name: string) => {
+    updateWorkspace(ws => ({
+      ...ws,
+      projects: ws.projects.map(p => p.id === projectId ? { ...p, name, updatedAt: new Date().toISOString() } : p),
+    }));
+  }, [updateWorkspace]);
+
+  const handleSetProjectRag = useCallback((projectId: string, rag: RagStatus | undefined, ragNote?: string) => {
+    updateWorkspace(ws => ({
+      ...ws,
+      projects: ws.projects.map(p => p.id === projectId ? { ...p, rag, ragNote: ragNote ?? p.ragNote, updatedAt: new Date().toISOString() } : p),
+    }));
+  }, [updateWorkspace]);
+
+  const handleSetProjectStatus = useCallback((projectId: string, status: ProjectStatus) => {
+    updateWorkspace(ws => ({
+      ...ws,
+      projects: ws.projects.map(p => p.id === projectId ? { ...p, status, updatedAt: new Date().toISOString() } : p),
+    }));
+  }, [updateWorkspace]);
+
+  // ---- Veri havuzu + tahsis ----
+  const handleChangeRole = useCallback((role: UserRole) => {
+    updateWorkspace(ws => ({ ...ws, currentRole: role }));
+  }, [updateWorkspace]);
+
+  const handleSetAllocationCell = useCallback((allocationId: string, field: EffortField, month: number, value: number | undefined) => {
+    updateWorkspace(ws => setAllocationCell(ws, allocationId, field, month, value));
+  }, [updateWorkspace]);
+
+  const handleAddAllocation = useCallback((personId: string, projectId: string, year: number, workPackageId?: string, role?: string) => {
+    updateWorkspace(ws => {
+      const created = createAllocation(ws.allocations, personId, projectId, year, workPackageId, role);
+      if (!created) {
+        alert('Bu kişi + proje + iş paketi + rol kombinasyonu için bu yılda zaten bir satır var.');
+        return ws;
+      }
+      return { ...ws, allocations: [...ws.allocations, created] };
+    });
+  }, [updateWorkspace]);
+
+  const handleDeleteAllocation = useCallback((allocationId: string) => {
+    updateWorkspace(ws => ({ ...ws, allocations: ws.allocations.filter(a => a.id !== allocationId) }));
+  }, [updateWorkspace]);
+
+  const handleLockAction = useCallback((projectId: string, year: number, status: PlanLockStatus) => {
+    updateWorkspace(ws => ({ ...ws, planLocks: upsertPlanLock(ws.planLocks, projectId, year, status, ws.currentRole) }));
+  }, [updateWorkspace]);
+
+  const handleApplyPoolImport = useCallback((imported: PoolImportResult) => {
+    updateWorkspace(ws => {
+      const { workspace: next, summary } = applyPoolImport(ws, imported);
+      const lines = [
+        `Personel: ${summary.peopleAdded} yeni, ${summary.peopleUpdated} güncellendi`,
+        `Bölüm: ${summary.departmentsAdded} yeni · Rol: ${summary.rolesAdded} yeni · Ünvan: ${summary.titlesAdded} yeni`,
+        `Proje: ${summary.projectsCreated} oluşturuldu, ${summary.projectsMatched} eşleşti · İP: ${summary.workPackagesAdded} yeni`,
+        `Tahsis: ${summary.allocationsAdded} yeni, ${summary.allocationsUpdated} güncellendi`,
+      ];
+      if (summary.warnings.length) {
+        lines.push('', `Uyarılar (${summary.warnings.length}):`, ...summary.warnings.slice(0, 6));
+        if (summary.warnings.length > 6) lines.push(`… ve ${summary.warnings.length - 6} uyarı daha`);
+      }
+      alert(`Excel içe aktarma tamamlandı.\n\n${lines.join('\n')}`);
+      return next;
+    });
+  }, [updateWorkspace]);
+
+  // ---- Yedekleme / içe aktarma ----
+  const handleSaveProject = useCallback(() => {
+    if (!workspace) return;
+    const jsonString = serializeWorkspace(workspace);
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `plan-asistan-calisma-alani-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [workspace]);
+
+  const handleLoadProject = useCallback((file: File) => {
+    if (!file || file.type !== 'application/json') {
+      alert('Lütfen geçerli bir JSON yedek dosyası seçin.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target?.result;
+      if (typeof text !== 'string') {
+        alert('Dosya içeriği okunamadı.');
+        return;
+      }
+      const result = parseImportedJson(text, file.name.replace(/\.json$/i, ''));
+      if (result.kind === 'invalid') {
+        alert(`Yedek yüklenemedi: ${result.error}`);
+        return;
+      }
+      if (result.kind === 'workspace') {
+        const incoming = result.workspace;
+        const ok = window.confirm(
+          `Bu dosya ${incoming.projects.length} proje içeren bir çalışma alanı yedeği. Mevcut çalışma alanının TAMAMI bu yedekle değiştirilecek. Devam edilsin mi?`
+        );
+        if (!ok) return;
+        setWorkspace(incoming);
+        setCurrentView(View.Portfolio);
+        return;
+      }
+      // Eski tek proje yedeği: mevcut çalışma alanına yeni proje olarak eklenir
+      updateWorkspace(ws => ({
+        ...ws,
+        projects: [...ws.projects, result.project],
+        activeProjectId: result.project.id,
+      }));
+      setCurrentView(View.Roadmap);
+      alert(`"${result.project.name}" çalışma alanına yeni proje olarak eklendi.`);
+    };
+    reader.readAsText(file);
+  }, [updateWorkspace]);
+
+  const handleResetData = useCallback(() => {
+    localStorage.removeItem(WORKSPACE_STORAGE_KEY);
+    localStorage.removeItem(LEGACY_STORAGE_KEY);
+    window.location.reload();
+  }, []);
+
+  const handleSaveSettings = (newDuration: number, newDate: string, enabled: boolean, aiEnabled: boolean, newTheme: string, dark: boolean) => {
+    updateWorkspace(ws => ({
+      ...ws,
+      settings: {
+        ...ws.settings,
+        isLocalPersistenceEnabled: enabled,
+        isAIEnabled: aiEnabled,
+        theme: newTheme,
+        isDarkMode: dark,
+      },
+    }));
+    if (activeProject) {
+      updateActiveProject(p => ({
+        ...p,
+        settings: {
+          ...p.settings,
+          sprintDuration: newDuration,
+          projectStartDate: newDate,
+          manMonthTableColor: THEME_COLORS[newTheme] || THEME_COLORS.classic,
+        },
+      }));
+    }
+    setIsSettingsModalOpen(false);
+  };
 
   const handleUpdateTask = (updatedTask: Task) => {
     setTasks(prev => prev.map(t => t.id === updatedTask.id ? updatedTask : t));
   };
 
-  const handleSaveProject = useCallback(() => {
-    const dataToSave: ProjectData = {
-      tasks,
-      resources,
-      notes,
-      customerRequests,
-      objectives,
-      settings: { 
-        sprintDuration, 
-        projectStartDate, 
-        isLocalPersistenceEnabled,
-        isAIEnabled,
-        tagColors,
-        titleCosts,
-        sprintNames,
-        globalTestDays,
-        manMonthTableColor,
-        costTableColor,
-        theme: appTheme,
-        isDarkMode
-      },
-      appVersion: '1.9.0',
-      exportDate: new Date().toISOString()
-    };
-    
-    const jsonString = JSON.stringify(dataToSave, null, 2);
-    const blob = new Blob([jsonString], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `plan-asistan-yedek-${new Date().toISOString().split('T')[0]}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }, [
-      tasks, resources, notes, customerRequests, objectives, 
-      sprintDuration, projectStartDate, isLocalPersistenceEnabled, isAIEnabled, 
-      tagColors, titleCosts, sprintNames, globalTestDays, manMonthTableColor, 
-      costTableColor, appTheme, isDarkMode
-  ]);
-
-  const handleLoadProject = useCallback((file: File) => {
-    if (file && file.type === 'application/json') {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        try {
-          const text = e.target?.result;
-          if (typeof text !== 'string') {
-              throw new Error("Dosya içeriği okunamadı.");
-          }
-          const parsed = JSON.parse(text) as ProjectData;
-          
-          setTasks(parsed.tasks || []);
-          setResources(parsed.resources || []);
-          setNotes(parsed.notes || []);
-          setCustomerRequests(parsed.customerRequests || []);
-          setObjectives(parsed.objectives || []);
-          
-          if (parsed.settings) {
-            setSprintDuration(parsed.settings.sprintDuration || 3);
-            setProjectStartDate(parsed.settings.projectStartDate || new Date().toISOString().split('T')[0]);
-            setIsLocalPersistenceEnabled(parsed.settings.isLocalPersistenceEnabled !== false);
-            setIsAIEnabled(parsed.settings.isAIEnabled !== false);
-            setTagColors(parsed.settings.tagColors || {});
-            setTitleCosts(parsed.settings.titleCosts || {});
-            setSprintNames(parsed.settings.sprintNames || {});
-            setGlobalTestDays(parsed.settings.globalTestDays || 4);
-            setAppTheme(parsed.settings.theme || 'classic');
-            setIsDarkMode(parsed.settings.isDarkMode || false);
-            if(parsed.settings.manMonthTableColor) setManMonthTableColor(parsed.settings.manMonthTableColor);
-            if(parsed.settings.costTableColor) setCostTableColor(parsed.settings.costTableColor);
-          }
-          alert("Proje başarıyla yüklendi!");
-        } catch (err) {
-          console.error("Proje yüklenirken hata oluştu:", err);
-          alert("Proje dosyası yüklenemedi. Dosya formatı bozuk olabilir.");
-        }
-      };
-      reader.readAsText(file);
-    } else {
-      alert("Lütfen geçerli bir JSON proje dosyası seçin.");
-    }
-  }, []);
-
-  const handleResetData = useCallback(() => {
-      localStorage.removeItem(STORAGE_KEY);
-      window.location.reload(); 
-  }, []);
-
-  const handleSaveSettings = (newDuration: number, newDate: string, enabled: boolean, aiEnabled: boolean, newTheme: string, dark: boolean) => {
-    setSprintDuration(newDuration);
-    setProjectStartDate(newDate);
-    setIsLocalPersistenceEnabled(enabled);
-    setIsAIEnabled(aiEnabled);
-    setAppTheme(newTheme);
-    setIsDarkMode(dark);
-    setIsSettingsModalOpen(false);
-  };
-
   const renderView = () => {
-    if (!isInitialized) return <div className="h-[60vh] flex items-center justify-center"><i className="fa-solid fa-spinner fa-spin text-4xl text-blue-500"></i></div>;
-    
-    const mainContentClass = `px-4 sm:px-6 lg:px-8 py-6 h-[calc(100vh-5rem)] overflow-auto`;
-    const fullWidthContentClass = 'h-[calc(100vh-5rem)]';
+    if (!isInitialized || !workspace) {
+      return <div className="h-[60vh] flex items-center justify-center"><i className="fa-solid fa-spinner fa-spin text-4xl text-blue-500"></i></div>;
+    }
+
+    // Çalışma alanı seviyesi ekranlar (aktif proje gerektirmez)
+    if (currentView === View.DataPool) {
+      return (
+        <DataPoolView
+          people={workspace.people}
+          departments={workspace.departments}
+          roleCatalog={workspace.roleCatalog}
+          titles={workspace.titles}
+          currentRole={workspace.currentRole || 'py'}
+          onUpdatePeople={(people) => updateWorkspace(ws => ({ ...ws, people }))}
+          onUpdateDepartments={(departments) => updateWorkspace(ws => ({ ...ws, departments }))}
+          onUpdateRoleCatalog={(roleCatalog) => updateWorkspace(ws => ({ ...ws, roleCatalog }))}
+          onUpdateTitles={(titles) => updateWorkspace(ws => ({ ...ws, titles }))}
+          onApplyImport={handleApplyPoolImport}
+        />
+      );
+    }
+    if (currentView === View.Allocations) {
+      return (
+        <AllocationView
+          allocations={workspace.allocations}
+          people={workspace.people}
+          projects={workspace.projects}
+          planLocks={workspace.planLocks}
+          currentRole={workspace.currentRole || 'py'}
+          onSetCell={handleSetAllocationCell}
+          onAddAllocation={handleAddAllocation}
+          onDeleteAllocation={handleDeleteAllocation}
+          onLockAction={handleLockAction}
+        />
+      );
+    }
+
+    // Aktif proje yoksa tek anlamlı ekran portföydür
+    if (!activeProject || currentView === View.Portfolio) {
+      return (
+        <PortfolioView
+          projects={workspace.projects}
+          activeProjectId={workspace.activeProjectId}
+          onOpenProject={handleOpenProject}
+          onCreateProject={handleCreateProject}
+          onDeleteProject={handleDeleteProject}
+          onRenameProject={handleRenameProject}
+          onSetRag={handleSetProjectRag}
+          onSetStatus={handleSetProjectStatus}
+        />
+      );
+    }
+
+    const { tasks, resources, notes, customerRequests, objectives } = activeProject;
+    const ps = activeProject.settings;
 
     switch (currentView) {
       case View.AI: return <AIAssistant tasks={tasks} resources={resources} notes={notes} />;
       case View.Tasks:
         return (
           <TaskGallery
-            tasks={tasks} resources={resources} 
+            tasks={tasks} resources={resources}
             onEditTask={(t) => { setEditingTask(t); setIsFormModalOpen(true); }} onViewTask={(t) => { setViewingTask(t); setIsDetailModalOpen(true); }}
             onNotifyTask={(t) => { setTeamsTask(t); setIsTeamsModalOpen(true); }} onNewTask={() => { setEditingTask(null); setIsFormModalOpen(true); }}
             onDeleteTask={(taskId) => { if(window.confirm('Emin misiniz?')) setTasks(prev => prev.filter(t => t.id !== taskId)); }}
             onDataImport={(nt, nr) => { setTasks(prev => [...prev, ...nt]); setResources(prev => [...prev, ...nr]); }}
-            onTaskStatusChange={(id, s) => setTasks(tasks.map(t => t.id === id ? { ...t, status: s } : t))}
+            onTaskStatusChange={(id, s) => setTasks(prev => prev.map(t => t.id === id ? { ...t, status: s } : t))}
           />
         );
       case View.Resources:
         return (
-          <ResourceManager 
+          <ResourceManager
             resources={resources} setResources={setResources} tasks={tasks} setTasks={setTasks}
-            titleCosts={titleCosts} setTitleCosts={setTitleCosts}
-            manMonthTableColor={manMonthTableColor} setManMonthTableColor={setManMonthTableColor}
-            costTableColor={costTableColor} setCostTableColor={setCostTableColor}
+            titleCosts={ps.titleCosts || {}} setTitleCosts={setTitleCosts}
+            manMonthTableColor={ps.manMonthTableColor || THEME_COLORS[settings?.theme || 'classic']}
+            setManMonthTableColor={(color) => setManMonthTableColor(color)}
+            costTableColor={ps.costTableColor || '#10b981'}
+            setCostTableColor={(color) => setCostTableColor(color)}
           />
         );
       case View.Kanban:
         return (
           <KanbanView
-            tasks={tasks} resources={resources} 
-            sprintDuration={sprintDuration} projectStartDate={projectStartDate}
-            sprintNames={sprintNames} setSprintNames={setSprintNames}
-            globalTestDays={globalTestDays} setGlobalTestDays={setGlobalTestDays}
-            onPlanGenerated={setTasks} onTaskSprintChange={(id, v) => setTasks(tasks.map(t => t.id === id ? { ...t, version: v } : t))}
-            onTaskStatusChange={(id, s) => setTasks(tasks.map(t => t.id === id ? { ...t, status: s } : t))} 
-            onInsertSprint={(n) => setTasks(tasks.map(t => t.version >= n ? { ...t, version: t.version + 1 } : t))}
-            onDeleteSprint={(n) => setTasks(tasks.map(t => t.version === n ? { ...t, version: 0, status: TaskStatus.Backlog } : t.version > n ? { ...t, version: t.version - 1 } : t))} 
+            tasks={tasks} resources={resources}
+            sprintDuration={ps.sprintDuration} projectStartDate={ps.projectStartDate}
+            sprintNames={ps.sprintNames || {}} setSprintNames={setSprintNames}
+            globalTestDays={ps.globalTestDays || 4} setGlobalTestDays={setGlobalTestDays as React.Dispatch<React.SetStateAction<number>>}
+            onPlanGenerated={setTasks} onTaskSprintChange={(id, v) => setTasks(prev => prev.map(t => t.id === id ? { ...t, version: v } : t))}
+            onTaskStatusChange={(id, s) => setTasks(prev => prev.map(t => t.id === id ? { ...t, status: s } : t))}
+            onInsertSprint={(n) => setTasks(prev => prev.map(t => t.version >= n ? { ...t, version: t.version + 1 } : t))}
+            onDeleteSprint={(n) => setTasks(prev => prev.map(t => t.version === n ? { ...t, version: 0, status: TaskStatus.Backlog } : t.version > n ? { ...t, version: t.version - 1 } : t))}
             onOpenSettings={() => setIsSettingsModalOpen(true)}
             onNewTask={() => { setEditingTask(null); setIsFormModalOpen(true); }}
             onViewTaskDetails={(taskId) => { const t = tasks.find(x => x.id === taskId); if(t) { setViewingTask(t); setIsDetailModalOpen(true); } }}
@@ -292,7 +434,7 @@ const App: React.FC = () => {
           <RoadmapView
             tasks={tasks}
             resources={resources}
-            onTaskStatusChange={(id, s) => setTasks(tasks.map(t => t.id === id ? { ...t, status: s } : t))}
+            onTaskStatusChange={(id, s) => setTasks(prev => prev.map(t => t.id === id ? { ...t, status: s } : t))}
             onNewTask={() => { setEditingTask(null); setIsFormModalOpen(true); }}
             onViewTask={(t) => { setViewingTask(t); setIsDetailModalOpen(true); }}
             onEditTask={(t) => { setEditingTask(t); setIsFormModalOpen(true); }}
@@ -300,56 +442,67 @@ const App: React.FC = () => {
           />
         );
       case View.Goals:
-        return <GoalsView 
-                 objectives={objectives} 
-                 tasks={tasks} 
+        return <GoalsView
+                 objectives={objectives}
+                 tasks={tasks}
                  onUpdateObjectives={setObjectives}
                />;
       case View.Notes:
         return (
-          <NotesView 
-            notes={notes} resources={resources} tagColors={tagColors} setTagColors={setTagColors}
-            onAddNote={(n) => setNotes([n, ...notes])} onEditNote={(n) => setNotes(notes.map(x => x.id === n.id ? n : x))} onDeleteNote={(id) => setNotes(notes.filter(x => x.id !== id))}
+          <NotesView
+            notes={notes} resources={resources} tagColors={ps.tagColors || {}} setTagColors={setTagColors}
+            onAddNote={(n) => setNotes(prev => [n, ...prev])} onEditNote={(n) => setNotes(prev => prev.map(x => x.id === n.id ? n : x))} onDeleteNote={(id) => setNotes(prev => prev.filter(x => x.id !== id))}
           />
         );
       case View.Requests:
         return (
-          <CustomerRequestsView 
-            requests={customerRequests} setRequests={setCustomerRequests} 
+          <CustomerRequestsView
+            requests={customerRequests} setRequests={setCustomerRequests}
             onConvertToTask={(r) => { setEditingTask({ id: `req-${r.id}`, name: r.title, status: TaskStatus.Backlog, version: 0, priority: 'Medium', unit: 'Müşteri', resourceName: resources[0]?.name || '', time: { best: 0, avg: 0, worst: 0 }, notes: r.description, jiraId: '', availability: false, predecessor: null, includeInSprints: true }); setIsFormModalOpen(true); }}
           />
         );
-      default: return <KanbanView {...{tasks, resources, sprintDuration, projectStartDate, sprintNames, setSprintNames, globalTestDays, setGlobalTestDays, onPlanGenerated: setTasks, onTaskSprintChange: (id, v) => {}, onTaskStatusChange: (id, s) => {}, onInsertSprint: (n) => {}, onDeleteSprint: (n) => {}, onOpenSettings: () => setIsSettingsModalOpen(true), onNewTask: () => {}, onViewTaskDetails: (id) => {} }} />;
+      default:
+        return null;
     }
   };
 
-  const isFullWidthView = currentView === View.Roadmap;
+  const isFullWidthView = currentView === View.Roadmap && !!activeProject;
 
   return (
-    <div className={`min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans theme-${appTheme}`}>
-      <Header 
-        currentView={currentView} setCurrentView={setCurrentView} 
-        onOpenSettings={() => setIsSettingsModalOpen(true)} 
-        onSaveProject={handleSaveProject} 
+    <div className={`min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans theme-${settings?.theme || 'classic'}`}>
+      <Header
+        currentView={currentView} setCurrentView={setCurrentView}
+        onOpenSettings={() => setIsSettingsModalOpen(true)}
+        onSaveProject={handleSaveProject}
         onLoadProject={handleLoadProject}
-        isLocalPersistenceEnabled={isLocalPersistenceEnabled} isAIEnabled={isAIEnabled}
+        isLocalPersistenceEnabled={settings?.isLocalPersistenceEnabled !== false}
+        isAIEnabled={settings?.isAIEnabled !== false}
         onOpenAbout={() => setIsAboutModalOpen(true)}
+        projects={workspace?.projects.map(p => ({ id: p.id, name: p.name, rag: p.rag })) || []}
+        activeProjectId={activeProject?.id ?? null}
+        onSelectProject={handleOpenProject}
+        currentRole={workspace?.currentRole || 'py'}
+        onChangeRole={handleChangeRole}
       />
       <main className={`w-full max-w-[1920px] mx-auto ${isFullWidthView ? 'h-[calc(100vh-5rem)]' : 'px-4 sm:px-6 lg:px-8 py-6 h-[calc(100vh-5rem)] overflow-auto'}`}>
         {renderView()}
       </main>
 
-      {isFormModalOpen && <TaskFormModal task={editingTask} resources={resources} tasks={tasks} objectives={objectives} onClose={() => setIsFormModalOpen(false)} onSave={(t) => {
-          const isEx = tasks.some(x => x.id === t.id);
-          setTasks(isEx ? tasks.map(x => x.id === t.id ? t : x) : [...tasks, t]);
+      {isFormModalOpen && activeProject && <TaskFormModal task={editingTask} resources={activeProject.resources} tasks={activeProject.tasks} objectives={activeProject.objectives} onClose={() => setIsFormModalOpen(false)} onSave={(t) => {
+          setTasks(prev => prev.some(x => x.id === t.id) ? prev.map(x => x.id === t.id ? t : x) : [...prev, t]);
           setIsFormModalOpen(false);
       }} />}
       {isDetailModalOpen && viewingTask && <TaskDetailModal task={viewingTask} onClose={() => setIsDetailModalOpen(false)} onEdit={(t) => { setIsDetailModalOpen(false); setEditingTask(t); setIsFormModalOpen(true); }} onSave={handleUpdateTask} />}
       {isTeamsModalOpen && teamsTask && <TeamsMessageModal task={teamsTask} onClose={() => setIsTeamsModalOpen(false)} />}
       {isSettingsModalOpen && (
-        <SettingsModal 
-          sprintDuration={sprintDuration} projectStartDate={projectStartDate} isLocalPersistenceEnabled={isLocalPersistenceEnabled} isAIEnabled={isAIEnabled} currentTheme={appTheme} isDarkMode={isDarkMode}
-          onSave={handleSaveSettings} onClose={() => setIsSettingsModalOpen(false)} onResetData={handleResetData} 
+        <SettingsModal
+          sprintDuration={activeProject?.settings.sprintDuration ?? 3}
+          projectStartDate={activeProject?.settings.projectStartDate ?? new Date().toISOString().split('T')[0]}
+          isLocalPersistenceEnabled={settings?.isLocalPersistenceEnabled !== false}
+          isAIEnabled={settings?.isAIEnabled !== false}
+          currentTheme={settings?.theme || 'classic'}
+          isDarkMode={settings?.isDarkMode || false}
+          onSave={handleSaveSettings} onClose={() => setIsSettingsModalOpen(false)} onResetData={handleResetData}
         />
       )}
       {isAboutModalOpen && <AboutModal onClose={() => setIsAboutModalOpen(false)} />}
