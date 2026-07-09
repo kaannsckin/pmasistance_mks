@@ -44,8 +44,8 @@ const StatChip: React.FC<{ icon: string; label: string; value: string }> = ({ ic
       <i className={`fa-solid ${icon} text-xs`}></i>
     </div>
     <div className="flex flex-col leading-none">
-      <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-1">{label}</span>
-      <span className="text-sm font-black text-gray-800 dark:text-white">{value}</span>
+      <span className="text-[11px] font-semibold text-gray-400 mb-1">{label}</span>
+      <span className="text-sm font-semibold text-gray-800 dark:text-white">{value}</span>
     </div>
   </div>
 );
@@ -75,7 +75,7 @@ const ProjectCard: React.FC<{
   };
 
   return (
-    <div className={`bg-white dark:bg-gray-800 rounded-3xl border shadow-sm hover:shadow-xl transition-all p-5 flex flex-col ${isActive ? 'border-primary ring-2' : 'border-gray-100 dark:border-gray-700'}`}
+    <div className={`bg-white dark:bg-gray-800 rounded-2xl border shadow-sm hover:shadow-xl transition-all p-5 flex flex-col ${isActive ? 'border-primary ring-2' : 'border-gray-100 dark:border-gray-700'}`}
          style={isActive ? { borderColor: 'var(--app-primary)', ['--tw-ring-color' as string]: 'var(--app-ring)' } : {}}>
       <div className="flex items-start justify-between mb-3">
         <div className="min-w-0 flex-1">
@@ -86,21 +86,21 @@ const ProjectCard: React.FC<{
               onChange={(e) => setTempName(e.target.value)}
               onBlur={saveName}
               onKeyDown={(e) => { if (e.key === 'Enter') saveName(); if (e.key === 'Escape') setIsEditingName(false); }}
-              className="w-full text-lg font-black bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1 text-gray-800 dark:text-white focus:outline-none"
+              className="w-full text-lg font-semibold bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg px-2 py-1 text-gray-800 dark:text-white focus:outline-none"
             />
           ) : (
             <button onClick={onOpen} className="text-left w-full group" title="Projeyi aç">
-              <h3 className="text-lg font-black text-gray-800 dark:text-white leading-tight truncate group-hover:text-primary transition-colors">
+              <h3 className="text-lg font-semibold text-gray-800 dark:text-white leading-tight truncate group-hover:text-primary transition-colors">
                 {project.name}
               </h3>
             </button>
           )}
           <div className="flex items-center space-x-2 mt-1.5">
-            <span className={`text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-lg ${STATUS_STYLES[project.status]}`}>
+            <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-lg ${STATUS_STYLES[project.status]}`}>
               {STATUS_LABELS[project.status]}
             </span>
             {project.rag && (
-              <span className="text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-lg text-white" style={{ backgroundColor: RAG_COLORS[project.rag] }}>
+              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-lg text-white" style={{ backgroundColor: RAG_COLORS[project.rag] }}>
                 {RAG_LABELS[project.rag]}
               </span>
             )}
@@ -108,18 +108,18 @@ const ProjectCard: React.FC<{
         </div>
         <div className="flex items-center space-x-1 ml-2 flex-none">
           <button onClick={() => { setTempName(project.name); setIsEditingName(true); }} className="w-7 h-7 rounded-lg text-gray-300 hover:text-primary hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors" title="Yeniden adlandır">
-            <i className="fa-solid fa-pen text-[10px]"></i>
+            <i className="fa-solid fa-pen text-xs"></i>
           </button>
           <button onClick={() => { if (window.confirm(`"${project.name}" projesi ve tüm verileri silinecek. Emin misiniz?`)) onDelete(); }} className="w-7 h-7 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors" title="Projeyi sil">
-            <i className="fa-solid fa-trash text-[10px]"></i>
+            <i className="fa-solid fa-trash text-xs"></i>
           </button>
         </div>
       </div>
 
       <div className="mb-4">
         <div className="flex items-center justify-between mb-1.5">
-          <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">İlerleme</span>
-          <span className="text-[10px] font-black" style={{ color: 'var(--app-primary)' }}>%{progress}</span>
+          <span className="text-[11px] font-semibold text-gray-400">İlerleme</span>
+          <span className="text-xs font-semibold" style={{ color: 'var(--app-primary)' }}>%{progress}</span>
         </div>
         <div className="w-full h-1.5 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
           <div className="h-full rounded-full transition-all duration-700" style={{ width: `${progress}%`, backgroundColor: 'var(--app-primary)' }}></div>
@@ -134,16 +134,16 @@ const ProjectCard: React.FC<{
           { icon: 'fa-bullseye', value: project.objectives.length, label: 'Hedef' },
         ].map(({ icon, value, label }) => (
           <div key={label} className="bg-gray-50 dark:bg-gray-900/50 rounded-xl px-2 py-2 text-center">
-            <i className={`fa-solid ${icon} text-[10px] text-gray-400 mb-1`}></i>
-            <div className="text-sm font-black text-gray-700 dark:text-gray-200 leading-none">{value}</div>
-            <div className="text-[7px] font-black text-gray-400 uppercase tracking-widest mt-1">{label}</div>
+            <i className={`fa-solid ${icon} text-xs text-gray-400 mb-1`}></i>
+            <div className="text-sm font-semibold text-gray-700 dark:text-gray-200 leading-none">{value}</div>
+            <div className="text-[10px] font-semibold text-gray-400 mt-1">{label}</div>
           </div>
         ))}
       </div>
 
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center space-x-2">
-          <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Haftalık Durum</span>
+          <span className="text-[11px] font-semibold text-gray-400">Haftalık Durum</span>
           <div className="flex items-center space-x-1">
             {(Object.keys(RAG_COLORS) as RagStatus[]).map(rag => (
               <button
@@ -159,7 +159,7 @@ const ProjectCard: React.FC<{
         <select
           value={project.status}
           onChange={(e) => onSetStatus(e.target.value as ProjectStatus)}
-          className="text-[9px] font-black uppercase tracking-wide bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-700 rounded-lg px-2 py-1 text-gray-500 dark:text-gray-300 focus:outline-none"
+          className="text-xs font-semibold bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-700 rounded-lg px-2 py-1 text-gray-500 dark:text-gray-300 focus:outline-none"
         >
           {(Object.keys(STATUS_LABELS) as ProjectStatus[]).map(s => (
             <option key={s} value={s}>{STATUS_LABELS[s]}</option>
@@ -176,13 +176,13 @@ const ProjectCard: React.FC<{
       />
 
       <div className="mt-auto flex items-center justify-between">
-        <span className="text-[8px] font-black text-gray-300 dark:text-gray-600 uppercase tracking-widest">
+        <span className="text-[11px] font-semibold text-gray-300 dark:text-gray-600">
           <i className="fa-solid fa-clock-rotate-left mr-1"></i>
           {new Date(project.updatedAt).toLocaleDateString('tr-TR')}
         </span>
         <button
           onClick={onOpen}
-          className="text-white text-[9px] font-black uppercase tracking-widest px-4 py-2 rounded-xl shadow-md hover:opacity-90 transition-all"
+          className="text-white text-xs font-semibold px-4 py-2 rounded-xl shadow-md hover:opacity-90 transition-all"
           style={{ backgroundColor: 'var(--app-primary)' }}
         >
           Aç <i className="fa-solid fa-arrow-right ml-1"></i>
@@ -220,8 +220,8 @@ const PortfolioView: React.FC<PortfolioViewProps> = ({ projects, activeProjectId
     <div className="max-w-full mx-auto space-y-6">
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-black text-gray-800 dark:text-white tracking-tight">Proje Portföyü</h2>
-          <p className="text-gray-400 text-[10px] uppercase font-black tracking-[0.2em]">Çoklu Proje & Program Yönetimi</p>
+          <h2 className="text-2xl font-semibold text-gray-800 dark:text-white tracking-tight">Proje Portföyü</h2>
+          <p className="text-gray-400 text-xs font-semibold tracking-[0.2em]">Çoklu Proje & Program Yönetimi</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <StatChip icon="fa-folder-open" label="Proje" value={String(stats.projectCount)} />
@@ -246,11 +246,11 @@ const PortfolioView: React.FC<PortfolioViewProps> = ({ projects, activeProjectId
           />
         ))}
 
-        <div className="bg-white/50 dark:bg-gray-800/30 rounded-3xl border-2 border-dashed border-gray-200 dark:border-gray-700 p-5 flex flex-col items-center justify-center min-h-[280px] hover:border-primary/50 transition-colors">
+        <div className="bg-white/50 dark:bg-gray-800/30 rounded-2xl border-2 border-dashed border-gray-200 dark:border-gray-700 p-5 flex flex-col items-center justify-center min-h-[280px] hover:border-primary/50 transition-colors">
           <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white mb-3 shadow-lg" style={{ backgroundColor: 'var(--app-primary)' }}>
             <i className="fa-solid fa-plus"></i>
           </div>
-          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Yeni Proje Ekle</p>
+          <p className="text-xs font-semibold text-gray-400 mb-3">Yeni Proje Ekle</p>
           <input
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
@@ -261,7 +261,7 @@ const PortfolioView: React.FC<PortfolioViewProps> = ({ projects, activeProjectId
           <button
             onClick={handleCreate}
             disabled={!newName.trim()}
-            className="text-white text-[9px] font-black uppercase tracking-widest px-5 py-2 rounded-xl shadow-md hover:opacity-90 transition-all disabled:opacity-40"
+            className="text-white text-xs font-semibold px-5 py-2 rounded-xl shadow-md hover:opacity-90 transition-all disabled:opacity-40"
             style={{ backgroundColor: 'var(--app-primary)' }}
           >
             Oluştur

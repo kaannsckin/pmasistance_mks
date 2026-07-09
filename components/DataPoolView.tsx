@@ -19,18 +19,18 @@ interface DataPoolViewProps {
 type PoolTab = 'people' | 'departments' | 'roles' | 'titles';
 
 const inputCls = 'w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1.5 text-[11px] text-gray-700 dark:text-gray-200 focus:outline-none focus:border-primary disabled:opacity-50 disabled:bg-gray-50 dark:disabled:bg-gray-800';
-const thCls = 'px-3 py-2 text-left text-[8px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap';
+const thCls = 'px-3 py-2 text-left text-[11px] font-semibold text-gray-400 whitespace-nowrap';
 const tdCls = 'px-3 py-1.5 align-middle';
 
 const TabButton: React.FC<{ active: boolean; icon: string; label: string; count: number; onClick: () => void }> = ({ active, icon, label, count, onClick }) => (
   <button
     onClick={onClick}
-    className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${active ? 'text-white shadow-md' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 bg-gray-50 dark:bg-gray-800'}`}
+    className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all ${active ? 'text-white shadow-md' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 bg-gray-50 dark:bg-gray-800'}`}
     style={active ? { backgroundColor: 'var(--app-primary)' } : {}}
   >
     <i className={`fa-solid ${icon}`}></i>
     <span>{label}</span>
-    <span className={`px-1.5 py-0.5 rounded-md text-[9px] ${active ? 'bg-white/20' : 'bg-gray-200 dark:bg-gray-700'}`}>{count}</span>
+    <span className={`px-1.5 py-0.5 rounded-md text-xs ${active ? 'bg-white/20' : 'bg-gray-200 dark:bg-gray-700'}`}>{count}</span>
   </button>
 );
 
@@ -117,7 +117,7 @@ const DataPoolView: React.FC<DataPoolViewProps> = ({ people, departments, roleCa
               <td className={tdCls}><input type="number" min={0} max={1} step={0.1} className={inputCls} value={newPerson.availableAA} onChange={e => setNewPerson({ ...newPerson, availableAA: parseFloat(e.target.value) || 1 })} /></td>
               <td className={tdCls}><input className={inputCls} placeholder="Rol1, Rol2…" value={newPerson.roles} onChange={e => setNewPerson({ ...newPerson, roles: e.target.value })} /></td>
               <td className={tdCls}>
-                <button onClick={addPerson} className="text-white text-[9px] font-black uppercase px-3 py-1.5 rounded-lg" style={{ backgroundColor: 'var(--app-primary)' }}>Ekle</button>
+                <button onClick={addPerson} className="text-white text-xs font-semibold px-3 py-1.5 rounded-lg" style={{ backgroundColor: 'var(--app-primary)' }}>Ekle</button>
               </td>
             </tr>
           )}
@@ -144,7 +144,7 @@ const DataPoolView: React.FC<DataPoolViewProps> = ({ people, departments, roleCa
               {editable && (
                 <td className={tdCls}>
                   <button onClick={() => { if (window.confirm(`${p.firstName} ${p.lastName} havuzdan silinsin mi? (Tahsis kayıtları etkilenebilir)`)) onUpdatePeople(people.filter(x => x.id !== p.id)); }} className="w-7 h-7 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
-                    <i className="fa-solid fa-trash text-[10px]"></i>
+                    <i className="fa-solid fa-trash text-xs"></i>
                   </button>
                 </td>
               )}
@@ -175,19 +175,19 @@ const DataPoolView: React.FC<DataPoolViewProps> = ({ people, departments, roleCa
                   if (!code || departments.some(d => d.code === code)) return;
                   onUpdateDepartments([...departments, { code, name: newDept.name.trim() || code, leadName: newDept.leadName.trim() || undefined }]);
                   setNewDept({ code: '', name: '', leadName: '' });
-                }} className="text-white text-[9px] font-black uppercase px-3 py-1.5 rounded-lg" style={{ backgroundColor: 'var(--app-primary)' }}>Ekle</button>
+                }} className="text-white text-xs font-semibold px-3 py-1.5 rounded-lg" style={{ backgroundColor: 'var(--app-primary)' }}>Ekle</button>
               </td>
             </tr>
           )}
           {departments.map(d => (
             <tr key={d.code} className="hover:bg-gray-50/60 dark:hover:bg-gray-800/40">
-              <td className={`${tdCls} text-[11px] font-black text-gray-700 dark:text-gray-200`}>{d.code}</td>
+              <td className={`${tdCls} text-[11px] font-semibold text-gray-700 dark:text-gray-200`}>{d.code}</td>
               <td className={tdCls}><input disabled={!editable} className={inputCls} value={d.name} onChange={e => onUpdateDepartments(departments.map(x => x.code === d.code ? { ...x, name: e.target.value } : x))} /></td>
               <td className={tdCls}><input disabled={!editable} className={inputCls} value={d.leadName || ''} onChange={e => onUpdateDepartments(departments.map(x => x.code === d.code ? { ...x, leadName: e.target.value || undefined } : x))} /></td>
               <td className={`${tdCls} text-[11px] text-gray-400`}>{people.filter(p => p.departmentCode === d.code).length} kişi</td>
               {editable && (
                 <td className={tdCls}>
-                  <button onClick={() => { if (window.confirm(`${d.code} bölümü silinsin mi?`)) onUpdateDepartments(departments.filter(x => x.code !== d.code)); }} className="w-7 h-7 rounded-lg text-gray-300 hover:text-red-500 transition-colors"><i className="fa-solid fa-trash text-[10px]"></i></button>
+                  <button onClick={() => { if (window.confirm(`${d.code} bölümü silinsin mi?`)) onUpdateDepartments(departments.filter(x => x.code !== d.code)); }} className="w-7 h-7 rounded-lg text-gray-300 hover:text-red-500 transition-colors"><i className="fa-solid fa-trash text-xs"></i></button>
                 </td>
               )}
             </tr>
@@ -219,18 +219,18 @@ const DataPoolView: React.FC<DataPoolViewProps> = ({ people, departments, roleCa
                   if (!newRole.departmentCode || !newRole.name.trim()) return;
                   onUpdateRoleCatalog([...roleCatalog, { id: `rolecat-${Date.now().toString(36)}`, departmentCode: newRole.departmentCode, name: newRole.name.trim() }]);
                   setNewRole({ departmentCode: '', name: '' });
-                }} className="text-white text-[9px] font-black uppercase px-3 py-1.5 rounded-lg" style={{ backgroundColor: 'var(--app-primary)' }}>Ekle</button>
+                }} className="text-white text-xs font-semibold px-3 py-1.5 rounded-lg" style={{ backgroundColor: 'var(--app-primary)' }}>Ekle</button>
               </td>
             </tr>
           )}
           {roleCatalog.map(r => (
             <tr key={r.id} className="hover:bg-gray-50/60 dark:hover:bg-gray-800/40">
-              <td className={`${tdCls} text-[11px] font-black text-gray-500`}>{r.departmentCode}</td>
+              <td className={`${tdCls} text-[11px] font-semibold text-gray-500`}>{r.departmentCode}</td>
               <td className={`${tdCls} text-[11px] text-gray-700 dark:text-gray-200`}>{r.name}</td>
               <td className={`${tdCls} text-[11px] text-gray-400`}>{people.filter(p => p.roles.includes(r.name)).length}</td>
               {editable && (
                 <td className={tdCls}>
-                  <button onClick={() => onUpdateRoleCatalog(roleCatalog.filter(x => x.id !== r.id))} className="w-7 h-7 rounded-lg text-gray-300 hover:text-red-500 transition-colors"><i className="fa-solid fa-trash text-[10px]"></i></button>
+                  <button onClick={() => onUpdateRoleCatalog(roleCatalog.filter(x => x.id !== r.id))} className="w-7 h-7 rounded-lg text-gray-300 hover:text-red-500 transition-colors"><i className="fa-solid fa-trash text-xs"></i></button>
                 </td>
               )}
             </tr>
@@ -258,18 +258,18 @@ const DataPoolView: React.FC<DataPoolViewProps> = ({ people, departments, roleCa
                   if (!code || titles.some(t => t.code === code)) return;
                   onUpdateTitles([...titles, { code, name: newTitle.name.trim() || code }]);
                   setNewTitle({ code: '', name: '' });
-                }} className="text-white text-[9px] font-black uppercase px-3 py-1.5 rounded-lg" style={{ backgroundColor: 'var(--app-primary)' }}>Ekle</button>
+                }} className="text-white text-xs font-semibold px-3 py-1.5 rounded-lg" style={{ backgroundColor: 'var(--app-primary)' }}>Ekle</button>
               </td>
             </tr>
           )}
           {titles.map(t => (
             <tr key={t.code} className="hover:bg-gray-50/60 dark:hover:bg-gray-800/40">
-              <td className={`${tdCls} text-[11px] font-black text-gray-700 dark:text-gray-200`}>{t.code}</td>
+              <td className={`${tdCls} text-[11px] font-semibold text-gray-700 dark:text-gray-200`}>{t.code}</td>
               <td className={`${tdCls} text-[11px] text-gray-600 dark:text-gray-300`}>{t.name}</td>
               <td className={`${tdCls} text-[11px] text-gray-400`}>{people.filter(p => p.titleCode === t.code).length}</td>
               {editable && (
                 <td className={tdCls}>
-                  <button onClick={() => onUpdateTitles(titles.filter(x => x.code !== t.code))} className="w-7 h-7 rounded-lg text-gray-300 hover:text-red-500 transition-colors"><i className="fa-solid fa-trash text-[10px]"></i></button>
+                  <button onClick={() => onUpdateTitles(titles.filter(x => x.code !== t.code))} className="w-7 h-7 rounded-lg text-gray-300 hover:text-red-500 transition-colors"><i className="fa-solid fa-trash text-xs"></i></button>
                 </td>
               )}
             </tr>
@@ -283,8 +283,8 @@ const DataPoolView: React.FC<DataPoolViewProps> = ({ people, departments, roleCa
     <div className="space-y-4">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h2 className="text-2xl font-black text-gray-800 dark:text-white tracking-tight">Veri Havuzu</h2>
-          <p className="text-gray-400 text-[10px] uppercase font-black tracking-[0.2em]">Personel · Bölüm · Rol · Ünvan Master Verisi</p>
+          <h2 className="text-2xl font-semibold text-gray-800 dark:text-white tracking-tight">Veri Havuzu</h2>
+          <p className="text-gray-400 text-xs font-semibold tracking-[0.2em]">Personel · Bölüm · Rol · Ünvan Master Verisi</p>
         </div>
         <div className="flex items-center space-x-2">
           {tab === 'people' && (
@@ -297,7 +297,7 @@ const DataPoolView: React.FC<DataPoolViewProps> = ({ people, departments, roleCa
           <button
             onClick={() => editable && fileRef.current?.click()}
             disabled={!editable || isImporting}
-            className="text-white text-[9px] font-black uppercase tracking-widest px-4 py-2.5 rounded-xl shadow-md hover:opacity-90 transition-all disabled:opacity-40 flex items-center"
+            className="text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-md hover:opacity-90 transition-all disabled:opacity-40 flex items-center"
             style={{ backgroundColor: 'var(--app-primary)' }}
             title="U310 İşgücü Tahsisi formatındaki Excel'i içe aktar"
           >
@@ -323,7 +323,7 @@ const DataPoolView: React.FC<DataPoolViewProps> = ({ people, departments, roleCa
         <TabButton active={tab === 'titles'} icon="fa-graduation-cap" label="Ünvanlar" count={titles.length} onClick={() => setTab('titles')} />
       </div>
 
-      <div className="bg-white dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm p-4 overflow-hidden">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm p-4 overflow-hidden">
         {tab === 'people' && renderPeople()}
         {tab === 'departments' && renderDepartments()}
         {tab === 'roles' && renderRoles()}
