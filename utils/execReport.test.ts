@@ -73,9 +73,9 @@ describe('buildExecReport', () => {
 });
 
 describe('buildExecWorkbookData', () => {
-    it('altı sayfayı doğru boyutlarla üretir', () => {
+    it('yedi sayfayı doğru boyutlarla üretir', () => {
         const data = buildExecWorkbookData(buildExecReport(buildWs(), 2026));
-        expect(Object.keys(data)).toEqual(['Özet', 'Projeler', 'Aylık Plan-Gerçekleşen', 'Bölüm AA (Plan)', 'Kişi AA (Plan)', 'Aşırı Tahsis']);
+        expect(Object.keys(data)).toEqual(['Özet', 'Projeler', 'Aylık Plan-Gerçekleşen', 'Bölüm AA (Plan)', 'Kişi AA (Plan)', 'Aşırı Tahsis', 'Kapasite-Talep (Rol)']);
         expect(data['Projeler']).toHaveLength(3); // başlık + 2 proje
         expect(data['Projeler'][1][0]).toBe('Proje A');
         expect(data['Projeler'][1][11]).toBe('Kilitli');

@@ -45,13 +45,12 @@ npm run build    # üretim derlemesi (dist/)
 
 ## 🗺️ Yol Haritası
 
-**Tamamlananlar:** Sprint planlayıcı yeniden yazımı (topolojik çizelgeleme, döngü güvenliği, termin/kritik zincir farkındalığı) · Çoklu proje çalışma alanı + portföy ekranı · Veri havuzu + U310 Excel içe aktarma · İşgücü tahsisi (Plan/Gerçekleşen/Karşılaştırma, aşırı tahsis uyarıları) · Onaylı plan kilidi · Üst yönetim ekranı + rol bazlı yetkilendirme · Yönetici Paketi (Excel) · Baseline & plan kayması · Supabase bulut senkronizasyonu (RLS ile not gizliliği) · İki katmanlı navigasyon (çalışma alanı ↔ proje bağlam çubuğu)
+**Tamamlananlar:** Sprint planlayıcı yeniden yazımı (topolojik çizelgeleme, döngü güvenliği, termin/kritik zincir farkındalığı) · Çoklu proje çalışma alanı + portföy ekranı · Veri havuzu + U310 Excel içe aktarma · İşgücü tahsisi (Plan/Gerçekleşen/Karşılaştırma, aşırı tahsis uyarıları) · Onaylı plan kilidi · Üst yönetim ekranı + rol bazlı yetkilendirme · Yönetici Paketi (Excel) · Baseline & plan kayması · Supabase bulut senkronizasyonu (RLS ile not gizliliği) · İki katmanlı navigasyon (çalışma alanı ↔ proje bağlam çubuğu) · **Rol bazlı kapasite-talep analizi** (Tahsis → Kapasite-Talep sekmesi: bölüm × rol bazında Planlı-Proje / Kaynak-İşgücü / İhtiyaç-Teklif / Personel Açığı; işe alım ihtiyacı göstergesi; yönetici paketinde ayrı sayfa)
 
 **Sıradaki:**
-1. **Rol Bazlı Kapasite-Talep Analizi:** Excel'deki "Plan, Kaynak, İhtiyaç (Rol)" sayfasının canlı karşılığı — bölüm × rol bazında dört efor türü (Planlı-Proje / Kaynak-İşgücü / İhtiyaç-Teklif / Yeni Personel açığı) ve işe alım ihtiyacı göstergeleri.
-2. **Supabase Realtime:** Ekip üyelerinin değişikliklerini sayfa yenilemeden anlık görme; hücre bazlı canlı eşzamanlılık.
-3. **Normalize veritabanı şeması:** Tahsis/görev verilerinin ayrı tablolara açılması → alan bazlı yazma RBAC'ının sunucu tarafında zorlanması ve çakışmasız eşzamanlı düzenleme.
-4. **PowerPoint yönetici paketi** ve aylık otomatik baseline hatırlatıcıları.
+1. **Supabase Realtime:** Ekip üyelerinin değişikliklerini sayfa yenilemeden anlık görme; hücre bazlı canlı eşzamanlılık.
+2. **Normalize veritabanı şeması:** Tahsis/görev verilerinin ayrı tablolara açılması → alan bazlı yazma RBAC'ının sunucu tarafında zorlanması ve çakışmasız eşzamanlı düzenleme.
+3. **PowerPoint yönetici paketi** ve aylık otomatik baseline hatırlatıcıları.
 
 ---
 *Sürüm 2.x — Çoklu proje, veri havuzu, işgücü tahsisi ve yönetim ekranı; React 19 + Vite + TypeScript.*
