@@ -216,7 +216,7 @@ const KanbanView: React.FC<KanbanViewProps> = ({ tasks, resources, sprintDuratio
   }, [tasks, orderedSprints]);
 
   return (
-    <div className={`flex flex-col transition-all duration-500 ease-in-out bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 overflow-hidden shadow-2xl ${isFullScreen ? 'fixed inset-0 z-[100] rounded-none' : 'h-[calc(100vh-6rem)] rounded-3xl'}`}>
+    <div className={`flex flex-col transition-all duration-500 ease-in-out bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 overflow-hidden shadow-2xl ${isFullScreen ? 'fixed inset-0 z-[100] rounded-none' : 'h-[calc(100vh-10rem)] rounded-2xl'}`}>
       <div className="flex-none bg-white dark:bg-gray-900/80 backdrop-blur-md p-4 border-b border-gray-100 dark:border-gray-800 z-20 shadow-sm relative">
         <div className="flex justify-between items-center">
           <div className="flex items-center space-x-4">

@@ -106,9 +106,9 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
           onSetCell(a.id, field, month, raw === '' ? undefined : parseFloat(raw));
         }}
         title={isOver && person ? `Aşırı tahsis: ${personName(person.id)} ${MONTHS_TR[month - 1]} toplamı ${fmt(personMonthTotal(yearAllocations, person.id, year, month, 'plan'))} / kapasite ${fmt(person.availableAA)}` : undefined}
-        className={`w-14 text-center text-[10px] rounded-md border px-1 py-1 focus:outline-none transition-colors
+        className={`w-14 text-center text-xs rounded-md border px-1 py-1 focus:outline-none transition-colors
           ${isOver
-            ? 'bg-red-50 dark:bg-red-900/30 border-red-300 dark:border-red-700 text-red-600 dark:text-red-300 font-black'
+            ? 'bg-red-50 dark:bg-red-900/30 border-red-300 dark:border-red-700 text-red-600 dark:text-red-300 font-semibold'
             : 'bg-white dark:bg-gray-900 border-gray-100 dark:border-gray-700 text-gray-700 dark:text-gray-200'}
           disabled:bg-gray-50 dark:disabled:bg-gray-800 disabled:text-gray-400 disabled:cursor-not-allowed`}
       />
@@ -121,12 +121,12 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
     const diff = g - p;
     const diffCls = Math.abs(diff) < 0.005
       ? 'text-gray-400'
-      : diff > 0 ? 'text-red-500 font-black' : 'text-amber-500 font-black';
+      : diff > 0 ? 'text-red-500 font-semibold' : 'text-amber-500 font-semibold';
     return (
       <div className="w-14 text-center leading-tight py-0.5">
-        <div className="text-[9px] text-gray-400">{fmt(p)}</div>
-        <div className="text-[10px] font-bold text-gray-700 dark:text-gray-200">{fmt(g)}</div>
-        <div className={`text-[8px] ${diffCls}`}>{diff > 0 ? '+' : ''}{fmt(diff)}</div>
+        <div className="text-xs text-gray-400">{fmt(p)}</div>
+        <div className="text-xs font-bold text-gray-700 dark:text-gray-200">{fmt(g)}</div>
+        <div className={`text-[11px] ${diffCls}`}>{diff > 0 ? '+' : ''}{fmt(diff)}</div>
       </div>
     );
   };
@@ -138,26 +138,26 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
     const s = LOCK_STYLES[status];
     return (
       <div className="flex items-center space-x-2">
-        <span className={`text-[8px] font-black uppercase tracking-widest px-2 py-1 rounded-lg ${s.cls}`}>
+        <span className={`text-[11px] font-semibold px-2 py-1 rounded-lg ${s.cls}`}>
           <i className={`fa-solid ${s.icon} mr-1`}></i>{s.label}
         </span>
         {status === 'draft' && canEnterData(currentRole) && (
-          <button onClick={() => onLockAction(projectId, year, 'submitted')} className="text-[8px] font-black uppercase tracking-widest px-2.5 py-1 rounded-lg text-white hover:opacity-90" style={{ backgroundColor: 'var(--app-primary)' }}>
+          <button onClick={() => onLockAction(projectId, year, 'submitted')} className="text-[11px] font-semibold px-2.5 py-1 rounded-lg text-white hover:opacity-90" style={{ backgroundColor: 'var(--app-primary)' }}>
             <i className="fa-solid fa-paper-plane mr-1"></i>Onaya Gönder
           </button>
         )}
         {status === 'submitted' && canApprovePlan(currentRole) && (
           <>
-            <button onClick={() => onLockAction(projectId, year, 'locked')} className="text-[8px] font-black uppercase tracking-widest px-2.5 py-1 rounded-lg text-white bg-emerald-500 hover:bg-emerald-600">
+            <button onClick={() => onLockAction(projectId, year, 'locked')} className="text-[11px] font-semibold px-2.5 py-1 rounded-lg text-white bg-emerald-500 hover:bg-emerald-600">
               <i className="fa-solid fa-check mr-1"></i>Onayla & Kilitle
             </button>
-            <button onClick={() => onLockAction(projectId, year, 'draft')} className="text-[8px] font-black uppercase tracking-widest px-2.5 py-1 rounded-lg text-white bg-red-400 hover:bg-red-500">
+            <button onClick={() => onLockAction(projectId, year, 'draft')} className="text-[11px] font-semibold px-2.5 py-1 rounded-lg text-white bg-red-400 hover:bg-red-500">
               <i className="fa-solid fa-rotate-left mr-1"></i>Reddet
             </button>
           </>
         )}
         {status === 'locked' && canApprovePlan(currentRole) && (
-          <button onClick={() => { if (window.confirm('Plan kilidi açılsın mı? Plan hücreleri yeniden düzenlenebilir olur.')) onLockAction(projectId, year, 'draft'); }} className="text-[8px] font-black uppercase tracking-widest px-2.5 py-1 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-300">
+          <button onClick={() => { if (window.confirm('Plan kilidi açılsın mı? Plan hücreleri yeniden düzenlenebilir olur.')) onLockAction(projectId, year, 'draft'); }} className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-300">
             <i className="fa-solid fa-lock-open mr-1"></i>Kilidi Aç
           </button>
         )}
@@ -174,7 +174,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
     <div className="space-y-5">
       {canEnterData(currentRole) && (
         <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-3 flex flex-wrap items-center gap-2">
-          <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest mr-1">Yeni Satır</span>
+          <span className="text-[11px] font-semibold text-gray-400 mr-1">Yeni Satır</span>
           <select value={newRow.personId} onChange={e => setNewRow({ ...newRow, personId: e.target.value, role: '' })} className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1.5 text-[11px] text-gray-700 dark:text-gray-200 focus:outline-none">
             <option value="">Personel…</option>
             {people.map(p => <option key={p.id} value={p.id}>{p.firstName} {p.lastName} ({p.departmentCode})</option>)}
@@ -191,7 +191,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
             <option value="">{selectedPerson && selectedPerson.roles.length === 0 ? 'Rol tanımsız' : 'Rol…'}</option>
             {selectedPerson?.roles.map(r => <option key={r} value={r}>{r}</option>)}
           </select>
-          <button onClick={handleAdd} disabled={!newRow.personId || !newRow.projectId} className="text-white text-[9px] font-black uppercase tracking-widest px-4 py-2 rounded-lg shadow-sm hover:opacity-90 disabled:opacity-40" style={{ backgroundColor: 'var(--app-primary)' }}>
+          <button onClick={handleAdd} disabled={!newRow.personId || !newRow.projectId} className="text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-sm hover:opacity-90 disabled:opacity-40" style={{ backgroundColor: 'var(--app-primary)' }}>
             <i className="fa-solid fa-plus mr-1"></i>Ekle
           </button>
         </div>
@@ -214,8 +214,8 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
             <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-gray-50 dark:border-gray-700/60 bg-gray-50/60 dark:bg-gray-800">
               <div className="flex items-center space-x-2">
                 <i className="fa-solid fa-folder-open text-xs" style={{ color: 'var(--app-primary)' }}></i>
-                <span className="text-[12px] font-black text-gray-800 dark:text-white">{projectNames.get(projectId) || 'Bilinmeyen Proje'}</span>
-                <span className="text-[9px] text-gray-400 font-bold">{list.length} satır · Plan Σ {fmt(planTotals.reduce((a, b) => a + b, 0))} AA · Gerç. Σ {fmt(actualTotals.reduce((a, b) => a + b, 0))} AA</span>
+                <span className="text-[12px] font-semibold text-gray-800 dark:text-white">{projectNames.get(projectId) || 'Bilinmeyen Proje'}</span>
+                <span className="text-xs text-gray-400 font-bold">{list.length} satır · Plan Σ {fmt(planTotals.reduce((a, b) => a + b, 0))} AA · Gerç. Σ {fmt(actualTotals.reduce((a, b) => a + b, 0))} AA</span>
               </div>
               {lockActions(projectId)}
             </div>
@@ -223,9 +223,9 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
               <table className="w-full min-w-[1100px]">
                 <thead>
                   <tr className="bg-gray-50/80 dark:bg-gray-800/80">
-                    <th className="px-3 py-2 text-left text-[8px] font-black text-gray-400 uppercase tracking-widest sticky left-0 bg-gray-50 dark:bg-gray-800 min-w-[190px]">Personel / İP / Rol</th>
-                    {MONTHS_TR.map(m => <th key={m} className="px-1 py-2 text-center text-[8px] font-black text-gray-400 uppercase tracking-widest">{m}</th>)}
-                    <th className="px-2 py-2 text-center text-[8px] font-black text-gray-400 uppercase tracking-widest">Yıllık</th>
+                    <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-400 sticky left-0 bg-gray-50 dark:bg-gray-800 min-w-[190px]">Personel / İP / Rol</th>
+                    {MONTHS_TR.map(m => <th key={m} className="px-1 py-2 text-center text-[11px] font-semibold text-gray-400">{m}</th>)}
+                    <th className="px-2 py-2 text-center text-[11px] font-semibold text-gray-400">Yıllık</th>
                     {canEnterData(currentRole) && <th className="px-1 py-2 w-8"></th>}
                   </tr>
                 </thead>
@@ -237,7 +237,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
                       <tr key={a.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/40">
                         <td className="px-3 py-1.5 sticky left-0 bg-white dark:bg-gray-800">
                           <div className="text-[11px] font-bold text-gray-700 dark:text-gray-200 leading-tight">{personName(a.personId)}</div>
-                          <div className="text-[8px] text-gray-400 font-black uppercase tracking-wide leading-tight">
+                          <div className="text-[11px] text-gray-400 font-semibold leading-tight">
                             {person?.departmentCode}{wpName ? ` · ${wpName}` : ''}{a.role ? ` · ${a.role}` : ''}
                           </div>
                         </td>
@@ -249,10 +249,10 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
                           </td>
                         ))}
                         <td className="px-2 py-1 text-center">
-                          <span className="text-[10px] font-black" style={{ color: 'var(--app-primary)' }}>
+                          <span className="text-xs font-semibold" style={{ color: 'var(--app-primary)' }}>
                             {mode === 'actual' ? fmt(rowTotal(a, 'actual')) : fmt(rowTotal(a, 'plan'))}
                           </span>
-                          {mode === 'compare' && <span className="text-[9px] text-gray-400"> / {fmt(rowTotal(a, 'actual'))}</span>}
+                          {mode === 'compare' && <span className="text-xs text-gray-400"> / {fmt(rowTotal(a, 'actual'))}</span>}
                         </td>
                         {canEnterData(currentRole) && (
                           <td className="px-1 py-1 text-center">
@@ -262,7 +262,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
                               className="w-6 h-6 rounded-md text-gray-300 hover:text-red-500 disabled:opacity-30 disabled:cursor-not-allowed"
                               title={planEditable ? 'Satırı sil' : 'Plan kilitli — satır silinemez'}
                             >
-                              <i className="fa-solid fa-trash text-[9px]"></i>
+                              <i className="fa-solid fa-trash text-xs"></i>
                             </button>
                           </td>
                         )}
@@ -270,14 +270,14 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
                     );
                   })}
                   <tr className="bg-gray-50/80 dark:bg-gray-800/80">
-                    <td className="px-3 py-1.5 sticky left-0 bg-gray-50 dark:bg-gray-800 text-[9px] font-black text-gray-500 uppercase tracking-widest">Proje Toplamı</td>
+                    <td className="px-3 py-1.5 sticky left-0 bg-gray-50 dark:bg-gray-800 text-xs font-semibold text-gray-500">Proje Toplamı</td>
                     {MONTH_INDEXES.map(m => (
-                      <td key={m} className="px-1 py-1.5 text-center text-[9px] font-black text-gray-600 dark:text-gray-300">
+                      <td key={m} className="px-1 py-1.5 text-center text-xs font-semibold text-gray-600 dark:text-gray-300">
                         {mode === 'actual' ? fmt(actualTotals[m - 1]) : fmt(planTotals[m - 1])}
-                        {mode === 'compare' && <span className="block text-[8px] text-gray-400">{fmt(actualTotals[m - 1])}</span>}
+                        {mode === 'compare' && <span className="block text-[11px] text-gray-400">{fmt(actualTotals[m - 1])}</span>}
                       </td>
                     ))}
-                    <td className="px-2 py-1.5 text-center text-[10px] font-black" style={{ color: 'var(--app-primary)' }}>
+                    <td className="px-2 py-1.5 text-center text-xs font-semibold" style={{ color: 'var(--app-primary)' }}>
                       {fmt((mode === 'actual' ? actualTotals : planTotals).reduce((a, b) => a + b, 0))}
                     </td>
                     {canEnterData(currentRole) && <td></td>}
@@ -298,12 +298,12 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
       <table className="w-full min-w-[1000px]">
         <thead>
           <tr className="bg-gray-50/80 dark:bg-gray-800/80">
-            <th className="px-4 py-2.5 text-left text-[8px] font-black text-gray-400 uppercase tracking-widest sticky left-0 bg-gray-50 dark:bg-gray-800 min-w-[170px]">
+            <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-400 sticky left-0 bg-gray-50 dark:bg-gray-800 min-w-[170px]">
               {tab === 'person' ? 'Personel' : tab === 'department' ? 'Bölüm' : 'Proje'}
             </th>
-            {MONTHS_TR.map(m => <th key={m} className="px-1 py-2.5 text-center text-[8px] font-black text-gray-400 uppercase tracking-widest">{m}</th>)}
-            <th className="px-3 py-2.5 text-center text-[8px] font-black text-gray-400 uppercase tracking-widest">Toplam</th>
-            {showCapacity && <th className="px-3 py-2.5 text-center text-[8px] font-black text-gray-400 uppercase tracking-widest">Kapasite/Ay</th>}
+            {MONTHS_TR.map(m => <th key={m} className="px-1 py-2.5 text-center text-[11px] font-semibold text-gray-400">{m}</th>)}
+            <th className="px-3 py-2.5 text-center text-[11px] font-semibold text-gray-400">Toplam</th>
+            {showCapacity && <th className="px-3 py-2.5 text-center text-[11px] font-semibold text-gray-400">Kapasite/Ay</th>}
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
@@ -315,7 +315,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
                 const isOver = cap !== undefined && v > cap + 1e-9;
                 const isFull = cap !== undefined && !isOver && v >= cap - 1e-9 && v > 0;
                 return (
-                  <td key={idx} className={`px-1 py-2 text-center text-[10px] font-bold
+                  <td key={idx} className={`px-1 py-2 text-center text-xs font-bold
                     ${isOver ? 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-300'
                       : isFull ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-300'
                       : v > 0 ? 'text-gray-600 dark:text-gray-300' : 'text-gray-300 dark:text-gray-600'}`}>
@@ -323,8 +323,8 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
                   </td>
                 );
               })}
-              <td className="px-3 py-2 text-center text-[10px] font-black" style={{ color: 'var(--app-primary)' }}>{fmt(row.total)}</td>
-              {showCapacity && <td className="px-3 py-2 text-center text-[10px] text-gray-400 font-bold">{row.capacity !== undefined ? fmt(row.capacity) : '—'}</td>}
+              <td className="px-3 py-2 text-center text-xs font-semibold" style={{ color: 'var(--app-primary)' }}>{fmt(row.total)}</td>
+              {showCapacity && <td className="px-3 py-2 text-center text-xs text-gray-400 font-bold">{row.capacity !== undefined ? fmt(row.capacity) : '—'}</td>}
             </tr>
           ))}
           {rows.length === 0 && (
@@ -341,11 +341,11 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
     <div className="space-y-4">
       <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
         <div>
-          <h2 className="text-2xl font-black text-gray-800 dark:text-white tracking-tight">İşgücü Tahsisi</h2>
-          <p className="text-gray-400 text-[10px] uppercase font-black tracking-[0.2em]">Adam/Ay Planı · Gerçekleşme · Koordinasyon</p>
+          <h2 className="text-2xl font-semibold text-gray-800 dark:text-white tracking-tight">İşgücü Tahsisi</h2>
+          <p className="text-gray-400 text-xs font-semibold tracking-[0.2em]">Adam/Ay Planı · Gerçekleşme · Koordinasyon</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <select value={year} onChange={e => setYear(parseInt(e.target.value, 10))} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-[11px] font-black text-gray-700 dark:text-gray-200 focus:outline-none">
+          <select value={year} onChange={e => setYear(parseInt(e.target.value, 10))} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-[11px] font-semibold text-gray-700 dark:text-gray-200 focus:outline-none">
             {YEAR_RANGE.map(y => <option key={y} value={y}>{y}</option>)}
           </select>
           <select value={projectFilter} onChange={e => setProjectFilter(e.target.value)} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-[11px] text-gray-700 dark:text-gray-200 focus:outline-none">
@@ -358,7 +358,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
           </select>
           <div className="bg-gray-50 dark:bg-gray-800 p-1 rounded-xl flex items-center border border-gray-100 dark:border-gray-700">
             {([['plan', 'Plan'], ['actual', 'Gerçekleşen'], ['compare', 'Karşılaştır']] as [Mode, string][]).map(([m, label]) => (
-              <button key={m} onClick={() => setMode(m)} className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${mode === m ? 'bg-white dark:bg-gray-700 shadow-sm border border-gray-100 dark:border-gray-600' : 'text-gray-400 hover:text-gray-600'}`} style={mode === m ? { color: 'var(--app-primary)' } : {}}>
+              <button key={m} onClick={() => setMode(m)} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${mode === m ? 'bg-white dark:bg-gray-700 shadow-sm border border-gray-100 dark:border-gray-600' : 'text-gray-400 hover:text-gray-600'}`} style={mode === m ? { color: 'var(--app-primary)' } : {}}>
                 {label}
               </button>
             ))}
@@ -369,19 +369,19 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center space-x-2 flex-wrap gap-y-2">
           {([['grid', 'fa-table-cells', 'Tahsis Tablosu'], ['person', 'fa-user', 'Kişi Özeti'], ['department', 'fa-building', 'Bölüm Özeti'], ['project', 'fa-folder-open', 'Proje Özeti']] as [Tab, string, string][]).map(([t, icon, label]) => (
-            <button key={t} onClick={() => setTab(t)} className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${tab === t ? 'text-white shadow-md' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 bg-gray-50 dark:bg-gray-800'}`} style={tab === t ? { backgroundColor: 'var(--app-primary)' } : {}}>
+            <button key={t} onClick={() => setTab(t)} className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all ${tab === t ? 'text-white shadow-md' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 bg-gray-50 dark:bg-gray-800'}`} style={tab === t ? { backgroundColor: 'var(--app-primary)' } : {}}>
               <i className={`fa-solid ${icon}`}></i><span>{label}</span>
             </button>
           ))}
         </div>
-        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">
+        <span className="text-xs font-semibold text-gray-400">
           Rol: <span style={{ color: 'var(--app-primary)' }}>{ROLE_LABELS[currentRole]}</span>
         </span>
       </div>
 
       {overAllocations.length > 0 && (
         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl px-4 py-3">
-          <p className="text-[10px] font-black text-red-600 dark:text-red-300 uppercase tracking-widest mb-1">
+          <p className="text-xs font-semibold text-red-600 dark:text-red-300 mb-1">
             <i className="fa-solid fa-triangle-exclamation mr-2"></i>{year} planında {overAllocations.length} aşırı tahsis
           </p>
           <p className="text-[11px] text-red-700 dark:text-red-300">

@@ -14,13 +14,13 @@ interface CloudSyncModalProps {
 }
 
 const inputCls = 'w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2.5 text-[12px] text-gray-700 dark:text-gray-200 focus:outline-none focus:border-primary';
-const btnPrimary = 'text-white text-[10px] font-black uppercase tracking-widest px-4 py-2.5 rounded-xl shadow-md hover:opacity-90 transition-all disabled:opacity-40';
-const btnGhost = 'text-[10px] font-black uppercase tracking-widest px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-300 hover:text-primary transition-all disabled:opacity-40';
+const btnPrimary = 'text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-md hover:opacity-90 transition-all disabled:opacity-40';
+const btnGhost = 'text-xs font-semibold px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-300 hover:text-primary transition-all disabled:opacity-40';
 
 const SectionTitle: React.FC<{ step: string; title: string }> = ({ step, title }) => (
   <div className="flex items-center space-x-2 mb-3">
-    <span className="w-6 h-6 rounded-lg text-white text-[10px] font-black flex items-center justify-center" style={{ backgroundColor: 'var(--app-primary)' }}>{step}</span>
-    <h4 className="text-[10px] font-black text-gray-500 dark:text-gray-300 uppercase tracking-widest">{title}</h4>
+    <span className="w-6 h-6 rounded-lg text-white text-xs font-semibold flex items-center justify-center" style={{ backgroundColor: 'var(--app-primary)' }}>{step}</span>
+    <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-300">{title}</h4>
   </div>
 );
 
@@ -148,11 +148,11 @@ const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ workspace, onReplaceWor
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={onClose}>
-      <div className="bg-white dark:bg-gray-900 rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto border border-gray-100 dark:border-gray-700" onClick={e => e.stopPropagation()}>
+      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto border border-gray-100 dark:border-gray-700" onClick={e => e.stopPropagation()}>
         <div className="sticky top-0 bg-white dark:bg-gray-900 px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between z-10">
           <div>
-            <h3 className="text-lg font-black text-gray-800 dark:text-white">Bulut Senkronizasyonu</h3>
-            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Supabase · Yerel-Öncelikli · Ücretsiz Katman</p>
+            <h3 className="text-lg font-semibold text-gray-800 dark:text-white">Bulut Senkronizasyonu</h3>
+            <p className="text-xs font-semibold text-gray-400">Supabase · Yerel-Öncelikli · Ücretsiz Katman</p>
           </div>
           <button onClick={onClose} className="w-9 h-9 rounded-xl text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"><i className="fa-solid fa-times"></i></button>
         </div>
@@ -177,7 +177,7 @@ const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ workspace, onReplaceWor
               <input className={inputCls} placeholder="Project URL — https://xxxx.supabase.co" value={url} onChange={e => setUrl(e.target.value)} />
               <input className={inputCls} placeholder="anon public anahtarı (eyJ…)" value={anonKey} onChange={e => setAnonKey(e.target.value)} />
               <div className="flex items-center justify-between">
-                <a className="text-[10px] font-bold underline" style={{ color: 'var(--app-primary)' }} href="https://github.com/kaannsckin/pmasistance_mks/blob/main/supabase/KURULUM.md" target="_blank" rel="noreferrer">
+                <a className="text-xs font-bold underline" style={{ color: 'var(--app-primary)' }} href="https://github.com/kaannsckin/pmasistance_mks/blob/main/supabase/KURULUM.md" target="_blank" rel="noreferrer">
                   Kurulum kılavuzu (10 dk)
                 </a>
                 <button onClick={handleSaveConfig} className={btnPrimary} style={{ backgroundColor: 'var(--app-primary)' }}>Kaydet</button>
@@ -191,8 +191,8 @@ const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ workspace, onReplaceWor
             {userEmail ? (
               <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-800 rounded-2xl px-4 py-3">
                 <div>
-                  <p className="text-[11px] font-black text-gray-700 dark:text-gray-200">{userEmail}</p>
-                  {cloudRole && <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mt-0.5">Bulut rolü: {ROLE_LABELS[cloudRole]}</p>}
+                  <p className="text-[11px] font-semibold text-gray-700 dark:text-gray-200">{userEmail}</p>
+                  {cloudRole && <p className="text-xs font-semibold text-gray-400 mt-0.5">Bulut rolü: {ROLE_LABELS[cloudRole]}</p>}
                 </div>
                 <button onClick={handleSignOut} className={btnGhost}>Çıkış</button>
               </div>
@@ -213,14 +213,14 @@ const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ workspace, onReplaceWor
             <SectionTitle step="3" title="Çalışma Alanı" />
             {linkedId ? (
               <div className="bg-gray-50 dark:bg-gray-800 rounded-2xl px-4 py-3 space-y-2">
-                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Bağlı Çalışma Alanı ID</p>
+                <p className="text-xs font-semibold text-gray-400">Bağlı Çalışma Alanı ID</p>
                 <div className="flex items-center space-x-2">
-                  <code className="text-[10px] text-gray-600 dark:text-gray-300 break-all flex-1">{linkedId}</code>
+                  <code className="text-xs text-gray-600 dark:text-gray-300 break-all flex-1">{linkedId}</code>
                   <button onClick={() => { navigator.clipboard?.writeText(linkedId); note('ok', 'ID kopyalandı.'); }} className="w-8 h-8 rounded-lg text-gray-400 hover:text-primary flex-none" title="Kopyala">
                     <i className="fa-solid fa-copy text-xs"></i>
                   </button>
                 </div>
-                <p className="text-[10px] text-gray-400">Ekip üyeleri bu ID ile bağlanır (üyelikleri eklendikten sonra — bkz. kılavuz).</p>
+                <p className="text-xs text-gray-400">Ekip üyeleri bu ID ile bağlanır (üyelikleri eklendikten sonra — bkz. kılavuz).</p>
               </div>
             ) : (
               <div className="space-y-3">
@@ -240,7 +240,7 @@ const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ workspace, onReplaceWor
             <SectionTitle step="4" title="Senkronizasyon" />
             <div className="space-y-3">
               <label className="flex items-center justify-between bg-gray-50 dark:bg-gray-800 rounded-2xl px-4 py-3 cursor-pointer">
-                <span className="text-[11px] font-black text-gray-700 dark:text-gray-200">Otomatik senkron (değişiklikten ~4 sn sonra)</span>
+                <span className="text-[11px] font-semibold text-gray-700 dark:text-gray-200">Otomatik senkron (değişiklikten ~4 sn sonra)</span>
                 <input type="checkbox" checked={autoSync} onChange={e => handleAutoSyncToggle(e.target.checked)} className="w-4 h-4 accent-blue-600" />
               </label>
               <div className="flex items-center space-x-2">
@@ -252,14 +252,14 @@ const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ workspace, onReplaceWor
                 </button>
               </div>
               {config?.lastSyncAt && (
-                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest text-center">
+                <p className="text-xs font-semibold text-gray-400 text-center">
                   Son eşitleme: {new Date(config.lastSyncAt).toLocaleString('tr-TR')}
                 </p>
               )}
             </div>
           </section>
 
-          <p className="text-[10px] text-gray-400 leading-relaxed">
+          <p className="text-xs text-gray-400 leading-relaxed">
             <i className="fa-solid fa-shield-halved mr-1.5"></i>
             Notlar ve müşteri istekleri sunucuda ayrı bir tabloda tutulur; Müdür ve PYB Sorumlusu rollerindeki üyeler
             bu veriyi <b>veritabanı politikası (RLS) gereği</b> hiç indiremez. Uygulama çevrimdışı da çalışmaya devam eder.

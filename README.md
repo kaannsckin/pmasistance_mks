@@ -43,5 +43,15 @@ npm run build    # üretim derlemesi (dist/)
 - **Vercel:** Depoyu Vercel'e bağlamak yeterli — `vite build` otomatik çalışır.
 - **GitHub Pages:** `npm run build` sonrası `dist/` klasörünü Pages'e yayınlayın.
 
+## 🗺️ Yol Haritası
+
+**Tamamlananlar:** Sprint planlayıcı yeniden yazımı (topolojik çizelgeleme, döngü güvenliği, termin/kritik zincir farkındalığı) · Çoklu proje çalışma alanı + portföy ekranı · Veri havuzu + U310 Excel içe aktarma · İşgücü tahsisi (Plan/Gerçekleşen/Karşılaştırma, aşırı tahsis uyarıları) · Onaylı plan kilidi · Üst yönetim ekranı + rol bazlı yetkilendirme · Yönetici Paketi (Excel) · Baseline & plan kayması · Supabase bulut senkronizasyonu (RLS ile not gizliliği) · İki katmanlı navigasyon (çalışma alanı ↔ proje bağlam çubuğu)
+
+**Sıradaki:**
+1. **Rol Bazlı Kapasite-Talep Analizi:** Excel'deki "Plan, Kaynak, İhtiyaç (Rol)" sayfasının canlı karşılığı — bölüm × rol bazında dört efor türü (Planlı-Proje / Kaynak-İşgücü / İhtiyaç-Teklif / Yeni Personel açığı) ve işe alım ihtiyacı göstergeleri.
+2. **Supabase Realtime:** Ekip üyelerinin değişikliklerini sayfa yenilemeden anlık görme; hücre bazlı canlı eşzamanlılık.
+3. **Normalize veritabanı şeması:** Tahsis/görev verilerinin ayrı tablolara açılması → alan bazlı yazma RBAC'ının sunucu tarafında zorlanması ve çakışmasız eşzamanlı düzenleme.
+4. **PowerPoint yönetici paketi** ve aylık otomatik baseline hatırlatıcıları.
+
 ---
 *Sürüm 2.x — Çoklu proje, veri havuzu, işgücü tahsisi ve yönetim ekranı; React 19 + Vite + TypeScript.*

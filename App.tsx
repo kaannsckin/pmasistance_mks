@@ -512,6 +512,9 @@ const App: React.FC = () => {
   };
 
   const isFullWidthView = currentView === View.Roadmap && !!activeProject;
+  // Header tek satır 4rem; proje seçiliyken bağlam çubuğuyla 6.75rem
+  const showProjectBar = !!activeProject;
+  const mainHeightClass = showProjectBar ? 'h-[calc(100vh-6.75rem)]' : 'h-[calc(100vh-4rem)]';
 
   return (
     <div className={`min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans theme-${settings?.theme || 'classic'}`}>
@@ -531,7 +534,7 @@ const App: React.FC = () => {
         cloudLinked={!!loadCloudConfig()?.workspaceId}
         onOpenCloudSync={() => setIsCloudModalOpen(true)}
       />
-      <main className={`w-full max-w-[1920px] mx-auto ${isFullWidthView ? 'h-[calc(100vh-5rem)]' : 'px-4 sm:px-6 lg:px-8 py-6 h-[calc(100vh-5rem)] overflow-auto'}`}>
+      <main className={`w-full max-w-[1920px] mx-auto ${isFullWidthView ? mainHeightClass : `px-4 sm:px-6 lg:px-8 py-6 ${mainHeightClass} overflow-auto`}`}>
         {renderView()}
       </main>
 
