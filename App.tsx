@@ -14,6 +14,9 @@ import {
 import { createAllocation, EffortField, setAllocationCell, upsertPlanLock } from './utils/allocations';
 import { applyPoolImport, PoolImportResult } from './utils/poolImporter';
 import { isExecRole } from './utils/execReport';
+import { addSnapshot, buildSnapshot } from './utils/snapshots';
+import { loadCloudConfig, scheduleAutoPush } from './utils/cloudSync';
+import CloudSyncModal from './components/CloudSyncModal';
 import Header from './components/Header';
 import TaskGallery from './components/TaskGallery';
 import ResourceManager from './components/ResourceManager';
@@ -59,6 +62,7 @@ const App: React.FC = () => {
   const [teamsTask, setTeamsTask] = useState<Task | null>(null);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
+  const [isCloudModalOpen, setIsCloudModalOpen] = useState(false);
 
   const [isInitialized, setIsInitialized] = useState(false);
 
@@ -101,6 +105,8 @@ const App: React.FC = () => {
       ? workspace
       : { ...workspace, projects: [], activeProjectId: null };
     localStorage.setItem(WORKSPACE_STORAGE_KEY, serializeWorkspace(toPersist));
+    // Bulut bağlıysa değişiklikleri gecikmeli gönder (yerel-öncelikli senkron)
+    scheduleAutoPush(workspace);
   }, [workspace, isInitialized]);
 
   // ---- Merkezi güncelleme yardımcıları ----
@@ -230,7 +236,22 @@ const App: React.FC = () => {
   }, [updateWorkspace]);
 
   const handleLockAction = useCallback((projectId: string, year: number, status: PlanLockStatus) => {
-    updateWorkspace(ws => ({ ...ws, planLocks: upsertPlanLock(ws.planLocks, projectId, year, status, ws.currentRole) }));
+    updateWorkspace(ws => {
+      let next = { ...ws, planLocks: upsertPlanLock(ws.planLocks, projectId, year, status, ws.currentRole) };
+      if (status === 'locked') {
+        // Onaylanan plan = baseline: kilit anında otomatik anlık görüntü al
+        const projectName = ws.projects.find(p => p.id === projectId)?.name || 'Proje';
+        next = addSnapshot(next, buildSnapshot(next, year, `Onaylı plan — ${projectName}`, 'lock'));
+      }
+      return next;
+    });
+  }, [updateWorkspace]);
+
+  const handleTakeSnapshot = useCallback((year: number) => {
+    updateWorkspace(ws => {
+      const label = `Manuel — ${new Date().toLocaleDateString('tr-TR')}`;
+      return addSnapshot(ws, buildSnapshot(ws, year, label, 'manual'));
+    });
   }, [updateWorkspace]);
 
   const handleApplyPoolImport = useCallback((imported: PoolImportResult) => {
@@ -356,6 +377,7 @@ const App: React.FC = () => {
           workspace={workspace}
           currentRole={workspace.currentRole || 'py'}
           onOpenProject={handleOpenProject}
+          onTakeSnapshot={handleTakeSnapshot}
         />
       );
     }
@@ -506,6 +528,8 @@ const App: React.FC = () => {
         onSelectProject={handleOpenProject}
         currentRole={workspace?.currentRole || 'py'}
         onChangeRole={handleChangeRole}
+        cloudLinked={!!loadCloudConfig()?.workspaceId}
+        onOpenCloudSync={() => setIsCloudModalOpen(true)}
       />
       <main className={`w-full max-w-[1920px] mx-auto ${isFullWidthView ? 'h-[calc(100vh-5rem)]' : 'px-4 sm:px-6 lg:px-8 py-6 h-[calc(100vh-5rem)] overflow-auto'}`}>
         {renderView()}
@@ -529,6 +553,13 @@ const App: React.FC = () => {
         />
       )}
       {isAboutModalOpen && <AboutModal onClose={() => setIsAboutModalOpen(false)} />}
+      {isCloudModalOpen && workspace && (
+        <CloudSyncModal
+          workspace={workspace}
+          onReplaceWorkspace={(updater) => setWorkspace(prev => (prev ? updater(prev) : prev))}
+          onClose={() => setIsCloudModalOpen(false)}
+        />
+      )}
     </div>
   );
 };

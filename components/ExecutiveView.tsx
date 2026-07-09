@@ -2,11 +2,13 @@ import React, { useMemo, useState } from 'react';
 import { PlanLockStatus, ProjectStatus, RagStatus, UserRole, WorkspaceData } from '../types';
 import { MONTHS_TR, ROLE_LABELS } from '../utils/allocations';
 import { buildExecReport, exportExecReportToExcel } from '../utils/execReport';
+import { baselinePlanFor, snapshotsForYear } from '../utils/snapshots';
 
 interface ExecutiveViewProps {
   workspace: WorkspaceData;
   currentRole: UserRole;
   onOpenProject: (projectId: string) => void;
+  onTakeSnapshot: (year: number) => void;
 }
 
 const STATUS_TR: Record<ProjectStatus, string> = {
@@ -85,12 +87,22 @@ const PlanActualChart: React.FC<{ plan: number[]; actual: number[]; capacity: nu
   );
 };
 
-const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, onOpenProject }) => {
+const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, onOpenProject, onTakeSnapshot }) => {
   const [year, setYear] = useState(new Date().getFullYear());
   const report = useMemo(() => buildExecReport(workspace, year), [workspace, year]);
   const k = report.kpi;
 
   const maxDeptTotal = Math.max(...report.departmentPlanRows.map(d => d.total), 0.1);
+  const snapshots = useMemo(() => snapshotsForYear(workspace, year), [workspace, year]);
+  const baselines = useMemo(() => {
+    const map = new Map<string, number>();
+    workspace.projects.forEach(p => {
+      const b = baselinePlanFor(workspace, p.id, year);
+      if (b !== undefined) map.set(p.id, b);
+    });
+    return map;
+  }, [workspace, year]);
+  const maxSnapTotal = Math.max(...snapshots.map(s => s.totalPlanAA), k.totalPlanAA, 0.1);
 
   return (
     <div className="space-y-5">
@@ -105,6 +117,13 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
           <select value={year} onChange={e => setYear(parseInt(e.target.value, 10))} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-[11px] font-black text-gray-700 dark:text-gray-200 focus:outline-none">
             {YEAR_RANGE.map(y => <option key={y} value={y}>{y}</option>)}
           </select>
+          <button
+            onClick={() => onTakeSnapshot(year)}
+            className="text-[9px] font-black uppercase tracking-widest px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-300 hover:text-primary transition-all flex items-center"
+            title="Şu anki plan-gerçekleşen durumunun anlık görüntüsünü (baseline) kaydeder"
+          >
+            <i className="fa-solid fa-camera mr-2"></i>Anlık Görüntü Al
+          </button>
           <button
             onClick={() => exportExecReportToExcel(report)}
             className="text-white text-[9px] font-black uppercase tracking-widest px-4 py-2.5 rounded-xl shadow-md hover:opacity-90 transition-all flex items-center"
@@ -173,6 +192,50 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
         </div>
       </div>
 
+      {/* Baseline & plan kayması trendi */}
+      <div className="bg-white dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm p-5">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+            <i className="fa-solid fa-camera mr-2" style={{ color: 'var(--app-primary)' }}></i>
+            Baseline & Plan Kayması ({year}) — plan onaylandığında otomatik fotoğraflanır
+          </h3>
+          <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{snapshots.length} anlık görüntü</span>
+        </div>
+        {snapshots.length === 0 ? (
+          <p className="text-xs text-gray-400 text-center py-4">
+            Henüz anlık görüntü yok. Bir plan onaylandığında ("Onayla & Kilitle") otomatik alınır veya "Anlık Görüntü Al" ile elle kaydedebilirsiniz.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {snapshots.map(s => (
+              <div key={s.id} className="flex items-center space-x-3">
+                <div className="w-44 flex-none leading-tight">
+                  <p className="text-[10px] font-black text-gray-600 dark:text-gray-300 truncate" title={s.label}>{s.label}</p>
+                  <p className="text-[8px] font-bold text-gray-400">{new Date(s.takenAt).toLocaleDateString('tr-TR')} · {s.trigger === 'lock' ? 'Onay' : 'Manuel'}</p>
+                </div>
+                <div className="flex-1 h-3 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
+                  <div className="h-full rounded-full opacity-70" style={{ width: `${(s.totalPlanAA / maxSnapTotal) * 100}%`, backgroundColor: 'var(--app-primary)' }} title={`Plan: ${fmt(s.totalPlanAA)} AA`}></div>
+                </div>
+                <span className="w-24 flex-none text-right text-[10px] font-black" style={{ color: 'var(--app-primary)' }}>{fmt(s.totalPlanAA)} AA</span>
+                <span className={`w-24 flex-none text-right text-[10px] font-black ${s.totalPlanAA !== k.totalPlanAA ? (k.totalPlanAA > s.totalPlanAA ? 'text-red-500' : 'text-amber-500') : 'text-gray-300'}`}>
+                  {k.totalPlanAA - s.totalPlanAA > 0 ? '+' : ''}{fmt(k.totalPlanAA - s.totalPlanAA)} Δ
+                </span>
+              </div>
+            ))}
+            <div className="flex items-center space-x-3 pt-1 border-t border-gray-50 dark:border-gray-700/60">
+              <div className="w-44 flex-none">
+                <p className="text-[10px] font-black" style={{ color: 'var(--app-primary)' }}>ŞU ANKİ PLAN</p>
+              </div>
+              <div className="flex-1 h-3 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
+                <div className="h-full rounded-full" style={{ width: `${(k.totalPlanAA / maxSnapTotal) * 100}%`, backgroundColor: 'var(--app-primary)' }}></div>
+              </div>
+              <span className="w-24 flex-none text-right text-[10px] font-black" style={{ color: 'var(--app-primary)' }}>{fmt(k.totalPlanAA)} AA</span>
+              <span className="w-24 flex-none"></span>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Proje durum tablosu */}
       <div className="bg-white dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden">
         <div className="px-5 py-3.5 border-b border-gray-50 dark:border-gray-700/60">
@@ -185,7 +248,7 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
           <table className="w-full min-w-[980px]">
             <thead>
               <tr className="bg-gray-50/80 dark:bg-gray-800/80">
-                {['Proje', 'Durum', 'RAG', 'Haftalık Not', 'İlerleme', `Plan AA`, 'Gerç. AA', 'Sapma', 'Plan Kilidi'].map(h => (
+                {['Proje', 'Durum', 'RAG', 'Haftalık Not', 'İlerleme', `Plan AA`, 'Gerç. AA', 'Sapma', 'Baseline Δ', 'Plan Kilidi'].map(h => (
                   <th key={h} className="px-4 py-2.5 text-left text-[8px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -218,12 +281,27 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
                     {p.varianceAA > 0 ? '+' : ''}{fmt(p.varianceAA)}
                   </td>
                   <td className="px-4 py-2.5">
+                    {(() => {
+                      const base = baselines.get(p.projectId);
+                      if (base === undefined) return <span className="text-[10px] text-gray-300">—</span>;
+                      const delta = Math.round((p.planAA - base) * 100) / 100;
+                      return (
+                        <span
+                          className={`text-[10px] font-black ${delta > 0 ? 'text-red-500' : delta < 0 ? 'text-amber-500' : 'text-gray-400'}`}
+                          title={`Onaylanan plan (baseline): ${fmt(base)} AA — şu anki plan: ${fmt(p.planAA)} AA`}
+                        >
+                          {delta > 0 ? '+' : ''}{fmt(delta)}
+                        </span>
+                      );
+                    })()}
+                  </td>
+                  <td className="px-4 py-2.5">
                     <span className={`text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-lg ${LOCK_TR[p.lockStatus].cls}`}>{LOCK_TR[p.lockStatus].label}</span>
                   </td>
                 </tr>
               ))}
               {report.projects.length === 0 && (
-                <tr><td colSpan={9} className="text-center text-gray-400 text-xs py-10">Portföyde proje yok.</td></tr>
+                <tr><td colSpan={10} className="text-center text-gray-400 text-xs py-10">Portföyde proje yok.</td></tr>
               )}
             </tbody>
           </table>

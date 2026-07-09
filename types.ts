@@ -277,6 +277,32 @@ export interface PlanLock {
   decidedByRole?: UserRole;
 }
 
+/**
+ * Baseline / anlık görüntü: bir anın portföy plan-gerçekleşen fotoğrafı.
+ * Plan onaylandığında otomatik alınır ("onaylanan plan = baseline") veya
+ * elle alınabilir; yönetim ekranında plan kayması trendi için kullanılır.
+ * Ham veri değil, kompakt toplamlar saklanır (localStorage boyutu için).
+ */
+export interface SnapshotProjectEntry {
+  projectId: string;
+  name: string;
+  planAA: number;
+  actualAA: number;
+}
+
+export interface Snapshot {
+  id: string;
+  takenAt: string; // ISO
+  year: number;
+  label: string;
+  trigger: 'manual' | 'lock';
+  totalPlanAA: number;
+  totalActualAA: number;
+  monthlyPlan: number[]; // 12 eleman (Ocak..Aralık)
+  monthlyActual: number[];
+  byProject: SnapshotProjectEntry[];
+}
+
 export interface WorkspaceData {
   schemaVersion: number;
   projects: Project[];
@@ -291,6 +317,7 @@ export interface WorkspaceData {
   // Tahsis
   allocations: Allocation[];
   planLocks: PlanLock[];
+  snapshots: Snapshot[];
   settings: WorkspaceSettings;
   appVersion: string;
   exportDate?: string;
