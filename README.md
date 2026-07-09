@@ -45,12 +45,12 @@ npm run build    # üretim derlemesi (dist/)
 
 ## 🗺️ Yol Haritası
 
-**Tamamlananlar:** Sprint planlayıcı yeniden yazımı (topolojik çizelgeleme, döngü güvenliği, termin/kritik zincir farkındalığı) · Çoklu proje çalışma alanı + portföy ekranı · Veri havuzu + U310 Excel içe aktarma · İşgücü tahsisi (Plan/Gerçekleşen/Karşılaştırma, aşırı tahsis uyarıları) · Onaylı plan kilidi · Üst yönetim ekranı + rol bazlı yetkilendirme · Yönetici Paketi (Excel) · Baseline & plan kayması · Supabase bulut senkronizasyonu (RLS ile not gizliliği) · İki katmanlı navigasyon (çalışma alanı ↔ proje bağlam çubuğu) · **Rol bazlı kapasite-talep analizi** (Tahsis → Kapasite-Talep sekmesi: bölüm × rol bazında Planlı-Proje / Kaynak-İşgücü / İhtiyaç-Teklif / Personel Açığı; işe alım ihtiyacı göstergesi; yönetici paketinde ayrı sayfa)
+**Tamamlananlar:** Sprint planlayıcı yeniden yazımı (topolojik çizelgeleme, döngü güvenliği, termin/kritik zincir farkındalığı) · Çoklu proje çalışma alanı + portföy ekranı · Veri havuzu + U310 Excel içe aktarma · İşgücü tahsisi (Plan/Gerçekleşen/Karşılaştırma, aşırı tahsis uyarıları) · Onaylı plan kilidi · Üst yönetim ekranı + rol bazlı yetkilendirme · Yönetici Paketi (Excel) · Baseline & plan kayması · Supabase bulut senkronizasyonu (RLS ile not gizliliği) · İki katmanlı navigasyon (çalışma alanı ↔ proje bağlam çubuğu) · **Rol bazlı kapasite-talep analizi** (Tahsis → Kapasite-Talep sekmesi: bölüm × rol bazında Planlı-Proje / Kaynak-İşgücü / İhtiyaç-Teklif / Personel Açığı; işe alım ihtiyacı göstergesi; yönetici paketinde ayrı sayfa) · **PowerPoint yönetici paketi** (kapak, KPI panosu, plan-gerçekleşen grafiği, portföy tablosu, bölüm dağılımı, kaynak sağlığı — tek tıkla .pptx) · **Aylık otomatik baseline** (ayın ilk açılışında portföy fotoğrafı kendiliğinden alınır)
 
-**Sıradaki:**
+**Backlog (Supabase kurulumu tamamlanınca):**
 1. **Supabase Realtime:** Ekip üyelerinin değişikliklerini sayfa yenilemeden anlık görme; hücre bazlı canlı eşzamanlılık.
 2. **Normalize veritabanı şeması:** Tahsis/görev verilerinin ayrı tablolara açılması → alan bazlı yazma RBAC'ının sunucu tarafında zorlanması ve çakışmasız eşzamanlı düzenleme.
-3. **PowerPoint yönetici paketi** ve aylık otomatik baseline hatırlatıcıları.
+3. Supabase kurulum doğrulaması (`supabase/dogrula.mjs` — anahtar/URL hazır, çalıştırılması bekliyor).
 
 ---
 *Sürüm 2.x — Çoklu proje, veri havuzu, işgücü tahsisi ve yönetim ekranı; React 19 + Vite + TypeScript.*

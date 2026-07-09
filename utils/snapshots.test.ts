@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { addSnapshot, baselinePlanFor, buildSnapshot, snapshotsForYear } from './snapshots';
+import { addSnapshot, baselinePlanFor, buildSnapshot, ensureMonthlySnapshot, snapshotsForYear } from './snapshots';
 import { createEmptyWorkspace, createProject } from './workspace';
 import { WorkspaceData } from '../types';
 
@@ -61,6 +61,39 @@ describe('addSnapshot / snapshotsForYear', () => {
         const list = snapshotsForYear(ws, 2026);
         expect(list).toHaveLength(24);
         expect(list[list.length - 1].label).toBe('S29');
+    });
+});
+
+describe('ensureMonthlySnapshot', () => {
+    it('ayın ilk açılışında otomatik snapshot alır', () => {
+        const ws = buildWs();
+        const now = new Date('2026-03-05T09:00:00Z');
+        // buildWs 2026 verisi içeriyor ama now yılı da 2026 olmalı — tahsis yılıyla eşleşiyor
+        const result = ensureMonthlySnapshot(ws, now);
+        expect(result).not.toBeNull();
+        const snap = result!.snapshots[0];
+        expect(snap.trigger).toBe('monthly');
+        expect(snap.label).toContain('Mart 2026');
+        expect(snap.totalPlanAA).toBeCloseTo(2.0);
+    });
+
+    it('aynı ay içinde ikinci kez almaz; herhangi bir snapshot da ayı doldurur', () => {
+        let ws = buildWs();
+        const now = new Date('2026-03-05T09:00:00Z');
+        ws = ensureMonthlySnapshot(ws, now)!;
+        expect(ensureMonthlySnapshot(ws, new Date('2026-03-28T09:00:00Z'))).toBeNull();
+        // Manuel snapshot da ayı doldurmuş sayılır
+        let ws2 = buildWs();
+        ws2 = addSnapshot(ws2, { ...buildSnapshot(ws2, 2026, 'Manuel', 'manual'), takenAt: '2026-04-02T00:00:00Z' });
+        expect(ensureMonthlySnapshot(ws2, new Date('2026-04-20T09:00:00Z'))).toBeNull();
+        // Yeni ayda tekrar alır
+        expect(ensureMonthlySnapshot(ws, new Date('2026-04-01T09:00:00Z'))).not.toBeNull();
+    });
+
+    it('o yıl için tahsis verisi yoksa snapshot almaz', () => {
+        const ws = buildWs();
+        ws.allocations = ws.allocations.filter(a => a.year !== 2026); // yalnız 2025 kalır
+        expect(ensureMonthlySnapshot(ws, new Date('2026-05-01T09:00:00Z'))).toBeNull();
     });
 });
 
