@@ -58,6 +58,36 @@ export const snapshotsForYear = (ws: WorkspaceData, year: number): Snapshot[] =>
  * projenin plan değeri (onaylanan plan). Kilit baseline'ı yoksa en son
  * manuel snapshot'a düşer.
  */
+const MONTHS_TR_LONG = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
+
+/**
+ * Aylık otomatik baseline: uygulama açılışında çağrılır. İçinde bulunulan
+ * takvim ayında (o yıl için) henüz hiç anlık görüntü alınmamışsa ve yılda
+ * tahsis verisi varsa, "Aylık otomatik" etiketiyle bir snapshot alır.
+ * Böylece plan kayması trendi ayda en az bir noktaya sahip olur.
+ * Değişiklik gerekmiyorsa null döner.
+ */
+export const ensureMonthlySnapshot = (ws: WorkspaceData, now: Date = new Date()): WorkspaceData | null => {
+    const year = now.getFullYear();
+    const month = now.getMonth(); // 0-11
+    const hasDataThisYear = ws.allocations.some(a =>
+        a.year === year && (Object.keys(a.plan).length > 0 || Object.keys(a.actual).length > 0));
+    if (!hasDataThisYear) return null;
+
+    const alreadyThisMonth = ws.snapshots.some(s => {
+        if (s.year !== year) return false;
+        const t = new Date(s.takenAt);
+        return t.getFullYear() === year && t.getMonth() === month;
+    });
+    if (alreadyThisMonth) return null;
+
+    const snapshot = {
+        ...buildSnapshot(ws, year, `Aylık otomatik — ${MONTHS_TR_LONG[month]} ${year}`, 'monthly'),
+        takenAt: now.toISOString(),
+    };
+    return addSnapshot(ws, snapshot);
+};
+
 export const baselinePlanFor = (ws: WorkspaceData, projectId: string, year: number): number | undefined => {
     const list = snapshotsForYear(ws, year);
     for (let i = list.length - 1; i >= 0; i--) {

@@ -6,6 +6,7 @@ import {
   MONTH_INDEXES, MONTHS_TR, personMonthTotal, ROLE_LABELS, rowTotal,
   summarizeByDepartment, summarizeByPerson, summarizeByProject,
 } from '../utils/allocations';
+import { buildRoleAnalysis, EFFORT_TYPE_LABELS, EffortType, summarizeGaps } from '../utils/roleAnalysis';
 
 interface AllocationViewProps {
   allocations: Allocation[];
@@ -20,7 +21,7 @@ interface AllocationViewProps {
 }
 
 type Mode = 'plan' | 'actual' | 'compare';
-type Tab = 'grid' | 'person' | 'department' | 'project';
+type Tab = 'grid' | 'person' | 'department' | 'project' | 'roles';
 
 const YEAR_RANGE = (() => {
   const y = new Date().getFullYear();
@@ -335,6 +336,89 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
     </div>
   );
 
+  // ---------------- Kapasite-Talep (Rol) — Excel "Plan, Kaynak, İhtiyaç" ----------------
+
+  const renderRoleAnalysis = () => {
+    const allRows = buildRoleAnalysis(allocations, people, projects, year);
+    const rows = deptFilter === 'all' ? allRows : allRows.filter(r => r.departmentCode === deptFilter);
+    const gapSummary = summarizeGaps(rows);
+
+    const EFFORT_ORDER: EffortType[] = ['planned', 'capacity', 'proposal', 'gap'];
+    const effortRowCls: Record<EffortType, { label: string; cell: (v: number) => string }> = {
+      planned: { label: 'text-gray-700 dark:text-gray-200', cell: v => v > 0 ? 'text-gray-700 dark:text-gray-200 font-semibold' : 'text-gray-300 dark:text-gray-600' },
+      capacity: { label: 'text-gray-400', cell: v => v > 0 ? 'text-gray-400' : 'text-gray-300 dark:text-gray-600' },
+      proposal: { label: 'text-purple-500 dark:text-purple-300', cell: v => v > 0 ? 'text-purple-500 dark:text-purple-300 font-semibold' : 'text-gray-300 dark:text-gray-600' },
+      gap: { label: 'text-red-500 dark:text-red-300', cell: v => v > 0 ? 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-300 font-semibold' : 'text-gray-300 dark:text-gray-600' },
+    };
+
+    return (
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl border text-xs font-semibold ${gapSummary.rolesWithGap > 0 ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-600 dark:text-red-300' : 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-600 dark:text-emerald-300'}`}>
+            <i className={`fa-solid ${gapSummary.rolesWithGap > 0 ? 'fa-user-plus' : 'fa-circle-check'}`}></i>
+            {gapSummary.rolesWithGap > 0
+              ? `${gapSummary.rolesWithGap} rolde personel açığı — toplam ${fmt(gapSummary.totalGapAA)} AA işe alım/görevlendirme ihtiyacı`
+              : 'Tüm rollerde kapasite talebi karşılıyor'}
+          </div>
+          <p className="text-[11px] text-gray-400">
+            Kapasite, rolü üstlenebilen kişilerin toplamıdır; çok rollü kişiler her rolünde sayılır (roller arası toplanmaz).
+          </p>
+        </div>
+
+        {rows.length === 0 && (
+          <div className="text-center py-16 text-gray-400">
+            <i className="fa-solid fa-id-badge text-3xl mb-3 opacity-40"></i>
+            <p className="text-xs">Bu yıl/filtre için rol verisi yok. Veri Havuzu'nda kişilere rol tanımlayın ve tahsis satırlarında rol seçin.</p>
+          </div>
+        )}
+
+        {rows.length > 0 && (
+          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm overflow-x-auto">
+            <table className="w-full min-w-[1150px]">
+              <thead>
+                <tr className="bg-gray-50/80 dark:bg-gray-800/80">
+                  <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-400 sticky left-0 bg-gray-50 dark:bg-gray-800 min-w-[230px]">Bölüm / Rol / Efor Türü</th>
+                  {MONTHS_TR.map(m => <th key={m} className="px-1 py-2.5 text-center text-[11px] font-semibold text-gray-400">{m}</th>)}
+                  <th className="px-3 py-2.5 text-center text-[11px] font-semibold text-gray-400">Toplam</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map(row => (
+                  <React.Fragment key={`${row.departmentCode}|${row.role}`}>
+                    <tr className="bg-gray-50/70 dark:bg-gray-900/40 border-t border-gray-100 dark:border-gray-700/60">
+                      <td colSpan={14} className="px-4 py-2 sticky left-0">
+                        <span className="text-xs font-semibold text-gray-700 dark:text-gray-200">{row.role}</span>
+                        <span className="ml-2 text-[11px] text-gray-400">{row.departmentCode}</span>
+                        {row.totals.gap > 0 && (
+                          <span className="ml-3 text-[11px] font-semibold text-red-500">
+                            <i className="fa-solid fa-user-plus mr-1"></i>{fmt(row.totals.gap)} AA açık
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                    {EFFORT_ORDER.map(et => (
+                      <tr key={et} className="hover:bg-gray-50/40 dark:hover:bg-gray-800/40">
+                        <td className={`pl-8 pr-4 py-1.5 sticky left-0 bg-white dark:bg-gray-800 text-[11px] ${effortRowCls[et].label}`}>
+                          {EFFORT_TYPE_LABELS[et]}
+                        </td>
+                        {row[et].map((v, idx) => (
+                          <td key={idx} className={`px-1 py-1.5 text-center text-xs ${effortRowCls[et].cell(v)}`}>{fmt(v)}</td>
+                        ))}
+                        <td className={`px-3 py-1.5 text-center text-xs font-semibold ${et === 'gap' && row.totals.gap > 0 ? 'text-red-500' : ''}`} style={et !== 'gap' ? { color: 'var(--app-primary)' } : {}}>
+                          {fmt(row.totals[et])}
+                        </td>
+                      </tr>
+                    ))}
+                  </React.Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const summaryField: EffortField = mode === 'actual' ? 'actual' : 'plan';
 
   return (
@@ -348,14 +432,17 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
           <select value={year} onChange={e => setYear(parseInt(e.target.value, 10))} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-[11px] font-semibold text-gray-700 dark:text-gray-200 focus:outline-none">
             {YEAR_RANGE.map(y => <option key={y} value={y}>{y}</option>)}
           </select>
-          <select value={projectFilter} onChange={e => setProjectFilter(e.target.value)} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-[11px] text-gray-700 dark:text-gray-200 focus:outline-none">
-            <option value="all">Tüm Projeler</option>
-            {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
+          {tab !== 'roles' && (
+            <select value={projectFilter} onChange={e => setProjectFilter(e.target.value)} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-[11px] text-gray-700 dark:text-gray-200 focus:outline-none">
+              <option value="all">Tüm Projeler</option>
+              {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          )}
           <select value={deptFilter} onChange={e => setDeptFilter(e.target.value)} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-[11px] text-gray-700 dark:text-gray-200 focus:outline-none">
             <option value="all">Tüm Bölümler</option>
             {departments.map(d => <option key={d} value={d}>{d}</option>)}
           </select>
+          {tab !== 'roles' && (
           <div className="bg-gray-50 dark:bg-gray-800 p-1 rounded-xl flex items-center border border-gray-100 dark:border-gray-700">
             {([['plan', 'Plan'], ['actual', 'Gerçekleşen'], ['compare', 'Karşılaştır']] as [Mode, string][]).map(([m, label]) => (
               <button key={m} onClick={() => setMode(m)} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${mode === m ? 'bg-white dark:bg-gray-700 shadow-sm border border-gray-100 dark:border-gray-600' : 'text-gray-400 hover:text-gray-600'}`} style={mode === m ? { color: 'var(--app-primary)' } : {}}>
@@ -363,12 +450,13 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
               </button>
             ))}
           </div>
+          )}
         </div>
       </div>
 
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center space-x-2 flex-wrap gap-y-2">
-          {([['grid', 'fa-table-cells', 'Tahsis Tablosu'], ['person', 'fa-user', 'Kişi Özeti'], ['department', 'fa-building', 'Bölüm Özeti'], ['project', 'fa-folder-open', 'Proje Özeti']] as [Tab, string, string][]).map(([t, icon, label]) => (
+          {([['grid', 'fa-table-cells', 'Tahsis Tablosu'], ['person', 'fa-user', 'Kişi Özeti'], ['department', 'fa-building', 'Bölüm Özeti'], ['project', 'fa-folder-open', 'Proje Özeti'], ['roles', 'fa-id-badge', 'Kapasite-Talep']] as [Tab, string, string][]).map(([t, icon, label]) => (
             <button key={t} onClick={() => setTab(t)} className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all ${tab === t ? 'text-white shadow-md' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 bg-gray-50 dark:bg-gray-800'}`} style={tab === t ? { backgroundColor: 'var(--app-primary)' } : {}}>
               <i className={`fa-solid ${icon}`}></i><span>{label}</span>
             </button>
@@ -395,6 +483,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
       {tab === 'person' && renderSummary(summarizeByPerson(yearAllocations, people, year, summaryField), true)}
       {tab === 'department' && renderSummary(summarizeByDepartment(yearAllocations, people, year, summaryField), true)}
       {tab === 'project' && renderSummary(summarizeByProject(yearAllocations, projectNames, year, summaryField), false)}
+      {tab === 'roles' && renderRoleAnalysis()}
     </div>
   );
 };

@@ -14,7 +14,7 @@ import {
 import { createAllocation, EffortField, setAllocationCell, upsertPlanLock } from './utils/allocations';
 import { applyPoolImport, PoolImportResult } from './utils/poolImporter';
 import { isExecRole } from './utils/execReport';
-import { addSnapshot, buildSnapshot } from './utils/snapshots';
+import { addSnapshot, buildSnapshot, ensureMonthlySnapshot } from './utils/snapshots';
 import { loadCloudConfig, scheduleAutoPush } from './utils/cloudSync';
 import CloudSyncModal from './components/CloudSyncModal';
 import Header from './components/Header';
@@ -73,7 +73,8 @@ const App: React.FC = () => {
       localStorage.getItem(LEGACY_STORAGE_KEY)
     );
     if (resolved) {
-      setWorkspace(resolved);
+      // Ayın ilk açılışında otomatik baseline (plan kayması trendi için)
+      setWorkspace(ensureMonthlySnapshot(resolved) || resolved);
     } else {
       const sample = createSampleProject();
       setWorkspace({ ...createEmptyWorkspace(), projects: [sample], activeProjectId: sample.id });

@@ -3,6 +3,7 @@ import {
     EffortField, findOverAllocations, getPlanLockStatus, MONTH_INDEXES, MONTHS_TR,
     MonthlySummaryRow, OverAllocation, summarizeByDepartment, summarizeByPerson,
 } from './allocations';
+import { buildRoleAnalysis, EFFORT_TYPE_LABELS, RoleAnalysisRow } from './roleAnalysis';
 
 declare const XLSX: any;
 
@@ -50,6 +51,7 @@ export interface ExecReport {
     departmentPlanRows: MonthlySummaryRow[];
     personPlanRows: MonthlySummaryRow[];
     overAllocations: OverAllocation[];
+    roleAnalysis: RoleAnalysisRow[];
 }
 
 const sumField = (ws: WorkspaceData, projectId: string, year: number, field: EffortField): number =>
@@ -125,6 +127,7 @@ export const buildExecReport = (ws: WorkspaceData, year: number): ExecReport => 
         departmentPlanRows: summarizeByDepartment(yearAllocations, ws.people, year, 'plan'),
         personPlanRows: summarizeByPerson(yearAllocations, ws.people, year, 'plan'),
         overAllocations,
+        roleAnalysis: buildRoleAnalysis(ws.allocations, ws.people, ws.projects, year),
     };
 };
 
@@ -199,6 +202,17 @@ export const buildExecWorkbookData = (report: ExecReport): Record<string, (strin
         ]),
     ];
 
+    // Excel'deki "Plan, Kaynak, İhtiyaç (Rol)" düzeni: rol başına 4 efor satırı
+    const rol: (string | number)[][] = [
+        ['Bölüm', 'Rol', 'Efor Türü', ...MONTHS_TR, 'Toplam'],
+        ...report.roleAnalysis.flatMap(r => ([
+            [r.departmentCode, r.role, EFFORT_TYPE_LABELS.planned, ...r.planned, r.totals.planned],
+            [r.departmentCode, r.role, EFFORT_TYPE_LABELS.capacity, ...r.capacity, r.totals.capacity],
+            [r.departmentCode, r.role, EFFORT_TYPE_LABELS.proposal, ...r.proposal, r.totals.proposal],
+            [r.departmentCode, r.role, EFFORT_TYPE_LABELS.gap, ...r.gap, r.totals.gap],
+        ] as (string | number)[][])),
+    ];
+
     return {
         'Özet': ozet,
         'Projeler': projeler,
@@ -206,6 +220,7 @@ export const buildExecWorkbookData = (report: ExecReport): Record<string, (strin
         'Bölüm AA (Plan)': bolum,
         'Kişi AA (Plan)': kisi,
         'Aşırı Tahsis': asiri,
+        'Kapasite-Talep (Rol)': rol,
     };
 };
 

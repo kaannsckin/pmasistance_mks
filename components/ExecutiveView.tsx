@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { PlanLockStatus, ProjectStatus, RagStatus, UserRole, WorkspaceData } from '../types';
 import { MONTHS_TR, ROLE_LABELS } from '../utils/allocations';
 import { buildExecReport, exportExecReportToExcel } from '../utils/execReport';
+import { exportExecReportToPpt } from '../utils/pptExport';
 import { baselinePlanFor, snapshotsForYear } from '../utils/snapshots';
 
 interface ExecutiveViewProps {
@@ -89,6 +90,18 @@ const PlanActualChart: React.FC<{ plan: number[]; actual: number[]; capacity: nu
 
 const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, onOpenProject, onTakeSnapshot }) => {
   const [year, setYear] = useState(new Date().getFullYear());
+  const [isPptBusy, setIsPptBusy] = useState(false);
+
+  const handlePptExport = async () => {
+    setIsPptBusy(true);
+    try {
+      await exportExecReportToPpt(report, workspace.settings.theme || 'classic');
+    } catch (e) {
+      alert(`Sunum oluşturulamadı: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setIsPptBusy(false);
+    }
+  };
   const report = useMemo(() => buildExecReport(workspace, year), [workspace, year]);
   const k = report.kpi;
 
@@ -131,6 +144,15 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
             title="Özet, projeler, aylık plan-gerçekleşen, bölüm/kişi AA ve aşırı tahsis sayfalarını içeren Excel indirir"
           >
             <i className="fa-solid fa-file-excel mr-2"></i>Yönetici Paketi (Excel)
+          </button>
+          <button
+            onClick={handlePptExport}
+            disabled={isPptBusy}
+            className="text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-md hover:opacity-90 transition-all flex items-center disabled:opacity-50 bg-orange-500"
+            title="Kapak, KPI panosu, plan-gerçekleşen grafiği, portföy tablosu, bölüm dağılımı ve kaynak sağlığı slaytlarını içeren PowerPoint indirir"
+          >
+            {isPptBusy ? <i className="fa-solid fa-spinner fa-spin mr-2"></i> : <i className="fa-solid fa-file-powerpoint mr-2"></i>}
+            Sunum (PPT)
           </button>
         </div>
       </div>
@@ -211,7 +233,7 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
               <div key={s.id} className="flex items-center space-x-3">
                 <div className="w-44 flex-none leading-tight">
                   <p className="text-xs font-semibold text-gray-600 dark:text-gray-300 truncate" title={s.label}>{s.label}</p>
-                  <p className="text-[11px] font-bold text-gray-400">{new Date(s.takenAt).toLocaleDateString('tr-TR')} · {s.trigger === 'lock' ? 'Onay' : 'Manuel'}</p>
+                  <p className="text-[11px] font-bold text-gray-400">{new Date(s.takenAt).toLocaleDateString('tr-TR')} · {s.trigger === 'lock' ? 'Onay' : s.trigger === 'monthly' ? 'Otomatik' : 'Manuel'}</p>
                 </div>
                 <div className="flex-1 h-3 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
                   <div className="h-full rounded-full opacity-70" style={{ width: `${(s.totalPlanAA / maxSnapTotal) * 100}%`, backgroundColor: 'var(--app-primary)' }} title={`Plan: ${fmt(s.totalPlanAA)} AA`}></div>

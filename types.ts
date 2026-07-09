@@ -295,7 +295,7 @@ export interface Snapshot {
   takenAt: string; // ISO
   year: number;
   label: string;
-  trigger: 'manual' | 'lock';
+  trigger: 'manual' | 'lock' | 'monthly';
   totalPlanAA: number;
   totalActualAA: number;
   monthlyPlan: number[]; // 12 eleman (Ocak..Aralık)

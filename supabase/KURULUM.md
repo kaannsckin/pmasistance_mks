@@ -64,6 +64,20 @@ values ('ÇALIŞMA-ALANI-ID', 'KULLANICI-ID', 'py');
 3. Üye, uygulamadaki bulut penceresine **Çalışma Alanı ID**'sini yapıştırıp
    **Bağlan** der → veri buluttan iner.
 
+## Kurulumu doğrulama (önerilir)
+
+Bilgisayarınızda (Node 18+ kuruluysa) tek komutla tüm kurulumu test edin:
+
+```bash
+node supabase/dogrula.mjs https://PROJENIZ.supabase.co ANON_ANAHTARINIZ
+```
+
+Betik; bağlantıyı, anahtarı, üç tablonun kurulu olup olmadığını ve auth
+ayarlarını kontrol edip Türkçe rapor verir. `--e2e` bayrağıyla çalıştırırsanız
+geçici bir test kullanıcısıyla uçtan uca senaryo da doğrulanır (çalışma alanı
+oluşturma, üyelik tetikleyicisi ve **Müdür rolünün notları okuyamadığının RLS
+kanıtı**); test verisi otomatik temizlenir.
+
 ## 6. Günlük kullanım
 
 - **Otomatik senkron** açıkken her değişiklik birkaç saniye içinde buluta gider.
