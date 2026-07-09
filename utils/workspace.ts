@@ -1,6 +1,6 @@
 import { Project, ProjectData, ProjectSettings, WorkspaceData } from '../types';
 
-export const APP_VERSION = '2.1.0';
+export const APP_VERSION = '2.2.0';
 export const WORKSPACE_SCHEMA_VERSION = 3; // 3: veri havuzu + tahsis + plan kilidi
 
 /** v2 çalışma alanı anahtarı */
@@ -50,6 +50,7 @@ export const createEmptyWorkspace = (): WorkspaceData => ({
     titles: [],
     allocations: [],
     planLocks: [],
+    snapshots: [],
     settings: {
         isLocalPersistenceEnabled: true,
         isAIEnabled: true,
@@ -129,6 +130,7 @@ export const normalizeWorkspace = (raw: Partial<WorkspaceData>): WorkspaceData =
         titles: raw.titles || [],
         allocations: (raw.allocations || []).map(a => ({ ...a, plan: a.plan || {}, actual: a.actual || {} })),
         planLocks: raw.planLocks || [],
+        snapshots: raw.snapshots || [],
         settings: { ...base.settings, ...(raw.settings || {}) },
         appVersion: APP_VERSION,
     };

@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'plan-asistan-v3';
+const CACHE_NAME = 'plan-asistan-v4';
 const ASSETS = [
   '/',
   '/index.html',

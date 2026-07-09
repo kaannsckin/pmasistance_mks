@@ -24,6 +24,8 @@ interface HeaderProps {
   onSelectProject: (id: string) => void;
   currentRole: UserRole;
   onChangeRole: (role: UserRole) => void;
+  cloudLinked: boolean;
+  onOpenCloudSync: () => void;
 }
 
 const ROLE_ICONS: Record<UserRole, string> = {
@@ -153,7 +155,7 @@ const NavItem: React.FC<{
   </button>
 );
 
-const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSettings, onSaveProject, onLoadProject, isLocalPersistenceEnabled = true, isAIEnabled = true, onOpenAbout, projects, activeProjectId, onSelectProject, currentRole, onChangeRole }) => {
+const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSettings, onSaveProject, onLoadProject, isLocalPersistenceEnabled = true, isAIEnabled = true, onOpenAbout, projects, activeProjectId, onSelectProject, currentRole, onChangeRole, cloudLinked, onOpenCloudSync }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   
@@ -316,6 +318,14 @@ const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSett
                 </button>
             </div>
             
+            <button
+              onClick={onOpenCloudSync}
+              className="w-11 h-11 flex items-center justify-center bg-white dark:bg-gray-700 rounded-xl border border-gray-200 dark:border-gray-600 hover:text-primary transition-all relative"
+              title={cloudLinked ? 'Bulut senkronizasyonu bağlı' : 'Bulut senkronizasyonu (Supabase) — kurulum için tıklayın'}
+            >
+              <i className="fa-solid fa-cloud" style={cloudLinked ? { color: 'var(--app-primary)' } : { color: '#9ca3af' }}></i>
+              {cloudLinked && <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-emerald-400 border border-white dark:border-gray-700"></span>}
+            </button>
             <RoleSwitcher currentRole={currentRole} onChangeRole={onChangeRole} />
             <button onClick={onOpenSettings} className="w-11 h-11 flex items-center justify-center bg-white dark:bg-gray-700 text-gray-500 dark:text-gray-300 rounded-xl border border-gray-200 dark:border-gray-600 hover:text-primary transition-all">
                 <i className="fa-solid fa-sliders"></i>

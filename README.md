@@ -24,6 +24,8 @@ PlanAsistan; PERT ve Bulanık Mantık (Fuzzy PERT) yöntemleriyle proje görevle
 - **Yönetici Paketi:** Tek tıkla çok sayfalı Excel raporu (Özet, Projeler, Aylık Plan-Gerçekleşen, Bölüm/Kişi AA, Aşırı Tahsis).
 
 ### Genel
+- **Baseline & Plan Kayması:** Plan onaylandığında portföyün anlık görüntüsü otomatik alınır ("onaylanan plan = baseline"); yönetim ekranı baseline'a göre plan kaymasını (Δ) proje bazında gösterir. Manuel anlık görüntü de alınabilir.
+- **Bulut Senkronizasyonu (opsiyonel, ücretsiz):** Supabase ile e-posta girişli çok kullanıcılı çalışma; yerel-öncelikli (çevrimdışı çalışmaya devam eder), sürüm kontrollü (kimsenin verisi sessizce ezilmez). Notlar ve müşteri istekleri sunucuda ayrı tabloda tutulur — **yönetici rolleri bu veriyi veritabanı politikası (RLS) gereği okuyamaz**. Kurulum: [`supabase/KURULUM.md`](./supabase/KURULUM.md) (~10 dk).
 - **Excel & Jira Desteği:** Görev verilerini Excel/Jira formatında içe/dışa aktarma.
 - **PWA Desteği:** Uygulama olarak yüklenip çevrimdışı kullanılabilir; veriler tarayıcıda saklanır, JSON yedeği alınabilir (eski tek proje yedekleri de içe aktarılabilir).
 
