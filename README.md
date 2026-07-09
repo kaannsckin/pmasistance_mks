@@ -1,34 +1,45 @@
 
-# PlanAsistan - Akıllı Proje Planlama Aracı
+# PlanAsistan - Akıllı Proje, Program ve Portföy Yönetim Aracı
 
-PlanAsistan, PERT ve Bulanık Mantık (Fuzzy PERT) yöntemlerini kullanarak proje görevlerini otomatik olarak planlayan, kaynakları yöneten ve sürüm takvimi oluşturan gelişmiş bir web uygulamasıdır.
-
-## 🚀 GitHub Üzerinden Canlı Kullanım (Deployment)
-
-Bu uygulamayı GitHub üzerinden canlıya almak ve bir web sitesi gibi kullanmak için şu adımları izleyin:
-
-1.  **GitHub Pages'i Etkinleştirin:**
-    - GitHub deponuzun (repository) üst menüsünden **Settings** sekmesine gidin.
-    - Sol sütundan **Pages** seçeneğine tıklayın.
-    - **Branch** kısmından `main` (veya kodlarınızın olduğu ana dal) seçin ve yanındaki klasörü `/(root)` olarak bırakıp **Save** deyin.
-    
-2.  **Erişim:**
-    - Birkaç dakika sonra sayfanın üstünde "Your site is live at..." şeklinde bir link belirecektir. Uygulamanıza bu link üzerinden her yerden erişebilirsiniz.
+PlanAsistan; PERT ve Bulanık Mantık (Fuzzy PERT) yöntemleriyle proje görevlerini otomatik planlayan, birden fazla projeyi tek çalışma alanında yöneten, işgücü (adam/ay) tahsisini planlayıp gerçekleşmeyle kıyaslayan ve üst yönetime rol bazlı dashboard sunan gelişmiş bir web uygulamasıdır.
 
 ## ✨ Temel Özellikler
 
-- **Otomatik Planlama:** PERT algoritması ile görevleri en verimli sürüm (sprint) takvimine yerleştirir.
-- **Kanban Panosu:** Sürüm bazlı, sürükle-bırak destekli görsel görev yönetimi.
+### Proje Yönetimi
+- **Otomatik Planlama:** Topolojik liste çizelgeleme + kritik zincir önceliklendirmesi ile görevleri en verimli sürüm (sprint) takvimine yerleştirir; termin (EDD) ve kapasite farkındalıklı.
+- **Kanban Panosu:** Sürüm bazlı, sürükle-bırak destekli görsel görev yönetimi; plan uyarıları (aşırı büyük görev, öncül döngüsü) banner ile gösterilir.
 - **Analiz & Zaman Çizelgesi:** Proje bitiş tarihini ve kritik yolu hesaplayan Gantt şeması.
-- **Akıllı Notlar:** `#anımsatıcı` etiketi ile notlarınızdan otomatik hatırlatıcılar oluşturun.
-- **Excel & Jira Desteği:** Verilerinizi Excel veya Jira formatında içe/dışa aktarın.
-- **PWA Desteği:** Bilgisayarınıza veya telefonunuza uygulama olarak yükleyip çevrimdışı kullanabilirsiniz.
+- **OKR / Hedefler, Haftalık Notlar, Müşteri İstekleri**
+
+### Program / Portföy Yönetimi
+- **Çoklu Proje Çalışma Alanı:** Portföy ekranında proje kartları; durum (Devam Eden / Teklif / Beklemede / Tamamlandı), haftalık RAG durumu (Yolunda / Riskli / Kritik) ve durum notu.
+- **Veri Havuzu:** Personel (sicil, bölüm, ünvan, kullanılabilir AA, roller), bölümler, rol kataloğu ve ünvan sözlüğü — tek merkezden yönetilir.
+- **İşgücü Tahsisi (Adam/Ay):** Kişi × proje × iş paketi × rol × yıl bazında aylık Plan ve Gerçekleşen girişi; Plan/Gerçekleşen/Karşılaştırma modları; kişi-ay bazlı **aşırı tahsis uyarıları**; kişi/bölüm/proje özet tabloları.
+- **Onaylı Plan Kilidi:** Taslak → Onaya Gönder → Onayla & Kilitle / Reddet akışı; kilitli planda yalnızca gerçekleşen girilebilir.
+- **Excel Entegrasyonu:** "İşgücü Tahsisi" formatındaki Excel dosyaları (Personel Listesi, Bölümler, Roller, Ünvanlar, Projeler, İş Paketleri, Veri Girişi Plan+Gerçekleşen) tek tıkla içe aktarılır; mükerrer kayıt oluşturmaz, günceller.
+
+### Üst Yönetim
+- **Yönetim Ekranı (Dashboard):** Portföy KPI'ları, RAG dağılımı, aylık Plan vs Gerçekleşen grafiği (kapasite çizgisiyle), bölüm bazlı AA dağılımı, aşırı tahsis listesi ve proje durum tablosu.
+- **Rol Bazlı Yetkilendirme:** Müdür / PYB Sorumlusu / PYB Destek / Proje Yöneticisi / Bölüm Sorumlusu rolleri. Yönetici rolleri girdi yapamaz ve PM'e özel ekranları (Günlük, İstekler, Zekâ) göremez; veri havuzunu yalnızca PYB Destek düzenler.
+- **Yönetici Paketi:** Tek tıkla çok sayfalı Excel raporu (Özet, Projeler, Aylık Plan-Gerçekleşen, Bölüm/Kişi AA, Aşırı Tahsis).
+
+### Genel
+- **Excel & Jira Desteği:** Görev verilerini Excel/Jira formatında içe/dışa aktarma.
+- **PWA Desteği:** Uygulama olarak yüklenip çevrimdışı kullanılabilir; veriler tarayıcıda saklanır, JSON yedeği alınabilir (eski tek proje yedekleri de içe aktarılabilir).
 
 ## 🛠️ Yerel Geliştirme
 
-Projeyi kendi bilgisayarınızda çalıştırmak isterseniz:
-1. Depoyu indirin: `git clone https://github.com/kullaniciadi/depo-adi.git`
-2. Bir web sunucusu ile (örn: VS Code Live Server) `index.html` dosyasını açın.
+```bash
+npm install
+npm run dev      # http://localhost:3000
+npm run test     # birim testleri (vitest)
+npm run build    # üretim derlemesi (dist/)
+```
+
+## 🚀 Yayınlama
+
+- **Vercel:** Depoyu Vercel'e bağlamak yeterli — `vite build` otomatik çalışır.
+- **GitHub Pages:** `npm run build` sonrası `dist/` klasörünü Pages'e yayınlayın.
 
 ---
-*Bu proje modern web standartları (ES6+, Tailwind CSS) kullanılarak build işlemine gerek kalmadan çalışacak şekilde tasarlanmıştır.*
+*Sürüm 2.x — Çoklu proje, veri havuzu, işgücü tahsisi ve yönetim ekranı; React 19 + Vite + TypeScript.*

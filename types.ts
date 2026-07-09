@@ -114,6 +114,7 @@ export enum View {
   Portfolio,
   DataPool,
   Allocations,
+  Executive,
 }
 
 export interface UnitLoad {

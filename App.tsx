@@ -13,6 +13,7 @@ import {
 } from './utils/workspace';
 import { createAllocation, EffortField, setAllocationCell, upsertPlanLock } from './utils/allocations';
 import { applyPoolImport, PoolImportResult } from './utils/poolImporter';
+import { isExecRole } from './utils/execReport';
 import Header from './components/Header';
 import TaskGallery from './components/TaskGallery';
 import ResourceManager from './components/ResourceManager';
@@ -30,6 +31,7 @@ import GoalsView from './components/GoalsView';
 import PortfolioView from './components/PortfolioView';
 import DataPoolView from './components/DataPoolView';
 import AllocationView from './components/AllocationView';
+import ExecutiveView from './components/ExecutiveView';
 
 const THEME_COLORS: Record<string, string> = {
   classic: '#2563eb',
@@ -200,6 +202,12 @@ const App: React.FC = () => {
   // ---- Veri havuzu + tahsis ----
   const handleChangeRole = useCallback((role: UserRole) => {
     updateWorkspace(ws => ({ ...ws, currentRole: role }));
+    // Yönetici rolüne geçişte PM'e özel ekranlardan çık, yönetim ekranına in
+    if (isExecRole(role)) {
+      setCurrentView(prev =>
+        prev === View.Notes || prev === View.Requests || prev === View.AI ? View.Executive : prev
+      );
+    }
   }, [updateWorkspace]);
 
   const handleSetAllocationCell = useCallback((allocationId: string, field: EffortField, month: number, value: number | undefined) => {
@@ -335,6 +343,21 @@ const App: React.FC = () => {
   const renderView = () => {
     if (!isInitialized || !workspace) {
       return <div className="h-[60vh] flex items-center justify-center"><i className="fa-solid fa-spinner fa-spin text-4xl text-blue-500"></i></div>;
+    }
+
+    const execRole = isExecRole(workspace.currentRole);
+
+    // Rol bazlı yetkilendirme: yönetici rolleri PM'e özel ekranları (Günlük,
+    // İstekler, Zekâ) göremez — doğrudan yönetim ekranına yönlendirilir.
+    if (currentView === View.Executive ||
+        (execRole && (currentView === View.Notes || currentView === View.Requests || currentView === View.AI))) {
+      return (
+        <ExecutiveView
+          workspace={workspace}
+          currentRole={workspace.currentRole || 'py'}
+          onOpenProject={handleOpenProject}
+        />
+      );
     }
 
     // Çalışma alanı seviyesi ekranlar (aktif proje gerektirmez)
