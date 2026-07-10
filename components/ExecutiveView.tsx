@@ -4,6 +4,7 @@ import { MONTHS_TR, ROLE_LABELS } from '../utils/allocations';
 import { buildExecReport, exportExecReportToExcel } from '../utils/execReport';
 import { exportExecReportToPpt } from '../utils/pptExport';
 import { baselinePlanFor, snapshotsForYear } from '../utils/snapshots';
+import { fmtTL } from '../utils/costing';
 
 interface ExecutiveViewProps {
   workspace: WorkspaceData;
@@ -212,6 +213,64 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
             </div>
           )}
         </div>
+      </div>
+
+      {/* Maliyet katmanı */}
+      <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm p-5">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-xs font-semibold text-gray-400">
+            <i className="fa-solid fa-coins mr-2" style={{ color: 'var(--app-primary)' }}></i>
+            Maliyet ({year}, ₺) — tahsis × ünvan aylık maliyeti
+          </h3>
+          {report.cost.uncostedPeople.length > 0 && (
+            <span className="text-[11px] font-semibold text-amber-500" title={report.cost.uncostedPeople.join(', ')}>
+              <i className="fa-solid fa-triangle-exclamation mr-1"></i>
+              {report.cost.uncostedPeople.length} kişi maliyetlenemedi (ünvan/₺ eksik)
+            </span>
+          )}
+        </div>
+        {report.cost.costedTitleCount === 0 ? (
+          <p className="text-xs text-gray-400 text-center py-4">
+            Ünvan maliyetleri girilmemiş. <b>Veri Havuzu → Ünvanlar</b> sekmesinde her ünvana aylık maliyet (₺) girin; bu kart, Excel ve sunum paketleri otomatik dolacak.
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+            <div className="flex items-center gap-6">
+              <div>
+                <p className="text-[11px] font-semibold text-gray-400 mb-1">Plan</p>
+                <p className="text-xl font-semibold" style={{ color: 'var(--app-primary)' }}>{fmtTL(report.cost.totalPlanCost)}</p>
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold text-gray-400 mb-1">Gerçekleşen</p>
+                <p className="text-xl font-semibold text-emerald-600 dark:text-emerald-400">{fmtTL(report.cost.totalActualCost)}</p>
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold text-gray-400 mb-1">Sapma</p>
+                <p className={`text-xl font-semibold ${report.cost.totalVarianceCost > 0 ? 'text-red-500' : report.cost.totalVarianceCost < 0 ? 'text-amber-500' : 'text-gray-400'}`}>
+                  {report.cost.totalVarianceCost > 0 ? '+' : ''}{fmtTL(report.cost.totalVarianceCost)}
+                </p>
+              </div>
+            </div>
+            <div className="lg:col-span-2 space-y-2">
+              {report.cost.byProject.slice(0, 5).map(row => {
+                const maxCost = Math.max(report.cost.byProject[0]?.planCost || 1, 1);
+                return (
+                  <div key={row.key} className="flex items-center gap-3">
+                    <span className="w-44 flex-none text-[11px] font-semibold text-gray-600 dark:text-gray-300 truncate" title={row.label}>{row.label}</span>
+                    <div className="flex-1 h-2.5 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full" style={{ width: `${(row.planCost / maxCost) * 100}%`, backgroundColor: 'var(--app-primary)' }} title={`Plan: ${fmtTL(row.planCost)}`}></div>
+                    </div>
+                    <span className="w-28 flex-none text-right text-[11px] font-semibold" style={{ color: 'var(--app-primary)' }}>{fmtTL(row.planCost)}</span>
+                    <span className="w-28 flex-none text-right text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">{fmtTL(row.actualCost)}</span>
+                  </div>
+                );
+              })}
+              {report.cost.byProject.length > 5 && (
+                <p className="text-[11px] text-gray-400">… ve {report.cost.byProject.length - 5} proje daha (tam kırılım Excel paketinde)</p>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Baseline & plan kayması trendi */}

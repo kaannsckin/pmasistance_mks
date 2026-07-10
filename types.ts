@@ -242,6 +242,8 @@ export interface RoleCatalogEntry {
 export interface TitleDef {
   code: string; // ARŞ
   name: string; // Araştırmacı
+  /** Tam zamanlı (1 AA) bir ayın maliyeti (₺) — maliyet katmanı için */
+  monthlyCost?: number;
 }
 
 // ---------------------------------------------------------------------------

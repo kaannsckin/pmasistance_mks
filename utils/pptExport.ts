@@ -2,6 +2,7 @@ import { PlanLockStatus, ProjectStatus, RagStatus } from '../types';
 import { MONTHS_TR } from './allocations';
 import { EFFORT_TYPE_LABELS } from './roleAnalysis';
 import { ExecReport } from './execReport';
+import { fmtTL } from './costing';
 
 /**
  * Yönetici Paketi — PowerPoint çıktısı (pptxgenjs, isteğe bağlı yüklenen chunk).
@@ -133,6 +134,38 @@ export const exportExecReportToPpt = async (report: ExecReport, theme: string): 
             showLegend: false, catAxisLabelFontSize: 12, valAxisLabelFontSize: 11,
             showValue: true, dataLabelFontSize: 11, dataLabelColor: DARK,
         });
+    }
+
+    // ---- 5b) Maliyet (ünvan maliyetleri girilmişse) ----
+    if (report.cost.costedTitleCount > 0) {
+        const cost = pptx.addSlide();
+        addTitle(cost, `Maliyet Özeti (${report.year}, ₺)`);
+        const costCards: Array<[string, string, string]> = [
+            ['Plan Maliyeti', fmtTL(report.cost.totalPlanCost), accent],
+            ['Gerçekleşen', fmtTL(report.cost.totalActualCost), GREEN],
+            ['Sapma', `${report.cost.totalVarianceCost > 0 ? '+' : ''}${fmtTL(report.cost.totalVarianceCost)}`, report.cost.totalVarianceCost > 0 ? RED : GRAY],
+        ];
+        costCards.forEach(([label, value, color], i) => {
+            const x = 0.5 + i * 4.3;
+            cost.addShape('roundRect', { x, y: 1.3, w: 3.95, h: 1.5, fill: { color: 'F9FAFB' }, line: { color: 'E5E7EB', width: 1 }, rectRadius: 0.08 });
+            cost.addText(label, { x: x + 0.3, y: 1.5, w: 3.4, h: 0.35, fontSize: 13, color: GRAY, fontFace: 'Calibri' });
+            cost.addText(value, { x: x + 0.3, y: 1.9, w: 3.4, h: 0.7, fontSize: 26, bold: true, color, fontFace: 'Calibri' });
+        });
+        const topCost = report.cost.byProject.slice(0, 10);
+        cost.addTable([
+            ['Proje', 'Plan ₺', 'Gerçekleşen ₺', 'Sapma ₺'].map(t => ({ text: t, options: { bold: true, color: 'FFFFFF', fill: { color: accent }, fontSize: 12 } })),
+            ...topCost.map(r => ([
+                { text: r.label, options: { fontSize: 11, color: DARK } },
+                { text: fmtTL(r.planCost), options: { fontSize: 11, color: DARK } },
+                { text: fmtTL(r.actualCost), options: { fontSize: 11, color: DARK } },
+                { text: `${r.varianceCost > 0 ? '+' : ''}${fmtTL(r.varianceCost)}`, options: { fontSize: 11, bold: r.varianceCost !== 0, color: r.varianceCost > 0 ? RED : r.varianceCost < 0 ? AMBER : GRAY } },
+            ])),
+        ] as never, { x: 0.5, y: 3.1, w: 12.3, colW: [5.4, 2.3, 2.3, 2.3], border: { type: 'solid', color: 'E5E7EB', pt: 0.5 }, rowH: 0.34 });
+        if (report.cost.uncostedPeople.length > 0) {
+            cost.addText(`Not: ${report.cost.uncostedPeople.length} kişi maliyetlenemedi (ünvan/₺ eksik): ${report.cost.uncostedPeople.slice(0, 6).join(', ')}${report.cost.uncostedPeople.length > 6 ? '…' : ''}`, {
+                x: 0.5, y: 6.95, w: 12.3, h: 0.4, fontSize: 10, italic: true, color: GRAY,
+            });
+        }
     }
 
     // ---- 6) Kaynak sağlığı: kapasite açıkları + aşırı tahsisler ----

@@ -4,6 +4,7 @@ import {
     MonthlySummaryRow, OverAllocation, summarizeByDepartment, summarizeByPerson,
 } from './allocations';
 import { buildRoleAnalysis, EFFORT_TYPE_LABELS, RoleAnalysisRow } from './roleAnalysis';
+import { buildCostReport, CostReport } from './costing';
 
 declare const XLSX: any;
 
@@ -52,6 +53,7 @@ export interface ExecReport {
     personPlanRows: MonthlySummaryRow[];
     overAllocations: OverAllocation[];
     roleAnalysis: RoleAnalysisRow[];
+    cost: CostReport;
 }
 
 const sumField = (ws: WorkspaceData, projectId: string, year: number, field: EffortField): number =>
@@ -128,6 +130,7 @@ export const buildExecReport = (ws: WorkspaceData, year: number): ExecReport => 
         personPlanRows: summarizeByPerson(yearAllocations, ws.people, year, 'plan'),
         overAllocations,
         roleAnalysis: buildRoleAnalysis(ws.allocations, ws.people, ws.projects, year),
+        cost: buildCostReport(ws, year),
     };
 };
 
@@ -213,6 +216,26 @@ export const buildExecWorkbookData = (report: ExecReport): Record<string, (strin
         ] as (string | number)[][])),
     ];
 
+    // Maliyet katmanı: proje + bölüm kırılımı, aylık toplamlar, eksik uyarıları
+    const c = report.cost;
+    const maliyet: (string | number)[][] = [
+        ['MALİYET RAPORU (₺)', `${report.year}`, c.costedTitleCount === 0 ? 'Ünvan maliyetleri girilmemiş — Veri Havuzu → Ünvanlar' : ''],
+        [],
+        ['Proje', 'Plan Maliyeti', 'Gerçekleşen', 'Sapma'],
+        ...c.byProject.map(r => [r.label, r.planCost, r.actualCost, r.varianceCost]),
+        ['TOPLAM', c.totalPlanCost, c.totalActualCost, c.totalVarianceCost],
+        [],
+        ['Bölüm', 'Plan Maliyeti', 'Gerçekleşen', 'Sapma'],
+        ...c.byDepartment.map(r => [r.label, r.planCost, r.actualCost, r.varianceCost]),
+        [],
+        ['Ay', 'Plan Maliyeti', 'Gerçekleşen'],
+        ...MONTHS_TR.map((m, i) => [m, c.monthlyPlanCost[i], c.monthlyActualCost[i]]),
+        [],
+        ...(c.uncostedPeople.length
+            ? [[`Maliyetlenemeyen personel (ünvan/₺ eksik): ${c.uncostedPeople.join(', ')}`]]
+            : []),
+    ];
+
     return {
         'Özet': ozet,
         'Projeler': projeler,
@@ -221,6 +244,7 @@ export const buildExecWorkbookData = (report: ExecReport): Record<string, (strin
         'Kişi AA (Plan)': kisi,
         'Aşırı Tahsis': asiri,
         'Kapasite-Talep (Rol)': rol,
+        'Maliyet (TL)': maliyet,
     };
 };
 

@@ -44,7 +44,7 @@ const DataPoolView: React.FC<DataPoolViewProps> = ({ people, departments, roleCa
   const [newPerson, setNewPerson] = useState({ firstName: '', lastName: '', sicil: '', departmentCode: '', titleCode: '', availableAA: 1, roles: '' });
   const [newDept, setNewDept] = useState({ code: '', name: '', leadName: '' });
   const [newRole, setNewRole] = useState({ departmentCode: '', name: '' });
-  const [newTitle, setNewTitle] = useState({ code: '', name: '' });
+  const [newTitle, setNewTitle] = useState({ code: '', name: '', monthlyCost: '' });
 
   const deptCodes = useMemo(() => departments.map(d => d.code), [departments]);
   const filteredPeople = useMemo(
@@ -244,20 +244,22 @@ const DataPoolView: React.FC<DataPoolViewProps> = ({ people, departments, roleCa
     <div className="max-w-2xl">
       <table className="w-full">
         <thead className="bg-gray-50 dark:bg-gray-800/60">
-          <tr><th className={thCls}>Kısaltma</th><th className={thCls}>Ünvan</th><th className={thCls}>Personel</th>{editable && <th className={thCls}></th>}</tr>
+          <tr><th className={thCls}>Kısaltma</th><th className={thCls}>Ünvan</th><th className={thCls}>Aylık Maliyet (₺, 1 AA)</th><th className={thCls}>Personel</th>{editable && <th className={thCls}></th>}</tr>
         </thead>
         <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
           {editable && (
             <tr style={{ backgroundColor: 'var(--app-accent-light)' }}>
               <td className={tdCls}><input className={inputCls} placeholder="ARŞ" value={newTitle.code} onChange={e => setNewTitle({ ...newTitle, code: e.target.value })} /></td>
               <td className={tdCls}><input className={inputCls} placeholder="Araştırmacı" value={newTitle.name} onChange={e => setNewTitle({ ...newTitle, name: e.target.value })} /></td>
+              <td className={tdCls}><input type="number" min={0} step={1000} className={inputCls} placeholder="örn. 120000" value={newTitle.monthlyCost} onChange={e => setNewTitle({ ...newTitle, monthlyCost: e.target.value })} /></td>
               <td className={tdCls}></td>
               <td className={tdCls}>
                 <button onClick={() => {
                   const code = newTitle.code.trim();
                   if (!code || titles.some(t => t.code === code)) return;
-                  onUpdateTitles([...titles, { code, name: newTitle.name.trim() || code }]);
-                  setNewTitle({ code: '', name: '' });
+                  const cost = parseFloat(newTitle.monthlyCost);
+                  onUpdateTitles([...titles, { code, name: newTitle.name.trim() || code, monthlyCost: isNaN(cost) || cost <= 0 ? undefined : cost }]);
+                  setNewTitle({ code: '', name: '', monthlyCost: '' });
                 }} className="text-white text-xs font-semibold px-3 py-1.5 rounded-lg" style={{ backgroundColor: 'var(--app-primary)' }}>Ekle</button>
               </td>
             </tr>
@@ -266,6 +268,19 @@ const DataPoolView: React.FC<DataPoolViewProps> = ({ people, departments, roleCa
             <tr key={t.code} className="hover:bg-gray-50/60 dark:hover:bg-gray-800/40">
               <td className={`${tdCls} text-[11px] font-semibold text-gray-700 dark:text-gray-200`}>{t.code}</td>
               <td className={`${tdCls} text-[11px] text-gray-600 dark:text-gray-300`}>{t.name}</td>
+              <td className={tdCls}>
+                <input
+                  disabled={!editable}
+                  type="number" min={0} step={1000}
+                  className={`${inputCls} w-32`}
+                  placeholder="—"
+                  value={t.monthlyCost ?? ''}
+                  onChange={e => {
+                    const v = parseFloat(e.target.value);
+                    onUpdateTitles(titles.map(x => x.code === t.code ? { ...x, monthlyCost: isNaN(v) || v <= 0 ? undefined : v } : x));
+                  }}
+                />
+              </td>
               <td className={`${tdCls} text-[11px] text-gray-400`}>{people.filter(p => p.titleCode === t.code).length}</td>
               {editable && (
                 <td className={tdCls}>
