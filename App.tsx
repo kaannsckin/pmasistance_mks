@@ -15,6 +15,7 @@ import { createAllocation, EffortField, setAllocationCell, upsertPlanLock } from
 import { applyPoolImport, PoolImportResult } from './utils/poolImporter';
 import { isExecRole } from './utils/execReport';
 import { addSnapshot, buildSnapshot, ensureMonthlySnapshot } from './utils/snapshots';
+import { AllocationSuggestion, ApplyMode, applyAllocationSuggestions } from './utils/taskToAllocation';
 import { loadCloudConfig, scheduleAutoPush } from './utils/cloudSync';
 import CloudSyncModal from './components/CloudSyncModal';
 import Header from './components/Header';
@@ -248,6 +249,14 @@ const App: React.FC = () => {
     });
   }, [updateWorkspace]);
 
+  const handleApplySuggestions = useCallback((projectId: string, year: number, suggestions: AllocationSuggestion[], mode: ApplyMode) => {
+    updateWorkspace(ws => {
+      const { workspace: next, applied, skippedCells } = applyAllocationSuggestions(ws, projectId, year, suggestions, mode);
+      alert(`Görev planından tahsis uygulandı: ${applied} kişi güncellendi${skippedCells > 0 ? `, ${skippedCells} dolu ay korundu` : ''}.`);
+      return next;
+    });
+  }, [updateWorkspace]);
+
   const handleTakeSnapshot = useCallback((year: number) => {
     updateWorkspace(ws => {
       const label = `Manuel — ${new Date().toLocaleDateString('tr-TR')}`;
@@ -412,6 +421,7 @@ const App: React.FC = () => {
           onAddAllocation={handleAddAllocation}
           onDeleteAllocation={handleDeleteAllocation}
           onLockAction={handleLockAction}
+          onApplySuggestions={handleApplySuggestions}
         />
       );
     }
