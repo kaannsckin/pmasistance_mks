@@ -1,18 +1,19 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Task, Resource, TaskStatus, Objective, Person } from '../types';
+import { Task, Resource, TaskStatus, Objective, Person, WorkPackage } from '../types';
 
 interface TaskFormModalProps {
   task: Task | null;
   resources: Resource[];
   people: Person[];
+  workPackages: WorkPackage[];
   tasks: Task[];
   objectives: Objective[];
   onClose: () => void;
   onSave: (task: Task) => void;
 }
 
-const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, people, tasks, objectives, onClose, onSave }) => {
+const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, people, workPackages, tasks, objectives, onClose, onSave }) => {
   const [formData, setFormData] = useState<Omit<Task, 'id' | 'availability'>>({
     name: '',
     priority: 'Medium',
@@ -27,6 +28,7 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, people, 
     labels: [],
     includeInSprints: true,
     keyResultId: undefined,
+    workPackageId: undefined,
   });
 
   const [selectedObjectiveId, setSelectedObjectiveId] = useState<string>('');
@@ -50,6 +52,7 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, people, 
         labels: task.labels || [],
         includeInSprints: task.includeInSprints ?? true,
         keyResultId: task.keyResultId,
+        workPackageId: task.workPackageId,
       });
 
       if (task.keyResultId) {
@@ -173,6 +176,21 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, people, 
               <label htmlFor="unit" className="block text-sm font-medium text-black dark:text-white">Birim</label>
               <input type="text" name="unit" id="unit" value={formData.unit} onChange={handleChange} className={`mt-1 block w-full ${inputStyle}`} />
             </div>
+          </div>
+
+          <div>
+            <label htmlFor="workPackageId" className="block text-sm font-medium text-black dark:text-white">İş Paketi</label>
+            <select
+              name="workPackageId"
+              id="workPackageId"
+              value={formData.workPackageId || ''}
+              onChange={e => setFormData(prev => ({ ...prev, workPackageId: e.target.value || undefined }))}
+              disabled={workPackages.length === 0}
+              className={`mt-1 block w-full disabled:opacity-50 ${inputStyle}`}
+            >
+              <option value="">{workPackages.length === 0 ? 'İş paketi tanımlı değil' : 'İş paketi atanmamış'}</option>
+              {workPackages.map(wp => <option key={wp.id} value={wp.id}>{wp.name}</option>)}
+            </select>
           </div>
 
           <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg space-y-4">

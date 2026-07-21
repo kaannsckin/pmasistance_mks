@@ -44,6 +44,7 @@ interface HeaderProps {
   onOpenDataHealth: () => void;
   onOpenAuditLog: () => void;
   onOpenCommandPalette: () => void;
+  onOpenWorkPackages: () => void;
 }
 
 const TODO_SEVERITY: Record<TodoItem['severity'], { dot: string; text: string }> = {
@@ -300,7 +301,7 @@ const IdentitySwitcher: React.FC<{
   );
 };
 
-const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSettings, onSaveProject, onLoadProject, isAIEnabled = true, onOpenAbout, projects, activeProjectId, onSelectProject, currentRole, currentPersonId, people, identityNeedsPerson, onChangeIdentity, cloudLinked, onOpenCloudSync, todoItems, onTodoNavigate, onOpenStatusReport, dataHealthAlerts, onOpenDataHealth, onOpenAuditLog, onOpenCommandPalette }) => {
+const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSettings, onSaveProject, onLoadProject, isAIEnabled = true, onOpenAbout, projects, activeProjectId, onSelectProject, currentRole, currentPersonId, people, identityNeedsPerson, onChangeIdentity, cloudLinked, onOpenCloudSync, todoItems, onTodoNavigate, onOpenStatusReport, dataHealthAlerts, onOpenDataHealth, onOpenAuditLog, onOpenCommandPalette, onOpenWorkPackages }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
@@ -486,8 +487,16 @@ const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSett
               )}
             </nav>
             <button
-              onClick={onOpenStatusReport}
+              onClick={onOpenWorkPackages}
               className="ml-auto flex-none flex items-center gap-1.5 h-8 px-3 rounded-md text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-primary hover:bg-white dark:hover:bg-gray-800 transition-colors"
+              title="İş paketleri — görev/kişi bağı"
+            >
+              <i className="fa-solid fa-briefcase text-[11px]"></i>
+              <span className="hidden lg:inline">İş Paketleri</span>
+            </button>
+            <button
+              onClick={onOpenStatusReport}
+              className="flex-none flex items-center gap-1.5 h-8 px-3 rounded-md text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-primary hover:bg-white dark:hover:bg-gray-800 transition-colors"
               title="Bu projenin haftalık durum raporu taslağını üret"
             >
               <i className="fa-solid fa-file-lines text-[11px]"></i>

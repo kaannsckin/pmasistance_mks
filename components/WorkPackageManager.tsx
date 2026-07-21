@@ -1,15 +1,21 @@
 
-import React, { useState, useEffect } from 'react';
-import { WorkPackage } from '../types';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Task, WorkPackage } from '../types';
+import { summarizeWorkPackages } from '../utils/workPackages';
 
 interface WorkPackageManagerProps {
   isOpen: boolean;
   onClose: () => void;
   workPackages: WorkPackage[];
+  tasks: Task[];
   setWorkPackages: React.Dispatch<React.SetStateAction<WorkPackage[]>>;
 }
 
-const WorkPackageManager: React.FC<WorkPackageManagerProps> = ({ isOpen, onClose, workPackages, setWorkPackages }) => {
+const WorkPackageManager: React.FC<WorkPackageManagerProps> = ({ isOpen, onClose, workPackages, tasks, setWorkPackages }) => {
+  const summaryById = useMemo(() => {
+    const rows = summarizeWorkPackages(workPackages, tasks);
+    return { map: new Map(rows.map(r => [r.id, r])), unassigned: rows.find(r => r.id === '') };
+  }, [workPackages, tasks]);
   const [formData, setFormData] = useState<Omit<WorkPackage, 'id'>>({ name: '', description: '' });
   const [editingPackageId, setEditingPackageId] = useState<string | null>(null);
 
@@ -124,14 +130,28 @@ const WorkPackageManager: React.FC<WorkPackageManagerProps> = ({ isOpen, onClose
                     <tr>
                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Paket Adı</th>
                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Açıklama</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Görevler</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Atananlar</th>
                         <th scope="col" className="relative px-6 py-3"><span className="sr-only">İşlemler</span></th>
                     </tr>
                     </thead>
                     <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                    {workPackages.map(wp => (
+                    {workPackages.map(wp => {
+                        const s = summaryById.map.get(wp.id);
+                        return (
                         <tr key={wp.id}>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{wp.name}</td>
                         <td className="px-6 py-4 whitespace-normal text-sm text-gray-500 dark:text-gray-300">{wp.description}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-300">
+                            {s && s.taskCount > 0
+                              ? <span><b>{s.taskCount}</b> görev · %{s.donePct} tamam</span>
+                              : <span className="text-gray-400">görev yok</span>}
+                        </td>
+                        <td className="px-6 py-4 whitespace-normal text-sm text-gray-500 dark:text-gray-300">
+                            {s && s.assignees.length > 0
+                              ? <div className="flex flex-wrap gap-1">{s.assignees.map(a => <span key={a} className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-gray-100 dark:bg-gray-700">{a}</span>)}</div>
+                              : <span className="text-gray-400">—</span>}
+                        </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-4">
                             <button onClick={() => setEditingPackageId(wp.id)} className="text-primary hover:opacity-80 transition-opacity">
                             <i className="fa-solid fa-pencil mr-1"></i> Düzenle
@@ -141,10 +161,22 @@ const WorkPackageManager: React.FC<WorkPackageManagerProps> = ({ isOpen, onClose
                             </button>
                         </td>
                         </tr>
-                    ))}
-                    {workPackages.length === 0 && (
+                        );
+                    })}
+                    {summaryById.unassigned && (
+                        <tr className="bg-amber-50/60 dark:bg-amber-900/10">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-amber-700 dark:text-amber-300"><i className="fa-solid fa-inbox mr-2"></i>İş paketi atanmamış</td>
+                        <td className="px-6 py-4 text-sm text-gray-400">Bir iş paketine bağlanmamış görevler</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-300"><b>{summaryById.unassigned.taskCount}</b> görev · %{summaryById.unassigned.donePct} tamam</td>
+                        <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-300">
+                            <div className="flex flex-wrap gap-1">{summaryById.unassigned.assignees.map(a => <span key={a} className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-gray-100 dark:bg-gray-700">{a}</span>)}</div>
+                        </td>
+                        <td></td>
+                        </tr>
+                    )}
+                    {workPackages.length === 0 && !summaryById.unassigned && (
                         <tr>
-                            <td colSpan={3} className="text-center py-8 text-gray-500">Henüz iş paketi eklenmemiş.</td>
+                            <td colSpan={5} className="text-center py-8 text-gray-500">Henüz iş paketi eklenmemiş.</td>
                         </tr>
                     )}
                     </tbody>
