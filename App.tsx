@@ -14,6 +14,7 @@ import {
 import { createAllocation, EffortField, setAllocationCell, upsertPlanLock } from './utils/allocations';
 import { applyPoolImport, PoolImportResult } from './utils/poolImporter';
 import { isExecRole } from './utils/execReport';
+import { canEditProjectContent, identityOf, identityNeedsPerson as computeNeedsPerson, visibleProjectIds } from './utils/rbac';
 import { addSnapshot, buildSnapshot, ensureMonthlySnapshot } from './utils/snapshots';
 import { AllocationSuggestion, ApplyMode, applyAllocationSuggestions } from './utils/taskToAllocation';
 import { buildTodoItems, TodoItem } from './utils/todoItems';
@@ -95,6 +96,15 @@ const App: React.FC = () => {
     () => workspace?.projects.find(p => p.id === workspace.activeProjectId) ?? null,
     [workspace]
   );
+
+  // ---- Kimlik + kapsam ----
+  const identity = useMemo(() => (workspace ? identityOf(workspace) : { role: 'py' as UserRole }), [workspace]);
+  const visibleProjects = useMemo(() => {
+    if (!workspace) return [];
+    const ids = visibleProjectIds(workspace, identity);
+    return workspace.projects.filter(p => ids.has(p.id));
+  }, [workspace, identity]);
+  const needsPerson = useMemo(() => computeNeedsPerson(identity), [identity]);
 
   // ---- Yapılacaklar (mevcut veriden türetilir, role göre filtreli) ----
   const todoItems = useMemo(() => (workspace ? buildTodoItems(workspace) : []), [workspace]);
@@ -182,11 +192,22 @@ const App: React.FC = () => {
 
   // ---- Proje yaşam döngüsü ----
   const handleCreateProject = useCallback((name: string) => {
-    const project = createProject(name);
-    project.settings.manMonthTableColor = THEME_COLORS[settings?.theme || 'classic'];
-    updateWorkspace(ws => ({ ...ws, projects: [...ws.projects, project], activeProjectId: project.id }));
+    updateWorkspace(ws => {
+      const project = createProject(name);
+      project.settings.manMonthTableColor = THEME_COLORS[ws.settings.theme || 'classic'];
+      // Oluşturan PM ise projeyi ona sahiplendir (RBAC kapsamı)
+      if (ws.currentRole === 'py' && ws.currentPersonId) project.pmPersonId = ws.currentPersonId;
+      return { ...ws, projects: [...ws.projects, project], activeProjectId: project.id };
+    });
     setCurrentView(View.Roadmap);
-  }, [updateWorkspace, settings?.theme]);
+  }, [updateWorkspace]);
+
+  const handleSetProjectOwner = useCallback((projectId: string, personId: string | undefined) => {
+    updateWorkspace(ws => ({
+      ...ws,
+      projects: ws.projects.map(p => p.id === projectId ? { ...p, pmPersonId: personId, updatedAt: new Date().toISOString() } : p),
+    }));
+  }, [updateWorkspace]);
 
   const handleOpenProject = useCallback((projectId: string) => {
     updateWorkspace(ws => ({ ...ws, activeProjectId: projectId }));
@@ -225,14 +246,20 @@ const App: React.FC = () => {
     }));
   }, [updateWorkspace]);
 
-  // ---- Veri havuzu + tahsis ----
-  const handleChangeRole = useCallback((role: UserRole) => {
-    updateWorkspace(ws => ({ ...ws, currentRole: role }));
-    // Yönetici rolüne geçişte PM'e özel ekranlardan çık, yönetim ekranına in
+  // ---- Kimlik / RBAC ----
+  const handleChangeIdentity = useCallback((role: UserRole, personId?: string) => {
+    updateWorkspace(ws => {
+      const next = { ...ws, currentRole: role, currentPersonId: personId };
+      // Kapsam değişince görünmeyen bir proje aktifse ilk görünür projeye/portföye geç
+      const visible = visibleProjectIds(next, { role, personId });
+      if (next.activeProjectId && !visible.has(next.activeProjectId)) {
+        next.activeProjectId = null;
+      }
+      return next;
+    });
+    // Yönetici rolüne geçişte PM'e özel ekranlardan çık
     if (isExecRole(role)) {
-      setCurrentView(prev =>
-        prev === View.Notes || prev === View.Requests || prev === View.AI ? View.Executive : prev
-      );
+      setCurrentView(prev => (prev === View.Notes || prev === View.Requests || prev === View.AI ? View.Executive : prev));
     }
   }, [updateWorkspace]);
 
@@ -436,6 +463,7 @@ const App: React.FC = () => {
           projects={workspace.projects}
           planLocks={workspace.planLocks}
           currentRole={workspace.currentRole || 'py'}
+          identity={identity}
           onSetCell={handleSetAllocationCell}
           onAddAllocation={handleAddAllocation}
           onDeleteAllocation={handleDeleteAllocation}
@@ -449,14 +477,18 @@ const App: React.FC = () => {
     if (!activeProject || currentView === View.Portfolio) {
       return (
         <PortfolioView
-          projects={workspace.projects}
+          projects={visibleProjects}
           activeProjectId={workspace.activeProjectId}
+          identity={identity}
+          people={workspace.people}
+          needsPerson={needsPerson}
           onOpenProject={handleOpenProject}
           onCreateProject={handleCreateProject}
           onDeleteProject={handleDeleteProject}
           onRenameProject={handleRenameProject}
           onSetRag={handleSetProjectRag}
           onSetStatus={handleSetProjectStatus}
+          onSetOwner={handleSetProjectOwner}
         />
       );
     }
@@ -527,7 +559,8 @@ const App: React.FC = () => {
           <RiskView
             projectName={activeProject.name}
             risks={activeProject.risks || []}
-            currentRole={workspace.currentRole || 'py'}
+            people={workspace.people}
+            canEdit={canEditProjectContent(workspace, identity, activeProject.id)}
             onUpdateRisks={(risks: Risk[]) => updateActiveProject(p => ({ ...p, risks }))}
           />
         );
@@ -565,11 +598,14 @@ const App: React.FC = () => {
         isLocalPersistenceEnabled={settings?.isLocalPersistenceEnabled !== false}
         isAIEnabled={settings?.isAIEnabled !== false}
         onOpenAbout={() => setIsAboutModalOpen(true)}
-        projects={workspace?.projects.map(p => ({ id: p.id, name: p.name, rag: p.rag })) || []}
+        projects={visibleProjects.map(p => ({ id: p.id, name: p.name, rag: p.rag }))}
         activeProjectId={activeProject?.id ?? null}
         onSelectProject={handleOpenProject}
         currentRole={workspace?.currentRole || 'py'}
-        onChangeRole={handleChangeRole}
+        currentPersonId={workspace?.currentPersonId}
+        people={(workspace?.people || []).map(p => ({ id: p.id, name: `${p.firstName} ${p.lastName}`.trim(), initials: `${p.firstName.charAt(0)}${p.lastName.charAt(0)}`, departmentCode: p.departmentCode }))}
+        identityNeedsPerson={needsPerson}
+        onChangeIdentity={handleChangeIdentity}
         cloudLinked={!!loadCloudConfig()?.workspaceId}
         onOpenCloudSync={() => setIsCloudModalOpen(true)}
         todoItems={todoItems}

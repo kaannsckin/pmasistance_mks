@@ -196,7 +196,8 @@ export interface Risk {
   description?: string;
   probability: RiskLevel;
   impact: RiskLevel;
-  owner?: string;
+  ownerPersonId?: string; // Sahibi (havuzdaki kişi) — Jira benzeri atama
+  owner?: string; // Sahibin adı (görüntü/dışa aktarım için; havuz atamasında otomatik doldurulur)
   mitigation?: string; // Azaltıcı aksiyon
   status: RiskStatus;
   createdAt: string;
@@ -209,6 +210,7 @@ export interface Project {
   status: ProjectStatus;
   rag?: RagStatus;
   ragNote?: string; // Haftalık durum açıklaması (PM girer)
+  pmPersonId?: string; // Proje Yöneticisi (havuzdaki kişi) — RBAC sahipliği
   risks?: Risk[];
   tasks: Task[];
   resources: Resource[];
@@ -248,7 +250,8 @@ export interface Person {
 export interface Department {
   code: string; // U310
   name: string;
-  leadName?: string; // Bölüm Sorumlusu
+  leadName?: string; // Bölüm Sorumlusu (metin, Excel'den)
+  leadPersonId?: string; // Bölüm Sorumlusu (havuzdaki kişi) — RBAC sahipliği
 }
 
 export interface RoleCatalogEntry {
@@ -329,6 +332,8 @@ export interface WorkspaceData {
   activeProjectId: string | null;
   /** Şimdilik istemci tarafı görünüm anahtarı; SaaS fazında gerçek auth'a bağlanacak */
   currentRole?: UserRole;
+  /** Aktif kimlik: py/bölüm sorumlusu rollerinde kapsamı belirleyen havuz kişisi */
+  currentPersonId?: string;
   // Veri havuzu
   people: Person[];
   departments: Department[];
