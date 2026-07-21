@@ -1,13 +1,14 @@
 import React, { useMemo, useState } from 'react';
 import { Allocation, Person, PlanLock, PlanLockStatus, Project, UserRole } from '../types';
 import {
-  canApprovePlan, canEnterData, EffortField, findOverAllocations,
-  getPlanLockStatus, isActualEditable, isPlanEditable,
+  canApprovePlan, EffortField, findOverAllocations,
+  getPlanLockStatus,
   MONTH_INDEXES, MONTHS_TR, personMonthTotal, ROLE_LABELS, rowTotal,
   summarizeByDepartment, summarizeByPerson, summarizeByProject,
 } from '../utils/allocations';
 import { buildRoleAnalysis, EFFORT_TYPE_LABELS, EffortType, summarizeGaps } from '../utils/roleAnalysis';
 import { AllocationSuggestion, ApplyMode, suggestAllocationsFromTasks, SuggestionResult } from '../utils/taskToAllocation';
+import { canAddAllocationToProject, canEditActualCell, canEditAllocationCell, canEditPlanCell, Identity, visiblePersonIds } from '../utils/rbac';
 import ScenarioView from './ScenarioView';
 
 interface AllocationViewProps {
@@ -16,6 +17,7 @@ interface AllocationViewProps {
   projects: Project[];
   planLocks: PlanLock[];
   currentRole: UserRole;
+  identity: Identity;
   onSetCell: (allocationId: string, field: EffortField, month: number, value: number | undefined) => void;
   onAddAllocation: (personId: string, projectId: string, year: number, workPackageId?: string, role?: string) => void;
   onDeleteAllocation: (allocationId: string) => void;
@@ -42,7 +44,10 @@ const LOCK_STYLES: Record<PlanLockStatus, { label: string; cls: string; icon: st
   locked: { label: 'Kilitli', cls: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-300', icon: 'fa-lock' },
 };
 
-const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, projects, planLocks, currentRole, onSetCell, onAddAllocation, onDeleteAllocation, onLockAction, onApplySuggestions }) => {
+const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, projects, planLocks, currentRole, identity, onSetCell, onAddAllocation, onDeleteAllocation, onLockAction, onApplySuggestions }) => {
+  const wsLike = useMemo(() => ({ people, projects, allocations }), [people, projects, allocations]);
+  // Kimlik kapsamına göre hücre/satır düzenlenebilirliği (RBAC)
+  const canEnter = identity.role === 'py' || identity.role === 'bolum_sorumlu';
   const [year, setYear] = useState(new Date().getFullYear());
   const [mode, setMode] = useState<Mode>('plan');
   const [tab, setTab] = useState<Tab>('grid');
@@ -102,8 +107,23 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
   const selectedPerson = personMap.get(newRow.personId);
   const selectedProject = projectMap.get(newRow.projectId);
 
+  // Kapsam: PY yalnız sahip olduğu projeye; bölüm sorumlusu yalnız bölümü kişisine ekler
+  const addableProjects = useMemo(
+    () => projects.filter(p => canAddAllocationToProject(wsLike, identity, p.id)),
+    [projects, wsLike, identity],
+  );
+  const addablePersonIds = useMemo(() => visiblePersonIds(wsLike, identity), [wsLike, identity]);
+  const addablePeople = useMemo(
+    () => people.filter(p => addablePersonIds.has(p.id)),
+    [people, addablePersonIds],
+  );
+
   const handleAdd = () => {
     if (!newRow.personId || !newRow.projectId) return;
+    if (!canEditAllocationCell(wsLike, identity, newRow.projectId, newRow.personId)) {
+      alert('Bu kişi × proje için tahsis ekleme yetkiniz yok. Yalnızca kendi projenizin ya da bölümünüz personelinin tahsisini ekleyebilirsiniz.');
+      return;
+    }
     onAddAllocation(newRow.personId, newRow.projectId, year, newRow.workPackageId || undefined, newRow.role || undefined);
     setNewRow({ personId: '', projectId: '', workPackageId: '', role: '' });
   };
@@ -154,7 +174,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
 
   // ---------------- Kilit aksiyonları ----------------
 
-  const lockActions = (projectId: string) => {
+  const lockActions = (projectId: string, canManage: boolean) => {
     const status = getPlanLockStatus(planLocks, projectId, year);
     const s = LOCK_STYLES[status];
     return (
@@ -162,7 +182,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
         <span className={`text-[11px] font-semibold px-2 py-1 rounded-lg ${s.cls}`}>
           <i className={`fa-solid ${s.icon} mr-1`}></i>{s.label}
         </span>
-        {status === 'draft' && canEnterData(currentRole) && (
+        {status === 'draft' && canManage && (
           <button onClick={() => onLockAction(projectId, year, 'submitted')} className="text-[11px] font-semibold px-2.5 py-1 rounded-lg text-white hover:opacity-90" style={{ backgroundColor: 'var(--app-primary)' }}>
             <i className="fa-solid fa-paper-plane mr-1"></i>Onaya Gönder
           </button>
@@ -193,16 +213,16 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
 
   const renderGrid = () => (
     <div className="space-y-5">
-      {canEnterData(currentRole) && (
+      {canEnter && (
         <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-3 flex flex-wrap items-center gap-2">
           <span className="text-[11px] font-semibold text-gray-400 mr-1">Yeni Satır</span>
           <select value={newRow.personId} onChange={e => setNewRow({ ...newRow, personId: e.target.value, role: '' })} className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1.5 text-[11px] text-gray-700 dark:text-gray-200 focus:outline-none">
             <option value="">Personel…</option>
-            {people.map(p => <option key={p.id} value={p.id}>{p.firstName} {p.lastName} ({p.departmentCode})</option>)}
+            {addablePeople.map(p => <option key={p.id} value={p.id}>{p.firstName} {p.lastName} ({p.departmentCode})</option>)}
           </select>
           <select value={newRow.projectId} onChange={e => setNewRow({ ...newRow, projectId: e.target.value, workPackageId: '' })} className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1.5 text-[11px] text-gray-700 dark:text-gray-200 focus:outline-none">
             <option value="">Proje…</option>
-            {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            {addableProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
           <select value={newRow.workPackageId} onChange={e => setNewRow({ ...newRow, workPackageId: e.target.value })} disabled={!selectedProject || selectedProject.workPackages.length === 0} className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1.5 text-[11px] text-gray-700 dark:text-gray-200 focus:outline-none disabled:opacity-40">
             <option value="">{selectedProject && selectedProject.workPackages.length === 0 ? 'İP tanımsız' : 'İş Paketi…'}</option>
@@ -221,13 +241,13 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
       {groupedByProject.length === 0 && (
         <div className="text-center py-16 text-gray-400">
           <i className="fa-solid fa-table-cells-large text-3xl mb-3 opacity-40"></i>
-          <p className="text-xs">Bu yıl/filtre için tahsis kaydı yok. {canEnterData(currentRole) ? 'Yukarıdan satır ekleyin veya Veri Havuzu ekranından Excel içe aktarın.' : ''}</p>
+          <p className="text-xs">Bu yıl/filtre için tahsis kaydı yok. {canEnter ? 'Yukarıdan satır ekleyin veya Veri Havuzu ekranından Excel içe aktarın.' : ''}</p>
         </div>
       )}
 
       {groupedByProject.map(([projectId, list]) => {
-        const planEditable = isPlanEditable(currentRole, planLocks, projectId, year);
-        const actualEditable = isActualEditable(currentRole);
+        const draft = getPlanLockStatus(planLocks, projectId, year) === 'draft';
+        const canManageProject = canAddAllocationToProject(wsLike, identity, projectId);
         const planTotals = monthTotalsFor(list, 'plan');
         const actualTotals = monthTotalsFor(list, 'actual');
         return (
@@ -239,7 +259,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
                 <span className="text-xs text-gray-400 font-bold">{list.length} satır · Plan Σ {fmt(planTotals.reduce((a, b) => a + b, 0))} AA · Gerç. Σ {fmt(actualTotals.reduce((a, b) => a + b, 0))} AA</span>
               </div>
               <div className="flex items-center gap-2">
-                {isPlanEditable(currentRole, planLocks, projectId, year) && (
+                {canManageProject && draft && (
                   <button
                     onClick={() => openSuggestions(projectId)}
                     className="text-[11px] font-semibold px-2.5 py-1 rounded-lg border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-300 hover:text-primary hover:border-primary/40 transition-colors"
@@ -248,7 +268,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
                     <i className="fa-solid fa-wand-magic-sparkles mr-1"></i>Görevlerden Öner
                   </button>
                 )}
-                {lockActions(projectId)}
+                {lockActions(projectId, canManageProject)}
               </div>
             </div>
             <div className="overflow-x-auto">
@@ -258,13 +278,15 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
                     <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-400 sticky left-0 bg-gray-50 dark:bg-gray-800 min-w-[190px]">Personel / İP / Rol</th>
                     {MONTHS_TR.map(m => <th key={m} className="px-1 py-2 text-center text-[11px] font-semibold text-gray-400">{m}</th>)}
                     <th className="px-2 py-2 text-center text-[11px] font-semibold text-gray-400">Yıllık</th>
-                    {canEnterData(currentRole) && <th className="px-1 py-2 w-8"></th>}
+                    {canEnter && <th className="px-1 py-2 w-8"></th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
                   {list.map(a => {
                     const person = personMap.get(a.personId);
                     const wpName = a.workPackageId ? projectMap.get(a.projectId)?.workPackages.find(w => w.id === a.workPackageId)?.name : undefined;
+                    const planEditable = canEditPlanCell(wsLike, identity, planLocks, a.projectId, a.personId, year);
+                    const actualEditable = canEditActualCell(wsLike, identity, a.projectId, a.personId);
                     return (
                       <tr key={a.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/40">
                         <td className="px-3 py-1.5 sticky left-0 bg-white dark:bg-gray-800">
@@ -286,13 +308,13 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
                           </span>
                           {mode === 'compare' && <span className="text-xs text-gray-400"> / {fmt(rowTotal(a, 'actual'))}</span>}
                         </td>
-                        {canEnterData(currentRole) && (
+                        {canEnter && (
                           <td className="px-1 py-1 text-center">
                             <button
                               onClick={() => { if (window.confirm('Bu tahsis satırı silinsin mi?')) onDeleteAllocation(a.id); }}
                               disabled={!planEditable}
                               className="w-6 h-6 rounded-md text-gray-300 hover:text-red-500 disabled:opacity-30 disabled:cursor-not-allowed"
-                              title={planEditable ? 'Satırı sil' : 'Plan kilitli — satır silinemez'}
+                              title={planEditable ? 'Satırı sil' : 'Yetkiniz yok veya plan kilitli'}
                             >
                               <i className="fa-solid fa-trash text-xs"></i>
                             </button>
@@ -312,7 +334,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
                     <td className="px-2 py-1.5 text-center text-xs font-semibold" style={{ color: 'var(--app-primary)' }}>
                       {fmt((mode === 'actual' ? actualTotals : planTotals).reduce((a, b) => a + b, 0))}
                     </td>
-                    {canEnterData(currentRole) && <td></td>}
+                    {canEnter && <td></td>}
                   </tr>
                 </tbody>
               </table>

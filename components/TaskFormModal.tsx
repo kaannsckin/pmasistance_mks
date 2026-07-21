@@ -1,17 +1,18 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Task, Resource, TaskStatus, Objective } from '../types';
+import { Task, Resource, TaskStatus, Objective, Person } from '../types';
 
 interface TaskFormModalProps {
   task: Task | null;
   resources: Resource[];
+  people: Person[];
   tasks: Task[];
   objectives: Objective[];
   onClose: () => void;
   onSave: (task: Task) => void;
 }
 
-const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, tasks, objectives, onClose, onSave }) => {
+const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, people, tasks, objectives, onClose, onSave }) => {
   const [formData, setFormData] = useState<Omit<Task, 'id' | 'availability'>>({
     name: '',
     priority: 'Medium',
@@ -71,14 +72,29 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, tasks, o
     }
   }, [task, resources, objectives]);
 
+  // Havuz kişileri (Jira gibi) — proje kaynağı olmayanlar ayrı grupta önerilir
+  const poolCandidates = useMemo(() => {
+    const existing = new Set(resources.map(r => r.name.trim().toLocaleLowerCase('tr-TR')));
+    return people
+      .map(p => ({ id: p.id, name: `${p.firstName} ${p.lastName}`.trim(), unit: p.departmentCode || '' }))
+      .filter(p => p.name && !existing.has(p.name.toLocaleLowerCase('tr-TR')))
+      .sort((a, b) => a.name.localeCompare(b.name, 'tr'));
+  }, [people, resources]);
+
   useEffect(() => {
     if (formData.resourceName) {
         const selectedResource = resources.find(r => r.name === formData.resourceName);
         if (selectedResource && formData.unit !== selectedResource.unit) {
             setFormData(prev => ({ ...prev, unit: selectedResource.unit }));
+            return;
+        }
+        // Havuzdan seçilen kişi için birimi bölüm kodundan doldur
+        const poolPerson = poolCandidates.find(p => p.name === formData.resourceName);
+        if (poolPerson && poolPerson.unit && formData.unit !== poolPerson.unit) {
+            setFormData(prev => ({ ...prev, unit: poolPerson.unit }));
         }
     }
-  }, [formData.resourceName, resources]);
+  }, [formData.resourceName, resources, poolCandidates]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const availableKeyResults = useMemo(() => {
     if (!selectedObjectiveId) return [];
@@ -138,10 +154,19 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, tasks, o
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
              <div>
-              <label htmlFor="resourceName" className="block text-sm font-medium text-black dark:text-white">Kaynak Adı</label>
+              <label htmlFor="resourceName" className="block text-sm font-medium text-black dark:text-white">Atanan Kişi (havuzdan)</label>
               <select name="resourceName" id="resourceName" value={formData.resourceName} onChange={handleChange} required className={`mt-1 block w-full ${inputStyle}`}>
-                <option value="" disabled>Kaynak Seçin</option>
-                {resources.map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
+                <option value="" disabled>Kişi Seçin…</option>
+                {resources.length > 0 && (
+                  <optgroup label="Proje Kaynakları">
+                    {resources.map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
+                  </optgroup>
+                )}
+                {poolCandidates.length > 0 && (
+                  <optgroup label="Havuz (Personel)">
+                    {poolCandidates.map(p => <option key={p.id} value={p.name}>{p.name}{p.unit ? ` (${p.unit})` : ''}</option>)}
+                  </optgroup>
+                )}
               </select>
             </div>
             <div>

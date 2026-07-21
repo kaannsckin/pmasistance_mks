@@ -3,6 +3,7 @@ import { WorkspaceData } from '../types';
 import { MONTHS_TR } from '../utils/allocations';
 import { STATUS_LABELS, STATUS_COLORS } from '../constants';
 import { buildPersonProfile } from '../utils/personProfile';
+import { RISK_BAND_HEX, RISK_STATUS_LABELS } from '../utils/risks';
 
 interface PersonDetailModalProps {
   workspace: WorkspaceData;
@@ -29,7 +30,7 @@ const PersonDetailModal: React.FC<PersonDetailModalProps> = ({ workspace, person
   }, [workspace.titles, profile]);
 
   if (!profile) return null;
-  const { person, capacity, monthlyPlan, monthlyActual, overMonths, byProject, tasks } = profile;
+  const { person, capacity, monthlyPlan, monthlyActual, overMonths, byProject, tasks, risks } = profile;
   const overSet = new Set(overMonths);
   const maxMonth = Math.max(...monthlyPlan, ...monthlyActual, capacity, 0.1);
 
@@ -157,6 +158,28 @@ const PersonDetailModal: React.FC<PersonDetailModalProps> = ({ workspace, person
                     <span className="text-[11px] text-gray-400 flex-none">{t.projectName}</span>
                     <span className="text-[11px] font-semibold flex-none" style={{ color: STATUS_COLORS[t.status] }}>{STATUS_LABELS[t.status]}</span>
                     {t.overdue && <span className="text-[10px] font-semibold text-red-500 flex-none"><i className="fa-solid fa-calendar-xmark mr-1"></i>gecikmiş</span>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Sahibi Olduğu Riskler */}
+          <div>
+            <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-300 mb-3">
+              <i className="fa-solid fa-shield-halved mr-2" style={{ color: 'var(--app-primary)' }}></i>
+              Sahibi Olduğu Riskler ({risks.length})
+            </h4>
+            {risks.length === 0 ? (
+              <p className="text-xs text-gray-400">Bu kişiye atanmış risk yok (risk sahibi havuzdan seçilir).</p>
+            ) : (
+              <div className="space-y-1.5">
+                {risks.map(r => (
+                  <div key={`${r.projectId}-${r.riskId}`} className={`flex items-center gap-3 bg-gray-50 dark:bg-gray-800/60 rounded-lg px-3 py-2 ${r.status === 'closed' ? 'opacity-50' : ''}`}>
+                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-md text-white flex-none" style={{ backgroundColor: RISK_BAND_HEX[r.band] }} title="Risk skoru (olasılık × etki)">{r.score}</span>
+                    <span className="flex-1 text-xs text-gray-700 dark:text-gray-200 truncate" title={r.title}>{r.title}</span>
+                    <span className="text-[11px] text-gray-400 flex-none">{r.projectName}</span>
+                    <span className="text-[11px] font-semibold text-gray-400 flex-none">{RISK_STATUS_LABELS[r.status]}</span>
                   </div>
                 ))}
               </div>

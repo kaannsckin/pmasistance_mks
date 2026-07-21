@@ -11,9 +11,10 @@ import {
   resolveWorkspaceFromStorage,
   serializeWorkspace,
 } from './utils/workspace';
-import { createAllocation, EffortField, setAllocationCell, upsertPlanLock } from './utils/allocations';
+import { createAllocation, EffortField, getPlanLockStatus, ROLE_LABELS, setAllocationCell, upsertPlanLock } from './utils/allocations';
 import { applyPoolImport, PoolImportResult } from './utils/poolImporter';
 import { isExecRole } from './utils/execReport';
+import { canEditProjectContent, identityOf, identityNeedsPerson as computeNeedsPerson, visibleProjectIds } from './utils/rbac';
 import { addSnapshot, buildSnapshot, ensureMonthlySnapshot } from './utils/snapshots';
 import { AllocationSuggestion, ApplyMode, applyAllocationSuggestions } from './utils/taskToAllocation';
 import { buildTodoItems, TodoItem } from './utils/todoItems';
@@ -40,6 +41,10 @@ import ExecutiveView from './components/ExecutiveView';
 import PersonDetailModal from './components/PersonDetailModal';
 import RiskView from './components/RiskView';
 import StatusReportModal from './components/StatusReportModal';
+import DataHealthModal from './components/DataHealthModal';
+import AuditLogModal from './components/AuditLogModal';
+import { analyzeDataHealth, applyHealthFix, HealthFix } from './utils/dataHealth';
+import { appendAudit, AUDIT_ACTION_LABELS } from './utils/audit';
 import { Risk } from './types';
 
 const THEME_COLORS: Record<string, string> = {
@@ -71,6 +76,8 @@ const App: React.FC = () => {
   const [isCloudModalOpen, setIsCloudModalOpen] = useState(false);
   const [viewingPersonId, setViewingPersonId] = useState<string | null>(null);
   const [isStatusReportOpen, setIsStatusReportOpen] = useState(false);
+  const [isHealthModalOpen, setIsHealthModalOpen] = useState(false);
+  const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
 
   const [isInitialized, setIsInitialized] = useState(false);
 
@@ -95,6 +102,22 @@ const App: React.FC = () => {
     () => workspace?.projects.find(p => p.id === workspace.activeProjectId) ?? null,
     [workspace]
   );
+
+  // ---- Kimlik + kapsam ----
+  const identity = useMemo(() => (workspace ? identityOf(workspace) : { role: 'py' as UserRole }), [workspace]);
+  const visibleProjects = useMemo(() => {
+    if (!workspace) return [];
+    const ids = visibleProjectIds(workspace, identity);
+    return workspace.projects.filter(p => ids.has(p.id));
+  }, [workspace, identity]);
+  const needsPerson = useMemo(() => computeNeedsPerson(identity), [identity]);
+
+  // ---- Veri sağlığı (hata + uyarı sayısı rozet için) ----
+  const healthAlerts = useMemo(() => {
+    if (!workspace) return 0;
+    const { counts } = analyzeDataHealth(workspace);
+    return counts.error + counts.warn;
+  }, [workspace]);
 
   // ---- Yapılacaklar (mevcut veriden türetilir, role göre filtreli) ----
   const todoItems = useMemo(() => (workspace ? buildTodoItems(workspace) : []), [workspace]);
@@ -133,6 +156,16 @@ const App: React.FC = () => {
   const updateWorkspace = useCallback((updater: (ws: WorkspaceData) => WorkspaceData) => {
     setWorkspace(prev => (prev ? updater(prev) : prev));
   }, []);
+
+  const handleApplyHealthFix = useCallback((fix: HealthFix) => {
+    updateWorkspace(ws => {
+      const next = applyHealthFix(ws, fix);
+      const summary = fix.kind === 'deleteAllocation' ? 'Yetim tahsis silindi'
+        : fix.kind === 'addPersonFromName' ? `Havuza kişi eklendi: ${fix.name}`
+        : 'Risk sahibi havuza bağlandı';
+      return appendAudit(next, 'health.fix', summary);
+    });
+  }, [updateWorkspace]);
 
   const updateActiveProject = useCallback((updater: (p: Project) => Project) => {
     updateWorkspace(ws => ({
@@ -182,11 +215,28 @@ const App: React.FC = () => {
 
   // ---- Proje yaşam döngüsü ----
   const handleCreateProject = useCallback((name: string) => {
-    const project = createProject(name);
-    project.settings.manMonthTableColor = THEME_COLORS[settings?.theme || 'classic'];
-    updateWorkspace(ws => ({ ...ws, projects: [...ws.projects, project], activeProjectId: project.id }));
+    updateWorkspace(ws => {
+      const project = createProject(name);
+      project.settings.manMonthTableColor = THEME_COLORS[ws.settings.theme || 'classic'];
+      // Oluşturan PM ise projeyi ona sahiplendir (RBAC kapsamı)
+      if (ws.currentRole === 'py' && ws.currentPersonId) project.pmPersonId = ws.currentPersonId;
+      const next = { ...ws, projects: [...ws.projects, project], activeProjectId: project.id };
+      return appendAudit(next, 'project.create', `"${name}" projesi oluşturuldu`, project.id);
+    });
     setCurrentView(View.Roadmap);
-  }, [updateWorkspace, settings?.theme]);
+  }, [updateWorkspace]);
+
+  const handleSetProjectOwner = useCallback((projectId: string, personId: string | undefined) => {
+    updateWorkspace(ws => {
+      const project = ws.projects.find(p => p.id === projectId);
+      const ownerName = personId ? (() => { const o = ws.people.find(p => p.id === personId); return o ? `${o.firstName} ${o.lastName}`.trim() : personId; })() : 'boş';
+      const next = {
+        ...ws,
+        projects: ws.projects.map(p => p.id === projectId ? { ...p, pmPersonId: personId, updatedAt: new Date().toISOString() } : p),
+      };
+      return appendAudit(next, 'project.owner', `"${project?.name || projectId}" sahibi: ${ownerName}`, projectId);
+    });
+  }, [updateWorkspace]);
 
   const handleOpenProject = useCallback((projectId: string) => {
     updateWorkspace(ws => ({ ...ws, activeProjectId: projectId }));
@@ -195,12 +245,14 @@ const App: React.FC = () => {
 
   const handleDeleteProject = useCallback((projectId: string) => {
     updateWorkspace(ws => {
+      const removed = ws.projects.find(p => p.id === projectId);
       const projects = ws.projects.filter(p => p.id !== projectId);
-      return {
+      const next = {
         ...ws,
         projects,
         activeProjectId: ws.activeProjectId === projectId ? (projects[0]?.id ?? null) : ws.activeProjectId,
       };
+      return appendAudit(next, 'project.delete', `"${removed?.name || projectId}" projesi silindi`);
     });
   }, [updateWorkspace]);
 
@@ -225,14 +277,21 @@ const App: React.FC = () => {
     }));
   }, [updateWorkspace]);
 
-  // ---- Veri havuzu + tahsis ----
-  const handleChangeRole = useCallback((role: UserRole) => {
-    updateWorkspace(ws => ({ ...ws, currentRole: role }));
-    // Yönetici rolüne geçişte PM'e özel ekranlardan çık, yönetim ekranına in
+  // ---- Kimlik / RBAC ----
+  const handleChangeIdentity = useCallback((role: UserRole, personId?: string) => {
+    updateWorkspace(ws => {
+      const next = { ...ws, currentRole: role, currentPersonId: personId };
+      // Kapsam değişince görünmeyen bir proje aktifse ilk görünür projeye/portföye geç
+      const visible = visibleProjectIds(next, { role, personId });
+      if (next.activeProjectId && !visible.has(next.activeProjectId)) {
+        next.activeProjectId = null;
+      }
+      const who = personId ? (() => { const p = next.people.find(x => x.id === personId); return p ? ` (${p.firstName} ${p.lastName})`.trimEnd() : ''; })() : '';
+      return appendAudit(next, 'identity.change', `Kimlik: ${ROLE_LABELS[role]}${who}`);
+    });
+    // Yönetici rolüne geçişte PM'e özel ekranlardan çık
     if (isExecRole(role)) {
-      setCurrentView(prev =>
-        prev === View.Notes || prev === View.Requests || prev === View.AI ? View.Executive : prev
-      );
+      setCurrentView(prev => (prev === View.Notes || prev === View.Requests || prev === View.AI ? View.Executive : prev));
     }
   }, [updateWorkspace]);
 
@@ -257,13 +316,19 @@ const App: React.FC = () => {
 
   const handleLockAction = useCallback((projectId: string, year: number, status: PlanLockStatus) => {
     updateWorkspace(ws => {
+      const projectName = ws.projects.find(p => p.id === projectId)?.name || 'Proje';
+      const prev = getPlanLockStatus(ws.planLocks, projectId, year);
       let next = { ...ws, planLocks: upsertPlanLock(ws.planLocks, projectId, year, status, ws.currentRole) };
       if (status === 'locked') {
         // Onaylanan plan = baseline: kilit anında otomatik anlık görüntü al
-        const projectName = ws.projects.find(p => p.id === projectId)?.name || 'Proje';
         next = addSnapshot(next, buildSnapshot(next, year, `Onaylı plan — ${projectName}`, 'lock'));
       }
-      return next;
+      // Denetim: geçişe göre aksiyon
+      const action = status === 'submitted' ? 'plan.submit'
+        : status === 'locked' ? 'plan.approve'
+        : prev === 'submitted' ? 'plan.reject' // submitted → draft = ret
+        : 'plan.unlock'; // locked → draft = kilit açma
+      return appendAudit(next, action, `${projectName} · ${year} planı — ${AUDIT_ACTION_LABELS[action]}`, projectId);
     });
   }, [updateWorkspace]);
 
@@ -296,7 +361,7 @@ const App: React.FC = () => {
         if (summary.warnings.length > 6) lines.push(`… ve ${summary.warnings.length - 6} uyarı daha`);
       }
       alert(`Excel içe aktarma tamamlandı.\n\n${lines.join('\n')}`);
-      return next;
+      return appendAudit(next, 'data.import', `Excel havuz içe aktarımı: ${summary.peopleAdded}+${summary.peopleUpdated} personel, ${summary.allocationsAdded}+${summary.allocationsUpdated} tahsis`);
     });
   }, [updateWorkspace]);
 
@@ -343,11 +408,11 @@ const App: React.FC = () => {
         return;
       }
       // Eski tek proje yedeği: mevcut çalışma alanına yeni proje olarak eklenir
-      updateWorkspace(ws => ({
+      updateWorkspace(ws => appendAudit({
         ...ws,
         projects: [...ws.projects, result.project],
         activeProjectId: result.project.id,
-      }));
+      }, 'data.import', `JSON yedeğinden proje eklendi: "${result.project.name}"`, result.project.id));
       setCurrentView(View.Roadmap);
       alert(`"${result.project.name}" çalışma alanına yeni proje olarak eklendi.`);
     };
@@ -436,6 +501,7 @@ const App: React.FC = () => {
           projects={workspace.projects}
           planLocks={workspace.planLocks}
           currentRole={workspace.currentRole || 'py'}
+          identity={identity}
           onSetCell={handleSetAllocationCell}
           onAddAllocation={handleAddAllocation}
           onDeleteAllocation={handleDeleteAllocation}
@@ -449,14 +515,18 @@ const App: React.FC = () => {
     if (!activeProject || currentView === View.Portfolio) {
       return (
         <PortfolioView
-          projects={workspace.projects}
+          projects={visibleProjects}
           activeProjectId={workspace.activeProjectId}
+          identity={identity}
+          people={workspace.people}
+          needsPerson={needsPerson}
           onOpenProject={handleOpenProject}
           onCreateProject={handleCreateProject}
           onDeleteProject={handleDeleteProject}
           onRenameProject={handleRenameProject}
           onSetRag={handleSetProjectRag}
           onSetStatus={handleSetProjectStatus}
+          onSetOwner={handleSetProjectOwner}
         />
       );
     }
@@ -527,7 +597,8 @@ const App: React.FC = () => {
           <RiskView
             projectName={activeProject.name}
             risks={activeProject.risks || []}
-            currentRole={workspace.currentRole || 'py'}
+            people={workspace.people}
+            canEdit={canEditProjectContent(workspace, identity, activeProject.id)}
             onUpdateRisks={(risks: Risk[]) => updateActiveProject(p => ({ ...p, risks }))}
           />
         );
@@ -565,23 +636,47 @@ const App: React.FC = () => {
         isLocalPersistenceEnabled={settings?.isLocalPersistenceEnabled !== false}
         isAIEnabled={settings?.isAIEnabled !== false}
         onOpenAbout={() => setIsAboutModalOpen(true)}
-        projects={workspace?.projects.map(p => ({ id: p.id, name: p.name, rag: p.rag })) || []}
+        projects={visibleProjects.map(p => ({ id: p.id, name: p.name, rag: p.rag }))}
         activeProjectId={activeProject?.id ?? null}
         onSelectProject={handleOpenProject}
         currentRole={workspace?.currentRole || 'py'}
-        onChangeRole={handleChangeRole}
+        currentPersonId={workspace?.currentPersonId}
+        people={(workspace?.people || []).map(p => ({ id: p.id, name: `${p.firstName} ${p.lastName}`.trim(), initials: `${p.firstName.charAt(0)}${p.lastName.charAt(0)}`, departmentCode: p.departmentCode }))}
+        identityNeedsPerson={needsPerson}
+        onChangeIdentity={handleChangeIdentity}
         cloudLinked={!!loadCloudConfig()?.workspaceId}
         onOpenCloudSync={() => setIsCloudModalOpen(true)}
         todoItems={todoItems}
         onTodoNavigate={handleTodoNavigate}
         onOpenStatusReport={() => setIsStatusReportOpen(true)}
+        dataHealthAlerts={healthAlerts}
+        onOpenDataHealth={() => setIsHealthModalOpen(true)}
+        onOpenAuditLog={() => setIsAuditModalOpen(true)}
       />
       <main className={`w-full max-w-[1920px] mx-auto ${isFullWidthView ? mainHeightClass : `px-4 sm:px-6 lg:px-8 py-6 ${mainHeightClass} overflow-auto`}`}>
         {renderView()}
       </main>
 
-      {isFormModalOpen && activeProject && <TaskFormModal task={editingTask} resources={activeProject.resources} tasks={activeProject.tasks} objectives={activeProject.objectives} onClose={() => setIsFormModalOpen(false)} onSave={(t) => {
-          setTasks(prev => prev.some(x => x.id === t.id) ? prev.map(x => x.id === t.id ? t : x) : [...prev, t]);
+      {isFormModalOpen && activeProject && workspace && <TaskFormModal task={editingTask} resources={activeProject.resources} people={workspace.people} tasks={activeProject.tasks} objectives={activeProject.objectives} onClose={() => setIsFormModalOpen(false)} onSave={(t) => {
+          updateActiveProject(p => {
+            const tasks = p.tasks.some(x => x.id === t.id) ? p.tasks.map(x => x.id === t.id ? t : x) : [...p.tasks, t];
+            // Havuzdan atanan kişi proje kaynağı değilse otomatik ekle (isim eşleşmesi korunur)
+            let resources = p.resources;
+            const assignee = t.resourceName?.trim();
+            if (assignee && !resources.some(r => r.name.trim().toLocaleLowerCase('tr-TR') === assignee.toLocaleLowerCase('tr-TR'))) {
+              const person = workspace.people.find(pp => `${pp.firstName} ${pp.lastName}`.trim().toLocaleLowerCase('tr-TR') === assignee.toLocaleLowerCase('tr-TR'));
+              if (person) {
+                resources = [...resources, {
+                  id: `res-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+                  name: assignee,
+                  participation: 100,
+                  unit: person.departmentCode || t.unit || '',
+                  title: person.titleCode || 'Uzman',
+                }];
+              }
+            }
+            return { ...p, tasks, resources };
+          });
           setIsFormModalOpen(false);
       }} />}
       {isDetailModalOpen && viewingTask && <TaskDetailModal task={viewingTask} onClose={() => setIsDetailModalOpen(false)} onEdit={(t) => { setIsDetailModalOpen(false); setEditingTask(t); setIsFormModalOpen(true); }} onSave={handleUpdateTask} />}
@@ -610,6 +705,19 @@ const App: React.FC = () => {
           workspace={workspace}
           personId={viewingPersonId}
           onClose={() => setViewingPersonId(null)}
+        />
+      )}
+      {isHealthModalOpen && workspace && (
+        <DataHealthModal
+          workspace={workspace}
+          onApplyFix={handleApplyHealthFix}
+          onClose={() => setIsHealthModalOpen(false)}
+        />
+      )}
+      {isAuditModalOpen && workspace && (
+        <AuditLogModal
+          workspace={workspace}
+          onClose={() => setIsAuditModalOpen(false)}
         />
       )}
       {isStatusReportOpen && workspace && activeProject && (

@@ -1,12 +1,12 @@
 import React, { useMemo, useState } from 'react';
-import { Risk, RiskLevel, RiskStatus, UserRole } from '../types';
-import { canEnterData } from '../utils/allocations';
+import { Person, Risk, RiskLevel, RiskStatus } from '../types';
 import { createRisk, riskBand, RISK_BAND_HEX, RISK_BAND_LABELS, riskScore, RISK_STATUS_LABELS } from '../utils/risks';
 
 interface RiskViewProps {
   projectName: string;
   risks: Risk[];
-  currentRole: UserRole;
+  people: Person[];
+  canEdit: boolean;
   onUpdateRisks: (risks: Risk[]) => void;
 }
 
@@ -19,9 +19,21 @@ const STATUS_STYLES: Record<RiskStatus, string> = {
   closed: 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400',
 };
 
-const RiskView: React.FC<RiskViewProps> = ({ projectName, risks, currentRole, onUpdateRisks }) => {
-  const editable = canEnterData(currentRole);
-  const [newRisk, setNewRisk] = useState({ title: '', probability: 3 as RiskLevel, impact: 3 as RiskLevel, owner: '', mitigation: '' });
+const RiskView: React.FC<RiskViewProps> = ({ projectName, risks, people, canEdit, onUpdateRisks }) => {
+  const editable = canEdit;
+  const [newRisk, setNewRisk] = useState({ title: '', probability: 3 as RiskLevel, impact: 3 as RiskLevel, ownerPersonId: '', mitigation: '' });
+
+  // Havuz — sahibi buradan seçilir (Jira gibi), serbest metin değil
+  const sortedPeople = useMemo(
+    () => [...people].sort((a, b) => `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`, 'tr')),
+    [people],
+  );
+  const personName = useMemo(() => {
+    const m = new Map(people.map(p => [p.id, `${p.firstName} ${p.lastName}`.trim()]));
+    return (id?: string) => (id ? m.get(id) : undefined);
+  }, [people]);
+  // Bir riskin sahip etiketi: havuz kişisi → güncel ad; yoksa eski serbest metin
+  const ownerLabel = (r: Risk): string => personName(r.ownerPersonId) || r.owner || '';
 
   const activeRisks = useMemo(() => risks.filter(r => r.status !== 'closed'), [risks]);
 
@@ -40,9 +52,21 @@ const RiskView: React.FC<RiskViewProps> = ({ projectName, risks, currentRole, on
 
   const addRisk = () => {
     if (!newRisk.title.trim()) return;
-    onUpdateRisks([...risks, createRisk({ ...newRisk, title: newRisk.title.trim(), owner: newRisk.owner.trim() || undefined, mitigation: newRisk.mitigation.trim() || undefined })]);
-    setNewRisk({ title: '', probability: 3, impact: 3, owner: '', mitigation: '' });
+    const ownerPersonId = newRisk.ownerPersonId || undefined;
+    onUpdateRisks([...risks, createRisk({
+      title: newRisk.title.trim(),
+      probability: newRisk.probability,
+      impact: newRisk.impact,
+      ownerPersonId,
+      owner: personName(ownerPersonId), // ad görüntü/dışa aktarım için sabitlenir
+      mitigation: newRisk.mitigation.trim() || undefined,
+    })]);
+    setNewRisk({ title: '', probability: 3, impact: 3, ownerPersonId: '', mitigation: '' });
   };
+
+  // Havuzdan sahip ata (satır düzenleme): hem id hem ad güncellenir
+  const setRiskOwner = (id: string, ownerPersonId: string) =>
+    updateRisk(id, { ownerPersonId: ownerPersonId || undefined, owner: personName(ownerPersonId) });
 
   const sortedRisks = useMemo(
     () => [...risks].sort((a, b) => (a.status === 'closed' ? 1 : 0) - (b.status === 'closed' ? 1 : 0) || riskScore(b) - riskScore(a)),
@@ -123,7 +147,10 @@ const RiskView: React.FC<RiskViewProps> = ({ projectName, risks, currentRole, on
                 </select>
               </label>
             </div>
-            <input className={inputCls} placeholder="Sahibi (opsiyonel)" value={newRisk.owner} onChange={e => setNewRisk({ ...newRisk, owner: e.target.value })} />
+            <select className={inputCls} value={newRisk.ownerPersonId} onChange={e => setNewRisk({ ...newRisk, ownerPersonId: e.target.value })}>
+              <option value="">Sahibi (havuzdan seç)…</option>
+              {sortedPeople.map(p => <option key={p.id} value={p.id}>{p.firstName} {p.lastName}{p.departmentCode ? ` (${p.departmentCode})` : ''}</option>)}
+            </select>
             <input className={inputCls} placeholder="Azaltıcı aksiyon (opsiyonel)" value={newRisk.mitigation} onChange={e => setNewRisk({ ...newRisk, mitigation: e.target.value })} />
             <div className="flex items-center justify-between">
               <span className="text-[11px] text-gray-400">Skor: <b style={{ color: RISK_BAND_HEX[riskBand(newRisk.probability * newRisk.impact)] }}>{newRisk.probability * newRisk.impact} · {RISK_BAND_LABELS[riskBand(newRisk.probability * newRisk.impact)]}</b></span>
@@ -173,8 +200,15 @@ const RiskView: React.FC<RiskViewProps> = ({ projectName, risks, currentRole, on
                   <td className="px-3 py-2">
                     <span className="text-xs font-bold px-2 py-1 rounded-lg text-white" style={{ backgroundColor: RISK_BAND_HEX[band] }}>{score}</span>
                   </td>
-                  <td className="px-3 py-2 min-w-[120px]">
-                    <input disabled={!editable} className={inputCls} value={r.owner || ''} placeholder="—" onChange={e => updateRisk(r.id, { owner: e.target.value || undefined })} />
+                  <td className="px-3 py-2 min-w-[140px]">
+                    {editable ? (
+                      <select className={inputCls} value={r.ownerPersonId || ''} onChange={e => setRiskOwner(r.id, e.target.value)}>
+                        <option value="">{r.owner && !r.ownerPersonId ? `${r.owner} (havuz dışı)` : 'Sahibi yok'}</option>
+                        {sortedPeople.map(p => <option key={p.id} value={p.id}>{p.firstName} {p.lastName}{p.departmentCode ? ` (${p.departmentCode})` : ''}</option>)}
+                      </select>
+                    ) : (
+                      <span className="text-[11px] text-gray-600 dark:text-gray-300">{ownerLabel(r) || '—'}</span>
+                    )}
                   </td>
                   <td className="px-3 py-2 min-w-[180px]">
                     <input disabled={!editable} className={inputCls} value={r.mitigation || ''} placeholder="—" onChange={e => updateRisk(r.id, { mitigation: e.target.value || undefined })} />
