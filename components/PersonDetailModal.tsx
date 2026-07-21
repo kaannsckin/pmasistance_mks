@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { WorkspaceData } from '../types';
 import { MONTHS_TR, MONTH_INDEXES } from '../utils/allocations';
 import { STATUS_LABELS, STATUS_COLORS } from '../constants';
@@ -26,6 +26,13 @@ const YEAR_RANGE = (() => {
 const PersonDetailModal: React.FC<PersonDetailModalProps> = ({ workspace, personId, canEditLeave = false, onSetLeave, onClose }) => {
   const [year, setYear] = useState(new Date().getFullYear());
   const [showLeave, setShowLeave] = useState(false);
+
+  // Esc ile kapat (kozmetik/hız)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
   const profile = useMemo(() => buildPersonProfile(workspace, personId, year), [workspace, personId, year]);
   const titleName = useMemo(() => {
     const t = workspace.titles.find(x => x.code === profile?.person.titleCode);
