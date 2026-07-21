@@ -616,8 +616,26 @@ const App: React.FC = () => {
         {renderView()}
       </main>
 
-      {isFormModalOpen && activeProject && <TaskFormModal task={editingTask} resources={activeProject.resources} tasks={activeProject.tasks} objectives={activeProject.objectives} onClose={() => setIsFormModalOpen(false)} onSave={(t) => {
-          setTasks(prev => prev.some(x => x.id === t.id) ? prev.map(x => x.id === t.id ? t : x) : [...prev, t]);
+      {isFormModalOpen && activeProject && workspace && <TaskFormModal task={editingTask} resources={activeProject.resources} people={workspace.people} tasks={activeProject.tasks} objectives={activeProject.objectives} onClose={() => setIsFormModalOpen(false)} onSave={(t) => {
+          updateActiveProject(p => {
+            const tasks = p.tasks.some(x => x.id === t.id) ? p.tasks.map(x => x.id === t.id ? t : x) : [...p.tasks, t];
+            // Havuzdan atanan kişi proje kaynağı değilse otomatik ekle (isim eşleşmesi korunur)
+            let resources = p.resources;
+            const assignee = t.resourceName?.trim();
+            if (assignee && !resources.some(r => r.name.trim().toLocaleLowerCase('tr-TR') === assignee.toLocaleLowerCase('tr-TR'))) {
+              const person = workspace.people.find(pp => `${pp.firstName} ${pp.lastName}`.trim().toLocaleLowerCase('tr-TR') === assignee.toLocaleLowerCase('tr-TR'));
+              if (person) {
+                resources = [...resources, {
+                  id: `res-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+                  name: assignee,
+                  participation: 100,
+                  unit: person.departmentCode || t.unit || '',
+                  title: person.titleCode || 'Uzman',
+                }];
+              }
+            }
+            return { ...p, tasks, resources };
+          });
           setIsFormModalOpen(false);
       }} />}
       {isDetailModalOpen && viewingTask && <TaskDetailModal task={viewingTask} onClose={() => setIsDetailModalOpen(false)} onEdit={(t) => { setIsDetailModalOpen(false); setEditingTask(t); setIsFormModalOpen(true); }} onSave={handleUpdateTask} />}

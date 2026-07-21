@@ -1,5 +1,6 @@
-import { Person, TaskStatus, WorkspaceData } from '../types';
+import { Person, RiskStatus, TaskStatus, WorkspaceData } from '../types';
 import { MONTH_INDEXES } from './allocations';
+import { RiskBand, riskBand, riskScore } from './risks';
 
 /**
  * Kişi profili: bir kişinin TÜM projelerdeki durumunu tek yerde toplar.
@@ -25,6 +26,16 @@ export interface PersonTaskRef {
     overdue: boolean;
 }
 
+export interface PersonRiskRef {
+    riskId: string;
+    title: string;
+    projectId: string;
+    projectName: string;
+    score: number;
+    band: RiskBand;
+    status: RiskStatus;
+}
+
 export interface PersonProfile {
     person: Person;
     year: number;
@@ -36,6 +47,7 @@ export interface PersonProfile {
     byProject: PersonProjectLoad[]; // plan AA'ya göre azalan
     overMonths: number[]; // kapasiteyi aşan aylar (1-12)
     tasks: PersonTaskRef[]; // isme göre eşleşen görevler (tüm projeler)
+    risks: PersonRiskRef[]; // sahibi bu kişi olan riskler (tüm projeler)
     projectCount: number;
     roles: string[];
 }
@@ -91,6 +103,28 @@ export const buildPersonProfile = (ws: WorkspaceData, personId: string, year: nu
     });
     tasks.sort((a, b) => (a.overdue === b.overdue ? 0 : a.overdue ? -1 : 1) || a.taskName.localeCompare(b.taskName, 'tr'));
 
+    // Sahibi bu kişi olan riskler (havuz ataması: ownerPersonId; eski kayıtlar için ad eşleşmesi)
+    const risks: PersonRiskRef[] = [];
+    ws.projects.forEach(p => {
+        (p.risks || []).forEach(r => {
+            const isOwner = r.ownerPersonId
+                ? r.ownerPersonId === personId
+                : !!r.owner && trKey(r.owner) === fullName;
+            if (!isOwner) return;
+            const score = riskScore(r);
+            risks.push({
+                riskId: r.id,
+                title: r.title,
+                projectId: p.id,
+                projectName: p.name,
+                score,
+                band: riskBand(score),
+                status: r.status,
+            });
+        });
+    });
+    risks.sort((a, b) => (a.status === 'closed' ? 1 : 0) - (b.status === 'closed' ? 1 : 0) || b.score - a.score);
+
     const byProject = Array.from(byProjectMap.values())
         .map(r => ({ ...r, months: r.months.map(round2), total: round2(r.total) }))
         .filter(r => r.total > 0)
@@ -107,6 +141,7 @@ export const buildPersonProfile = (ws: WorkspaceData, personId: string, year: nu
         byProject,
         overMonths,
         tasks,
+        risks,
         projectCount: byProject.length,
         roles: person.roles,
     };

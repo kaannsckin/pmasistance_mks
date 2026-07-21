@@ -72,4 +72,31 @@ describe('buildPersonProfile', () => {
     it('bulunmayan kişide null döner', () => {
         expect(buildPersonProfile(buildWs(), 'yok', 2026, NOW)).toBeNull();
     });
+
+    it('sahibi olduğu riskleri havuz ataması (ownerPersonId) ile toplar, skora göre sıralar', () => {
+        const ws = buildWs();
+        ws.projects[0].risks = [
+            { id: 'r1', title: 'Düşük risk', probability: 2, impact: 2, status: 'open', createdAt: '', ownerPersonId: 'k1' }, // skor 4
+            { id: 'r2', title: 'Yüksek risk', probability: 5, impact: 4, status: 'open', createdAt: '', ownerPersonId: 'k1' }, // skor 20
+            { id: 'r3', title: 'Başkasının riski', probability: 5, impact: 5, status: 'open', createdAt: '', ownerPersonId: 'baska' },
+        ];
+        ws.projects[1].risks = [
+            { id: 'r4', title: 'Eski ad eşleşmesi', probability: 3, impact: 3, status: 'monitoring', createdAt: '', owner: 'Kaan Test' }, // skor 9, ownerPersonId yok
+        ];
+        const r = buildPersonProfile(ws, 'k1', 2026, NOW)!;
+        expect(r.risks.map(x => x.title)).toEqual(['Yüksek risk', 'Eski ad eşleşmesi', 'Düşük risk']);
+        expect(r.risks[0].score).toBe(20);
+        expect(r.risks[0].band).toBe('high');
+        expect(r.risks.some(x => x.title === 'Başkasının riski')).toBe(false);
+    });
+
+    it('kapalı riskleri sona atar', () => {
+        const ws = buildWs();
+        ws.projects[0].risks = [
+            { id: 'r1', title: 'Kapalı yüksek', probability: 5, impact: 5, status: 'closed', createdAt: '', ownerPersonId: 'k1' },
+            { id: 'r2', title: 'Açık düşük', probability: 2, impact: 1, status: 'open', createdAt: '', ownerPersonId: 'k1' },
+        ];
+        const r = buildPersonProfile(ws, 'k1', 2026, NOW)!;
+        expect(r.risks.map(x => x.title)).toEqual(['Açık düşük', 'Kapalı yüksek']);
+    });
 });
