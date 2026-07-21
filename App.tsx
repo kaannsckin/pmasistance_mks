@@ -16,6 +16,7 @@ import { applyPoolImport, PoolImportResult } from './utils/poolImporter';
 import { isExecRole } from './utils/execReport';
 import { addSnapshot, buildSnapshot, ensureMonthlySnapshot } from './utils/snapshots';
 import { AllocationSuggestion, ApplyMode, applyAllocationSuggestions } from './utils/taskToAllocation';
+import { buildTodoItems, TodoItem } from './utils/todoItems';
 import { loadCloudConfig, scheduleAutoPush } from './utils/cloudSync';
 import CloudSyncModal from './components/CloudSyncModal';
 import Header from './components/Header';
@@ -88,6 +89,17 @@ const App: React.FC = () => {
     () => workspace?.projects.find(p => p.id === workspace.activeProjectId) ?? null,
     [workspace]
   );
+
+  // ---- Yapılacaklar (mevcut veriden türetilir, role göre filtreli) ----
+  const todoItems = useMemo(() => (workspace ? buildTodoItems(workspace) : []), [workspace]);
+
+  const handleTodoNavigate = useCallback((item: TodoItem) => {
+    // Proje bağlamı gerekiyorsa önce o projeyi aç, sonra ekrana geç
+    if (item.projectId) {
+      setWorkspace(prev => (prev ? { ...prev, activeProjectId: item.projectId! } : prev));
+    }
+    setCurrentView(item.view);
+  }, []);
 
   // ---- Tema / gece modu ----
   useEffect(() => {
@@ -544,6 +556,8 @@ const App: React.FC = () => {
         onChangeRole={handleChangeRole}
         cloudLinked={!!loadCloudConfig()?.workspaceId}
         onOpenCloudSync={() => setIsCloudModalOpen(true)}
+        todoItems={todoItems}
+        onTodoNavigate={handleTodoNavigate}
       />
       <main className={`w-full max-w-[1920px] mx-auto ${isFullWidthView ? mainHeightClass : `px-4 sm:px-6 lg:px-8 py-6 ${mainHeightClass} overflow-auto`}`}>
         {renderView()}

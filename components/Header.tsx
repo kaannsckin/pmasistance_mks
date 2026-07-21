@@ -3,6 +3,7 @@ import React, { useRef, useState } from 'react';
 import { View, RagStatus, UserRole } from '../types';
 import { ROLE_LABELS } from '../utils/allocations';
 import { isExecRole } from '../utils/execReport';
+import { TodoItem, todoBadgeCount } from '../utils/todoItems';
 
 export interface HeaderProjectSummary {
   id: string;
@@ -26,7 +27,65 @@ interface HeaderProps {
   onChangeRole: (role: UserRole) => void;
   cloudLinked: boolean;
   onOpenCloudSync: () => void;
+  todoItems: TodoItem[];
+  onTodoNavigate: (item: TodoItem) => void;
 }
+
+const TODO_SEVERITY: Record<TodoItem['severity'], { dot: string; text: string }> = {
+  danger: { dot: '#ef4444', text: 'text-red-600 dark:text-red-300' },
+  warn: { dot: '#f59e0b', text: 'text-amber-600 dark:text-amber-300' },
+  info: { dot: '#9ca3af', text: 'text-gray-500 dark:text-gray-400' },
+};
+
+const TodoBell: React.FC<{ items: TodoItem[]; onNavigate: (item: TodoItem) => void }> = ({ items, onNavigate }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const badge = todoBadgeCount(items);
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-10 h-10 flex items-center justify-center bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500 transition-colors relative"
+        title="Yapılacaklar ve hatırlatıcılar"
+      >
+        <i className="fa-solid fa-bell text-[13px] text-gray-400"></i>
+        {badge > 0 && (
+          <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center border border-white dark:border-gray-700">
+            {badge > 9 ? '9+' : badge}
+          </span>
+        )}
+      </button>
+      {isOpen && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)}></div>
+          <div className="absolute top-full right-0 mt-1.5 w-80 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-50 py-1.5 max-h-[70vh] overflow-y-auto">
+            <div className="px-3.5 pt-1.5 pb-2 flex items-center justify-between">
+              <p className="text-xs font-semibold text-gray-500 dark:text-gray-300">Yapılacaklar</p>
+              <span className="text-[11px] text-gray-400">{items.length} kalem</span>
+            </div>
+            {items.length === 0 ? (
+              <div className="px-3.5 py-6 text-center">
+                <i className="fa-solid fa-circle-check text-emerald-400 text-2xl mb-2"></i>
+                <p className="text-xs text-gray-400">Bekleyen bir iş yok. Temiz!</p>
+              </div>
+            ) : (
+              items.map(item => (
+                <button
+                  key={item.id}
+                  onClick={() => { onNavigate(item); setIsOpen(false); }}
+                  className="w-full flex items-start gap-2.5 px-3.5 py-2.5 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors border-t border-gray-50 dark:border-gray-700/60 first:border-t-0"
+                >
+                  <span className="mt-1 w-2 h-2 rounded-full flex-none" style={{ backgroundColor: TODO_SEVERITY[item.severity].dot }}></span>
+                  <i className={`fa-solid ${item.icon} text-[11px] mt-0.5 flex-none ${TODO_SEVERITY[item.severity].text}`}></i>
+                  <span className="text-xs text-gray-700 dark:text-gray-200 leading-snug">{item.text}</span>
+                </button>
+              ))
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
 
 /** Proje bağlamında çalışan görünümler — ikinci navigasyon katmanı bunları taşır */
 export const PROJECT_VIEWS: View[] = [View.Kanban, View.Roadmap, View.Goals, View.Tasks, View.Requests, View.Resources, View.Notes, View.AI];
@@ -190,7 +249,7 @@ const RoleSwitcher: React.FC<{ currentRole: UserRole; onChangeRole: (r: UserRole
   );
 };
 
-const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSettings, onSaveProject, onLoadProject, isAIEnabled = true, onOpenAbout, projects, activeProjectId, onSelectProject, currentRole, onChangeRole, cloudLinked, onOpenCloudSync }) => {
+const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSettings, onSaveProject, onLoadProject, isAIEnabled = true, onOpenAbout, projects, activeProjectId, onSelectProject, currentRole, onChangeRole, cloudLinked, onOpenCloudSync, todoItems, onTodoNavigate }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
@@ -300,6 +359,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSett
           </nav>
 
           <div className="flex items-center gap-1.5 flex-none">
+            <TodoBell items={todoItems} onNavigate={onTodoNavigate} />
             <button
               onClick={onOpenCloudSync}
               className="w-10 h-10 flex items-center justify-center bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500 transition-colors relative"
