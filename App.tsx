@@ -41,6 +41,8 @@ import ExecutiveView from './components/ExecutiveView';
 import PersonDetailModal from './components/PersonDetailModal';
 import RiskView from './components/RiskView';
 import StatusReportModal from './components/StatusReportModal';
+import DataHealthModal from './components/DataHealthModal';
+import { analyzeDataHealth, applyHealthFix, HealthFix } from './utils/dataHealth';
 import { Risk } from './types';
 
 const THEME_COLORS: Record<string, string> = {
@@ -72,6 +74,7 @@ const App: React.FC = () => {
   const [isCloudModalOpen, setIsCloudModalOpen] = useState(false);
   const [viewingPersonId, setViewingPersonId] = useState<string | null>(null);
   const [isStatusReportOpen, setIsStatusReportOpen] = useState(false);
+  const [isHealthModalOpen, setIsHealthModalOpen] = useState(false);
 
   const [isInitialized, setIsInitialized] = useState(false);
 
@@ -105,6 +108,13 @@ const App: React.FC = () => {
     return workspace.projects.filter(p => ids.has(p.id));
   }, [workspace, identity]);
   const needsPerson = useMemo(() => computeNeedsPerson(identity), [identity]);
+
+  // ---- Veri sağlığı (hata + uyarı sayısı rozet için) ----
+  const healthAlerts = useMemo(() => {
+    if (!workspace) return 0;
+    const { counts } = analyzeDataHealth(workspace);
+    return counts.error + counts.warn;
+  }, [workspace]);
 
   // ---- Yapılacaklar (mevcut veriden türetilir, role göre filtreli) ----
   const todoItems = useMemo(() => (workspace ? buildTodoItems(workspace) : []), [workspace]);
@@ -143,6 +153,10 @@ const App: React.FC = () => {
   const updateWorkspace = useCallback((updater: (ws: WorkspaceData) => WorkspaceData) => {
     setWorkspace(prev => (prev ? updater(prev) : prev));
   }, []);
+
+  const handleApplyHealthFix = useCallback((fix: HealthFix) => {
+    updateWorkspace(ws => applyHealthFix(ws, fix));
+  }, [updateWorkspace]);
 
   const updateActiveProject = useCallback((updater: (p: Project) => Project) => {
     updateWorkspace(ws => ({
@@ -611,6 +625,8 @@ const App: React.FC = () => {
         todoItems={todoItems}
         onTodoNavigate={handleTodoNavigate}
         onOpenStatusReport={() => setIsStatusReportOpen(true)}
+        dataHealthAlerts={healthAlerts}
+        onOpenDataHealth={() => setIsHealthModalOpen(true)}
       />
       <main className={`w-full max-w-[1920px] mx-auto ${isFullWidthView ? mainHeightClass : `px-4 sm:px-6 lg:px-8 py-6 ${mainHeightClass} overflow-auto`}`}>
         {renderView()}
@@ -664,6 +680,13 @@ const App: React.FC = () => {
           workspace={workspace}
           personId={viewingPersonId}
           onClose={() => setViewingPersonId(null)}
+        />
+      )}
+      {isHealthModalOpen && workspace && (
+        <DataHealthModal
+          workspace={workspace}
+          onApplyFix={handleApplyHealthFix}
+          onClose={() => setIsHealthModalOpen(false)}
         />
       )}
       {isStatusReportOpen && workspace && activeProject && (
