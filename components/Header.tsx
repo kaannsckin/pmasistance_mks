@@ -29,6 +29,7 @@ interface HeaderProps {
   onOpenCloudSync: () => void;
   todoItems: TodoItem[];
   onTodoNavigate: (item: TodoItem) => void;
+  onOpenStatusReport: () => void;
 }
 
 const TODO_SEVERITY: Record<TodoItem['severity'], { dot: string; text: string }> = {
@@ -249,7 +250,7 @@ const RoleSwitcher: React.FC<{ currentRole: UserRole; onChangeRole: (r: UserRole
   );
 };
 
-const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSettings, onSaveProject, onLoadProject, isAIEnabled = true, onOpenAbout, projects, activeProjectId, onSelectProject, currentRole, onChangeRole, cloudLinked, onOpenCloudSync, todoItems, onTodoNavigate }) => {
+const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSettings, onSaveProject, onLoadProject, isAIEnabled = true, onOpenAbout, projects, activeProjectId, onSelectProject, currentRole, onChangeRole, cloudLinked, onOpenCloudSync, todoItems, onTodoNavigate, onOpenStatusReport }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
@@ -419,6 +420,14 @@ const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSett
                 </>
               )}
             </nav>
+            <button
+              onClick={onOpenStatusReport}
+              className="ml-auto flex-none flex items-center gap-1.5 h-8 px-3 rounded-md text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-primary hover:bg-white dark:hover:bg-gray-800 transition-colors"
+              title="Bu projenin haftalık durum raporu taslağını üret"
+            >
+              <i className="fa-solid fa-file-lines text-[11px]"></i>
+              <span className="hidden lg:inline">Durum Raporu</span>
+            </button>
           </div>
         </div>
       )}

@@ -39,6 +39,7 @@ import AllocationView from './components/AllocationView';
 import ExecutiveView from './components/ExecutiveView';
 import PersonDetailModal from './components/PersonDetailModal';
 import RiskView from './components/RiskView';
+import StatusReportModal from './components/StatusReportModal';
 import { Risk } from './types';
 
 const THEME_COLORS: Record<string, string> = {
@@ -69,6 +70,7 @@ const App: React.FC = () => {
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
   const [isCloudModalOpen, setIsCloudModalOpen] = useState(false);
   const [viewingPersonId, setViewingPersonId] = useState<string | null>(null);
+  const [isStatusReportOpen, setIsStatusReportOpen] = useState(false);
 
   const [isInitialized, setIsInitialized] = useState(false);
 
@@ -572,6 +574,7 @@ const App: React.FC = () => {
         onOpenCloudSync={() => setIsCloudModalOpen(true)}
         todoItems={todoItems}
         onTodoNavigate={handleTodoNavigate}
+        onOpenStatusReport={() => setIsStatusReportOpen(true)}
       />
       <main className={`w-full max-w-[1920px] mx-auto ${isFullWidthView ? mainHeightClass : `px-4 sm:px-6 lg:px-8 py-6 ${mainHeightClass} overflow-auto`}`}>
         {renderView()}
@@ -607,6 +610,13 @@ const App: React.FC = () => {
           workspace={workspace}
           personId={viewingPersonId}
           onClose={() => setViewingPersonId(null)}
+        />
+      )}
+      {isStatusReportOpen && workspace && activeProject && (
+        <StatusReportModal
+          workspace={workspace}
+          projectId={activeProject.id}
+          onClose={() => setIsStatusReportOpen(false)}
         />
       )}
     </div>
