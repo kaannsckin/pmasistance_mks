@@ -8,6 +8,7 @@ import {
 } from '../utils/allocations';
 import { buildRoleAnalysis, EFFORT_TYPE_LABELS, EffortType, summarizeGaps } from '../utils/roleAnalysis';
 import { AllocationSuggestion, ApplyMode, suggestAllocationsFromTasks, SuggestionResult } from '../utils/taskToAllocation';
+import ScenarioView from './ScenarioView';
 
 interface AllocationViewProps {
   allocations: Allocation[];
@@ -23,7 +24,7 @@ interface AllocationViewProps {
 }
 
 type Mode = 'plan' | 'actual' | 'compare';
-type Tab = 'grid' | 'person' | 'department' | 'project' | 'roles';
+type Tab = 'grid' | 'person' | 'department' | 'project' | 'roles' | 'scenario';
 
 const YEAR_RANGE = (() => {
   const y = new Date().getFullYear();
@@ -486,7 +487,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
 
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center space-x-2 flex-wrap gap-y-2">
-          {([['grid', 'fa-table-cells', 'Tahsis Tablosu'], ['person', 'fa-user', 'Kişi Özeti'], ['department', 'fa-building', 'Bölüm Özeti'], ['project', 'fa-folder-open', 'Proje Özeti'], ['roles', 'fa-id-badge', 'Kapasite-Talep']] as [Tab, string, string][]).map(([t, icon, label]) => (
+          {([['grid', 'fa-table-cells', 'Tahsis Tablosu'], ['person', 'fa-user', 'Kişi Özeti'], ['department', 'fa-building', 'Bölüm Özeti'], ['project', 'fa-folder-open', 'Proje Özeti'], ['roles', 'fa-id-badge', 'Kapasite-Talep'], ['scenario', 'fa-flask', 'Senaryo']] as [Tab, string, string][]).map(([t, icon, label]) => (
             <button key={t} onClick={() => setTab(t)} className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all ${tab === t ? 'text-white shadow-md' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 bg-gray-50 dark:bg-gray-800'}`} style={tab === t ? { backgroundColor: 'var(--app-primary)' } : {}}>
               <i className={`fa-solid ${icon}`}></i><span>{label}</span>
             </button>
@@ -591,6 +592,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
       {tab === 'department' && renderSummary(summarizeByDepartment(yearAllocations, people, year, summaryField), true)}
       {tab === 'project' && renderSummary(summarizeByProject(yearAllocations, projectNames, year, summaryField), false)}
       {tab === 'roles' && renderRoleAnalysis()}
+      {tab === 'scenario' && <ScenarioView people={people} projects={projects} allocations={allocations} year={year} />}
     </div>
   );
 };
