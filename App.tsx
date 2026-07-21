@@ -37,6 +37,7 @@ import PortfolioView from './components/PortfolioView';
 import DataPoolView from './components/DataPoolView';
 import AllocationView from './components/AllocationView';
 import ExecutiveView from './components/ExecutiveView';
+import PersonDetailModal from './components/PersonDetailModal';
 
 const THEME_COLORS: Record<string, string> = {
   classic: '#2563eb',
@@ -65,6 +66,7 @@ const App: React.FC = () => {
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
   const [isCloudModalOpen, setIsCloudModalOpen] = useState(false);
+  const [viewingPersonId, setViewingPersonId] = useState<string | null>(null);
 
   const [isInitialized, setIsInitialized] = useState(false);
 
@@ -418,6 +420,7 @@ const App: React.FC = () => {
           onUpdateRoleCatalog={(roleCatalog) => updateWorkspace(ws => ({ ...ws, roleCatalog }))}
           onUpdateTitles={(titles) => updateWorkspace(ws => ({ ...ws, titles }))}
           onApplyImport={handleApplyPoolImport}
+          onViewPerson={setViewingPersonId}
         />
       );
     }
@@ -586,6 +589,13 @@ const App: React.FC = () => {
           workspace={workspace}
           onReplaceWorkspace={(updater) => setWorkspace(prev => (prev ? updater(prev) : prev))}
           onClose={() => setIsCloudModalOpen(false)}
+        />
+      )}
+      {viewingPersonId && workspace && (
+        <PersonDetailModal
+          workspace={workspace}
+          personId={viewingPersonId}
+          onClose={() => setViewingPersonId(null)}
         />
       )}
     </div>

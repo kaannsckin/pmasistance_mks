@@ -14,6 +14,7 @@ interface DataPoolViewProps {
   onUpdateRoleCatalog: (roles: RoleCatalogEntry[]) => void;
   onUpdateTitles: (titles: TitleDef[]) => void;
   onApplyImport: (imported: PoolImportResult) => void;
+  onViewPerson: (personId: string) => void;
 }
 
 type PoolTab = 'people' | 'departments' | 'roles' | 'titles';
@@ -34,7 +35,7 @@ const TabButton: React.FC<{ active: boolean; icon: string; label: string; count:
   </button>
 );
 
-const DataPoolView: React.FC<DataPoolViewProps> = ({ people, departments, roleCatalog, titles, currentRole, onUpdatePeople, onUpdateDepartments, onUpdateRoleCatalog, onUpdateTitles, onApplyImport }) => {
+const DataPoolView: React.FC<DataPoolViewProps> = ({ people, departments, roleCatalog, titles, currentRole, onUpdatePeople, onUpdateDepartments, onUpdateRoleCatalog, onUpdateTitles, onApplyImport, onViewPerson }) => {
   const [tab, setTab] = useState<PoolTab>('people');
   const [isImporting, setIsImporting] = useState(false);
   const [deptFilter, setDeptFilter] = useState('all');
@@ -93,7 +94,7 @@ const DataPoolView: React.FC<DataPoolViewProps> = ({ people, departments, roleCa
             <th className={thCls}>Ad</th><th className={thCls}>Soyad</th><th className={thCls}>Sicil</th>
             <th className={thCls}>Bölüm</th><th className={thCls}>Ünvan</th>
             <th className={thCls}>Kullanılabilir AA</th><th className={thCls}>Roller (virgülle)</th>
-            {editable && <th className={thCls}></th>}
+            <th className={thCls}></th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
@@ -141,13 +142,18 @@ const DataPoolView: React.FC<DataPoolViewProps> = ({ people, departments, roleCa
               </td>
               <td className={tdCls}><input disabled={!editable} type="number" min={0} max={1.5} step={0.05} className={`${inputCls} w-20`} value={p.availableAA} onChange={e => updatePerson(p.id, { availableAA: parseFloat(e.target.value) || 0 })} /></td>
               <td className={tdCls}><input disabled={!editable} className={inputCls} value={p.roles.join(', ')} onChange={e => updatePerson(p.id, { roles: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })} /></td>
-              {editable && (
-                <td className={tdCls}>
-                  <button onClick={() => { if (window.confirm(`${p.firstName} ${p.lastName} havuzdan silinsin mi? (Tahsis kayıtları etkilenebilir)`)) onUpdatePeople(people.filter(x => x.id !== p.id)); }} className="w-7 h-7 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
-                    <i className="fa-solid fa-trash text-xs"></i>
+              <td className={tdCls}>
+                <div className="flex items-center gap-1">
+                  <button onClick={() => onViewPerson(p.id)} className="w-7 h-7 rounded-lg text-gray-300 hover:text-primary hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors" title="Kişi profili (tüm projelerdeki durumu)">
+                    <i className="fa-solid fa-chart-line text-xs"></i>
                   </button>
-                </td>
-              )}
+                  {editable && (
+                    <button onClick={() => { if (window.confirm(`${p.firstName} ${p.lastName} havuzdan silinsin mi? (Tahsis kayıtları etkilenebilir)`)) onUpdatePeople(people.filter(x => x.id !== p.id)); }} className="w-7 h-7 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors" title="Havuzdan sil">
+                      <i className="fa-solid fa-trash text-xs"></i>
+                    </button>
+                  )}
+                </div>
+              </td>
             </tr>
           ))}
         </tbody>
