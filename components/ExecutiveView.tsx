@@ -6,6 +6,7 @@ import { exportExecReportToPpt } from '../utils/pptExport';
 import { baselinePlanFor, snapshotsForYear } from '../utils/snapshots';
 import { fmtTL } from '../utils/costing';
 import { RISK_BAND_HEX, RISK_BAND_LABELS, summarizeRisks, topPortfolioRisks } from '../utils/risks';
+import EvmPanel from './EvmPanel';
 
 interface ExecutiveViewProps {
   workspace: WorkspaceData;
@@ -304,6 +305,9 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
           </div>
         )}
       </div>
+
+      {/* Kazanılmış Değer (EVM) & Bütçe */}
+      <EvmPanel workspace={workspace} year={year} />
 
       {/* Baseline & plan kayması trendi */}
       <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm p-5">
