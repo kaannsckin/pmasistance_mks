@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Allocation, Person, PlanLock, PlanLockStatus, Project, UserRole } from '../types';
+import { Allocation, Leave, Person, PlanLock, PlanLockStatus, Project, UserRole } from '../types';
 import {
   canApprovePlan, EffortField, findOverAllocations,
   getPlanLockStatus,
@@ -16,6 +16,7 @@ interface AllocationViewProps {
   people: Person[];
   projects: Project[];
   planLocks: PlanLock[];
+  leaves: Leave[];
   currentRole: UserRole;
   identity: Identity;
   onSetCell: (allocationId: string, field: EffortField, month: number, value: number | undefined) => void;
@@ -44,7 +45,7 @@ const LOCK_STYLES: Record<PlanLockStatus, { label: string; cls: string; icon: st
   locked: { label: 'Kilitli', cls: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-300', icon: 'fa-lock' },
 };
 
-const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, projects, planLocks, currentRole, identity, onSetCell, onAddAllocation, onDeleteAllocation, onLockAction, onApplySuggestions }) => {
+const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, projects, planLocks, leaves, currentRole, identity, onSetCell, onAddAllocation, onDeleteAllocation, onLockAction, onApplySuggestions }) => {
   const wsLike = useMemo(() => ({ people, projects, allocations }), [people, projects, allocations]);
   // Kimlik kapsamına göre hücre/satır düzenlenebilirliği (RBAC)
   const canEnter = identity.role === 'py' || identity.role === 'bolum_sorumlu';
@@ -99,7 +100,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
       (projectNames.get(a[0]) || '').localeCompare(projectNames.get(b[0]) || '', 'tr'));
   }, [visibleAllocations, projectNames]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const overAllocations = useMemo(() => findOverAllocations(yearAllocations, people, year, 'plan'), [yearAllocations, people, year]);
+  const overAllocations = useMemo(() => findOverAllocations(yearAllocations, people, year, 'plan', leaves), [yearAllocations, people, year, leaves]);
   const overSet = useMemo(() => new Set(overAllocations.map(o => `${o.personId}:${o.month}`)), [overAllocations]);
 
   const departments = useMemo(() => Array.from(new Set(people.map(p => p.departmentCode).filter(Boolean))).sort(), [people]);
@@ -392,7 +393,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
   // ---------------- Kapasite-Talep (Rol) — Excel "Plan, Kaynak, İhtiyaç" ----------------
 
   const renderRoleAnalysis = () => {
-    const allRows = buildRoleAnalysis(allocations, people, projects, year);
+    const allRows = buildRoleAnalysis(allocations, people, projects, year, leaves);
     const rows = deptFilter === 'all' ? allRows : allRows.filter(r => r.departmentCode === deptFilter);
     const gapSummary = summarizeGaps(rows);
 

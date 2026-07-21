@@ -11,7 +11,7 @@ import {
   resolveWorkspaceFromStorage,
   serializeWorkspace,
 } from './utils/workspace';
-import { createAllocation, EffortField, getPlanLockStatus, ROLE_LABELS, setAllocationCell, upsertPlanLock } from './utils/allocations';
+import { canEditPool, createAllocation, EffortField, getPlanLockStatus, ROLE_LABELS, setAllocationCell, upsertPlanLock } from './utils/allocations';
 import { applyPoolImport, PoolImportResult } from './utils/poolImporter';
 import { isExecRole } from './utils/execReport';
 import { canEditProjectContent, identityOf, identityNeedsPerson as computeNeedsPerson, visibleProjectIds } from './utils/rbac';
@@ -45,6 +45,7 @@ import DataHealthModal from './components/DataHealthModal';
 import AuditLogModal from './components/AuditLogModal';
 import { analyzeDataHealth, applyHealthFix, HealthFix } from './utils/dataHealth';
 import { appendAudit, AUDIT_ACTION_LABELS } from './utils/audit';
+import { upsertLeave } from './utils/availability';
 import { Risk } from './types';
 
 const THEME_COLORS: Record<string, string> = {
@@ -241,6 +242,10 @@ const App: React.FC = () => {
   const handleOpenProject = useCallback((projectId: string) => {
     updateWorkspace(ws => ({ ...ws, activeProjectId: projectId }));
     setCurrentView(View.Roadmap);
+  }, [updateWorkspace]);
+
+  const handleSetLeave = useCallback((personId: string, year: number, month: number, aa: number, reason?: string) => {
+    updateWorkspace(ws => ({ ...ws, leaves: upsertLeave(ws.leaves || [], personId, year, month, aa, reason) }));
   }, [updateWorkspace]);
 
   const handleDeleteProject = useCallback((projectId: string) => {
@@ -500,6 +505,7 @@ const App: React.FC = () => {
           people={workspace.people}
           projects={workspace.projects}
           planLocks={workspace.planLocks}
+          leaves={workspace.leaves || []}
           currentRole={workspace.currentRole || 'py'}
           identity={identity}
           onSetCell={handleSetAllocationCell}
@@ -704,6 +710,8 @@ const App: React.FC = () => {
         <PersonDetailModal
           workspace={workspace}
           personId={viewingPersonId}
+          canEditLeave={canEditPool(workspace.currentRole)}
+          onSetLeave={handleSetLeave}
           onClose={() => setViewingPersonId(null)}
         />
       )}

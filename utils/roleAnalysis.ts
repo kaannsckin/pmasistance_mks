@@ -1,5 +1,6 @@
-import { Allocation, Person, Project } from '../types';
+import { Allocation, Leave, Person, Project } from '../types';
 import { MONTH_INDEXES } from './allocations';
+import { effectiveCapacity } from './availability';
 
 /**
  * Rol bazlı kapasite-talep analizi — Excel'deki "Plan, Kaynak, İhtiyaç (Rol)"
@@ -47,7 +48,8 @@ export const buildRoleAnalysis = (
     allocations: Allocation[],
     people: Person[],
     projects: Project[],
-    year: number
+    year: number,
+    leaves: Leave[] = []
 ): RoleAnalysisRow[] => {
     const personById = new Map(people.map(p => [p.id, p]));
     const projectById = new Map(projects.map(p => [p.id, p]));
@@ -96,7 +98,8 @@ export const buildRoleAnalysis = (
             // rolü olan herkese açıyoruz — boş rol satırı da görünür olmalı
             const row = getRow(dept, role.trim() || UNASSIGNED_ROLE);
             MONTH_INDEXES.forEach(m => {
-                row.capacity[m - 1] += p.availableAA || 0;
+                // İzin/tatili düşülmüş efektif kapasite (rol açığı gerçekçi olsun)
+                row.capacity[m - 1] += effectiveCapacity(p, leaves, year, m);
             });
         });
     });

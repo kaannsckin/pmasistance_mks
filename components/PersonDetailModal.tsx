@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { WorkspaceData } from '../types';
-import { MONTHS_TR } from '../utils/allocations';
+import { MONTHS_TR, MONTH_INDEXES } from '../utils/allocations';
 import { STATUS_LABELS, STATUS_COLORS } from '../constants';
 import { buildPersonProfile } from '../utils/personProfile';
 import { RISK_BAND_HEX, RISK_STATUS_LABELS } from '../utils/risks';
@@ -8,6 +8,8 @@ import { RISK_BAND_HEX, RISK_STATUS_LABELS } from '../utils/risks';
 interface PersonDetailModalProps {
   workspace: WorkspaceData;
   personId: string;
+  canEditLeave?: boolean;
+  onSetLeave?: (personId: string, year: number, month: number, aa: number, reason?: string) => void;
   onClose: () => void;
 }
 
@@ -21,8 +23,9 @@ const YEAR_RANGE = (() => {
   return [y - 1, y, y + 1, y + 2];
 })();
 
-const PersonDetailModal: React.FC<PersonDetailModalProps> = ({ workspace, personId, onClose }) => {
+const PersonDetailModal: React.FC<PersonDetailModalProps> = ({ workspace, personId, canEditLeave = false, onSetLeave, onClose }) => {
   const [year, setYear] = useState(new Date().getFullYear());
+  const [showLeave, setShowLeave] = useState(false);
   const profile = useMemo(() => buildPersonProfile(workspace, personId, year), [workspace, personId, year]);
   const titleName = useMemo(() => {
     const t = workspace.titles.find(x => x.code === profile?.person.titleCode);
@@ -30,7 +33,7 @@ const PersonDetailModal: React.FC<PersonDetailModalProps> = ({ workspace, person
   }, [workspace.titles, profile]);
 
   if (!profile) return null;
-  const { person, capacity, monthlyPlan, monthlyActual, overMonths, byProject, tasks, risks } = profile;
+  const { person, capacity, monthlyCapacity, monthlyLeave, annualLeave, monthlyPlan, monthlyActual, overMonths, byProject, tasks, risks } = profile;
   const overSet = new Set(overMonths);
   const maxMonth = Math.max(...monthlyPlan, ...monthlyActual, capacity, 0.1);
 
@@ -84,22 +87,78 @@ const PersonDetailModal: React.FC<PersonDetailModalProps> = ({ workspace, person
                 const planH = (monthlyPlan[i] / maxMonth) * 100;
                 const actualH = (monthlyActual[i] / maxMonth) * 100;
                 const over = overSet.has(i + 1);
+                const capH = (monthlyCapacity[i] / maxMonth) * 100;
+                const hasLeave = monthlyLeave[i] > 0;
                 return (
-                  <div key={m} className="flex-1 flex flex-col items-center justify-end h-full group relative">
-                    <div className="w-full flex items-end justify-center gap-0.5 h-full">
+                  <div key={m} className="flex-1 flex flex-col items-center justify-end h-full group">
+                    <div className="w-full flex items-end justify-center gap-0.5 h-full relative">
+                      {/* Efektif kapasite çizgisi (izin düşülmüş) */}
+                      <div
+                        className="absolute -left-0.5 -right-0.5 border-t border-dashed border-gray-400/70 dark:border-gray-500/70 z-10"
+                        style={{ bottom: `${Math.min(capH, 100)}%` }}
+                        title={`Kapasite ${fmt(monthlyCapacity[i])} AA${hasLeave ? ` (izin −${fmt(monthlyLeave[i])})` : ''}`}
+                      ></div>
                       <div className="w-2.5 rounded-t transition-all" style={{ height: `${planH}%`, backgroundColor: over ? '#ef4444' : 'var(--app-primary)' }} title={`Plan ${fmt(monthlyPlan[i])} AA`}></div>
                       <div className="w-2.5 rounded-t bg-emerald-500 transition-all" style={{ height: `${actualH}%` }} title={`Gerçekleşen ${fmt(monthlyActual[i])} AA`}></div>
                     </div>
-                    <span className="text-[9px] text-gray-400 mt-1">{m}</span>
+                    <span className={`text-[9px] mt-1 ${hasLeave ? 'text-amber-500 font-semibold' : 'text-gray-400'}`} title={hasLeave ? `İzin −${fmt(monthlyLeave[i])} AA` : undefined}>
+                      {m}{hasLeave ? '*' : ''}
+                    </span>
                   </div>
                 );
               })}
             </div>
-            <div className="flex items-center gap-4 mt-2 text-[11px] text-gray-400">
+            <div className="flex items-center flex-wrap gap-4 mt-2 text-[11px] text-gray-400">
               <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ backgroundColor: 'var(--app-primary)' }}></span>Plan</span>
               <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm inline-block bg-emerald-500"></span>Gerçekleşen</span>
               <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm inline-block bg-red-500"></span>Kapasite aşımı</span>
+              <span className="flex items-center gap-1.5"><span className="w-3 border-t border-dashed border-gray-400 inline-block"></span>Efektif kapasite</span>
+              {annualLeave > 0 && <span className="text-amber-500 font-semibold">* izin ayı</span>}
             </div>
+          </div>
+
+          {/* Uygunluk / İzin */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-300">
+                <i className="fa-solid fa-plane-departure mr-2" style={{ color: 'var(--app-primary)' }}></i>
+                Uygunluk & İzin ({year}){annualLeave > 0 ? <span className="text-amber-500 ml-1">· {fmt(annualLeave)} AA izin</span> : ''}
+              </h4>
+              {canEditLeave && onSetLeave && (
+                <button onClick={() => setShowLeave(v => !v)} className="text-[11px] font-semibold px-2.5 py-1 rounded-lg border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-300 hover:text-primary hover:border-primary/40 transition-colors">
+                  <i className={`fa-solid ${showLeave ? 'fa-check' : 'fa-pen'} mr-1`}></i>{showLeave ? 'Bitir' : 'İzin Gir'}
+                </button>
+              )}
+            </div>
+            <div className="grid grid-cols-6 sm:grid-cols-12 gap-1">
+              {MONTH_INDEXES.map((mo, i) => {
+                const leaveAA = monthlyLeave[i];
+                const hasLeave = leaveAA > 0;
+                return (
+                  <div key={mo} className={`rounded-lg px-1 py-1.5 text-center ${hasLeave ? 'bg-amber-50 dark:bg-amber-900/25 border border-amber-200 dark:border-amber-800' : 'bg-gray-50 dark:bg-gray-800/60 border border-transparent'}`}>
+                    <div className="text-[9px] font-semibold text-gray-400">{MONTHS_TR[i]}</div>
+                    {showLeave && canEditLeave && onSetLeave ? (
+                      <input
+                        type="number" min={0} max={1} step={0.5}
+                        value={leaveAA || ''}
+                        placeholder="0"
+                        onChange={e => onSetLeave(person.id, year, mo, parseFloat(e.target.value) || 0)}
+                        className="w-full mt-0.5 text-center text-[11px] bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded px-0.5 py-0.5 focus:outline-none focus:border-primary"
+                        title={`${MONTHS_TR[i]} izin AA (1 = tam ay)`}
+                      />
+                    ) : (
+                      <div className={`text-[11px] font-semibold mt-0.5 ${hasLeave ? 'text-amber-600 dark:text-amber-300' : 'text-gray-300 dark:text-gray-600'}`}>
+                        {hasLeave ? `−${fmt(leaveAA)}` : '—'}
+                      </div>
+                    )}
+                    <div className="text-[9px] text-gray-400 mt-0.5" title="Efektif kapasite">{fmt(monthlyCapacity[i])}</div>
+                  </div>
+                );
+              })}
+            </div>
+            {showLeave && (
+              <p className="text-[10px] text-gray-400 mt-2">İzin AA: 1 = tam ay yok, 0,5 = yarım ay. Efektif kapasite ve aşırı-tahsis anında güncellenir.</p>
+            )}
           </div>
 
           {/* Proje kırılımı */}
