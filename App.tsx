@@ -1,5 +1,5 @@
 
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { View, Task, Resource, TaskStatus, Note, CustomerRequest, Objective, Project, WorkspaceData, RagStatus, ProjectStatus, UserRole, PlanLockStatus } from './types';
 import { INITIAL_TASKS, INITIAL_RESOURCES, INITIAL_OBJECTIVES } from './constants';
 import {
@@ -11,7 +11,7 @@ import {
   resolveWorkspaceFromStorage,
   serializeWorkspace,
 } from './utils/workspace';
-import { createAllocation, EffortField, getPlanLockStatus, ROLE_LABELS, setAllocationCell, upsertPlanLock } from './utils/allocations';
+import { canEditPool, createAllocation, EffortField, getPlanLockStatus, ROLE_LABELS, setAllocationCell, upsertPlanLock } from './utils/allocations';
 import { applyPoolImport, PoolImportResult } from './utils/poolImporter';
 import { isExecRole } from './utils/execReport';
 import { canEditProjectContent, identityOf, identityNeedsPerson as computeNeedsPerson, visibleProjectIds } from './utils/rbac';
@@ -43,8 +43,10 @@ import RiskView from './components/RiskView';
 import StatusReportModal from './components/StatusReportModal';
 import DataHealthModal from './components/DataHealthModal';
 import AuditLogModal from './components/AuditLogModal';
+import CommandPalette, { CommandItem } from './components/CommandPalette';
 import { analyzeDataHealth, applyHealthFix, HealthFix } from './utils/dataHealth';
 import { appendAudit, AUDIT_ACTION_LABELS } from './utils/audit';
+import { upsertLeave } from './utils/availability';
 import { Risk } from './types';
 
 const THEME_COLORS: Record<string, string> = {
@@ -78,6 +80,10 @@ const App: React.FC = () => {
   const [isStatusReportOpen, setIsStatusReportOpen] = useState(false);
   const [isHealthModalOpen, setIsHealthModalOpen] = useState(false);
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
+  const [isPaletteOpen, setIsPaletteOpen] = useState(false);
+  const [undo, setUndo] = useState<{ message: string; snapshot: WorkspaceData } | null>(null);
+  const undoTimer = useRef<number | undefined>(undefined);
+  const workspaceRef = useRef<WorkspaceData | null>(null);
 
   const [isInitialized, setIsInitialized] = useState(false);
 
@@ -167,6 +173,32 @@ const App: React.FC = () => {
     });
   }, [updateWorkspace]);
 
+  // En güncel workspace'i ref'te tut (geri-al anlık görüntüsü için)
+  useEffect(() => { workspaceRef.current = workspace; }, [workspace]);
+
+  // Komut paleti kısayolu (Cmd/Ctrl+K)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault();
+        setIsPaletteOpen(o => !o);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  // Geri-al bildirimi (silme gibi yıkıcı aksiyonlar için)
+  const showUndo = useCallback((message: string, snapshot: WorkspaceData) => {
+    window.clearTimeout(undoTimer.current);
+    setUndo({ message, snapshot });
+    undoTimer.current = window.setTimeout(() => setUndo(null), 7000);
+  }, []);
+  const handleUndo = useCallback(() => {
+    if (undo) setWorkspace(undo.snapshot);
+    setUndo(null);
+  }, [undo]);
+
   const updateActiveProject = useCallback((updater: (p: Project) => Project) => {
     updateWorkspace(ws => ({
       ...ws,
@@ -243,9 +275,14 @@ const App: React.FC = () => {
     setCurrentView(View.Roadmap);
   }, [updateWorkspace]);
 
+  const handleSetLeave = useCallback((personId: string, year: number, month: number, aa: number, reason?: string) => {
+    updateWorkspace(ws => ({ ...ws, leaves: upsertLeave(ws.leaves || [], personId, year, month, aa, reason) }));
+  }, [updateWorkspace]);
+
   const handleDeleteProject = useCallback((projectId: string) => {
+    const snapshot = workspaceRef.current;
+    const removed = snapshot?.projects.find(p => p.id === projectId);
     updateWorkspace(ws => {
-      const removed = ws.projects.find(p => p.id === projectId);
       const projects = ws.projects.filter(p => p.id !== projectId);
       const next = {
         ...ws,
@@ -254,7 +291,8 @@ const App: React.FC = () => {
       };
       return appendAudit(next, 'project.delete', `"${removed?.name || projectId}" projesi silindi`);
     });
-  }, [updateWorkspace]);
+    if (snapshot) showUndo(`"${removed?.name || 'Proje'}" silindi`, snapshot);
+  }, [updateWorkspace, showUndo]);
 
   const handleRenameProject = useCallback((projectId: string, name: string) => {
     updateWorkspace(ws => ({
@@ -500,6 +538,7 @@ const App: React.FC = () => {
           people={workspace.people}
           projects={workspace.projects}
           planLocks={workspace.planLocks}
+          leaves={workspace.leaves || []}
           currentRole={workspace.currentRole || 'py'}
           identity={identity}
           onSetCell={handleSetAllocationCell}
@@ -626,6 +665,22 @@ const App: React.FC = () => {
   const showProjectBar = !!activeProject;
   const mainHeightClass = showProjectBar ? 'h-[calc(100vh-6.75rem)]' : 'h-[calc(100vh-4rem)]';
 
+  // Komut paleti öğeleri (ekranlar + aksiyonlar + kapsamdaki projeler + kişiler)
+  const commandItems = useMemo<CommandItem[]>(() => {
+    if (!workspace) return [];
+    const items: CommandItem[] = [];
+    const go = (view: View) => () => setCurrentView(view);
+    items.push({ id: 'v-portfolio', group: 'Ekranlar', label: 'Portföy', icon: 'fa-table-cells-large', keywords: 'portfoy proje', run: go(View.Portfolio) });
+    items.push({ id: 'v-alloc', group: 'Ekranlar', label: 'İşgücü Tahsisi', icon: 'fa-people-arrows', keywords: 'tahsis aa doluluk isi', run: go(View.Allocations) });
+    items.push({ id: 'v-pool', group: 'Ekranlar', label: 'Veri Havuzu', icon: 'fa-database', keywords: 'personel bolum rol unvan havuz', run: go(View.DataPool) });
+    if (isExecRole(identity.role)) items.push({ id: 'v-exec', group: 'Ekranlar', label: 'Yönetim (EVM · riskler · baseline)', icon: 'fa-gauge-high', keywords: 'yonetim evm butce risk', run: go(View.Executive) });
+    items.push({ id: 'a-health', group: 'Aksiyonlar', label: 'Veri Sağlığı Denetimi', icon: 'fa-stethoscope', keywords: 'saglik hata yetim', run: () => setIsHealthModalOpen(true) });
+    items.push({ id: 'a-audit', group: 'Aksiyonlar', label: 'Denetim Günlüğü', icon: 'fa-clock-rotate-left', keywords: 'audit log gunluk kayit', run: () => setIsAuditModalOpen(true) });
+    visibleProjects.forEach(p => items.push({ id: `p-${p.id}`, group: 'Projeler', label: p.name, sublabel: 'Projeyi aç', icon: 'fa-folder-open', keywords: p.code || '', run: () => handleOpenProject(p.id) }));
+    workspace.people.forEach(p => items.push({ id: `k-${p.id}`, group: 'Kişiler', label: `${p.firstName} ${p.lastName}`.trim(), sublabel: `${p.departmentCode || ''} · kişi profili`, icon: 'fa-user', keywords: p.sicil || '', run: () => setViewingPersonId(p.id) }));
+    return items;
+  }, [workspace, visibleProjects, identity, handleOpenProject]);
+
   return (
     <div className={`min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans theme-${settings?.theme || 'classic'}`}>
       <Header
@@ -652,6 +707,7 @@ const App: React.FC = () => {
         dataHealthAlerts={healthAlerts}
         onOpenDataHealth={() => setIsHealthModalOpen(true)}
         onOpenAuditLog={() => setIsAuditModalOpen(true)}
+        onOpenCommandPalette={() => setIsPaletteOpen(true)}
       />
       <main className={`w-full max-w-[1920px] mx-auto ${isFullWidthView ? mainHeightClass : `px-4 sm:px-6 lg:px-8 py-6 ${mainHeightClass} overflow-auto`}`}>
         {renderView()}
@@ -704,6 +760,8 @@ const App: React.FC = () => {
         <PersonDetailModal
           workspace={workspace}
           personId={viewingPersonId}
+          canEditLeave={canEditPool(workspace.currentRole)}
+          onSetLeave={handleSetLeave}
           onClose={() => setViewingPersonId(null)}
         />
       )}
@@ -719,6 +777,19 @@ const App: React.FC = () => {
           workspace={workspace}
           onClose={() => setIsAuditModalOpen(false)}
         />
+      )}
+      {isPaletteOpen && (
+        <CommandPalette items={commandItems} onClose={() => setIsPaletteOpen(false)} />
+      )}
+      {undo && (
+        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[250] flex items-center gap-3 bg-gray-900 dark:bg-gray-800 text-white rounded-xl shadow-2xl px-4 py-2.5 border border-gray-700">
+          <i className="fa-solid fa-trash-can text-gray-400 text-xs"></i>
+          <span className="text-xs font-semibold">{undo.message}</span>
+          <button onClick={handleUndo} className="text-xs font-bold px-2.5 py-1 rounded-lg text-white hover:opacity-90" style={{ backgroundColor: 'var(--app-primary)' }}>
+            <i className="fa-solid fa-rotate-left mr-1"></i>Geri Al
+          </button>
+          <button onClick={() => setUndo(null)} className="text-gray-400 hover:text-white transition-colors" title="Kapat"><i className="fa-solid fa-xmark text-xs"></i></button>
+        </div>
       )}
       {isStatusReportOpen && workspace && activeProject && (
         <StatusReportModal

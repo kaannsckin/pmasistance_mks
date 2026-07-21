@@ -43,6 +43,7 @@ interface HeaderProps {
   dataHealthAlerts: number;
   onOpenDataHealth: () => void;
   onOpenAuditLog: () => void;
+  onOpenCommandPalette: () => void;
 }
 
 const TODO_SEVERITY: Record<TodoItem['severity'], { dot: string; text: string }> = {
@@ -299,7 +300,7 @@ const IdentitySwitcher: React.FC<{
   );
 };
 
-const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSettings, onSaveProject, onLoadProject, isAIEnabled = true, onOpenAbout, projects, activeProjectId, onSelectProject, currentRole, currentPersonId, people, identityNeedsPerson, onChangeIdentity, cloudLinked, onOpenCloudSync, todoItems, onTodoNavigate, onOpenStatusReport, dataHealthAlerts, onOpenDataHealth, onOpenAuditLog }) => {
+const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSettings, onSaveProject, onLoadProject, isAIEnabled = true, onOpenAbout, projects, activeProjectId, onSelectProject, currentRole, currentPersonId, people, identityNeedsPerson, onChangeIdentity, cloudLinked, onOpenCloudSync, todoItems, onTodoNavigate, onOpenStatusReport, dataHealthAlerts, onOpenDataHealth, onOpenAuditLog, onOpenCommandPalette }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
@@ -433,6 +434,10 @@ const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSett
                 <i className="fa-solid fa-upload text-xs"></i>
               </button>
             </div>
+            <button onClick={onOpenCommandPalette} className="hidden md:flex items-center gap-2 h-10 px-3 bg-white dark:bg-gray-700 text-gray-400 rounded-lg border border-gray-200 dark:border-gray-600 hover:text-primary transition-colors" title="Hızlı git — projeye, kişiye ya da ekrana (⌘K / Ctrl+K)">
+              <i className="fa-solid fa-magnifying-glass text-[13px]"></i>
+              <kbd className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-400">⌘K</kbd>
+            </button>
             <button onClick={onOpenDataHealth} className="relative w-10 h-10 flex items-center justify-center bg-white dark:bg-gray-700 text-gray-400 rounded-lg border border-gray-200 dark:border-gray-600 hover:text-primary transition-colors" title="Veri sağlığı denetimi (yetim tahsis, eşleşmeyen atama, mükerrer, eksik alan)">
               <i className="fa-solid fa-stethoscope text-[13px]"></i>
               {dataHealthAlerts > 0 && (

@@ -1,5 +1,6 @@
 import { Person, RiskStatus, TaskStatus, WorkspaceData } from '../types';
 import { MONTH_INDEXES } from './allocations';
+import { annualLeaveAA, monthlyEffectiveCapacity, personYearLeaveMonths } from './availability';
 import { RiskBand, riskBand, riskScore } from './risks';
 
 /**
@@ -39,13 +40,16 @@ export interface PersonRiskRef {
 export interface PersonProfile {
     person: Person;
     year: number;
-    capacity: number; // availableAA (aylık)
+    capacity: number; // availableAA (aylık temel)
+    monthlyCapacity: number[]; // 12 — izin/tatil düşülmüş efektif kapasite
+    monthlyLeave: number[]; // 12 — aya özel izin AA
+    annualLeave: number; // toplam izin AA
     monthlyPlan: number[]; // 12 (tüm projeler toplamı)
     monthlyActual: number[];
     totalPlanAA: number;
     totalActualAA: number;
     byProject: PersonProjectLoad[]; // plan AA'ya göre azalan
-    overMonths: number[]; // kapasiteyi aşan aylar (1-12)
+    overMonths: number[]; // efektif kapasiteyi aşan aylar (1-12)
     tasks: PersonTaskRef[]; // isme göre eşleşen görevler (tüm projeler)
     risks: PersonRiskRef[]; // sahibi bu kişi olan riskler (tüm projeler)
     projectCount: number;
@@ -60,7 +64,10 @@ export const buildPersonProfile = (ws: WorkspaceData, personId: string, year: nu
     if (!person) return null;
 
     const projectName = new Map(ws.projects.map(p => [p.id, p.name]));
+    const leaves = ws.leaves || [];
     const cap = person.availableAA ?? 1;
+    const monthlyCapacity = monthlyEffectiveCapacity(person, leaves, year);
+    const monthlyLeave = personYearLeaveMonths(leaves, personId, year);
     const monthlyPlan = Array(12).fill(0) as number[];
     const monthlyActual = Array(12).fill(0) as number[];
     const byProjectMap = new Map<string, PersonProjectLoad>();
@@ -80,7 +87,7 @@ export const buildPersonProfile = (ws: WorkspaceData, personId: string, year: nu
         });
     });
 
-    const overMonths = MONTH_INDEXES.filter(m => monthlyPlan[m - 1] > cap + 1e-9);
+    const overMonths = MONTH_INDEXES.filter(m => monthlyPlan[m - 1] > monthlyCapacity[m - 1] + 1e-9);
 
     // İsme göre görevler (tüm projeler) — tahsis kaydı adla eşleşiyorsa görev de eşleşir
     const fullName = trKey(`${person.firstName} ${person.lastName}`);
@@ -134,6 +141,9 @@ export const buildPersonProfile = (ws: WorkspaceData, personId: string, year: nu
         person,
         year,
         capacity: cap,
+        monthlyCapacity,
+        monthlyLeave,
+        annualLeave: annualLeaveAA(leaves, personId, year),
         monthlyPlan: monthlyPlan.map(round2),
         monthlyActual: monthlyActual.map(round2),
         totalPlanAA: round2(monthlyPlan.reduce((a, b) => a + b, 0)),

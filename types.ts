@@ -343,10 +343,24 @@ export interface WorkspaceData {
   allocations: Allocation[];
   planLocks: PlanLock[];
   snapshots: Snapshot[];
+  leaves?: Leave[]; // Kişi uygunluğu — izin/tatil/yarı-zaman (kapasiteyi aya özel düşürür)
   auditLog?: AuditEntry[]; // Kritik aksiyonların günlüğü (en yeni başta)
   settings: WorkspaceSettings;
   appVersion: string;
   exportDate?: string;
+}
+
+/**
+ * Kişi uygunluğu (izin/tatil/yarı-zaman): bir kişinin belirli ay için
+ * kullanılamayan AA'sı. Efektif kapasite = availableAA − aynı ay izin AA'ları.
+ */
+export interface Leave {
+  id: string;
+  personId: string;
+  year: number;
+  month: number; // 1-12
+  aa: number; // O ay düşen kapasite (AA); 1 = tam ay, 0.5 = yarım ay
+  reason?: string; // İzin / Tatil / Eğitim / Yarı-zaman …
 }
 
 /** Denetim günlüğü — kim, ne zaman, hangi kritik aksiyonu yaptı */

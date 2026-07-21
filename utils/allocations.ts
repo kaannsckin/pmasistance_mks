@@ -1,4 +1,5 @@
-import { Allocation, Person, PlanLock, PlanLockStatus, UserRole, WorkspaceData } from '../types';
+import { Allocation, Leave, Person, PlanLock, PlanLockStatus, UserRole, WorkspaceData } from '../types';
+import { effectiveCapacity } from './availability';
 
 export const MONTHS_TR = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
 export const MONTH_INDEXES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
@@ -185,7 +186,8 @@ export const findOverAllocations = (
     allocations: Allocation[],
     people: Person[],
     year: number,
-    field: EffortField = 'plan'
+    field: EffortField = 'plan',
+    leaves: Leave[] = []
 ): OverAllocation[] => {
     const result: OverAllocation[] = [];
     const byPerson = summarizeByPerson(allocations, people, year, field);
@@ -193,8 +195,9 @@ export const findOverAllocations = (
     byPerson.forEach(row => {
         const person = personMap.get(row.key);
         if (!person) return;
-        const cap = person.availableAA ?? 1;
         row.months.forEach((v, idx) => {
+            // İzin/tatili düşülmüş efektif kapasite (aya özel)
+            const cap = effectiveCapacity(person, leaves, year, idx + 1);
             if (v > cap + 1e-9) {
                 result.push({ personId: person.id, personName: row.label, month: idx + 1, total: v, capacity: cap });
             }
