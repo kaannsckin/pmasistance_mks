@@ -343,7 +343,25 @@ export interface WorkspaceData {
   allocations: Allocation[];
   planLocks: PlanLock[];
   snapshots: Snapshot[];
+  auditLog?: AuditEntry[]; // Kritik aksiyonların günlüğü (en yeni başta)
   settings: WorkspaceSettings;
   appVersion: string;
   exportDate?: string;
+}
+
+/** Denetim günlüğü — kim, ne zaman, hangi kritik aksiyonu yaptı */
+export type AuditAction =
+  | 'project.create' | 'project.delete' | 'project.owner'
+  | 'plan.submit' | 'plan.approve' | 'plan.reject' | 'plan.unlock'
+  | 'data.import' | 'identity.change' | 'health.fix' | 'snapshot.create';
+
+export interface AuditEntry {
+  id: string;
+  at: string; // ISO
+  actorRole: UserRole;
+  actorPersonId?: string;
+  actorName?: string; // aksiyon anındaki kişi adı (sonradan silinse de kalır)
+  action: AuditAction;
+  summary: string; // insan-okur Türkçe özet
+  projectId?: string;
 }

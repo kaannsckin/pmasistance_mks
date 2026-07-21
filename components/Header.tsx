@@ -42,6 +42,7 @@ interface HeaderProps {
   onOpenStatusReport: () => void;
   dataHealthAlerts: number;
   onOpenDataHealth: () => void;
+  onOpenAuditLog: () => void;
 }
 
 const TODO_SEVERITY: Record<TodoItem['severity'], { dot: string; text: string }> = {
@@ -298,7 +299,7 @@ const IdentitySwitcher: React.FC<{
   );
 };
 
-const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSettings, onSaveProject, onLoadProject, isAIEnabled = true, onOpenAbout, projects, activeProjectId, onSelectProject, currentRole, currentPersonId, people, identityNeedsPerson, onChangeIdentity, cloudLinked, onOpenCloudSync, todoItems, onTodoNavigate, onOpenStatusReport, dataHealthAlerts, onOpenDataHealth }) => {
+const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSettings, onSaveProject, onLoadProject, isAIEnabled = true, onOpenAbout, projects, activeProjectId, onSelectProject, currentRole, currentPersonId, people, identityNeedsPerson, onChangeIdentity, cloudLinked, onOpenCloudSync, todoItems, onTodoNavigate, onOpenStatusReport, dataHealthAlerts, onOpenDataHealth, onOpenAuditLog }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
@@ -439,6 +440,9 @@ const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSett
                   {dataHealthAlerts > 99 ? '99+' : dataHealthAlerts}
                 </span>
               )}
+            </button>
+            <button onClick={onOpenAuditLog} className="w-10 h-10 hidden md:flex items-center justify-center bg-white dark:bg-gray-700 text-gray-400 rounded-lg border border-gray-200 dark:border-gray-600 hover:text-primary transition-colors" title="Denetim günlüğü (kritik aksiyonların kaydı)">
+              <i className="fa-solid fa-clock-rotate-left text-[13px]"></i>
             </button>
             <button onClick={onOpenSettings} className="w-10 h-10 flex items-center justify-center bg-white dark:bg-gray-700 text-gray-400 rounded-lg border border-gray-200 dark:border-gray-600 hover:text-primary transition-colors" title="Ayarlar">
               <i className="fa-solid fa-sliders text-[13px]"></i>
