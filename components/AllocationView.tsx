@@ -10,6 +10,7 @@ import { buildRoleAnalysis, EFFORT_TYPE_LABELS, EffortType, summarizeGaps } from
 import { AllocationSuggestion, ApplyMode, suggestAllocationsFromTasks, SuggestionResult } from '../utils/taskToAllocation';
 import { canAddAllocationToProject, canEditActualCell, canEditAllocationCell, canEditPlanCell, Identity, visiblePersonIds } from '../utils/rbac';
 import ScenarioView from './ScenarioView';
+import UtilizationHeatmap from './UtilizationHeatmap';
 
 interface AllocationViewProps {
   allocations: Allocation[];
@@ -27,7 +28,7 @@ interface AllocationViewProps {
 }
 
 type Mode = 'plan' | 'actual' | 'compare';
-type Tab = 'grid' | 'person' | 'department' | 'project' | 'roles' | 'scenario';
+type Tab = 'grid' | 'person' | 'department' | 'project' | 'heatmap' | 'roles' | 'scenario';
 
 const YEAR_RANGE = (() => {
   const y = new Date().getFullYear();
@@ -486,7 +487,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
           <select value={year} onChange={e => setYear(parseInt(e.target.value, 10))} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-[11px] font-semibold text-gray-700 dark:text-gray-200 focus:outline-none">
             {YEAR_RANGE.map(y => <option key={y} value={y}>{y}</option>)}
           </select>
-          {tab !== 'roles' && (
+          {tab !== 'roles' && tab !== 'heatmap' && (
             <select value={projectFilter} onChange={e => setProjectFilter(e.target.value)} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-[11px] text-gray-700 dark:text-gray-200 focus:outline-none">
               <option value="all">Tüm Projeler</option>
               {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -496,7 +497,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
             <option value="all">Tüm Bölümler</option>
             {departments.map(d => <option key={d} value={d}>{d}</option>)}
           </select>
-          {tab !== 'roles' && (
+          {tab !== 'roles' && tab !== 'heatmap' && (
           <div className="bg-gray-50 dark:bg-gray-800 p-1 rounded-xl flex items-center border border-gray-100 dark:border-gray-700">
             {([['plan', 'Plan'], ['actual', 'Gerçekleşen'], ['compare', 'Karşılaştır']] as [Mode, string][]).map(([m, label]) => (
               <button key={m} onClick={() => setMode(m)} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${mode === m ? 'bg-white dark:bg-gray-700 shadow-sm border border-gray-100 dark:border-gray-600' : 'text-gray-400 hover:text-gray-600'}`} style={mode === m ? { color: 'var(--app-primary)' } : {}}>
@@ -510,7 +511,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
 
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center space-x-2 flex-wrap gap-y-2">
-          {([['grid', 'fa-table-cells', 'Tahsis Tablosu'], ['person', 'fa-user', 'Kişi Özeti'], ['department', 'fa-building', 'Bölüm Özeti'], ['project', 'fa-folder-open', 'Proje Özeti'], ['roles', 'fa-id-badge', 'Kapasite-Talep'], ['scenario', 'fa-flask', 'Senaryo']] as [Tab, string, string][]).map(([t, icon, label]) => (
+          {([['grid', 'fa-table-cells', 'Tahsis Tablosu'], ['person', 'fa-user', 'Kişi Özeti'], ['department', 'fa-building', 'Bölüm Özeti'], ['project', 'fa-folder-open', 'Proje Özeti'], ['heatmap', 'fa-fire', 'Doluluk'], ['roles', 'fa-id-badge', 'Kapasite-Talep'], ['scenario', 'fa-flask', 'Senaryo']] as [Tab, string, string][]).map(([t, icon, label]) => (
             <button key={t} onClick={() => setTab(t)} className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all ${tab === t ? 'text-white shadow-md' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 bg-gray-50 dark:bg-gray-800'}`} style={tab === t ? { backgroundColor: 'var(--app-primary)' } : {}}>
               <i className={`fa-solid ${icon}`}></i><span>{label}</span>
             </button>
@@ -611,6 +612,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
       )}
 
       {tab === 'grid' && renderGrid()}
+      {tab === 'heatmap' && <UtilizationHeatmap allocations={allocations} people={people} year={year} deptFilter={deptFilter} leaves={leaves} />}
       {tab === 'person' && renderSummary(summarizeByPerson(yearAllocations, people, year, summaryField), true)}
       {tab === 'department' && renderSummary(summarizeByDepartment(yearAllocations, people, year, summaryField), true)}
       {tab === 'project' && renderSummary(summarizeByProject(yearAllocations, projectNames, year, summaryField), false)}
