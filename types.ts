@@ -115,6 +115,7 @@ export enum View {
   DataPool,
   Allocations,
   Executive,
+  Risks,
 }
 
 export interface UnitLoad {
@@ -185,6 +186,22 @@ export interface ProjectSettings {
   costTableColor?: string;
 }
 
+/** Proje risk kaydı — olasılık × etki (1-5), skor 1-25 */
+export type RiskLevel = 1 | 2 | 3 | 4 | 5;
+export type RiskStatus = 'open' | 'monitoring' | 'closed';
+
+export interface Risk {
+  id: string;
+  title: string;
+  description?: string;
+  probability: RiskLevel;
+  impact: RiskLevel;
+  owner?: string;
+  mitigation?: string; // Azaltıcı aksiyon
+  status: RiskStatus;
+  createdAt: string;
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -192,6 +209,7 @@ export interface Project {
   status: ProjectStatus;
   rag?: RagStatus;
   ragNote?: string; // Haftalık durum açıklaması (PM girer)
+  risks?: Risk[];
   tasks: Task[];
   resources: Resource[];
   notes: Note[];

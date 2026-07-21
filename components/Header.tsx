@@ -409,6 +409,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSett
               <ProjectTab view={View.Roadmap} currentView={currentView} setCurrentView={setCurrentView} icon="fa-map" label="Yol Haritası" />
               <ProjectTab view={View.Goals} currentView={currentView} setCurrentView={setCurrentView} icon="fa-bullseye" label="Hedefler" />
               <ProjectTab view={View.Tasks} currentView={currentView} setCurrentView={setCurrentView} icon="fa-list-check" label="Görevler" />
+              <ProjectTab view={View.Risks} currentView={currentView} setCurrentView={setCurrentView} icon="fa-shield-halved" label="Riskler" />
               <ProjectTab view={View.Resources} currentView={currentView} setCurrentView={setCurrentView} icon="fa-users-gear" label="Ekip" />
               {!exec && (
                 <>

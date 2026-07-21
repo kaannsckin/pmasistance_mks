@@ -5,6 +5,7 @@ import { buildExecReport, exportExecReportToExcel } from '../utils/execReport';
 import { exportExecReportToPpt } from '../utils/pptExport';
 import { baselinePlanFor, snapshotsForYear } from '../utils/snapshots';
 import { fmtTL } from '../utils/costing';
+import { RISK_BAND_HEX, RISK_BAND_LABELS, summarizeRisks, topPortfolioRisks } from '../utils/risks';
 
 interface ExecutiveViewProps {
   workspace: WorkspaceData;
@@ -117,6 +118,8 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
     return map;
   }, [workspace, year]);
   const maxSnapTotal = Math.max(...snapshots.map(s => s.totalPlanAA), k.totalPlanAA, 0.1);
+  const riskSummary = useMemo(() => summarizeRisks(workspace), [workspace]);
+  const topRisks = useMemo(() => topPortfolioRisks(workspace).slice(0, 6), [workspace]);
 
   return (
     <div className="space-y-5">
@@ -214,6 +217,35 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
           )}
         </div>
       </div>
+
+      {/* Portföy riskleri */}
+      {riskSummary.total > 0 && (
+        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xs font-semibold text-gray-400">
+              <i className="fa-solid fa-shield-halved mr-2" style={{ color: 'var(--app-primary)' }}></i>
+              Portföy Riskleri
+            </h3>
+            <div className="flex items-center gap-2">
+              {(['high', 'medium', 'low'] as const).map(b => (
+                <span key={b} className="text-[11px] font-semibold px-2 py-1 rounded-lg text-white" style={{ backgroundColor: RISK_BAND_HEX[b] }}>
+                  {RISK_BAND_LABELS[b]}: {b === 'high' ? riskSummary.high : b === 'medium' ? riskSummary.medium : riskSummary.low}
+                </span>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            {topRisks.map(r => (
+              <button key={r.id} onClick={() => onOpenProject(r.projectId)} className="w-full flex items-center gap-3 bg-gray-50 dark:bg-gray-800/60 rounded-lg px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700/60 transition-colors text-left" title="Projeyi aç">
+                <span className="text-xs font-bold px-2 py-1 rounded-lg text-white flex-none" style={{ backgroundColor: RISK_BAND_HEX[r.band] }}>{r.score}</span>
+                <span className="flex-1 text-xs text-gray-700 dark:text-gray-200 truncate" title={r.title}>{r.title}</span>
+                <span className="text-[11px] text-gray-400 flex-none">{r.projectName}</span>
+                {r.owner && <span className="text-[11px] text-gray-400 flex-none hidden md:inline">· {r.owner}</span>}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Maliyet katmanı */}
       <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm p-5">

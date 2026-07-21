@@ -3,6 +3,7 @@ import { MONTHS_TR } from './allocations';
 import { EFFORT_TYPE_LABELS } from './roleAnalysis';
 import { ExecReport } from './execReport';
 import { fmtTL } from './costing';
+import { RISK_BAND_LABELS, RISK_STATUS_LABELS } from './risks';
 
 /**
  * Yönetici Paketi — PowerPoint çıktısı (pptxgenjs, isteğe bağlı yüklenen chunk).
@@ -198,6 +199,27 @@ export const exportExecReportToPpt = async (report: ExecReport, theme: string): 
                 { text: `${fmt(o.total)} / ${fmt(o.capacity)}`, options: { fontSize: 11, bold: true, color: RED } },
             ])),
         ] as never, { x: 7.0, y: 1.7, w: 5.8, colW: [2.8, 1.2, 1.8], border: { type: 'solid', color: 'E5E7EB', pt: 0.5 }, rowH: 0.35 });
+    }
+
+    // ---- 7) Portföy riskleri ----
+    if (report.risks.length > 0) {
+        const RISK_HEX = { high: RED, medium: AMBER, low: GREEN } as const;
+        const riskSlide = pptx.addSlide();
+        addTitle(riskSlide, 'Portföy Riskleri');
+        riskSlide.addText(`Yüksek ${report.riskCounts.high} · Orta ${report.riskCounts.medium} · Düşük ${report.riskCounts.low} (aktif)`, {
+            x: 0.5, y: 1.1, w: 12.3, h: 0.4, fontSize: 14, color: GRAY, fontFace: 'Calibri',
+        });
+        riskSlide.addTable([
+            ['Risk', 'Proje', 'Skor', 'Önem', 'Sahibi', 'Durum'].map(t => ({ text: t, options: { bold: true, color: 'FFFFFF', fill: { color: accent }, fontSize: 12 } })),
+            ...report.risks.slice(0, 14).map(r => ([
+                { text: r.title, options: { fontSize: 11, color: DARK } },
+                { text: r.projectName, options: { fontSize: 11, color: GRAY } },
+                { text: String(r.score), options: { fontSize: 11, bold: true, color: RISK_HEX[r.band] } },
+                { text: RISK_BAND_LABELS[r.band], options: { fontSize: 11, color: RISK_HEX[r.band] } },
+                { text: r.owner || '—', options: { fontSize: 11, color: GRAY } },
+                { text: RISK_STATUS_LABELS[r.status], options: { fontSize: 11, color: GRAY } },
+            ])),
+        ] as never, { x: 0.5, y: 1.7, w: 12.3, colW: [4.3, 2.6, 1.2, 1.6, 1.6, 1.0], border: { type: 'solid', color: 'E5E7EB', pt: 0.5 }, rowH: 0.34, valign: 'middle' });
     }
 
     await pptx.writeFile({ fileName: `yonetici-paketi-${report.year}-${new Date().toISOString().split('T')[0]}.pptx` });

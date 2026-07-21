@@ -38,6 +38,8 @@ import DataPoolView from './components/DataPoolView';
 import AllocationView from './components/AllocationView';
 import ExecutiveView from './components/ExecutiveView';
 import PersonDetailModal from './components/PersonDetailModal';
+import RiskView from './components/RiskView';
+import { Risk } from './types';
 
 const THEME_COLORS: Record<string, string> = {
   classic: '#2563eb',
@@ -518,6 +520,15 @@ const App: React.FC = () => {
                  tasks={tasks}
                  onUpdateObjectives={setObjectives}
                />;
+      case View.Risks:
+        return (
+          <RiskView
+            projectName={activeProject.name}
+            risks={activeProject.risks || []}
+            currentRole={workspace.currentRole || 'py'}
+            onUpdateRisks={(risks: Risk[]) => updateActiveProject(p => ({ ...p, risks }))}
+          />
+        );
       case View.Notes:
         return (
           <NotesView
