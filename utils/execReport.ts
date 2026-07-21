@@ -4,6 +4,8 @@ import {
     MonthlySummaryRow, OverAllocation, summarizeByDepartment, summarizeByPerson,
 } from './allocations';
 import { buildRoleAnalysis, EFFORT_TYPE_LABELS, RoleAnalysisRow } from './roleAnalysis';
+import { buildCostReport, CostReport } from './costing';
+import { PortfolioRisk, RISK_BAND_LABELS, RISK_STATUS_LABELS, summarizeRisks, topPortfolioRisks } from './risks';
 
 declare const XLSX: any;
 
@@ -52,6 +54,9 @@ export interface ExecReport {
     personPlanRows: MonthlySummaryRow[];
     overAllocations: OverAllocation[];
     roleAnalysis: RoleAnalysisRow[];
+    cost: CostReport;
+    risks: PortfolioRisk[];
+    riskCounts: { high: number; medium: number; low: number; closed: number };
 }
 
 const sumField = (ws: WorkspaceData, projectId: string, year: number, field: EffortField): number =>
@@ -128,6 +133,9 @@ export const buildExecReport = (ws: WorkspaceData, year: number): ExecReport => 
         personPlanRows: summarizeByPerson(yearAllocations, ws.people, year, 'plan'),
         overAllocations,
         roleAnalysis: buildRoleAnalysis(ws.allocations, ws.people, ws.projects, year),
+        cost: buildCostReport(ws, year),
+        risks: topPortfolioRisks(ws),
+        riskCounts: (() => { const s = summarizeRisks(ws); return { high: s.high, medium: s.medium, low: s.low, closed: s.closed }; })(),
     };
 };
 
@@ -162,6 +170,7 @@ export const buildExecWorkbookData = (report: ExecReport): Record<string, (strin
         ['Aşırı Tahsis (kişi-ay)', k.overAllocationCount],
         ['Görev İlerlemesi', `${k.taskDone}/${k.taskTotal} (%${k.taskProgressPct})`],
         ['Personel / Bölüm', `${k.peopleCount} / ${k.departmentCount}`],
+        ['Riskler Yüksek / Orta / Düşük', `${report.riskCounts.high} / ${report.riskCounts.medium} / ${report.riskCounts.low}`],
     ];
 
     const projeler: (string | number)[][] = [
@@ -213,6 +222,34 @@ export const buildExecWorkbookData = (report: ExecReport): Record<string, (strin
         ] as (string | number)[][])),
     ];
 
+    // Maliyet katmanı: proje + bölüm kırılımı, aylık toplamlar, eksik uyarıları
+    const c = report.cost;
+    const maliyet: (string | number)[][] = [
+        ['MALİYET RAPORU (₺)', `${report.year}`, c.costedTitleCount === 0 ? 'Ünvan maliyetleri girilmemiş — Veri Havuzu → Ünvanlar' : ''],
+        [],
+        ['Proje', 'Plan Maliyeti', 'Gerçekleşen', 'Sapma'],
+        ...c.byProject.map(r => [r.label, r.planCost, r.actualCost, r.varianceCost]),
+        ['TOPLAM', c.totalPlanCost, c.totalActualCost, c.totalVarianceCost],
+        [],
+        ['Bölüm', 'Plan Maliyeti', 'Gerçekleşen', 'Sapma'],
+        ...c.byDepartment.map(r => [r.label, r.planCost, r.actualCost, r.varianceCost]),
+        [],
+        ['Ay', 'Plan Maliyeti', 'Gerçekleşen'],
+        ...MONTHS_TR.map((m, i) => [m, c.monthlyPlanCost[i], c.monthlyActualCost[i]]),
+        [],
+        ...(c.uncostedPeople.length
+            ? [[`Maliyetlenemeyen personel (ünvan/₺ eksik): ${c.uncostedPeople.join(', ')}`]]
+            : []),
+    ];
+
+    const riskler: (string | number)[][] = [
+        ['Risk', 'Proje', 'Olasılık', 'Etki', 'Skor', 'Önem', 'Sahibi', 'Aksiyon', 'Durum'],
+        ...report.risks.map(r => [
+            r.title, r.projectName, r.probability, r.impact, r.score, RISK_BAND_LABELS[r.band],
+            r.owner || '', r.mitigation || '', RISK_STATUS_LABELS[r.status],
+        ]),
+    ];
+
     return {
         'Özet': ozet,
         'Projeler': projeler,
@@ -221,6 +258,8 @@ export const buildExecWorkbookData = (report: ExecReport): Record<string, (strin
         'Kişi AA (Plan)': kisi,
         'Aşırı Tahsis': asiri,
         'Kapasite-Talep (Rol)': rol,
+        'Maliyet (TL)': maliyet,
+        'Riskler': riskler,
     };
 };
 

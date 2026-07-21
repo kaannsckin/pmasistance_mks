@@ -15,6 +15,8 @@ import { createAllocation, EffortField, setAllocationCell, upsertPlanLock } from
 import { applyPoolImport, PoolImportResult } from './utils/poolImporter';
 import { isExecRole } from './utils/execReport';
 import { addSnapshot, buildSnapshot, ensureMonthlySnapshot } from './utils/snapshots';
+import { AllocationSuggestion, ApplyMode, applyAllocationSuggestions } from './utils/taskToAllocation';
+import { buildTodoItems, TodoItem } from './utils/todoItems';
 import { loadCloudConfig, scheduleAutoPush } from './utils/cloudSync';
 import CloudSyncModal from './components/CloudSyncModal';
 import Header from './components/Header';
@@ -35,6 +37,10 @@ import PortfolioView from './components/PortfolioView';
 import DataPoolView from './components/DataPoolView';
 import AllocationView from './components/AllocationView';
 import ExecutiveView from './components/ExecutiveView';
+import PersonDetailModal from './components/PersonDetailModal';
+import RiskView from './components/RiskView';
+import StatusReportModal from './components/StatusReportModal';
+import { Risk } from './types';
 
 const THEME_COLORS: Record<string, string> = {
   classic: '#2563eb',
@@ -63,6 +69,8 @@ const App: React.FC = () => {
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
   const [isCloudModalOpen, setIsCloudModalOpen] = useState(false);
+  const [viewingPersonId, setViewingPersonId] = useState<string | null>(null);
+  const [isStatusReportOpen, setIsStatusReportOpen] = useState(false);
 
   const [isInitialized, setIsInitialized] = useState(false);
 
@@ -87,6 +95,17 @@ const App: React.FC = () => {
     () => workspace?.projects.find(p => p.id === workspace.activeProjectId) ?? null,
     [workspace]
   );
+
+  // ---- Yapılacaklar (mevcut veriden türetilir, role göre filtreli) ----
+  const todoItems = useMemo(() => (workspace ? buildTodoItems(workspace) : []), [workspace]);
+
+  const handleTodoNavigate = useCallback((item: TodoItem) => {
+    // Proje bağlamı gerekiyorsa önce o projeyi aç, sonra ekrana geç
+    if (item.projectId) {
+      setWorkspace(prev => (prev ? { ...prev, activeProjectId: item.projectId! } : prev));
+    }
+    setCurrentView(item.view);
+  }, []);
 
   // ---- Tema / gece modu ----
   useEffect(() => {
@@ -248,6 +267,14 @@ const App: React.FC = () => {
     });
   }, [updateWorkspace]);
 
+  const handleApplySuggestions = useCallback((projectId: string, year: number, suggestions: AllocationSuggestion[], mode: ApplyMode) => {
+    updateWorkspace(ws => {
+      const { workspace: next, applied, skippedCells } = applyAllocationSuggestions(ws, projectId, year, suggestions, mode);
+      alert(`Görev planından tahsis uygulandı: ${applied} kişi güncellendi${skippedCells > 0 ? `, ${skippedCells} dolu ay korundu` : ''}.`);
+      return next;
+    });
+  }, [updateWorkspace]);
+
   const handleTakeSnapshot = useCallback((year: number) => {
     updateWorkspace(ws => {
       const label = `Manuel — ${new Date().toLocaleDateString('tr-TR')}`;
@@ -397,6 +424,7 @@ const App: React.FC = () => {
           onUpdateRoleCatalog={(roleCatalog) => updateWorkspace(ws => ({ ...ws, roleCatalog }))}
           onUpdateTitles={(titles) => updateWorkspace(ws => ({ ...ws, titles }))}
           onApplyImport={handleApplyPoolImport}
+          onViewPerson={setViewingPersonId}
         />
       );
     }
@@ -412,6 +440,7 @@ const App: React.FC = () => {
           onAddAllocation={handleAddAllocation}
           onDeleteAllocation={handleDeleteAllocation}
           onLockAction={handleLockAction}
+          onApplySuggestions={handleApplySuggestions}
         />
       );
     }
@@ -493,6 +522,15 @@ const App: React.FC = () => {
                  tasks={tasks}
                  onUpdateObjectives={setObjectives}
                />;
+      case View.Risks:
+        return (
+          <RiskView
+            projectName={activeProject.name}
+            risks={activeProject.risks || []}
+            currentRole={workspace.currentRole || 'py'}
+            onUpdateRisks={(risks: Risk[]) => updateActiveProject(p => ({ ...p, risks }))}
+          />
+        );
       case View.Notes:
         return (
           <NotesView
@@ -534,6 +572,9 @@ const App: React.FC = () => {
         onChangeRole={handleChangeRole}
         cloudLinked={!!loadCloudConfig()?.workspaceId}
         onOpenCloudSync={() => setIsCloudModalOpen(true)}
+        todoItems={todoItems}
+        onTodoNavigate={handleTodoNavigate}
+        onOpenStatusReport={() => setIsStatusReportOpen(true)}
       />
       <main className={`w-full max-w-[1920px] mx-auto ${isFullWidthView ? mainHeightClass : `px-4 sm:px-6 lg:px-8 py-6 ${mainHeightClass} overflow-auto`}`}>
         {renderView()}
@@ -562,6 +603,20 @@ const App: React.FC = () => {
           workspace={workspace}
           onReplaceWorkspace={(updater) => setWorkspace(prev => (prev ? updater(prev) : prev))}
           onClose={() => setIsCloudModalOpen(false)}
+        />
+      )}
+      {viewingPersonId && workspace && (
+        <PersonDetailModal
+          workspace={workspace}
+          personId={viewingPersonId}
+          onClose={() => setViewingPersonId(null)}
+        />
+      )}
+      {isStatusReportOpen && workspace && activeProject && (
+        <StatusReportModal
+          workspace={workspace}
+          projectId={activeProject.id}
+          onClose={() => setIsStatusReportOpen(false)}
         />
       )}
     </div>

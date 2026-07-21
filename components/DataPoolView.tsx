@@ -14,6 +14,7 @@ interface DataPoolViewProps {
   onUpdateRoleCatalog: (roles: RoleCatalogEntry[]) => void;
   onUpdateTitles: (titles: TitleDef[]) => void;
   onApplyImport: (imported: PoolImportResult) => void;
+  onViewPerson: (personId: string) => void;
 }
 
 type PoolTab = 'people' | 'departments' | 'roles' | 'titles';
@@ -34,7 +35,7 @@ const TabButton: React.FC<{ active: boolean; icon: string; label: string; count:
   </button>
 );
 
-const DataPoolView: React.FC<DataPoolViewProps> = ({ people, departments, roleCatalog, titles, currentRole, onUpdatePeople, onUpdateDepartments, onUpdateRoleCatalog, onUpdateTitles, onApplyImport }) => {
+const DataPoolView: React.FC<DataPoolViewProps> = ({ people, departments, roleCatalog, titles, currentRole, onUpdatePeople, onUpdateDepartments, onUpdateRoleCatalog, onUpdateTitles, onApplyImport, onViewPerson }) => {
   const [tab, setTab] = useState<PoolTab>('people');
   const [isImporting, setIsImporting] = useState(false);
   const [deptFilter, setDeptFilter] = useState('all');
@@ -44,7 +45,7 @@ const DataPoolView: React.FC<DataPoolViewProps> = ({ people, departments, roleCa
   const [newPerson, setNewPerson] = useState({ firstName: '', lastName: '', sicil: '', departmentCode: '', titleCode: '', availableAA: 1, roles: '' });
   const [newDept, setNewDept] = useState({ code: '', name: '', leadName: '' });
   const [newRole, setNewRole] = useState({ departmentCode: '', name: '' });
-  const [newTitle, setNewTitle] = useState({ code: '', name: '' });
+  const [newTitle, setNewTitle] = useState({ code: '', name: '', monthlyCost: '' });
 
   const deptCodes = useMemo(() => departments.map(d => d.code), [departments]);
   const filteredPeople = useMemo(
@@ -93,7 +94,7 @@ const DataPoolView: React.FC<DataPoolViewProps> = ({ people, departments, roleCa
             <th className={thCls}>Ad</th><th className={thCls}>Soyad</th><th className={thCls}>Sicil</th>
             <th className={thCls}>Bölüm</th><th className={thCls}>Ünvan</th>
             <th className={thCls}>Kullanılabilir AA</th><th className={thCls}>Roller (virgülle)</th>
-            {editable && <th className={thCls}></th>}
+            <th className={thCls}></th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
@@ -141,13 +142,18 @@ const DataPoolView: React.FC<DataPoolViewProps> = ({ people, departments, roleCa
               </td>
               <td className={tdCls}><input disabled={!editable} type="number" min={0} max={1.5} step={0.05} className={`${inputCls} w-20`} value={p.availableAA} onChange={e => updatePerson(p.id, { availableAA: parseFloat(e.target.value) || 0 })} /></td>
               <td className={tdCls}><input disabled={!editable} className={inputCls} value={p.roles.join(', ')} onChange={e => updatePerson(p.id, { roles: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })} /></td>
-              {editable && (
-                <td className={tdCls}>
-                  <button onClick={() => { if (window.confirm(`${p.firstName} ${p.lastName} havuzdan silinsin mi? (Tahsis kayıtları etkilenebilir)`)) onUpdatePeople(people.filter(x => x.id !== p.id)); }} className="w-7 h-7 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
-                    <i className="fa-solid fa-trash text-xs"></i>
+              <td className={tdCls}>
+                <div className="flex items-center gap-1">
+                  <button onClick={() => onViewPerson(p.id)} className="w-7 h-7 rounded-lg text-gray-300 hover:text-primary hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors" title="Kişi profili (tüm projelerdeki durumu)">
+                    <i className="fa-solid fa-chart-line text-xs"></i>
                   </button>
-                </td>
-              )}
+                  {editable && (
+                    <button onClick={() => { if (window.confirm(`${p.firstName} ${p.lastName} havuzdan silinsin mi? (Tahsis kayıtları etkilenebilir)`)) onUpdatePeople(people.filter(x => x.id !== p.id)); }} className="w-7 h-7 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors" title="Havuzdan sil">
+                      <i className="fa-solid fa-trash text-xs"></i>
+                    </button>
+                  )}
+                </div>
+              </td>
             </tr>
           ))}
         </tbody>
@@ -244,20 +250,22 @@ const DataPoolView: React.FC<DataPoolViewProps> = ({ people, departments, roleCa
     <div className="max-w-2xl">
       <table className="w-full">
         <thead className="bg-gray-50 dark:bg-gray-800/60">
-          <tr><th className={thCls}>Kısaltma</th><th className={thCls}>Ünvan</th><th className={thCls}>Personel</th>{editable && <th className={thCls}></th>}</tr>
+          <tr><th className={thCls}>Kısaltma</th><th className={thCls}>Ünvan</th><th className={thCls}>Aylık Maliyet (₺, 1 AA)</th><th className={thCls}>Personel</th>{editable && <th className={thCls}></th>}</tr>
         </thead>
         <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
           {editable && (
             <tr style={{ backgroundColor: 'var(--app-accent-light)' }}>
               <td className={tdCls}><input className={inputCls} placeholder="ARŞ" value={newTitle.code} onChange={e => setNewTitle({ ...newTitle, code: e.target.value })} /></td>
               <td className={tdCls}><input className={inputCls} placeholder="Araştırmacı" value={newTitle.name} onChange={e => setNewTitle({ ...newTitle, name: e.target.value })} /></td>
+              <td className={tdCls}><input type="number" min={0} step={1000} className={inputCls} placeholder="örn. 120000" value={newTitle.monthlyCost} onChange={e => setNewTitle({ ...newTitle, monthlyCost: e.target.value })} /></td>
               <td className={tdCls}></td>
               <td className={tdCls}>
                 <button onClick={() => {
                   const code = newTitle.code.trim();
                   if (!code || titles.some(t => t.code === code)) return;
-                  onUpdateTitles([...titles, { code, name: newTitle.name.trim() || code }]);
-                  setNewTitle({ code: '', name: '' });
+                  const cost = parseFloat(newTitle.monthlyCost);
+                  onUpdateTitles([...titles, { code, name: newTitle.name.trim() || code, monthlyCost: isNaN(cost) || cost <= 0 ? undefined : cost }]);
+                  setNewTitle({ code: '', name: '', monthlyCost: '' });
                 }} className="text-white text-xs font-semibold px-3 py-1.5 rounded-lg" style={{ backgroundColor: 'var(--app-primary)' }}>Ekle</button>
               </td>
             </tr>
@@ -266,6 +274,19 @@ const DataPoolView: React.FC<DataPoolViewProps> = ({ people, departments, roleCa
             <tr key={t.code} className="hover:bg-gray-50/60 dark:hover:bg-gray-800/40">
               <td className={`${tdCls} text-[11px] font-semibold text-gray-700 dark:text-gray-200`}>{t.code}</td>
               <td className={`${tdCls} text-[11px] text-gray-600 dark:text-gray-300`}>{t.name}</td>
+              <td className={tdCls}>
+                <input
+                  disabled={!editable}
+                  type="number" min={0} step={1000}
+                  className={`${inputCls} w-32`}
+                  placeholder="—"
+                  value={t.monthlyCost ?? ''}
+                  onChange={e => {
+                    const v = parseFloat(e.target.value);
+                    onUpdateTitles(titles.map(x => x.code === t.code ? { ...x, monthlyCost: isNaN(v) || v <= 0 ? undefined : v } : x));
+                  }}
+                />
+              </td>
               <td className={`${tdCls} text-[11px] text-gray-400`}>{people.filter(p => p.titleCode === t.code).length}</td>
               {editable && (
                 <td className={tdCls}>

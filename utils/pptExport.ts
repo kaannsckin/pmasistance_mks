@@ -2,6 +2,8 @@ import { PlanLockStatus, ProjectStatus, RagStatus } from '../types';
 import { MONTHS_TR } from './allocations';
 import { EFFORT_TYPE_LABELS } from './roleAnalysis';
 import { ExecReport } from './execReport';
+import { fmtTL } from './costing';
+import { RISK_BAND_LABELS, RISK_STATUS_LABELS } from './risks';
 
 /**
  * Yönetici Paketi — PowerPoint çıktısı (pptxgenjs, isteğe bağlı yüklenen chunk).
@@ -135,6 +137,38 @@ export const exportExecReportToPpt = async (report: ExecReport, theme: string): 
         });
     }
 
+    // ---- 5b) Maliyet (ünvan maliyetleri girilmişse) ----
+    if (report.cost.costedTitleCount > 0) {
+        const cost = pptx.addSlide();
+        addTitle(cost, `Maliyet Özeti (${report.year}, ₺)`);
+        const costCards: Array<[string, string, string]> = [
+            ['Plan Maliyeti', fmtTL(report.cost.totalPlanCost), accent],
+            ['Gerçekleşen', fmtTL(report.cost.totalActualCost), GREEN],
+            ['Sapma', `${report.cost.totalVarianceCost > 0 ? '+' : ''}${fmtTL(report.cost.totalVarianceCost)}`, report.cost.totalVarianceCost > 0 ? RED : GRAY],
+        ];
+        costCards.forEach(([label, value, color], i) => {
+            const x = 0.5 + i * 4.3;
+            cost.addShape('roundRect', { x, y: 1.3, w: 3.95, h: 1.5, fill: { color: 'F9FAFB' }, line: { color: 'E5E7EB', width: 1 }, rectRadius: 0.08 });
+            cost.addText(label, { x: x + 0.3, y: 1.5, w: 3.4, h: 0.35, fontSize: 13, color: GRAY, fontFace: 'Calibri' });
+            cost.addText(value, { x: x + 0.3, y: 1.9, w: 3.4, h: 0.7, fontSize: 26, bold: true, color, fontFace: 'Calibri' });
+        });
+        const topCost = report.cost.byProject.slice(0, 10);
+        cost.addTable([
+            ['Proje', 'Plan ₺', 'Gerçekleşen ₺', 'Sapma ₺'].map(t => ({ text: t, options: { bold: true, color: 'FFFFFF', fill: { color: accent }, fontSize: 12 } })),
+            ...topCost.map(r => ([
+                { text: r.label, options: { fontSize: 11, color: DARK } },
+                { text: fmtTL(r.planCost), options: { fontSize: 11, color: DARK } },
+                { text: fmtTL(r.actualCost), options: { fontSize: 11, color: DARK } },
+                { text: `${r.varianceCost > 0 ? '+' : ''}${fmtTL(r.varianceCost)}`, options: { fontSize: 11, bold: r.varianceCost !== 0, color: r.varianceCost > 0 ? RED : r.varianceCost < 0 ? AMBER : GRAY } },
+            ])),
+        ] as never, { x: 0.5, y: 3.1, w: 12.3, colW: [5.4, 2.3, 2.3, 2.3], border: { type: 'solid', color: 'E5E7EB', pt: 0.5 }, rowH: 0.34 });
+        if (report.cost.uncostedPeople.length > 0) {
+            cost.addText(`Not: ${report.cost.uncostedPeople.length} kişi maliyetlenemedi (ünvan/₺ eksik): ${report.cost.uncostedPeople.slice(0, 6).join(', ')}${report.cost.uncostedPeople.length > 6 ? '…' : ''}`, {
+                x: 0.5, y: 6.95, w: 12.3, h: 0.4, fontSize: 10, italic: true, color: GRAY,
+            });
+        }
+    }
+
     // ---- 6) Kaynak sağlığı: kapasite açıkları + aşırı tahsisler ----
     const gaps = report.roleAnalysis.filter(r => r.totals.gap > 0).slice(0, 10);
     const risky = pptx.addSlide();
@@ -165,6 +199,27 @@ export const exportExecReportToPpt = async (report: ExecReport, theme: string): 
                 { text: `${fmt(o.total)} / ${fmt(o.capacity)}`, options: { fontSize: 11, bold: true, color: RED } },
             ])),
         ] as never, { x: 7.0, y: 1.7, w: 5.8, colW: [2.8, 1.2, 1.8], border: { type: 'solid', color: 'E5E7EB', pt: 0.5 }, rowH: 0.35 });
+    }
+
+    // ---- 7) Portföy riskleri ----
+    if (report.risks.length > 0) {
+        const RISK_HEX = { high: RED, medium: AMBER, low: GREEN } as const;
+        const riskSlide = pptx.addSlide();
+        addTitle(riskSlide, 'Portföy Riskleri');
+        riskSlide.addText(`Yüksek ${report.riskCounts.high} · Orta ${report.riskCounts.medium} · Düşük ${report.riskCounts.low} (aktif)`, {
+            x: 0.5, y: 1.1, w: 12.3, h: 0.4, fontSize: 14, color: GRAY, fontFace: 'Calibri',
+        });
+        riskSlide.addTable([
+            ['Risk', 'Proje', 'Skor', 'Önem', 'Sahibi', 'Durum'].map(t => ({ text: t, options: { bold: true, color: 'FFFFFF', fill: { color: accent }, fontSize: 12 } })),
+            ...report.risks.slice(0, 14).map(r => ([
+                { text: r.title, options: { fontSize: 11, color: DARK } },
+                { text: r.projectName, options: { fontSize: 11, color: GRAY } },
+                { text: String(r.score), options: { fontSize: 11, bold: true, color: RISK_HEX[r.band] } },
+                { text: RISK_BAND_LABELS[r.band], options: { fontSize: 11, color: RISK_HEX[r.band] } },
+                { text: r.owner || '—', options: { fontSize: 11, color: GRAY } },
+                { text: RISK_STATUS_LABELS[r.status], options: { fontSize: 11, color: GRAY } },
+            ])),
+        ] as never, { x: 0.5, y: 1.7, w: 12.3, colW: [4.3, 2.6, 1.2, 1.6, 1.6, 1.0], border: { type: 'solid', color: 'E5E7EB', pt: 0.5 }, rowH: 0.34, valign: 'middle' });
     }
 
     await pptx.writeFile({ fileName: `yonetici-paketi-${report.year}-${new Date().toISOString().split('T')[0]}.pptx` });
