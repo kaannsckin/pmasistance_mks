@@ -9,6 +9,7 @@ import {
 import { buildRoleAnalysis, EFFORT_TYPE_LABELS, EffortType, summarizeGaps } from '../utils/roleAnalysis';
 import { AllocationSuggestion, ApplyMode, suggestAllocationsFromTasks, SuggestionResult } from '../utils/taskToAllocation';
 import { canAddAllocationToProject, canEditActualCell, canEditAllocationCell, canEditPlanCell, Identity, visiblePersonIds } from '../utils/rbac';
+import { effectiveCapacity } from '../utils/availability';
 import ScenarioView from './ScenarioView';
 import UtilizationHeatmap from './UtilizationHeatmap';
 
@@ -108,6 +109,17 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
 
   const selectedPerson = personMap.get(newRow.personId);
   const selectedProject = projectMap.get(newRow.projectId);
+
+  // Çakışma önizlemesi: seçilen kişinin bu yıl aylık boş kapasitesi (izin farkında)
+  const newPersonAvail = useMemo(() => {
+    if (!selectedPerson) return null;
+    return MONTH_INDEXES.map(m => {
+      const load = personMonthTotal(yearAllocations, selectedPerson.id, year, m, 'plan');
+      const cap = effectiveCapacity(selectedPerson, leaves, year, m);
+      const free = Math.round((cap - load) * 100) / 100;
+      return { m, load, cap, free, over: load > cap + 1e-9, full: cap > 0 && free <= 0.049 && !(load > cap + 1e-9) };
+    });
+  }, [selectedPerson, yearAllocations, year, leaves]);
 
   // Kapsam: PY yalnız sahip olduğu projeye; bölüm sorumlusu yalnız bölümü kişisine ekler
   const addableProjects = useMemo(
@@ -237,6 +249,33 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
           <button onClick={handleAdd} disabled={!newRow.personId || !newRow.projectId} className="text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-sm hover:opacity-90 disabled:opacity-40" style={{ backgroundColor: 'var(--app-primary)' }}>
             <i className="fa-solid fa-plus mr-1"></i>Ekle
           </button>
+
+          {newPersonAvail && selectedPerson && (
+            <div className="w-full flex items-center gap-2 flex-wrap pt-1 mt-1 border-t border-gray-50 dark:border-gray-700/60">
+              <span className="text-[10px] font-semibold text-gray-400">{selectedPerson.firstName} · {year} boş kapasite:</span>
+              <div className="flex gap-0.5">
+                {newPersonAvail.map(a => (
+                  <span key={a.m} title={`${MONTHS_TR[a.m - 1]}: yük ${fmt(a.load)} / kapasite ${fmt(a.cap)} → boş ${fmt(a.free)}`}
+                    className={`w-7 h-5 rounded flex flex-col items-center justify-center text-[8px] font-bold leading-none ${a.over ? 'bg-red-500 text-white' : a.full ? 'bg-amber-200 text-amber-800 dark:bg-amber-800/60 dark:text-amber-200' : a.cap <= 0.049 ? 'bg-gray-200 text-gray-400 dark:bg-gray-700 dark:text-gray-500' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'}`}>
+                    <span className="text-[7px] opacity-70">{MONTHS_TR[a.m - 1][0]}</span>
+                    {a.cap <= 0.049 ? 'iz' : fmt(a.free)}
+                  </span>
+                ))}
+              </div>
+              {(() => {
+                const overM = newPersonAvail.filter(a => a.over).map(a => MONTHS_TR[a.m - 1]);
+                const fullM = newPersonAvail.filter(a => a.full).map(a => MONTHS_TR[a.m - 1]);
+                return (
+                  <span className="text-[10px] font-semibold">
+                    {overM.length > 0 && <span className="text-red-500"><i className="fa-solid fa-triangle-exclamation mr-1"></i>Aşırı: {overM.join(', ')}</span>}
+                    {overM.length > 0 && fullM.length > 0 && <span className="text-gray-300 mx-1">·</span>}
+                    {fullM.length > 0 && <span className="text-amber-500">Dolu: {fullM.join(', ')}</span>}
+                    {overM.length === 0 && fullM.length === 0 && <span className="text-emerald-500"><i className="fa-solid fa-circle-check mr-1"></i>Yıl boyu uygun</span>}
+                  </span>
+                );
+              })()}
+            </div>
+          )}
         </div>
       )}
 
