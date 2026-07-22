@@ -45,6 +45,7 @@ import DataHealthModal from './components/DataHealthModal';
 import AuditLogModal from './components/AuditLogModal';
 import CommandPalette, { CommandItem } from './components/CommandPalette';
 import WorkPackageManager from './components/WorkPackageManager';
+import CalendarView from './components/CalendarView';
 import { analyzeDataHealth, applyHealthFix, HealthFix } from './utils/dataHealth';
 import { appendAudit, AUDIT_ACTION_LABELS } from './utils/audit';
 import { upsertLeave } from './utils/availability';
@@ -553,6 +554,10 @@ const App: React.FC = () => {
       );
     }
 
+    if (currentView === View.Calendar) {
+      return <CalendarView workspace={workspace} identity={identity} onViewPerson={setViewingPersonId} />;
+    }
+
     // Aktif proje yoksa tek anlamlı ekran portföydür
     if (!activeProject || currentView === View.Portfolio) {
       return (
@@ -675,6 +680,7 @@ const App: React.FC = () => {
     const go = (view: View) => () => setCurrentView(view);
     items.push({ id: 'v-portfolio', group: 'Ekranlar', label: 'Portföy', icon: 'fa-table-cells-large', keywords: 'portfoy proje', run: go(View.Portfolio) });
     items.push({ id: 'v-alloc', group: 'Ekranlar', label: 'İşgücü Tahsisi', icon: 'fa-people-arrows', keywords: 'tahsis aa doluluk isi', run: go(View.Allocations) });
+    items.push({ id: 'v-calendar', group: 'Ekranlar', label: 'Takvim', icon: 'fa-calendar-days', keywords: 'takvim zaman cizelge ekip is paketi', run: go(View.Calendar) });
     items.push({ id: 'v-pool', group: 'Ekranlar', label: 'Veri Havuzu', icon: 'fa-database', keywords: 'personel bolum rol unvan havuz', run: go(View.DataPool) });
     if (isExecRole(identity.role)) items.push({ id: 'v-exec', group: 'Ekranlar', label: 'Yönetim (EVM · riskler · baseline)', icon: 'fa-gauge-high', keywords: 'yonetim evm butce risk', run: go(View.Executive) });
     items.push({ id: 'a-health', group: 'Aksiyonlar', label: 'Veri Sağlığı Denetimi', icon: 'fa-stethoscope', keywords: 'saglik hata yetim', run: () => setIsHealthModalOpen(true) });

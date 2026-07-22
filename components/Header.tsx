@@ -407,6 +407,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSett
             {exec && <WorkspaceNavItem view={View.Executive} currentView={currentView} setCurrentView={setCurrentView} icon="fa-gauge-high" label="Yönetim" />}
             <WorkspaceNavItem view={View.Portfolio} currentView={currentView} setCurrentView={setCurrentView} icon="fa-table-cells-large" label="Portföy" />
             <WorkspaceNavItem view={View.Allocations} currentView={currentView} setCurrentView={setCurrentView} icon="fa-people-arrows" label="Tahsis" />
+            <WorkspaceNavItem view={View.Calendar} currentView={currentView} setCurrentView={setCurrentView} icon="fa-calendar-days" label="Takvim" />
             <WorkspaceNavItem view={View.DataPool} currentView={currentView} setCurrentView={setCurrentView} icon="fa-database" label="Veri Havuzu" />
           </nav>
 
