@@ -116,6 +116,7 @@ export enum View {
   Allocations,
   Executive,
   Risks,
+  Calendar,
 }
 
 export interface UnitLoad {

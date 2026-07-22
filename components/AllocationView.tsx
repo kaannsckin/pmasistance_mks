@@ -9,6 +9,8 @@ import {
 import { buildRoleAnalysis, EFFORT_TYPE_LABELS, EffortType, summarizeGaps } from '../utils/roleAnalysis';
 import { AllocationSuggestion, ApplyMode, suggestAllocationsFromTasks, SuggestionResult } from '../utils/taskToAllocation';
 import { canAddAllocationToProject, canEditActualCell, canEditAllocationCell, canEditPlanCell, Identity, visiblePersonIds } from '../utils/rbac';
+import { effectiveCapacity } from '../utils/availability';
+import { allPersonRoles, findAvailablePeople } from '../utils/staffing';
 import ScenarioView from './ScenarioView';
 import UtilizationHeatmap from './UtilizationHeatmap';
 
@@ -28,7 +30,7 @@ interface AllocationViewProps {
 }
 
 type Mode = 'plan' | 'actual' | 'compare';
-type Tab = 'grid' | 'person' | 'department' | 'project' | 'heatmap' | 'roles' | 'scenario';
+type Tab = 'grid' | 'person' | 'department' | 'project' | 'heatmap' | 'staffing' | 'roles' | 'scenario';
 
 const YEAR_RANGE = (() => {
   const y = new Date().getFullYear();
@@ -58,6 +60,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
   const [newRow, setNewRow] = useState({ personId: '', projectId: '', workPackageId: '', role: '' });
   const [suggestModal, setSuggestModal] = useState<{ projectId: string; projectName: string; result: SuggestionResult } | null>(null);
   const [applyMode, setApplyMode] = useState<ApplyMode>('fill');
+  const [staff, setStaff] = useState({ role: '', from: 1, to: 12, aa: 0.5 });
 
   const openSuggestions = (projectId: string) => {
     const project = projectMap.get(projectId);
@@ -108,6 +111,17 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
 
   const selectedPerson = personMap.get(newRow.personId);
   const selectedProject = projectMap.get(newRow.projectId);
+
+  // Çakışma önizlemesi: seçilen kişinin bu yıl aylık boş kapasitesi (izin farkında)
+  const newPersonAvail = useMemo(() => {
+    if (!selectedPerson) return null;
+    return MONTH_INDEXES.map(m => {
+      const load = personMonthTotal(yearAllocations, selectedPerson.id, year, m, 'plan');
+      const cap = effectiveCapacity(selectedPerson, leaves, year, m);
+      const free = Math.round((cap - load) * 100) / 100;
+      return { m, load, cap, free, over: load > cap + 1e-9, full: cap > 0 && free <= 0.049 && !(load > cap + 1e-9) };
+    });
+  }, [selectedPerson, yearAllocations, year, leaves]);
 
   // Kapsam: PY yalnız sahip olduğu projeye; bölüm sorumlusu yalnız bölümü kişisine ekler
   const addableProjects = useMemo(
@@ -237,6 +251,33 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
           <button onClick={handleAdd} disabled={!newRow.personId || !newRow.projectId} className="text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-sm hover:opacity-90 disabled:opacity-40" style={{ backgroundColor: 'var(--app-primary)' }}>
             <i className="fa-solid fa-plus mr-1"></i>Ekle
           </button>
+
+          {newPersonAvail && selectedPerson && (
+            <div className="w-full flex items-center gap-2 flex-wrap pt-1 mt-1 border-t border-gray-50 dark:border-gray-700/60">
+              <span className="text-[10px] font-semibold text-gray-400">{selectedPerson.firstName} · {year} boş kapasite:</span>
+              <div className="flex gap-0.5">
+                {newPersonAvail.map(a => (
+                  <span key={a.m} title={`${MONTHS_TR[a.m - 1]}: yük ${fmt(a.load)} / kapasite ${fmt(a.cap)} → boş ${fmt(a.free)}`}
+                    className={`w-7 h-5 rounded flex flex-col items-center justify-center text-[8px] font-bold leading-none ${a.over ? 'bg-red-500 text-white' : a.full ? 'bg-amber-200 text-amber-800 dark:bg-amber-800/60 dark:text-amber-200' : a.cap <= 0.049 ? 'bg-gray-200 text-gray-400 dark:bg-gray-700 dark:text-gray-500' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'}`}>
+                    <span className="text-[7px] opacity-70">{MONTHS_TR[a.m - 1][0]}</span>
+                    {a.cap <= 0.049 ? 'iz' : fmt(a.free)}
+                  </span>
+                ))}
+              </div>
+              {(() => {
+                const overM = newPersonAvail.filter(a => a.over).map(a => MONTHS_TR[a.m - 1]);
+                const fullM = newPersonAvail.filter(a => a.full).map(a => MONTHS_TR[a.m - 1]);
+                return (
+                  <span className="text-[10px] font-semibold">
+                    {overM.length > 0 && <span className="text-red-500"><i className="fa-solid fa-triangle-exclamation mr-1"></i>Aşırı: {overM.join(', ')}</span>}
+                    {overM.length > 0 && fullM.length > 0 && <span className="text-gray-300 mx-1">·</span>}
+                    {fullM.length > 0 && <span className="text-amber-500">Dolu: {fullM.join(', ')}</span>}
+                    {overM.length === 0 && fullM.length === 0 && <span className="text-emerald-500"><i className="fa-solid fa-circle-check mr-1"></i>Yıl boyu uygun</span>}
+                  </span>
+                );
+              })()}
+            </div>
+          )}
         </div>
       )}
 
@@ -391,6 +432,97 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
     </div>
   );
 
+  // ---------------- Uygun Kişi (staffing) ----------------
+
+  const renderStaffing = () => {
+    const roles = allPersonRoles(people);
+    const lo = Math.min(staff.from, staff.to), hi = Math.max(staff.from, staff.to);
+    const months = MONTH_INDEXES.filter(m => m >= lo && m <= hi);
+    const candidates = findAvailablePeople(people, allocations, leaves, { role: staff.role || undefined, year, months, requiredAA: staff.aa });
+    const fitCount = candidates.filter(c => c.fits).length;
+    const windowLabel = lo === hi ? MONTHS_TR[lo - 1] : `${MONTHS_TR[lo - 1]}–${MONTHS_TR[hi - 1]}`;
+
+    return (
+      <div className="space-y-4">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-4 flex flex-wrap items-end gap-3">
+          <label className="text-[11px] font-semibold text-gray-500 dark:text-gray-300">Rol / Beceri
+            <select value={staff.role} onChange={e => setStaff({ ...staff, role: e.target.value })} className="mt-1 block bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1.5 text-[11px] focus:outline-none min-w-[160px]">
+              <option value="">Tüm roller</option>
+              {roles.map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </label>
+          <label className="text-[11px] font-semibold text-gray-500 dark:text-gray-300">Başlangıç ay
+            <select value={staff.from} onChange={e => setStaff({ ...staff, from: parseInt(e.target.value, 10) })} className="mt-1 block bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1.5 text-[11px] focus:outline-none">
+              {MONTHS_TR.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+            </select>
+          </label>
+          <label className="text-[11px] font-semibold text-gray-500 dark:text-gray-300">Bitiş ay
+            <select value={staff.to} onChange={e => setStaff({ ...staff, to: parseInt(e.target.value, 10) })} className="mt-1 block bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1.5 text-[11px] focus:outline-none">
+              {MONTHS_TR.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+            </select>
+          </label>
+          <label className="text-[11px] font-semibold text-gray-500 dark:text-gray-300">Gerekli AA/ay
+            <input type="number" min={0.05} max={1} step={0.05} value={staff.aa} onChange={e => setStaff({ ...staff, aa: parseFloat(e.target.value) || 0 })} className="mt-1 block w-24 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1.5 text-[11px] focus:outline-none" />
+          </label>
+          <div className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold ${fitCount > 0 ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-300' : 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-300'}`}>
+            <i className={`fa-solid ${fitCount > 0 ? 'fa-user-check' : 'fa-user-xmark'}`}></i>
+            {windowLabel} · {staff.role || 'tüm roller'} · her ay ≥ {fmt(staff.aa)} AA: <b>{fitCount} uygun kişi</b>
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm overflow-x-auto">
+          <table className="w-full min-w-[820px]">
+            <thead>
+              <tr className="bg-gray-50/80 dark:bg-gray-800/80">
+                <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-400">Kişi</th>
+                <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-400">Bölüm</th>
+                <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-400">Pencere ({windowLabel})</th>
+                <th className="px-3 py-2 text-center text-[11px] font-semibold text-gray-400">En dar ay</th>
+                <th className="px-3 py-2 text-center text-[11px] font-semibold text-gray-400">Toplam boş</th>
+                <th className="px-3 py-2 text-center text-[11px] font-semibold text-gray-400">Durum</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
+              {candidates.map(c => (
+                <tr key={c.personId} className={`hover:bg-gray-50/50 dark:hover:bg-gray-800/40 ${c.fits ? '' : 'opacity-60'}`}>
+                  <td className="px-3 py-2">
+                    <div className="text-[11px] font-bold text-gray-700 dark:text-gray-200">{c.name}</div>
+                    <div className="text-[10px] text-gray-400">{c.roles.join(', ') || '—'}</div>
+                  </td>
+                  <td className="px-3 py-2 text-[11px] text-gray-500">{c.departmentCode}</td>
+                  <td className="px-3 py-2">
+                    <div className="flex gap-0.5">
+                      {months.map(m => {
+                        const f = c.freeByMonth[m - 1];
+                        return (
+                          <span key={m} title={`${MONTHS_TR[m - 1]}: boş ${fmt(f)} AA`}
+                            className={`w-7 h-5 rounded flex flex-col items-center justify-center text-[8px] font-bold leading-none ${f < -1e-9 ? 'bg-red-500 text-white' : f <= 0.049 ? 'bg-amber-200 text-amber-800 dark:bg-amber-800/60 dark:text-amber-200' : f + 1e-9 >= staff.aa ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300'}`}>
+                            <span className="text-[7px] opacity-70">{MONTHS_TR[m - 1][0]}</span>{fmt(f)}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </td>
+                  <td className={`px-3 py-2 text-center text-[11px] font-semibold ${c.windowMinFree < staff.aa ? 'text-amber-500' : 'text-emerald-600 dark:text-emerald-300'}`}>{fmt(c.windowMinFree)}</td>
+                  <td className="px-3 py-2 text-center text-[11px] font-semibold" style={{ color: 'var(--app-primary)' }}>{fmt(c.windowFree)}</td>
+                  <td className="px-3 py-2 text-center">
+                    {c.fits
+                      ? <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">Uygun</span>
+                      : <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-gray-100 text-gray-400 dark:bg-gray-800">Dolu</span>}
+                  </td>
+                </tr>
+              ))}
+              {candidates.length === 0 && (
+                <tr><td colSpan={6} className="text-center text-gray-400 text-xs py-10">Bu rolde havuzda kişi yok.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        <p className="text-[11px] text-gray-400"><i className="fa-solid fa-circle-info mr-1"></i>Boş kapasite = efektif kapasite (izin düşülmüş) − mevcut plan yükü. "En dar ay" pencerede en az boşluğu olan aydır; gerekli AA'yı karşılaması gerekir.</p>
+      </div>
+    );
+  };
+
   // ---------------- Kapasite-Talep (Rol) — Excel "Plan, Kaynak, İhtiyaç" ----------------
 
   const renderRoleAnalysis = () => {
@@ -487,7 +619,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
           <select value={year} onChange={e => setYear(parseInt(e.target.value, 10))} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-[11px] font-semibold text-gray-700 dark:text-gray-200 focus:outline-none">
             {YEAR_RANGE.map(y => <option key={y} value={y}>{y}</option>)}
           </select>
-          {tab !== 'roles' && tab !== 'heatmap' && (
+          {tab !== 'roles' && tab !== 'heatmap' && tab !== 'staffing' && (
             <select value={projectFilter} onChange={e => setProjectFilter(e.target.value)} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-[11px] text-gray-700 dark:text-gray-200 focus:outline-none">
               <option value="all">Tüm Projeler</option>
               {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -497,7 +629,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
             <option value="all">Tüm Bölümler</option>
             {departments.map(d => <option key={d} value={d}>{d}</option>)}
           </select>
-          {tab !== 'roles' && tab !== 'heatmap' && (
+          {tab !== 'roles' && tab !== 'heatmap' && tab !== 'staffing' && (
           <div className="bg-gray-50 dark:bg-gray-800 p-1 rounded-xl flex items-center border border-gray-100 dark:border-gray-700">
             {([['plan', 'Plan'], ['actual', 'Gerçekleşen'], ['compare', 'Karşılaştır']] as [Mode, string][]).map(([m, label]) => (
               <button key={m} onClick={() => setMode(m)} className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${mode === m ? 'bg-white dark:bg-gray-700 shadow-sm border border-gray-100 dark:border-gray-600' : 'text-gray-400 hover:text-gray-600'}`} style={mode === m ? { color: 'var(--app-primary)' } : {}}>
@@ -511,7 +643,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
 
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center space-x-2 flex-wrap gap-y-2">
-          {([['grid', 'fa-table-cells', 'Tahsis Tablosu'], ['person', 'fa-user', 'Kişi Özeti'], ['department', 'fa-building', 'Bölüm Özeti'], ['project', 'fa-folder-open', 'Proje Özeti'], ['heatmap', 'fa-fire', 'Doluluk'], ['roles', 'fa-id-badge', 'Kapasite-Talep'], ['scenario', 'fa-flask', 'Senaryo']] as [Tab, string, string][]).map(([t, icon, label]) => (
+          {([['grid', 'fa-table-cells', 'Tahsis Tablosu'], ['person', 'fa-user', 'Kişi Özeti'], ['department', 'fa-building', 'Bölüm Özeti'], ['project', 'fa-folder-open', 'Proje Özeti'], ['heatmap', 'fa-fire', 'Doluluk'], ['staffing', 'fa-user-check', 'Uygun Kişi'], ['roles', 'fa-id-badge', 'Kapasite-Talep'], ['scenario', 'fa-flask', 'Senaryo']] as [Tab, string, string][]).map(([t, icon, label]) => (
             <button key={t} onClick={() => setTab(t)} className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all ${tab === t ? 'text-white shadow-md' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 bg-gray-50 dark:bg-gray-800'}`} style={tab === t ? { backgroundColor: 'var(--app-primary)' } : {}}>
               <i className={`fa-solid ${icon}`}></i><span>{label}</span>
             </button>
@@ -613,6 +745,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
 
       {tab === 'grid' && renderGrid()}
       {tab === 'heatmap' && <UtilizationHeatmap allocations={allocations} people={people} year={year} deptFilter={deptFilter} leaves={leaves} />}
+      {tab === 'staffing' && renderStaffing()}
       {tab === 'person' && renderSummary(summarizeByPerson(yearAllocations, people, year, summaryField), true)}
       {tab === 'department' && renderSummary(summarizeByDepartment(yearAllocations, people, year, summaryField), true)}
       {tab === 'project' && renderSummary(summarizeByProject(yearAllocations, projectNames, year, summaryField), false)}

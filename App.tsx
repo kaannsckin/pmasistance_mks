@@ -1,6 +1,6 @@
 
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { View, Task, Resource, TaskStatus, Note, CustomerRequest, Objective, Project, WorkspaceData, RagStatus, ProjectStatus, UserRole, PlanLockStatus } from './types';
+import { View, Task, Resource, TaskStatus, Note, CustomerRequest, Objective, Project, WorkspaceData, RagStatus, ProjectStatus, UserRole, PlanLockStatus, WorkPackage } from './types';
 import { INITIAL_TASKS, INITIAL_RESOURCES, INITIAL_OBJECTIVES } from './constants';
 import {
   WORKSPACE_STORAGE_KEY,
@@ -44,6 +44,8 @@ import StatusReportModal from './components/StatusReportModal';
 import DataHealthModal from './components/DataHealthModal';
 import AuditLogModal from './components/AuditLogModal';
 import CommandPalette, { CommandItem } from './components/CommandPalette';
+import WorkPackageManager from './components/WorkPackageManager';
+import CalendarView from './components/CalendarView';
 import { analyzeDataHealth, applyHealthFix, HealthFix } from './utils/dataHealth';
 import { appendAudit, AUDIT_ACTION_LABELS } from './utils/audit';
 import { upsertLeave } from './utils/availability';
@@ -81,6 +83,7 @@ const App: React.FC = () => {
   const [isHealthModalOpen, setIsHealthModalOpen] = useState(false);
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
   const [isPaletteOpen, setIsPaletteOpen] = useState(false);
+  const [isWpManagerOpen, setIsWpManagerOpen] = useState(false);
   const [undo, setUndo] = useState<{ message: string; snapshot: WorkspaceData } | null>(null);
   const undoTimer = useRef<number | undefined>(undefined);
   const workspaceRef = useRef<WorkspaceData | null>(null);
@@ -208,7 +211,7 @@ const App: React.FC = () => {
     }));
   }, [updateWorkspace]);
 
-  type ListField = 'tasks' | 'resources' | 'notes' | 'customerRequests' | 'objectives';
+  type ListField = 'tasks' | 'resources' | 'notes' | 'customerRequests' | 'objectives' | 'workPackages';
   const makeListSetter = <T,>(field: ListField): React.Dispatch<React.SetStateAction<T[]>> =>
     ((action: React.SetStateAction<T[]>) => {
       updateActiveProject(p => ({
@@ -224,6 +227,7 @@ const App: React.FC = () => {
   const setNotes = makeListSetter<Note>('notes');
   const setCustomerRequests = makeListSetter<CustomerRequest>('customerRequests');
   const setObjectives = makeListSetter<Objective>('objectives');
+  const setWorkPackages = makeListSetter<WorkPackage>('workPackages');
 
   const makeProjectSettingSetter = <K extends keyof Project['settings']>(key: K): React.Dispatch<React.SetStateAction<Project['settings'][K]>> =>
     ((action: React.SetStateAction<Project['settings'][K]>) => {
@@ -550,6 +554,10 @@ const App: React.FC = () => {
       );
     }
 
+    if (currentView === View.Calendar) {
+      return <CalendarView workspace={workspace} identity={identity} onViewPerson={setViewingPersonId} />;
+    }
+
     // Aktif proje yoksa tek anlamlı ekran portföydür
     if (!activeProject || currentView === View.Portfolio) {
       return (
@@ -672,14 +680,16 @@ const App: React.FC = () => {
     const go = (view: View) => () => setCurrentView(view);
     items.push({ id: 'v-portfolio', group: 'Ekranlar', label: 'Portföy', icon: 'fa-table-cells-large', keywords: 'portfoy proje', run: go(View.Portfolio) });
     items.push({ id: 'v-alloc', group: 'Ekranlar', label: 'İşgücü Tahsisi', icon: 'fa-people-arrows', keywords: 'tahsis aa doluluk isi', run: go(View.Allocations) });
+    items.push({ id: 'v-calendar', group: 'Ekranlar', label: 'Takvim', icon: 'fa-calendar-days', keywords: 'takvim zaman cizelge ekip is paketi', run: go(View.Calendar) });
     items.push({ id: 'v-pool', group: 'Ekranlar', label: 'Veri Havuzu', icon: 'fa-database', keywords: 'personel bolum rol unvan havuz', run: go(View.DataPool) });
     if (isExecRole(identity.role)) items.push({ id: 'v-exec', group: 'Ekranlar', label: 'Yönetim (EVM · riskler · baseline)', icon: 'fa-gauge-high', keywords: 'yonetim evm butce risk', run: go(View.Executive) });
     items.push({ id: 'a-health', group: 'Aksiyonlar', label: 'Veri Sağlığı Denetimi', icon: 'fa-stethoscope', keywords: 'saglik hata yetim', run: () => setIsHealthModalOpen(true) });
     items.push({ id: 'a-audit', group: 'Aksiyonlar', label: 'Denetim Günlüğü', icon: 'fa-clock-rotate-left', keywords: 'audit log gunluk kayit', run: () => setIsAuditModalOpen(true) });
+    if (activeProject) items.push({ id: 'a-wp', group: 'Aksiyonlar', label: `İş Paketleri — ${activeProject.name}`, icon: 'fa-briefcase', keywords: 'is paketi work package gorev', run: () => setIsWpManagerOpen(true) });
     visibleProjects.forEach(p => items.push({ id: `p-${p.id}`, group: 'Projeler', label: p.name, sublabel: 'Projeyi aç', icon: 'fa-folder-open', keywords: p.code || '', run: () => handleOpenProject(p.id) }));
     workspace.people.forEach(p => items.push({ id: `k-${p.id}`, group: 'Kişiler', label: `${p.firstName} ${p.lastName}`.trim(), sublabel: `${p.departmentCode || ''} · kişi profili`, icon: 'fa-user', keywords: p.sicil || '', run: () => setViewingPersonId(p.id) }));
     return items;
-  }, [workspace, visibleProjects, identity, handleOpenProject]);
+  }, [workspace, visibleProjects, identity, handleOpenProject, activeProject]);
 
   return (
     <div className={`min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans theme-${settings?.theme || 'classic'}`}>
@@ -708,12 +718,13 @@ const App: React.FC = () => {
         onOpenDataHealth={() => setIsHealthModalOpen(true)}
         onOpenAuditLog={() => setIsAuditModalOpen(true)}
         onOpenCommandPalette={() => setIsPaletteOpen(true)}
+        onOpenWorkPackages={() => setIsWpManagerOpen(true)}
       />
       <main className={`w-full max-w-[1920px] mx-auto ${isFullWidthView ? mainHeightClass : `px-4 sm:px-6 lg:px-8 py-6 ${mainHeightClass} overflow-auto`}`}>
         {renderView()}
       </main>
 
-      {isFormModalOpen && activeProject && workspace && <TaskFormModal task={editingTask} resources={activeProject.resources} people={workspace.people} tasks={activeProject.tasks} objectives={activeProject.objectives} onClose={() => setIsFormModalOpen(false)} onSave={(t) => {
+      {isFormModalOpen && activeProject && workspace && <TaskFormModal task={editingTask} resources={activeProject.resources} people={workspace.people} workPackages={activeProject.workPackages} tasks={activeProject.tasks} objectives={activeProject.objectives} onClose={() => setIsFormModalOpen(false)} onSave={(t) => {
           updateActiveProject(p => {
             const tasks = p.tasks.some(x => x.id === t.id) ? p.tasks.map(x => x.id === t.id ? t : x) : [...p.tasks, t];
             // Havuzdan atanan kişi proje kaynağı değilse otomatik ekle (isim eşleşmesi korunur)
@@ -735,6 +746,15 @@ const App: React.FC = () => {
           });
           setIsFormModalOpen(false);
       }} />}
+      {isWpManagerOpen && activeProject && (
+        <WorkPackageManager
+          isOpen={isWpManagerOpen}
+          onClose={() => setIsWpManagerOpen(false)}
+          workPackages={activeProject.workPackages}
+          tasks={activeProject.tasks}
+          setWorkPackages={setWorkPackages}
+        />
+      )}
       {isDetailModalOpen && viewingTask && <TaskDetailModal task={viewingTask} onClose={() => setIsDetailModalOpen(false)} onEdit={(t) => { setIsDetailModalOpen(false); setEditingTask(t); setIsFormModalOpen(true); }} onSave={handleUpdateTask} />}
       {isTeamsModalOpen && teamsTask && <TeamsMessageModal task={teamsTask} onClose={() => setIsTeamsModalOpen(false)} />}
       {isSettingsModalOpen && (
