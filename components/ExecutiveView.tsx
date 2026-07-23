@@ -50,19 +50,26 @@ const HealthRing: React.FC<{ score: number; band: HealthBand; size?: number }> =
   </div>
 );
 
-const KpiCard: React.FC<{ icon: string; label: string; value: string; sub?: string; tone?: 'default' | 'red' | 'green' }> = ({ icon, label, value, sub, tone = 'default' }) => (
-  <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm px-4 py-3.5 flex items-center space-x-3 min-w-[150px]">
-    <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white flex-none ${tone === 'red' ? 'bg-red-500' : tone === 'green' ? 'bg-emerald-500' : ''}`}
-         style={tone === 'default' ? { backgroundColor: 'var(--app-primary)' } : {}}>
-      <i className={`fa-solid ${icon} text-sm`}></i>
-    </div>
-    <div className="leading-none min-w-0">
-      <p className="text-[11px] font-semibold text-gray-400 mb-1.5">{label}</p>
-      <p className="text-lg font-semibold text-gray-800 dark:text-white leading-none truncate">{value}</p>
-      {sub && <p className="text-xs text-gray-400 font-bold mt-1 truncate">{sub}</p>}
-    </div>
-  </div>
-);
+const KpiCard: React.FC<{ icon: string; label: string; value: string; sub?: string; tone?: 'default' | 'red' | 'green'; onClick?: () => void; active?: boolean }> = ({ icon, label, value, sub, tone = 'default', onClick, active }) => {
+  const Tag = onClick ? 'button' : 'div';
+  return (
+    <Tag
+      onClick={onClick}
+      className={`bg-white dark:bg-gray-800 rounded-2xl border shadow-sm px-4 py-3.5 flex items-center space-x-3 min-w-[150px] text-left w-full transition-all ${onClick ? 'hover:shadow-md hover:border-primary/40 cursor-pointer' : ''} ${active ? 'border-primary ring-2' : 'border-gray-100 dark:border-gray-700'}`}
+      style={active ? { borderColor: 'var(--app-primary)', ['--tw-ring-color' as string]: 'var(--app-ring)' } : {}}
+    >
+      <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white flex-none ${tone === 'red' ? 'bg-red-500' : tone === 'green' ? 'bg-emerald-500' : ''}`}
+           style={tone === 'default' ? { backgroundColor: 'var(--app-primary)' } : {}}>
+        <i className={`fa-solid ${icon} text-sm`}></i>
+      </div>
+      <div className="leading-none min-w-0 flex-1">
+        <p className="text-[11px] font-semibold text-gray-400 mb-1.5">{label}{onClick && <i className={`fa-solid fa-chevron-${active ? 'up' : 'down'} ml-1.5 text-[9px] opacity-60`}></i>}</p>
+        <p className="text-lg font-semibold text-gray-800 dark:text-white leading-none truncate">{value}</p>
+        {sub && <p className="text-xs text-gray-400 font-bold mt-1 truncate">{sub}</p>}
+      </div>
+    </Tag>
+  );
+};
 
 /** Aylık Plan vs Gerçekleşen gruplu bar + kapasite çizgisi (SVG) */
 const PlanActualChart: React.FC<{ plan: number[]; actual: number[]; capacity: number }> = ({ plan, actual, capacity }) => {
@@ -111,6 +118,8 @@ const PlanActualChart: React.FC<{ plan: number[]; actual: number[]; capacity: nu
 const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, onOpenProject, onTakeSnapshot }) => {
   const [year, setYear] = useState(new Date().getFullYear());
   const [isPptBusy, setIsPptBusy] = useState(false);
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const toggle = (key: string) => setExpanded(e => (e === key ? null : key));
 
   const handlePptExport = async () => {
     setIsPptBusy(true);
@@ -229,14 +238,102 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
         )}
       </div>
 
-      {/* KPI şeridi */}
+      {/* KPI şeridi — tıklanabilir kartlar detay açar */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-        <KpiCard icon="fa-folder-open" label="Proje" value={String(k.projectTotal)} sub={`${k.projectCounts.devam} devam · ${k.projectCounts.teklif} teklif`} />
-        <KpiCard icon="fa-heart-pulse" label="RAG Durumu" value={`${k.ragCounts.green}·${k.ragCounts.amber}·${k.ragCounts.red}`} sub="yolunda · riskli · kritik" tone={k.ragCounts.red > 0 ? 'red' : 'green'} />
+        <KpiCard icon="fa-folder-open" label="Proje" value={String(k.projectTotal)} sub={`${k.projectCounts.devam} devam · ${k.projectCounts.teklif} teklif`} onClick={() => toggle('projects')} active={expanded === 'projects'} />
+        <KpiCard icon="fa-heart-pulse" label="RAG Durumu" value={`${k.ragCounts.green}·${k.ragCounts.amber}·${k.ragCounts.red}`} sub="yolunda · riskli · kritik" tone={k.ragCounts.red > 0 ? 'red' : 'green'} onClick={() => toggle('rag')} active={expanded === 'rag'} />
         <KpiCard icon="fa-calendar-check" label={`${year} Plan`} value={`${fmt(k.totalPlanAA)} AA`} sub={`kapasite ${fmt(k.monthlyCapacityAA)} AA/ay`} />
         <KpiCard icon="fa-chart-line" label="Gerçekleşen" value={`${fmt(k.totalActualAA)} AA`} sub={`sapma ${k.totalVarianceAA >= 0 ? '+' : ''}${fmt(k.totalVarianceAA)} AA`} tone={k.totalVarianceAA > 0 ? 'red' : 'default'} />
-        <KpiCard icon="fa-triangle-exclamation" label="Aşırı Tahsis" value={String(k.overAllocationCount)} sub="kişi-ay" tone={k.overAllocationCount > 0 ? 'red' : 'green'} />
-        <KpiCard icon="fa-list-check" label="Görev İlerleme" value={`%${k.taskProgressPct}`} sub={`${k.taskDone}/${k.taskTotal} tamamlandı`} />
+        <KpiCard icon="fa-triangle-exclamation" label="Aşırı Tahsis" value={String(k.overAllocationCount)} sub="kişi-ay" tone={k.overAllocationCount > 0 ? 'red' : 'green'} onClick={() => toggle('over')} active={expanded === 'over'} />
+        <KpiCard icon="fa-list-check" label="Görev İlerleme" value={`%${k.taskProgressPct}`} sub={`${k.taskDone}/${k.taskTotal} tamamlandı`} onClick={() => toggle('progress')} active={expanded === 'progress'} />
+      </div>
+
+      {/* Drill-down detayı (tıklanan KPI'ya göre) */}
+      {expanded && (
+        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm p-5">
+          {expanded === 'rag' && (
+            <div className="space-y-2">
+              <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-300 mb-2">Projeler — RAG durumuna göre</h4>
+              {(['red', 'amber', 'green'] as RagStatus[]).map(rag => {
+                const ps = workspace.projects.filter(p => p.rag === rag);
+                if (ps.length === 0) return null;
+                return (
+                  <div key={rag} className="flex items-start gap-2 flex-wrap">
+                    <span className="text-[11px] font-semibold px-2 py-1 rounded-lg text-white flex-none" style={{ backgroundColor: RAG_COLORS[rag] }}>{RAG_TR[rag]} ({ps.length})</span>
+                    {ps.map(p => <button key={p.id} onClick={() => onOpenProject(p.id)} className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:text-primary">{p.name}</button>)}
+                  </div>
+                );
+              })}
+              {workspace.projects.filter(p => !p.rag).length > 0 && (
+                <p className="text-[11px] text-gray-400">{workspace.projects.filter(p => !p.rag).length} proje RAG girilmemiş.</p>
+              )}
+            </div>
+          )}
+          {expanded === 'projects' && (
+            <div className="flex flex-wrap gap-2">
+              {workspace.projects.map(p => (
+                <button key={p.id} onClick={() => onOpenProject(p.id)} className="flex items-center gap-2 text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:text-primary">
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-white/70 dark:bg-gray-800 text-gray-400">{STATUS_TR[p.status]}</span>{p.name}
+                </button>
+              ))}
+            </div>
+          )}
+          {expanded === 'over' && (
+            report.overAllocations.length === 0
+              ? <p className="text-xs text-emerald-600 dark:text-emerald-300"><i className="fa-solid fa-circle-check mr-1"></i>Aşırı tahsis yok.</p>
+              : (
+                <div className="flex flex-wrap gap-2">
+                  {report.overAllocations.map((o, i) => (
+                    <span key={i} className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-300">
+                      {o.personName} · {MONTHS_TR[o.month - 1]} {fmt(o.total)}/{fmt(o.capacity)}
+                    </span>
+                  ))}
+                </div>
+              )
+          )}
+          {expanded === 'progress' && (
+            <div className="space-y-2">
+              {workspace.projects.map(p => {
+                const total = p.tasks.length;
+                const done = p.tasks.filter(t => t.status === 'Done').length;
+                const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+                return (
+                  <div key={p.id} className="flex items-center gap-3">
+                    <span className="w-40 flex-none text-[11px] font-semibold text-gray-600 dark:text-gray-300 truncate">{p.name}</span>
+                    <div className="flex-1 h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden"><div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: 'var(--app-primary)' }}></div></div>
+                    <span className="w-24 flex-none text-right text-[11px] font-semibold text-gray-500">{done}/{total} · %{pct}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Proje Sağlık Panosu — proje bazında (kurum skoru üstte) */}
+      <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm p-5">
+        <h3 className="text-sm font-semibold text-gray-800 dark:text-white flex items-center gap-2 mb-4">
+          <i className="fa-solid fa-heart-circle-check" style={{ color: 'var(--app-primary)' }}></i>Proje Sağlık Panosu
+        </h3>
+        {health.projects.length === 0 ? (
+          <p className="text-xs text-gray-400">Proje yok.</p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+            {health.projects.map(ph => (
+              <div key={ph.projectId} className="flex items-center gap-3 rounded-xl border border-gray-100 dark:border-gray-700 p-3">
+                <HealthRing score={ph.score} band={ph.band} size={52} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-gray-700 dark:text-gray-200 truncate">{ph.name}</p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">
+                    {ph.rag ? `${RAG_TR[ph.rag]} · ` : ''}{ph.cpi !== null ? `CPI ${ph.cpi.toLocaleString('tr-TR')} · ` : ''}{ph.spi !== null ? `SPI ${ph.spi.toLocaleString('tr-TR')} · ` : ''}{ph.highRisks > 0 ? `${ph.highRisks} yüksek risk` : 'risk yok'}
+                  </p>
+                  {ph.reasons.length > 0 && <p className="text-[10px] text-amber-500 mt-0.5 truncate" title={ph.reasons.join(', ')}>{ph.reasons.join(', ')}</p>}
+                </div>
+                <button onClick={() => onOpenProject(ph.projectId)} className="text-[11px] font-semibold px-2.5 py-1 rounded-lg flex-none text-white hover:opacity-90" style={{ backgroundColor: 'var(--app-primary)' }}>Aç</button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
