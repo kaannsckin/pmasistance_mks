@@ -7,6 +7,7 @@ import { baselinePlanFor, snapshotsForYear } from '../utils/snapshots';
 import { fmtTL } from '../utils/costing';
 import { RISK_BAND_HEX, RISK_BAND_LABELS, summarizeRisks, topPortfolioRisks } from '../utils/risks';
 import { AttentionCategory, attentionItems, executiveSummary, HealthBand, portfolioHealth } from '../utils/executive';
+import { orgCapacity } from '../utils/deptScorecard';
 import EvmPanel from './EvmPanel';
 
 interface ExecutiveViewProps {
@@ -152,6 +153,8 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
   const health = useMemo(() => portfolioHealth(workspace, year), [workspace, year]);
   const attention = useMemo(() => attentionItems(workspace, year), [workspace, year]);
   const summaryText = useMemo(() => executiveSummary(workspace, year), [workspace, year]);
+  const org = useMemo(() => orgCapacity(workspace, year), [workspace, year]);
+  const [expandedDept, setExpandedDept] = useState<string | null>(null);
 
   return (
     <div className="space-y-5">
@@ -335,6 +338,68 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
           </div>
         )}
       </div>
+
+      {/* Departman Karnesi — kurum (insan kaynağı) kapasite sağlığı: özet gör, istersen kişilere in */}
+      {org.departments.length > 0 && (
+        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm p-5">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+            <h3 className="text-sm font-semibold text-gray-800 dark:text-white flex items-center gap-2">
+              <i className="fa-solid fa-people-group" style={{ color: 'var(--app-primary)' }}></i>Departman Karnesi
+            </h3>
+            <p className="text-[11px] text-gray-400">
+              {org.totalHeadcount} kişi · Kapasite {fmt(org.totalCapacityAA)} AA · Plan {fmt(org.totalPlannedAA)} AA · Doluluk {org.utilization === null ? '—' : `%${Math.round(org.utilization * 100)}`}
+              {org.overAllocatedPeople > 0 && ` · ${org.overAllocatedPeople} aşırı tahsis`}
+            </p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+            {org.departments.map(d => {
+              const uPct = d.utilization === null ? null : Math.round(d.utilization * 100);
+              const isOpen = expandedDept === d.code;
+              return (
+                <div key={d.code} className="rounded-xl border border-gray-100 dark:border-gray-700 p-3">
+                  <button onClick={() => setExpandedDept(o => (o === d.code ? null : d.code))} className="w-full flex items-center gap-2 text-left" title="Bölümdeki kişileri göster/gizle">
+                    <span className="w-2.5 h-2.5 rounded-full flex-none" style={{ backgroundColor: HEALTH_HEX[d.band] }} title={HEALTH_LABEL[d.band]}></span>
+                    <span className="text-xs font-bold text-gray-700 dark:text-gray-200 truncate flex-1">{d.name}</span>
+                    <span className="text-[10px] text-gray-400 flex-none">{d.headcount} kişi</span>
+                    <i className={`fa-solid fa-chevron-${isOpen ? 'up' : 'down'} text-[9px] text-gray-300 flex-none`}></i>
+                  </button>
+                  <div className="mt-2">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] text-gray-400">Doluluk</span>
+                      <span className="text-[10px] font-bold" style={{ color: HEALTH_HEX[d.band] }}>{uPct === null ? '—' : `%${uPct}`}</span>
+                    </div>
+                    <div className="w-full h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full" style={{ width: `${Math.min(100, uPct ?? 0)}%`, backgroundColor: HEALTH_HEX[d.band] }}></div>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-[10px] text-gray-400">
+                    <span>Kapasite <b className="text-gray-600 dark:text-gray-300">{fmt(d.capacityAA)}</b> AA</span>
+                    <span>Plan <b className="text-gray-600 dark:text-gray-300">{fmt(d.plannedAA)}</b> AA</span>
+                    <span>{d.projectCount} proje</span>
+                    {d.overAllocatedPeople > 0 && <span className="text-red-500 font-semibold"><i className="fa-solid fa-users-slash mr-1"></i>{d.overAllocatedPeople} aşırı</span>}
+                  </div>
+                  {d.reasons.length > 0 && <p className="text-[10px] text-amber-500 mt-1 truncate" title={d.reasons.join(', ')}>{d.reasons.join(' · ')}</p>}
+                  {isOpen && (
+                    <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700 space-y-1.5">
+                      {d.people.map(pp => {
+                        const pu = pp.utilization === null ? null : Math.round(pp.utilization * 100);
+                        return (
+                          <div key={pp.personId} className="flex items-center gap-2">
+                            <span className="text-[11px] text-gray-600 dark:text-gray-300 truncate flex-1">{pp.name}</span>
+                            {pp.over && <span className="text-[9px] font-bold text-red-500 flex-none" title="Bazı aylarda kapasite üstü"><i className="fa-solid fa-triangle-exclamation"></i></span>}
+                            <span className="text-[10px] text-gray-400 flex-none">{fmt(pp.plannedAA)}/{fmt(pp.capacityAA)} AA</span>
+                            <span className="text-[10px] font-bold flex-none w-9 text-right" style={{ color: pu !== null && pu > 105 ? '#ef4444' : 'var(--app-primary)' }}>{pu === null ? '—' : `%${pu}`}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
         {/* Aylık plan vs gerçekleşen */}
