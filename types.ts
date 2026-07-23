@@ -204,6 +204,22 @@ export interface Risk {
   createdAt: string;
 }
 
+/**
+ * PESTEL analizi — projenin dış çevre faktörleri (Politik, Ekonomik, Sosyal,
+ * Teknolojik, Çevresel, Yasal). Risk kaydını tamamlar: her faktör bir fırsat
+ * ya da tehdit olarak, etki derecesiyle (1-5) kaydedilir.
+ */
+export type PestelCategory = 'political' | 'economic' | 'social' | 'technological' | 'environmental' | 'legal';
+
+export interface PestelItem {
+  id: string;
+  category: PestelCategory;
+  text: string;
+  kind: 'opportunity' | 'threat'; // fırsat / tehdit
+  impact: RiskLevel; // 1-5 etki derecesi
+  note?: string; // aksiyon / açıklama
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -213,6 +229,7 @@ export interface Project {
   ragNote?: string; // Haftalık durum açıklaması (PM girer)
   pmPersonId?: string; // Proje Yöneticisi (havuzdaki kişi) — RBAC sahipliği
   risks?: Risk[];
+  pestelItems?: PestelItem[]; // PESTEL dış çevre analizi
   tasks: Task[];
   resources: Resource[];
   notes: Note[];
