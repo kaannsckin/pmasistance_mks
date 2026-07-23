@@ -647,8 +647,10 @@ const App: React.FC = () => {
             people={workspace.people}
             canEdit={canEditProjectContent(workspace, identity, activeProject.id)}
             pestelItems={activeProject.pestelItems || []}
+            swotItems={activeProject.swotItems || []}
             onUpdateRisks={(risks: Risk[]) => updateActiveProject(p => ({ ...p, risks }))}
             onUpdatePestel={(pestelItems) => updateActiveProject(p => ({ ...p, pestelItems }))}
+            onUpdateSwot={(swotItems) => updateActiveProject(p => ({ ...p, swotItems }))}
           />
         );
       case View.Notes:

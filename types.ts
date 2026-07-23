@@ -220,6 +220,21 @@ export interface PestelItem {
   note?: string; // aksiyon / açıklama
 }
 
+/**
+ * SWOT analizi — Güçlü Yönler (Strengths) ve Zayıf Yönler (Weaknesses) içsel;
+ * Fırsatlar (Opportunities) ve Tehditler (Threats) dışsaldır. PESTEL ve risk
+ * kaydını 2×2 stratejik pano olarak özetler; PESTEL fırsat/tehditleri ve
+ * yüksek riskler tek tıkla SWOT'a beslenebilir.
+ */
+export type SwotQuadrant = 'strength' | 'weakness' | 'opportunity' | 'threat';
+
+export interface SwotItem {
+  id: string;
+  quadrant: SwotQuadrant;
+  text: string;
+  note?: string; // aksiyon / açıklama (opsiyonel)
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -230,6 +245,7 @@ export interface Project {
   pmPersonId?: string; // Proje Yöneticisi (havuzdaki kişi) — RBAC sahipliği
   risks?: Risk[];
   pestelItems?: PestelItem[]; // PESTEL dış çevre analizi
+  swotItems?: SwotItem[]; // SWOT stratejik analizi
   tasks: Task[];
   resources: Resource[];
   notes: Note[];
