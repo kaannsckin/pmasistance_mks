@@ -8,7 +8,9 @@ import { fmtTL } from '../utils/costing';
 import { RISK_BAND_HEX, RISK_BAND_LABELS, summarizeRisks, topPortfolioRisks } from '../utils/risks';
 import { AttentionCategory, attentionItems, executiveSummary, HealthBand, portfolioHealth } from '../utils/executive';
 import { orgCapacity } from '../utils/deptScorecard';
+import { buildExecutiveBrief } from '../utils/execBrief';
 import EvmPanel from './EvmPanel';
+import ExecBriefModal from './ExecBriefModal';
 
 interface ExecutiveViewProps {
   workspace: WorkspaceData;
@@ -155,9 +157,12 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
   const summaryText = useMemo(() => executiveSummary(workspace, year), [workspace, year]);
   const org = useMemo(() => orgCapacity(workspace, year), [workspace, year]);
   const [expandedDept, setExpandedDept] = useState<string | null>(null);
+  const [showBrief, setShowBrief] = useState(false);
+  const brief = useMemo(() => buildExecutiveBrief(workspace, year), [workspace, year]);
 
   return (
     <div className="space-y-5">
+      {showBrief && <ExecBriefModal brief={brief} year={year} onClose={() => setShowBrief(false)} />}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
         <div>
           <h2 className="text-2xl font-semibold text-gray-800 dark:text-white tracking-tight">Yönetim Ekranı</h2>
@@ -175,6 +180,13 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
             title="Şu anki plan-gerçekleşen durumunun anlık görüntüsünü (baseline) kaydeder"
           >
             <i className="fa-solid fa-camera mr-2"></i>Anlık Görüntü Al
+          </button>
+          <button
+            onClick={() => setShowBrief(true)}
+            className="text-xs font-semibold px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-300 hover:text-primary transition-all flex items-center"
+            title="Sağlık, dikkat, departman yükü ve kritik riskleri tek sayfada özetleyen brifingi aç (kopyala / indir)"
+          >
+            <i className="fa-solid fa-clipboard-list mr-2"></i>Brifing
           </button>
           <button
             onClick={() => exportExecReportToExcel(report)}
