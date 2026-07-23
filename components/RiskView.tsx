@@ -1,13 +1,17 @@
 import React, { useMemo, useState } from 'react';
-import { Person, Risk, RiskLevel, RiskStatus } from '../types';
+import { Person, PestelItem, Risk, RiskLevel, RiskStatus } from '../types';
 import { createRisk, riskBand, RISK_BAND_HEX, RISK_BAND_LABELS, riskScore, RISK_STATUS_LABELS } from '../utils/risks';
+import { summarizePestel } from '../utils/pestel';
+import PestelModal from './PestelModal';
 
 interface RiskViewProps {
   projectName: string;
   risks: Risk[];
   people: Person[];
   canEdit: boolean;
+  pestelItems: PestelItem[];
   onUpdateRisks: (risks: Risk[]) => void;
+  onUpdatePestel: (items: PestelItem[]) => void;
 }
 
 const LEVELS: RiskLevel[] = [1, 2, 3, 4, 5];
@@ -19,9 +23,11 @@ const STATUS_STYLES: Record<RiskStatus, string> = {
   closed: 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400',
 };
 
-const RiskView: React.FC<RiskViewProps> = ({ projectName, risks, people, canEdit, onUpdateRisks }) => {
+const RiskView: React.FC<RiskViewProps> = ({ projectName, risks, people, canEdit, pestelItems, onUpdateRisks, onUpdatePestel }) => {
   const editable = canEdit;
   const [newRisk, setNewRisk] = useState({ title: '', probability: 3 as RiskLevel, impact: 3 as RiskLevel, ownerPersonId: '', mitigation: '' });
+  const [showPestel, setShowPestel] = useState(false);
+  const pestelSummary = useMemo(() => summarizePestel(pestelItems), [pestelItems]);
 
   // Havuz — sahibi buradan seçilir (Jira gibi), serbest metin değil
   const sortedPeople = useMemo(
@@ -75,10 +81,26 @@ const RiskView: React.FC<RiskViewProps> = ({ projectName, risks, people, canEdit
 
   return (
     <div className="space-y-5">
-      <div>
-        <h2 className="text-2xl font-semibold text-gray-800 dark:text-white tracking-tight">Risk Kaydı</h2>
-        <p className="text-gray-400 text-xs font-semibold tracking-[0.2em]">{projectName} · Olasılık × Etki</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-2xl font-semibold text-gray-800 dark:text-white tracking-tight">Risk Kaydı</h2>
+          <p className="text-gray-400 text-xs font-semibold tracking-[0.2em]">{projectName} · Olasılık × Etki</p>
+        </div>
+        <button
+          onClick={() => setShowPestel(true)}
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold text-white shadow-md hover:opacity-90 transition-all"
+          style={{ backgroundColor: 'var(--app-primary)' }}
+          title="Projenin dış çevre (PESTEL) analizini görüntüle / düzenle"
+        >
+          <i className="fa-solid fa-globe"></i>
+          PESTEL Analizi
+          {pestelSummary.total > 0 && <span className="bg-white/25 rounded-md px-1.5 py-0.5 text-[10px]">{pestelSummary.total}</span>}
+        </button>
       </div>
+
+      {showPestel && (
+        <PestelModal projectName={projectName} items={pestelItems} canEdit={canEdit} onUpdate={onUpdatePestel} onClose={() => setShowPestel(false)} />
+      )}
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
         {/* 5×5 risk matrisi */}
