@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Person, PestelItem, Risk, RiskLevel, RiskStatus } from '../types';
 import { createRisk, riskBand, RISK_BAND_HEX, RISK_BAND_LABELS, riskScore, RISK_STATUS_LABELS } from '../utils/risks';
-import { summarizePestel } from '../utils/pestel';
+import { riskDraftFromPestel, summarizePestel } from '../utils/pestel';
 import PestelModal from './PestelModal';
 
 interface RiskViewProps {
@@ -99,7 +99,15 @@ const RiskView: React.FC<RiskViewProps> = ({ projectName, risks, people, canEdit
       </div>
 
       {showPestel && (
-        <PestelModal projectName={projectName} items={pestelItems} canEdit={canEdit} onUpdate={onUpdatePestel} onClose={() => setShowPestel(false)} />
+        <PestelModal
+          projectName={projectName}
+          items={pestelItems}
+          canEdit={canEdit}
+          existingRiskTitles={new Set(risks.map(r => r.title.toLocaleLowerCase('tr-TR')))}
+          onUpdate={onUpdatePestel}
+          onCreateRisk={(item) => onUpdateRisks([...risks, createRisk(riskDraftFromPestel(item))])}
+          onClose={() => setShowPestel(false)}
+        />
       )}
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
