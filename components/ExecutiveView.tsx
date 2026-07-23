@@ -6,6 +6,7 @@ import { exportExecReportToPpt } from '../utils/pptExport';
 import { baselinePlanFor, snapshotsForYear } from '../utils/snapshots';
 import { fmtTL } from '../utils/costing';
 import { RISK_BAND_HEX, RISK_BAND_LABELS, summarizeRisks, topPortfolioRisks } from '../utils/risks';
+import { AttentionCategory, attentionItems, executiveSummary, HealthBand, portfolioHealth } from '../utils/executive';
 import EvmPanel from './EvmPanel';
 
 interface ExecutiveViewProps {
@@ -32,6 +33,22 @@ const YEAR_RANGE = (() => {
   const y = new Date().getFullYear();
   return [y - 1, y, y + 1, y + 2];
 })();
+
+const HEALTH_HEX: Record<HealthBand, string> = { good: '#10b981', warn: '#f59e0b', bad: '#ef4444' };
+const HEALTH_LABEL: Record<HealthBand, string> = { good: 'Sağlıklı', warn: 'İzlemede', bad: 'Kritik' };
+const ATTN_ICON: Record<AttentionCategory, string> = {
+  rag: 'fa-heart-pulse', approval: 'fa-hourglass-half', budget: 'fa-coins', schedule: 'fa-calendar-xmark',
+  risk: 'fa-shield-halved', overdue: 'fa-clock', overalloc: 'fa-users-slash', data: 'fa-triangle-exclamation',
+};
+
+/** Sağlık halkası (conic-gradient) */
+const HealthRing: React.FC<{ score: number; band: HealthBand; size?: number }> = ({ score, band, size = 68 }) => (
+  <div className="rounded-full flex items-center justify-center flex-none" style={{ width: size, height: size, background: `conic-gradient(${HEALTH_HEX[band]} ${score * 3.6}deg, var(--tw-ring-color, #e5e7eb) 0deg)` }}>
+    <div className="rounded-full bg-white dark:bg-gray-800 flex flex-col items-center justify-center" style={{ width: size - 14, height: size - 14 }}>
+      <span className="text-sm font-bold" style={{ color: HEALTH_HEX[band] }}>%{score}</span>
+    </div>
+  </div>
+);
 
 const KpiCard: React.FC<{ icon: string; label: string; value: string; sub?: string; tone?: 'default' | 'red' | 'green' }> = ({ icon, label, value, sub, tone = 'default' }) => (
   <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm px-4 py-3.5 flex items-center space-x-3 min-w-[150px]">
@@ -122,6 +139,11 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
   const riskSummary = useMemo(() => summarizeRisks(workspace), [workspace]);
   const topRisks = useMemo(() => topPortfolioRisks(workspace).slice(0, 6), [workspace]);
 
+  // "Özet gör, istersen detaya in" — sağlık + dikkat + otomatik özet
+  const health = useMemo(() => portfolioHealth(workspace, year), [workspace, year]);
+  const attention = useMemo(() => attentionItems(workspace, year), [workspace, year]);
+  const summaryText = useMemo(() => executiveSummary(workspace, year), [workspace, year]);
+
   return (
     <div className="space-y-5">
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
@@ -160,6 +182,51 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
             Sunum (PPT)
           </button>
         </div>
+      </div>
+
+      {/* Portföy sağlığı + otomatik yönetici özeti */}
+      <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+        <div className="flex items-center gap-3 flex-none">
+          <HealthRing score={health.orgScore} band={health.orgBand} />
+          <div>
+            <p className="text-[11px] font-semibold text-gray-400">Portföy Sağlığı</p>
+            <p className="text-sm font-semibold" style={{ color: HEALTH_HEX[health.orgBand] }}>{HEALTH_LABEL[health.orgBand]}</p>
+          </div>
+        </div>
+        <div className="w-px h-12 bg-gray-100 dark:bg-gray-700 hidden sm:block"></div>
+        <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed flex-1">{summaryText}</p>
+      </div>
+
+      {/* Dikkat gerektirenler — detaya inmeden hepsi tek yerde */}
+      <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm p-5">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-gray-800 dark:text-white flex items-center gap-2">
+            <i className="fa-solid fa-bell" style={{ color: 'var(--app-primary)' }}></i>Dikkat Gerektirenler
+            {attention.length > 0 && <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-300">{attention.length}</span>}
+          </h3>
+        </div>
+        {attention.length === 0 ? (
+          <div className="flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-300 py-2">
+            <i className="fa-solid fa-circle-check"></i>Her şey yolunda — acil dikkat gerektiren bir durum yok.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            {attention.map(item => (
+              <div key={item.id} className={`flex items-start gap-3 rounded-xl px-3 py-2.5 border ${item.severity === 'error' ? 'bg-red-50/60 dark:bg-red-900/15 border-red-200 dark:border-red-800' : 'bg-amber-50/60 dark:bg-amber-900/15 border-amber-200 dark:border-amber-800'}`}>
+                <i className={`fa-solid ${ATTN_ICON[item.category]} mt-0.5 flex-none ${item.severity === 'error' ? 'text-red-500' : 'text-amber-500'}`}></i>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-gray-800 dark:text-gray-100">{item.title}</p>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">{item.detail}</p>
+                </div>
+                {item.projectId && (
+                  <button onClick={() => onOpenProject(item.projectId!)} className="text-[11px] font-semibold px-2.5 py-1 rounded-lg flex-none text-white hover:opacity-90" style={{ backgroundColor: 'var(--app-primary)' }} title="Projeyi aç">
+                    Aç <i className="fa-solid fa-arrow-right ml-0.5"></i>
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* KPI şeridi */}
