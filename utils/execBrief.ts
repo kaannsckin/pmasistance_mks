@@ -2,6 +2,7 @@ import { WorkspaceData } from '../types';
 import { attentionItems, executiveSummary, portfolioHealth } from './executive';
 import { orgCapacity } from './deptScorecard';
 import { topPortfolioRisks } from './risks';
+import { recentChanges } from './recentChanges';
 
 /**
  * Yönetici brifingi — "detay görmeden her şeye tek bakışta eriş". Mevcut
@@ -42,6 +43,12 @@ export const buildExecutiveBrief = (ws: WorkspaceData, year: number, now: Date =
     lines.push('EN KRİTİK RİSKLER');
     if (risks.length === 0) lines.push('- Açık risk yok.');
     else risks.forEach(r => lines.push(`- ${r.projectName}: ${r.title} (skor ${r.score})`));
+    lines.push('');
+
+    const changes = recentChanges(ws, now, 7);
+    lines.push(`SON DEĞİŞİKLİKLER (son 7 gün, ${changes.length})`);
+    if (changes.length === 0) lines.push('- Kayıtlı değişiklik yok.');
+    else changes.slice(0, 6).forEach(c => lines.push(`- ${c.summary}`));
 
     return lines.join('\n');
 };

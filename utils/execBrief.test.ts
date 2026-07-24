@@ -29,6 +29,7 @@ describe('buildExecutiveBrief', () => {
         expect(brief).toContain('DİKKAT GEREKTİRENLER');
         expect(brief).toContain('DEPARTMAN YÜKÜ');
         expect(brief).toContain('EN KRİTİK RİSKLER');
+        expect(brief).toContain('SON DEĞİŞİKLİKLER');
         // Kırmızı proje kritik RAG + yüksek risk brifingte
         expect(brief).toContain('Kritik: Kırmızı');
         expect(brief).toContain('Kritik risk (skor 25)');

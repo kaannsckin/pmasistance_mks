@@ -9,6 +9,8 @@ import { RISK_BAND_HEX, RISK_BAND_LABELS, summarizeRisks, topPortfolioRisks } fr
 import { AttentionCategory, attentionItems, executiveSummary, HealthBand, portfolioHealth } from '../utils/executive';
 import { orgCapacity } from '../utils/deptScorecard';
 import { buildExecutiveBrief } from '../utils/execBrief';
+import { recentChanges, relativeTime } from '../utils/recentChanges';
+import { actorLabel, AUDIT_ACTION_ICONS } from '../utils/audit';
 import EvmPanel from './EvmPanel';
 import ExecBriefModal from './ExecBriefModal';
 
@@ -159,6 +161,8 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
   const [expandedDept, setExpandedDept] = useState<string | null>(null);
   const [showBrief, setShowBrief] = useState(false);
   const brief = useMemo(() => buildExecutiveBrief(workspace, year), [workspace, year]);
+  const [changeDays, setChangeDays] = useState<7 | 30>(7);
+  const changes = useMemo(() => recentChanges(workspace, new Date(), changeDays), [workspace, changeDays]);
 
   return (
     <div className="space-y-5">
@@ -412,6 +416,38 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
           </div>
         </div>
       )}
+
+      {/* Ne Değişti? — son değişikliklerin yönetici akışı (denetim günlüğünden) */}
+      <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm p-5">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+          <h3 className="text-sm font-semibold text-gray-800 dark:text-white flex items-center gap-2">
+            <i className="fa-solid fa-clock-rotate-left" style={{ color: 'var(--app-primary)' }}></i>Ne Değişti?
+            <span className="text-[11px] font-semibold text-gray-400">son {changeDays} gün · {changes.length}</span>
+          </h3>
+          <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-700/60 rounded-lg p-0.5">
+            {[7, 30].map(d => (
+              <button key={d} onClick={() => setChangeDays(d as 7 | 30)} className={`text-[11px] font-semibold px-2.5 py-1 rounded-md transition-colors ${changeDays === d ? 'bg-white dark:bg-gray-800 text-primary shadow-sm' : 'text-gray-500'}`}>{d} gün</button>
+            ))}
+          </div>
+        </div>
+        {changes.length === 0 ? (
+          <p className="text-xs text-gray-400">Son {changeDays} günde kayıtlı değişiklik yok. Değişiklikler (RAG, risk, onay, proje) otomatik listelenir.</p>
+        ) : (
+          <div className="space-y-1.5">
+            {changes.slice(0, 12).map(c => (
+              <div key={c.id} className="flex items-center gap-3 rounded-lg px-3 py-2 hover:bg-gray-50/60 dark:hover:bg-gray-800/40">
+                <span className="w-7 h-7 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center flex-none text-gray-500 dark:text-gray-300"><i className={`fa-solid ${AUDIT_ACTION_ICONS[c.action]} text-[11px]`}></i></span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[12px] text-gray-700 dark:text-gray-200 truncate">{c.summary}</p>
+                  <p className="text-[10px] text-gray-400">{actorLabel(c)} · {relativeTime(c.at)}</p>
+                </div>
+                {c.projectName && <button onClick={() => onOpenProject(c.projectId!)} className="text-[11px] font-semibold px-2.5 py-1 rounded-lg flex-none text-white hover:opacity-90" style={{ backgroundColor: 'var(--app-primary)' }}>Aç</button>}
+              </div>
+            ))}
+            {changes.length > 12 && <p className="text-[11px] text-gray-400 px-3 pt-1">ve {changes.length - 12} değişiklik daha…</p>}
+          </div>
+        )}
+      </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
         {/* Aylık plan vs gerçekleşen */}
