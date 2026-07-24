@@ -655,7 +655,15 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
           people={people}
           projects={projects}
           defaultYear={year}
-          onApply={onApplyBilledHours}
+          onApply={(records, options, applyMode, autoCreate) => {
+            onApplyBilledHours(records, options, applyMode, autoCreate);
+            // İçe aktarım gerçekleşene yazar; kullanıcı değerleri hemen görsün diye
+            // grid'i o yıl + "Gerçekleşen" moduna al.
+            setYear(options.year);
+            setMode('actual');
+            setTab('grid');
+            setProjectFilter('all');
+          }}
           onClose={() => setShowBilled(false)}
         />
       )}
