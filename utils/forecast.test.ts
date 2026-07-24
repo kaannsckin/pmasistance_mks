@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildForecast } from './forecast';
+import { buildForecast, detectCutoffMonth } from './forecast';
 import { createEmptyWorkspace, createProject } from './workspace';
 import { Allocation, Person, TitleDef, WorkspaceData } from '../types';
 
@@ -81,6 +81,26 @@ describe('buildForecast', () => {
         const p2row = r.rows.find(x => x.key === 'p2')!;
         expect(p2row.costable).toBe(false);
         expect(r.uncostedEacAA).toBeGreaterThan(0);
+    });
+
+    it('cutoff: yarım kalan son ayı (önceki ayların çok altında) atlar', () => {
+        // Oca..Tem dolu (~10-16), Ağustos yarım (0,5) → cutoff Temmuz olmalı
+        const ws = build([alloc('a1', 'p1', 'x', { 1: 10, 2: 12, 3: 13, 4: 12, 5: 15, 6: 13, 7: 10, 8: 0.5 })], [person('p1', 'A', 'B')]);
+        ws.projects = [createProject('X')]; ws.allocations[0].projectId = ws.projects[0].id;
+        expect(detectCutoffMonth(ws, 2026)).toBe(7); // Ağustos atlandı
+        const r = buildForecast(ws, { year: 2026, method: 'movingAvg', window: 3, dim: 'project' });
+        expect(r.cutoffMonth).toBe(7);
+        // Öngörü = (May15+Haz13+Tem10)/3 ≈ 12.67, yarım Ağustos'a düşmez
+        expect(r.total.months[7].forecast).toBeGreaterThan(11);
+        expect(r.total.months[7].isForecast).toBe(true);
+    });
+
+    it('cutoff: kullanıcı elle ay seçebilir', () => {
+        const ws = build([alloc('a1', 'p1', 'x', { 1: 10, 2: 12, 3: 13, 4: 12, 5: 15, 6: 13, 7: 10, 8: 0.5 })], [person('p1', 'A', 'B')]);
+        ws.projects = [createProject('X')]; ws.allocations[0].projectId = ws.projects[0].id;
+        const r = buildForecast(ws, { year: 2026, method: 'naive', window: 3, dim: 'project', cutoffMonth: 8 });
+        expect(r.cutoffMonth).toBe(8); // elle Ağustos → gerçekleşen 0,5 dahil
+        expect(r.total.months[8].forecast).toBeCloseTo(0.5, 2); // Eylül = son ay (0,5)
     });
 
     it('kırılım: proje bazında satırlar EAC’ye göre azalan', () => {

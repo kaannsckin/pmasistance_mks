@@ -66,6 +66,38 @@ export interface ForecastResult {
 
 const round2 = (v: number) => Math.round(v * 100) / 100;
 
+/** Yılın aylık gerçekleşen (actual) AA toplamları (12 eleman, index 0 = Ocak). */
+export function monthlyActualTotals(
+    ws: Pick<WorkspaceData, 'allocations'>,
+    year: number,
+): number[] {
+    const t = Array(12).fill(0) as number[];
+    ws.allocations.filter(a => a.year === year).forEach(a =>
+        MONTH_INDEXES.forEach(m => { t[m - 1] += a.actual[m] || 0; }));
+    return t;
+}
+
+/**
+ * Son gerçekleşen ayı (cutoff) otomatik bulur: verisi olan son ay, ancak
+ * önceki ayların çok altında kalan (yarım/eksik girilmiş) sondaki ay(lar)
+ * atlanır — böylece eksik son ay öngörüyü aşağı çekmez. En çok 2 ay atlanır.
+ */
+export function detectCutoffMonth(ws: Pick<WorkspaceData, 'allocations'>, year: number): number {
+    const t = monthlyActualTotals(ws, year);
+    let last = 0;
+    for (let i = 11; i >= 0; i--) { if (t[i] > 1e-9) { last = i + 1; break; } }
+    if (last === 0) return 0;
+    let skips = 0;
+    while (last >= 2 && skips < 2) {
+        const prev: number[] = [];
+        for (let j = last - 2; j >= 0 && prev.length < 3; j--) { if (t[j] > 1e-9) prev.push(t[j]); }
+        if (!prev.length) break;
+        const avg = prev.reduce((a, b) => a + b, 0) / prev.length;
+        if (t[last - 1] < 0.4 * avg) { last--; skips++; } else break;
+    }
+    return last;
+}
+
 /** j = 0..cutoffIdx noktalarına doğru uydurup x'te değer verir. */
 function linearAt(actual: number[], cutoffIdx: number, x: number): number {
     const n = cutoffIdx + 1;
@@ -122,7 +154,7 @@ interface AllocFc {
 /** Portföy/boyut öngörüsünü tek seferde hesaplar. */
 export function buildForecast(
     ws: Pick<WorkspaceData, 'allocations' | 'people' | 'projects' | 'titles'>,
-    opts: { year: number; method: ForecastMethod; window: number; dim: ForecastDim },
+    opts: { year: number; method: ForecastMethod; window: number; dim: ForecastDim; cutoffMonth?: number },
 ): ForecastResult {
     const window = opts.window > 0 ? opts.window : 3;
     const allocs = ws.allocations.filter(a => a.year === opts.year);
@@ -132,11 +164,10 @@ export function buildForecast(
     const personById = new Map(ws.people.map(p => [p.id, p]));
     const projName = new Map(ws.projects.map(p => [p.id, p.name]));
 
-    // Global cutoff: gerçekleşen verisi olan son ay (tüm portföyde).
-    let cutoffMonth = 0;
-    allocs.forEach(a => MONTH_INDEXES.forEach(m => {
-        if ((a.actual[m] || 0) > 0 && m > cutoffMonth) cutoffMonth = m;
-    }));
+    // Cutoff: kullanıcı verdiyse onu, yoksa yarım son ayı atlayan otomatik tespit.
+    const cutoffMonth = opts.cutoffMonth != null
+        ? Math.max(0, Math.min(12, Math.round(opts.cutoffMonth)))
+        : detectCutoffMonth(ws, opts.year);
     const cutoffIdx = cutoffMonth - 1;
 
     const fcs: AllocFc[] = allocs.map(a => {

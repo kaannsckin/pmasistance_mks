@@ -4,6 +4,7 @@ import { MONTHS_TR } from '../utils/allocations';
 import { fmtTL } from '../utils/costing';
 import {
     buildForecast,
+    detectCutoffMonth,
     FORECAST_DIM_LABELS,
     FORECAST_METHOD_LABELS,
     ForecastDim,
@@ -25,10 +26,17 @@ const ForecastView: React.FC<Props> = ({ allocations, people, projects, titles, 
     const [method, setMethod] = useState<ForecastMethod>('movingAvg');
     const [window, setWindow] = useState(3);
     const [dim, setDim] = useState<ForecastDim>('project');
+    const [cutoffSel, setCutoffSel] = useState(0); // 0 = otomatik
 
+    const autoCutoff = useMemo(
+        () => detectCutoffMonth({ allocations }, year),
+        [allocations, year],
+    );
     const fc = useMemo(
-        () => buildForecast({ allocations, people, projects, titles }, { year, method, window, dim }),
-        [allocations, people, projects, titles, year, method, window, dim],
+        () => buildForecast({ allocations, people, projects, titles }, {
+            year, method, window, dim, cutoffMonth: cutoffSel || undefined,
+        }),
+        [allocations, people, projects, titles, year, method, window, dim, cutoffSel],
     );
 
     const t = fc.total;
@@ -61,9 +69,16 @@ const ForecastView: React.FC<Props> = ({ allocations, people, projects, titles, 
                         ))}
                     </select>
                 </label>
-                <p className="text-[11px] text-gray-400 ml-auto self-center max-w-md">
+                <label className="text-[11px] text-gray-500 dark:text-gray-300">
+                    <span className="block mb-1 font-semibold">Son gerçekleşen ay</span>
+                    <select value={cutoffSel} onChange={e => setCutoffSel(Number(e.target.value))} className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1.5 text-gray-700 dark:text-gray-200 focus:outline-none">
+                        <option value={0}>Otomatik{autoCutoff ? ` (${MONTHS_TR[autoCutoff - 1]})` : ''}</option>
+                        {MONTHS_TR.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+                    </select>
+                </label>
+                <p className="text-[11px] text-gray-400 ml-auto self-center max-w-xs">
                     {hasActual
-                        ? `Gerçekleşen ${MONTHS_TR[fc.cutoffMonth - 1]} ayına kadar; sonrası öngörü.`
+                        ? `${MONTHS_TR[fc.cutoffMonth - 1]} ayına kadar gerçekleşen; sonrası öngörü. Yarım kalan son ay otomatik atlanır.`
                         : 'Gerçekleşen veri yok — öngörü plana göre yapılıyor.'}
                 </p>
             </div>
