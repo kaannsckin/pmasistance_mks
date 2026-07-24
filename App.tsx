@@ -619,6 +619,7 @@ const App: React.FC = () => {
           projects={workspace.projects}
           planLocks={workspace.planLocks}
           leaves={workspace.leaves || []}
+          titles={workspace.titles}
           currentRole={workspace.currentRole || 'py'}
           identity={identity}
           onSetCell={handleSetAllocationCell}
