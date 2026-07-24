@@ -57,16 +57,30 @@ const ayIndex = (v: unknown): number | null => {
     return AY_ADI_INDEX[k] ?? null;
 };
 
-/** "1.234,5" / "1234.5" / sayı → number; boş/geçersiz → null. */
+/**
+ * "1.234,56" (TR/AB) / "1,234.56" (US) / "57.5" / "57,5" / sayı → number.
+ * Hangi ayracın ondalık olduğunu son konuma göre belirler; tek ayraç varsa
+ * onu ondalık kabul eder. Böylece hem nokta- hem virgül-ondalık yapıştırmalar
+ * doğru okunur (nokta binlik sanılıp silinmez).
+ */
 const toNumber = (v: unknown): number | null => {
     if (v == null || v === '') return null;
     if (typeof v === 'number') return Number.isFinite(v) ? v : null;
-    const s = String(v).trim();
+    let s = String(v).trim().replace(/\s/g, '');
     if (!s) return null;
-    const n = Number(s.replace(/\./g, '').replace(',', '.'));
-    if (Number.isFinite(n)) return n;
-    const n2 = Number(s);
-    return Number.isFinite(n2) ? n2 : null;
+    const hasComma = s.includes(',');
+    const hasDot = s.includes('.');
+    if (hasComma && hasDot) {
+        // İki ayraç varsa: sondaki ondalıktır.
+        s = s.lastIndexOf(',') > s.lastIndexOf('.')
+            ? s.replace(/\./g, '').replace(',', '.') // 1.234,56 → 1234.56
+            : s.replace(/,/g, ''); // 1,234.56 → 1234.56
+    } else if (hasComma) {
+        s = s.replace(',', '.'); // tek virgül → ondalık
+    }
+    // tek nokta ya da ayraçsız → olduğu gibi (nokta ondalıktır)
+    const n = Number(s);
+    return Number.isFinite(n) ? n : null;
 };
 
 const isSkipLabel = (v: unknown): boolean => {
@@ -167,6 +181,7 @@ export interface BilledHoursImportResult {
     recordCount: number;
     totalHours: number; // tüm kayıtların saati
     totalAA: number; // yalnızca eşleşen satırların AA'sı
+    totalAllAA: number; // tüm kayıtlar eşleşseydi oluşacak AA (otomatik ekleme önizlemesi)
 }
 
 const projectMatcher = (projects: WorkspaceData['projects']) => {
@@ -213,9 +228,14 @@ export const suggestBilledHoursActuals = (
     const unmatchedPeople = new Set<string>();
     const matchedProjectIds = new Set<string>();
     let totalHours = 0;
+    let allAA = 0;
 
     for (const rec of records) {
         totalHours += rec.hours;
+        const wd = workdays[rec.month] || TR_WORKDAYS_2026[rec.month] || 21;
+        const aa = wd > 0 ? rec.hours / hoursPerDay / wd : 0;
+        allAA += aa;
+
         const project = matchProject(rec.projectName);
         const person = matchPerson(rec.personName);
         if (!project) unmatchedProjects.add(rec.projectName);
@@ -223,9 +243,6 @@ export const suggestBilledHoursActuals = (
         if (!project || !person) continue;
 
         matchedProjectIds.add(project.id);
-        const wd = workdays[rec.month] || TR_WORKDAYS_2026[rec.month] || 21;
-        const aa = wd > 0 ? rec.hours / hoursPerDay / wd : 0;
-
         const key = `${project.id}::${person.id}`;
         let row = rowMap.get(key);
         if (!row) {
@@ -270,8 +287,61 @@ export const suggestBilledHoursActuals = (
         recordCount: records.length,
         totalHours: Math.round(totalHours * 100) / 100,
         totalAA: Math.round(rows.reduce((s, r) => s + r.totalAA, 0) * 100) / 100,
+        totalAllAA: Math.round(allAA * 100) / 100,
     };
 };
+
+// ---------------------------------------------------------------------------
+// Havuza otomatik ekleme (eşleşmeyen proje/kişileri Veri Havuzu'na açma)
+// ---------------------------------------------------------------------------
+
+export interface NewProjectPlan {
+    name: string; // havuzda açılacak proje adı ("… - kod" ayrıştırılır)
+    code?: string; // ayrıştırılan proje/faaliyet kodu
+    sourceName: string; // pivottaki ham ad
+}
+
+export interface NewPersonPlan {
+    firstName: string;
+    lastName: string;
+    sourceName: string; // pivottaki ham ad ("(BILGEM)" gibi ekler dahil)
+}
+
+export interface PoolAdditionPlan {
+    projects: NewProjectPlan[];
+    people: NewPersonPlan[];
+}
+
+/** "MEB Posta Sistemi - 100654" → { name: 'MEB Posta Sistemi', code: '100654' } */
+export const parseProjectNameCode = (raw: string): { name: string; code?: string } => {
+    const s = norm(raw);
+    const idx = s.lastIndexOf(' - ');
+    if (idx > 0) {
+        const head = s.slice(0, idx).trim();
+        const tail = s.slice(idx + 3).trim();
+        // kod: opsiyonel harf + rakam(lar), nokta olabilir (T100341, 100857.3, 100654)
+        if (head && /^[A-Za-z]?\d[\d.]*$/.test(tail)) return { name: head, code: tail };
+    }
+    return { name: s };
+};
+
+/** "Cevher Cemal BOZKUR (BILGEM)" → { firstName: 'Cevher Cemal', lastName: 'BOZKUR' } */
+export const parsePersonName = (raw: string): { firstName: string; lastName: string } => {
+    const clean = norm(raw).replace(/\([^)]*\)/g, '').replace(/\s+/g, ' ').trim();
+    const parts = clean.split(' ').filter(Boolean);
+    if (parts.length <= 1) return { firstName: parts[0] || clean, lastName: '' };
+    const lastName = parts.pop()!;
+    return { firstName: parts.join(' '), lastName };
+};
+
+/**
+ * Import sonucundaki eşleşmeyen proje/kişileri Veri Havuzu'na eklenecek
+ * kayıtlara ayrıştırır. Proje adı/kodu ve kişi ad/soyadı pivottan üretilir.
+ */
+export const planBilledHoursPoolAdditions = (result: BilledHoursImportResult): PoolAdditionPlan => ({
+    projects: result.unmatchedProjects.map(n => ({ ...parseProjectNameCode(n), sourceName: n })),
+    people: result.unmatchedPeople.map(n => ({ ...parsePersonName(n), sourceName: n })),
+});
 
 // ---------------------------------------------------------------------------
 // Uygulama (çalışma alanına yazma)

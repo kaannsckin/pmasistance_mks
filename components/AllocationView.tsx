@@ -14,7 +14,7 @@ import { allPersonRoles, findAvailablePeople } from '../utils/staffing';
 import ScenarioView from './ScenarioView';
 import UtilizationHeatmap from './UtilizationHeatmap';
 import BilledHoursImportModal from './BilledHoursImportModal';
-import { BilledApplyMode, BilledHoursImportResult } from '../utils/billedHours';
+import { BilledApplyMode, BilledHoursOptions, BilledHoursRecord } from '../utils/billedHours';
 
 interface AllocationViewProps {
   allocations: Allocation[];
@@ -29,7 +29,7 @@ interface AllocationViewProps {
   onDeleteAllocation: (allocationId: string) => void;
   onLockAction: (projectId: string, year: number, status: PlanLockStatus) => void;
   onApplySuggestions: (projectId: string, year: number, suggestions: AllocationSuggestion[], mode: ApplyMode) => void;
-  onApplyBilledHours: (result: BilledHoursImportResult, mode: BilledApplyMode) => void;
+  onApplyBilledHours: (records: BilledHoursRecord[], options: BilledHoursOptions, mode: BilledApplyMode, autoCreate: boolean) => void;
 }
 
 type Mode = 'plan' | 'actual' | 'compare';

@@ -2,6 +2,9 @@ import { describe, it, expect } from 'vitest';
 import {
     applyBilledHoursActuals,
     parseBilledHoursPivot,
+    parsePersonName,
+    parseProjectNameCode,
+    planBilledHoursPoolAdditions,
     suggestBilledHoursActuals,
     TR_WORKDAYS_2026,
 } from './billedHours';
@@ -48,12 +51,16 @@ describe('parseBilledHoursPivot', () => {
         expect(recs.some(r => /toplam/i.test(r.personName))).toBe(false);
     });
 
-    it('yapıştırılan TSV metnini de ayrıştırır', () => {
+    it('yapıştırılan TSV metnini (nokta-ondalık dahil) doğru ayrıştırır', () => {
+        // Excel/openpyxl kopyasında ondalık nokta olabilir (160.5). Nokta binlik
+        // sanılıp silinmemeli (160.5 → 1605 olmamalı).
         const tsv = PIVOT.map(r => r.map(c => (c == null ? '' : c)).join('\t')).join('\n');
-        // parseBilledHoursText tsvToMatrix + parseBilledHoursPivot
-        // (aynı sonucu vermeli)
         const recs = parseBilledHoursPivot(tsv.split('\n').map(l => l.split('\t')));
         expect(recs.length).toBe(11);
+        const kadirMart = recs.find(r => r.personName === 'Kadir KORKMAZ' && r.month === 3 && r.projectName.startsWith('MEB'));
+        expect(kadirMart?.hours).toBe(160.5);
+        // Toplam saat pivotun gerçek toplamıyla aynı olmalı
+        expect(Math.round(recs.reduce((s, r) => s + r.hours, 0) * 10) / 10).toBe(1098.5);
     });
 });
 
@@ -119,5 +126,43 @@ describe('applyBilledHoursActuals', () => {
         expect(alloc.actual[1]).toBe(0.5); // korundu
         expect(alloc.actual[2]).toBeCloseTo(0.95, 2); // boş ay dolduruldu
         expect(summary.cellsSkipped).toBeGreaterThanOrEqual(1);
+    });
+});
+
+describe('havuza otomatik ekleme', () => {
+    it('proje adı/kodunu ve kişi ad/soyadını ayrıştırır', () => {
+        expect(parseProjectNameCode('MEB Posta Sistemi - 100654')).toEqual({ name: 'MEB Posta Sistemi', code: '100654' });
+        expect(parseProjectNameCode('Safir Posta Savnet - 100857.3')).toEqual({ name: 'Safir Posta Savnet', code: '100857.3' });
+        expect(parseProjectNameCode('T.Mesajlaşma - T100341')).toEqual({ name: 'T.Mesajlaşma', code: 'T100341' });
+        expect(parseProjectNameCode('Kodsuz Proje')).toEqual({ name: 'Kodsuz Proje' });
+        expect(parsePersonName('Cevher Cemal BOZKUR (BILGEM)')).toEqual({ firstName: 'Cevher Cemal', lastName: 'BOZKUR' });
+        expect(parsePersonName('Zerda GÜL')).toEqual({ firstName: 'Zerda', lastName: 'GÜL' });
+    });
+
+    it('boş havuzda eşleşmeyenleri planlar, ekleyince tümü eşleşir ve uygulanır', () => {
+        const ws = createEmptyWorkspace(); // hiç proje/kişi yok
+        const recs = parseBilledHoursPivot(PIVOT);
+        const res0 = suggestBilledHoursActuals(ws, recs, { year: 2026 });
+        expect(res0.rows).toHaveLength(0);
+        expect(res0.unmatchedProjects).toHaveLength(2);
+        expect(res0.unmatchedPeople).toHaveLength(3);
+        expect(res0.totalAllAA).toBeGreaterThan(0);
+
+        // App'in otomatik-ekle mantığını taklit et
+        const plan = planBilledHoursPoolAdditions(res0);
+        expect(plan.projects.map(p => p.code)).toEqual(expect.arrayContaining(['100654', 'T100341']));
+        ws.projects = plan.projects.map(p => createProject(p.name, { code: p.code }));
+        ws.people = plan.people.map((p, i) => ({ id: `np${i}`, firstName: p.firstName, lastName: p.lastName, departmentCode: 'Tanımsız', availableAA: 1, roles: [] }));
+
+        const res1 = suggestBilledHoursActuals(ws, recs, { year: 2026 });
+        expect(res1.unmatchedProjects).toHaveLength(0);
+        expect(res1.unmatchedPeople).toHaveLength(0);
+        expect(res1.totalAA).toBeCloseTo(res0.totalAllAA, 1);
+
+        const { workspace, summary } = applyBilledHoursActuals(ws, res1, 'overwrite');
+        expect(summary.rowsApplied).toBeGreaterThan(0);
+        const totalActual = workspace.allocations.reduce(
+            (s, a) => s + Object.values(a.actual).reduce((x, y) => x + (y || 0), 0), 0);
+        expect(Math.round(totalActual * 100) / 100).toBeCloseTo(res1.totalAA, 2);
     });
 });

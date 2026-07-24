@@ -1,6 +1,6 @@
 
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { View, Task, Resource, TaskStatus, Note, CustomerRequest, Objective, Project, WorkspaceData, RagStatus, ProjectStatus, UserRole, PlanLockStatus, WorkPackage } from './types';
+import { View, Task, Resource, TaskStatus, Note, CustomerRequest, Objective, Project, Person, WorkspaceData, RagStatus, ProjectStatus, UserRole, PlanLockStatus, WorkPackage } from './types';
 import { INITIAL_TASKS, INITIAL_RESOURCES, INITIAL_OBJECTIVES } from './constants';
 import {
   WORKSPACE_STORAGE_KEY,
@@ -17,7 +17,7 @@ import { isExecRole } from './utils/execReport';
 import { canEditProjectContent, identityOf, identityNeedsPerson as computeNeedsPerson, visibleProjectIds } from './utils/rbac';
 import { addSnapshot, buildSnapshot, ensureMonthlySnapshot } from './utils/snapshots';
 import { AllocationSuggestion, ApplyMode, applyAllocationSuggestions } from './utils/taskToAllocation';
-import { applyBilledHoursActuals, BilledApplyMode, BilledHoursImportResult } from './utils/billedHours';
+import { applyBilledHoursActuals, planBilledHoursPoolAdditions, suggestBilledHoursActuals, BilledApplyMode, BilledHoursOptions, BilledHoursRecord } from './utils/billedHours';
 import { buildTodoItems, TodoItem } from './utils/todoItems';
 import { loadCloudConfig, scheduleAutoPush } from './utils/cloudSync';
 import CloudSyncModal from './components/CloudSyncModal';
@@ -421,18 +421,40 @@ const App: React.FC = () => {
     });
   }, [updateWorkspace]);
 
-  const handleApplyBilledHours = useCallback((result: BilledHoursImportResult, mode: BilledApplyMode) => {
+  const handleApplyBilledHours = useCallback((records: BilledHoursRecord[], options: BilledHoursOptions, mode: BilledApplyMode, autoCreate: boolean) => {
     updateWorkspace(ws => {
-      const { workspace: next, summary } = applyBilledHoursActuals(ws, result, mode);
-      const lines = [
-        `${result.year} gerçekleşen: ${summary.rowsApplied} kişi×proje güncellendi (${summary.cellsWritten} ay)`,
-        `${summary.peopleAffected} kişi · ${summary.projectsAffected} proje`,
-      ];
+      let base = ws;
+      let createdProjects = 0;
+      let createdPeople = 0;
+      // Eşleşmeyen proje/kişileri istenirse önce Veri Havuzu'na aç.
+      if (autoCreate) {
+        const plan = planBilledHoursPoolAdditions(suggestBilledHoursActuals(base, records, options));
+        if (plan.projects.length || plan.people.length) {
+          const newProjects: Project[] = plan.projects.map(p => createProject(p.name, { code: p.code }));
+          const newPeople: Person[] = plan.people.map((p, i) => ({
+            id: `person-${Date.now().toString(36)}-${i}-${Math.random().toString(36).slice(2, 6)}`,
+            firstName: p.firstName,
+            lastName: p.lastName,
+            departmentCode: 'Tanımsız',
+            availableAA: 1,
+            roles: [],
+          }));
+          base = { ...base, projects: [...base.projects, ...newProjects], people: [...base.people, ...newPeople] };
+          createdProjects = newProjects.length;
+          createdPeople = newPeople.length;
+        }
+      }
+      const result = suggestBilledHoursActuals(base, records, options);
+      const { workspace: next, summary } = applyBilledHoursActuals(base, result, mode);
+      const lines: string[] = [];
+      if (createdProjects || createdPeople) lines.push(`Havuza eklendi: ${createdProjects} proje, ${createdPeople} kişi`);
+      lines.push(`${options.year} gerçekleşen: ${summary.rowsApplied} kişi×proje güncellendi (${summary.cellsWritten} ay)`);
       if (summary.cellsSkipped > 0) lines.push(`${summary.cellsSkipped} dolu ay korundu (doldur modu)`);
-      if (result.unmatchedPeople.length) lines.push(`Eşleşmeyen kişi: ${result.unmatchedPeople.length}`);
-      if (result.unmatchedProjects.length) lines.push(`Eşleşmeyen proje: ${result.unmatchedProjects.length}`);
+      if (result.unmatchedPeople.length) lines.push(`Hâlâ eşleşmeyen kişi: ${result.unmatchedPeople.length}`);
+      if (result.unmatchedProjects.length) lines.push(`Hâlâ eşleşmeyen proje: ${result.unmatchedProjects.length}`);
       alert(`Jira Billed Hours içe aktarıldı.\n\n${lines.join('\n')}`);
-      return appendAudit(next, 'data.import', `Jira Billed Hours → gerçekleşen: ${summary.rowsApplied} kişi×proje, ${summary.cellsWritten} ay (${result.year})`);
+      const auditExtra = createdProjects || createdPeople ? ` · +${createdProjects} proje, +${createdPeople} kişi (havuz)` : '';
+      return appendAudit(next, 'data.import', `Jira Billed Hours → gerçekleşen: ${summary.rowsApplied} kişi×proje, ${summary.cellsWritten} ay (${options.year})${auditExtra}`);
     });
   }, [updateWorkspace]);
 

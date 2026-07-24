@@ -3,11 +3,12 @@ import { Person, Project } from '../types';
 import { MONTHS_TR } from '../utils/allocations';
 import {
     BilledApplyMode,
-    BilledHoursImportResult,
+    BilledHoursOptions,
     BilledHoursRecord,
     DEFAULT_HOURS_PER_DAY,
     parseBilledHoursText,
     parseBilledHoursWorkbook,
+    planBilledHoursPoolAdditions,
     suggestBilledHoursActuals,
 } from '../utils/billedHours';
 
@@ -15,7 +16,7 @@ interface Props {
     people: Person[];
     projects: Project[];
     defaultYear: number;
-    onApply: (result: BilledHoursImportResult, mode: BilledApplyMode) => void;
+    onApply: (records: BilledHoursRecord[], options: BilledHoursOptions, mode: BilledApplyMode, autoCreate: boolean) => void;
     onClose: () => void;
 }
 
@@ -36,6 +37,7 @@ const BilledHoursImportModal: React.FC<Props> = ({ people, projects, defaultYear
     const [hoursPerDay, setHoursPerDay] = useState(DEFAULT_HOURS_PER_DAY);
     const [records, setRecords] = useState<BilledHoursRecord[] | null>(null);
     const [mode, setMode] = useState<BilledApplyMode>('overwrite');
+    const [autoCreate, setAutoCreate] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
     const [paste, setPaste] = useState('');
@@ -45,6 +47,8 @@ const BilledHoursImportModal: React.FC<Props> = ({ people, projects, defaultYear
         () => (records ? suggestBilledHoursActuals({ projects, people }, records, { year, hoursPerDay }) : null),
         [records, projects, people, year, hoursPerDay],
     );
+    const additions = useMemo(() => (result ? planBilledHoursPoolAdditions(result) : null), [result]);
+    const hasUnmatched = !!result && (result.unmatchedPeople.length > 0 || result.unmatchedProjects.length > 0);
 
     const handleFile = async (file?: File) => {
         if (!file) return;
@@ -70,7 +74,7 @@ const BilledHoursImportModal: React.FC<Props> = ({ people, projects, defaultYear
         setRecords(recs);
     };
 
-    const canApply = !!result && result.rows.length > 0;
+    const canApply = !!result && (result.rows.length > 0 || (autoCreate && hasUnmatched));
 
     return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={onClose}>
@@ -143,15 +147,25 @@ const BilledHoursImportModal: React.FC<Props> = ({ people, projects, defaultYear
                                 <button onClick={() => { setRecords(null); setPaste(''); }} className="ml-auto text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"><i className="fa-solid fa-rotate-left mr-1"></i>Başka dosya</button>
                             </div>
 
-                            {(result.unmatchedPeople.length > 0 || result.unmatchedProjects.length > 0) && (
+                            {hasUnmatched && (
                                 <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl px-4 py-3 text-[11px] text-amber-700 dark:text-amber-300 space-y-1">
                                     {result.unmatchedProjects.length > 0 && (
-                                        <div><b>Eşleşmeyen proje ({result.unmatchedProjects.length}):</b> {result.unmatchedProjects.join(', ')} — bu satırlar uygulanmaz. Proje adı ya da kodu havuzla aynı olmalı.</div>
+                                        <div><b>Eşleşmeyen proje ({result.unmatchedProjects.length}):</b> {result.unmatchedProjects.join(', ')}</div>
                                     )}
                                     {result.unmatchedPeople.length > 0 && (
-                                        <div><b>Eşleşmeyen kişi ({result.unmatchedPeople.length}):</b> {result.unmatchedPeople.join(', ')} — Veri Havuzu'na ekleyin, ad/soyad birebir aynı olsun ("(BILGEM)" gibi ekler yok sayılır).</div>
+                                        <div><b>Eşleşmeyen kişi ({result.unmatchedPeople.length}):</b> {result.unmatchedPeople.join(', ')}</div>
                                     )}
                                 </div>
+                            )}
+
+                            {hasUnmatched && (
+                                <label className={`flex items-start gap-3 rounded-xl px-4 py-3 cursor-pointer border transition-colors ${autoCreate ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800' : 'bg-gray-50 dark:bg-gray-800/60 border-gray-200 dark:border-gray-700'}`}>
+                                    <input type="checkbox" checked={autoCreate} onChange={e => setAutoCreate(e.target.checked)} className="mt-0.5 accent-emerald-600" />
+                                    <span className="text-[11px] text-gray-600 dark:text-gray-300">
+                                        <b>Eşleşmeyenleri Veri Havuzu'na otomatik ekle</b> — {additions?.projects.length || 0} proje (koduyla) ve {additions?.people.length || 0} kişi (ad/soyad) havuza açılır, ardından tüm kayıtlar uygulanır.
+                                        {autoCreate && <span className="block mt-0.5 text-emerald-600 dark:text-emerald-400">Uygulanacak toplam: {fmt(result.totalAllAA)} AA · Yeni kişiler "Tanımsız" bölüm/ünvansız açılır (maliyet için ünvanı sonra atayın).</span>}
+                                    </span>
+                                </label>
                             )}
 
                             {result.rows.length > 0 ? (
@@ -187,7 +201,11 @@ const BilledHoursImportModal: React.FC<Props> = ({ people, projects, defaultYear
                                     </table>
                                 </div>
                             ) : (
-                                <p className="text-xs text-gray-400">Havuzla eşleşen kişi×proje bulunamadı — yukarıdaki uyarılara göre havuzu güncelleyin.</p>
+                                <p className="text-xs text-gray-400">
+                                    {autoCreate && hasUnmatched
+                                        ? 'Havuzda eşleşen yok; “otomatik ekle” işaretli olduğundan proje/kişiler açılıp uygulanacak.'
+                                        : 'Havuzla eşleşen kişi×proje bulunamadı — yukarıdaki seçenekle havuza ekleyin ya da havuzu güncelleyin.'}
+                                </p>
                             )}
 
                             <div className="flex flex-wrap items-center gap-4 bg-gray-50 dark:bg-gray-800/60 rounded-xl px-4 py-3">
@@ -206,7 +224,7 @@ const BilledHoursImportModal: React.FC<Props> = ({ people, projects, defaultYear
                     <div className="flex items-center justify-end gap-2 pt-1">
                         <button onClick={onClose} className="text-xs font-semibold px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-300">Vazgeç</button>
                         <button
-                            onClick={() => { if (result) { onApply(result, mode); onClose(); } }}
+                            onClick={() => { if (result && records) { onApply(records, { year, hoursPerDay }, mode, autoCreate); onClose(); } }}
                             disabled={!canApply}
                             className="text-white text-xs font-semibold px-5 py-2.5 rounded-xl shadow-md hover:opacity-90 disabled:opacity-40"
                             style={{ backgroundColor: 'var(--app-primary)' }}
