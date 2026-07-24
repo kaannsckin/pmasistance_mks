@@ -48,6 +48,7 @@ import WorkPackageManager from './components/WorkPackageManager';
 import CalendarView from './components/CalendarView';
 import { analyzeDataHealth, applyHealthFix, HealthFix } from './utils/dataHealth';
 import { appendAudit, AUDIT_ACTION_LABELS } from './utils/audit';
+import { riskScore } from './utils/risks';
 import { upsertLeave } from './utils/availability';
 import { Risk } from './types';
 
@@ -57,6 +58,9 @@ const THEME_COLORS: Record<string, string> = {
   purple: '#7c3aed',
   orange: '#ea580c',
 };
+
+// Denetim günlüğü RAG etiketleri ("Ne değişti?" akışı için)
+const RAG_AUDIT_TR: Record<RagStatus, string> = { green: 'Yolunda', amber: 'Riskli', red: 'Kritik' };
 
 const createSampleProject = (): Project =>
   createProject('Örnek Proje', {
@@ -211,6 +215,31 @@ const App: React.FC = () => {
     }));
   }, [updateWorkspace]);
 
+  // Risk güncellemesi + "Ne değişti?" günlüğü: eklenen/kapatılan riskleri yakalar
+  const handleUpdateActiveRisks = useCallback((risks: Risk[]) => {
+    updateWorkspace(ws => {
+      const proj = ws.projects.find(p => p.id === ws.activeProjectId);
+      let next: WorkspaceData = {
+        ...ws,
+        projects: ws.projects.map(p => p.id === ws.activeProjectId ? { ...p, risks, updatedAt: new Date().toISOString() } : p),
+      };
+      if (proj) {
+        const oldById = new Map<string, Risk>();
+        (proj.risks || []).forEach(r => oldById.set(r.id, r));
+        risks.filter(r => !oldById.has(r.id)).forEach(r => {
+          next = appendAudit(next, 'risk.add', `"${proj.name}" · risk eklendi: ${r.title} (skor ${riskScore(r)})`, proj.id);
+        });
+        risks.forEach(r => {
+          const old = oldById.get(r.id);
+          if (old && old.status !== 'closed' && r.status === 'closed') {
+            next = appendAudit(next, 'risk.close', `"${proj.name}" · risk kapatıldı: ${r.title}`, proj.id);
+          }
+        });
+      }
+      return next;
+    });
+  }, [updateWorkspace]);
+
   type ListField = 'tasks' | 'resources' | 'notes' | 'customerRequests' | 'objectives' | 'workPackages';
   const makeListSetter = <T,>(field: ListField): React.Dispatch<React.SetStateAction<T[]>> =>
     ((action: React.SetStateAction<T[]>) => {
@@ -306,10 +335,19 @@ const App: React.FC = () => {
   }, [updateWorkspace]);
 
   const handleSetProjectRag = useCallback((projectId: string, rag: RagStatus | undefined, ragNote?: string) => {
-    updateWorkspace(ws => ({
-      ...ws,
-      projects: ws.projects.map(p => p.id === projectId ? { ...p, rag, ragNote: ragNote ?? p.ragNote, updatedAt: new Date().toISOString() } : p),
-    }));
+    updateWorkspace(ws => {
+      const prev = ws.projects.find(p => p.id === projectId);
+      const next = {
+        ...ws,
+        projects: ws.projects.map(p => p.id === projectId ? { ...p, rag, ragNote: ragNote ?? p.ragNote, updatedAt: new Date().toISOString() } : p),
+      };
+      // RAG değişimini "Ne değişti?" akışı için günlüğe yaz
+      if (prev && prev.rag !== rag) {
+        const label = (r?: RagStatus) => (r ? RAG_AUDIT_TR[r] : 'Belirsiz');
+        return appendAudit(next, 'project.rag', `"${prev.name}" RAG: ${label(prev.rag)} → ${label(rag)}`, projectId);
+      }
+      return next;
+    });
   }, [updateWorkspace]);
 
   const handleSetProjectStatus = useCallback((projectId: string, status: ProjectStatus) => {
@@ -647,8 +685,10 @@ const App: React.FC = () => {
             people={workspace.people}
             canEdit={canEditProjectContent(workspace, identity, activeProject.id)}
             pestelItems={activeProject.pestelItems || []}
-            onUpdateRisks={(risks: Risk[]) => updateActiveProject(p => ({ ...p, risks }))}
+            swotItems={activeProject.swotItems || []}
+            onUpdateRisks={handleUpdateActiveRisks}
             onUpdatePestel={(pestelItems) => updateActiveProject(p => ({ ...p, pestelItems }))}
+            onUpdateSwot={(swotItems) => updateActiveProject(p => ({ ...p, swotItems }))}
           />
         );
       case View.Notes:

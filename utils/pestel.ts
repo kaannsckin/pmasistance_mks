@@ -1,4 +1,4 @@
-import { PestelCategory, PestelItem, RiskLevel } from '../types';
+import { PestelCategory, PestelItem, Risk, RiskLevel } from '../types';
 
 /**
  * PESTEL analizi yardımcıları — dış çevre faktörleri (Politik, Ekonomik,
@@ -61,3 +61,20 @@ export const summarizePestel = (items: PestelItem[]): PestelSummary => {
 /** Bir faktörün maddeleri (etkisine göre azalan) */
 export const itemsForCategory = (items: PestelItem[], category: PestelCategory): PestelItem[] =>
     items.filter(i => i.category === category).sort((a, b) => b.impact - a.impact);
+
+/** PESTEL maddesinin risk başlığı — "[Faktör] metin" (mükerrer tespiti için de kullanılır) */
+export const pestelRiskTitle = (item: PestelItem): string =>
+    `[${PESTEL_LABELS[item.category].label}] ${item.text.trim()}`;
+
+/**
+ * PESTEL tehdidinden risk taslağı üretir (tek tıkla risk kaydı için).
+ * Etki PESTEL'den gelir; olasılık orta (3) başlar; azaltıcı aksiyon = not.
+ */
+export const riskDraftFromPestel = (item: PestelItem): Partial<Risk> => ({
+    title: pestelRiskTitle(item),
+    description: 'PESTEL analizinden üretildi',
+    probability: 3,
+    impact: item.impact,
+    mitigation: item.note,
+    status: 'open',
+});

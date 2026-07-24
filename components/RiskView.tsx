@@ -1,8 +1,10 @@
 import React, { useMemo, useState } from 'react';
-import { Person, PestelItem, Risk, RiskLevel, RiskStatus } from '../types';
+import { Person, PestelItem, Risk, RiskLevel, RiskStatus, SwotItem } from '../types';
 import { createRisk, riskBand, RISK_BAND_HEX, RISK_BAND_LABELS, riskScore, RISK_STATUS_LABELS } from '../utils/risks';
-import { summarizePestel } from '../utils/pestel';
+import { riskDraftFromPestel, summarizePestel } from '../utils/pestel';
+import { summarizeSwot } from '../utils/swot';
 import PestelModal from './PestelModal';
+import SwotModal from './SwotModal';
 
 interface RiskViewProps {
   projectName: string;
@@ -10,8 +12,10 @@ interface RiskViewProps {
   people: Person[];
   canEdit: boolean;
   pestelItems: PestelItem[];
+  swotItems: SwotItem[];
   onUpdateRisks: (risks: Risk[]) => void;
   onUpdatePestel: (items: PestelItem[]) => void;
+  onUpdateSwot: (items: SwotItem[]) => void;
 }
 
 const LEVELS: RiskLevel[] = [1, 2, 3, 4, 5];
@@ -23,11 +27,13 @@ const STATUS_STYLES: Record<RiskStatus, string> = {
   closed: 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400',
 };
 
-const RiskView: React.FC<RiskViewProps> = ({ projectName, risks, people, canEdit, pestelItems, onUpdateRisks, onUpdatePestel }) => {
+const RiskView: React.FC<RiskViewProps> = ({ projectName, risks, people, canEdit, pestelItems, swotItems, onUpdateRisks, onUpdatePestel, onUpdateSwot }) => {
   const editable = canEdit;
   const [newRisk, setNewRisk] = useState({ title: '', probability: 3 as RiskLevel, impact: 3 as RiskLevel, ownerPersonId: '', mitigation: '' });
   const [showPestel, setShowPestel] = useState(false);
+  const [showSwot, setShowSwot] = useState(false);
   const pestelSummary = useMemo(() => summarizePestel(pestelItems), [pestelItems]);
+  const swotSummary = useMemo(() => summarizeSwot(swotItems), [swotItems]);
 
   // Havuz — sahibi buradan seçilir (Jira gibi), serbest metin değil
   const sortedPeople = useMemo(
@@ -86,20 +92,51 @@ const RiskView: React.FC<RiskViewProps> = ({ projectName, risks, people, canEdit
           <h2 className="text-2xl font-semibold text-gray-800 dark:text-white tracking-tight">Risk Kaydı</h2>
           <p className="text-gray-400 text-xs font-semibold tracking-[0.2em]">{projectName} · Olasılık × Etki</p>
         </div>
-        <button
-          onClick={() => setShowPestel(true)}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold text-white shadow-md hover:opacity-90 transition-all"
-          style={{ backgroundColor: 'var(--app-primary)' }}
-          title="Projenin dış çevre (PESTEL) analizini görüntüle / düzenle"
-        >
-          <i className="fa-solid fa-globe"></i>
-          PESTEL Analizi
-          {pestelSummary.total > 0 && <span className="bg-white/25 rounded-md px-1.5 py-0.5 text-[10px]">{pestelSummary.total}</span>}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => setShowPestel(true)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold text-white shadow-md hover:opacity-90 transition-all"
+            style={{ backgroundColor: 'var(--app-primary)' }}
+            title="Projenin dış çevre (PESTEL) analizini görüntüle / düzenle"
+          >
+            <i className="fa-solid fa-globe"></i>
+            PESTEL Analizi
+            {pestelSummary.total > 0 && <span className="bg-white/25 rounded-md px-1.5 py-0.5 text-[10px]">{pestelSummary.total}</span>}
+          </button>
+          <button
+            onClick={() => setShowSwot(true)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold text-gray-600 dark:text-gray-200 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm hover:border-primary hover:text-primary transition-all"
+            title="Projenin SWOT (Güçlü/Zayıf · Fırsat/Tehdit) analizini görüntüle / düzenle"
+          >
+            <i className="fa-solid fa-table-cells-large"></i>
+            SWOT Analizi
+            {swotSummary.total > 0 && <span className="bg-gray-100 dark:bg-gray-700 rounded-md px-1.5 py-0.5 text-[10px]">{swotSummary.total}</span>}
+          </button>
+        </div>
       </div>
 
       {showPestel && (
-        <PestelModal projectName={projectName} items={pestelItems} canEdit={canEdit} onUpdate={onUpdatePestel} onClose={() => setShowPestel(false)} />
+        <PestelModal
+          projectName={projectName}
+          items={pestelItems}
+          canEdit={canEdit}
+          existingRiskTitles={new Set(risks.map(r => r.title.toLocaleLowerCase('tr-TR')))}
+          onUpdate={onUpdatePestel}
+          onCreateRisk={(item) => onUpdateRisks([...risks, createRisk(riskDraftFromPestel(item))])}
+          onClose={() => setShowPestel(false)}
+        />
+      )}
+
+      {showSwot && (
+        <SwotModal
+          projectName={projectName}
+          items={swotItems}
+          canEdit={canEdit}
+          pestelItems={pestelItems}
+          risks={risks}
+          onUpdate={onUpdateSwot}
+          onClose={() => setShowSwot(false)}
+        />
       )}
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">

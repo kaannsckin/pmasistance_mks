@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createPestelItem, itemsForCategory, PESTEL_ORDER, summarizePestel } from './pestel';
+import { createPestelItem, itemsForCategory, PESTEL_ORDER, pestelRiskTitle, riskDraftFromPestel, summarizePestel } from './pestel';
 import { PestelItem } from '../types';
 
 const item = (category: PestelItem['category'], kind: PestelItem['kind'], impact: number, text = 'x'): PestelItem =>
@@ -36,6 +36,17 @@ describe('pestel', () => {
         expect(s.emptyCategories).toContain('technological');
         expect(s.emptyCategories).toContain('environmental');
         expect(s.emptyCategories).not.toContain('political');
+    });
+
+    it('riskDraftFromPestel: başlık [Faktör] metin, etki PESTEL\'den, olasılık 3', () => {
+        const p = createPestelItem('legal', { text: 'İhracat lisansı riski', impact: 5, kind: 'threat', note: 'Erken başvuru' });
+        expect(pestelRiskTitle(p)).toBe('[Yasal] İhracat lisansı riski');
+        const draft = riskDraftFromPestel(p);
+        expect(draft.title).toBe('[Yasal] İhracat lisansı riski');
+        expect(draft.impact).toBe(5);
+        expect(draft.probability).toBe(3);
+        expect(draft.mitigation).toBe('Erken başvuru');
+        expect(draft.status).toBe('open');
     });
 
     it('itemsForCategory etkiye göre azalan', () => {

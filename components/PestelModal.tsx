@@ -1,12 +1,15 @@
 import React, { useMemo, useState } from 'react';
 import { PestelItem, RiskLevel } from '../types';
-import { createPestelItem, itemsForCategory, PESTEL_KIND_LABELS, PESTEL_LABELS, PESTEL_ORDER, summarizePestel } from '../utils/pestel';
+import { createPestelItem, itemsForCategory, PESTEL_KIND_LABELS, PESTEL_LABELS, PESTEL_ORDER, pestelRiskTitle, summarizePestel } from '../utils/pestel';
+import { exportPestelPng, exportPestelSvg } from '../utils/pestelExport';
 
 interface PestelModalProps {
   projectName: string;
   items: PestelItem[];
   canEdit: boolean;
+  existingRiskTitles: Set<string>;
   onUpdate: (items: PestelItem[]) => void;
+  onCreateRisk: (item: PestelItem) => void;
   onClose: () => void;
 }
 
@@ -18,9 +21,17 @@ const kindStyle = (kind: PestelItem['kind']): string =>
     ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
     : 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-300';
 
-const PestelModal: React.FC<PestelModalProps> = ({ projectName, items, canEdit, onUpdate, onClose }) => {
+const PestelModal: React.FC<PestelModalProps> = ({ projectName, items, canEdit, existingRiskTitles, onUpdate, onCreateRisk, onClose }) => {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [exporting, setExporting] = useState(false);
   const summary = useMemo(() => summarizePestel(items), [items]);
+
+  const handlePng = async () => {
+    setExporting(true);
+    try { await exportPestelPng(projectName, items); }
+    catch (e) { alert(`PNG dışa aktarılamadı: ${e instanceof Error ? e.message : String(e)}`); }
+    finally { setExporting(false); }
+  };
 
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -50,7 +61,15 @@ const PestelModal: React.FC<PestelModalProps> = ({ projectName, items, canEdit, 
               <p className="text-xs text-gray-400">{projectName} · Politik · Ekonomik · Sosyal · Teknolojik · Çevresel · Yasal</p>
             </div>
           </div>
-          <button onClick={onClose} className="w-9 h-9 rounded-xl text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"><i className="fa-solid fa-times"></i></button>
+          <div className="flex items-center gap-2">
+            <button onClick={handlePng} disabled={exporting || items.length === 0} className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-2 rounded-lg text-white shadow-sm hover:opacity-90 disabled:opacity-40" style={{ backgroundColor: 'var(--app-primary)' }} title="PESTEL panosunu PNG görsel olarak indir">
+              {exporting ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-image"></i>}PNG
+            </button>
+            <button onClick={() => exportPestelSvg(projectName, items)} disabled={items.length === 0} className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-300 hover:text-primary disabled:opacity-40" title="Vektörel (SVG) olarak indir">
+              <i className="fa-solid fa-bezier-curve"></i>SVG
+            </button>
+            <button onClick={onClose} className="w-9 h-9 rounded-xl text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"><i className="fa-solid fa-times"></i></button>
+          </div>
         </div>
 
         <div className="p-6 space-y-5">
@@ -112,6 +131,13 @@ const PestelModal: React.FC<PestelModalProps> = ({ projectName, items, canEdit, 
                               <button onClick={() => remove(it.id)} className="w-6 h-6 rounded-md text-gray-300 hover:text-red-500 flex-none" title="Sil"><i className="fa-solid fa-trash text-[10px]"></i></button>
                             </div>
                             <input className={inputCls} value={it.note || ''} placeholder="Aksiyon / not (opsiyonel)" onChange={e => update(it.id, { note: e.target.value || undefined })} />
+                            {it.kind === 'threat' && it.text.trim() && (
+                              existingRiskTitles.has(pestelRiskTitle(it).toLocaleLowerCase('tr-TR'))
+                                ? <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600 dark:text-emerald-300"><i className="fa-solid fa-circle-check"></i>Risk kaydı oluşturuldu</span>
+                                : <button onClick={() => onCreateRisk(it)} className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-md bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors" title="Bu tehditten risk kaydı üret">
+                                    <i className="fa-solid fa-bolt"></i>Risk Oluştur
+                                  </button>
+                            )}
                           </div>
                         ) : (
                           <div className="flex items-start gap-2">
