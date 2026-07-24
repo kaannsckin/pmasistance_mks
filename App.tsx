@@ -17,6 +17,7 @@ import { isExecRole } from './utils/execReport';
 import { canEditProjectContent, identityOf, identityNeedsPerson as computeNeedsPerson, visibleProjectIds } from './utils/rbac';
 import { addSnapshot, buildSnapshot, ensureMonthlySnapshot } from './utils/snapshots';
 import { AllocationSuggestion, ApplyMode, applyAllocationSuggestions } from './utils/taskToAllocation';
+import { applyBilledHoursActuals, BilledApplyMode, BilledHoursImportResult } from './utils/billedHours';
 import { buildTodoItems, TodoItem } from './utils/todoItems';
 import { loadCloudConfig, scheduleAutoPush } from './utils/cloudSync';
 import CloudSyncModal from './components/CloudSyncModal';
@@ -420,6 +421,21 @@ const App: React.FC = () => {
     });
   }, [updateWorkspace]);
 
+  const handleApplyBilledHours = useCallback((result: BilledHoursImportResult, mode: BilledApplyMode) => {
+    updateWorkspace(ws => {
+      const { workspace: next, summary } = applyBilledHoursActuals(ws, result, mode);
+      const lines = [
+        `${result.year} gerçekleşen: ${summary.rowsApplied} kişi×proje güncellendi (${summary.cellsWritten} ay)`,
+        `${summary.peopleAffected} kişi · ${summary.projectsAffected} proje`,
+      ];
+      if (summary.cellsSkipped > 0) lines.push(`${summary.cellsSkipped} dolu ay korundu (doldur modu)`);
+      if (result.unmatchedPeople.length) lines.push(`Eşleşmeyen kişi: ${result.unmatchedPeople.length}`);
+      if (result.unmatchedProjects.length) lines.push(`Eşleşmeyen proje: ${result.unmatchedProjects.length}`);
+      alert(`Jira Billed Hours içe aktarıldı.\n\n${lines.join('\n')}`);
+      return appendAudit(next, 'data.import', `Jira Billed Hours → gerçekleşen: ${summary.rowsApplied} kişi×proje, ${summary.cellsWritten} ay (${result.year})`);
+    });
+  }, [updateWorkspace]);
+
   const handleTakeSnapshot = useCallback((year: number) => {
     updateWorkspace(ws => {
       const label = `Manuel — ${new Date().toLocaleDateString('tr-TR')}`;
@@ -588,6 +604,7 @@ const App: React.FC = () => {
           onDeleteAllocation={handleDeleteAllocation}
           onLockAction={handleLockAction}
           onApplySuggestions={handleApplySuggestions}
+          onApplyBilledHours={handleApplyBilledHours}
         />
       );
     }

@@ -13,6 +13,8 @@ import { effectiveCapacity } from '../utils/availability';
 import { allPersonRoles, findAvailablePeople } from '../utils/staffing';
 import ScenarioView from './ScenarioView';
 import UtilizationHeatmap from './UtilizationHeatmap';
+import BilledHoursImportModal from './BilledHoursImportModal';
+import { BilledApplyMode, BilledHoursImportResult } from '../utils/billedHours';
 
 interface AllocationViewProps {
   allocations: Allocation[];
@@ -27,6 +29,7 @@ interface AllocationViewProps {
   onDeleteAllocation: (allocationId: string) => void;
   onLockAction: (projectId: string, year: number, status: PlanLockStatus) => void;
   onApplySuggestions: (projectId: string, year: number, suggestions: AllocationSuggestion[], mode: ApplyMode) => void;
+  onApplyBilledHours: (result: BilledHoursImportResult, mode: BilledApplyMode) => void;
 }
 
 type Mode = 'plan' | 'actual' | 'compare';
@@ -48,7 +51,7 @@ const LOCK_STYLES: Record<PlanLockStatus, { label: string; cls: string; icon: st
   locked: { label: 'Kilitli', cls: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-300', icon: 'fa-lock' },
 };
 
-const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, projects, planLocks, leaves, currentRole, identity, onSetCell, onAddAllocation, onDeleteAllocation, onLockAction, onApplySuggestions }) => {
+const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, projects, planLocks, leaves, currentRole, identity, onSetCell, onAddAllocation, onDeleteAllocation, onLockAction, onApplySuggestions, onApplyBilledHours }) => {
   const wsLike = useMemo(() => ({ people, projects, allocations }), [people, projects, allocations]);
   // Kimlik kapsamına göre hücre/satır düzenlenebilirliği (RBAC)
   const canEnter = identity.role === 'py' || identity.role === 'bolum_sorumlu';
@@ -59,6 +62,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
   const [deptFilter, setDeptFilter] = useState('all');
   const [newRow, setNewRow] = useState({ personId: '', projectId: '', workPackageId: '', role: '' });
   const [suggestModal, setSuggestModal] = useState<{ projectId: string; projectName: string; result: SuggestionResult } | null>(null);
+  const [showBilled, setShowBilled] = useState(false);
   const [applyMode, setApplyMode] = useState<ApplyMode>('fill');
   const [staff, setStaff] = useState({ role: '', from: 1, to: 12, aa: 0.5 });
 
@@ -638,8 +642,23 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
             ))}
           </div>
           )}
+          {canEnter && (
+            <button onClick={() => setShowBilled(true)} title="Jira 'Toplam Billed Hours' pivotunu gerçekleşen tahsise (AA) aktar" className="flex items-center gap-2 px-3 py-2 rounded-xl text-[11px] font-semibold text-gray-600 dark:text-gray-200 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:border-blue-400 hover:text-blue-500 transition-colors">
+              <i className="fa-solid fa-file-import"></i><span>Jira Billed Hours</span>
+            </button>
+          )}
         </div>
       </div>
+
+      {showBilled && (
+        <BilledHoursImportModal
+          people={people}
+          projects={projects}
+          defaultYear={year}
+          onApply={onApplyBilledHours}
+          onClose={() => setShowBilled(false)}
+        />
+      )}
 
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center space-x-2 flex-wrap gap-y-2">
