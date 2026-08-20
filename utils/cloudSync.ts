@@ -34,6 +34,25 @@ export interface PrivateDoc {
     customerRequests: Record<string, CustomerRequest[]>;
 }
 
+interface NormalizedPrivateRow<T> {
+    project_id: string;
+    payload: T;
+}
+
+export const privateDocFromNormalizedRows = (
+    noteRows: NormalizedPrivateRow<Note>[],
+    requestRows: NormalizedPrivateRow<CustomerRequest>[],
+): PrivateDoc => {
+    const result: PrivateDoc = { notes: {}, customerRequests: {} };
+    noteRows.forEach(row => {
+        (result.notes[row.project_id] ||= []).push(row.payload);
+    });
+    requestRows.forEach(row => {
+        (result.customerRequests[row.project_id] ||= []).push(row.payload);
+    });
+    return result;
+};
+
 export const loadCloudConfig = (): CloudConfig | null => {
     try {
         const raw = localStorage.getItem(CLOUD_CONFIG_KEY);
@@ -177,30 +196,42 @@ export const getMyCloudRole = async (workspaceId: string): Promise<UserRole | nu
 
 export interface PushResult {
     ok: boolean;
-    reason?: 'conflict' | 'error' | 'not-configured';
+    reason?: 'conflict' | 'error' | 'not-configured' | 'normalization-required';
     message?: string;
     coreVersion?: number;
     privateVersion?: number;
 }
+
+interface DualWriteRpcResult {
+    ok: boolean;
+    id?: string;
+    reason?: PushResult['reason'];
+    message?: string;
+    coreVersion?: number;
+    privateVersion?: number | null;
+}
+
+const migrationErrorMessage = (message: string): string =>
+    /create_workspace_v2|push_workspace_v2|get_private_version|workspace_normalization_state|project_notes|customer_requests|PGRST20[25]/i.test(message)
+        ? 'Transaction çift-yazma migration\'ı eksik. Supabase\'te 20260820_0002_transactional_dual_write.sql dosyasını çalıştırın.'
+        : message;
 
 export const createCloudWorkspace = async (name: string, ws: WorkspaceData): Promise<{ id: string } | { error: string }> => {
     const c = getClient();
     if (!c) return { error: 'Bağlantı yapılandırılmadı.' };
     const { core, privateDoc } = splitWorkspaceDoc(ws);
     const { data, error } = await c
-        .from('workspaces')
-        .insert({ name, core, version: 1 })
-        .select('id')
-        .single();
-    if (error || !data) return { error: error?.message || 'Çalışma alanı oluşturulamadı.' };
-    // Tetikleyici private satırını version 0 ile açtı; veriyi yazıp 1'e çek
-    const { error: pErr } = await c
-        .from('workspace_private')
-        .update({ data: privateDoc, version: 1 })
-        .eq('workspace_id', data.id)
-        .eq('version', 0);
-    if (pErr) console.warn('Özel veri yazılamadı:', pErr.message);
-    return { id: data.id };
+        .rpc('create_workspace_v2', {
+            workspace_name: name,
+            core_doc: core,
+            private_doc: privateDoc,
+        });
+    if (error) return { error: migrationErrorMessage(error.message) };
+    const result = data as DualWriteRpcResult | null;
+    if (!result?.ok || !result.id) {
+        return { error: result?.message || 'Çalışma alanı oluşturulamadı.' };
+    }
+    return { id: result.id };
 };
 
 export const pushWorkspace = async (ws: WorkspaceData): Promise<PushResult> => {
@@ -209,8 +240,8 @@ export const pushWorkspace = async (ws: WorkspaceData): Promise<PushResult> => {
     if (!c || !config?.workspaceId) return { ok: false, reason: 'not-configured' };
 
     // İstemcideki rol/kişi değiştirilmişse belgeyi sunucuya göndermeyi reddet.
-    // Asıl alan bazlı güvenlik normalize şema RLS fazında uygulanacaktır; bu
-    // kontrol mevcut belge modelinde doğrudan kimlik taklidini engeller.
+    // Sunucuda transaction RPC + RLS ayrıca zorlanır; bu erken kontrol hatalı
+    // yerel kimliği daha ağ isteği yapılmadan reddeder.
     const verifiedIdentity = await getMyCloudIdentity(config.workspaceId);
     if (!verifiedIdentity) {
         return { ok: false, reason: 'error', message: 'Bulut üyeliği doğrulanamadı.' };
@@ -223,36 +254,45 @@ export const pushWorkspace = async (ws: WorkspaceData): Promise<PushResult> => {
     const { core, privateDoc } = splitWorkspaceDoc(ws);
     const expectedCore = config.coreVersion ?? 0;
 
-    const { data, error } = await c
-        .from('workspaces')
-        .update({ core, version: expectedCore + 1 })
-        .eq('id', config.workspaceId)
-        .eq('version', expectedCore)
-        .select('version');
-
-    if (error) return { ok: false, reason: 'error', message: error.message };
-    if (!data || data.length === 0) return { ok: false, reason: 'conflict', message: 'Bulutta daha yeni bir sürüm var.' };
-
-    let privateVersion = config.privateVersion;
     const expectedPriv = config.privateVersion ?? 0;
-    const { data: pData, error: pErr } = await c
-        .from('workspace_private')
-        .update({ data: privateDoc, version: expectedPriv + 1 })
-        .eq('workspace_id', config.workspaceId)
-        .eq('version', expectedPriv)
-        .select('version');
-    if (!pErr && pData && pData.length > 0) {
-        privateVersion = expectedPriv + 1;
+    const { data, error } = await c.rpc('push_workspace_v2', {
+        ws: config.workspaceId,
+        expected_core_version: expectedCore,
+        core_doc: core,
+        expected_private_version: expectedPriv,
+        private_doc: privateDoc,
+    });
+
+    if (error) {
+        const conflict = error.code === '40001' || /sürüm.*(çakış|değiş)/i.test(error.message);
+        return {
+            ok: false,
+            reason: conflict ? 'conflict' : 'error',
+            message: migrationErrorMessage(error.message),
+        };
     }
-    // pErr: yönetici rolü RLS nedeniyle private yazamaz — sorun değil, atlanır
+
+    const result = data as DualWriteRpcResult | null;
+    if (!result?.ok) {
+        return {
+            ok: false,
+            reason: result?.reason || 'error',
+            message: result?.message || 'Transaction çift-yazma tamamlanamadı.',
+        };
+    }
+
+    const coreVersion = result.coreVersion ?? expectedCore + 1;
+    const privateVersion = typeof result.privateVersion === 'number'
+        ? result.privateVersion
+        : config.privateVersion;
 
     saveCloudConfig({
         ...config,
-        coreVersion: expectedCore + 1,
+        coreVersion,
         privateVersion,
         lastSyncAt: new Date().toISOString(),
     });
-    return { ok: true, coreVersion: expectedCore + 1, privateVersion };
+    return { ok: true, coreVersion, privateVersion };
 };
 
 export interface PullResult {
@@ -271,32 +311,71 @@ export const pullWorkspace = async (): Promise<PullResult> => {
     const verifiedIdentity = await getMyCloudIdentity(config.workspaceId);
     if (!verifiedIdentity) return { ok: false, message: 'Çalışma alanı üyeliğiniz veya rolünüz doğrulanamadı.' };
 
+    const { data: normalizationState, error: stateError } = await c
+        .from('workspace_normalization_state')
+        .select('source_core_version')
+        .eq('workspace_id', config.workspaceId)
+        .maybeSingle();
+    if (stateError) {
+        return { ok: false, message: migrationErrorMessage(stateError.message) };
+    }
+    if (!normalizationState && verifiedIdentity.role !== 'pyb_destek') {
+        return {
+            ok: false,
+            message: 'İlk normalize senkronu henüz yapılmadı. Önce PYB Destek hesabı bağlanıp "Şimdi Gönder" işlemini tamamlamalı.',
+        };
+    }
+
     const { data, error } = await c
         .from('workspaces')
         .select('core, version')
         .eq('id', config.workspaceId)
         .maybeSingle();
     if (error || !data) return { ok: false, message: error?.message || 'Çalışma alanı bulunamadı (üyeliğinizi kontrol edin).' };
+    if (normalizationState
+        && Number(normalizationState.source_core_version) !== Number(data.version)) {
+        return {
+            ok: false,
+            message: 'Normalize veri sürümü belge sürümünün gerisinde. Veri sorumlusu senkronu doğrulamadan çekme işlemi durduruldu.',
+        };
+    }
 
-    // Yönetici rollerinde RLS bu satırı gizler — notlar boş iner (tasarım gereği)
-    const { data: pData } = await c
-        .from('workspace_private')
-        .select('data, version')
-        .eq('workspace_id', config.workspaceId)
-        .maybeSingle();
+    let privateDoc: PrivateDoc | undefined;
+    let privateVersion = config.privateVersion;
+    if (normalizationState && verifiedIdentity.role === 'py') {
+        const [notesResult, requestsResult, versionResult] = await Promise.all([
+            c.from('project_notes')
+                .select('project_id, payload')
+                .eq('workspace_id', config.workspaceId)
+                .order('position', { ascending: true, nullsFirst: false }),
+            c.from('customer_requests')
+                .select('project_id, payload')
+                .eq('workspace_id', config.workspaceId)
+                .order('position', { ascending: true, nullsFirst: false }),
+            c.rpc('get_private_version', { ws: config.workspaceId }),
+        ]);
+        const privateError = notesResult.error || requestsResult.error || versionResult.error;
+        if (privateError) {
+            return { ok: false, message: migrationErrorMessage(privateError.message) };
+        }
+        privateDoc = privateDocFromNormalizedRows(
+            (notesResult.data || []) as NormalizedPrivateRow<Note>[],
+            (requestsResult.data || []) as NormalizedPrivateRow<CustomerRequest>[],
+        );
+        if (typeof versionResult.data === 'number') privateVersion = versionResult.data;
+    }
 
     saveCloudConfig({
         ...config,
         coreVersion: data.version as number,
-        privateVersion: (pData?.version as number | undefined) ?? config.privateVersion,
+        privateVersion,
         lastSyncAt: new Date().toISOString(),
     });
 
     const core = data.core as Partial<WorkspaceData>;
-    const privateDoc = pData?.data as PrivateDoc | undefined;
     return {
         ok: true,
-        privateVisible: !!pData,
+        privateVisible: verifiedIdentity.role === 'py',
         identity: verifiedIdentity,
         workspace: (local: WorkspaceData) => mergeWorkspaceDoc(local, core, privateDoc, verifiedIdentity),
     };
@@ -326,6 +405,8 @@ export const scheduleAutoPush = (ws: WorkspaceData, delayMs = 4000): void => {
         if (!result.ok && result.reason === 'conflict') {
             lastConflict = true;
             console.warn('Bulut çakışması: başka bir cihaz/kullanıcı daha yeni veri yazdı. Bulut penceresinden "Buluttan Çek" yapın.');
+        } else if (!result.ok) {
+            console.warn('Otomatik transaction çift-yazma tamamlanamadı:', result.message);
         }
     }, delayMs);
 };

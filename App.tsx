@@ -527,6 +527,7 @@ const App: React.FC = () => {
 
   const handleTakeSnapshot = useCallback((year: number) => {
     updateWorkspace(ws => {
+      if (!seesAllProjects(ws.currentRole)) return ws;
       const label = `Manuel — ${new Date().toLocaleDateString('tr-TR')}`;
       return addSnapshot(ws, buildSnapshot(ws, year, label, 'manual'));
     });

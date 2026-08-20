@@ -49,8 +49,12 @@ const checkTable = async (table) => {
         ok(`${table} tablosu kurulu (RLS aktif, anonim erişim boş dönüyor)`);
         return true;
     }
+    if ((status === 401 || status === 403) && body?.code === '42501') {
+        ok(`${table} tablosu kurulu (anon erişimi tamamen kapalı)`);
+        return true;
+    }
     if (status === 404 || body?.code === 'PGRST205') {
-        fail(`${table} tablosu YOK — supabase/schema.sql henüz çalıştırılmamış`);
+        fail(`${table} tablosu YOK — schema.sql/migration kurulumu eksik`);
     } else if (status === 401) {
         fail(`${table}: anahtar reddedildi (anon anahtarını kontrol edin)`);
     } else {
@@ -93,9 +97,10 @@ const run = async () => {
     const t1 = await checkTable('workspaces');
     const t2 = await checkTable('workspace_private');
     const t3 = await checkTable('workspace_members');
-    const schemaReady = t1 && t2 && t3;
+    const t4 = await checkTable('workspace_normalization_state');
+    const schemaReady = t1 && t2 && t3 && t4;
     if (!schemaReady) {
-        info('Çözüm: Dashboard → SQL Editor → New query → supabase/schema.sql içeriğini yapıştırın → Run');
+        info('Çözüm: SQL Editor içinde schema.sql, 0001 ve 0002 migration dosyalarını sırayla çalıştırın.');
     }
 
     // ---- 3) Uçtan uca test (isteğe bağlı) ----
@@ -128,21 +133,32 @@ const run = async () => {
         ok('Kayıt + otomatik giriş çalışıyor');
         const authed = { apikey: anonKey, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
-        // Çalışma alanı oluştur
-        const wsRes = await fetch(`${url}/rest/v1/workspaces`, {
+        const coreDoc = {
+            schemaVersion: 3,
+            projects: [], people: [], departments: [], roleCatalog: [], titles: [],
+            allocations: [], planLocks: [], snapshots: [], leaves: [], auditLog: [],
+        };
+        const privateDoc = { notes: {}, customerRequests: {} };
+
+        // Çalışma alanı + normalize backfill atomik RPC ile oluştur
+        const wsRes = await fetch(`${url}/rest/v1/rpc/create_workspace_v2`, {
             method: 'POST',
-            headers: { ...authed, Prefer: 'return=representation' },
-            body: JSON.stringify({ name: 'E2E Test', core: { probe: true }, version: 1 }),
+            headers: authed,
+            body: JSON.stringify({
+                workspace_name: 'E2E Test',
+                core_doc: coreDoc,
+                private_doc: privateDoc,
+            }),
         });
         const wsBody = await wsRes.json();
-        const wsId = Array.isArray(wsBody) ? wsBody[0]?.id : wsBody?.id;
+        const wsId = wsBody?.id;
         if (!wsRes.ok || !wsId) {
             fail(`Çalışma alanı oluşturulamadı: ${JSON.stringify(wsBody).slice(0, 160)}`);
             process.exit(1);
         }
         ok(`Çalışma alanı oluşturuldu (${wsId})`);
 
-        // Tetikleyici: üyelik + private satırı
+        // Tetikleyici: üyelik + normalize state
         const memRes = await fetch(`${url}/rest/v1/workspace_members?workspace_id=eq.${wsId}&select=role`, { headers: authed });
         const members = await memRes.json();
         if (Array.isArray(members) && members[0]?.role === 'pyb_destek') {
@@ -151,32 +167,45 @@ const run = async () => {
             fail(`Üyelik tetikleyicisi beklenen sonucu vermedi: ${JSON.stringify(members).slice(0, 120)}`);
             errorCount++;
         }
-        const privRes1 = await fetch(`${url}/rest/v1/workspace_private?workspace_id=eq.${wsId}&select=workspace_id`, { headers: authed });
-        const priv1 = await privRes1.json();
-        if (Array.isArray(priv1) && priv1.length === 1) {
-            ok('pyb_destek rolü private (not) verisini görebiliyor');
+        const stateRes = await fetch(`${url}/rest/v1/workspace_normalization_state?workspace_id=eq.${wsId}&select=source_core_version`, { headers: authed });
+        const state = await stateRes.json();
+        if (Array.isArray(state) && state[0]?.source_core_version === 1) {
+            ok('Normalize state oluşturuldu ve core sürümü 1 ile eşleşiyor');
         } else {
-            fail('private satırı görünmüyor (tetikleyici/politika sorunu)');
+            fail(`Normalize state beklenen sonucu vermedi: ${JSON.stringify(state).slice(0, 120)}`);
             errorCount++;
         }
 
-        // Rolü müdüre çevir → private RLS ile GİZLENMELİ
-        await fetch(`${url}/rest/v1/workspace_members?workspace_id=eq.${wsId}`, {
-            method: 'PATCH', headers: authed, body: JSON.stringify({ role: 'mudur' }),
+        // Transaction push → core + normalize sürüm birlikte 2 olmalı
+        const pushRes = await fetch(`${url}/rest/v1/rpc/push_workspace_v2`, {
+            method: 'POST', headers: authed,
+            body: JSON.stringify({
+                ws: wsId,
+                expected_core_version: 1,
+                core_doc: coreDoc,
+                expected_private_version: 1,
+                private_doc: privateDoc,
+            }),
         });
-        const privRes2 = await fetch(`${url}/rest/v1/workspace_private?workspace_id=eq.${wsId}&select=workspace_id`, { headers: authed });
-        const priv2 = await privRes2.json();
-        if (Array.isArray(priv2) && priv2.length === 0) {
-            ok('RLS DOĞRULANDI: Müdür rolü private (not/istek) verisini OKUYAMIYOR');
+        const push = await pushRes.json();
+        if (pushRes.ok && push?.ok && push.coreVersion === 2) {
+            ok('Transaction çift-yazma RPC çalıştı (core sürümü 2)');
         } else {
-            fail(`RLS beklenen gibi çalışmadı: müdür private görebiliyor (${JSON.stringify(priv2).slice(0, 80)})`);
+            fail(`Transaction push başarısız: ${JSON.stringify(push).slice(0, 160)}`);
             errorCount++;
         }
 
-        // Temizlik: rolü geri al + çalışma alanını sil (cascade)
-        await fetch(`${url}/rest/v1/workspace_members?workspace_id=eq.${wsId}`, {
-            method: 'PATCH', headers: authed, body: JSON.stringify({ role: 'pyb_destek' }),
-        });
+        // Private uyumluluk tablosuna istemci erişimi tamamen kapalı olmalı.
+        const privRes = await fetch(`${url}/rest/v1/workspace_private?workspace_id=eq.${wsId}&select=data`, { headers: authed });
+        const privBody = await privRes.json();
+        if ((privRes.status === 401 || privRes.status === 403) && privBody?.code === '42501') {
+            ok('Private uyumluluk belgesine istemci erişimi kapalı');
+        } else {
+            fail(`Private tablo doğrudan erişilebilir durumda: ${privRes.status} ${JSON.stringify(privBody).slice(0, 100)}`);
+            errorCount++;
+        }
+
+        // Temizlik: çalışma alanını sil (cascade)
         const delRes = await fetch(`${url}/rest/v1/workspaces?id=eq.${wsId}`, { method: 'DELETE', headers: authed });
         if (delRes.ok) {
             ok('Test çalışma alanı silindi (temizlik tamam)');
