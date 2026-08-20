@@ -19,6 +19,11 @@ const buildWs = (): WorkspaceData => {
         currentRole: 'py',
         people: [{ id: 'k1', firstName: 'Kaan', lastName: 'T', departmentCode: 'U310', availableAA: 1, roles: [] }],
         allocations: [{ id: 'a1', personId: 'k1', projectId: p1.id, year: 2026, plan: { 1: 0.5 }, actual: {} }],
+        leaves: [{ id: 'l1', personId: 'k1', year: 2026, month: 7, aa: 0.5, reason: 'İzin' }],
+        auditLog: [{
+            id: 'audit-1', at: '2026-01-01T00:00:00Z', actorRole: 'py', actorPersonId: 'k1',
+            action: 'project.create', summary: 'Proje oluşturuldu', projectId: p1.id,
+        }],
         settings: { theme: 'purple', isDarkMode: true, isAIEnabled: false, isLocalPersistenceEnabled: true },
     };
 };
@@ -39,6 +44,8 @@ describe('splitWorkspaceDoc', () => {
         // Paylaşılan veri core'da
         expect((core.allocations as unknown[]).length).toBe(1);
         expect((core.people as unknown[]).length).toBe(1);
+        expect((core.leaves as unknown[]).length).toBe(1);
+        expect((core.auditLog as unknown[]).length).toBe(1);
     });
 
     it('orijinal workspace nesnesini değiştirmez', () => {
@@ -57,6 +64,8 @@ describe('mergeWorkspaceDoc', () => {
         expect(merged.projects[0].notes).toHaveLength(2);
         expect(merged.projects[0].customerRequests).toHaveLength(1);
         expect(merged.allocations).toHaveLength(1);
+        expect(merged.leaves).toHaveLength(1);
+        expect(merged.auditLog).toHaveLength(1);
         expect(merged.currentRole).toBe('py'); // yerelden
         expect(merged.currentPersonId).toBe('k1'); // yerelden
         expect(merged.settings.theme).toBe('orange'); // yerelden

@@ -7,7 +7,8 @@ import { bindIdentity, Identity } from './rbac';
  * Yerel-öncelikli bulut senkronizasyonu (Supabase).
  *
  * Veri iki belgeye ayrılır:
- *  - core: paylaşılan her şey (projeler*, havuz, tahsis, kilit, snapshot)
+ *  - core: paylaşılan her şey (projeler*, havuz, tahsis, kilit, snapshot,
+ *    izin ve audit günlüğü)
  *  - private: PM'e özel notlar + müşteri istekleri — sunucuda RLS ile yönetici
  *    rollerinden gizlenir (bkz. supabase/schema.sql)
  *  (* core'daki projelerde notes/customerRequests boşaltılır)
@@ -75,6 +76,8 @@ export const splitWorkspaceDoc = (ws: WorkspaceData): { core: Record<string, unk
         allocations: ws.allocations,
         planLocks: ws.planLocks,
         snapshots: ws.snapshots,
+        leaves: ws.leaves || [],
+        auditLog: ws.auditLog || [],
     };
     return { core, privateDoc };
 };
