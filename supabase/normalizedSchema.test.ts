@@ -10,6 +10,10 @@ const dualWritePath = fileURLToPath(
     new URL('./migrations/20260820_0002_transactional_dual_write.sql', import.meta.url),
 );
 const dualWriteSql = readFileSync(dualWritePath, 'utf8');
+const readCutoverPath = fileURLToPath(
+    new URL('./migrations/20260820_0003_normalized_read_cutover.sql', import.meta.url),
+);
+const readCutoverSql = readFileSync(readCutoverPath, 'utf8');
 const cloudSyncPath = fileURLToPath(new URL('../utils/cloudSync.ts', import.meta.url));
 const cloudSyncSource = readFileSync(cloudSyncPath, 'utf8');
 
@@ -112,7 +116,8 @@ describe('transactional dual-write migration', () => {
         expect(dualWriteSql).toContain('public.can_edit_project(ws, grouped.key)');
         expect(dualWriteSql).toContain('insert into public.project_notes');
         expect(dualWriteSql).toContain('insert into public.customer_requests');
-        expect(cloudSyncSource).toContain("c.from('project_notes')");
+        expect(readCutoverSql).toContain('from public.project_notes');
+        expect(readCutoverSql).toContain('from public.customer_requests');
         expect(cloudSyncSource).not.toContain(".from('workspace_private')");
     });
 
@@ -129,5 +134,40 @@ describe('transactional dual-write migration', () => {
         expect(dualWriteSql).toContain('membership.person_id');
         expect(dualWriteSql).toContain('on conflict (workspace_id, id) do nothing');
         expect(dualWriteSql).toContain('public.valid_audit_action(event_action)');
+    });
+});
+
+describe('normalized read cutover migration', () => {
+    it('cutover öncesi bütün workspace sürümlerinin normalize olmasını zorunlu kılar', () => {
+        expect(readCutoverSql).toContain("errcode = 'PZ004'");
+        expect(readCutoverSql).toContain('s.workspace_id is null');
+        expect(readCutoverSql).toContain('s.source_core_version <> w.version');
+        expect(readCutoverSql).toContain('s.source_private_version <> coalesce(p.version, 0)');
+    });
+
+    it('scoped belge üreticilerini çağıranın RLS kimliğiyle çalıştırır', () => {
+        expect(readCutoverSql).toContain('planasistan_private.build_scoped_core_document');
+        expect(readCutoverSql).toContain('planasistan_private.build_scoped_private_document');
+        expect(readCutoverSql.match(/language plpgsql stable security invoker/g)?.length).toBeGreaterThanOrEqual(3);
+        expect(readCutoverSql).toContain('from public.projects p where p.workspace_id = ws');
+        expect(readCutoverSql).toContain('from public.project_notes');
+        expect(readCutoverSql).not.toContain('select core into');
+    });
+
+    it('tek pull RPC ile RLS kapsamlı core ve PY private belgesini döndürür', () => {
+        expect(readCutoverSql).toContain('create or replace function public.pull_workspace_v2');
+        expect(readCutoverSql).toContain("private_visible := membership_role = 'py'");
+        expect(readCutoverSql).toContain("'core', planasistan_private.build_scoped_core_document(ws)");
+        expect(readCutoverSql).toContain("'privateDoc', case when private_visible");
+        expect(cloudSyncSource).toContain("c.rpc('pull_workspace_v2'");
+    });
+
+    it('istemcinin tam legacy core okuma ve doğrudan yazma izinlerini kapatır', () => {
+        expect(readCutoverSql).toContain('revoke select, insert, update on table public.workspaces from authenticated');
+        expect(readCutoverSql).toContain('grant select (id, name, version, updated_at, created_by)');
+        expect(cloudSyncSource).not.toContain(".from('workspaces')");
+        expect(cloudSyncSource).not.toContain(".from('project_notes')");
+        expect(cloudSyncSource).not.toContain(".from('customer_requests')");
+        expect(readCutoverSql.trim().endsWith('commit;')).toBe(true);
     });
 });

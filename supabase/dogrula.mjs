@@ -100,7 +100,7 @@ const run = async () => {
     const t4 = await checkTable('workspace_normalization_state');
     const schemaReady = t1 && t2 && t3 && t4;
     if (!schemaReady) {
-        info('Çözüm: SQL Editor içinde schema.sql, 0001 ve 0002 migration dosyalarını sırayla çalıştırın.');
+        info('Çözüm: SQL Editor içinde schema.sql, 0001, 0002 ve 0003 migration dosyalarını sırayla çalıştırın.');
     }
 
     // ---- 3) Uçtan uca test (isteğe bağlı) ----
@@ -192,6 +192,31 @@ const run = async () => {
             ok('Transaction çift-yazma RPC çalıştı (core sürümü 2)');
         } else {
             fail(`Transaction push başarısız: ${JSON.stringify(push).slice(0, 160)}`);
+            errorCount++;
+        }
+
+        // Normalize tablolar RLS kapsamıyla tek RPC snapshot'ında okunmalı.
+        const pullRes = await fetch(`${url}/rest/v1/rpc/pull_workspace_v2`, {
+            method: 'POST', headers: authed, body: JSON.stringify({ ws: wsId }),
+        });
+        const pull = await pullRes.json();
+        if (pullRes.ok && pull?.ok && pull.coreVersion === 2
+            && Array.isArray(pull.core?.projects)
+            && pull.privateVisible === false
+            && pull.privateDoc === null) {
+            ok('Normalize read RPC çalıştı; RLS-kapsamlı core sürümü 2 döndü');
+        } else {
+            fail(`Normalize pull başarısız: ${JSON.stringify(pull).slice(0, 180)}`);
+            errorCount++;
+        }
+
+        // Legacy core artık istemciye hiçbir rolde doğrudan açılmamalı.
+        const coreRes = await fetch(`${url}/rest/v1/workspaces?id=eq.${wsId}&select=core`, { headers: authed });
+        const coreBody = await coreRes.json();
+        if ((coreRes.status === 401 || coreRes.status === 403) && coreBody?.code === '42501') {
+            ok('Legacy core belgesine doğrudan istemci erişimi kapalı');
+        } else {
+            fail(`Legacy core doğrudan erişilebilir durumda: ${coreRes.status} ${JSON.stringify(coreBody).slice(0, 100)}`);
             errorCount++;
         }
 

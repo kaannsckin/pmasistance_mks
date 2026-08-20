@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mergeWorkspaceDoc, privateDocFromNormalizedRows, splitWorkspaceDoc } from './cloudSync';
+import { mergeWorkspaceDoc, splitWorkspaceDoc } from './cloudSync';
 import { createEmptyWorkspace, createProject } from './workspace';
 import { Note, WorkspaceData } from '../types';
 
@@ -93,24 +93,5 @@ describe('mergeWorkspaceDoc', () => {
         expect(merged.projects[0].customerRequests).toEqual([]);
         expect(merged.people).toHaveLength(1);
         expect(merged.allocations).toHaveLength(1);
-    });
-});
-
-describe('privateDocFromNormalizedRows', () => {
-    it('RLS ile gelen satırları proje bazlı private belgeye çevirir', () => {
-        const result = privateDocFromNormalizedRows(
-            [
-                { project_id: 'p1', payload: note('n1') },
-                { project_id: 'p1', payload: note('n2') },
-                { project_id: 'p2', payload: note('n3') },
-            ],
-            [{
-                project_id: 'p1',
-                payload: { id: 'r1', title: 'İstek', description: '', customerName: 'X', createdAt: '2026-01-01', status: 'New' },
-            }],
-        );
-        expect(result.notes.p1.map(item => item.id)).toEqual(['n1', 'n2']);
-        expect(result.notes.p2.map(item => item.id)).toEqual(['n3']);
-        expect(result.customerRequests.p1[0].id).toBe('r1');
     });
 });

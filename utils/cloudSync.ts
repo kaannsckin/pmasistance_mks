@@ -34,25 +34,6 @@ export interface PrivateDoc {
     customerRequests: Record<string, CustomerRequest[]>;
 }
 
-interface NormalizedPrivateRow<T> {
-    project_id: string;
-    payload: T;
-}
-
-export const privateDocFromNormalizedRows = (
-    noteRows: NormalizedPrivateRow<Note>[],
-    requestRows: NormalizedPrivateRow<CustomerRequest>[],
-): PrivateDoc => {
-    const result: PrivateDoc = { notes: {}, customerRequests: {} };
-    noteRows.forEach(row => {
-        (result.notes[row.project_id] ||= []).push(row.payload);
-    });
-    requestRows.forEach(row => {
-        (result.customerRequests[row.project_id] ||= []).push(row.payload);
-    });
-    return result;
-};
-
 export const loadCloudConfig = (): CloudConfig | null => {
     try {
         const raw = localStorage.getItem(CLOUD_CONFIG_KEY);
@@ -212,8 +193,10 @@ interface DualWriteRpcResult {
 }
 
 const migrationErrorMessage = (message: string): string =>
-    /create_workspace_v2|push_workspace_v2|get_private_version|workspace_normalization_state|project_notes|customer_requests|PGRST20[25]/i.test(message)
-        ? 'Transaction çift-yazma migration\'ı eksik. Supabase\'te 20260820_0002_transactional_dual_write.sql dosyasını çalıştırın.'
+    /pull_workspace_v2|build_scoped_(core|private)_document|PGRST20[25]/i.test(message)
+        ? 'Normalize okuma migration\'ı eksik. Supabase\'te 20260820_0003_normalized_read_cutover.sql dosyasını çalıştırın.'
+        : /create_workspace_v2|push_workspace_v2|get_private_version|workspace_normalization_state|project_notes|customer_requests/i.test(message)
+            ? 'Transaction çift-yazma migration\'ı eksik. Supabase\'te 20260820_0002_transactional_dual_write.sql dosyasını çalıştırın.'
         : message;
 
 export const createCloudWorkspace = async (name: string, ws: WorkspaceData): Promise<{ id: string } | { error: string }> => {
@@ -303,6 +286,17 @@ export interface PullResult {
     workspace?: (local: WorkspaceData) => WorkspaceData;
 }
 
+interface PullWorkspaceRpcResult {
+    ok: boolean;
+    reason?: 'error' | 'normalization-required';
+    message?: string;
+    core?: Partial<WorkspaceData>;
+    coreVersion?: number;
+    privateDoc?: PrivateDoc | null;
+    privateVersion?: number | null;
+    privateVisible?: boolean;
+}
+
 export const pullWorkspace = async (): Promise<PullResult> => {
     const c = getClient();
     const config = loadCloudConfig();
@@ -311,73 +305,39 @@ export const pullWorkspace = async (): Promise<PullResult> => {
     const verifiedIdentity = await getMyCloudIdentity(config.workspaceId);
     if (!verifiedIdentity) return { ok: false, message: 'Çalışma alanı üyeliğiniz veya rolünüz doğrulanamadı.' };
 
-    const { data: normalizationState, error: stateError } = await c
-        .from('workspace_normalization_state')
-        .select('source_core_version')
-        .eq('workspace_id', config.workspaceId)
-        .maybeSingle();
-    if (stateError) {
-        return { ok: false, message: migrationErrorMessage(stateError.message) };
-    }
-    if (!normalizationState && verifiedIdentity.role !== 'pyb_destek') {
+    const { data, error } = await c.rpc('pull_workspace_v2', { ws: config.workspaceId });
+    if (error) return { ok: false, message: migrationErrorMessage(error.message) };
+
+    const result = data as PullWorkspaceRpcResult | null;
+    if (!result?.ok) {
         return {
             ok: false,
-            message: 'İlk normalize senkronu henüz yapılmadı. Önce PYB Destek hesabı bağlanıp "Şimdi Gönder" işlemini tamamlamalı.',
+            message: result?.message || 'Normalize çalışma alanı okunamadı.',
         };
     }
-
-    const { data, error } = await c
-        .from('workspaces')
-        .select('core, version')
-        .eq('id', config.workspaceId)
-        .maybeSingle();
-    if (error || !data) return { ok: false, message: error?.message || 'Çalışma alanı bulunamadı (üyeliğinizi kontrol edin).' };
-    if (normalizationState
-        && Number(normalizationState.source_core_version) !== Number(data.version)) {
-        return {
-            ok: false,
-            message: 'Normalize veri sürümü belge sürümünün gerisinde. Veri sorumlusu senkronu doğrulamadan çekme işlemi durduruldu.',
-        };
+    if (!result.core || typeof result.coreVersion !== 'number') {
+        return { ok: false, message: 'Sunucu eksik normalize çalışma alanı verisi döndürdü.' };
     }
 
-    let privateDoc: PrivateDoc | undefined;
-    let privateVersion = config.privateVersion;
-    if (normalizationState && verifiedIdentity.role === 'py') {
-        const [notesResult, requestsResult, versionResult] = await Promise.all([
-            c.from('project_notes')
-                .select('project_id, payload')
-                .eq('workspace_id', config.workspaceId)
-                .order('position', { ascending: true, nullsFirst: false }),
-            c.from('customer_requests')
-                .select('project_id, payload')
-                .eq('workspace_id', config.workspaceId)
-                .order('position', { ascending: true, nullsFirst: false }),
-            c.rpc('get_private_version', { ws: config.workspaceId }),
-        ]);
-        const privateError = notesResult.error || requestsResult.error || versionResult.error;
-        if (privateError) {
-            return { ok: false, message: migrationErrorMessage(privateError.message) };
-        }
-        privateDoc = privateDocFromNormalizedRows(
-            (notesResult.data || []) as NormalizedPrivateRow<Note>[],
-            (requestsResult.data || []) as NormalizedPrivateRow<CustomerRequest>[],
-        );
-        if (typeof versionResult.data === 'number') privateVersion = versionResult.data;
-    }
+    const privateDoc = result.privateVisible && result.privateDoc
+        ? result.privateDoc
+        : undefined;
+    const privateVersion = typeof result.privateVersion === 'number'
+        ? result.privateVersion
+        : config.privateVersion;
 
     saveCloudConfig({
         ...config,
-        coreVersion: data.version as number,
+        coreVersion: result.coreVersion,
         privateVersion,
         lastSyncAt: new Date().toISOString(),
     });
 
-    const core = data.core as Partial<WorkspaceData>;
     return {
         ok: true,
-        privateVisible: verifiedIdentity.role === 'py',
+        privateVisible: result.privateVisible === true,
         identity: verifiedIdentity,
-        workspace: (local: WorkspaceData) => mergeWorkspaceDoc(local, core, privateDoc, verifiedIdentity),
+        workspace: (local: WorkspaceData) => mergeWorkspaceDoc(local, result.core!, privateDoc, verifiedIdentity),
     };
 };
 

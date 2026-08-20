@@ -24,7 +24,7 @@ Bu şema üç tablo kurar ve **Row Level Security** politikalarını açar:
 
 | Tablo | İçerik | Kim erişir |
 |---|---|---|
-| `workspaces` | Projeler, veri havuzu, tahsisler, kilitler, snapshot'lar | Tüm üyeler |
+| `workspaces` | Sunucu içi legacy core uyumluluk kopyası + sürüm | İstemci yalnız güvenli metadata sütunlarını okur; `core` kapalıdır |
 | `workspace_private` | Sunucu içi geçiş/uyumluluk kopyası | `0002` sonrasında istemci erişimine kapalı |
 | `workspace_members` | Üyelik + rol + uygulamadaki kişi eşlemesi | Üyeler görür; PYB Destek/Müdür yönetir |
 
@@ -39,10 +39,18 @@ ve her birini ayrı sorguda çalıştırın:
 
 1. [`migrations/20260820_0001_normalized_rbac.sql`](./migrations/20260820_0001_normalized_rbac.sql)
 2. [`migrations/20260820_0002_transactional_dual_write.sql`](./migrations/20260820_0002_transactional_dual_write.sql)
+3. [`migrations/20260820_0003_normalized_read_cutover.sql`](./migrations/20260820_0003_normalized_read_cutover.sql)
 
 `0001` ile `0002` arasında uygulamadan bulut yazımı yapılmamalıdır. `0002`,
 backfill kaynak sürümüyle mevcut belge sürümü farklıysa veri kaybını önlemek
 için `PZ003` hatasıyla kurulumu durdurur.
+
+Canlı ve mevcut workspace içeren bir kurulumda `0003` hemen çalıştırılmaz.
+Önce `0002` uyumlu uygulama sürümüyle bütün workspace'lerde PYB Destek hesabı
+bir kez **Buluttan Çek → Şimdi Gönder** yapmalıdır. `0003`, normalize edilmemiş
+veya core/private sürümü geride tek bir workspace dahi bulursa `PZ004` ile
+durur; tam legacy belge erişimini yarım geçişte kapatmaz. Yeni/boş kurulumda
+üç migration doğrudan sırayla çalıştırılabilir.
 
 Bu migration mevcut JSON belgelerini **silmez veya değiştirmez**. Proje, kişi,
 tahsis ve plan kilidi verilerini satır bazında tutacak paralel tabloları kurar;
@@ -64,8 +72,8 @@ Ek korumalar:
 - Plan durumları yalnız `draft → submitted → locked` veya yetkili ret/kilit
   açma geçişleriyle değişir.
 - Proje notları ve müşteri istekleri yalnız proje sahibi PY tarafından okunur.
-- Uygulama private uyumluluk belgesini indirmez; `project_notes` ve
-  `customer_requests` satırlarını doğrudan sahiplik RLS'iyle çeker.
+- Uygulama private uyumluluk belgesini indirmez. `pull_workspace_v2`, özel
+  not/istek satırlarını yalnız proje sahibi PY için sahiplik RLS'iyle toplar.
 - Audit kayıtları doğrudan eklenemez; sunucunun gerçek üyelik kimliğini kullanan
   `append_audit_event` RPC'siyle append-only yazılır.
 
@@ -80,11 +88,19 @@ backfill'i otomatik olarak aynı transaction içinde yapar. `py`, bölüm soruml
 ve yönetim rolleri state oluşmadan yazamaz. Geçiş sırası:
 
 1. `schema.sql`, `0001` ve `0002` dosyalarını sırayla çalıştırın.
-2. Bu çift-yazma sürümünü yayınlayın.
-3. PYB Destek hesabıyla **Buluttan Çek**, ardından **Şimdi Gönder** yapın.
-4. `workspace_normalization_state.source_core_version` ile
+2. `0002` çift-yazma uyumlu uygulama sürümünü yayınlayın.
+3. Her workspace için PYB Destek hesabıyla **Buluttan Çek**, ardından
+   **Şimdi Gönder** yapın.
+4. Her workspace'te `workspace_normalization_state.source_core_version` ile
    `workspaces.version` değerlerinin eşit olduğunu doğrulayın.
-5. Bir sonraki fazda okumayı normalize tablolara alın.
+5. `0003` migration'ını çalıştırın ve normalize-okuma uygulama sürümünü
+   yayınlayın.
+
+`0003` sonrasında `pull_workspace_v2` tek transaction snapshot'ında yalnız
+oturumun RLS ile görebildiği projeleri, kişileri, tahsisleri, kilitleri,
+snapshot/audit kayıtlarını ve PY'ye özel veriyi belge biçiminde döndürür.
+Tarayıcının `workspaces.core`, `workspace_private`, `project_notes` veya
+`customer_requests` tablolarını doğrudan okumasına ihtiyaç kalmaz.
 
 Backfill sonucu `workspace_normalization_state` tablosuna kaynak `core/private`
 sürümlerini kaydeder ve aynı çalışma alanında yanlışlıkla ikinci kez çalışmayı
@@ -145,8 +161,9 @@ node supabase/dogrula.mjs https://PROJENIZ.supabase.co ANON_ANAHTARINIZ
 Betik; bağlantıyı, anahtarı, temel tabloları, normalize state'i ve auth
 ayarlarını kontrol edip Türkçe rapor verir. `--e2e` bayrağıyla çalıştırırsanız
 geçici bir test kullanıcısıyla atomik workspace oluşturma, normalize backfill,
-transaction çift-yazma ve private uyumluluk tablosunun istemciye kapalı olduğu
-uçtan uca doğrulanır; test verisi otomatik temizlenir.
+transaction çift-yazma, normalize/RLS kapsamlı pull ve legacy core/private
+uyumluluk belgelerinin istemciye kapalı olduğu uçtan uca doğrulanır; test
+verisi otomatik temizlenir.
 
 ## 6. Günlük kullanım
 
@@ -156,12 +173,12 @@ uçtan uca doğrulanır; test verisi otomatik temizlenir.
 - Çakışma olursa (iki kişi aynı anda yazdıysa) uygulama sizi uyarır ve
   buluttaki güncel veriyi çekmenizi ister — kimsenin verisi sessizce ezilmez.
 
-## Bilinen sınırlar (çift-yazma geçişi)
+## Bilinen sınırlar
 
 - Çakışma kontrolü hâlâ workspace belge sürümü bazındadır; iki farklı satırı
   aynı anda değiştiren kullanıcılar da önce çekme uyarısı alabilir.
-- Yazımlar transaction çift-yazma ve RLS ile korunur; okumalar henüz
-  `workspaces.core` belgesinden yapılır. Satır bazlı okuma gizliliğinin tam
-  devreye girmesi için normalize okuma cutover fazı tamamlanmalıdır.
+- Okumalar normalize tablolardan RLS kapsamıyla yapılır; legacy core/private
+  JSON belgeleri geçiş uyumluluğu için sunucuda tutulmaya devam eder. Sonraki
+  sadeleştirme adımında bu uyumluluk kopyaları kaldırılabilir.
 - Ücretsiz Supabase projeleri ~1 hafta hareketsizlikte uykuya geçer; ilk
   istek birkaç saniye gecikir (veri kaybı olmaz).
