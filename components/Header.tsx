@@ -34,6 +34,7 @@ interface HeaderProps {
   currentPersonId?: string;
   people: HeaderPersonSummary[];
   identityNeedsPerson: boolean;
+  identityLocked?: boolean;
   onChangeIdentity: (role: UserRole, personId?: string) => void;
   cloudLinked: boolean;
   onOpenCloudSync: () => void;
@@ -235,8 +236,9 @@ const IdentitySwitcher: React.FC<{
   currentPersonId?: string;
   people: HeaderPersonSummary[];
   needsPerson: boolean;
+  locked?: boolean;
   onChangeIdentity: (role: UserRole, personId?: string) => void;
-}> = ({ currentRole, currentPersonId, people, needsPerson, onChangeIdentity }) => {
+}> = ({ currentRole, currentPersonId, people, needsPerson, locked = false, onChangeIdentity }) => {
   const [isOpen, setIsOpen] = useState(false);
   const activePerson = people.find(p => p.id === currentPersonId);
   const scoped = SCOPED_ROLES.includes(currentRole);
@@ -244,9 +246,10 @@ const IdentitySwitcher: React.FC<{
   return (
     <div className="relative">
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => { if (!locked) setIsOpen(!isOpen); }}
+        disabled={locked}
         className={`h-10 flex items-center gap-2 px-3 bg-white dark:bg-gray-700 rounded-lg border transition-colors ${needsPerson ? 'border-amber-400 text-amber-600' : 'border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-500'}`}
-        title="Kimlik / rol değiştir (RBAC)"
+        title={locked ? 'Kimlik Supabase üyeliğinden doğrulandı' : 'Kimlik / rol değiştir (yerel demo)'}
       >
         <i className={`fa-solid ${ROLE_ICONS[currentRole]} text-[11px]`} style={{ color: 'var(--app-primary)' }}></i>
         <span className="hidden xl:flex flex-col items-start leading-none">
@@ -254,9 +257,9 @@ const IdentitySwitcher: React.FC<{
           {scoped && <span className="text-[9px] text-gray-400 mt-0.5">{activePerson ? `${activePerson.name}` : 'kişi seçilmedi'}</span>}
         </span>
         {needsPerson && <i className="fa-solid fa-triangle-exclamation text-[10px] text-amber-500"></i>}
-        <i className={`fa-solid fa-chevron-down text-[9px] text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}></i>
+        <i className={`fa-solid ${locked ? 'fa-lock' : 'fa-chevron-down'} text-[9px] text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}></i>
       </button>
-      {isOpen && (
+      {isOpen && !locked && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)}></div>
           <div className="absolute top-full right-0 mt-1.5 w-72 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-50 py-1.5 max-h-[70vh] overflow-y-auto">
@@ -301,7 +304,7 @@ const IdentitySwitcher: React.FC<{
   );
 };
 
-const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSettings, onSaveProject, onLoadProject, isAIEnabled = true, onOpenAbout, projects, activeProjectId, onSelectProject, currentRole, currentPersonId, people, identityNeedsPerson, onChangeIdentity, cloudLinked, onOpenCloudSync, todoItems, onTodoNavigate, onOpenStatusReport, dataHealthAlerts, onOpenDataHealth, onOpenAuditLog, onOpenCommandPalette, onOpenWorkPackages }) => {
+const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSettings, onSaveProject, onLoadProject, isAIEnabled = true, onOpenAbout, projects, activeProjectId, onSelectProject, currentRole, currentPersonId, people, identityNeedsPerson, identityLocked, onChangeIdentity, cloudLinked, onOpenCloudSync, todoItems, onTodoNavigate, onOpenStatusReport, dataHealthAlerts, onOpenDataHealth, onOpenAuditLog, onOpenCommandPalette, onOpenWorkPackages }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
@@ -421,7 +424,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSett
               <i className="fa-solid fa-cloud text-[13px]" style={cloudLinked ? { color: 'var(--app-primary)' } : { color: '#9ca3af' }}></i>
               {cloudLinked && <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-emerald-400 border border-white dark:border-gray-700"></span>}
             </button>
-            <IdentitySwitcher currentRole={currentRole} currentPersonId={currentPersonId} people={people} needsPerson={identityNeedsPerson} onChangeIdentity={onChangeIdentity} />
+            <IdentitySwitcher currentRole={currentRole} currentPersonId={currentPersonId} people={people} needsPerson={identityNeedsPerson} locked={identityLocked} onChangeIdentity={onChangeIdentity} />
             <div className="hidden sm:flex items-center bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
               <input type="file" ref={fileInputRef} className="hidden" accept=".json" onChange={(e) => {
                 const file = e.target.files?.[0];

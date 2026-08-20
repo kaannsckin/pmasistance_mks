@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
     canAddAllocationToProject, canCreateProject, canEditActualCell, canEditAllocationCell,
     canEditPlanCell, canEditProjectContent, Identity, identityNeedsPerson,
-    managesPerson, ownsProject, seesAllProjects, visiblePersonIds, visibleProjectIds,
+    bindIdentity, canSubmitPlan, managesPerson, ownsProject, seesAllProjects, visiblePersonIds, visibleProjectIds,
 } from './rbac';
 import { createEmptyWorkspace, createProject } from './workspace';
 import { Person, WorkspaceData } from '../types';
@@ -28,6 +28,19 @@ const py = (personId?: string): Identity => ({ role: 'py', personId });
 const bolum = (personId?: string): Identity => ({ role: 'bolum_sorumlu', personId });
 
 describe('görünürlük kapsamı', () => {
+    it('doğrulanmış kimliği bağlar ve görünmeyen aktif projeyi temizler', () => {
+        const ws = buildWs();
+        ws.activeProjectId = ws.projects[1].id;
+        const bound = bindIdentity(ws, py('pm1'));
+        expect(bound.currentRole).toBe('py');
+        expect(bound.currentPersonId).toBe('pm1');
+        expect(bound.activeProjectId).toBeNull();
+
+        const exec = bindIdentity(ws, { role: 'mudur' });
+        expect(exec.activeProjectId).toBe(ws.projects[1].id);
+        expect(exec.currentPersonId).toBeUndefined();
+    });
+
     it('müdür/pyb her projeyi görür; py yalnız sahip olduğunu', () => {
         const ws = buildWs();
         expect(seesAllProjects('mudur')).toBe(true);
@@ -119,5 +132,14 @@ describe('tahsis hücresi düzenleme', () => {
         expect(canAddAllocationToProject(ws, py('pm1'), ws.projects[1].id)).toBe(false);
         expect(canAddAllocationToProject(ws, bolum('pm1'), ws.projects[0].id)).toBe(true);
         expect(canAddAllocationToProject(ws, { role: 'mudur' }, ws.projects[0].id)).toBe(false);
+    });
+
+    it('planı sahip PM veya projede bölümü tahsisli sorumlu gönderir', () => {
+        const ws = buildWs();
+        expect(canSubmitPlan(ws, py('pm1'), ws.projects[0].id)).toBe(true);
+        expect(canSubmitPlan(ws, py('pm1'), ws.projects[1].id)).toBe(false);
+        expect(canSubmitPlan(ws, bolum('pm1'), ws.projects[1].id)).toBe(true);
+        expect(canSubmitPlan(ws, bolum('pm1'), ws.projects[0].id)).toBe(false);
+        expect(canSubmitPlan(ws, { role: 'mudur' }, ws.projects[0].id)).toBe(false);
     });
 });

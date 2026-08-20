@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { UserRole, WorkspaceData } from '../types';
 import { ROLE_LABELS } from '../utils/allocations';
+import { Identity } from '../utils/rbac';
 import {
-  clearConflictFlag, CloudConfig, createCloudWorkspace, getMyCloudRole, getUserEmail,
+  clearConflictFlag, CloudConfig, createCloudWorkspace, getMyCloudIdentity, getUserEmail,
   hasPendingConflict, loadCloudConfig, pullWorkspace, pushWorkspace, saveCloudConfig,
   signIn, signOut, signUp,
 } from '../utils/cloudSync';
@@ -10,6 +11,7 @@ import {
 interface CloudSyncModalProps {
   workspace: WorkspaceData;
   onReplaceWorkspace: (updater: (local: WorkspaceData) => WorkspaceData) => void;
+  onCloudIdentity: (identity: Identity | null) => void;
   onClose: () => void;
 }
 
@@ -24,7 +26,7 @@ const SectionTitle: React.FC<{ step: string; title: string }> = ({ step, title }
   </div>
 );
 
-const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ workspace, onReplaceWorkspace, onClose }) => {
+const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ workspace, onReplaceWorkspace, onCloudIdentity, onClose }) => {
   const existing = loadCloudConfig();
   const [url, setUrl] = useState(existing?.url || '');
   const [anonKey, setAnonKey] = useState(existing?.anonKey || '');
@@ -46,7 +48,9 @@ const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ workspace, onReplaceWor
     setUserEmail(await getUserEmail());
     const cfg = loadCloudConfig();
     if (cfg?.workspaceId) {
-      setCloudRole(await getMyCloudRole(cfg.workspaceId));
+      const identity = await getMyCloudIdentity(cfg.workspaceId);
+      setCloudRole(identity?.role ?? null);
+      onCloudIdentity(identity);
     }
   };
 
@@ -100,6 +104,7 @@ const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ workspace, onReplaceWor
     setBusy(false);
     if (!result.ok || !result.workspace) { note('err', result.message || 'Bağlantı hatası.'); return; }
     onReplaceWorkspace(result.workspace);
+    onCloudIdentity(result.identity ?? null);
     setLinkedId(id);
     await refreshSession();
     note('ok', `Bağlanıldı ve veri indirildi.${result.privateVisible ? '' : ' (Rolünüz gereği notlar/istekler görünmez.)'}`);
@@ -128,6 +133,7 @@ const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ workspace, onReplaceWor
     setBusy(false);
     if (!result.ok || !result.workspace) { note('err', result.message || 'İndirme hatası.'); return; }
     onReplaceWorkspace(result.workspace);
+    onCloudIdentity(result.identity ?? null);
     clearConflictFlag();
     setConflict(false);
     note('ok', 'Bulut verisi indirildi.');
@@ -143,6 +149,7 @@ const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ workspace, onReplaceWor
     await signOut();
     setUserEmail(null);
     setCloudRole(null);
+    onCloudIdentity(null);
     note('ok', 'Oturum kapatıldı. (Veriler cihazda durmaya devam eder.)');
   };
 

@@ -33,9 +33,41 @@ create table if not exists public.workspace_members (
     workspace_id uuid not null references public.workspaces(id) on delete cascade,
     user_id uuid not null references auth.users(id) on delete cascade,
     role text not null check (role in ('mudur','pyb_sorumlu','pyb_destek','py','bolum_sorumlu')),
+    -- Uygulamadaki people[].id ile eşleşir. PY ve bölüm sorumlusu kapsamı
+    -- artık tarayıcıdan seçilmez; bu sunucu tarafı üyelik kaydından gelir.
+    person_id text,
     added_at timestamptz not null default now(),
     primary key (workspace_id, user_id)
 );
+
+-- Mevcut kurulumlar için geriye uyumlu migration (create table daha önce
+-- çalıştıysa person_id sütununu ekler).
+alter table public.workspace_members
+    add column if not exists person_id text;
+
+create index if not exists workspace_members_user_idx
+    on public.workspace_members (user_id, workspace_id);
+
+-- Yeni/yenilenen üyeliklerde kapsamlı roller kişiyle bağlanmak zorundadır.
+-- NOT VALID mevcut kurulumdaki eski satırları kırmaz; yeni insert/update
+-- işlemlerinde kural hemen uygulanır.
+do $$
+begin
+    if not exists (
+        select 1 from pg_constraint
+        where conname = 'workspace_members_scoped_person_ck'
+          and conrelid = 'public.workspace_members'::regclass
+    ) then
+        alter table public.workspace_members
+            add constraint workspace_members_scoped_person_ck
+            check (
+                (role in ('py','bolum_sorumlu') and nullif(btrim(person_id), '') is not null)
+                or
+                (role not in ('py','bolum_sorumlu') and person_id is null)
+            ) not valid;
+    end if;
+end
+$$;
 
 -- ---------------------------------------------------------------------------
 -- Yardımcı: kullanıcının bir çalışma alanındaki rolü (RLS döngüsünü kırmak

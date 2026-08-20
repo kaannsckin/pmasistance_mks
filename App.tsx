@@ -11,15 +11,20 @@ import {
   resolveWorkspaceFromStorage,
   serializeWorkspace,
 } from './utils/workspace';
-import { canEditPool, createAllocation, EffortField, getPlanLockStatus, ROLE_LABELS, setAllocationCell, upsertPlanLock } from './utils/allocations';
+import { canApprovePlan, canEditPool, createAllocation, EffortField, getPlanLockStatus, ROLE_LABELS, setAllocationCell, upsertPlanLock } from './utils/allocations';
 import { applyPoolImport, PoolImportResult } from './utils/poolImporter';
 import { isExecRole } from './utils/execReport';
-import { canEditProjectContent, identityOf, identityNeedsPerson as computeNeedsPerson, visibleProjectIds } from './utils/rbac';
+import {
+  bindIdentity, canAssignProjectOwner, canCreateProject, canEditActualCell,
+  canEditPlanCell, canEditProjectContent, canSubmitPlan,
+  Identity, identityOf, identityNeedsPerson as computeNeedsPerson,
+  seesAllProjects, visiblePersonIds, visibleProjectIds,
+} from './utils/rbac';
 import { addSnapshot, buildSnapshot, ensureMonthlySnapshot } from './utils/snapshots';
 import { AllocationSuggestion, ApplyMode, applyAllocationSuggestions } from './utils/taskToAllocation';
 import { applyBilledHoursActuals, planBilledHoursPoolAdditions, suggestBilledHoursActuals, BilledApplyMode, BilledHoursOptions, BilledHoursRecord } from './utils/billedHours';
 import { buildTodoItems, TodoItem } from './utils/todoItems';
-import { loadCloudConfig, scheduleAutoPush } from './utils/cloudSync';
+import { getMyCloudIdentity, loadCloudConfig, scheduleAutoPush } from './utils/cloudSync';
 import CloudSyncModal from './components/CloudSyncModal';
 import Header from './components/Header';
 import TaskGallery from './components/TaskGallery';
@@ -94,6 +99,7 @@ const App: React.FC = () => {
   const workspaceRef = useRef<WorkspaceData | null>(null);
 
   const [isInitialized, setIsInitialized] = useState(false);
+  const cloudLinked = !!loadCloudConfig()?.workspaceId;
 
   // ---- Açılış: v2 workspace → v1 migration → örnek proje sırasıyla çözülür ----
   useEffect(() => {
@@ -110,6 +116,21 @@ const App: React.FC = () => {
     }
     setIsInitialized(true);
   }, []);
+
+  // Buluta bağlı kullanımda rol/kişi tarayıcı ayarı değildir. Oturumdaki
+  // workspace_members kaydı tek kimlik kaynağı olarak uygulanır.
+  useEffect(() => {
+    if (!isInitialized) return;
+    const workspaceId = loadCloudConfig()?.workspaceId;
+    if (!workspaceId) return;
+    let cancelled = false;
+    getMyCloudIdentity(workspaceId).then(cloudIdentity => {
+      if (!cancelled && cloudIdentity) {
+        setWorkspace(prev => (prev ? bindIdentity(prev, cloudIdentity) : prev));
+      }
+    });
+    return () => { cancelled = true; };
+  }, [isInitialized]);
 
   const settings = workspace?.settings;
   const activeProject = useMemo(
@@ -173,6 +194,7 @@ const App: React.FC = () => {
 
   const handleApplyHealthFix = useCallback((fix: HealthFix) => {
     updateWorkspace(ws => {
+      if (!canEditPool(ws.currentRole)) return ws;
       const next = applyHealthFix(ws, fix);
       const summary = fix.kind === 'deleteAllocation' ? 'Yetim tahsis silindi'
         : fix.kind === 'addPersonFromName' ? `Havuza kişi eklendi: ${fix.name}`
@@ -208,12 +230,16 @@ const App: React.FC = () => {
   }, [undo]);
 
   const updateActiveProject = useCallback((updater: (p: Project) => Project) => {
-    updateWorkspace(ws => ({
-      ...ws,
-      projects: ws.projects.map(p =>
-        p.id === ws.activeProjectId ? { ...updater(p), updatedAt: new Date().toISOString() } : p
-      ),
-    }));
+    updateWorkspace(ws => {
+      const activeId = ws.activeProjectId;
+      if (!activeId || !canEditProjectContent(ws, identityOf(ws), activeId)) return ws;
+      return {
+        ...ws,
+        projects: ws.projects.map(p =>
+          p.id === activeId ? { ...updater(p), updatedAt: new Date().toISOString() } : p
+        ),
+      };
+    });
   }, [updateWorkspace]);
 
   // Risk güncellemesi + "Ne değişti?" günlüğü: eklenen/kapatılan riskleri yakalar
@@ -282,6 +308,7 @@ const App: React.FC = () => {
   // ---- Proje yaşam döngüsü ----
   const handleCreateProject = useCallback((name: string) => {
     updateWorkspace(ws => {
+      if (!canCreateProject(identityOf(ws))) return ws;
       const project = createProject(name);
       project.settings.manMonthTableColor = THEME_COLORS[ws.settings.theme || 'classic'];
       // Oluşturan PM ise projeyi ona sahiplendir (RBAC kapsamı)
@@ -294,6 +321,7 @@ const App: React.FC = () => {
 
   const handleSetProjectOwner = useCallback((projectId: string, personId: string | undefined) => {
     updateWorkspace(ws => {
+      if (!canAssignProjectOwner(ws, identityOf(ws), projectId)) return ws;
       const project = ws.projects.find(p => p.id === projectId);
       const ownerName = personId ? (() => { const o = ws.people.find(p => p.id === personId); return o ? `${o.firstName} ${o.lastName}`.trim() : personId; })() : 'boş';
       const next = {
@@ -305,18 +333,30 @@ const App: React.FC = () => {
   }, [updateWorkspace]);
 
   const handleOpenProject = useCallback((projectId: string) => {
-    updateWorkspace(ws => ({ ...ws, activeProjectId: projectId }));
+    updateWorkspace(ws => {
+      if (!visibleProjectIds(ws, identityOf(ws)).has(projectId)) return ws;
+      return { ...ws, activeProjectId: projectId };
+    });
     setCurrentView(View.Roadmap);
   }, [updateWorkspace]);
 
+  const handleViewPerson = useCallback((personId: string) => {
+    const ws = workspaceRef.current;
+    if (!ws || !visiblePersonIds(ws, identityOf(ws)).has(personId)) return;
+    setViewingPersonId(personId);
+  }, []);
+
   const handleSetLeave = useCallback((personId: string, year: number, month: number, aa: number, reason?: string) => {
-    updateWorkspace(ws => ({ ...ws, leaves: upsertLeave(ws.leaves || [], personId, year, month, aa, reason) }));
+    updateWorkspace(ws => canEditPool(ws.currentRole)
+      ? { ...ws, leaves: upsertLeave(ws.leaves || [], personId, year, month, aa, reason) }
+      : ws);
   }, [updateWorkspace]);
 
   const handleDeleteProject = useCallback((projectId: string) => {
     const snapshot = workspaceRef.current;
     const removed = snapshot?.projects.find(p => p.id === projectId);
     updateWorkspace(ws => {
+      if (!canAssignProjectOwner(ws, identityOf(ws), projectId)) return ws;
       const projects = ws.projects.filter(p => p.id !== projectId);
       const next = {
         ...ws,
@@ -329,14 +369,15 @@ const App: React.FC = () => {
   }, [updateWorkspace, showUndo]);
 
   const handleRenameProject = useCallback((projectId: string, name: string) => {
-    updateWorkspace(ws => ({
-      ...ws,
-      projects: ws.projects.map(p => p.id === projectId ? { ...p, name, updatedAt: new Date().toISOString() } : p),
-    }));
+    updateWorkspace(ws => canEditProjectContent(ws, identityOf(ws), projectId) ? ({
+        ...ws,
+        projects: ws.projects.map(p => p.id === projectId ? { ...p, name, updatedAt: new Date().toISOString() } : p),
+      }) : ws);
   }, [updateWorkspace]);
 
   const handleSetProjectRag = useCallback((projectId: string, rag: RagStatus | undefined, ragNote?: string) => {
     updateWorkspace(ws => {
+      if (!canEditProjectContent(ws, identityOf(ws), projectId)) return ws;
       const prev = ws.projects.find(p => p.id === projectId);
       const next = {
         ...ws,
@@ -352,21 +393,17 @@ const App: React.FC = () => {
   }, [updateWorkspace]);
 
   const handleSetProjectStatus = useCallback((projectId: string, status: ProjectStatus) => {
-    updateWorkspace(ws => ({
-      ...ws,
-      projects: ws.projects.map(p => p.id === projectId ? { ...p, status, updatedAt: new Date().toISOString() } : p),
-    }));
+    updateWorkspace(ws => canEditProjectContent(ws, identityOf(ws), projectId) ? ({
+        ...ws,
+        projects: ws.projects.map(p => p.id === projectId ? { ...p, status, updatedAt: new Date().toISOString() } : p),
+      }) : ws);
   }, [updateWorkspace]);
 
   // ---- Kimlik / RBAC ----
   const handleChangeIdentity = useCallback((role: UserRole, personId?: string) => {
+    if (loadCloudConfig()?.workspaceId) return;
     updateWorkspace(ws => {
-      const next = { ...ws, currentRole: role, currentPersonId: personId };
-      // Kapsam değişince görünmeyen bir proje aktifse ilk görünür projeye/portföye geç
-      const visible = visibleProjectIds(next, { role, personId });
-      if (next.activeProjectId && !visible.has(next.activeProjectId)) {
-        next.activeProjectId = null;
-      }
+      const next = bindIdentity(ws, { role, personId });
       const who = personId ? (() => { const p = next.people.find(x => x.id === personId); return p ? ` (${p.firstName} ${p.lastName})`.trimEnd() : ''; })() : '';
       return appendAudit(next, 'identity.change', `Kimlik: ${ROLE_LABELS[role]}${who}`);
     });
@@ -376,12 +413,26 @@ const App: React.FC = () => {
     }
   }, [updateWorkspace]);
 
+  const handleCloudIdentity = useCallback((cloudIdentity: Identity | null) => {
+    if (!cloudIdentity) return;
+    setWorkspace(prev => (prev ? bindIdentity(prev, cloudIdentity) : prev));
+  }, []);
+
   const handleSetAllocationCell = useCallback((allocationId: string, field: EffortField, month: number, value: number | undefined) => {
-    updateWorkspace(ws => setAllocationCell(ws, allocationId, field, month, value));
+    updateWorkspace(ws => {
+      const allocation = ws.allocations.find(a => a.id === allocationId);
+      if (!allocation) return ws;
+      const id = identityOf(ws);
+      const allowed = field === 'plan'
+        ? canEditPlanCell(ws, id, ws.planLocks, allocation.projectId, allocation.personId, allocation.year)
+        : canEditActualCell(ws, id, allocation.projectId, allocation.personId);
+      return allowed ? setAllocationCell(ws, allocationId, field, month, value) : ws;
+    });
   }, [updateWorkspace]);
 
   const handleAddAllocation = useCallback((personId: string, projectId: string, year: number, workPackageId?: string, role?: string) => {
     updateWorkspace(ws => {
+      if (!canEditPlanCell(ws, identityOf(ws), ws.planLocks, projectId, personId, year)) return ws;
       const created = createAllocation(ws.allocations, personId, projectId, year, workPackageId, role);
       if (!created) {
         alert('Bu kişi + proje + iş paketi + rol kombinasyonu için bu yılda zaten bir satır var.');
@@ -392,13 +443,22 @@ const App: React.FC = () => {
   }, [updateWorkspace]);
 
   const handleDeleteAllocation = useCallback((allocationId: string) => {
-    updateWorkspace(ws => ({ ...ws, allocations: ws.allocations.filter(a => a.id !== allocationId) }));
+    updateWorkspace(ws => {
+      const allocation = ws.allocations.find(a => a.id === allocationId);
+      if (!allocation || !canEditPlanCell(ws, identityOf(ws), ws.planLocks, allocation.projectId, allocation.personId, allocation.year)) return ws;
+      return { ...ws, allocations: ws.allocations.filter(a => a.id !== allocationId) };
+    });
   }, [updateWorkspace]);
 
   const handleLockAction = useCallback((projectId: string, year: number, status: PlanLockStatus) => {
     updateWorkspace(ws => {
       const projectName = ws.projects.find(p => p.id === projectId)?.name || 'Proje';
       const prev = getPlanLockStatus(ws.planLocks, projectId, year);
+      const id = identityOf(ws);
+      const allowed = (status === 'submitted' && prev === 'draft' && canSubmitPlan(ws, id, projectId))
+        || (status === 'locked' && prev === 'submitted' && canApprovePlan(ws.currentRole))
+        || (status === 'draft' && (prev === 'submitted' || prev === 'locked') && canApprovePlan(ws.currentRole));
+      if (!allowed) return ws;
       let next = { ...ws, planLocks: upsertPlanLock(ws.planLocks, projectId, year, status, ws.currentRole) };
       if (status === 'locked') {
         // Onaylanan plan = baseline: kilit anında otomatik anlık görüntü al
@@ -415,6 +475,7 @@ const App: React.FC = () => {
 
   const handleApplySuggestions = useCallback((projectId: string, year: number, suggestions: AllocationSuggestion[], mode: ApplyMode) => {
     updateWorkspace(ws => {
+      if (!canEditProjectContent(ws, identityOf(ws), projectId) || getPlanLockStatus(ws.planLocks, projectId, year) !== 'draft') return ws;
       const { workspace: next, applied, skippedCells } = applyAllocationSuggestions(ws, projectId, year, suggestions, mode);
       alert(`Görev planından tahsis uygulandı: ${applied} kişi güncellendi${skippedCells > 0 ? `, ${skippedCells} dolu ay korundu` : ''}.`);
       return next;
@@ -427,7 +488,8 @@ const App: React.FC = () => {
       let createdProjects = 0;
       let createdPeople = 0;
       // Eşleşmeyen proje/kişileri istenirse önce Veri Havuzu'na aç.
-      if (autoCreate) {
+      // Toplu içe aktarım sıradan PY/bölüm sorumlusuna master veri açtırmaz.
+      if (autoCreate && canEditPool(ws.currentRole)) {
         const plan = planBilledHoursPoolAdditions(suggestBilledHoursActuals(base, records, options));
         if (plan.projects.length || plan.people.length) {
           const newProjects: Project[] = plan.projects.map(p => createProject(p.name, { code: p.code }));
@@ -445,7 +507,12 @@ const App: React.FC = () => {
         }
       }
       const result = suggestBilledHoursActuals(base, records, options);
-      const { workspace: next, summary } = applyBilledHoursActuals(base, result, mode);
+      const id = identityOf(base);
+      const scopedResult = {
+        ...result,
+        rows: result.rows.filter(r => canEditActualCell(base, id, r.projectId, r.personId)),
+      };
+      const { workspace: next, summary } = applyBilledHoursActuals(base, scopedResult, mode);
       const lines: string[] = [];
       if (createdProjects || createdPeople) lines.push(`Havuza eklendi: ${createdProjects} proje, ${createdPeople} kişi`);
       lines.push(`${options.year} gerçekleşen: ${summary.rowsApplied} kişi×proje güncellendi (${summary.cellsWritten} ay)`);
@@ -467,6 +534,7 @@ const App: React.FC = () => {
 
   const handleApplyPoolImport = useCallback((imported: PoolImportResult) => {
     updateWorkspace(ws => {
+      if (!canEditPool(ws.currentRole)) return ws;
       const { workspace: next, summary } = applyPoolImport(ws, imported);
       const lines = [
         `Personel: ${summary.peopleAdded} yeni, ${summary.peopleUpdated} güncellendi`,
@@ -486,6 +554,10 @@ const App: React.FC = () => {
   // ---- Yedekleme / içe aktarma ----
   const handleSaveProject = useCallback(() => {
     if (!workspace) return;
+    if (!seesAllProjects(workspace.currentRole)) {
+      alert('Tam çalışma alanı yedeğini yalnızca portföy kapsamındaki roller indirebilir.');
+      return;
+    }
     const jsonString = serializeWorkspace(workspace);
     const blob = new Blob([jsonString], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -499,6 +571,10 @@ const App: React.FC = () => {
   }, [workspace]);
 
   const handleLoadProject = useCallback((file: File) => {
+    if (!workspace || !canEditPool(workspace.currentRole)) {
+      alert('Çalışma alanı yedeğini yalnızca PYB Destek yükleyebilir.');
+      return;
+    }
     if (!file || file.type !== 'application/json') {
       alert('Lütfen geçerli bir JSON yedek dosyası seçin.');
       return;
@@ -535,7 +611,7 @@ const App: React.FC = () => {
       alert(`"${result.project.name}" çalışma alanına yeni proje olarak eklendi.`);
     };
     reader.readAsText(file);
-  }, [updateWorkspace]);
+  }, [updateWorkspace, workspace]);
 
   const handleResetData = useCallback(() => {
     localStorage.removeItem(WORKSPACE_STORAGE_KEY);
@@ -595,9 +671,10 @@ const App: React.FC = () => {
 
     // Çalışma alanı seviyesi ekranlar (aktif proje gerektirmez)
     if (currentView === View.DataPool) {
+      const scopedPeopleIds = visiblePersonIds(workspace, identity);
       return (
         <DataPoolView
-          people={workspace.people}
+          people={workspace.people.filter(p => scopedPeopleIds.has(p.id))}
           departments={workspace.departments}
           roleCatalog={workspace.roleCatalog}
           titles={workspace.titles}
@@ -607,7 +684,7 @@ const App: React.FC = () => {
           onUpdateRoleCatalog={(roleCatalog) => updateWorkspace(ws => ({ ...ws, roleCatalog }))}
           onUpdateTitles={(titles) => updateWorkspace(ws => ({ ...ws, titles }))}
           onApplyImport={handleApplyPoolImport}
-          onViewPerson={setViewingPersonId}
+          onViewPerson={handleViewPerson}
         />
       );
     }
@@ -633,7 +710,7 @@ const App: React.FC = () => {
     }
 
     if (currentView === View.Calendar) {
-      return <CalendarView workspace={workspace} identity={identity} onViewPerson={setViewingPersonId} />;
+      return <CalendarView workspace={workspace} identity={identity} onViewPerson={handleViewPerson} />;
     }
 
     // Aktif proje yoksa tek anlamlı ekran portföydür
@@ -769,9 +846,10 @@ const App: React.FC = () => {
     items.push({ id: 'a-audit', group: 'Aksiyonlar', label: 'Denetim Günlüğü', icon: 'fa-clock-rotate-left', keywords: 'audit log gunluk kayit', run: () => setIsAuditModalOpen(true) });
     if (activeProject) items.push({ id: 'a-wp', group: 'Aksiyonlar', label: `İş Paketleri — ${activeProject.name}`, icon: 'fa-briefcase', keywords: 'is paketi work package gorev', run: () => setIsWpManagerOpen(true) });
     visibleProjects.forEach(p => items.push({ id: `p-${p.id}`, group: 'Projeler', label: p.name, sublabel: 'Projeyi aç', icon: 'fa-folder-open', keywords: p.code || '', run: () => handleOpenProject(p.id) }));
-    workspace.people.forEach(p => items.push({ id: `k-${p.id}`, group: 'Kişiler', label: `${p.firstName} ${p.lastName}`.trim(), sublabel: `${p.departmentCode || ''} · kişi profili`, icon: 'fa-user', keywords: p.sicil || '', run: () => setViewingPersonId(p.id) }));
+    const scopedPeople = visiblePersonIds(workspace, identity);
+    workspace.people.filter(p => scopedPeople.has(p.id)).forEach(p => items.push({ id: `k-${p.id}`, group: 'Kişiler', label: `${p.firstName} ${p.lastName}`.trim(), sublabel: `${p.departmentCode || ''} · kişi profili`, icon: 'fa-user', keywords: p.sicil || '', run: () => handleViewPerson(p.id) }));
     return items;
-  }, [workspace, visibleProjects, identity, handleOpenProject, activeProject]);
+  }, [workspace, visibleProjects, identity, handleOpenProject, handleViewPerson, activeProject]);
 
   return (
     <div className={`min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans theme-${settings?.theme || 'classic'}`}>
@@ -790,8 +868,9 @@ const App: React.FC = () => {
         currentPersonId={workspace?.currentPersonId}
         people={(workspace?.people || []).map(p => ({ id: p.id, name: `${p.firstName} ${p.lastName}`.trim(), initials: `${p.firstName.charAt(0)}${p.lastName.charAt(0)}`, departmentCode: p.departmentCode }))}
         identityNeedsPerson={needsPerson}
+        identityLocked={cloudLinked}
         onChangeIdentity={handleChangeIdentity}
-        cloudLinked={!!loadCloudConfig()?.workspaceId}
+        cloudLinked={cloudLinked}
         onOpenCloudSync={() => setIsCloudModalOpen(true)}
         todoItems={todoItems}
         onTodoNavigate={handleTodoNavigate}
@@ -855,6 +934,7 @@ const App: React.FC = () => {
         <CloudSyncModal
           workspace={workspace}
           onReplaceWorkspace={(updater) => setWorkspace(prev => (prev ? updater(prev) : prev))}
+          onCloudIdentity={handleCloudIdentity}
           onClose={() => setIsCloudModalOpen(false)}
         />
       )}

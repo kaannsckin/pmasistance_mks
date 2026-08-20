@@ -8,7 +8,7 @@ import {
 } from '../utils/allocations';
 import { buildRoleAnalysis, EFFORT_TYPE_LABELS, EffortType, summarizeGaps } from '../utils/roleAnalysis';
 import { AllocationSuggestion, ApplyMode, suggestAllocationsFromTasks, SuggestionResult } from '../utils/taskToAllocation';
-import { canAddAllocationToProject, canEditActualCell, canEditAllocationCell, canEditPlanCell, Identity, visiblePersonIds } from '../utils/rbac';
+import { canAddAllocationToProject, canEditActualCell, canEditAllocationCell, canEditPlanCell, Identity, visiblePersonIds, visibleProjectIds } from '../utils/rbac';
 import { effectiveCapacity } from '../utils/availability';
 import { allPersonRoles, findAvailablePeople } from '../utils/staffing';
 import ScenarioView from './ScenarioView';
@@ -55,6 +55,13 @@ const LOCK_STYLES: Record<PlanLockStatus, { label: string; cls: string; icon: st
 
 const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, projects, planLocks, leaves, titles, currentRole, identity, onSetCell, onAddAllocation, onDeleteAllocation, onLockAction, onApplySuggestions, onApplyBilledHours }) => {
   const wsLike = useMemo(() => ({ people, projects, allocations }), [people, projects, allocations]);
+  const scopedProjectIds = useMemo(() => visibleProjectIds(wsLike, identity), [wsLike, identity]);
+  const scopedPersonIds = useMemo(() => visiblePersonIds(wsLike, identity), [wsLike, identity]);
+  const scopedProjects = useMemo(() => projects.filter(p => scopedProjectIds.has(p.id)), [projects, scopedProjectIds]);
+  const scopedPeople = useMemo(() => people.filter(p => scopedPersonIds.has(p.id)), [people, scopedPersonIds]);
+  const scopedAllocations = useMemo(() => allocations.filter(a =>
+    scopedProjectIds.has(a.projectId) && scopedPersonIds.has(a.personId)
+  ), [allocations, scopedProjectIds, scopedPersonIds]);
   // Kimlik kapsamına göre hücre/satır düzenlenebilirliği (RBAC)
   const canEnter = identity.role === 'py' || identity.role === 'bolum_sorumlu';
   const [year, setYear] = useState(new Date().getFullYear());
@@ -91,7 +98,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
     return p ? `${p.firstName} ${p.lastName}`.trim() : 'Bilinmeyen';
   };
 
-  const yearAllocations = useMemo(() => allocations.filter(a => a.year === year), [allocations, year]);
+  const yearAllocations = useMemo(() => scopedAllocations.filter(a => a.year === year), [scopedAllocations, year]);
 
   const visibleAllocations = useMemo(() => yearAllocations.filter(a => {
     if (projectFilter !== 'all' && a.projectId !== projectFilter) return false;
@@ -110,10 +117,10 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
       (projectNames.get(a[0]) || '').localeCompare(projectNames.get(b[0]) || '', 'tr'));
   }, [visibleAllocations, projectNames]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const overAllocations = useMemo(() => findOverAllocations(yearAllocations, people, year, 'plan', leaves), [yearAllocations, people, year, leaves]);
+  const overAllocations = useMemo(() => findOverAllocations(yearAllocations, scopedPeople, year, 'plan', leaves), [yearAllocations, scopedPeople, year, leaves]);
   const overSet = useMemo(() => new Set(overAllocations.map(o => `${o.personId}:${o.month}`)), [overAllocations]);
 
-  const departments = useMemo(() => Array.from(new Set(people.map(p => p.departmentCode).filter(Boolean))).sort(), [people]);
+  const departments = useMemo(() => Array.from(new Set(scopedPeople.map(p => p.departmentCode).filter(Boolean))).sort(), [scopedPeople]);
 
   const selectedPerson = personMap.get(newRow.personId);
   const selectedProject = projectMap.get(newRow.projectId);
@@ -441,10 +448,10 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
   // ---------------- Uygun Kişi (staffing) ----------------
 
   const renderStaffing = () => {
-    const roles = allPersonRoles(people);
+    const roles = allPersonRoles(scopedPeople);
     const lo = Math.min(staff.from, staff.to), hi = Math.max(staff.from, staff.to);
     const months = MONTH_INDEXES.filter(m => m >= lo && m <= hi);
-    const candidates = findAvailablePeople(people, allocations, leaves, { role: staff.role || undefined, year, months, requiredAA: staff.aa });
+    const candidates = findAvailablePeople(scopedPeople, scopedAllocations, leaves, { role: staff.role || undefined, year, months, requiredAA: staff.aa });
     const fitCount = candidates.filter(c => c.fits).length;
     const windowLabel = lo === hi ? MONTHS_TR[lo - 1] : `${MONTHS_TR[lo - 1]}–${MONTHS_TR[hi - 1]}`;
 
@@ -532,7 +539,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
   // ---------------- Kapasite-Talep (Rol) — Excel "Plan, Kaynak, İhtiyaç" ----------------
 
   const renderRoleAnalysis = () => {
-    const allRows = buildRoleAnalysis(allocations, people, projects, year, leaves);
+    const allRows = buildRoleAnalysis(scopedAllocations, scopedPeople, scopedProjects, year, leaves);
     const rows = deptFilter === 'all' ? allRows : allRows.filter(r => r.departmentCode === deptFilter);
     const gapSummary = summarizeGaps(rows);
 
@@ -628,7 +635,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
           {tab !== 'roles' && tab !== 'heatmap' && tab !== 'staffing' && tab !== 'forecast' && (
             <select value={projectFilter} onChange={e => setProjectFilter(e.target.value)} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-[11px] text-gray-700 dark:text-gray-200 focus:outline-none">
               <option value="all">Tüm Projeler</option>
-              {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              {scopedProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           )}
           <select value={deptFilter} onChange={e => setDeptFilter(e.target.value)} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-[11px] text-gray-700 dark:text-gray-200 focus:outline-none">
@@ -654,8 +661,8 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
 
       {showBilled && (
         <BilledHoursImportModal
-          people={people}
-          projects={projects}
+          people={scopedPeople}
+          projects={scopedProjects}
           defaultYear={year}
           onApply={(records, options, applyMode, autoCreate) => {
             onApplyBilledHours(records, options, applyMode, autoCreate);
@@ -773,14 +780,14 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
       )}
 
       {tab === 'grid' && renderGrid()}
-      {tab === 'heatmap' && <UtilizationHeatmap allocations={allocations} people={people} year={year} deptFilter={deptFilter} leaves={leaves} />}
+      {tab === 'heatmap' && <UtilizationHeatmap allocations={scopedAllocations} people={scopedPeople} year={year} deptFilter={deptFilter} leaves={leaves} />}
       {tab === 'staffing' && renderStaffing()}
-      {tab === 'person' && renderSummary(summarizeByPerson(yearAllocations, people, year, summaryField), true)}
-      {tab === 'department' && renderSummary(summarizeByDepartment(yearAllocations, people, year, summaryField), true)}
+      {tab === 'person' && renderSummary(summarizeByPerson(yearAllocations, scopedPeople, year, summaryField), true)}
+      {tab === 'department' && renderSummary(summarizeByDepartment(yearAllocations, scopedPeople, year, summaryField), true)}
       {tab === 'project' && renderSummary(summarizeByProject(yearAllocations, projectNames, year, summaryField), false)}
       {tab === 'roles' && renderRoleAnalysis()}
-      {tab === 'forecast' && <ForecastView allocations={allocations} people={people} projects={projects} titles={titles} year={year} />}
-      {tab === 'scenario' && <ScenarioView people={people} projects={projects} allocations={allocations} year={year} />}
+      {tab === 'forecast' && <ForecastView allocations={scopedAllocations} people={scopedPeople} projects={scopedProjects} titles={titles} year={year} />}
+      {tab === 'scenario' && <ScenarioView people={scopedPeople} projects={scopedProjects} allocations={scopedAllocations} year={year} />}
     </div>
   );
 };

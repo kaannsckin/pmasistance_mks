@@ -1,6 +1,7 @@
 import { TaskStatus, View, WorkspaceData } from '../types';
 import { canApprovePlan, canEnterData, findOverAllocations, getPlanLockStatus, MONTHS_TR } from './allocations';
 import { isExecRole } from './execReport';
+import { identityOf, visiblePersonIds, visibleProjectIds } from './rbac';
 
 /**
  * Yapılacaklar paneli: tamamen mevcut veriden türetilen, role göre filtrelenen
@@ -23,16 +24,21 @@ export const buildTodoItems = (ws: WorkspaceData, now: Date = new Date()): TodoI
     const year = now.getFullYear();
     const currentMonth = now.getMonth() + 1; // 1-12
     const items: TodoItem[] = [];
-    const projectName = new Map(ws.projects.map(p => [p.id, p.name]));
+    const identity = identityOf(ws);
+    const projectIds = visibleProjectIds(ws, identity);
+    const personIds = visiblePersonIds(ws, identity);
+    const scopedProjects = ws.projects.filter(p => projectIds.has(p.id));
+    const scopedAllocations = ws.allocations.filter(a => projectIds.has(a.projectId) && personIds.has(a.personId));
+    const projectName = new Map(scopedProjects.map(p => [p.id, p.name]));
 
-    const yearAllocations = ws.allocations.filter(a => a.year === year);
+    const yearAllocations = scopedAllocations.filter(a => a.year === year);
     const projectsWithPlan = new Set(
         yearAllocations.filter(a => Object.values(a.plan).some(v => (v || 0) > 0)).map(a => a.projectId)
     );
 
     // 1) Onay bekleyen planlar (onaylayan roller)
     if (canApprovePlan(role)) {
-        ws.planLocks.filter(l => l.status === 'submitted').forEach(l => {
+        ws.planLocks.filter(l => l.status === 'submitted' && projectIds.has(l.projectId)).forEach(l => {
             items.push({
                 id: `approve-${l.projectId}-${l.year}`,
                 severity: 'warn',
@@ -77,7 +83,7 @@ export const buildTodoItems = (ws: WorkspaceData, now: Date = new Date()): TodoI
 
     // 4) Termini geçen görevler (proje bazında; yönetici de görür)
     const today = now.toISOString().split('T')[0];
-    ws.projects.forEach(p => {
+    scopedProjects.forEach(p => {
         const overdue = p.tasks.filter(t => t.dueDate && t.dueDate < today && t.status !== TaskStatus.Done);
         if (overdue.length > 0) {
             items.push({
@@ -92,7 +98,7 @@ export const buildTodoItems = (ws: WorkspaceData, now: Date = new Date()): TodoI
     });
 
     // 5) Kritik (kırmızı) RAG projeleri
-    ws.projects.filter(p => p.rag === 'red').forEach(p => {
+    scopedProjects.filter(p => p.rag === 'red').forEach(p => {
         items.push({
             id: `rag-${p.id}`,
             severity: 'danger',
@@ -103,7 +109,7 @@ export const buildTodoItems = (ws: WorkspaceData, now: Date = new Date()): TodoI
     });
 
     // 6) Aşırı tahsisler (bu yıl planı)
-    const overs = findOverAllocations(yearAllocations, ws.people, year, 'plan');
+    const overs = findOverAllocations(yearAllocations, ws.people.filter(p => personIds.has(p.id)), year, 'plan');
     if (overs.length > 0) {
         items.push({
             id: `over-${year}`,

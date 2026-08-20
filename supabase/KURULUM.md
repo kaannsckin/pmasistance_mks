@@ -26,7 +26,7 @@ Bu şema üç tablo kurar ve **Row Level Security** politikalarını açar:
 |---|---|---|
 | `workspaces` | Projeler, veri havuzu, tahsisler, kilitler, snapshot'lar | Tüm üyeler |
 | `workspace_private` | **Notlar ve müşteri istekleri** | Yalnızca PY, Bölüm Sorumlusu, PYB Destek — **Müdür ve PYB Sorumlusu sunucu düzeyinde okuyamaz** |
-| `workspace_members` | Üyelik + rol | Üyeler görür; PYB Destek/Müdür yönetir |
+| `workspace_members` | Üyelik + rol + uygulamadaki kişi eşlemesi | Üyeler görür; PYB Destek/Müdür yönetir |
 
 > Not: "Yönetici notları göremez" kuralı artık yalnızca arayüz gizlemesi
 > değil — veritabanı politikası. Yönetici rolündeki bir kullanıcı API ile
@@ -57,9 +57,21 @@ select id, email from auth.users order by created_at desc;
 
 -- Üyeliği rolüyle ekleyin:
 insert into public.workspace_members (workspace_id, user_id, role)
-values ('ÇALIŞMA-ALANI-ID', 'KULLANICI-ID', 'py');
+values ('ÇALIŞMA-ALANI-ID', 'KULLANICI-ID', 'pyb_destek');
 -- roller: mudur | pyb_sorumlu | pyb_destek | py | bolum_sorumlu
 ```
+
+`py` ve `bolum_sorumlu` rollerinde `person_id` de verilmelidir. Bu değer,
+uygulamadaki Veri Havuzu'nda yer alan kişinin `id` alanıdır:
+
+```sql
+insert into public.workspace_members (workspace_id, user_id, role, person_id)
+values ('ÇALIŞMA-ALANI-ID', 'KULLANICI-ID', 'py', 'PERSON-ID');
+```
+
+Müdür, PYB Sorumlusu ve PYB Destek rollerinde `person_id` boş bırakılır.
+Buluta bağlı kullanımda uygulamadaki rol ve kişi seçimi bu üyelik kaydından
+zorunlu olarak gelir; kullanıcı arayüzden başka bir rolü taklit edemez.
 
 3. Üye, uygulamadaki bulut penceresine **Çalışma Alanı ID**'sini yapıştırıp
    **Bağlan** der → veri buluttan iner.

@@ -1,6 +1,7 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { CustomerRequest, Note, UserRole, WorkspaceData } from '../types';
 import { normalizeWorkspace } from './workspace';
+import { bindIdentity, Identity } from './rbac';
 
 /**
  * Yerel-öncelikli bulut senkronizasyonu (Supabase).
@@ -81,21 +82,24 @@ export const splitWorkspaceDoc = (ws: WorkspaceData): { core: Record<string, unk
 export const mergeWorkspaceDoc = (
     local: WorkspaceData,
     core: Partial<WorkspaceData>,
-    privateDoc?: PrivateDoc
+    privateDoc?: PrivateDoc,
+    verifiedIdentity?: Identity,
 ): WorkspaceData => {
     const projects = (core.projects || []).map(p => ({
         ...p,
         notes: privateDoc?.notes?.[p.id] || [],
         customerRequests: privateDoc?.customerRequests?.[p.id] || [],
     }));
-    return normalizeWorkspace({
+    const merged = normalizeWorkspace({
         ...core,
         projects,
         // Cihaza özel alanlar yerelden korunur
         activeProjectId: local.activeProjectId,
         currentRole: local.currentRole,
+        currentPersonId: local.currentPersonId,
         settings: local.settings,
     });
+    return verifiedIdentity ? bindIdentity(merged, verifiedIdentity) : merged;
 };
 
 // ---------------------------------------------------------------------------
@@ -142,19 +146,27 @@ export const getUserEmail = async (): Promise<string | null> => {
     return data.user?.email ?? null;
 };
 
-export const getMyCloudRole = async (workspaceId: string): Promise<UserRole | null> => {
+export const getMyCloudIdentity = async (workspaceId: string): Promise<Identity | null> => {
     const c = getClient();
     if (!c) return null;
     const { data: userData } = await c.auth.getUser();
     if (!userData.user) return null;
     const { data } = await c
         .from('workspace_members')
-        .select('role')
+        .select('role, person_id')
         .eq('workspace_id', workspaceId)
         .eq('user_id', userData.user.id)
         .maybeSingle();
-    return (data?.role as UserRole) ?? null;
+    if (!data?.role) return null;
+    return {
+        role: data.role as UserRole,
+        personId: (data.person_id as string | null) || undefined,
+    };
 };
+
+/** Geriye uyumlu yardımcı; yeni kod kimliğin tamamını kullanmalı. */
+export const getMyCloudRole = async (workspaceId: string): Promise<UserRole | null> =>
+    (await getMyCloudIdentity(workspaceId))?.role ?? null;
 
 // ---------------------------------------------------------------------------
 // Push / Pull (iyimser sürüm kontrolü — sessiz veri ezmek yok)
@@ -192,6 +204,18 @@ export const pushWorkspace = async (ws: WorkspaceData): Promise<PushResult> => {
     const c = getClient();
     const config = loadCloudConfig();
     if (!c || !config?.workspaceId) return { ok: false, reason: 'not-configured' };
+
+    // İstemcideki rol/kişi değiştirilmişse belgeyi sunucuya göndermeyi reddet.
+    // Asıl alan bazlı güvenlik normalize şema RLS fazında uygulanacaktır; bu
+    // kontrol mevcut belge modelinde doğrudan kimlik taklidini engeller.
+    const verifiedIdentity = await getMyCloudIdentity(config.workspaceId);
+    if (!verifiedIdentity) {
+        return { ok: false, reason: 'error', message: 'Bulut üyeliği doğrulanamadı.' };
+    }
+    const localPersonId = ws.currentPersonId || undefined;
+    if (ws.currentRole !== verifiedIdentity.role || localPersonId !== verifiedIdentity.personId) {
+        return { ok: false, reason: 'error', message: 'Yerel kimlik bulut üyeliğiyle uyuşmuyor. Önce buluttan yeniden çekin.' };
+    }
 
     const { core, privateDoc } = splitWorkspaceDoc(ws);
     const expectedCore = config.coreVersion ?? 0;
@@ -232,6 +256,7 @@ export interface PullResult {
     ok: boolean;
     message?: string;
     privateVisible?: boolean;
+    identity?: Identity;
     workspace?: (local: WorkspaceData) => WorkspaceData;
 }
 
@@ -239,6 +264,9 @@ export const pullWorkspace = async (): Promise<PullResult> => {
     const c = getClient();
     const config = loadCloudConfig();
     if (!c || !config?.workspaceId) return { ok: false, message: 'Bağlantı yapılandırılmadı.' };
+
+    const verifiedIdentity = await getMyCloudIdentity(config.workspaceId);
+    if (!verifiedIdentity) return { ok: false, message: 'Çalışma alanı üyeliğiniz veya rolünüz doğrulanamadı.' };
 
     const { data, error } = await c
         .from('workspaces')
@@ -266,7 +294,8 @@ export const pullWorkspace = async (): Promise<PullResult> => {
     return {
         ok: true,
         privateVisible: !!pData,
-        workspace: (local: WorkspaceData) => mergeWorkspaceDoc(local, core, privateDoc),
+        identity: verifiedIdentity,
+        workspace: (local: WorkspaceData) => mergeWorkspaceDoc(local, core, privateDoc, verifiedIdentity),
     };
 };
 

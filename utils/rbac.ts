@@ -30,6 +30,23 @@ export const identityOf = (ws: WorkspaceData): Identity => ({
     personId: ws.currentPersonId,
 });
 
+/**
+ * Doğrulanmış üyelik kimliğini workspace'e uygular. Kapsam değiştiğinde artık
+ * görünmeyen aktif projeyi de temizler. Buluta bağlı kullanımda tek kimlik
+ * kaynağı workspace_members satırıdır.
+ */
+export const bindIdentity = (ws: WorkspaceData, id: Identity): WorkspaceData => {
+    const next: WorkspaceData = {
+        ...ws,
+        currentRole: id.role,
+        currentPersonId: id.personId,
+    };
+    if (next.activeProjectId && !visibleProjectIds(next, id).has(next.activeProjectId)) {
+        next.activeProjectId = null;
+    }
+    return next;
+};
+
 export const isExecViewer = (role: UserRole | undefined): boolean =>
     role === 'mudur' || role === 'pyb_sorumlu';
 
@@ -122,4 +139,15 @@ export const canAddAllocationToProject = (ws: WsLike, id: Identity, projectId: s
     if (project && ownsProject(project, id)) return true;
     // Bölüm sorumlusu bölümündeki bir kişi için ekleyebilir → satır formunda kişi bazlı doğrulanır
     return id.role === 'bolum_sorumlu' && !!managedDepartmentCode(ws, id);
+};
+
+/**
+ * Proje planını onaya gönderebilir mi?
+ *  - sahip PM kendi projesini,
+ *  - bölüm sorumlusu yalnız bölümü personelinin fiilen tahsisli olduğu projeyi.
+ */
+export const canSubmitPlan = (ws: WsLike, id: Identity, projectId: string): boolean => {
+    const project = ws.projects.find(p => p.id === projectId);
+    if (project && ownsProject(project, id)) return true;
+    return id.role === 'bolum_sorumlu' && visibleProjectIds(ws, id).has(projectId);
 };

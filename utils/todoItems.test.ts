@@ -8,6 +8,8 @@ const NOW = new Date('2026-04-10T09:00:00Z'); // Nisan → Oca-Mar geçmiş ayla
 const buildWs = (): WorkspaceData => {
     const p1 = createProject('Proje A');
     const p2 = createProject('Proje B');
+    p1.pmPersonId = 'k1';
+    p2.pmPersonId = 'k1';
     p2.rag = 'red';
     p2.ragNote = 'Bütçe aşımı';
     p1.tasks = [
@@ -17,6 +19,7 @@ const buildWs = (): WorkspaceData => {
     return {
         ...createEmptyWorkspace(),
         currentRole: 'py',
+        currentPersonId: 'k1',
         projects: [p1, p2],
         people: [{ id: 'k1', firstName: 'Kaan', lastName: 'T', departmentCode: 'U310', availableAA: 1, roles: [] }],
         allocations: [
@@ -51,6 +54,14 @@ describe('buildTodoItems', () => {
         expect(texts).not.toContain('onaya gönderilmedi');
         const rag = items.find(i => i.id.startsWith('rag-'))!;
         expect(rag.view).toBe(View.Executive);
+    });
+
+    it('PY sahip olmadığı projenin görev ve RAG uyarılarını görmez', () => {
+        const ws = buildWs();
+        ws.projects[1].pmPersonId = 'başka-pm';
+        const texts = buildTodoItems(ws, NOW).map(i => i.text).join(' | ');
+        expect(texts).not.toContain('Proje B kritik durumda');
+        expect(texts).not.toContain('Proje B — 2026 planı');
     });
 
     it('PYB Destek: havuz eksiklerini görür', () => {

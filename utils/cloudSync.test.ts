@@ -52,13 +52,28 @@ describe('mergeWorkspaceDoc', () => {
     it('split → merge gidiş-dönüşü veri kaybetmez, kişisel alanları yerelden korur', () => {
         const ws = buildWs();
         const { core, privateDoc } = splitWorkspaceDoc(ws);
-        const local = { ...createEmptyWorkspace(), currentRole: 'mudur' as const, settings: { theme: 'orange' } };
+        const local = { ...createEmptyWorkspace(), currentRole: 'py' as const, currentPersonId: 'k1', settings: { theme: 'orange' } };
         const merged = mergeWorkspaceDoc(local as WorkspaceData, core as Partial<WorkspaceData>, privateDoc);
         expect(merged.projects[0].notes).toHaveLength(2);
         expect(merged.projects[0].customerRequests).toHaveLength(1);
         expect(merged.allocations).toHaveLength(1);
-        expect(merged.currentRole).toBe('mudur'); // yerelden
+        expect(merged.currentRole).toBe('py'); // yerelden
+        expect(merged.currentPersonId).toBe('k1'); // yerelden
         expect(merged.settings.theme).toBe('orange'); // yerelden
+    });
+
+    it('doğrulanmış bulut kimliği yerel rol/kişinin üzerine yazılır', () => {
+        const ws = buildWs();
+        const { core, privateDoc } = splitWorkspaceDoc(ws);
+        const local = { ...createEmptyWorkspace(), currentRole: 'mudur' as const };
+        const merged = mergeWorkspaceDoc(
+            local as WorkspaceData,
+            core as Partial<WorkspaceData>,
+            privateDoc,
+            { role: 'py', personId: 'k1' },
+        );
+        expect(merged.currentRole).toBe('py');
+        expect(merged.currentPersonId).toBe('k1');
     });
 
     it('private belge yokken (yönetici RLS) notlar boş iner, çekirdek veri tam gelir', () => {
