@@ -122,7 +122,7 @@ export const readAiConfig = (env: Env, opts: { isDev?: boolean } = {}): ConfigRe
                 .split(',')
                 .map(s => s.trim().replace(/\/+$/, ''))
                 .filter(Boolean),
-            rateLimitPerMin: positiveInt(env.AI_RATE_LIMIT_PER_MIN, 20),
+            rateLimitPerMin: positiveInt(env.AI_RATE_LIMIT_PER_MIN, 60), // bir soru araç adımlarıyla birkaç istek üretir
         },
     };
 };

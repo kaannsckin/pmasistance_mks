@@ -3,8 +3,10 @@
 PlanAsistan'ın AI asistanı, kurumsal API anahtarını **yalnızca sunucuda** tutan küçük bir proxy üzerinden çalışır. Tarayıcıya, derlenmiş JS paketine ya da depoya hiçbir anahtar girmez.
 
 ```
-Tarayıcı (Zekâ ekranı) ──► /api/ai/chat  (proxy: anahtar burada) ──► Kurumsal LLM sağlayıcısı
-                       ◄── NDJSON akışı ◄──────────────────────────── SSE akışı
+Tarayıcı (asistan paneli) ──► /api/ai/chat  (proxy: anahtar burada) ──► Kurumsal LLM sağlayıcısı
+   │  ▲                     ◄── NDJSON (metin + araç çağrısı) ◄──────── SSE akışı
+   ▼  │
+ Araçlar: rol kapsamlı, uygulama verisi üzerinde TARAYICIDA çalışır
 ```
 
 | Bileşen | Dosya |
@@ -15,6 +17,25 @@ Tarayıcı (Zekâ ekranı) ──► /api/ai/chat  (proxy: anahtar burada) ─�
 | Vercel fonksiyonları | `api/ai/chat.ts`, `api/ai/health.ts` |
 | Yerel geliştirme ara katmanı | `vite.config.ts` → `server/ai/nodeAdapter.ts` |
 | Tarayıcı istemcisi | `utils/ai/client.ts` |
+| Araç döngüsü / araçlar / kapsam | `utils/ai/agent.ts`, `utils/ai/tools.ts`, `utils/ai/scope.ts` |
+| Sistem talimatı | `utils/ai/systemPrompt.ts` |
+| Arayüz (panel, sohbet, paylaşılan durum) | `components/assistant/` |
+
+## Asistan nasıl çalışır?
+
+- **Her ekrandan erişim:** Sağ alttaki <kbd>✨</kbd> düğmesi sağdan açılan paneli açar; ⌘K / Ctrl+K komut paletine yazılan serbest metin "AI Asistanı'na sor" ile doğrudan sorulabilir; proje çubuğundaki **Zekâ** sekmesi aynı sohbeti tam ekranda gösterir. Sohbet ekranlar arasında korunur, yalnızca bellekte tutulur (sayfa yenilenince silinir).
+- **Bağlam:** Her soruda modele kim olduğunuz (rol + kişi), hangi ekranda olduğunuz, açık proje ve görebildiğiniz projelerin adları gider — **veri gitmez**.
+- **Araçlar (tool calling):** Model veriye ihtiyaç duyunca bir araç çağırır; araç **tarayıcıda**, uygulamanın test edilmiş hesap motorlarıyla çalışır ve yalnızca gereken özeti modele döndürür. Sayıları model değil, uygulama hesaplar. Panelde hangi araçların kullanıldığı etiket olarak görünür.
+- **Salt-okunur:** Bu sürümde asistan veri değiştiremez; değişiklik isteklerinde hangi ekrandan nasıl yapılacağını anlatır.
+
+| Araç | Ne döndürür | Kapsam |
+|---|---|---|
+| `proje_listesi`, `proje_detayi`, `gorev_ara`, `risk_listesi` | Proje durumu, görevler, riskler, iş paketleri, hedefler | Görünür projeler |
+| `portfoy_ozeti`, `evm_analizi`, `durum_raporu_taslagi`, `son_degisiklikler` | Sağlık skoru, dikkat gerektirenler, EVM, durum raporu, denetim günlüğü | Görünür projeler |
+| `notlari_ara`, `musteri_istekleri` | Haftalık notlar, müşteri istekleri | Görünür projeler; **Müdür / PYB Sorumlusu'na hiç sunulmaz** |
+| `kisi_profili`, `uygun_kisi_bul`, `doluluk_analizi`, `departman_karnesi`, `kapasite_talep`, `tahsis_ozeti`, `is_yuku_ongorusu`, `maliyet_raporu`, `veri_sagligi` | Kapasite, doluluk, tahsis, öngörü, maliyet, veri kalitesi | Tahsis / Veri Havuzu ekranlarıyla aynı (tüm roller) |
+
+**Kapsam kuralı:** Asistan, kullanıcının arayüzde görebildiğinden fazlasını göremez (`utils/ai/scope.ts`). Proje içeriği `rbac.visibleProjectIds` ile sınırlıdır; yönetici rollerinde notlar ve müşteri istekleri veriden tamamen çıkarılır; **sicil numaraları hiçbir araç çıktısında yer almaz**. Araç sonuçları 12.000 karakterle, bir yanıt 6 araç adımıyla sınırlıdır.
 
 ## 1. Ortam değişkenleri
 
@@ -30,7 +51,7 @@ Tarayıcı (Zekâ ekranı) ──► /api/ai/chat  (proxy: anahtar burada) ─�
 | `AI_ALLOWED_ORIGINS` | — | Proxy farklı bir adresteyse izinli uygulama kökenleri (virgülle) |
 | `AI_MAX_OUTPUT_TOKENS` | — | Yanıt başına üst sınır (varsayılan 4096) |
 | `AI_TEMPERATURE` | — | Örn. `0.3` |
-| `AI_RATE_LIMIT_PER_MIN` | — | Kişi/IP başına dakikalık istek sınırı (varsayılan 20) |
+| `AI_RATE_LIMIT_PER_MIN` | — | Kişi/IP başına dakikalık istek sınırı (varsayılan 60; araç kullanan bir soru 2-4 istek üretir) |
 | `AI_TIMEOUT_MS` | — | Sağlayıcı zaman aşımı (varsayılan 55000) |
 
 \* **Yayında erişim koruması zorunludur.** Ne `AI_ACCESS_TOKEN` ne de Supabase tanımlıysa proxy istekleri reddeder (aksi halde kurumsal anahtarın kotası internete açılırdı). Yalnızca kurum içi kapalı ağda `AI_AUTH_MODE=none` bilinçli olarak seçilebilir. Yerel geliştirmede (`npm run dev`) koruma gerekmez.

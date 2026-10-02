@@ -1,5 +1,5 @@
 import { getClient } from '../cloudSync';
-import { AI_LIMITS, AiAuthMode, AiStatus, ChatMessage, ChatRequestBody, ChatStreamEvent } from './protocol';
+import { AI_LIMITS, AiAuthMode, AiStatus, ChatMessage, ChatRequestBody, ChatStreamEvent, ToolCall } from './protocol';
 
 /**
  * Tarayıcı tarafı AI istemcisi — yalnızca kendi proxy'mizle (/api/ai) konuşur;
@@ -106,9 +106,17 @@ export async function* readNdjson(stream: ReadableStream<Uint8Array>): AsyncGene
     }
 }
 
+const messageSize = (m: ChatMessage): number =>
+    m.content.length + (m.role === 'assistant' && m.toolCalls ? JSON.stringify(m.toolCalls).length : 0);
+
+const clip = (m: ChatMessage): ChatMessage =>
+    m.content.length > AI_LIMITS.maxCharsPerMessage ? { ...m, content: m.content.slice(0, AI_LIMITS.maxCharsPerMessage) } : m;
+
 /**
- * Sohbet geçmişini sunucu sınırlarına sığdırır: en yeni mesajlar korunur,
- * ilk mesaj her zaman kullanıcıdan olur.
+ * Sohbet geçmişini sunucu sınırlarına sığdırır. Mesajlar "tur"lara bölünür
+ * (her tur bir kullanıcı mesajıyla başlar ve araç çağrı/sonuçlarını içerir);
+ * turlar bölünmez — araç çağrısı sonucu olmadan gönderilmez. Son tur her
+ * zaman korunur, eskiler sığdığı kadar eklenir.
  */
 export const trimHistory = (
     messages: ChatMessage[],
@@ -116,18 +124,29 @@ export const trimHistory = (
     maxMessages = AI_LIMITS.maxMessages,
     maxChars = AI_LIMITS.maxTotalChars
 ): ChatMessage[] => {
-    const out: ChatMessage[] = [];
+    const usable = messages
+        .filter(m => m.role !== 'user' || m.content.trim())
+        .filter(m => m.role !== 'assistant' || m.content.trim() || (m.toolCalls && m.toolCalls.length))
+        .map(clip);
+    const turns: ChatMessage[][] = [];
+    usable.forEach(m => {
+        if (m.role === 'user' || turns.length === 0) turns.push([m]);
+        else turns[turns.length - 1].push(m);
+    });
+    while (turns.length && turns[0][0].role !== 'user') turns.shift();
+
+    const out: ChatMessage[][] = [];
     let total = systemChars;
-    for (let i = messages.length - 1; i >= 0 && out.length < maxMessages; i--) {
-        const m = messages[i];
-        const content = m.content.slice(0, AI_LIMITS.maxCharsPerMessage);
-        if (!content.trim()) continue;
-        if (total + content.length > maxChars && out.length > 0) break;
-        total += content.length;
-        out.unshift({ role: m.role, content });
+    let count = 0;
+    for (let i = turns.length - 1; i >= 0; i--) {
+        const size = turns[i].reduce((sum, m) => sum + messageSize(m), 0);
+        const isLast = out.length === 0;
+        if (!isLast && (total + size > maxChars || count + turns[i].length > maxMessages)) break;
+        total += size;
+        count += turns[i].length;
+        out.unshift(turns[i]);
     }
-    while (out.length > 0 && out[0].role !== 'user') out.shift();
-    return out;
+    return out.flat();
 };
 
 export interface StreamChatOptions {
@@ -136,7 +155,13 @@ export interface StreamChatOptions {
     onDelta?: (text: string, full: string) => void;
 }
 
-export const streamChat = async (body: ChatRequestBody, opts: StreamChatOptions): Promise<{ text: string; stopReason?: string }> => {
+export interface StreamChatResult {
+    text: string;
+    toolCalls: ToolCall[];
+    stopReason?: string;
+}
+
+export const streamChat = async (body: ChatRequestBody, opts: StreamChatOptions): Promise<StreamChatResult> => {
     let res: Response;
     try {
         res = await fetch(`${PROXY_BASE}/chat`, {
@@ -157,11 +182,14 @@ export const streamChat = async (body: ChatRequestBody, opts: StreamChatOptions)
 
     let full = '';
     let stopReason: string | undefined;
+    const toolCalls: ToolCall[] = [];
     try {
         for await (const ev of readNdjson(res.body)) {
             if (ev.type === 'delta') {
                 full += ev.text;
                 opts.onDelta?.(ev.text, full);
+            } else if (ev.type === 'tool_call') {
+                toolCalls.push(ev.call);
             } else if (ev.type === 'done') {
                 stopReason = ev.stopReason;
             } else if (ev.type === 'error') {
@@ -170,8 +198,8 @@ export const streamChat = async (body: ChatRequestBody, opts: StreamChatOptions)
         }
     } catch (e) {
         if (e instanceof AiError) throw e;
-        if ((e as Error)?.name === 'AbortError') throw new AiError('İptal edildi.', 'aborted');
+        if ((e as Error)?.name === 'AbortError' || opts.signal?.aborted) throw new AiError('İptal edildi.', 'aborted');
         throw new AiError('AI yanıt akışı kesildi.', 'network');
     }
-    return { text: full, stopReason };
+    return { text: full, toolCalls, stopReason };
 };

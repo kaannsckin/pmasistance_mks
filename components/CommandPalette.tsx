@@ -13,6 +13,8 @@ export interface CommandItem {
 interface CommandPaletteProps {
   items: CommandItem[];
   onClose: () => void;
+  /** Verilirse yazılan metin için "AI Asistanı'na sor" seçeneği eklenir */
+  onAskAI?: (query: string) => void;
 }
 
 const lower = (s: string): string => s.toLocaleLowerCase('tr-TR');
@@ -47,7 +49,7 @@ const scoreItem = (query: string, item: CommandItem): number => {
   return 0;
 };
 
-const CommandPalette: React.FC<CommandPaletteProps> = ({ items, onClose }) => {
+const CommandPalette: React.FC<CommandPaletteProps> = ({ items, onClose, onAskAI }) => {
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -55,12 +57,17 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ items, onClose }) => {
 
   const filtered = useMemo(() => {
     if (!query.trim()) return items;
-    return items
+    const matches = items
       .map((it, i) => ({ it, i, s: scoreItem(query, it) }))
       .filter(x => x.s > 0)
       .sort((a, b) => b.s - a.s || a.i - b.i) // skor; eşitlikte özgün sıra
       .map(x => x.it);
-  }, [items, query]);
+    if (!onAskAI) return matches;
+    // Serbest metin → AI'ya sor (eşleşme yoksa en üstte, varsa en altta)
+    const q = query.trim();
+    const ask: CommandItem = { id: 'ai-ask', group: 'AI', label: `AI Asistanı'na sor: “${q}”`, sublabel: 'Uygulama verinizden yanıtlar', icon: 'fa-wand-magic-sparkles', run: () => onAskAI(q) };
+    return matches.length ? [...matches, ask] : [ask];
+  }, [items, query, onAskAI]);
 
   useEffect(() => { setActive(0); }, [query]);
   useEffect(() => { inputRef.current?.focus(); }, []);
@@ -98,7 +105,7 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ items, onClose }) => {
             value={query}
             onChange={e => setQuery(e.target.value)}
             onKeyDown={onKeyDown}
-            placeholder="Projeye, kişiye ya da ekrana git…"
+            placeholder={onAskAI ? "Projeye, kişiye, ekrana git — ya da AI'ya sor…" : "Projeye, kişiye ya da ekrana git…"}
             className="flex-1 bg-transparent text-sm text-gray-800 dark:text-gray-100 placeholder-gray-400 focus:outline-none"
           />
           <kbd className="hidden sm:inline text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-400">Esc</kbd>

@@ -483,9 +483,9 @@ const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSett
                 <>
                   <ProjectTab view={View.Requests} currentView={currentView} setCurrentView={setCurrentView} icon="fa-users-viewfinder" label="İstekler" />
                   <ProjectTab view={View.Notes} currentView={currentView} setCurrentView={setCurrentView} icon="fa-pen-nib" label="Günlük" />
-                  {isAIEnabled && <ProjectTab view={View.AI} currentView={currentView} setCurrentView={setCurrentView} icon="fa-wand-magic-sparkles" label="Zekâ" />}
                 </>
               )}
+              {isAIEnabled && <ProjectTab view={View.AI} currentView={currentView} setCurrentView={setCurrentView} icon="fa-wand-magic-sparkles" label="Zekâ" />}
             </nav>
             <button
               onClick={onOpenWorkPackages}

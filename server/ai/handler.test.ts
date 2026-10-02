@@ -178,3 +178,50 @@ describe('safeEqual', () => {
         expect(safeEqual('', '')).toBe(true);
     });
 });
+
+describe('validateChatBody — araç mesajları', () => {
+    const tools = [{ name: 'proje_listesi', description: 'Projeleri listeler', parameters: { type: 'object', properties: {} } }];
+    const call = { id: 'c1', name: 'proje_listesi', arguments: {} };
+
+    it('geçerli araç turu kabul edilir', () => {
+        const r = validateChatBody({
+            tools,
+            messages: [
+                { role: 'user', content: 'soru' },
+                { role: 'assistant', content: '', toolCalls: [call] },
+                { role: 'tool', toolCallId: 'c1', name: 'proje_listesi', content: '{}' },
+            ],
+        });
+        expect(r.error).toBeUndefined();
+        expect(r.body?.tools).toHaveLength(1);
+        expect(r.body?.messages).toHaveLength(3);
+    });
+
+    it('bilinmeyen çağrıya ait sonuç, geçersiz araç adı ve nesne olmayan şema reddedilir', () => {
+        expect(validateChatBody({ messages: [{ role: 'user', content: 'a' }, { role: 'tool', toolCallId: 'yok', name: 'x', content: '{}' }] }).error).toMatch(/bilinen bir çağrı/);
+        expect(validateChatBody({ tools: [{ ...tools[0], name: 'kötü ad' }], messages: [{ role: 'user', content: 'a' }] }).error).toMatch(/araç adı/);
+        expect(validateChatBody({ tools: [{ ...tools[0], parameters: { type: 'string' } }], messages: [{ role: 'user', content: 'a' }] }).error).toMatch(/nesne/);
+        expect(validateChatBody({ tools: [tools[0], tools[0]], messages: [{ role: 'user', content: 'a' }] }).error).toMatch(/yinelenen/);
+    });
+
+    it('ilk mesaj kullanıcıdan olmalı; son mesaj asistan olamaz', () => {
+        expect(validateChatBody({ messages: [{ role: 'assistant', content: 'a' }, { role: 'user', content: 'b' }] }).error).toMatch(/İlk mesaj/);
+        expect(validateChatBody({ messages: [{ role: 'user', content: 'a' }, { role: 'assistant', content: '', toolCalls: [call] }] }).error).toMatch(/Son mesaj/);
+    });
+
+    it('argümanı nesne olmayan çağrı reddedilir', () => {
+        expect(validateChatBody({ messages: [{ role: 'user', content: 'a' }, { role: 'assistant', content: '', toolCalls: [{ ...call, arguments: '{}' }] }, { role: 'tool', toolCallId: 'c1', name: 'proje_listesi', content: '{}' }] }).error).toMatch(/araç çağrısı/);
+    });
+
+    it('chat ucu tool_call olaylarını NDJSON ile iletir', async () => {
+        const fetchImpl = vi.fn(async () => new Response(streamOf(
+            'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_a","function":{"name":"proje_listesi","arguments":"{}"}}]}}]}\n\n',
+            'data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}\n\ndata: [DONE]\n\n'
+        ), { status: 200 }));
+        const res = await handleAiRequest(chatReq({ tools, messages: [{ role: 'user', content: 'x' }] }), BASE_ENV, { isDev: true, fetchImpl, rateLimiter: freshLimiter() });
+        const evs = await collect(readNdjson(res.body!));
+        expect(evs[0]).toEqual({ type: 'tool_call', call: { id: 'call_a', name: 'proje_listesi', arguments: {} } });
+        const sent = JSON.parse((fetchImpl.mock.calls[0] as unknown as [string, RequestInit])[1].body as string);
+        expect(sent.tools[0].function.name).toBe('proje_listesi');
+    });
+});

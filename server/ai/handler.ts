@@ -1,4 +1,4 @@
-import { AI_LIMITS, AiStatus, ChatRequestBody } from '../../utils/ai/protocol.js';
+import { AI_LIMITS, AiStatus, ChatMessage, ChatRequestBody, TOOL_NAME_PATTERN, ToolCall, ToolSpec } from '../../utils/ai/protocol.js';
 import { AuthResult, authorize } from './auth.js';
 import { Env, readAiConfig } from './config.js';
 import { buildUpstreamRequest, extractUpstreamError, parseUpstreamEvents, UpstreamStreamError } from './providers.js';
@@ -71,29 +71,118 @@ const corsFor = (request: Request, allowedOrigins: string[]): Record<string, str
     return null;
 };
 
+const isPlainObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+
+const jsonSize = (v: unknown): number => {
+    try {
+        return JSON.stringify(v).length;
+    } catch {
+        return Infinity;
+    }
+};
+
+const validateTools = (raw: unknown): { tools?: ToolSpec[]; size: number; error?: string } => {
+    if (raw === undefined) return { size: 0 };
+    if (!Array.isArray(raw)) return { size: 0, error: 'tools bir dizi olmalı.' };
+    if (raw.length > AI_LIMITS.maxTools) return { size: 0, error: `En fazla ${AI_LIMITS.maxTools} araç tanımlanabilir.` };
+    const tools: ToolSpec[] = [];
+    let size = 0;
+    const names = new Set<string>();
+    for (const t of raw) {
+        const name = (t as any)?.name;
+        const description = (t as any)?.description;
+        const parameters = (t as any)?.parameters;
+        if (typeof name !== 'string' || !TOOL_NAME_PATTERN.test(name) || names.has(name)) return { size: 0, error: 'Geçersiz ya da yinelenen araç adı.' };
+        if (typeof description !== 'string' || description.length > 2000) return { size: 0, error: `Geçersiz araç açıklaması: ${name}` };
+        if (!isPlainObject(parameters) || parameters.type !== 'object') return { size: 0, error: `Araç parametre şeması nesne olmalı: ${name}` };
+        const sz = jsonSize(parameters);
+        if (sz > AI_LIMITS.maxToolJsonChars) return { size: 0, error: `Araç şeması çok büyük: ${name}` };
+        names.add(name);
+        size += name.length + description.length + sz;
+        tools.push({ name, description, parameters: parameters as unknown as ToolSpec['parameters'] });
+    }
+    return { tools, size };
+};
+
+const validateToolCall = (c: unknown): { call?: ToolCall; size: number } => {
+    const id = (c as any)?.id;
+    const name = (c as any)?.name;
+    const args = (c as any)?.arguments;
+    const meta = (c as any)?.meta;
+    if (typeof id !== 'string' || !id || id.length > 200) return { size: 0 };
+    if (typeof name !== 'string' || !TOOL_NAME_PATTERN.test(name)) return { size: 0 };
+    if (!isPlainObject(args)) return { size: 0 };
+    if (meta !== undefined && !isPlainObject(meta)) return { size: 0 };
+    const size = jsonSize(args) + (meta ? jsonSize(meta) : 0);
+    if (size > AI_LIMITS.maxToolJsonChars) return { size: 0 };
+    return { call: { id, name, arguments: args, ...(meta ? { meta } : {}) }, size: size + id.length + name.length };
+};
+
+/**
+ * Gövde doğrulaması: roller ve sıralama sağlayıcıların ortak kurallarına
+ * uymalı — ilk mesaj kullanıcıdan, her araç sonucu önceki bir çağrıya ait,
+ * son mesaj kullanıcı ya da araç sonucu.
+ */
 export const validateChatBody = (raw: unknown): { body?: ChatRequestBody; error?: string } => {
-    if (!raw || typeof raw !== 'object') return { error: 'Geçersiz istek gövdesi.' };
-    const { system: rawSystem, messages } = raw as Record<string, unknown>;
+    if (!isPlainObject(raw)) return { error: 'Geçersiz istek gövdesi.' };
+    const { system: rawSystem, messages, tools: rawTools } = raw;
     if (rawSystem !== undefined && typeof rawSystem !== 'string') return { error: 'system metin olmalı.' };
     const system = typeof rawSystem === 'string' ? rawSystem : '';
     if (system.length > AI_LIMITS.maxSystemChars) return { error: 'Sistem talimatı çok uzun.' };
     if (!Array.isArray(messages) || messages.length === 0) return { error: 'En az bir mesaj gerekli.' };
     if (messages.length > AI_LIMITS.maxMessages) return { error: `En fazla ${AI_LIMITS.maxMessages} mesaj gönderilebilir.` };
 
-    let total = system.length;
-    const clean: ChatRequestBody['messages'] = [];
+    const toolCheck = validateTools(rawTools);
+    if (toolCheck.error) return { error: toolCheck.error };
+
+    let total = system.length + toolCheck.size;
+    const clean: ChatMessage[] = [];
+    const callIds = new Set<string>();
     for (const m of messages) {
         const role = (m as any)?.role;
         const content = (m as any)?.content;
-        if (role !== 'user' && role !== 'assistant') return { error: 'Mesaj rolü user ya da assistant olmalı.' };
-        if (typeof content !== 'string' || !content.trim()) return { error: 'Mesaj içeriği boş olamaz.' };
+        if (role !== 'user' && role !== 'assistant' && role !== 'tool') return { error: 'Mesaj rolü user, assistant ya da tool olmalı.' };
+        if (typeof content !== 'string') return { error: 'Mesaj içeriği metin olmalı.' };
         if (content.length > AI_LIMITS.maxCharsPerMessage) return { error: 'Mesaj çok uzun.' };
         total += content.length;
-        clean.push({ role, content });
+
+        if (role === 'user') {
+            if (!content.trim()) return { error: 'Mesaj içeriği boş olamaz.' };
+            clean.push({ role, content });
+        } else if (role === 'assistant') {
+            const rawCalls = (m as any)?.toolCalls;
+            if (rawCalls !== undefined && (!Array.isArray(rawCalls) || rawCalls.length > AI_LIMITS.maxToolCallsPerMessage)) {
+                return { error: 'Geçersiz araç çağrısı listesi.' };
+            }
+            const calls: ToolCall[] = [];
+            for (const c of rawCalls || []) {
+                const v = validateToolCall(c);
+                if (!v.call) return { error: 'Geçersiz araç çağrısı.' };
+                callIds.add(v.call.id);
+                total += v.size;
+                calls.push(v.call);
+            }
+            if (!content.trim() && calls.length === 0) return { error: 'Mesaj içeriği boş olamaz.' };
+            clean.push(calls.length ? { role, content, toolCalls: calls } : { role, content });
+        } else {
+            const toolCallId = (m as any)?.toolCallId;
+            const name = (m as any)?.name;
+            if (typeof toolCallId !== 'string' || !callIds.has(toolCallId)) return { error: 'Araç sonucu bilinen bir çağrıya ait değil.' };
+            if (typeof name !== 'string' || !TOOL_NAME_PATTERN.test(name)) return { error: 'Geçersiz araç adı.' };
+            clean.push({ role, toolCallId, name, content });
+        }
     }
     if (total > AI_LIMITS.maxTotalChars) return { error: 'Sohbet çok uzun; yeni bir sohbet başlatın.' };
-    if (clean[clean.length - 1].role !== 'user') return { error: 'Son mesaj kullanıcıdan olmalı.' };
-    return { body: { ...(system ? { system } : {}), messages: clean } };
+    if (clean[0].role !== 'user') return { error: 'İlk mesaj kullanıcıdan olmalı.' };
+    const lastRole = clean[clean.length - 1].role;
+    if (lastRole !== 'user' && lastRole !== 'tool') return { error: 'Son mesaj kullanıcıdan ya da araç sonucundan olmalı.' };
+    return {
+        body: {
+            ...(system ? { system } : {}),
+            messages: clean,
+            ...(toolCheck.tools && toolCheck.tools.length ? { tools: toolCheck.tools } : {}),
+        },
+    };
 };
 
 const upstreamErrorMessage = (status: number, detail: string): string => {

@@ -44,7 +44,10 @@ import RiskView from './components/RiskView';
 import StatusReportModal from './components/StatusReportModal';
 import DataHealthModal from './components/DataHealthModal';
 import AuditLogModal from './components/AuditLogModal';
-import CommandPalette, { CommandItem } from './components/CommandPalette';
+import { CommandItem } from './components/CommandPalette';
+import { AssistantProvider } from './components/assistant/AssistantContext';
+import AssistantPanel, { AssistantCommandPalette } from './components/assistant/AssistantPanel';
+import { buildSuggestions } from './utils/ai/suggestions';
 import WorkPackageManager from './components/WorkPackageManager';
 import CalendarView from './components/CalendarView';
 import { analyzeDataHealth, applyHealthFix, HealthFix } from './utils/dataHealth';
@@ -372,7 +375,7 @@ const App: React.FC = () => {
     });
     // Yönetici rolüne geçişte PM'e özel ekranlardan çık
     if (isExecRole(role)) {
-      setCurrentView(prev => (prev === View.Notes || prev === View.Requests || prev === View.AI ? View.Executive : prev));
+      setCurrentView(prev => (prev === View.Notes || prev === View.Requests ? View.Executive : prev));
     }
   }, [updateWorkspace]);
 
@@ -580,9 +583,10 @@ const App: React.FC = () => {
     const execRole = isExecRole(workspace.currentRole);
 
     // Rol bazlı yetkilendirme: yönetici rolleri PM'e özel ekranları (Günlük,
-    // İstekler, Zekâ) göremez — doğrudan yönetim ekranına yönlendirilir.
+    // İstekler) göremez — doğrudan yönetim ekranına yönlendirilir. Zekâ (AI)
+    // açıktır; asistanın araçları yönetici rolünde not/isteklere erişmez.
     if (currentView === View.Executive ||
-        (execRole && (currentView === View.Notes || currentView === View.Requests || currentView === View.AI))) {
+        (execRole && (currentView === View.Notes || currentView === View.Requests))) {
       return (
         <ExecutiveView
           workspace={workspace}
@@ -660,7 +664,7 @@ const App: React.FC = () => {
     const ps = activeProject.settings;
 
     switch (currentView) {
-      case View.AI: return <AIAssistant projectName={activeProject.name} tasks={tasks} resources={resources} notes={notes} />;
+      case View.AI: return <AIAssistant suggestions={aiSuggestions} />;
       case View.Tasks:
         return (
           <TaskGallery
@@ -751,6 +755,17 @@ const App: React.FC = () => {
   };
 
   const isFullWidthView = currentView === View.Roadmap && !!activeProject;
+
+  // ---- AI asistanı: ekran/proje bağlamı ve örnek sorular ----
+  const isAIEnabled = settings?.isAIEnabled !== false;
+  const currentViewRef = useRef(currentView);
+  currentViewRef.current = currentView;
+  const getAssistantWorkspace = useCallback(() => workspaceRef.current, []);
+  const getAssistantView = useCallback(() => currentViewRef.current, []);
+  const aiSuggestions = useMemo(
+    () => buildSuggestions(identity.role, activeProject && visibleProjects.some(p => p.id === activeProject.id) ? activeProject.name : undefined),
+    [identity.role, activeProject, visibleProjects]
+  );
   // Header tek satır 4rem; proje seçiliyken bağlam çubuğuyla 6.75rem
   const showProjectBar = !!activeProject;
   const mainHeightClass = showProjectBar ? 'h-[calc(100vh-6.75rem)]' : 'h-[calc(100vh-4rem)]';
@@ -774,6 +789,7 @@ const App: React.FC = () => {
   }, [workspace, visibleProjects, identity, handleOpenProject, activeProject]);
 
   return (
+    <AssistantProvider enabled={isAIEnabled} getWorkspace={getAssistantWorkspace} getView={getAssistantView}>
     <div className={`min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans theme-${settings?.theme || 'classic'}`}>
       <Header
         currentView={currentView} setCurrentView={setCurrentView}
@@ -881,8 +897,13 @@ const App: React.FC = () => {
         />
       )}
       {isPaletteOpen && (
-        <CommandPalette items={commandItems} onClose={() => setIsPaletteOpen(false)} />
+        <AssistantCommandPalette items={commandItems} onClose={() => setIsPaletteOpen(false)} />
       )}
+      <AssistantPanel
+        suggestions={aiSuggestions}
+        hidden={currentView === View.AI && !!activeProject}
+        onExpand={activeProject ? () => setCurrentView(View.AI) : undefined}
+      />
       {undo && (
         <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[250] flex items-center gap-3 bg-gray-900 dark:bg-gray-800 text-white rounded-xl shadow-2xl px-4 py-2.5 border border-gray-700">
           <i className="fa-solid fa-trash-can text-gray-400 text-xs"></i>
@@ -901,6 +922,7 @@ const App: React.FC = () => {
         />
       )}
     </div>
+    </AssistantProvider>
   );
 };
 
