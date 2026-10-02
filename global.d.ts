@@ -1,7 +1,6 @@
-// Google AI Studio ortamının window'a enjekte ettiği API (AIAssistant.tsx kullanıyor)
-interface Window {
-  aistudio?: {
-    hasSelectedApiKey?: () => Promise<boolean>;
-    openSelectKey?: () => Promise<void>;
-  };
+/// <reference types="vite/client" />
+
+interface ImportMetaEnv {
+  /** AI proxy farklı bir adresteyse (ör. kurum içi sunucu); varsayılan /api/ai. Gizli DEĞİLDİR. */
+  readonly VITE_AI_PROXY_URL?: string;
 }

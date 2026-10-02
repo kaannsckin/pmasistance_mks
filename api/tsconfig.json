@@ -1,0 +1,8 @@
+{
+  "//": "Vercel api/ fonksiyonları derlenirken (emit) kullanılır; kök yapılandırmadaki yalnızca-noEmit seçeneği kapatılır.",
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "allowImportingTsExtensions": false,
+    "noEmit": false
+  }
+}

@@ -660,7 +660,7 @@ const App: React.FC = () => {
     const ps = activeProject.settings;
 
     switch (currentView) {
-      case View.AI: return <AIAssistant tasks={tasks} resources={resources} notes={notes} />;
+      case View.AI: return <AIAssistant projectName={activeProject.name} tasks={tasks} resources={resources} notes={notes} />;
       case View.Tasks:
         return (
           <TaskGallery

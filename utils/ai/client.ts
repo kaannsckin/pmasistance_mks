@@ -1,0 +1,177 @@
+import { getClient } from '../cloudSync';
+import { AI_LIMITS, AiAuthMode, AiStatus, ChatMessage, ChatRequestBody, ChatStreamEvent } from './protocol';
+
+/**
+ * Tarayıcı tarafı AI istemcisi — yalnızca kendi proxy'mizle (/api/ai) konuşur;
+ * API anahtarı tarayıcıya hiç gelmez. Proxy başka bir adresteyse
+ * VITE_AI_PROXY_URL ile verilir (gizli değildir).
+ */
+
+const PROXY_BASE = (import.meta.env.VITE_AI_PROXY_URL || '/api/ai').replace(/\/+$/, '');
+
+/** "token" modunda kullanıcının girdiği erişim kodu (cihaza özel) */
+export const AI_ACCESS_TOKEN_KEY = 'PLANASISTAN_AI_ACCESS_TOKEN';
+
+export type AiErrorCode = 'config' | 'auth' | 'forbidden' | 'origin' | 'rate_limited' | 'bad_request' | 'upstream' | 'timeout' | 'network' | 'aborted' | 'not_found';
+
+export class AiError extends Error {
+    constructor(message: string, public code: AiErrorCode, public status?: number) {
+        super(message);
+        this.name = 'AiError';
+    }
+}
+
+export const loadAccessToken = (): string | null => {
+    try {
+        return localStorage.getItem(AI_ACCESS_TOKEN_KEY);
+    } catch {
+        return null;
+    }
+};
+
+export const saveAccessToken = (token: string | null): void => {
+    try {
+        if (token) localStorage.setItem(AI_ACCESS_TOKEN_KEY, token);
+        else localStorage.removeItem(AI_ACCESS_TOKEN_KEY);
+    } catch {
+        /* depolama kapalıysa kod yalnızca bu oturumda kullanılamaz */
+    }
+};
+
+const authHeaders = async (mode: AiAuthMode): Promise<Record<string, string>> => {
+    if (mode === 'token') {
+        const t = loadAccessToken();
+        return t ? { authorization: `Bearer ${t}` } : {};
+    }
+    if (mode === 'supabase') {
+        const c = getClient();
+        if (!c) return {};
+        const { data } = await c.auth.getSession();
+        const jwt = data.session?.access_token;
+        return jwt ? { authorization: `Bearer ${jwt}` } : {};
+    }
+    return {};
+};
+
+/** "token" modunda kod girilmiş mi / "supabase" modunda oturum var mı */
+export const hasCredentials = async (mode: AiAuthMode): Promise<boolean> =>
+    mode === 'none' || !!(await authHeaders(mode)).authorization;
+
+export const fetchAiStatus = async (signal?: AbortSignal): Promise<AiStatus & { unreachable?: boolean }> => {
+    try {
+        const res = await fetch(`${PROXY_BASE}/health`, { signal, cache: 'no-store' });
+        if (!res.ok) throw new Error(String(res.status));
+        return (await res.json()) as AiStatus;
+    } catch (e) {
+        if ((e as Error)?.name === 'AbortError') throw e;
+        return {
+            configured: false,
+            authMode: 'none',
+            unreachable: true,
+            problem: 'AI sunucusuna ulaşılamadı. Uygulama AI proxy\'si olmadan yayınlanmış olabilir (bkz. docs/AI_KURULUM.md).',
+        };
+    }
+};
+
+/** NDJSON akışını olaylara böler (parçalar satır ortasında kesilebilir) */
+export async function* readNdjson(stream: ReadableStream<Uint8Array>): AsyncGenerator<ChatStreamEvent> {
+    const reader = stream.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    const parse = (line: string): ChatStreamEvent | null => {
+        const t = line.trim();
+        if (!t) return null;
+        try {
+            return JSON.parse(t) as ChatStreamEvent;
+        } catch {
+            return null;
+        }
+    };
+    try {
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            let idx: number;
+            while ((idx = buffer.indexOf('\n')) !== -1) {
+                const ev = parse(buffer.slice(0, idx));
+                buffer = buffer.slice(idx + 1);
+                if (ev) yield ev;
+            }
+        }
+        const ev = parse(buffer + decoder.decode());
+        if (ev) yield ev;
+    } finally {
+        reader.releaseLock();
+    }
+}
+
+/**
+ * Sohbet geçmişini sunucu sınırlarına sığdırır: en yeni mesajlar korunur,
+ * ilk mesaj her zaman kullanıcıdan olur.
+ */
+export const trimHistory = (
+    messages: ChatMessage[],
+    systemChars = 0,
+    maxMessages = AI_LIMITS.maxMessages,
+    maxChars = AI_LIMITS.maxTotalChars
+): ChatMessage[] => {
+    const out: ChatMessage[] = [];
+    let total = systemChars;
+    for (let i = messages.length - 1; i >= 0 && out.length < maxMessages; i--) {
+        const m = messages[i];
+        const content = m.content.slice(0, AI_LIMITS.maxCharsPerMessage);
+        if (!content.trim()) continue;
+        if (total + content.length > maxChars && out.length > 0) break;
+        total += content.length;
+        out.unshift({ role: m.role, content });
+    }
+    while (out.length > 0 && out[0].role !== 'user') out.shift();
+    return out;
+};
+
+export interface StreamChatOptions {
+    authMode: AiAuthMode;
+    signal?: AbortSignal;
+    onDelta?: (text: string, full: string) => void;
+}
+
+export const streamChat = async (body: ChatRequestBody, opts: StreamChatOptions): Promise<{ text: string; stopReason?: string }> => {
+    let res: Response;
+    try {
+        res = await fetch(`${PROXY_BASE}/chat`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', ...(await authHeaders(opts.authMode)) },
+            body: JSON.stringify(body),
+            signal: opts.signal,
+        });
+    } catch (e) {
+        if ((e as Error)?.name === 'AbortError') throw new AiError('İptal edildi.', 'aborted');
+        throw new AiError('AI sunucusuna ulaşılamadı; bağlantınızı kontrol edin.', 'network');
+    }
+
+    if (!res.ok || !res.body) {
+        const err = await res.json().catch(() => null) as { error?: string; code?: AiErrorCode } | null;
+        throw new AiError(err?.error || `AI isteği başarısız (HTTP ${res.status}).`, err?.code || 'upstream', res.status);
+    }
+
+    let full = '';
+    let stopReason: string | undefined;
+    try {
+        for await (const ev of readNdjson(res.body)) {
+            if (ev.type === 'delta') {
+                full += ev.text;
+                opts.onDelta?.(ev.text, full);
+            } else if (ev.type === 'done') {
+                stopReason = ev.stopReason;
+            } else if (ev.type === 'error') {
+                throw new AiError(ev.message, 'upstream');
+            }
+        }
+    } catch (e) {
+        if (e instanceof AiError) throw e;
+        if ((e as Error)?.name === 'AbortError') throw new AiError('İptal edildi.', 'aborted');
+        throw new AiError('AI yanıt akışı kesildi.', 'network');
+    }
+    return { text: full, stopReason };
+};
