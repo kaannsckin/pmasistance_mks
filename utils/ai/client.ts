@@ -203,3 +203,48 @@ export const streamChat = async (body: ChatRequestBody, opts: StreamChatOptions)
     }
     return { text: full, toolCalls, stopReason };
 };
+
+const sleep = (ms: number, signal?: AbortSignal) =>
+    new Promise<void>((resolve, reject) => {
+        const t = setTimeout(resolve, ms);
+        signal?.addEventListener('abort', () => {
+            clearTimeout(t);
+            reject(new AiError('İptal edildi.', 'aborted'));
+        }, { once: true });
+    });
+
+/**
+ * Metinler için embedding vektörleri (RAG). Hız sınırına takılırsa sunucunun
+ * bildirdiği süre kadar bekleyip en çok 3 kez yeniden dener.
+ */
+export const embedTexts = async (
+    texts: string[],
+    kind: 'document' | 'query',
+    authMode: AiAuthMode,
+    signal?: AbortSignal
+): Promise<number[][]> => {
+    for (let attempt = 0; ; attempt++) {
+        let res: Response;
+        try {
+            res = await fetch(`${PROXY_BASE}/embed`, {
+                method: 'POST',
+                headers: { 'content-type': 'application/json', ...(await authHeaders(authMode)) },
+                body: JSON.stringify({ texts, kind }),
+                signal,
+            });
+        } catch (e) {
+            if ((e as Error)?.name === 'AbortError') throw new AiError('İptal edildi.', 'aborted');
+            throw new AiError('AI sunucusuna ulaşılamadı.', 'network');
+        }
+        if (res.status === 429 && attempt < 3) {
+            const wait = Math.min(60, Number(res.headers.get('retry-after')) || 5);
+            await sleep(wait * 1000, signal);
+            continue;
+        }
+        const json = await res.json().catch(() => null) as { vectors?: number[][]; error?: string; code?: AiErrorCode } | null;
+        if (!res.ok || !json?.vectors) {
+            throw new AiError(json?.error || `Embedding isteği başarısız (HTTP ${res.status}).`, json?.code || 'upstream', res.status);
+        }
+        return json.vectors;
+    }
+};

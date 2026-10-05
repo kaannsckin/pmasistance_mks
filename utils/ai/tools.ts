@@ -14,6 +14,7 @@ import { RISK_BAND_LABELS, RISK_STATUS_LABELS, riskBand, riskScore, summarizeRis
 import { allPersonRoles, findAvailablePeople } from '../staffing';
 import { buildStatusReport } from '../statusReport';
 import { buildUtilization } from '../utilization';
+import { RAG_SOURCE_LABELS, RagSourceType } from '../rag/sources';
 import { summarizeWorkPackages } from '../workPackages';
 import { JsonSchema, ToolCall, ToolSpec } from './protocol';
 import {
@@ -35,7 +36,7 @@ export interface ToolDef {
     label: string;
     /** Yalnızca not/istek görebilen roller (yönetici rollerine hiç sunulmaz) */
     privateOnly?: boolean;
-    run: (args: Args, ctx: ToolContext) => unknown;
+    run: (args: Args, ctx: ToolContext) => unknown | Promise<unknown>;
 }
 
 /** Tek araç sonucunun üst sınırı (karakter) — bağlamı şişirmesin */
@@ -119,7 +120,52 @@ const evmRow = (e: ProjectEVM) => ({
 // Araçlar
 // ---------------------------------------------------------------------------
 
+const RAG_TYPES = Object.keys(RAG_SOURCE_LABELS) as RagSourceType[];
+
 export const AI_TOOLS: ToolDef[] = [
+    {
+        label: 'Bilgi tabanı araması',
+        spec: {
+            name: 'bilgi_ara',
+            description: 'Serbest metin bilgi tabanında anlam ve anahtar kelime araması: haftalık notlar, görev açıklama/yorumları, risk açıklama ve aksiyonları, müşteri istekleri, PESTEL/SWOT maddeleri, hedefler, proje durum notları, uygulamanın kullanım kılavuzu ve Bilgi Bankası\'na yüklenen kurumsal dokümanlar. "Nasıl yapılır" soruları, geçmiş kararlar/konuşmalar, notlarda veya dokümanlarda geçen konular için kullan. Sayısal sorular için yapısal araçları tercih et. Yanıtta kullandığın bilgiyi [no] biçiminde kaynak numarasıyla belirt.',
+            parameters: S.obj({
+                sorgu: S.str('Aranacak konu; doğal dilde, anahtar kelimeleri içeren kısa bir ifade.'),
+                kaynak: S.str('Yalnızca bu kaynak türünde ara (isteğe bağlı): not, gorev, risk, istek, analiz (PESTEL/SWOT), hedef, proje, kilavuz (kullanım kılavuzu), dokuman (kurumsal dokümanlar).', RAG_TYPES),
+                proje: S.str('Yalnızca bu projede ara (isteğe bağlı; proje adı ya da kodu).'),
+                limit: S.int('En fazla kaç pasaj (varsayılan 6, en çok 10).'),
+            }, ['sorgu']),
+        },
+        run: async (a, ctx) => {
+            if (!ctx.rag) throw new ToolError('Bilgi tabanı araması bu oturumda kullanılamıyor.');
+            const sorgu = str(a.sorgu);
+            if (!sorgu) throw new ToolError('sorgu parametresi gerekli.');
+            const rawTypes = Array.isArray(a.kaynak) ? a.kaynak : str(a.kaynak) ? [str(a.kaynak)] : [];
+            const types = rawTypes.filter((t): t is RagSourceType => RAG_TYPES.includes(t as RagSourceType));
+            if (!ctx.canSeePrivate && types.length > 0 && types.every(t => t === 'not' || t === 'istek')) {
+                throw new ToolError('Bu rol proje notlarına ve müşteri isteklerine erişemez.');
+            }
+            const project = str(a.proje) ? resolveProject(ctx, a.proje) : undefined;
+            const hits = await ctx.rag.search(sorgu, { k: clampLimit(a.limit, 6, 10), types, projectId: project?.id });
+            const sonuclar = hits.map(h => {
+                let cit = ctx.citations.find(c => c.chunkId === h.chunk.id);
+                if (!cit) {
+                    cit = {
+                        no: ctx.citations.length + 1, chunkId: h.chunk.id, type: h.chunk.type, title: h.chunk.title,
+                        projectName: h.chunk.projectName, date: h.chunk.date, excerpt: maskSicil(h.chunk.text, ctx.ws.people), ref: h.chunk.ref,
+                    };
+                    ctx.citations.push(cit);
+                }
+                return {
+                    no: cit.no, kaynak: RAG_SOURCE_LABELS[h.chunk.type], baslik: h.chunk.title, proje: h.chunk.projectName,
+                    tarih: h.chunk.date, metin: short(cit.excerpt, 900),
+                };
+            });
+            return {
+                sorgu, arama_turu: ctx.rag.mode(), sonuc_sayisi: sonuclar.length, sonuclar,
+                ...(sonuclar.length === 0 ? { not: 'Eşleşen içerik bulunamadı. Farklı/eş anlamlı kelimelerle tekrar dene ya da yapısal araçları kullan.' } : {}),
+            };
+        },
+    },
     {
         label: 'Proje listesi',
         spec: {
@@ -721,13 +767,13 @@ const serialize = (value: unknown): string => {
 };
 
 /** Aracı çalıştırır; sonuç (ya da hata açıklaması) modele gidecek JSON metnidir */
-export const executeTool = (call: Pick<ToolCall, 'name' | 'arguments'>, ctx: ToolContext): { content: string; ok: boolean } => {
+export const executeTool = async (call: Pick<ToolCall, 'name' | 'arguments'>, ctx: ToolContext): Promise<{ content: string; ok: boolean }> => {
     const def = TOOL_MAP.get(call.name);
     if (!def || (def.privateOnly && !ctx.canSeePrivate)) {
         return { content: JSON.stringify({ hata: `Bilinmeyen ya da bu rol için kullanılamayan araç: ${call.name}` }), ok: false };
     }
     try {
-        return { content: serialize(def.run(call.arguments || {}, ctx)), ok: true };
+        return { content: serialize(await def.run(call.arguments || {}, ctx)), ok: true };
     } catch (e) {
         if (e instanceof ToolError) return { content: JSON.stringify({ hata: e.message }), ok: false };
         console.error(`[ai] araç hatası (${call.name}):`, (e as Error)?.message);

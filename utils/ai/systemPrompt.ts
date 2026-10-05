@@ -38,7 +38,8 @@ const RULES = `Kurallar:
 4. Bu sürümde veri DEĞİŞTİREMEZSİN (salt-okunur). Değişiklik isteklerinde hangi ekrandan, hangi adımlarla yapılacağını anlat.
 5. Türkçe, kısa ve yönetici diliyle yaz: önce sonuç / öneri, sonra gerekçe. Karşılaştırmalarda markdown tablo kullan. Ondalıkları Türkçe biçimde yaz (1,5).
 6. Soru belirsizse makul bir varsayımla (içinde bulunulan yıl, açık proje) ilerle ve varsayımını belirt.
-7. Sicil gibi kimlik numaralarını isteme ve yazma.`;
+7. Sicil gibi kimlik numaralarını isteme ve yazma.
+8. Serbest metin içeriği (notlar, görev/risk açıklamaları, kararlar, müşteri istekleri, PESTEL/SWOT, kurumsal dokümanlar) ve "nasıl yapılır" soruları için bilgi_ara aracını kullan; uygulama kullanımı sorularında kaynak olarak kilavuz'u seç. Bu bilgileri kullandığında cümlenin sonuna kaynak numarasını [1] biçiminde yaz; pasajlarda olmayan bir şeyi pasajlara dayandırma.`;
 
 export const buildSystemPrompt = (ctx: ToolContext, opts: { view?: View } = {}): string => {
     const me = ctx.identity.personId ? ctx.ws.people.find(p => p.id === ctx.identity.personId) : undefined;

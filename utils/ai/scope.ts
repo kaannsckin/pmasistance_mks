@@ -1,5 +1,7 @@
 import { Person, Project, WorkspaceData } from '../../types';
 import { Identity, identityOf, isExecViewer, visibleProjectIds } from '../rbac';
+import type { RagHit } from '../rag/retriever';
+import type { Citation, RagSourceType } from '../rag/sources';
 
 /**
  * AI araçlarının veri kapsamı — asistan, kullanıcının arayüzde görebildiğinden
@@ -25,6 +27,13 @@ export interface ToolContext {
     activeProjectId: string | null;
     year: number;
     now: Date;
+    /** Bilgi tabanı araması (RAG) — tarayıcı çalışma zamanı bağlar; yoksa bilgi_ara kullanılamaz */
+    rag?: {
+        search: (query: string, o: { k?: number; types?: RagSourceType[]; projectId?: string }) => Promise<RagHit[]>;
+        mode: () => string;
+    };
+    /** Bu turda modele verilen kaynaklar (yanıtın altında numaralı gösterilir) */
+    citations: Citation[];
 }
 
 export const buildToolContext = (ws: WorkspaceData, now: Date = new Date()): ToolContext => {
@@ -48,6 +57,7 @@ export const buildToolContext = (ws: WorkspaceData, now: Date = new Date()): Too
         activeProjectId: ws.activeProjectId && visible.has(ws.activeProjectId) ? ws.activeProjectId : null,
         year: now.getFullYear(),
         now,
+        citations: [],
     };
 };
 

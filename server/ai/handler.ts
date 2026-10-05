@@ -1,6 +1,7 @@
 import { AI_LIMITS, AiStatus, ChatMessage, ChatRequestBody, TOOL_NAME_PATTERN, ToolCall, ToolSpec } from '../../utils/ai/protocol.js';
 import { AuthResult, authorize } from './auth.js';
 import { Env, readAiConfig } from './config.js';
+import { buildEmbedRequest, parseEmbedResponse, readEmbeddingConfig, validateEmbedBody } from './embeddings.js';
 import { buildUpstreamRequest, extractUpstreamError, parseUpstreamEvents, UpstreamStreamError } from './providers.js';
 import { createRateLimiter, RateLimiter } from './rateLimit.js';
 import { parseSSE } from './sse.js';
@@ -10,6 +11,7 @@ import { parseSSE } from './sse.js';
  * (api/ai/*) ve Vite geliştirme sunucusu (vite.config.ts) bu işleyiciyi çağırır.
  *
  *   GET  …/health → AiStatus (anahtar içermez)
+ *   POST …/embed  → { vectors } (RAG anlamsal arama; isteğe bağlı)
  *   POST …/chat   → NDJSON akışı (ChatStreamEvent satırları)
  *
  * Mesaj içerikleri hiçbir zaman loglanmaz.
@@ -21,7 +23,7 @@ export interface HandlerOptions {
     isDev?: boolean;
     fetchImpl?: typeof fetch;
     rateLimiter?: RateLimiter;
-    route?: 'health' | 'chat';
+    route?: 'health' | 'chat' | 'embed';
 }
 
 const limiters = new Map<number, RateLimiter>();
@@ -197,7 +199,7 @@ const upstreamErrorMessage = (status: number, detail: string): string => {
 export const handleAiRequest = async (request: Request, env: Env, opts: HandlerOptions = {}): Promise<Response> => {
     const fetchImpl = opts.fetchImpl || fetch;
     const path = new URL(request.url).pathname.replace(/\/+$/, '');
-    const route = opts.route || (path.endsWith('/health') ? 'health' : path.endsWith('/chat') ? 'chat' : undefined);
+    const route = opts.route || (path.endsWith('/health') ? 'health' : path.endsWith('/chat') ? 'chat' : path.endsWith('/embed') ? 'embed' : undefined);
     if (!route) return errorResponse(404, 'not_found', 'Bilinmeyen AI uç noktası.');
 
     const cfg = readAiConfig(env, { isDev: opts.isDev });
@@ -215,6 +217,9 @@ export const handleAiRequest = async (request: Request, env: Env, opts: HandlerO
             ...(cfg.model ? { model: cfg.model } : {}),
             ...(cfg.problem ? { problem: cfg.problem } : {}),
         };
+        const emb = readEmbeddingConfig(env);
+        if (emb.config) status.embeddingModel = emb.config.model;
+        else if (emb.problem) status.embeddingProblem = emb.problem;
         return jsonResponse(200, status, cors);
     }
 
@@ -227,6 +232,8 @@ export const handleAiRequest = async (request: Request, env: Env, opts: HandlerO
         const { status, message } = auth as Extract<AuthResult, { ok: false }>;
         return errorResponse(status, status === 403 ? 'forbidden' : status === 401 ? 'auth' : 'upstream', message, cors);
     }
+
+    if (route === 'embed') return handleEmbed(request, env, auth.subject, cors, fetchImpl, opts, config.timeoutMs);
 
     const retryAfter = (opts.rateLimiter || sharedLimiter(config.rateLimitPerMin)).hit(auth.subject);
     if (retryAfter > 0) {
@@ -316,4 +323,62 @@ export const handleAiRequest = async (request: Request, env: Env, opts: HandlerO
             'x-accel-buffering': 'no',
         },
     });
+};
+
+/** POST …/embed — belge/sorgu metinleri için embedding vektörleri */
+const handleEmbed = async (
+    request: Request,
+    env: Env,
+    subject: string,
+    cors: Record<string, string>,
+    fetchImpl: typeof fetch,
+    opts: HandlerOptions,
+    timeoutMs: number,
+): Promise<Response> => {
+    const emb = readEmbeddingConfig(env);
+    if (!emb.config) return errorResponse(503, 'config', emb.problem || 'Embedding modeli yapılandırılmamış (AI_EMBEDDING_MODEL).', cors);
+    const c = emb.config;
+
+    const retryAfter = (opts.rateLimiter || sharedLimiter(c.rateLimitPerMin)).hit(`embed:${subject}`);
+    if (retryAfter > 0) {
+        return errorResponse(429, 'rate_limited', `Çok fazla embedding isteği; ${retryAfter} sn sonra tekrar deneyin.`, { ...cors, 'retry-after': String(retryAfter) });
+    }
+
+    const rawText = await request.text();
+    if (rawText.length > AI_LIMITS.maxEmbedTexts * AI_LIMITS.maxEmbedChars * 2) return errorResponse(413, 'bad_request', 'İstek çok büyük.', cors);
+    let parsed: unknown;
+    try {
+        parsed = JSON.parse(rawText);
+    } catch {
+        return errorResponse(400, 'bad_request', 'İstek gövdesi JSON değil.', cors);
+    }
+    const { body, error } = validateEmbedBody(parsed);
+    if (!body) return errorResponse(400, 'bad_request', error || 'Geçersiz istek.', cors);
+
+    const abort = new AbortController();
+    const timer = setTimeout(() => abort.abort(), timeoutMs);
+    try {
+        const up = buildEmbedRequest(c, body);
+        let res: Response;
+        try {
+            res = await fetchImpl(up.url, { method: 'POST', headers: up.headers, body: up.body, signal: abort.signal });
+        } catch {
+            return errorResponse(abort.signal.aborted ? 504 : 502, abort.signal.aborted ? 'timeout' : 'upstream', 'Embedding sağlayıcısına ulaşılamadı.', cors);
+        }
+        const text = await res.text().catch(() => '');
+        if (!res.ok) {
+            console.error(`[ai] embedding hatası: ${c.provider} HTTP ${res.status}`);
+            return errorResponse(res.status === 429 ? 429 : 502, res.status === 429 ? 'rate_limited' : 'upstream',
+                upstreamErrorMessage(res.status, extractUpstreamError(text)).replace('AI_API_KEY', 'AI_EMBEDDING_API_KEY').replace('AI_MODEL', 'AI_EMBEDDING_MODEL'), cors);
+        }
+        let vectors: number[][];
+        try {
+            vectors = parseEmbedResponse(c, JSON.parse(text), body.texts.length);
+        } catch (e) {
+            return errorResponse(502, 'upstream', (e as Error).message || 'Embedding yanıtı okunamadı.', cors);
+        }
+        return jsonResponse(200, { vectors, model: c.model }, cors);
+    } finally {
+        clearTimeout(timer);
+    }
 };

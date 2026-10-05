@@ -67,6 +67,21 @@ export interface AiStatus {
     model?: string;
     /** Yapılandırma eksikse kullanıcıya gösterilecek Türkçe açıklama */
     problem?: string;
+    /** Anlamsal arama (RAG) için embedding modeli — yoksa yalnızca anahtar kelime araması */
+    embeddingModel?: string;
+    /** AI_EMBEDDING_MODEL verilmiş ama yapılandırma eksikse açıklama */
+    embeddingProblem?: string;
+}
+
+/** /api/ai/embed isteği: belge parçaları dizinleme, sorgu arama içindir */
+export interface EmbedRequestBody {
+    texts: string[];
+    kind: 'document' | 'query';
+}
+
+export interface EmbedResponseBody {
+    vectors: number[][];
+    model: string;
 }
 
 /** Sunucunun kabul ettiği üst sınırlar (istemci de geçmişi buna göre kırpar) */
@@ -79,6 +94,8 @@ export const AI_LIMITS = {
     maxToolCallsPerMessage: 16,
     /** Araç tanımı / argüman / meta JSON'u için üst sınır (karakter) */
     maxToolJsonChars: 20_000,
+    maxEmbedTexts: 64,
+    maxEmbedChars: 8_000,
 };
 
 /** Sağlayıcıların ortak kabul ettiği araç adı biçimi */

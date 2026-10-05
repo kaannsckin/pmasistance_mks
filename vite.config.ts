@@ -29,6 +29,9 @@ export default defineConfig(({ mode }) => {
         host: '0.0.0.0',
       },
       plugins: [react(), aiProxyPlugin(mode)],
+      // Bilgi Bankası doküman okuyucuları yalnızca gerektiğinde yüklenir; geliştirme
+      // sunucusu ilk kullanımda sayfayı yenilemesin diye önceden hazırlanır
+      optimizeDeps: { include: ['pdfjs-dist', 'jszip'] },
       resolve: {
         alias: {
           '@': path.resolve(__dirname, '.'),

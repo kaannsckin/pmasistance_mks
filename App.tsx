@@ -48,6 +48,7 @@ import { CommandItem } from './components/CommandPalette';
 import { AssistantProvider } from './components/assistant/AssistantContext';
 import AssistantPanel, { AssistantCommandPalette } from './components/assistant/AssistantPanel';
 import { buildSuggestions } from './utils/ai/suggestions';
+import { RagRef } from './utils/rag/sources';
 import WorkPackageManager from './components/WorkPackageManager';
 import CalendarView from './components/CalendarView';
 import { analyzeDataHealth, applyHealthFix, HealthFix } from './utils/dataHealth';
@@ -762,6 +763,12 @@ const App: React.FC = () => {
   currentViewRef.current = currentView;
   const getAssistantWorkspace = useCallback(() => workspaceRef.current, []);
   const getAssistantView = useCallback(() => currentViewRef.current, []);
+  // Asistan kaynağına tıklanınca: ilgili projeyi aç ve ekrana geç
+  const handleAssistantNavigate = useCallback((ref: RagRef) => {
+    if (ref.kind !== 'project-view') return;
+    handleOpenProject(ref.projectId);
+    setCurrentView(ref.view);
+  }, [handleOpenProject]);
   const aiSuggestions = useMemo(
     () => buildSuggestions(identity.role, activeProject && visibleProjects.some(p => p.id === activeProject.id) ? activeProject.name : undefined),
     [identity.role, activeProject, visibleProjects]
@@ -789,7 +796,7 @@ const App: React.FC = () => {
   }, [workspace, visibleProjects, identity, handleOpenProject, activeProject]);
 
   return (
-    <AssistantProvider enabled={isAIEnabled} getWorkspace={getAssistantWorkspace} getView={getAssistantView}>
+    <AssistantProvider enabled={isAIEnabled} getWorkspace={getAssistantWorkspace} getView={getAssistantView} onNavigate={handleAssistantNavigate}>
     <div className={`min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans theme-${settings?.theme || 'classic'}`}>
       <Header
         currentView={currentView} setCurrentView={setCurrentView}

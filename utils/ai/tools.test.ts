@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { Allocation, Person, Task, TaskStatus, UserRole, WorkspaceData } from '../../types';
 import { createEmptyWorkspace, createProject } from '../workspace';
 import { TOOL_NAME_PATTERN } from './protocol';
@@ -57,13 +57,13 @@ const buildWs = (role: UserRole = 'py', personId: string | null = 'p1'): Workspa
     };
 };
 
-const run = (name: string, args: Record<string, unknown>, ws: WorkspaceData = buildWs()) => {
-    const out = executeTool({ name, arguments: args }, buildToolContext(ws, NOW));
+const run = async (name: string, args: Record<string, unknown>, ws: WorkspaceData = buildWs()) => {
+    const out = await executeTool({ name, arguments: args }, buildToolContext(ws, NOW));
     return { ...out, json: JSON.parse(out.content) };
 };
 
 describe('araç kataloğu', () => {
-    it('tüm araç adları ve şemaları sağlayıcı kurallarına uyar', () => {
+    it('tüm araç adları ve şemaları sağlayıcı kurallarına uyar', async () => {
         const names = new Set<string>();
         for (const t of AI_TOOLS) {
             expect(t.spec.name).toMatch(TOOL_NAME_PATTERN);
@@ -75,18 +75,18 @@ describe('araç kataloğu', () => {
         }
     });
 
-    it('araç tanımlarının toplam boyutu sınırlı kalır (her istekte gönderilir)', () => {
+    it('araç tanımlarının toplam boyutu sınırlı kalır (her istekte gönderilir)', async () => {
         const size = JSON.stringify(AI_TOOLS.map(t => t.spec)).length;
         console.log(`araç tanımları: ${AI_TOOLS.length} adet, ${size} karakter`);
         expect(size).toBeLessThan(16_000);
     });
 
-    it('her araç parametresiz çalışır (duman testi) ve sicil sızdırmaz', () => {
+    it('her araç parametresiz çalışır (duman testi) ve sicil sızdırmaz', async () => {
         for (const role of ['py', 'mudur', 'bolum_sorumlu', 'pyb_destek'] as UserRole[]) {
             const ws = buildWs(role, role === 'mudur' || role === 'pyb_destek' ? null : 'p1');
             const ctx = buildToolContext(ws, NOW);
             for (const spec of toolSpecsFor(ctx)) {
-                const out = executeTool({ name: spec.name, arguments: {} }, ctx);
+                const out = await executeTool({ name: spec.name, arguments: {} }, ctx);
                 expect(() => JSON.parse(out.content)).not.toThrow();
                 expect(out.content.length).toBeLessThanOrEqual(MAX_TOOL_RESULT_CHARS);
                 expect(out.content).not.toMatch(/SCp\d99/);
@@ -96,16 +96,16 @@ describe('araç kataloğu', () => {
 });
 
 describe('rol kapsamı', () => {
-    it('PY yalnızca kendi projesini görür; başka projenin içeriği yetki hatası verir', () => {
-        const list = run('proje_listesi', {});
+    it('PY yalnızca kendi projesini görür; başka projenin içeriği yetki hatası verir', async () => {
+        const list = await run('proje_listesi', {});
         expect(list.json.projeler.map((p: any) => p.ad)).toEqual(['ALTAY Sistemi']);
-        const denied = run('proje_detayi', { proje: 'Gizli Proje' });
+        const denied = await run('proje_detayi', { proje: 'Gizli Proje' });
         expect(denied.ok).toBe(false);
         expect(denied.json.hata).toMatch(/yetki kapsamında değil/);
-        expect(run('gorev_ara', { metin: 'gizli' }).json.eslesen).toBe(0);
+        expect((await run('gorev_ara', { metin: 'gizli' })).json.eslesen).toBe(0);
     });
 
-    it('yönetici rolleri tüm projeleri görür ama not/istek araçları hiç sunulmaz', () => {
+    it('yönetici rolleri tüm projeleri görür ama not/istek araçları hiç sunulmaz', async () => {
         const ws = buildWs('mudur', null);
         const ctx = buildToolContext(ws, NOW);
         expect(ctx.scoped.projects).toHaveLength(2);
@@ -114,33 +114,33 @@ describe('rol kapsamı', () => {
         expect(names).not.toContain('notlari_ara');
         expect(names).not.toContain('musteri_istekleri');
         // Doğrudan çağrılsa bile reddedilir
-        expect(executeTool({ name: 'notlari_ara', arguments: {} }, ctx).ok).toBe(false);
+        expect((await executeTool({ name: 'notlari_ara', arguments: {} }, ctx)).ok).toBe(false);
         // Durum raporu taslağı yöneticide notları içermez
-        const rep = executeTool({ name: 'durum_raporu_taslagi', arguments: { proje: 'ALTAY' } }, ctx);
+        const rep = await executeTool({ name: 'durum_raporu_taslagi', arguments: { proje: 'ALTAY' } }, ctx);
         expect(rep.content).not.toContain('Müşteri toplantısı');
     });
 
-    it('PY kendi projesinin notlarını arayabilir', () => {
-        const r = run('notlari_ara', { metin: 'bütçe' });
+    it('PY kendi projesinin notlarını arayabilir', async () => {
+        const r = await run('notlari_ara', { metin: 'bütçe' });
         expect(r.json.eslesen).toBe(1);
         expect(r.json.notlar[0].proje).toBe('ALTAY Sistemi');
-        expect(run('musteri_istekleri', {}).json.istekler[0].baslik).toBe('Rapor ekranı');
+        expect((await run('musteri_istekleri', {})).json.istekler[0].baslik).toBe('Rapor ekranı');
     });
 
-    it('son değişiklikler görünmeyen projelerin kayıtlarını içermez', () => {
-        const r = run('son_degisiklikler', { gun: 30 });
+    it('son değişiklikler görünmeyen projelerin kayıtlarını içermez', async () => {
+        const r = await run('son_degisiklikler', { gun: 30 });
         expect(r.json.degisiklikler.map((d: any) => d.ozet)).toEqual(['ALTAY RAG → Riskli']);
     });
 
-    it('kişi seçilmemiş PY için kapsam boştur ve açıklama döner', () => {
-        const r = run('proje_listesi', {}, buildWs('py', null));
+    it('kişi seçilmemiş PY için kapsam boştur ve açıklama döner', async () => {
+        const r = await run('proje_listesi', {}, buildWs('py', null));
         expect(r.json.proje_sayisi).toBe(0);
         expect(r.json.not).toMatch(/kişi seçilmedi/);
     });
 });
 
 describe('çözücüler', () => {
-    it('proje adı/kodu Türkçe karakter ve büyük-küçük harf duyarsız eşleşir; boşsa açık proje', () => {
+    it('proje adı/kodu Türkçe karakter ve büyük-küçük harf duyarsız eşleşir; boşsa açık proje', async () => {
         const ctx = buildToolContext(buildWs(), NOW);
         expect(resolveProject(ctx, 'alt-01').id).toBe('altay');
         expect(resolveProject(ctx, 'altay sİstemi').id).toBe('altay');
@@ -150,8 +150,8 @@ describe('çözücüler', () => {
 });
 
 describe('veri araçları', () => {
-    it('proje detayı: geciken/yaklaşan görevler, risk ve tahsis', () => {
-        const d = run('proje_detayi', {}).json;
+    it('proje detayı: geciken/yaklaşan görevler, risk ve tahsis', async () => {
+        const d = (await run('proje_detayi', {})).json;
         expect(d.ad).toBe('ALTAY Sistemi');
         expect(d.gorevler.geciken_sayisi).toBe(1);
         expect(d.gorevler.geciken[0].gorev).toBe('Arayüz tasarımı');
@@ -160,52 +160,52 @@ describe('veri araçları', () => {
         expect(d.tahsis).toMatchObject({ yil: 2026, plan_aa: 1.7, gerceklesen_aa: 0.8 });
     });
 
-    it('kişi profili: aylık yük, kapasite aşımı; sicil yok', () => {
-        const r = run('kisi_profili', { kisi: 'ayse kaya' });
+    it('kişi profili: aylık yük, kapasite aşımı; sicil yok', async () => {
+        const r = await run('kisi_profili', { kisi: 'ayse kaya' });
         expect(r.json.ad).toBe('Ayşe Kaya');
         expect(r.json.aylik_plan[6]).toBe(1.2);
         expect(r.json.kapasite_asimi_olan_aylar).toContain(7);
         expect(r.content).not.toContain('SCp199');
     });
 
-    it('kişi verilmezse kullanıcının kendisi', () => {
-        expect(run('kisi_profili', {}).json.ad).toBe('Ayşe Kaya');
+    it('kişi verilmezse kullanıcının kendisi', async () => {
+        expect((await run('kisi_profili', {})).json.ad).toBe('Ayşe Kaya');
     });
 
-    it('uygun kişi bulma: rol ve pencere', () => {
-        const r = run('uygun_kisi_bul', { rol: 'test muhendisi', baslangic_ay: 8, bitis_ay: 10, gerekli_aa: 0.5 }).json;
+    it('uygun kişi bulma: rol ve pencere', async () => {
+        const r = (await run('uygun_kisi_bul', { rol: 'test muhendisi', baslangic_ay: 8, bitis_ay: 10, gerekli_aa: 0.5 })).json;
         expect(r.sorgu.rol).toBe('Test Mühendisi');
         expect(r.adaylar.map((a: any) => a.ad)).toEqual(['Zeynep Şahin']);
         expect(r.adaylar[0].uygun).toBe(true);
     });
 
-    it('doluluk analizi aşırı yüklü kişiyi ve ayı bulur', () => {
-        const r = run('doluluk_analizi', {}).json;
+    it('doluluk analizi aşırı yüklü kişiyi ve ayı bulur', async () => {
+        const r = (await run('doluluk_analizi', {})).json;
         expect(r.kapasitesini_asan_kisi).toBe(1);
         expect(r.asiri_yuklu[0].ad).toBe('Ayşe Kaya');
         expect(r.asiri_yuklu[0].asiri_aylar[0].ay).toBe(7);
     });
 
-    it('geciken görev filtresi', () => {
-        const r = run('gorev_ara', { geciken: true }).json;
+    it('geciken görev filtresi', async () => {
+        const r = (await run('gorev_ara', { geciken: true })).json;
         expect(r.gorevler.map((g: any) => g.gorev)).toEqual(['Arayüz tasarımı']);
     });
 
-    it('tahsis özeti tüm projeleri kapsar (Tahsis ekranı gibi)', () => {
-        const r = run('tahsis_ozeti', {}).json;
+    it('tahsis özeti tüm projeleri kapsar (Tahsis ekranı gibi)', async () => {
+        const r = (await run('tahsis_ozeti', {})).json;
         expect(r.projeler.map((p: any) => p.proje).sort()).toEqual(['ALTAY Sistemi', 'Gizli Proje']);
     });
 
-    it('bilinmeyen araç ve geçersiz yıl hata olarak döner', () => {
-        expect(run('olmayan_arac', {}).ok).toBe(false);
-        const bad = run('portfoy_ozeti', { yil: 1800 });
+    it('bilinmeyen araç ve geçersiz yıl hata olarak döner', async () => {
+        expect((await run('olmayan_arac', {})).ok).toBe(false);
+        const bad = await run('portfoy_ozeti', { yil: 1800 });
         expect(bad.ok).toBe(false);
         expect(bad.json.hata).toMatch(/Geçersiz yıl/);
     });
 });
 
 describe('sistem talimatı', () => {
-    it('rol, kişi, açık proje ve görünür projeleri içerir; sicil içermez', () => {
+    it('rol, kişi, açık proje ve görünür projeleri içerir; sicil içermez', async () => {
         const ctx = buildToolContext(buildWs(), NOW);
         const s = buildSystemPrompt(ctx);
         expect(s).toContain('Proje Yöneticisi — Ayşe Kaya');
@@ -215,8 +215,44 @@ describe('sistem talimatı', () => {
         expect(s).not.toMatch(/SCp\d99/);
     });
 
-    it('yönetici rolünde not erişimi olmadığını belirtir', () => {
+    it('yönetici rolünde not erişimi olmadığını belirtir', async () => {
         const s = buildSystemPrompt(buildToolContext(buildWs('mudur', null), NOW));
         expect(s).toContain('notlarını ve müşteri isteklerini göremez');
+    });
+});
+
+describe('bilgi_ara (RAG)', () => {
+    const fakeHit = (id: string, type: any, title: string, text: string, projectName?: string) => ({
+        chunk: { id: `${id}#0`, docId: id, type, title, text, projectName, ref: { kind: 'guide', section: title }, hash: id },
+        score: 1, lexical: true, semantic: false,
+    });
+
+    it('kaynakları numaralar, tekrar eden parçaya aynı numarayı verir, sicili maskeler', async () => {
+        const ctx = buildToolContext(buildWs(), NOW);
+        const search = vi.fn(async () => [
+            fakeHit('not:1', 'not', 'ALTAY notu', 'Ayşe Kaya (SCp199) ek bütçe istedi.', 'ALTAY Sistemi'),
+            fakeHit('kilavuz:x', 'kilavuz', 'Plan onayı', 'Onaya Gönder ile gönderilir.'),
+        ]);
+        ctx.rag = { search: search as any, mode: () => 'anahtar kelime' };
+        const r1 = JSON.parse((await executeTool({ name: 'bilgi_ara', arguments: { sorgu: 'ek bütçe', kaynak: 'not', proje: 'ALTAY' } }, ctx)).content);
+        expect(r1.sonuclar.map((s: any) => s.no)).toEqual([1, 2]);
+        expect(r1.sonuclar[0].metin).toContain('[sicil]');
+        expect(search).toHaveBeenCalledWith('ek bütçe', { k: 6, types: ['not'], projectId: 'altay' });
+        const r2 = JSON.parse((await executeTool({ name: 'bilgi_ara', arguments: { sorgu: 'plan onayı' } }, ctx)).content);
+        expect(r2.sonuclar.map((s: any) => s.no)).toEqual([1, 2]);
+        expect(ctx.citations.map(c => c.no)).toEqual([1, 2]);
+    });
+
+    it('RAG yoksa ya da sorgu boşsa hata; yönetici yalnız notlarda arayamaz', async () => {
+        const ctx = buildToolContext(buildWs(), NOW);
+        expect((await executeTool({ name: 'bilgi_ara', arguments: { sorgu: 'x' } }, ctx)).ok).toBe(false);
+        ctx.rag = { search: async () => [], mode: () => 'anahtar kelime' };
+        expect((await executeTool({ name: 'bilgi_ara', arguments: {} }, ctx)).ok).toBe(false);
+        const empty = JSON.parse((await executeTool({ name: 'bilgi_ara', arguments: { sorgu: 'yok' } }, ctx)).content);
+        expect(empty.not).toMatch(/bulunamadı/);
+        const ex = buildToolContext(buildWs('mudur', null), NOW);
+        ex.rag = { search: async () => [], mode: () => 'anahtar kelime' };
+        const denied = await executeTool({ name: 'bilgi_ara', arguments: { sorgu: 'x', kaynak: 'not' } }, ex);
+        expect(denied.ok).toBe(false);
     });
 });

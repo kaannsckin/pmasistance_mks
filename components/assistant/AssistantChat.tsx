@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Markdown from '../Markdown';
 import { AgentStep } from '../../utils/ai/agent';
+import { Citation, RAG_SOURCE_LABELS } from '../../utils/rag/sources';
 import { useAssistant } from './AssistantContext';
 
 /**
@@ -33,6 +35,67 @@ const StepChips: React.FC<{ steps: AgentStep[] }> = ({ steps }) => (
   </div>
 );
 
+const SOURCE_ICONS: Record<Citation['type'], string> = {
+  not: 'fa-pen-nib', gorev: 'fa-list-check', risk: 'fa-shield-halved', istek: 'fa-users-viewfinder', analiz: 'fa-chess',
+  hedef: 'fa-bullseye', proje: 'fa-folder-open', kilavuz: 'fa-book', dokuman: 'fa-file-lines',
+};
+
+/** Metinde [n] olarak anılan kaynaklar; hiç anılmadıysa incelenen tüm kaynaklar */
+export const citedSources = (content: string, citations: Citation[]): { label: string; list: Citation[] } => {
+  const nums = new Set(Array.from(content.matchAll(/\[(\d{1,2})\]/g)).map(m => Number(m[1])));
+  const used = citations.filter(c => nums.has(c.no));
+  return used.length ? { label: 'Kaynaklar', list: used } : { label: 'İncelenen kaynaklar', list: citations };
+};
+
+const SourceList: React.FC<{ content: string; citations: Citation[]; onOpen: (c: Citation) => void }> = ({ content, citations, onOpen }) => {
+  const { label, list } = citedSources(content, citations);
+  if (!list.length) return null;
+  return (
+    <div className="mt-3 pt-2 border-t border-gray-200/70 dark:border-gray-700">
+      <div className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1.5">{label}</div>
+      <div className="flex flex-col gap-1">
+        {list.map(c => (
+          <button
+            key={c.no}
+            onClick={() => onOpen(c)}
+            title={c.excerpt.slice(0, 240)}
+            className="flex items-start gap-2 text-left text-[11px] px-2 py-1 rounded-lg hover:bg-white dark:hover:bg-gray-800 transition-colors"
+          >
+            <span className="flex-none min-w-[1.5rem] h-5 px-1 rounded-md bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 font-bold flex items-center justify-center">{c.no}</span>
+            <span className="min-w-0">
+              <span className="font-semibold text-gray-700 dark:text-gray-200"><i className={`fa-solid ${SOURCE_ICONS[c.type]} mr-1 opacity-60`}></i>{c.title}</span>
+              <span className="block text-gray-400 truncate">{[RAG_SOURCE_LABELS[c.type], c.projectName, c.date].filter(Boolean).join(' · ')}</span>
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// Portal: panel içindeki olası CSS dönüşümleri pencereyi panele hapsetmesin
+const SourcePreview: React.FC<{ c: Citation; onClose: () => void; onOpenKb: () => void }> = ({ c, onClose, onOpenKb }) => createPortal(
+  <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+    <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-xl max-h-[80vh] flex flex-col border border-gray-100 dark:border-gray-700" onClick={e => e.stopPropagation()}>
+      <div className="px-5 py-3 border-b dark:border-gray-700 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-[10px] font-bold uppercase tracking-wider text-indigo-500">[{c.no}] {RAG_SOURCE_LABELS[c.type]}</div>
+          <div className="text-sm font-black text-gray-800 dark:text-white">{c.title}</div>
+          {(c.projectName || c.date) && <div className="text-[11px] text-gray-400">{[c.projectName, c.date].filter(Boolean).join(' · ')}</div>}
+        </div>
+        <button onClick={onClose} title="Kapat" className="w-8 h-8 rounded-lg text-gray-400 hover:text-gray-700 dark:hover:text-white"><i className="fa-solid fa-xmark"></i></button>
+      </div>
+      <div className="p-5 overflow-y-auto text-sm text-gray-700 dark:text-gray-200 whitespace-pre-wrap leading-relaxed">{c.excerpt}</div>
+      {c.ref.kind === 'document' && (
+        <div className="px-5 py-3 border-t dark:border-gray-700 text-right">
+          <button onClick={onOpenKb} className="text-xs font-bold text-indigo-600 hover:underline"><i className="fa-solid fa-book mr-1"></i>Bilgi Bankası'nda göster</button>
+        </div>
+      )}
+    </div>
+  </div>,
+  document.body
+);
+
 const Dots = () => (
   <div className="flex items-center space-x-1.5 py-1">
     <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce"></div>
@@ -45,6 +108,7 @@ const AssistantChat: React.FC<Props> = ({ variant, suggestions, onClose, onExpan
   const a = useAssistant();
   const [input, setInput] = useState('');
   const [token, setToken] = useState('');
+  const [preview, setPreview] = useState<Citation | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const compact = variant === 'panel';
@@ -78,6 +142,9 @@ const AssistantChat: React.FC<Props> = ({ variant, suggestions, onClose, onExpan
         </div>
       </div>
       <div className="flex items-center gap-1 flex-none">
+        <button onClick={() => a.setKbOpen(true)} title="Bilgi Bankası — dizin durumu ve kurumsal dokümanlar" className="w-8 h-8 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-white dark:hover:bg-gray-800 transition-colors">
+          <i className="fa-solid fa-book text-xs"></i>
+        </button>
         {a.messages.length > 0 && (
           <button onClick={a.clear} title="Sohbeti temizle" className="w-8 h-8 rounded-lg text-gray-400 hover:text-red-500 hover:bg-white dark:hover:bg-gray-800 transition-colors">
             <i className="fa-solid fa-broom text-xs"></i>
@@ -182,6 +249,13 @@ const AssistantChat: React.FC<Props> = ({ variant, suggestions, onClose, onExpan
                 <>
                   {msg.steps && msg.steps.length > 0 && <StepChips steps={msg.steps} />}
                   {msg.content ? <Markdown text={msg.content} /> : msg.streaming ? <Dots /> : null}
+                  {msg.citations && msg.citations.length > 0 && (
+                    <SourceList
+                      content={msg.content}
+                      citations={msg.citations}
+                      onOpen={c => (c.ref.kind === 'project-view' ? a.navigate(c.ref) : setPreview(c))}
+                    />
+                  )}
                 </>
               ) : (
                 <div className="whitespace-pre-wrap break-words">{msg.content}</div>
@@ -195,6 +269,7 @@ const AssistantChat: React.FC<Props> = ({ variant, suggestions, onClose, onExpan
 
   return (
     <div className="h-full flex flex-col bg-white dark:bg-gray-800 overflow-hidden">
+      {preview && <SourcePreview c={preview} onClose={() => setPreview(null)} onOpenKb={() => { setPreview(null); a.setKbOpen(true); }} />}
       {header}
       <div ref={scrollRef} className={`flex-grow overflow-y-auto ${compact ? 'p-4' : 'p-8'} custom-scrollbar`}>
         {a.phase !== 'ready' || !a.enabled ? phaseScreen() : a.messages.length === 0 ? empty : list}

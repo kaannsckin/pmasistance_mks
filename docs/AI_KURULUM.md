@@ -14,11 +14,12 @@ Tarayıcı (asistan paneli) ──► /api/ai/chat  (proxy: anahtar burada) ─�
 | Proxy çekirdeği (çatıdan bağımsız) | `server/ai/handler.ts` |
 | Sağlayıcı adaptörleri | `server/ai/providers.ts` |
 | Erişim koruması / hız sınırı | `server/ai/auth.ts`, `server/ai/rateLimit.ts` |
-| Vercel fonksiyonları | `api/ai/chat.ts`, `api/ai/health.ts` |
+| Vercel fonksiyonları | `api/ai/chat.ts`, `api/ai/health.ts`, `api/ai/embed.ts` |
 | Yerel geliştirme ara katmanı | `vite.config.ts` → `server/ai/nodeAdapter.ts` |
 | Tarayıcı istemcisi | `utils/ai/client.ts` |
 | Araç döngüsü / araçlar / kapsam | `utils/ai/agent.ts`, `utils/ai/tools.ts`, `utils/ai/scope.ts` |
 | Sistem talimatı | `utils/ai/systemPrompt.ts` |
+| Bilgi tabanı (RAG) | `utils/rag/` (kaynaklar, parçalama, BM25, hibrit arama, doküman okuyucular, kılavuz) · `server/ai/embeddings.ts` |
 | Arayüz (panel, sohbet, paylaşılan durum) | `components/assistant/` |
 
 ## Asistan nasıl çalışır?
@@ -37,6 +38,23 @@ Tarayıcı (asistan paneli) ──► /api/ai/chat  (proxy: anahtar burada) ─�
 
 **Kapsam kuralı:** Asistan, kullanıcının arayüzde görebildiğinden fazlasını göremez (`utils/ai/scope.ts`). Proje içeriği `rbac.visibleProjectIds` ile sınırlıdır; yönetici rollerinde notlar ve müşteri istekleri veriden tamamen çıkarılır; **sicil numaraları hiçbir araç çıktısında yer almaz**. Araç sonuçları 12.000 karakterle, bir yanıt 6 araç adımıyla sınırlıdır.
 
+## Bilgi tabanı (RAG)
+
+Asistan, serbest metin içeriğinde `bilgi_ara` aracıyla arama yapar ve yanıtında kullandığı pasajları **[1], [2]** biçiminde kaynak göstererek verir. Yanıtın altındaki kaynaklara tıklayınca ilgili ekran açılır; kılavuz ve doküman kaynakları önizlenir.
+
+**Kaynaklar:**
+- **Uygulama içeriği** (rol kapsamlı): haftalık notlar, görev açıklama/yorum/alt görevleri, risk açıklama ve aksiyonları, müşteri istekleri, PESTEL/SWOT maddeleri, hedefler, iş paketleri, proje durum notları.
+- **Kullanım kılavuzu**: uygulamayla gelen `utils/rag/guide.md`; "nasıl yapılır" soruları için.
+- **Kurumsal dokümanlar**: Bilgi Bankası'na yüklenen PDF, Word (.docx), Markdown ve metin dosyaları. Metin tarayıcıda çıkarılır; taranmış (görüntü) PDF'lerde OCR yapılmaz.
+
+**Akış:** kaynaklar → parçalama (~900 karakter, örtüşmeli) → BM25 anahtar kelime dizini (anında, bellekte) → embedding (isteğe bağlı, arka planda; yalnızca değişen parçalar) → hibrit arama (Reciprocal Rank Fusion) → kaynaklı yanıt.
+
+- **Anahtar kelime araması her zaman çalışır**: Türkçe ek ve aksan duyarsızdır ("butce" → "bütçesi", "gecikmeler" → "gecikme").
+- **Anlamsal arama** `AI_EMBEDDING_MODEL` tanımlanınca açılır. Embedding vektörleri cihazda (IndexedDB) "model:içerik özeti" anahtarıyla önbelleğe alınır, metin saklanmaz. İçerik değişmedikçe yeniden hesaplanmaz.
+- **Kapsam:** Dizin her aramada kullanıcının güncel yetki kapsamından kurulur. Görünmeyen projeler dizine girmez; yönetici rollerinde notlar ve müşteri istekleri dizine girmez.
+- **Dokümanlar bu cihazda (tarayıcıda) saklanır**, ekiple paylaşılmaz. Ekip genelinde paylaşılan bir doküman kütüphanesi için sunucu depolaması (ör. Supabase Storage) gerekir.
+- **Doğruluk ölçümü:** `utils/rag/eval.test.ts` gerçekçi Türkçe sorulardan oluşan bir değerlendirme setiyle recall@3 ve MRR ölçer; `npm run test` her çalıştığında raporlar. Yalnızca anahtar kelime aramasıyla şu an recall@3 = 0,94, MRR = 0,95.
+
 ## 1. Ortam değişkenleri
 
 | Değişken | Zorunlu | Açıklama |
@@ -53,6 +71,12 @@ Tarayıcı (asistan paneli) ──► /api/ai/chat  (proxy: anahtar burada) ─�
 | `AI_TEMPERATURE` | — | Örn. `0.3` |
 | `AI_RATE_LIMIT_PER_MIN` | — | Kişi/IP başına dakikalık istek sınırı (varsayılan 60; araç kullanan bir soru 2-4 istek üretir) |
 | `AI_TIMEOUT_MS` | — | Sağlayıcı zaman aşımı (varsayılan 55000) |
+| `AI_EMBEDDING_MODEL` | — | Anlamsal arama için embedding modeli; verilmezse yalnızca anahtar kelime araması |
+| `AI_EMBEDDING_PROVIDER` | Anthropic'te ✔ | `openai` · `azure` · `gemini` · `voyage`; varsayılan sohbet sağlayıcısı (Anthropic embedding sunmaz) |
+| `AI_EMBEDDING_API_KEY` | farklı sağlayıcıda ✔ | Aynı sağlayıcıda `AI_API_KEY` kullanılır |
+| `AI_EMBEDDING_BASE_URL` | — | Aynı sağlayıcıda `AI_BASE_URL`, yoksa sağlayıcının varsayılanı |
+| `AI_EMBEDDING_DIMENSIONS` | — | Destekleyen modellerde vektör boyutu (ör. 512) |
+| `AI_EMBED_RATE_LIMIT_PER_MIN` | — | Embedding isteği sınırı (varsayılan 120/dk; ilk dizinleme 32'şer parçalık partilerle yapılır) |
 
 \* **Yayında erişim koruması zorunludur.** Ne `AI_ACCESS_TOKEN` ne de Supabase tanımlıysa proxy istekleri reddeder (aksi halde kurumsal anahtarın kotası internete açılırdı). Yalnızca kurum içi kapalı ağda `AI_AUTH_MODE=none` bilinçli olarak seçilebilir. Yerel geliştirmede (`npm run dev`) koruma gerekmez.
 
@@ -80,6 +104,15 @@ AI_MODEL=<model-adı>
 AI_PROVIDER=openai
 AI_BASE_URL=https://llm.kurum.local/v1
 AI_MODEL=<model-adı>
+
+# Anlamsal arama (isteğe bağlı) — aynı sağlayıcı
+AI_EMBEDDING_MODEL=<embedding-modeli>
+
+# Anthropic sohbet + ayrı embedding sağlayıcısı
+AI_PROVIDER=anthropic
+AI_EMBEDDING_PROVIDER=voyage
+AI_EMBEDDING_API_KEY=...
+AI_EMBEDDING_MODEL=<embedding-modeli>
 ```
 
 ## 3. Yerel geliştirme

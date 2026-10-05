@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import CommandPalette, { CommandItem } from '../CommandPalette';
 import AssistantChat from './AssistantChat';
+import KnowledgeBaseModal from './KnowledgeBaseModal';
 import { useAssistant } from './AssistantContext';
 
 /**
@@ -20,19 +21,20 @@ const AssistantPanel: React.FC<Props> = ({ suggestions, hidden, onExpand }) => {
   const a = useAssistant();
 
   useEffect(() => {
-    if (!a.isOpen) return;
+    if (!a.isOpen || a.isKbOpen) return; // Bilgi Bankası açıkken Esc yalnızca onu kapatır
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') a.setOpen(false);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [a.isOpen, a.setOpen]);
+  }, [a.isOpen, a.isKbOpen, a.setOpen]);
 
-  if (!a.enabled || hidden) return null;
+  if (!a.enabled) return null;
 
   return (
     <>
-      {!a.isOpen && (
+      {a.isKbOpen && <KnowledgeBaseModal onClose={() => a.setKbOpen(false)} />}
+      {!hidden && !a.isOpen && (
         <button
           onClick={() => a.setOpen(true)}
           title="AI Asistan"
@@ -43,7 +45,7 @@ const AssistantPanel: React.FC<Props> = ({ suggestions, hidden, onExpand }) => {
           {a.isStreaming && <span className="absolute top-2 right-2 w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse border-2 border-indigo-600"></span>}
         </button>
       )}
-      {a.isOpen && (
+      {!hidden && a.isOpen && (
         <aside
           role="dialog"
           aria-label="AI Asistan"
@@ -62,7 +64,11 @@ export default AssistantPanel;
 export const AssistantCommandPalette: React.FC<{ items: CommandItem[]; onClose: () => void }> = ({ items, onClose }) => {
   const a = useAssistant();
   const all = a.enabled
-    ? [{ id: 'a-ai', group: 'Aksiyonlar', label: 'AI Asistan', sublabel: 'Sohbet panelini aç', icon: 'fa-wand-magic-sparkles', keywords: 'ai yapay zeka asistan zeka sor', run: () => a.setOpen(true) }, ...items]
+    ? [
+      { id: 'a-ai', group: 'Aksiyonlar', label: 'AI Asistan', sublabel: 'Sohbet panelini aç', icon: 'fa-wand-magic-sparkles', keywords: 'ai yapay zeka asistan zeka sor', run: () => a.setOpen(true) },
+      { id: 'a-kb', group: 'Aksiyonlar', label: 'Bilgi Bankası', sublabel: 'AI bilgi tabanı ve kurumsal dokümanlar', icon: 'fa-book', keywords: 'rag dokuman pdf word bilgi tabani kilavuz', run: () => { a.ensureReady(); a.setKbOpen(true); } },
+      ...items,
+    ]
     : items;
   return <CommandPalette items={all} onClose={onClose} onAskAI={a.enabled ? q => a.ask(q) : undefined} />;
 };

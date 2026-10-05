@@ -1,11 +1,13 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { View, WorkspaceData } from '../../types';
 import { AgentStep, runAgentTurn } from '../../utils/ai/agent';
-import { AiError, fetchAiStatus, hasCredentials, saveAccessToken, streamChat } from '../../utils/ai/client';
+import { AiError, embedTexts, fetchAiStatus, hasCredentials, saveAccessToken, streamChat } from '../../utils/ai/client';
 import { AiStatus, ChatMessage } from '../../utils/ai/protocol';
 import { buildToolContext } from '../../utils/ai/scope';
 import { buildSystemPrompt } from '../../utils/ai/systemPrompt';
 import { executeTool, toolLabel, toolSpecsFor } from '../../utils/ai/tools';
+import { Citation, RagRef } from '../../utils/rag/sources';
+import { configureEmbedder, rebuildIndex, searchKnowledge, searchMode, syncIndex } from '../../utils/rag/service';
 
 /**
  * Genel AI asistanının paylaşılan durumu: sohbet ekranlar arasında gezerken
@@ -19,6 +21,8 @@ export interface UiMessage {
   content: string;
   streaming?: boolean;
   steps?: AgentStep[];
+  /** bilgi_ara ile modele verilen kaynaklar */
+  citations?: Citation[];
 }
 
 export type AssistantPhase = 'idle' | 'loading' | 'unavailable' | 'needs_token' | 'needs_login' | 'ready';
@@ -41,6 +45,13 @@ interface AssistantApi {
   stop: () => void;
   clear: () => void;
   saveToken: (token: string) => void;
+  /** Bilgi Bankası penceresi */
+  isKbOpen: boolean;
+  setKbOpen: (open: boolean) => void;
+  /** Dizini güncel veriyle yeniden kurar (embedding'i baştan dener) */
+  refreshIndex: () => Promise<void>;
+  /** Kaynağa git (proje ekranı); kılavuz/doküman kaynakları sohbette önizlenir */
+  navigate: (ref: RagRef) => void;
 }
 
 const Ctx = createContext<AssistantApi | null>(null);
@@ -59,16 +70,18 @@ interface ProviderProps {
   enabled: boolean;
   getWorkspace: () => WorkspaceData | null;
   getView: () => View;
+  onNavigate?: (ref: RagRef) => void;
   children: React.ReactNode;
 }
 
-export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, getWorkspace, getView, children }) => {
+export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, getWorkspace, getView, onNavigate, children }) => {
   const [phase, setPhase] = useState<AssistantPhase>('idle');
   const [status, setStatus] = useState<AiStatus | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
   const [messages, setMessages] = useState<UiMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [isOpen, setOpen] = useState(false);
+  const [isKbOpen, setKbOpen] = useState(false);
   const messagesRef = useRef<UiMessage[]>([]);
   const abortRef = useRef<AbortController | null>(null);
   const pendingAsk = useRef<string | null>(null);
@@ -87,6 +100,33 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, getWorkspa
       setPhase('unavailable');
     }
   }, []);
+
+  useEffect(() => {
+    configureEmbedder(status?.configured && status.embeddingModel
+      ? { model: status.embeddingModel, embed: (texts, kind) => embedTexts(texts, kind, status.authMode) }
+      : null);
+  }, [status]);
+
+  /** Kullanıcının güncel kapsamında araç bağlamı + RAG çalışma zamanı */
+  const makeContext = useCallback(() => {
+    const ws = getWorkspace();
+    if (!ws) return null;
+    const ctx = buildToolContext(ws);
+    ctx.rag = { search: (q, o) => searchKnowledge(ctx, q, o), mode: searchMode };
+    return ctx;
+  }, [getWorkspace]);
+
+  // Panel açılıp asistan hazır olunca dizin arka planda kurulur (ilk soruyu bekletmesin)
+  useEffect(() => {
+    if (phase !== 'ready' || !(isOpen || isKbOpen)) return;
+    const ctx = makeContext();
+    if (ctx) syncIndex(ctx).catch(() => undefined);
+  }, [phase, isOpen, isKbOpen, makeContext]);
+
+  const refreshIndex = useCallback(async () => {
+    const ctx = makeContext();
+    if (ctx) await rebuildIndex(ctx);
+  }, [makeContext]);
 
   const ensureReady = useCallback(() => {
     if (enabled && phase === 'idle') checkStatus();
@@ -109,10 +149,9 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, getWorkspa
 
   const send = useCallback(async (raw: string) => {
     const prompt = raw.trim();
-    const ws = getWorkspace();
-    if (!prompt || !ws || !status || abortRef.current) return;
+    const ctx = makeContext();
+    if (!prompt || !ctx || !status || abortRef.current) return;
 
-    const ctx = buildToolContext(ws);
     const system = buildSystemPrompt(ctx, { view: getView() });
     // Önceki turlar yalnızca görünen metinleriyle gider (araç ayrıntıları tekrar gönderilmez)
     const history: ChatMessage[] = [
@@ -136,7 +175,7 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, getWorkspa
         execute: call => executeTool(call, ctx),
         stream: (body, onDelta) => streamChat(body, { authMode: status.authMode, signal: ctrl.signal, onDelta: (_, full) => onDelta(full) }),
         onText: text => update(replyId, { content: text }),
-        onSteps: steps => update(replyId, { steps }),
+        onSteps: steps => update(replyId, { steps, citations: [...ctx.citations] }),
         labelFor: toolLabel,
       });
       const notes: string[] = [];
@@ -169,7 +208,7 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, getWorkspa
       setIsStreaming(false);
       abortRef.current = null;
     }
-  }, [getWorkspace, getView, status]);
+  }, [makeContext, getView, status]);
 
   // Panel kapalıyken sorulan soru (komut paleti) hazır olunca gönderilir
   useEffect(() => {
@@ -207,10 +246,14 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, getWorkspa
     checkStatus();
   }, [checkStatus]);
 
+  const navigate = useCallback((ref: RagRef) => {
+    if (ref.kind === 'project-view') onNavigate?.(ref);
+  }, [onNavigate]);
+
   const api = useMemo<AssistantApi>(() => ({
     enabled, phase, status, authError, messages, isStreaming, isOpen, setOpen,
-    ensureReady, recheck, send, ask, stop, clear, saveToken,
-  }), [enabled, phase, status, authError, messages, isStreaming, isOpen, ensureReady, recheck, send, ask, stop, clear, saveToken]);
+    ensureReady, recheck, send, ask, stop, clear, saveToken, isKbOpen, setKbOpen, refreshIndex, navigate,
+  }), [enabled, phase, status, authError, messages, isStreaming, isOpen, ensureReady, recheck, send, ask, stop, clear, saveToken, isKbOpen, refreshIndex, navigate]);
 
   return <Ctx.Provider value={api}>{children}</Ctx.Provider>;
 };
