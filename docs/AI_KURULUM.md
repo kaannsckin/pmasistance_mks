@@ -69,6 +69,8 @@ Asistan, serbest metin içeriğinde `bilgi_ara` aracıyla arama yapar ve yanıt�
 | `AI_ALLOWED_ORIGINS` | — | Proxy farklı bir adresteyse izinli uygulama kökenleri (virgülle) |
 | `AI_MAX_OUTPUT_TOKENS` | — | Yanıt başına üst sınır (varsayılan 4096) |
 | `AI_TEMPERATURE` | — | Örn. `0.3` |
+| `AI_REASONING_EFFORT` | — | Akıl yürüten modellerde `reasoning_effort`: `none` · `minimal` · `low` · `medium` · `high` (OpenAI-uyumlu uçlar) |
+| `AI_EXTRA_BODY` | — | Ağ geçidine özgü ek gövde alanları, JSON nesnesi (ör. `{"chat_template_kwargs":{"enable_thinking":false}}`); model/mesaj/araç alanlarını ezemez |
 | `AI_RATE_LIMIT_PER_MIN` | — | Kişi/IP başına dakikalık istek sınırı (varsayılan 60; araç kullanan bir soru 2-4 istek üretir) |
 | `AI_TIMEOUT_MS` | — | Sağlayıcı zaman aşımı (varsayılan 55000) |
 | `AI_EMBEDDING_MODEL` | — | Anlamsal arama için embedding modeli; verilmezse yalnızca anahtar kelime araması |
@@ -99,6 +101,13 @@ AI_MODEL=<model-adı>
 # Google Gemini
 AI_PROVIDER=gemini
 AI_MODEL=<model-adı>
+
+# TÜBİTAK BİLGEM AI API (OpenAI-uyumlu)
+AI_PROVIDER=openai
+AI_BASE_URL=https://ai-api.bilgem.tubitak.gov.tr/v1
+AI_MODEL=general            # Qwen3.8 Flash Next · 256K bağlam  (alternatif: code → DeepSeek Flash v4.1 · 1M bağlam)
+AI_REASONING_EFFORT=medium  # varsayılan "en yüksek" yavaş olabilir; sohbet için medium/low önerilir
+AI_MAX_OUTPUT_TOKENS=8192   # akıl yürütme token'ları da bu sınıra dahildir
 
 # Kurum içi / OpenAI-uyumlu (vLLM, Ollama, LiteLLM, kurumsal ağ geçidi)
 AI_PROVIDER=openai
@@ -151,7 +160,15 @@ AI_MODEL=...
   app.listen(8080);
   ```
 
-## 6. Güvenlik notları
+## 6. Akıl yürüten modeller ve kurum içi API'ler
+
+- **Düşünme çıktısı gösterilmez:** Ağ geçidi düşünmeyi ayrı alanda (`reasoning_content`) veriyorsa yok sayılır; metin içinde `<think>…</think>` olarak geliyorsa istemci ayıklar.
+- **Hız:** "En yüksek" akıl yürütme her araç adımını yavaşlatır. Vercel'deki 60 sn süre sınırına takılmamak için `AI_REASONING_EFFORT=medium` (ya da `low`) ve gerekirse `AI_TIMEOUT_MS` / `vercel.json` `maxDuration` ayarı önerilir.
+- **Araç çağrısı:** Asistan veriye araçlarla eriştiği için modelin/sunucunun OpenAI biçiminde *tool calling* desteklemesi gerekir (vLLM'de `--enable-auto-tool-choice --tool-call-parser …`). Desteklenmiyorsa asistan bunu açık bir hata mesajıyla bildirir.
+- **Ağ erişimi:** Proxy'nin API'ye ulaşabilmesi gerekir. API yalnızca kurum ağından erişilebiliyorsa proxy Vercel yerine kurum içinde çalıştırılmalıdır (bkz. 5. bölüm, Node ara katmanı); veri de böylece kurum dışına çıkmaz.
+- **Embedding:** Kurum API'sinde embedding modeli yoksa RAG anahtar kelime aramasıyla çalışır; varsa `AI_EMBEDDING_MODEL` ile açılır.
+
+## 7. Güvenlik notları
 
 - Anahtar yalnızca proxy'nin ortam değişkenindedir; `/health` yalnızca sağlayıcı ve model adını gösterir.
 - Mesaj içerikleri loglanmaz; sağlayıcı hata mesajları kısaltılıp anahtar içermeden iletilir.

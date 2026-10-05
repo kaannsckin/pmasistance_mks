@@ -149,6 +149,24 @@ export const trimHistory = (
     return out.flat();
 };
 
+/**
+ * Akıl yürüten modellerin (Qwen3, DeepSeek-R1 vb.) <think> düşünme çıktısını
+ * gizler. Ağ geçidi düşünmeyi ayrı alanda (reasoning_content) veriyorsa zaten
+ * görünmez; vermiyorsa metin içindeki bloklar burada ayıklanır:
+ *  - tam <think>…</think> blokları silinir
+ *  - eşsiz </think> (açılışı şablonun eklediği düşünme) → öncesi silinir
+ *  - kapanmamış <think> (hâlâ düşünüyor) → sonrası henüz gösterilmez
+ */
+export const stripReasoning = (text: string): string => {
+    if (!text.includes('think>')) return text;
+    let t = text.replace(/<think>[\s\S]*?<\/think>/g, '');
+    const close = t.indexOf('</think>');
+    if (close !== -1) t = t.slice(close + '</think>'.length);
+    const open = t.indexOf('<think>');
+    if (open !== -1) t = t.slice(0, open);
+    return t.replace(/^\s+/, '');
+};
+
 export interface StreamChatOptions {
     authMode: AiAuthMode;
     signal?: AbortSignal;
@@ -187,7 +205,7 @@ export const streamChat = async (body: ChatRequestBody, opts: StreamChatOptions)
         for await (const ev of readNdjson(res.body)) {
             if (ev.type === 'delta') {
                 full += ev.text;
-                opts.onDelta?.(ev.text, full);
+                opts.onDelta?.(ev.text, stripReasoning(full));
             } else if (ev.type === 'tool_call') {
                 toolCalls.push(ev.call);
             } else if (ev.type === 'done') {
@@ -201,7 +219,7 @@ export const streamChat = async (body: ChatRequestBody, opts: StreamChatOptions)
         if ((e as Error)?.name === 'AbortError' || opts.signal?.aborted) throw new AiError('İptal edildi.', 'aborted');
         throw new AiError('AI yanıt akışı kesildi.', 'network');
     }
-    return { text: full, toolCalls, stopReason };
+    return { text: stripReasoning(full), toolCalls, stopReason };
 };
 
 const sleep = (ms: number, signal?: AbortSignal) =>

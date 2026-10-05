@@ -243,3 +243,36 @@ describe('araç çağrısı (tool calling)', () => {
         expect(calls[0].call.id).not.toBe(calls[1].call.id);
     });
 });
+
+describe('OpenAI-uyumlu ağ geçidi ayarları (ör. BİLGEM AI API)', () => {
+    const bilgem = { AI_PROVIDER: 'openai', AI_BASE_URL: 'https://ai-api.bilgem.tubitak.gov.tr/v1', AI_MODEL: 'general' };
+
+    it('reasoning_effort ve AI_EXTRA_BODY gövdeye eklenir; temel alanları ezemez', () => {
+        const c = cfg({ ...bilgem, AI_REASONING_EFFORT: 'Medium', AI_EXTRA_BODY: '{"chat_template_kwargs":{"enable_thinking":false},"model":"baska","stream":false}' });
+        const r = buildUpstreamRequest(c, req);
+        expect(r.url).toBe('https://ai-api.bilgem.tubitak.gov.tr/v1/chat/completions');
+        const body = JSON.parse(r.body);
+        expect(body.reasoning_effort).toBe('medium');
+        expect(body.chat_template_kwargs).toEqual({ enable_thinking: false });
+        expect(body.model).toBe('general');
+        expect(body.stream).toBe(true);
+        expect(body.max_tokens).toBe(4096); // özel uç nokta → max_tokens
+    });
+
+    it('geçersiz reasoning effort ve bozuk AI_EXTRA_BODY yapılandırma sorunu verir', () => {
+        const env = { ...bilgem, AI_API_KEY: 'k', AI_AUTH_MODE: 'none' };
+        expect(readAiConfig({ ...env, AI_REASONING_EFFORT: 'max' }).problem).toMatch(/AI_REASONING_EFFORT/);
+        expect(readAiConfig({ ...env, AI_EXTRA_BODY: '{bozuk' }).problem).toMatch(/AI_EXTRA_BODY/);
+        expect(readAiConfig({ ...env, AI_EXTRA_BODY: '[1]' }).problem).toMatch(/AI_EXTRA_BODY/);
+        expect(readAiConfig(env).config?.reasoningEffort).toBeUndefined();
+    });
+
+    it('akıl yürütme alanı (reasoning_content) kullanıcıya akmaz', async () => {
+        const s = streamOf(
+            'data: {"choices":[{"delta":{"reasoning_content":"önce verileri düşünüyorum"}}]}\n\n',
+            'data: {"choices":[{"delta":{"content":"Yanıt"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n'
+        );
+        const evs = await collect(parseUpstreamEvents(cfg(bilgem), parseSSE(s)));
+        expect(evs).toEqual([{ type: 'delta', text: 'Yanıt' }, { type: 'done', stopReason: 'stop' }]);
+    });
+});

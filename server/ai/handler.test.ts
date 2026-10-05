@@ -225,3 +225,12 @@ describe('validateChatBody — araç mesajları', () => {
         expect(sent.tools[0].function.name).toBe('proje_listesi');
     });
 });
+
+describe('araç çağrısını desteklemeyen sunucu', () => {
+    it('400 + tool hatası anlaşılır ipucuyla döner', async () => {
+        const fetchImpl = vi.fn(async () => new Response('{"error":{"message":"\\"auto\\" tool choice requires --enable-auto-tool-choice and --tool-call-parser to be set"}}', { status: 400 }));
+        const res = await handleAiRequest(chatReq(okBody), BASE_ENV, { isDev: true, fetchImpl, rateLimiter: freshLimiter() });
+        expect(res.status).toBe(502);
+        expect((await res.json()).error).toMatch(/araç çağrısını \(tool calling\) reddetti/);
+    });
+});

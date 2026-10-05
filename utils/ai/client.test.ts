@@ -39,3 +39,14 @@ describe('trimHistory', () => {
         expect(trimHistory([{ role: 'user', content: '  ' }, { role: 'user', content: 'a' }])).toEqual([{ role: 'user', content: 'a' }]);
     });
 });
+
+describe('stripReasoning (<think> çıktısı)', () => {
+    it('tam blokları, şablonun açtığı düşünmeyi ve süren düşünmeyi gizler', async () => {
+        const { stripReasoning } = await import('./client');
+        expect(stripReasoning('Merhaba')).toBe('Merhaba');
+        expect(stripReasoning('<think>plan yapıyorum</think>\n\nYanıt burada.')).toBe('Yanıt burada.');
+        expect(stripReasoning('önce düşünürüm...</think>Sonuç: 3 proje')).toBe('Sonuç: 3 proje');
+        expect(stripReasoning('<think>hâlâ düşünüyor')).toBe('');
+        expect(stripReasoning('Giriş <think>ara düşünce</think> devam')).toBe('Giriş  devam');
+    });
+});

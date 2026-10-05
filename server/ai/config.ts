@@ -16,6 +16,10 @@ export interface AiConfig {
     baseUrl: string;
     maxOutputTokens: number;
     temperature?: number;
+    /** OpenAI-uyumlu uçlarda reasoning_effort (akıl yürütme seviyesi) */
+    reasoningEffort?: string;
+    /** OpenAI-uyumlu ağ geçidine özgü ek gövde alanları (AI_EXTRA_BODY, JSON) */
+    extraBody?: Record<string, unknown>;
     timeoutMs: number;
     authMode: AiAuthMode;
     accessToken?: string;
@@ -42,6 +46,8 @@ const DEFAULT_BASE_URLS: Record<AiProvider, string | undefined> = {
     anthropic: 'https://api.anthropic.com',
     gemini: 'https://generativelanguage.googleapis.com/v1beta',
 };
+
+const REASONING_EFFORTS = ['none', 'minimal', 'low', 'medium', 'high'];
 
 const clean = (v: string | undefined): string | undefined => {
     const t = v?.trim();
@@ -104,6 +110,21 @@ export const readAiConfig = (env: Env, opts: { isDev?: boolean } = {}): ConfigRe
 
     const temperature = clean(env.AI_TEMPERATURE) !== undefined ? Number(env.AI_TEMPERATURE) : undefined;
 
+    const reasoningEffort = clean(env.AI_REASONING_EFFORT)?.toLowerCase();
+    if (reasoningEffort && !REASONING_EFFORTS.includes(reasoningEffort)) {
+        return { ...base, problem: `Geçersiz AI_REASONING_EFFORT: "${reasoningEffort}" (${REASONING_EFFORTS.join(' | ')}).` };
+    }
+    let extraBody: Record<string, unknown> | undefined;
+    if (clean(env.AI_EXTRA_BODY)) {
+        try {
+            const v = JSON.parse(env.AI_EXTRA_BODY!);
+            if (!v || typeof v !== 'object' || Array.isArray(v)) throw new Error();
+            extraBody = v;
+        } catch {
+            return { ...base, problem: 'AI_EXTRA_BODY geçerli bir JSON nesnesi olmalı (ör. {"chat_template_kwargs":{"enable_thinking":false}}).' };
+        }
+    }
+
     return {
         ...base,
         config: {
@@ -113,6 +134,8 @@ export const readAiConfig = (env: Env, opts: { isDev?: boolean } = {}): ConfigRe
             baseUrl,
             maxOutputTokens: positiveInt(env.AI_MAX_OUTPUT_TOKENS, 4096),
             temperature: temperature !== undefined && Number.isFinite(temperature) ? temperature : undefined,
+            reasoningEffort,
+            extraBody,
             timeoutMs: positiveInt(env.AI_TIMEOUT_MS, 55_000), // Vercel maxDuration (60 sn) dolmadan düzgün hata verilsin
             authMode: auth.mode,
             accessToken: clean(env.AI_ACCESS_TOKEN),

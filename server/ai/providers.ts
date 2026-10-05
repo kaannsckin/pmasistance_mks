@@ -159,11 +159,14 @@ export const buildUpstreamRequest = (config: AiConfig, req: ChatRequestBody): Up
                     ? { ...json, 'api-key': config.apiKey }
                     : { ...json, authorization: `Bearer ${config.apiKey}` },
                 body: JSON.stringify({
+                    // Ağ geçidine özgü alanlar önce: temel alanları (model, mesajlar, araçlar) ezemez
+                    ...(config.extraBody || {}),
                     model: config.model,
                     messages: openaiMessages(req),
                     stream: true,
                     [tokenParam]: config.maxOutputTokens,
                     ...(tools ? { tools: openaiTools(tools) } : {}),
+                    ...(config.reasoningEffort ? { reasoning_effort: config.reasoningEffort } : {}),
                     ...temp,
                 }),
             };
