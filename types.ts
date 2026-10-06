@@ -118,6 +118,8 @@ export enum View {
   Risks,
   Calendar,
   Overview, // Proje genel bakış (modern arayüz)
+  RiskReport, // Portföy risk raporu (modern arayüz)
+  Expectations, // Yönetimden beklentiler (modern arayüz)
 }
 
 export interface UnitLoad {
@@ -383,6 +385,7 @@ export interface WorkspaceData {
   planLocks: PlanLock[];
   snapshots: Snapshot[];
   leaves?: Leave[]; // Kişi uygunluğu — izin/tatil/yarı-zaman (kapasiteyi aya özel düşürür)
+  expectations?: ManagementExpectation[]; // Yönetimden beklentiler (PM / bölüm sorumlusu → yönetim)
   auditLog?: AuditEntry[]; // Kritik aksiyonların günlüğü (en yeni başta)
   settings: WorkspaceSettings;
   appVersion: string;
@@ -402,13 +405,55 @@ export interface Leave {
   reason?: string; // İzin / Tatil / Eğitim / Yarı-zaman …
 }
 
+/**
+ * Yönetimden beklenti: PM ya da bölüm sorumlusunun yönetimden karar, onay ya
+ * da destek beklediği konu. Aciliyet ve kategoriyle kaydedilir; yönetim
+ * panelinde hatırlatma olarak görünür, yönetim yanıtlar.
+ */
+export type ExpectationUrgency = 'critical' | 'important' | 'normal';
+export type ExpectationCategory = 'budget' | 'schedule' | 'approval' | 'customer' | 'resource' | 'procurement' | 'technical' | 'other';
+/** open: yanıt bekliyor · acknowledged: yönetim inceliyor · resolved: karşılandı · withdrawn: geri çekildi */
+export type ExpectationStatus = 'open' | 'acknowledged' | 'resolved' | 'withdrawn';
+
+/** Beklentiye eklenen ayrıntı: projedeki görev/risk kaydı ya da bir bağlantı */
+export interface ExpectationLink {
+  kind: 'task' | 'risk' | 'url';
+  projectId?: string; // task/risk için
+  refId?: string; // görev/risk id
+  url?: string; // kind = url
+  label: string; // eklendiği andaki başlık (kayıt silinse de okunur)
+}
+
+export interface ManagementExpectation {
+  id: string;
+  title: string;
+  description?: string;
+  category: ExpectationCategory;
+  urgency: ExpectationUrgency;
+  status: ExpectationStatus;
+  projectId?: string;
+  departmentCode?: string; // bölüm sorumlusunun bölümü
+  needBy?: string; // ISO tarih — en geç ne zamana kadar
+  links?: ExpectationLink[];
+  createdAt: string;
+  updatedAt: string;
+  createdByRole: UserRole;
+  createdByPersonId?: string;
+  createdByName?: string;
+  response?: string; // yönetimin yanıtı
+  respondedAt?: string;
+  respondedByName?: string;
+  respondedByRole?: UserRole;
+}
+
 /** Denetim günlüğü — kim, ne zaman, hangi kritik aksiyonu yaptı */
 export type AuditAction =
   | 'project.create' | 'project.delete' | 'project.owner' | 'project.rag'
   | 'risk.add' | 'risk.close'
   | 'plan.submit' | 'plan.approve' | 'plan.reject' | 'plan.unlock'
   | 'data.import' | 'identity.change' | 'health.fix' | 'snapshot.create'
-  | 'ai.apply';
+  | 'ai.apply'
+  | 'expectation.create' | 'expectation.respond' | 'expectation.close';
 
 export interface AuditEntry {
   id: string;

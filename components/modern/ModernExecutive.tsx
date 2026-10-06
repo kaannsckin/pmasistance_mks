@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { PlanLockStatus, ProjectStatus, UserRole, View, WorkspaceData } from '../../types';
+import { ExpectationUrgency, PlanLockStatus, ProjectStatus, UserRole, View, WorkspaceData } from '../../types';
 import { actorLabel } from '../../utils/audit';
 import { orgCapacity } from '../../utils/deptScorecard';
 import { defaultStatusMonth, buildPortfolioEVM } from '../../utils/evm';
@@ -7,6 +7,7 @@ import { buildExecutiveBrief } from '../../utils/execBrief';
 import { attentionProjects, attentionReasons, buildExecProjectRows, ExecProjectRow, ExecSortKey, filterExecRows, healthDistribution, SortDir, sortExecRows } from '../../utils/execOverview';
 import { buildExecReport, exportExecReportToExcel } from '../../utils/execReport';
 import { executiveSummary, HealthBand } from '../../utils/executive';
+import { CATEGORY_LABELS, daysUntilNeed, isActiveExpectation, sortExpectations, STATUS_LABELS, URGENCY_LABELS, URGENCY_ORDER, urgencyCounts, waitingLabel } from '../../utils/expectations';
 import { exportExecReportToPpt } from '../../utils/pptExport';
 import { recentChanges, relativeTime } from '../../utils/recentChanges';
 import { topPortfolioRisks } from '../../utils/risks';
@@ -15,7 +16,8 @@ import ExecutiveView from '../ExecutiveView';
 import { Icon, IconName } from './icons';
 import { PROJECT_STATUS_LABEL, RAG_TONE } from './ModernProjectHeader';
 import { RAG_DOT } from './ModernSidebar';
-import { BAND_META, Card, LinkButton } from './ui';
+import { URGENCY_TONE } from './ModernExpectations';
+import { BAND_META, Card, LinkButton, rowSep } from './ui';
 
 /**
  * Modern yönetim ekranı. Yönetici 30+ projeyi tek tek görmek yerine:
@@ -32,6 +34,8 @@ interface ModernExecutiveProps {
     onTakeSnapshot: (year: number) => void;
     onNavigate: (view: View) => void;
     onOpenAudit: () => void;
+    /** Yönetimden beklentiler sayfası (aciliyet süzgeciyle) */
+    onOpenExpectations: (urgency?: ExpectationUrgency) => void;
 }
 
 type Screen = 'overview' | 'projects' | 'details';
@@ -187,7 +191,7 @@ const AllProjects: React.FC<{
 
 // ------------------------------------------------------------------ Genel bakış
 
-const ModernExecutive: React.FC<ModernExecutiveProps> = ({ workspace, currentRole, onOpenProject, onTakeSnapshot, onNavigate, onOpenAudit }) => {
+const ModernExecutive: React.FC<ModernExecutiveProps> = ({ workspace, currentRole, onOpenProject, onTakeSnapshot, onNavigate, onOpenAudit, onOpenExpectations }) => {
     const thisYear = new Date().getFullYear();
     const [year, setYear] = useState(thisYear);
     const [screen, setScreen] = useState<Screen>('overview');
@@ -200,6 +204,9 @@ const ModernExecutive: React.FC<ModernExecutiveProps> = ({ workspace, currentRol
     const dist = useMemo(() => healthDistribution(rows), [rows]);
     const attention = useMemo(() => attentionProjects(rows, 6), [rows]);
     const attentionTotal = useMemo(() => attentionProjects(rows, rows.length).length, [rows]);
+    const expCounts = useMemo(() => urgencyCounts(workspace.expectations || []), [workspace.expectations]);
+    const topExpectations = useMemo(() => sortExpectations((workspace.expectations || []).filter(isActiveExpectation)).slice(0, 3), [workspace.expectations]);
+    const projectNames = useMemo(() => new Map(workspace.projects.map(p => [p.id, p.name])), [workspace.projects]);
     const report = useMemo(() => buildExecReport(workspace, year), [workspace, year]);
     const summary = useMemo(() => executiveSummary(workspace, year), [workspace, year]);
     const evm = useMemo(() => buildPortfolioEVM(workspace, year), [workspace, year]);
@@ -319,6 +326,46 @@ const ModernExecutive: React.FC<ModernExecutiveProps> = ({ workspace, currentRol
                 ))}
             </section>
 
+            <section aria-labelledby="ex-expect" className="m-surface rounded-2xl p-5 flex flex-col gap-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                        <h2 id="ex-expect" className="m-0 text-[17px] font-semibold m-text">Yönetimden beklentiler</h2>
+                        <p className="m-0 mt-0.5 text-[14px] m-text-3">
+                            {expCounts.total ? `Proje yöneticileri ve bölüm sorumluları sizden ${expCounts.total} konuda karar bekliyor${expCounts.unanswered ? `; ${expCounts.unanswered} tanesi henüz yanıtlanmadı` : ''}` : 'Bekleyen karar ya da onay yok'}
+                        </p>
+                    </div>
+                    <LinkButton onClick={() => onOpenExpectations()}>{expCounts.total ? `Tümü (${expCounts.total})` : 'Beklentiler'}</LinkButton>
+                </div>
+                <div className="grid gap-2.5 grid-cols-3">
+                    {URGENCY_ORDER.map(u => (
+                        <button key={u} type="button" onClick={() => onOpenExpectations(u)} className="m-row-link flex items-center gap-3 min-h-[56px] px-3.5 rounded-xl m-fill-2" aria-label={`${URGENCY_LABELS[u]}: ${expCounts[u]} beklenti, listeyi aç`}>
+                            <span aria-hidden="true" className="w-3 h-3 rounded-full flex-none" style={{ background: URGENCY_TONE[u].dot }}></span>
+                            <span className="flex-1 text-[15px] m-text">{URGENCY_LABELS[u]}</span>
+                            <span className={`text-[22px] font-bold m-tabular ${expCounts[u] ? URGENCY_TONE[u].ink : 'm-text'}`}>{expCounts[u]}</span>
+                        </button>
+                    ))}
+                </div>
+                {topExpectations.length > 0 && (
+                    <div className="-mx-2 flex flex-col">
+                        {topExpectations.map((e, i) => {
+                            const sep = rowSep(i);
+                            const due = daysUntilNeed(e);
+                            return (
+                                <button key={e.id} type="button" onClick={() => onOpenExpectations(e.urgency)} className={`m-row-link flex items-center gap-3 px-2 py-2.5 min-h-[56px] ${sep.className}`} style={sep.style}>
+                                    <span aria-hidden="true" className="w-2.5 h-2.5 rounded-full flex-none" style={{ background: URGENCY_TONE[e.urgency].dot }}></span>
+                                    <span className="flex-1 min-w-0 flex flex-col gap-0.5">
+                                        <span className="text-[15px] font-semibold m-text truncate">{e.title}</span>
+                                        <span className="text-[13px] m-text-3 truncate">{[CATEGORY_LABELS[e.category], e.projectId ? projectNames.get(e.projectId) : '', e.createdByName, waitingLabel(e)].filter(Boolean).join(' · ')}</span>
+                                    </span>
+                                    {due !== null && due < 0 && <span className="inline-flex items-center h-6 px-2.5 rounded-full text-[12px] font-semibold m-tone-bad whitespace-nowrap">{-due} gün gecikti</span>}
+                                    {e.status === 'acknowledged' && <span className="hidden sm:inline-flex items-center h-6 px-2.5 rounded-full text-[12px] font-semibold m-tone-accent">{STATUS_LABELS[e.status]}</span>}
+                                </button>
+                            );
+                        })}
+                    </div>
+                )}
+            </section>
+
             <section aria-labelledby="ex-dist" className="m-surface rounded-2xl p-5 flex flex-col gap-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
@@ -388,7 +435,7 @@ const ModernExecutive: React.FC<ModernExecutiveProps> = ({ workspace, currentRol
                             </p>
                         )}
                     </Card>
-                    <Card title="En yüksek riskler" labelledBy="ex-risks">
+                    <Card title="En yüksek riskler" labelledBy="ex-risks" action={<LinkButton onClick={() => onNavigate(View.RiskReport)}>Risk raporu</LinkButton>}>
                         {risks.length === 0 ? (
                             <p className="m-0 text-[15px] m-text-3">Açık risk yok.</p>
                         ) : (

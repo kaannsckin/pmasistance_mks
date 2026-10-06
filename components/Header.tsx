@@ -131,7 +131,7 @@ const WorkspaceNavItem: React.FC<{
   return (
     <button
       onClick={() => setCurrentView(view)}
-      className={`flex items-center gap-2 px-3.5 h-9 rounded-lg text-xs font-semibold transition-colors ${
+      className={`flex items-center gap-2 px-3.5 h-9 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${
         active
           ? 'text-white shadow-sm'
           : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/60'
@@ -408,6 +408,8 @@ const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSett
             <WorkspaceNavItem view={View.Portfolio} currentView={currentView} setCurrentView={setCurrentView} icon="fa-table-cells-large" label="Portföy" />
             <WorkspaceNavItem view={View.Allocations} currentView={currentView} setCurrentView={setCurrentView} icon="fa-people-arrows" label="Tahsis" />
             <WorkspaceNavItem view={View.Calendar} currentView={currentView} setCurrentView={setCurrentView} icon="fa-calendar-days" label="Takvim" />
+            <WorkspaceNavItem view={View.RiskReport} currentView={currentView} setCurrentView={setCurrentView} icon="fa-shield-halved" label="Riskler" />
+            <WorkspaceNavItem view={View.Expectations} currentView={currentView} setCurrentView={setCurrentView} icon="fa-flag" label="Beklentiler" />
             <WorkspaceNavItem view={View.DataPool} currentView={currentView} setCurrentView={setCurrentView} icon="fa-database" label="Veri Havuzu" />
           </nav>
 
