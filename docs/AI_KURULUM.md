@@ -93,6 +93,7 @@ Asistan, serbest metin içeriğinde `bilgi_ara` aracıyla arama yapar ve yanıt�
 | `AI_EXTRA_BODY` | — | Ağ geçidine özgü ek gövde alanları, JSON nesnesi (ör. `{"chat_template_kwargs":{"enable_thinking":false}}`); model/mesaj/araç alanlarını ezemez |
 | `AI_RATE_LIMIT_PER_MIN` | — | Kişi/IP başına dakikalık istek sınırı (varsayılan 60; araç kullanan bir soru 2-4 istek üretir) |
 | `AI_TIMEOUT_MS` | — | Sağlayıcı zaman aşımı (varsayılan 55000) |
+| `AI_CA_CERTS` | — | Kurumsal sertifika zinciri (PEM; ara + kök). Sunucu ara sertifikayı göndermiyorsa ya da kök Node.js'in listesinde yoksa gerekir. `*.tubitak.gov.tr` için gerekmez, TÜBİTAK zinciri hazır gelir |
 | `AI_EMBEDDING_MODEL` | — | Anlamsal arama için embedding modeli; verilmezse yalnızca anahtar kelime araması |
 | `AI_EMBEDDING_PROVIDER` | Anthropic'te ✔ | `openai` · `azure` · `gemini` · `voyage`; varsayılan sohbet sağlayıcısı (Anthropic embedding sunmaz) |
 | `AI_EMBEDDING_API_KEY` | farklı sağlayıcıda ✔ | Aynı sağlayıcıda `AI_API_KEY` kullanılır |
@@ -185,6 +186,8 @@ AI_MODEL=...
 - **Düşünme çıktısı gösterilmez:** Ağ geçidi düşünmeyi ayrı alanda (`reasoning_content`) veriyorsa yok sayılır; metin içinde `<think>…</think>` olarak geliyorsa istemci ayıklar.
 - **Hız:** "En yüksek" akıl yürütme her araç adımını yavaşlatır. Vercel'deki 60 sn süre sınırına takılmamak için `AI_REASONING_EFFORT=medium` (ya da `low`) ve gerekirse `AI_TIMEOUT_MS` / `vercel.json` `maxDuration` ayarı önerilir.
 - **Araç çağrısı:** Asistan veriye araçlarla eriştiği için modelin/sunucunun OpenAI biçiminde *tool calling* desteklemesi gerekir (vLLM'de `--enable-auto-tool-choice --tool-call-parser …`). Desteklenmiyorsa asistan bunu açık bir hata mesajıyla bildirir.
+- **Sertifika:** BİLGEM sunucusu ara sertifikayı göndermiyor ve TÜBİTAK kök sertifikası (Sürüm 2) Node.js'in güven listesinde yok; tarayıcı sorunsuz açsa da Node.js bağlantıyı reddeder. Proxy bu yüzden `*.tubitak.gov.tr` adreslerinde TÜBİTAK Kamu SM zincirini (`server/ai/certs.ts`) kendiliğinden ekler; yalnızca bu isteklerde, Node.js'in kendi listesine ek olarak. Başka bir kurumsal API'de aynı sorun varsa zinciri `AI_CA_CERTS` ile verin. Doğrulama hiçbir koşulda kapatılmaz.
+- **Bağlantı hataları:** Asistan, ulaşılamayan sağlayıcıda nedeni yazar: *sertifika doğrulanamadı* → `AI_CA_CERTS`; *alan adı çözümlenemedi* / *bağlantı kurulamadı* → adres yanlış ya da sunucu bu ağdan (ör. Vercel'den) erişilebilir değil. Vercel'de aynı bilgi fonksiyon loglarında `[ai] sağlayıcıya bağlanılamadı` satırında görünür.
 - **Ağ erişimi:** Proxy'nin API'ye ulaşabilmesi gerekir. API yalnızca kurum ağından erişilebiliyorsa proxy Vercel yerine kurum içinde çalıştırılmalıdır (bkz. 5. bölüm, Node ara katmanı); veri de böylece kurum dışına çıkmaz.
 - **Embedding:** Kurum API'sinde embedding modeli yoksa RAG anahtar kelime aramasıyla çalışır; varsa `AI_EMBEDDING_MODEL` ile açılır.
 

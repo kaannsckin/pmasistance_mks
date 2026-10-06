@@ -5,6 +5,7 @@ import { buildEmbedRequest, parseEmbedResponse, readEmbeddingConfig, validateEmb
 import { buildUpstreamRequest, extractUpstreamError, parseUpstreamEvents, UpstreamStreamError } from './providers.js';
 import { createRateLimiter, RateLimiter } from './rateLimit.js';
 import { parseSSE } from './sse.js';
+import { describeNetworkError, networkErrorCode, upstreamFetch } from './tls.js';
 
 /**
  * AI proxy — çatıdan bağımsız (Web Request → Response). Vercel fonksiyonu
@@ -199,6 +200,14 @@ const upstreamErrorMessage = (status: number, detail: string): string => {
     return `AI sağlayıcısı isteği reddetti${suffix}.`;
 };
 
+const hostOf = (url: string): string => {
+    try {
+        return new URL(url).host;
+    } catch {
+        return '?';
+    }
+};
+
 export const handleAiRequest = async (request: Request, env: Env, opts: HandlerOptions = {}): Promise<Response> => {
     const fetchImpl = opts.fetchImpl || fetch;
     const path = new URL(request.url).pathname.replace(/\/+$/, '');
@@ -236,7 +245,7 @@ export const handleAiRequest = async (request: Request, env: Env, opts: HandlerO
         return errorResponse(status, status === 403 ? 'forbidden' : status === 401 ? 'auth' : 'upstream', message, cors);
     }
 
-    if (route === 'embed') return handleEmbed(request, env, auth.subject, cors, fetchImpl, opts, config.timeoutMs);
+    if (route === 'embed') return handleEmbed(request, env, auth.subject, cors, opts, config.timeoutMs);
 
     const retryAfter = (opts.rateLimiter || sharedLimiter(config.rateLimitPerMin)).hit(auth.subject);
     if (retryAfter > 0) {
@@ -271,12 +280,13 @@ export const handleAiRequest = async (request: Request, env: Env, opts: HandlerO
     const up = buildUpstreamRequest(config, body);
     let upstream: Response;
     try {
-        upstream = await fetchImpl(up.url, { method: 'POST', headers: up.headers, body: up.body, signal: upstreamAbort.signal });
-    } catch {
+        const send = opts.fetchImpl || upstreamFetch(up.url, env);
+        upstream = await send(up.url, { method: 'POST', headers: up.headers, body: up.body, signal: upstreamAbort.signal });
+    } catch (err) {
         cleanup();
-        return timedOut
-            ? errorResponse(504, 'timeout', 'AI sağlayıcısı zamanında yanıt vermedi.', cors)
-            : errorResponse(502, 'upstream', 'AI sağlayıcısına ulaşılamadı; AI_BASE_URL ve ağ erişimini kontrol edin.', cors);
+        if (timedOut) return errorResponse(504, 'timeout', 'AI sağlayıcısı zamanında yanıt vermedi.', cors);
+        console.error(`[ai] sağlayıcıya bağlanılamadı: ${config.provider} ${hostOf(up.url)} ${networkErrorCode(err) || 'bilinmeyen'}`);
+        return errorResponse(502, 'upstream', `AI sağlayıcısına ulaşılamadı: ${describeNetworkError(err)}.`, cors);
     }
 
     if (!upstream.ok || !upstream.body) {
@@ -334,7 +344,6 @@ const handleEmbed = async (
     env: Env,
     subject: string,
     cors: Record<string, string>,
-    fetchImpl: typeof fetch,
     opts: HandlerOptions,
     timeoutMs: number,
 ): Promise<Response> => {
@@ -364,9 +373,12 @@ const handleEmbed = async (
         const up = buildEmbedRequest(c, body);
         let res: Response;
         try {
-            res = await fetchImpl(up.url, { method: 'POST', headers: up.headers, body: up.body, signal: abort.signal });
-        } catch {
-            return errorResponse(abort.signal.aborted ? 504 : 502, abort.signal.aborted ? 'timeout' : 'upstream', 'Embedding sağlayıcısına ulaşılamadı.', cors);
+            const send = opts.fetchImpl || upstreamFetch(up.url, env);
+            res = await send(up.url, { method: 'POST', headers: up.headers, body: up.body, signal: abort.signal });
+        } catch (err) {
+            if (abort.signal.aborted) return errorResponse(504, 'timeout', 'Embedding sağlayıcısı zamanında yanıt vermedi.', cors);
+            console.error(`[ai] embedding sağlayıcısına bağlanılamadı: ${c.provider} ${hostOf(up.url)} ${networkErrorCode(err) || 'bilinmeyen'}`);
+            return errorResponse(502, 'upstream', `Embedding sağlayıcısına ulaşılamadı: ${describeNetworkError(err)}.`, cors);
         }
         const text = await res.text().catch(() => '');
         if (!res.ok) {
