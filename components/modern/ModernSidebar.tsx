@@ -56,6 +56,17 @@ interface ModernSidebarProps {
 
 const SCOPED_ROLES: UserRole[] = ['py', 'bolum_sorumlu'];
 
+/** Kenar çubuğunda en fazla bu kadar proje; açık proje her zaman görünür, önce sorunlular */
+export const SIDEBAR_PROJECT_LIMIT = 8;
+const RAG_ORDER: Record<RagStatus | 'none', number> = { red: 0, amber: 1, none: 2, green: 3 };
+export const sidebarProjects = (projects: SidebarProject[], activeId: string | null): SidebarProject[] => {
+    if (projects.length <= SIDEBAR_PROJECT_LIMIT) return projects;
+    const sorted = [...projects].sort((a, b) => RAG_ORDER[a.rag || 'none'] - RAG_ORDER[b.rag || 'none'] || a.name.localeCompare(b.name, 'tr'));
+    const top = sorted.slice(0, SIDEBAR_PROJECT_LIMIT);
+    const active = activeId ? projects.find(p => p.id === activeId) : undefined;
+    return active && !top.some(p => p.id === active.id) ? [active, ...top.slice(0, SIDEBAR_PROJECT_LIMIT - 1)] : top;
+};
+
 export const RAG_DOT: Record<RagStatus | 'none', string> = {
     green: 'var(--m-ok)',
     amber: 'var(--m-warn)',
@@ -196,7 +207,7 @@ const ModernSidebar: React.FC<ModernSidebarProps> = (props) => {
                         )}
                     </div>
                     {projects.length === 0 && <p className="px-2.5 py-2 text-[14px] m-text-3">Kapsamınızda proje yok.</p>}
-                    {projects.map(p => {
+                    {sidebarProjects(projects, hasActiveProject ? activeProjectId : null).map(p => {
                         const active = hasActiveProject && p.id === activeProjectId;
                         return (
                             <button
@@ -212,6 +223,13 @@ const ModernSidebar: React.FC<ModernSidebarProps> = (props) => {
                             </button>
                         );
                     })}
+                    {projects.length > SIDEBAR_PROJECT_LIMIT && (
+                        <button type="button" onClick={() => go(View.Portfolio)} className="m-row-link w-full flex items-center gap-3 min-h-[44px] px-2.5 rounded-[10px] text-[15px] m-accent font-medium">
+                            <span className="w-2.5 flex-none"></span>
+                            <span className="flex-1">Tüm projeler ({projects.length})</span>
+                            <Icon name="chevronRight" size={16} strokeWidth={2.2} />
+                        </button>
+                    )}
                 </div>
 
                 <div className="mt-auto flex flex-col gap-1.5">

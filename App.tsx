@@ -63,6 +63,7 @@ import ModernPortfolio from './components/modern/ModernPortfolio';
 import ModernBoard from './components/modern/ModernBoard';
 import ModernTaskList from './components/modern/ModernTaskList';
 import ModernAllocation from './components/modern/ModernAllocation';
+import ModernExecutive from './components/modern/ModernExecutive';
 import { Celebration, EggEvent, HyperdriveOverlay, SpaceMode } from './components/modern/Eggs';
 import { Icon } from './components/modern/icons';
 import { createSequenceDetector } from './utils/easterEggs';
@@ -627,6 +628,18 @@ const App: React.FC = () => {
     // açıktır; asistanın araçları yönetici rolünde not/isteklere erişmez.
     if (currentView === View.Executive ||
         (execRole && (currentView === View.Notes || currentView === View.Requests))) {
+      if (isModern) {
+        return (
+          <ModernExecutive
+            workspace={workspace}
+            currentRole={workspace.currentRole || 'py'}
+            onOpenProject={handleOpenProject}
+            onTakeSnapshot={handleTakeSnapshot}
+            onNavigate={(v: View) => setCurrentView(v)}
+            onOpenAudit={() => setIsAuditModalOpen(true)}
+          />
+        );
+      }
       return (
         <ExecutiveView
           workspace={workspace}
@@ -927,9 +940,11 @@ const App: React.FC = () => {
     return owner ? `${owner.firstName} ${owner.lastName}`.trim() : undefined;
   }, [activeProject, workspace?.people]);
   // Yeniden yazılmış ekranlar m-legacy yumuşatma katmanının dışında kalır
+  const showsExecutive = currentView === View.Executive ||
+    (!!workspace && isExecRole(workspace.currentRole) && (currentView === View.Notes || currentView === View.Requests));
   const usesModernScreen = inProjectView
     ? currentView === View.Roadmap || currentView === View.Tasks
-    : currentView === View.Allocations || ((currentView === View.Portfolio || !activeProject) && ![View.Executive, View.DataPool, View.Calendar].includes(currentView));
+    : showsExecutive || currentView === View.Allocations || ((currentView === View.Portfolio || !activeProject) && ![View.DataPool, View.Calendar].includes(currentView));
 
   // Komut paleti öğeleri (ekranlar + aksiyonlar + kapsamdaki projeler + kişiler)
   const commandItems = useMemo<CommandItem[]>(() => {
