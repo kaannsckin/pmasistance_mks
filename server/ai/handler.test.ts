@@ -130,6 +130,21 @@ describe('chat', () => {
         expect(res.status).toBe(502);
     });
 
+    it('bağlantı hatasının nedenini (sertifika) açıklar', async () => {
+        const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const fetchImpl = vi.fn(async () => {
+            throw new TypeError('fetch failed', { cause: Object.assign(new Error('unable to get local issuer certificate'), { code: 'UNABLE_TO_GET_ISSUER_CERT_LOCALLY' }) });
+        });
+        const res = await handleAiRequest(chatReq(okBody), BASE_ENV, { isDev: true, fetchImpl, rateLimiter: freshLimiter() });
+        expect(res.status).toBe(502);
+        const json = await res.json();
+        expect(json.error).toMatch(/sertifika/);
+        expect(json.error).toContain('UNABLE_TO_GET_ISSUER_CERT_LOCALLY');
+        expect(String(errSpy.mock.calls[0]?.[0])).toContain('api.openai.com');
+        expect(JSON.stringify(errSpy.mock.calls)).not.toContain('gizli-anahtar');
+        errSpy.mockRestore();
+    });
+
     it('akış ortasında hata → error olayı', async () => {
         const fetchImpl = vi.fn(async () => new Response(streamOf('data: {"choices":[{"delta":{"content":"a"}}]}\n\n', 'data: {"error":{"message":"kesildi"}}\n\n'), { status: 200 }));
         const res = await handleAiRequest(chatReq(okBody), BASE_ENV, { isDev: true, fetchImpl, rateLimiter: freshLimiter() });
