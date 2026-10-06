@@ -79,4 +79,24 @@ describe('buildTodoItems', () => {
         expect(badge).toBeGreaterThan(0);
         expect(badge).toBeLessThan(items.length); // info'lar var
     });
+
+    it('yönetimden beklentiler: yanıtsız kritik/önemli yönetime, incelenen sahibine hatırlatılır', () => {
+        const base = { category: 'budget' as const, createdAt: '', updatedAt: '', createdByRole: 'py' as const, createdByPersonId: 'pm1' };
+        const ws: WorkspaceData = {
+            ...buildWs(),
+            expectations: [
+                { ...base, id: 'e1', title: 'a', urgency: 'critical', status: 'open' },
+                { ...base, id: 'e2', title: 'b', urgency: 'critical', status: 'open' },
+                { ...base, id: 'e3', title: 'c', urgency: 'important', status: 'open' },
+                { ...base, id: 'e4', title: 'd', urgency: 'critical', status: 'acknowledged' },
+                { ...base, id: 'e5', title: 'e', urgency: 'normal', status: 'open' },
+            ],
+        };
+        const mudur = buildTodoItems({ ...ws, currentRole: 'mudur' }, NOW);
+        expect(mudur.find(i => i.id === 'exp-critical')).toMatchObject({ severity: 'danger', text: '2 kritik beklenti yanıtınızı bekliyor', view: View.Expectations });
+        expect(mudur.find(i => i.id === 'exp-important')?.text).toBe('1 önemli beklenti yanıtınızı bekliyor');
+        const pm = buildTodoItems({ ...ws, currentRole: 'py', currentPersonId: 'pm1' }, NOW);
+        expect(pm.find(i => i.id === 'exp-critical')).toBeUndefined();
+        expect(pm.find(i => i.id === 'exp-answered')?.text).toBe('Yönetim 1 beklentinizi inceliyor');
+    });
 });

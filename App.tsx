@@ -56,7 +56,7 @@ import { analyzeDataHealth, applyHealthFix, HealthFix } from './utils/dataHealth
 import { appendAudit, AUDIT_ACTION_LABELS } from './utils/audit';
 import { riskScore } from './utils/risks';
 import { upsertLeave } from './utils/availability';
-import { Risk } from './types';
+import { ExpectationStatus, ExpectationUrgency, PestelItem, Risk, SwotItem } from './types';
 import ModernSidebar from './components/modern/ModernSidebar';
 import ModernProjectHeader from './components/modern/ModernProjectHeader';
 import ModernPortfolio from './components/modern/ModernPortfolio';
@@ -65,6 +65,13 @@ import ModernProjectOverview from './components/modern/ModernProjectOverview';
 import ModernTaskList from './components/modern/ModernTaskList';
 import ModernAllocation from './components/modern/ModernAllocation';
 import ModernExecutive from './components/modern/ModernExecutive';
+import ModernRisks from './components/modern/ModernRisks';
+import ModernRiskReport from './components/modern/ModernRiskReport';
+import ModernExpectations from './components/modern/ModernExpectations';
+import {
+  canEditExpectation, canRespondExpectation, CATEGORY_LABELS, createExpectation, ExpectationDraft, isOwnExpectation,
+  respondExpectation, setExpectationStatus, updateExpectationDraft, URGENCY_LABELS, urgencyCounts, visibleExpectations,
+} from './utils/expectations';
 import { Celebration, EggEvent, HyperdriveOverlay, SpaceMode } from './components/modern/Eggs';
 import { Icon } from './components/modern/icons';
 import { createSequenceDetector } from './utils/easterEggs';
@@ -148,6 +155,20 @@ const App: React.FC = () => {
     return workspace.projects.filter(p => ids.has(p.id));
   }, [workspace, identity]);
   const needsPerson = useMemo(() => computeNeedsPerson(identity), [identity]);
+  const visibleProjectIdSet = useMemo(() => new Set(visibleProjects.map(p => p.id)), [visibleProjects]);
+
+  // ---- Yönetimden beklentiler (kapsam + rozet) ----
+  const visibleExps = useMemo(() => (workspace ? visibleExpectations(workspace, identity) : []), [workspace, identity]);
+  // Yönetim: yanıtlanmamışlar; açanlar: aktif beklentileri
+  const expectationBadge = useMemo(() => {
+    const c = urgencyCounts(visibleExps);
+    return canRespondExpectation(identity) ? c.unanswered : c.total;
+  }, [visibleExps, identity]);
+  // Yönetim panelinden aciliyete göre açılınca sayfanın ilk süzgeci
+  const [expectationUrgency, setExpectationUrgency] = useState<ExpectationUrgency | undefined>(undefined);
+  useEffect(() => {
+    if (currentView !== View.Expectations) setExpectationUrgency(undefined);
+  }, [currentView]);
 
   // ---- Veri sağlığı (hata + uyarı sayısı rozet için) ----
   const healthAlerts = useMemo(() => {
@@ -580,6 +601,49 @@ const App: React.FC = () => {
     window.location.reload();
   }, []);
 
+  // ---- Yönetimden beklentiler: oluştur / düzenle / yanıtla (yetki işlem anında yeniden doğrulanır) ----
+  const handleCreateExpectation = useCallback((draft: ExpectationDraft) => {
+    updateWorkspace(ws => {
+      const e = createExpectation(ws, draft);
+      return appendAudit({ ...ws, expectations: [e, ...(ws.expectations || [])] }, 'expectation.create',
+        `Yönetimden beklenti (${URGENCY_LABELS[e.urgency]} · ${CATEGORY_LABELS[e.category]}): ${e.title}`, e.projectId);
+    });
+  }, [updateWorkspace]);
+
+  const handleUpdateExpectation = useCallback((id: string, draft: ExpectationDraft) => {
+    updateWorkspace(ws => {
+      const e = (ws.expectations || []).find(x => x.id === id);
+      if (!e || !canEditExpectation(e, identityOf(ws))) return ws;
+      return { ...ws, expectations: (ws.expectations || []).map(x => (x.id === id ? updateExpectationDraft(x, draft) : x)) };
+    });
+  }, [updateWorkspace]);
+
+  const handleRespondExpectation = useCallback((id: string, status: 'acknowledged' | 'resolved', response: string) => {
+    updateWorkspace(ws => {
+      const e = (ws.expectations || []).find(x => x.id === id);
+      if (!e || !canRespondExpectation(identityOf(ws))) return ws;
+      const next = { ...ws, expectations: (ws.expectations || []).map(x => (x.id === id ? respondExpectation(ws, x, status, response) : x)) };
+      return appendAudit(next, status === 'resolved' ? 'expectation.close' : 'expectation.respond',
+        `Beklenti ${status === 'resolved' ? 'karşılandı' : 'inceleniyor'}: ${e.title}`, e.projectId);
+    });
+  }, [updateWorkspace]);
+
+  const handleSetExpectationStatus = useCallback((id: string, status: ExpectationStatus) => {
+    updateWorkspace(ws => {
+      const e = (ws.expectations || []).find(x => x.id === id);
+      if (!e || !isOwnExpectation(e, identityOf(ws))) return ws;
+      const next = { ...ws, expectations: (ws.expectations || []).map(x => (x.id === id ? setExpectationStatus(x, status) : x)) };
+      if (status === 'withdrawn') return appendAudit(next, 'expectation.close', `Beklenti geri çekildi: ${e.title}`, e.projectId);
+      if (status === 'open') return appendAudit(next, 'expectation.create', `Beklenti yeniden açıldı: ${e.title}`, e.projectId);
+      return next;
+    });
+  }, [updateWorkspace]);
+
+  const openExpectations = useCallback((urgency?: ExpectationUrgency) => {
+    setCurrentView(View.Expectations);
+    setExpectationUrgency(urgency);
+  }, []);
+
   // Arayüz tercihi (Ayarlar → Arayüz ya da profil menüsündeki kısayol): anında geçiş
   const handleSetUiStyle = useCallback((uiStyle: UiStyle) => {
     updateWorkspace(ws => ({ ...ws, settings: { ...ws.settings, uiStyle } }));
@@ -642,6 +706,7 @@ const App: React.FC = () => {
             onTakeSnapshot={handleTakeSnapshot}
             onNavigate={(v: View) => setCurrentView(v)}
             onOpenAudit={() => setIsAuditModalOpen(true)}
+            onOpenExpectations={openExpectations}
           />
         );
       }
@@ -653,6 +718,30 @@ const App: React.FC = () => {
           onTakeSnapshot={handleTakeSnapshot}
         />
       );
+    }
+
+    // Risk raporu ve yönetimden beklentiler (aktif proje gerektirmez). Klasik
+    // arayüzde de açılır: modern görünüm katmanı kendi kabının içinde uygulanır.
+    if (currentView === View.RiskReport || currentView === View.Expectations) {
+      const page = currentView === View.RiskReport ? (
+        <ModernRiskReport
+          workspace={workspace}
+          projectIds={visibleProjectIdSet}
+          onOpenProjectRisks={(projectId: string) => { handleOpenProject(projectId); setCurrentView(View.Risks); }}
+        />
+      ) : (
+        <ModernExpectations
+          key={`exp-${expectationUrgency || 'all'}`}
+          workspace={workspace}
+          identity={identity}
+          initialUrgency={expectationUrgency}
+          onCreate={handleCreateExpectation}
+          onUpdate={handleUpdateExpectation}
+          onRespond={handleRespondExpectation}
+          onSetStatus={handleSetExpectationStatus}
+        />
+      );
+      return isModern ? page : <div className="ui-modern rounded-3xl p-4 sm:p-6">{page}</div>;
     }
 
     // Çalışma alanı seviyesi ekranlar (aktif proje gerektirmez)
@@ -769,6 +858,18 @@ const App: React.FC = () => {
     const newTask = () => { setEditingTask(null); setIsFormModalOpen(true); };
     const celebrate = (message: string) => setEgg({ kind: 'celebrate', message });
 
+    if (isModern && currentView === View.Risks) {
+      return (
+        <ModernRisks
+          project={activeProject}
+          people={workspace.people}
+          canEdit={canEditProjectContent(workspace, identity, activeProject.id)}
+          onUpdateRisks={handleUpdateActiveRisks}
+          onUpdatePestel={(pestelItems: PestelItem[]) => updateActiveProject(p => ({ ...p, pestelItems }))}
+          onUpdateSwot={(swotItems: SwotItem[]) => updateActiveProject(p => ({ ...p, swotItems }))}
+        />
+      );
+    }
     if (isModern && currentView === View.Overview) {
       return (
         <ModernProjectOverview
@@ -963,8 +1064,8 @@ const App: React.FC = () => {
   const showsExecutive = currentView === View.Executive ||
     (!!workspace && isExecRole(workspace.currentRole) && (currentView === View.Notes || currentView === View.Requests));
   const usesModernScreen = inProjectView
-    ? currentView === View.Overview || currentView === View.Roadmap || currentView === View.Tasks
-    : showsExecutive || currentView === View.Allocations || ((currentView === View.Portfolio || !activeProject) && ![View.DataPool, View.Calendar].includes(currentView));
+    ? [View.Overview, View.Roadmap, View.Tasks, View.Risks].includes(currentView)
+    : showsExecutive || currentView === View.Allocations || currentView === View.RiskReport || currentView === View.Expectations || ((currentView === View.Portfolio || !activeProject) && ![View.DataPool, View.Calendar].includes(currentView));
 
   // Komut paleti öğeleri (ekranlar + aksiyonlar + kapsamdaki projeler + kişiler)
   const commandItems = useMemo<CommandItem[]>(() => {
@@ -974,6 +1075,8 @@ const App: React.FC = () => {
     items.push({ id: 'v-portfolio', group: 'Ekranlar', label: 'Portföy', icon: 'fa-table-cells-large', keywords: 'portfoy proje', run: go(View.Portfolio) });
     items.push({ id: 'v-alloc', group: 'Ekranlar', label: 'İşgücü Tahsisi', icon: 'fa-people-arrows', keywords: 'tahsis aa doluluk isi', run: go(View.Allocations) });
     items.push({ id: 'v-calendar', group: 'Ekranlar', label: 'Takvim', icon: 'fa-calendar-days', keywords: 'takvim zaman cizelge ekip is paketi', run: go(View.Calendar) });
+    items.push({ id: 'v-risks', group: 'Ekranlar', label: 'Risk raporu', icon: 'fa-shield-halved', keywords: 'risk rapor matris yuksek', run: go(View.RiskReport) });
+    items.push({ id: 'v-expect', group: 'Ekranlar', label: 'Yönetimden beklentiler', icon: 'fa-flag', keywords: 'beklenti yonetim karar onay talep eskalasyon', run: go(View.Expectations) });
     items.push({ id: 'v-pool', group: 'Ekranlar', label: 'Veri Havuzu', icon: 'fa-database', keywords: 'personel bolum rol unvan havuz', run: go(View.DataPool) });
     if (isExecRole(identity.role)) items.push({ id: 'v-exec', group: 'Ekranlar', label: 'Yönetim (EVM · riskler · baseline)', icon: 'fa-gauge-high', keywords: 'yonetim evm butce risk', run: go(View.Executive) });
     items.push({ id: 'a-health', group: 'Aksiyonlar', label: 'Veri Sağlığı Denetimi', icon: 'fa-stethoscope', keywords: 'saglik hata yetim', run: () => setIsHealthModalOpen(true) });
@@ -997,6 +1100,7 @@ const App: React.FC = () => {
             hasActiveProject={inProjectView}
             onNavigate={(v: View) => setCurrentView(v)}
             exec={isExecRole(identity.role)}
+            expectationBadge={expectationBadge}
             projects={visibleProjects.map(p => ({ id: p.id, name: p.name, rag: p.rag, openTasks: p.tasks.filter(t => t.status !== TaskStatus.Done).length }))}
             activeProjectId={activeProject?.id ?? null}
             onOpenProject={handleOpenProject}

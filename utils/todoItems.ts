@@ -102,6 +102,27 @@ export const buildTodoItems = (ws: WorkspaceData, now: Date = new Date()): TodoI
         });
     });
 
+    // 5b) Yönetimden beklentiler — yanıt bekleyen kritik/önemli olanlar yönetime hatırlatılır
+    if (role === 'mudur' || role === 'pyb_sorumlu') {
+        const waiting = (ws.expectations || []).filter(e => e.status === 'open');
+        const critical = waiting.filter(e => e.urgency === 'critical').length;
+        const important = waiting.filter(e => e.urgency === 'important').length;
+        if (critical > 0) {
+            items.push({ id: 'exp-critical', severity: 'danger', icon: 'fa-flag', text: `${critical} kritik beklenti yanıtınızı bekliyor`, view: View.Expectations });
+        }
+        if (important > 0) {
+            items.push({ id: 'exp-important', severity: 'warn', icon: 'fa-flag', text: `${important} önemli beklenti yanıtınızı bekliyor`, view: View.Expectations });
+        }
+    }
+    // Beklenti sahibine: yönetim yanıtladı (inceleniyor) — takip için
+    if ((role === 'py' || role === 'bolum_sorumlu') && ws.currentPersonId) {
+        const answered = (ws.expectations || []).filter(e =>
+            e.status === 'acknowledged' && e.createdByPersonId === ws.currentPersonId && e.createdByRole === role).length;
+        if (answered > 0) {
+            items.push({ id: 'exp-answered', severity: 'info', icon: 'fa-reply', text: `Yönetim ${answered} beklentinizi inceliyor`, view: View.Expectations });
+        }
+    }
+
     // 6) Aşırı tahsisler (bu yıl planı)
     const overs = findOverAllocations(yearAllocations, ws.people, year, 'plan');
     if (overs.length > 0) {

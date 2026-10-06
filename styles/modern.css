@@ -27,6 +27,8 @@
   --m-warn: #E07800; --m-warn-ink: #8F4300; --m-warn-tint: #FFF1DB;
   --m-bad: #D70015;  --m-bad-ink: #B00020;  --m-bad-tint: #FDE7EA;
   --m-hold: #8E8E93; --m-hold-ink: #48484A; --m-hold-tint: #EBEBF0;
+  /* Dolu durum rengi üstündeki yazı (risk matrisi) */
+  --m-on-ok: #FFFFFF; --m-on-warn: #1C1C1E; --m-on-bad: #FFFFFF;
   --m-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
   --m-pop-shadow: 0 10px 30px rgba(0, 0, 0, 0.14), 0 1px 3px rgba(0, 0, 0, 0.08);
   /* Doluluk ısı haritası: düzeyler açıklık farkıyla da ayrışır */
@@ -73,6 +75,7 @@
     --m-on-accent: #00172F;
     --m-ok: #30D158;  --m-ok-ink: #7EE29A;  --m-ok-tint: rgba(48, 209, 88, 0.16);
     --m-warn: #FF9F0A; --m-warn-ink: #FFC56B; --m-warn-tint: rgba(255, 159, 10, 0.16);
+    --m-on-ok: #000000; --m-on-warn: #000000; --m-on-bad: #000000;
     --m-bad: #FF453A;  --m-bad-ink: #FF8A82;  --m-bad-tint: rgba(255, 69, 58, 0.16);
     --m-hold: #8E8E93; --m-hold-ink: #C7C7CC; --m-hold-tint: rgba(142, 142, 147, 0.2);
     --m-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
