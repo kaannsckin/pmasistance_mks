@@ -13,11 +13,13 @@ interface Props {
   suggestions: { label: string; prompt: string }[];
   /** Zekâ sekmesi açıkken panel gizlenir (aynı sohbet tam ekranda) */
   hidden?: boolean;
+  /** Modern arayüzde yüzen düğme gösterilmez; panel kenar çubuğundaki "Asistan"dan açılır */
+  hideLauncher?: boolean;
   /** Tam ekran (Zekâ) — yalnızca bir proje açıkken */
   onExpand?: () => void;
 }
 
-const AssistantPanel: React.FC<Props> = ({ suggestions, hidden, onExpand }) => {
+const AssistantPanel: React.FC<Props> = ({ suggestions, hidden, hideLauncher, onExpand }) => {
   const a = useAssistant();
 
   useEffect(() => {
@@ -34,7 +36,7 @@ const AssistantPanel: React.FC<Props> = ({ suggestions, hidden, onExpand }) => {
   return (
     <>
       {a.isKbOpen && <KnowledgeBaseModal onClose={() => a.setKbOpen(false)} />}
-      {!hidden && !a.isOpen && (
+      {!hidden && !hideLauncher && !a.isOpen && (
         <button
           onClick={() => a.setOpen(true)}
           title="AI Asistan"
