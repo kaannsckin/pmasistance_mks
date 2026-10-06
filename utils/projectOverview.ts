@@ -136,29 +136,3 @@ export const teamLoad = (project: Project, now: Date = new Date()): { members: M
     const members = [...byName.values()].sort((a, b) => b.open - a.open || b.overdue - a.overdue || a.name.localeCompare(b.name, 'tr'));
     return { members, unassigned };
 };
-
-export interface ObjectiveProgress {
-    id: string;
-    name: string;
-    quarter?: string;
-    /** Bağlı görevlerden; bağlı görev yoksa null */
-    progressPct: number | null;
-    keyResults: number;
-    linkedTasks: number;
-}
-
-/** Hedef ilerlemesi = anahtar sonuçlara bağlı görevlerin tamamlanma oranı (Hedefler ekranıyla aynı) */
-export const objectiveProgress = (project: Project): ObjectiveProgress[] =>
-    (project.objectives || []).map(o => {
-        const krIds = new Set((o.keyResults || []).map(kr => kr.id));
-        const linked = (project.tasks || []).filter(t => t.keyResultId && krIds.has(t.keyResultId));
-        const done = linked.filter(t => t.status === TaskStatus.Done).length;
-        return {
-            id: o.id,
-            name: o.name,
-            quarter: o.quarter,
-            progressPct: linked.length ? Math.round((done / linked.length) * 100) : null,
-            keyResults: krIds.size,
-            linkedTasks: linked.length,
-        };
-    });

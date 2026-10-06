@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Project, Task, TaskStatus } from '../types';
-import { currentSprint, deadlineLabel, objectiveProgress, overviewStats, teamLoad, upcomingDeadlines } from './projectOverview';
+import { currentSprint, deadlineLabel, overviewStats, teamLoad, upcomingDeadlines } from './projectOverview';
 import { createProject } from './workspace';
 
 const NOW = new Date(2026, 6, 15); // 15 Temmuz 2026, Çarşamba
@@ -112,13 +112,5 @@ describe('teamLoad', () => {
         expect(members[1]).toMatchObject({ open: 1, done: 3 });
         expect(members[2].open).toBe(0);
         expect(unassigned).toBe(3); // e, g, x
-    });
-});
-
-describe('objectiveProgress', () => {
-    it('anahtar sonuçlara bağlı görevlerden ilerleme; bağ yoksa null', () => {
-        const [o1, o2] = objectiveProgress(buildProject());
-        expect(o1).toMatchObject({ progressPct: 33, keyResults: 2, linkedTasks: 3 });
-        expect(o2.progressPct).toBeNull();
     });
 });

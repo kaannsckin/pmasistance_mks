@@ -4,7 +4,8 @@ import { actorLabel } from '../../utils/audit';
 import { getPlanLockStatus } from '../../utils/allocations';
 import { defaultStatusMonth } from '../../utils/evm';
 import { projectHealth } from '../../utils/executive';
-import { currentSprint, deadlineLabel, objectiveProgress, overviewStats, teamLoad, upcomingDeadlines } from '../../utils/projectOverview';
+import { objectiveProgress } from '../../utils/goals';
+import { currentSprint, deadlineLabel, overviewStats, teamLoad, upcomingDeadlines } from '../../utils/projectOverview';
 import { recentChanges, relativeTime } from '../../utils/recentChanges';
 import { riskBand, riskScore } from '../../utils/risks';
 import { Icon, IconName } from './icons';
@@ -317,7 +318,7 @@ const ModernProjectOverview: React.FC<ModernProjectOverviewProps> = ({ workspace
                                         <span className="text-[14px] font-semibold m-tabular m-text-2 whitespace-nowrap">{g.progressPct === null ? '—' : `%${g.progressPct}`}</span>
                                     </div>
                                     <Bar total={100} parts={[{ value: g.progressPct || 0, color: g.progressPct === 100 ? 'var(--m-ok)' : 'var(--m-accent)' }]} />
-                                    <span className="text-[13px] m-text-3">{[g.quarter, `${g.keyResults} anahtar sonuç`, g.linkedTasks ? `${g.linkedTasks} bağlı görev` : 'Bağlı görev yok'].filter(Boolean).join(' · ')}</span>
+                                    <span className="text-[13px] m-text-3">{[g.quarter, `${g.keyResults.length} anahtar sonuç`, g.linkedTasks ? `${g.linkedTasks} bağlı görev` : 'Bağlı görev yok'].filter(Boolean).join(' · ')}</span>
                                 </div>
                             ))}
                             {goals.length > 4 && <span className="text-[13px] m-text-3">ve {goals.length - 4} hedef daha</span>}
