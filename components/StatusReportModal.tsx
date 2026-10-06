@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { WorkspaceData } from '../types';
-import { buildStatusReport } from '../utils/statusReport';
+import { buildPolishPrompt, buildStatusReport } from '../utils/statusReport';
+import { cleanText, EMBED_SYSTEM } from '../utils/ai/embedded';
+import { AiButton, AiErrorNote, useAiRun } from './assistant/AiButton';
 
 interface StatusReportModalProps {
   workspace: WorkspaceData;
@@ -12,8 +14,19 @@ const StatusReportModal: React.FC<StatusReportModalProps> = ({ workspace, projec
   const report = React.useMemo(() => buildStatusReport(workspace, projectId), [workspace, projectId]);
   const [text, setText] = useState(report?.text || '');
   const [copied, setCopied] = useState(false);
+  const [draft, setDraft] = useState<string | null>(null); // AI öncesi metin (geri dönmek için)
+  const ai = useAiRun();
 
   if (!report) return null;
+
+  const handlePolish = async () => {
+    const before = text;
+    const polished = await ai.run(EMBED_SYSTEM, buildPolishPrompt({ ...report, text: before }), cleanText);
+    if (polished) {
+      setDraft(before);
+      setText(polished);
+    }
+  };
 
   const handleCopy = async () => {
     try {
@@ -51,6 +64,18 @@ const StatusReportModal: React.FC<StatusReportModalProps> = ({ workspace, projec
         </div>
 
         <div className="p-6 flex-1 overflow-hidden flex flex-col">
+          {ai.available && (
+            <div className="flex flex-wrap items-center gap-2 mb-3">
+              <AiButton label="AI ile e-postaya dönüştür" loading={ai.loading} onClick={handlePolish} title="Taslağı verileri değiştirmeden akıcı bir yönetici e-postasına çevirir" />
+              {draft !== null && !ai.loading && (
+                <button onClick={() => { setText(draft); setDraft(null); }} className="text-[11px] font-semibold text-gray-500 hover:text-primary">
+                  <i className="fa-solid fa-rotate-left mr-1"></i>Taslağa dön
+                </button>
+              )}
+              {draft !== null && <span className="text-[10px] text-gray-400">AI metnini göndermeden önce sayıları kontrol edin.</span>}
+            </div>
+          )}
+          <div className="mb-2"><AiErrorNote message={ai.error} onClose={() => ai.setError(null)} /></div>
           {!report.hasContent && (
             <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl px-4 py-2.5 text-[11px] text-amber-700 dark:text-amber-300 mb-3">
               Bu proje için henüz yeterli veri yok (görev, not, tahsis veya risk girin). Taslak yine de kopyalanabilir.
@@ -68,7 +93,7 @@ const StatusReportModal: React.FC<StatusReportModalProps> = ({ workspace, projec
         <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between flex-none">
           <p className="text-[11px] text-gray-400">
             <i className="fa-solid fa-circle-info mr-1"></i>
-            Teams/e-postaya yapıştırın; isterseniz Zekâ asistanına verip parlatabilirsiniz.
+            Teams/e-postaya yapıştırın.
           </p>
           <div className="flex items-center gap-2">
             <button onClick={handleDownload} className="text-xs font-semibold px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-300 hover:text-primary transition-all">

@@ -18,6 +18,8 @@ self.addEventListener('install', (event) => {
 
 // İnternet olmadığında önbellekten servis et
 self.addEventListener('fetch', (event) => {
+  // AI proxy (akışlı yanıt) ve diğer API çağrıları önbelleğe uğramadan doğrudan ağa gider
+  if (new URL(event.request.url).pathname.startsWith('/api/')) return;
   event.respondWith(
     caches.match(event.request).then((response) => {
       return response || fetch(event.request);

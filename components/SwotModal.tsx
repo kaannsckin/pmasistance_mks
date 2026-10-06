@@ -1,5 +1,7 @@
 import React, { useMemo, useState } from 'react';
-import { PestelItem, Risk, SwotItem } from '../types';
+import { PestelItem, Project, Risk, SwotItem } from '../types';
+import { EMBED_SYSTEM, parseSwotSuggestions, swotSuggestionPrompt, SwotSuggestion } from '../utils/ai/embedded';
+import { AiButton, AiErrorNote, useAiRun } from './assistant/AiButton';
 import { createSwotItem, itemsForQuadrant, SWOT_KIND_LABELS, SWOT_LABELS, SWOT_ORDER, suggestSwotFromContext, summarizeSwot } from '../utils/swot';
 import { exportSwotPng, exportSwotSvg } from '../utils/swotExport';
 
@@ -11,14 +13,31 @@ interface SwotModalProps {
   risks: Risk[];
   onUpdate: (items: SwotItem[]) => void;
   onClose: () => void;
+  /** AI taslağı için proje bağlamı (verilmezse AI düğmesi görünmez) */
+  aiProject?: Project;
 }
 
 const inputCls = 'w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1 text-[11px] text-gray-700 dark:text-gray-200 focus:outline-none focus:border-primary';
 
-const SwotModal: React.FC<SwotModalProps> = ({ projectName, items, canEdit, pestelItems, risks, onUpdate, onClose }) => {
+const SwotModal: React.FC<SwotModalProps> = ({ projectName, items, canEdit, pestelItems, risks, onUpdate, onClose, aiProject }) => {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [exporting, setExporting] = useState(false);
   const summary = useMemo(() => summarizeSwot(items), [items]);
+  const ai = useAiRun();
+  const [aiItems, setAiItems] = useState<SwotSuggestion[] | null>(null);
+
+  const draftWithAi = async () => {
+    if (!aiProject) return;
+    const list = await ai.run(EMBED_SYSTEM, swotSuggestionPrompt({ ...aiProject, swotItems: items }, new Date()), t => parseSwotSuggestions(t, items));
+    if (list) setAiItems(list);
+  };
+  const addAi = (list: SwotSuggestion[]) => {
+    onUpdate([...items, ...list.map(s => createSwotItem(s.quadrant, { text: s.text }))]);
+    setAiItems(prev => {
+      const rest = (prev || []).filter(x => !list.includes(x));
+      return rest.length ? rest : null;
+    });
+  };
   const suggestions = useMemo(() => suggestSwotFromContext(items, pestelItems, risks), [items, pestelItems, risks]);
 
   const handlePng = async () => {
@@ -91,7 +110,32 @@ const SwotModal: React.FC<SwotModalProps> = ({ projectName, items, canEdit, pest
                 PESTEL & risklerden öner{suggestions.length > 0 && ` (${suggestions.length})`}
               </button>
             )}
+            {canEdit && aiProject && ai.available && (
+              <AiButton label="AI ile taslak öner" loading={ai.loading} onClick={draftWithAi} title="Proje verilerinden SWOT maddeleri önerir; seçtikleriniz eklenir" />
+            )}
           </div>
+
+          <AiErrorNote message={ai.error} onClose={() => ai.setError(null)} />
+          {aiItems && (
+            <div className="bg-indigo-50/60 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800 rounded-2xl p-4">
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-xs font-bold text-gray-800 dark:text-gray-100"><i className="fa-solid fa-wand-magic-sparkles text-indigo-500 mr-2"></i>AI SWOT önerileri</h4>
+                <div className="flex gap-2">
+                  <button onClick={() => addAi(aiItems)} className="text-[11px] font-semibold px-3 py-1.5 rounded-lg text-white" style={{ backgroundColor: 'var(--app-primary)' }}>Tümünü ekle</button>
+                  <button onClick={() => setAiItems(null)} className="text-[11px] font-semibold px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-500">Kapat</button>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                {aiItems.map((s, i) => (
+                  <div key={i} className="flex items-center gap-2 bg-white dark:bg-gray-900 rounded-lg border border-gray-100 dark:border-gray-800 px-3 py-2">
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded text-white flex-none" style={{ backgroundColor: SWOT_LABELS[s.quadrant].hex }}>{SWOT_LABELS[s.quadrant].label}</span>
+                    <span className="text-[11px] text-gray-700 dark:text-gray-200 flex-1">{s.text}</span>
+                    <button onClick={() => addAi([s])} className="text-[11px] font-semibold text-indigo-600 hover:underline flex-none"><i className="fa-solid fa-plus mr-0.5"></i>Ekle</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {items.length === 0 && !canEdit && (
             <div className="text-center py-10 text-gray-400">

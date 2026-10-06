@@ -1,5 +1,7 @@
 import React, { useMemo, useState } from 'react';
-import { PestelItem, RiskLevel } from '../types';
+import { PestelItem, Project, RiskLevel } from '../types';
+import { EMBED_SYSTEM, parsePestelSuggestions, pestelSuggestionPrompt, PestelSuggestion } from '../utils/ai/embedded';
+import { AiButton, AiErrorNote, useAiRun } from './assistant/AiButton';
 import { createPestelItem, itemsForCategory, PESTEL_KIND_LABELS, PESTEL_LABELS, PESTEL_ORDER, pestelRiskTitle, summarizePestel } from '../utils/pestel';
 import { exportPestelPng, exportPestelSvg } from '../utils/pestelExport';
 
@@ -11,6 +13,8 @@ interface PestelModalProps {
   onUpdate: (items: PestelItem[]) => void;
   onCreateRisk: (item: PestelItem) => void;
   onClose: () => void;
+  /** AI taslağı için proje bağlamı (verilmezse AI düğmesi görünmez) */
+  aiProject?: Project;
 }
 
 const LEVELS: RiskLevel[] = [1, 2, 3, 4, 5];
@@ -21,10 +25,25 @@ const kindStyle = (kind: PestelItem['kind']): string =>
     ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
     : 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-300';
 
-const PestelModal: React.FC<PestelModalProps> = ({ projectName, items, canEdit, existingRiskTitles, onUpdate, onCreateRisk, onClose }) => {
+const PestelModal: React.FC<PestelModalProps> = ({ projectName, items, canEdit, existingRiskTitles, onUpdate, onCreateRisk, onClose, aiProject }) => {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [exporting, setExporting] = useState(false);
   const summary = useMemo(() => summarizePestel(items), [items]);
+  const ai = useAiRun();
+  const [aiItems, setAiItems] = useState<PestelSuggestion[] | null>(null);
+
+  const draftWithAi = async () => {
+    if (!aiProject) return;
+    const list = await ai.run(EMBED_SYSTEM, pestelSuggestionPrompt({ ...aiProject, pestelItems: items }, new Date()), t => parsePestelSuggestions(t, items));
+    if (list) setAiItems(list);
+  };
+  const addSuggestions = (list: PestelSuggestion[]) => {
+    onUpdate([...items, ...list.map(s => createPestelItem(s.category, { text: s.text, kind: s.kind, impact: s.impact }))]);
+    setAiItems(prev => {
+      const rest = (prev || []).filter(x => !list.includes(x));
+      return rest.length ? rest : null;
+    });
+  };
 
   const handlePng = async () => {
     setExporting(true);
@@ -89,7 +108,34 @@ const PestelModal: React.FC<PestelModalProps> = ({ projectName, items, canEdit, 
                 <i className="fa-solid fa-triangle-exclamation"></i>{summary.highImpact} yüksek etki
               </div>
             )}
+            {canEdit && aiProject && ai.available && (
+              <div className="ml-auto"><AiButton label="AI ile taslak öner" loading={ai.loading} onClick={draftWithAi} title="Proje verilerinden (hedefler, görevler, riskler, notlar) PESTEL maddeleri önerir; seçtikleriniz eklenir" /></div>
+            )}
           </div>
+
+          <AiErrorNote message={ai.error} onClose={() => ai.setError(null)} />
+          {aiItems && (
+            <div className="bg-indigo-50/60 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800 rounded-2xl p-4">
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-xs font-bold text-gray-800 dark:text-gray-100"><i className="fa-solid fa-wand-magic-sparkles text-indigo-500 mr-2"></i>AI PESTEL önerileri</h4>
+                <div className="flex gap-2">
+                  <button onClick={() => addSuggestions(aiItems)} className="text-[11px] font-semibold px-3 py-1.5 rounded-lg text-white" style={{ backgroundColor: 'var(--app-primary)' }}>Tümünü ekle</button>
+                  <button onClick={() => setAiItems(null)} className="text-[11px] font-semibold px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-500">Kapat</button>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                {aiItems.map((s, i) => (
+                  <div key={i} className="flex items-center gap-2 bg-white dark:bg-gray-900 rounded-lg border border-gray-100 dark:border-gray-800 px-3 py-2">
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded text-white flex-none" style={{ backgroundColor: PESTEL_LABELS[s.category].hex }}>{PESTEL_LABELS[s.category].label}</span>
+                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded flex-none ${kindStyle(s.kind)}`}>{PESTEL_KIND_LABELS[s.kind]}</span>
+                    <span className="text-[11px] text-gray-700 dark:text-gray-200 flex-1">{s.text}</span>
+                    <span className="text-[10px] text-gray-400 flex-none">etki {s.impact}</span>
+                    <button onClick={() => addSuggestions([s])} className="text-[11px] font-semibold text-indigo-600 hover:underline flex-none"><i className="fa-solid fa-plus mr-0.5"></i>Ekle</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {items.length === 0 && !canEdit && (
             <div className="text-center py-10 text-gray-400">

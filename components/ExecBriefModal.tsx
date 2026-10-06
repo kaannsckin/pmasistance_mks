@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { cleanText, EMBED_SYSTEM, execNarrativePrompt } from '../utils/ai/embedded';
+import { AiButton, AiErrorNote, useAiRun } from './assistant/AiButton';
 
 interface ExecBriefModalProps {
   brief: string;
@@ -8,6 +10,25 @@ interface ExecBriefModalProps {
 
 const ExecBriefModal: React.FC<ExecBriefModalProps> = ({ brief, year, onClose }) => {
   const [copied, setCopied] = useState(false);
+  const [narrative, setNarrative] = useState<string | null>(null);
+  const [narrativeCopied, setNarrativeCopied] = useState(false);
+  const ai = useAiRun();
+
+  const makeNarrative = async () => {
+    const t = await ai.run(EMBED_SYSTEM, execNarrativePrompt(brief), cleanText);
+    if (t) setNarrative(t);
+  };
+
+  const copyNarrative = async () => {
+    if (!narrative) return;
+    try {
+      await navigator.clipboard.writeText(narrative);
+      setNarrativeCopied(true);
+      setTimeout(() => setNarrativeCopied(false), 1800);
+    } catch {
+      alert('Panoya kopyalanamadı. Metni elle seçip kopyalayabilirsiniz.');
+    }
+  };
 
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -60,7 +81,26 @@ const ExecBriefModal: React.FC<ExecBriefModalProps> = ({ brief, year, onClose })
             <button onClick={onClose} className="w-9 h-9 rounded-xl text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"><i className="fa-solid fa-times"></i></button>
           </div>
         </div>
-        <div className="p-6">
+        <div className="p-6 space-y-4">
+          {ai.available && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <AiButton label={narrative ? 'Yeniden yaz' : 'AI ile yönetici özeti yaz'} loading={ai.loading} onClick={makeNarrative} title="Brifing verilerinden üst yönetime akıcı bir özet paragrafı üretir" />
+                {narrative && (
+                  <button onClick={copyNarrative} className="text-[11px] font-semibold text-gray-500 hover:text-primary">
+                    <i className={`fa-solid ${narrativeCopied ? 'fa-check' : 'fa-copy'} mr-1`}></i>{narrativeCopied ? 'Kopyalandı' : 'Özeti kopyala'}
+                  </button>
+                )}
+              </div>
+              <AiErrorNote message={ai.error} onClose={() => ai.setError(null)} />
+              {narrative && (
+                <div className="text-[13px] leading-relaxed text-gray-700 dark:text-gray-200 whitespace-pre-wrap bg-indigo-50/60 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800 rounded-xl p-4">
+                  {narrative}
+                  <p className="mt-2 text-[10px] text-gray-400">AI tarafından brifing verilerinden üretildi — paylaşmadan önce sayıları aşağıdaki brifingle karşılaştırın.</p>
+                </div>
+              )}
+            </div>
+          )}
           <pre className="text-[12px] leading-relaxed text-gray-700 dark:text-gray-200 whitespace-pre-wrap font-sans bg-gray-50 dark:bg-gray-800/60 rounded-xl border border-gray-100 dark:border-gray-700 p-4">{brief}</pre>
         </div>
       </div>

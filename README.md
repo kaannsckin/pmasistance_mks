@@ -27,6 +27,7 @@ PlanAsistan; PERT ve Bulanık Mantık (Fuzzy PERT) yöntemleriyle proje görevle
 - **Baseline & Plan Kayması:** Plan onaylandığında portföyün anlık görüntüsü otomatik alınır ("onaylanan plan = baseline"); yönetim ekranı baseline'a göre plan kaymasını (Δ) proje bazında gösterir. Manuel anlık görüntü de alınabilir.
 - **Bulut Senkronizasyonu (opsiyonel, ücretsiz):** Supabase ile e-posta girişli çok kullanıcılı çalışma; yerel-öncelikli (çevrimdışı çalışmaya devam eder), sürüm kontrollü (kimsenin verisi sessizce ezilmez). Notlar ve müşteri istekleri sunucuda ayrı tabloda tutulur — **yönetici rolleri bu veriyi veritabanı politikası (RLS) gereği okuyamaz**. Kurulum: [`supabase/KURULUM.md`](./supabase/KURULUM.md) (~10 dk).
 - **Excel & Jira Desteği:** Görev verilerini Excel/Jira formatında içe/dışa aktarma.
+- **Kurumsal AI Asistanı:** Her ekrandan açılan yan panel (sağ alt düğme, ⌘K'den "AI'ya sor", Zekâ sekmesinde tam ekran). Asistan, uygulamanın kendi hesap motorlarını **rol kapsamlı, salt-okunur araçlar** olarak kullanır (portföy sağlığı, proje detayı, görev/risk arama, kişi profili, uygun kişi, doluluk, departman karnesi, kapasite-talep, tahsis, öngörü, EVM, maliyet, veri sağlığı, son değişiklikler, notlar, durum raporu) — sayıları model değil uygulama hesaplar; kullanıcı arayüzde göremediğini asistanda da göremez, yönetici rollerine notlar hiç gitmez, sicil hiçbir yanıtta yer almaz. **Bilgi tabanı (RAG):** notlar, görev/risk açıklamaları, istekler, PESTEL/SWOT, yerleşik kullanım kılavuzu ve **Bilgi Bankası**'na yüklenen kurumsal dokümanlarda (PDF, Word, Markdown, metin) Türkçe ek/aksan duyarsız anahtar kelime + isteğe bağlı anlamsal (embedding) hibrit arama; yanıtlar numaralı kaynak gösterir, kaynağa tıklayınca ilgili ekran açılır; artımlı dizinleme ve doğruluk değerlendirme seti. **Onaylı değişiklikler:** "şu riski ekle", "görevi tamamlandı yap", "Mart planını 0,5 yap" gibi isteklerde asistan öneri kartı hazırlar; kullanıcı onaylarsa yetki ve plan kilidi yeniden doğrulanıp uygulanır, denetim günlüğüne yazılır, geri alınabilir. **Ekran içi AI:** durum raporunu e-postaya dönüştürme, yönetici brifingi özeti, AI risk önerisi, PESTEL/SWOT taslağı, görev süre (PERT) tahmini. Sağlayıcıdan bağımsız (OpenAI-uyumlu / Azure OpenAI / Anthropic / Gemini) AI proxy'si üzerinden akışlı (streaming) sohbet. Kurumsal API anahtarı **yalnızca sunucuda** tutulur, tarayıcı paketine girmez; yayında erişim koruması (erişim kodu ya da Supabase üyeliği), hız sınırı ve köken denetimi uygulanır; model yanıtları HTML yorumlanmadan güvenli biçimde gösterilir. Kurulum: [`docs/AI_KURULUM.md`](./docs/AI_KURULUM.md).
 - **PWA Desteği:** Uygulama olarak yüklenip çevrimdışı kullanılabilir; veriler tarayıcıda saklanır, JSON yedeği alınabilir (eski tek proje yedekleri de içe aktarılabilir).
 
 ## 🛠️ Yerel Geliştirme
@@ -38,10 +39,12 @@ npm run test     # birim testleri (vitest)
 npm run build    # üretim derlemesi (dist/)
 ```
 
+AI asistanını yerelde denemek için `.env.example` dosyasını `.env.local` olarak kopyalayıp `AI_PROVIDER`, `AI_API_KEY`, `AI_MODEL` değerlerini doldurun (bkz. [`docs/AI_KURULUM.md`](./docs/AI_KURULUM.md)).
+
 ## 🚀 Yayınlama
 
-- **Vercel:** Depoyu Vercel'e bağlamak yeterli — `vite build` otomatik çalışır.
-- **GitHub Pages:** `npm run build` sonrası `dist/` klasörünü Pages'e yayınlayın.
+- **Vercel:** Depoyu Vercel'e bağlamak yeterli — `vite build` otomatik çalışır; `api/ai/*` AI proxy'si sunucusuz fonksiyon olarak yayınlanır (AI ortam değişkenleri Vercel proje ayarlarından girilir).
+- **GitHub Pages:** `npm run build` sonrası `dist/` klasörünü Pages'e yayınlayın. (AI proxy'si statik barındırmada çalışmaz; ayrı bir proxy + `VITE_AI_PROXY_URL` gerekir.)
 
 ## 🗺️ Yol Haritası
 

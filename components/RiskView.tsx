@@ -1,5 +1,7 @@
 import React, { useMemo, useState } from 'react';
-import { Person, PestelItem, Risk, RiskLevel, RiskStatus, SwotItem } from '../types';
+import { Person, PestelItem, Project, Risk, RiskLevel, RiskStatus, SwotItem } from '../types';
+import { EMBED_SYSTEM, parseRiskSuggestions, riskSuggestionPrompt, RiskSuggestion } from '../utils/ai/embedded';
+import { AiButton, AiErrorNote, useAiRun } from './assistant/AiButton';
 import { createRisk, riskBand, RISK_BAND_HEX, RISK_BAND_LABELS, riskScore, RISK_STATUS_LABELS } from '../utils/risks';
 import { riskDraftFromPestel, summarizePestel } from '../utils/pestel';
 import { summarizeSwot } from '../utils/swot';
@@ -16,6 +18,8 @@ interface RiskViewProps {
   onUpdateRisks: (risks: Risk[]) => void;
   onUpdatePestel: (items: PestelItem[]) => void;
   onUpdateSwot: (items: SwotItem[]) => void;
+  /** AI önerileri için proje bağlamı (görevler, notlar, hedefler) */
+  project?: Project;
 }
 
 const LEVELS: RiskLevel[] = [1, 2, 3, 4, 5];
@@ -27,11 +31,28 @@ const STATUS_STYLES: Record<RiskStatus, string> = {
   closed: 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400',
 };
 
-const RiskView: React.FC<RiskViewProps> = ({ projectName, risks, people, canEdit, pestelItems, swotItems, onUpdateRisks, onUpdatePestel, onUpdateSwot }) => {
+const RiskView: React.FC<RiskViewProps> = ({ projectName, risks, people, canEdit, pestelItems, swotItems, onUpdateRisks, onUpdatePestel, onUpdateSwot, project }) => {
   const editable = canEdit;
   const [newRisk, setNewRisk] = useState({ title: '', probability: 3 as RiskLevel, impact: 3 as RiskLevel, ownerPersonId: '', mitigation: '' });
   const [showPestel, setShowPestel] = useState(false);
   const [showSwot, setShowSwot] = useState(false);
+  const ai = useAiRun();
+  const [aiRisks, setAiRisks] = useState<(RiskSuggestion & { selected: boolean })[] | null>(null);
+
+  const suggestRisks = async () => {
+    if (!project) return;
+    const list = await ai.run(EMBED_SYSTEM, riskSuggestionPrompt({ ...project, risks }, new Date()), t => parseRiskSuggestions(t, risks.map(r => r.title)));
+    if (list) setAiRisks(list.map(r => ({ ...r, selected: true })));
+  };
+
+  const addAiRisks = () => {
+    if (!aiRisks) return;
+    const chosen = aiRisks.filter(r => r.selected);
+    if (chosen.length) {
+      onUpdateRisks([...risks, ...chosen.map(r => createRisk({ title: r.title, description: r.description, probability: r.probability, impact: r.impact, mitigation: r.mitigation }))]);
+    }
+    setAiRisks(null);
+  };
   const pestelSummary = useMemo(() => summarizePestel(pestelItems), [pestelItems]);
   const swotSummary = useMemo(() => summarizeSwot(swotItems), [swotItems]);
 
@@ -93,6 +114,9 @@ const RiskView: React.FC<RiskViewProps> = ({ projectName, risks, people, canEdit
           <p className="text-gray-400 text-xs font-semibold tracking-[0.2em]">{projectName} · Olasılık × Etki</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {canEdit && project && ai.available && (
+            <AiButton label="AI Risk Önerisi" loading={ai.loading} onClick={suggestRisks} title="Gecikmeler, notlar, PESTEL ve hedeflerden risk kaydında olmayan riskleri önerir; seçtikleriniz eklenir" />
+          )}
           <button
             onClick={() => setShowPestel(true)}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold text-white shadow-md hover:opacity-90 transition-all"
@@ -115,6 +139,37 @@ const RiskView: React.FC<RiskViewProps> = ({ projectName, risks, people, canEdit
         </div>
       </div>
 
+      <AiErrorNote message={ai.error} onClose={() => ai.setError(null)} />
+      {aiRisks && (
+        <div className="bg-indigo-50/60 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800 rounded-2xl p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-bold text-gray-800 dark:text-gray-100"><i className="fa-solid fa-wand-magic-sparkles text-indigo-500 mr-2"></i>AI risk önerileri</h3>
+            <span className="text-[10px] text-gray-400">Eklemek istediklerinizi seçin; eklendikten sonra düzenleyebilirsiniz.</span>
+          </div>
+          <div className="space-y-2">
+            {aiRisks.map((r, i) => (
+              <label key={i} className="flex items-start gap-3 bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 p-3 cursor-pointer">
+                <input type="checkbox" className="mt-1" checked={r.selected} onChange={e => setAiRisks(aiRisks.map((x, j) => (j === i ? { ...x, selected: e.target.checked } : x)))} />
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-gray-800 dark:text-gray-100">{r.title}</span>
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded text-white" style={{ backgroundColor: RISK_BAND_HEX[riskBand(r.probability * r.impact)] }}>{r.probability}×{r.impact}={r.probability * r.impact}</span>
+                  </span>
+                  {r.description && <span className="block text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">{r.description}</span>}
+                  {r.mitigation && <span className="block text-[11px] text-gray-500 dark:text-gray-400 mt-0.5"><b>Aksiyon:</b> {r.mitigation}</span>}
+                </span>
+              </label>
+            ))}
+          </div>
+          <div className="flex justify-end gap-2 mt-3">
+            <button onClick={() => setAiRisks(null)} className="text-xs font-semibold px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-500">Vazgeç</button>
+            <button onClick={addAiRisks} disabled={!aiRisks.some(r => r.selected)} className="text-xs font-semibold px-4 py-2 rounded-xl text-white disabled:opacity-50" style={{ backgroundColor: 'var(--app-primary)' }}>
+              <i className="fa-solid fa-plus mr-1"></i>Seçilenleri Ekle ({aiRisks.filter(r => r.selected).length})
+            </button>
+          </div>
+        </div>
+      )}
+
       {showPestel && (
         <PestelModal
           projectName={projectName}
@@ -124,6 +179,7 @@ const RiskView: React.FC<RiskViewProps> = ({ projectName, risks, people, canEdit
           onUpdate={onUpdatePestel}
           onCreateRisk={(item) => onUpdateRisks([...risks, createRisk(riskDraftFromPestel(item))])}
           onClose={() => setShowPestel(false)}
+          aiProject={project ? { ...project, risks, pestelItems, swotItems } : undefined}
         />
       )}
 
@@ -136,6 +192,7 @@ const RiskView: React.FC<RiskViewProps> = ({ projectName, risks, people, canEdit
           risks={risks}
           onUpdate={onUpdateSwot}
           onClose={() => setShowSwot(false)}
+          aiProject={project ? { ...project, risks, pestelItems, swotItems } : undefined}
         />
       )}
 
