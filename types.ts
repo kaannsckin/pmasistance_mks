@@ -257,11 +257,15 @@ export interface Project {
   updatedAt: string;
 }
 
+/** Arayüz tercihi: klasik (mevcut) ya da modern (sade, iOS tarzı) */
+export type UiStyle = 'classic' | 'modern';
+
 export interface WorkspaceSettings {
   isLocalPersistenceEnabled?: boolean;
   isAIEnabled?: boolean;
   theme?: string;
   isDarkMode?: boolean;
+  uiStyle?: UiStyle;
 }
 
 // ---------------------------------------------------------------------------

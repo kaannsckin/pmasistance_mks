@@ -7,6 +7,8 @@ export interface CommandItem {
   sublabel?: string;
   icon: string;
   keywords?: string;
+  /** Gizli öğe (sürpriz): listede görünmez, yalnızca bir anahtar kelime tam yazılınca çıkar */
+  hidden?: boolean;
   run: () => void;
 }
 
@@ -36,6 +38,7 @@ const isSubsequence = (q: string, t: string): boolean => {
  */
 const scoreItem = (query: string, item: CommandItem): number => {
   const q = lower(query.trim());
+  if (item.hidden) return q && lower(item.keywords || '').split(/\s+/).includes(q) ? 1000 : 0;
   if (!q) return 1;
   const label = lower(item.label);
   if (label === q) return 1000;
@@ -56,7 +59,7 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ items, onClose, onAskAI
   const listRef = useRef<HTMLDivElement>(null);
 
   const filtered = useMemo(() => {
-    if (!query.trim()) return items;
+    if (!query.trim()) return items.filter(it => !it.hidden);
     const matches = items
       .map((it, i) => ({ it, i, s: scoreItem(query, it) }))
       .filter(x => x.s > 0)

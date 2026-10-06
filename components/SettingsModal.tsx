@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { UiStyle } from '../types';
 
 interface SettingsModalProps {
   sprintDuration: number;
@@ -8,6 +9,9 @@ interface SettingsModalProps {
   isAIEnabled: boolean;
   currentTheme: string;
   isDarkMode: boolean;
+  /** Arayüz tercihi — kartlara tıklanınca hemen uygulanır (kaydet beklenmez) */
+  currentUiStyle: UiStyle;
+  onChangeUiStyle: (style: UiStyle) => void;
   onSave: (duration: number, date: string, enabled: boolean, aiEnabled: boolean, theme: string, isDarkMode: boolean) => void;
   onClose: () => void;
   onResetData?: () => void;
@@ -20,6 +24,47 @@ const THEMES = [
   { id: 'orange', name: 'Gün Batımı', color: '#ea580c' },
 ];
 
+/** Seçim kartlarındaki küçük önizleme — iki arayüzün iskeleti */
+const UiPreview: React.FC<{ kind: UiStyle }> = ({ kind }) => kind === 'modern' ? (
+  <div aria-hidden="true" className="h-20 w-full rounded-lg overflow-hidden flex" style={{ background: '#F2F2F7' }}>
+    <div className="w-1/3 h-full bg-white flex flex-col gap-1 p-1.5">
+      <div className="h-2 w-6 rounded-sm" style={{ background: '#1C1C1E' }}></div>
+      <div className="h-2 rounded-sm" style={{ background: '#0066D6' }}></div>
+      <div className="h-2 rounded-sm bg-gray-200"></div>
+      <div className="h-2 rounded-sm bg-gray-200"></div>
+    </div>
+    <div className="flex-1 p-1.5 flex flex-col gap-1">
+      <div className="h-2.5 w-10 rounded-sm" style={{ background: '#1C1C1E' }}></div>
+      <div className="flex-1 rounded-md bg-white"></div>
+      <div className="flex-1 rounded-md bg-white"></div>
+    </div>
+  </div>
+) : (
+  <div aria-hidden="true" className="h-20 w-full rounded-lg overflow-hidden flex flex-col bg-gray-50">
+    <div className="h-4 bg-white border-b border-gray-200 flex items-center gap-1 px-1.5">
+      <div className="h-2.5 w-2.5 rounded" style={{ background: 'var(--app-primary)' }}></div>
+      <div className="h-1.5 w-5 rounded-sm bg-gray-300"></div>
+      <div className="h-1.5 w-5 rounded-sm bg-gray-300"></div>
+      <div className="h-1.5 w-5 rounded-sm bg-gray-300"></div>
+    </div>
+    <div className="h-3 bg-white border-b border-gray-200 flex items-center gap-1 px-1.5">
+      <div className="h-1 w-4 rounded-sm bg-gray-300"></div>
+      <div className="h-1 w-4 rounded-sm bg-gray-300"></div>
+      <div className="h-1 w-4 rounded-sm bg-gray-300"></div>
+    </div>
+    <div className="flex-1 grid grid-cols-3 gap-1 p-1.5">
+      <div className="rounded bg-white border border-gray-200"></div>
+      <div className="rounded bg-white border border-gray-200"></div>
+      <div className="rounded bg-white border border-gray-200"></div>
+    </div>
+  </div>
+);
+
+const UI_STYLES: { id: UiStyle; name: string; hint: string }[] = [
+  { id: 'classic', name: 'Klasik', hint: 'Alışık olduğunuz görünüm' },
+  { id: 'modern', name: 'Modern', hint: 'Sade, kenar menülü yeni görünüm' },
+];
+
 const SettingsModal: React.FC<SettingsModalProps> = ({
   sprintDuration,
   projectStartDate,
@@ -27,6 +72,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   isAIEnabled,
   currentTheme,
   isDarkMode,
+  currentUiStyle,
+  onChangeUiStyle,
   onSave,
   onClose,
   onResetData
@@ -65,7 +112,35 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
         
         <div className="p-6 space-y-6 overflow-y-auto max-h-[70vh] custom-scrollbar">
-          <section className="space-y-4">
+          <section className="space-y-3" aria-labelledby="ui-style-title">
+              <h3 id="ui-style-title" className="text-sm font-semibold text-gray-800 dark:text-white">Arayüz</h3>
+              <div role="radiogroup" aria-labelledby="ui-style-title" className="grid grid-cols-2 gap-3">
+                  {UI_STYLES.map(u => {
+                      const selected = (currentUiStyle || 'classic') === u.id;
+                      return (
+                          <button
+                            key={u.id}
+                            type="button"
+                            role="radio"
+                            aria-checked={selected}
+                            onClick={() => { if (!selected) onChangeUiStyle(u.id); }}
+                            className={`text-left p-2 rounded-xl border-2 transition-colors ${selected ? '' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-500'}`}
+                            style={selected ? { borderColor: 'var(--app-primary)' } : {}}
+                          >
+                              <UiPreview kind={u.id} />
+                              <span className="mt-2 flex items-center gap-1.5 text-sm font-semibold text-gray-800 dark:text-white">
+                                  {u.name}
+                                  {selected && <i className="fa-solid fa-circle-check text-xs" style={{ color: 'var(--app-primary)' }} aria-hidden="true"></i>}
+                              </span>
+                              <span className="block text-xs text-gray-600 dark:text-gray-400">{u.hint}</span>
+                          </button>
+                      );
+                  })}
+              </div>
+              <p className="text-xs text-gray-600 dark:text-gray-400">Seçim hemen uygulanır; istediğiniz zaman buradan geri dönebilirsiniz.</p>
+          </section>
+
+          <section className="space-y-4 pt-6 border-t dark:border-gray-700">
               <div className="flex justify-between items-center mb-4">
                   <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest">Görünüm & Temalar</h3>
                   <button 

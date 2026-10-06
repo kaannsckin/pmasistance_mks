@@ -1,6 +1,6 @@
 
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { View, Task, Resource, TaskStatus, Note, CustomerRequest, Objective, Project, Person, WorkspaceData, RagStatus, ProjectStatus, UserRole, PlanLockStatus, WorkPackage } from './types';
+import { View, Task, Resource, TaskStatus, Note, CustomerRequest, Objective, Project, Person, WorkspaceData, RagStatus, ProjectStatus, UserRole, PlanLockStatus, WorkPackage, UiStyle } from './types';
 import { INITIAL_TASKS, INITIAL_RESOURCES, INITIAL_OBJECTIVES } from './constants';
 import {
   WORKSPACE_STORAGE_KEY,
@@ -14,7 +14,7 @@ import {
 import { canEditPool, createAllocation, EffortField, getPlanLockStatus, ROLE_LABELS, setAllocationCell, upsertPlanLock } from './utils/allocations';
 import { applyPoolImport, PoolImportResult } from './utils/poolImporter';
 import { isExecRole } from './utils/execReport';
-import { canEditProjectContent, identityOf, identityNeedsPerson as computeNeedsPerson, visibleProjectIds } from './utils/rbac';
+import { canCreateProject, canEditProjectContent, identityOf, identityNeedsPerson as computeNeedsPerson, visibleProjectIds } from './utils/rbac';
 import { addSnapshot, buildSnapshot, ensureMonthlySnapshot } from './utils/snapshots';
 import { AllocationSuggestion, ApplyMode, applyAllocationSuggestions } from './utils/taskToAllocation';
 import { applyBilledHoursActuals, planBilledHoursPoolAdditions, suggestBilledHoursActuals, BilledApplyMode, BilledHoursOptions, BilledHoursRecord } from './utils/billedHours';
@@ -57,6 +57,14 @@ import { appendAudit, AUDIT_ACTION_LABELS } from './utils/audit';
 import { riskScore } from './utils/risks';
 import { upsertLeave } from './utils/availability';
 import { Risk } from './types';
+import ModernSidebar from './components/modern/ModernSidebar';
+import ModernProjectHeader from './components/modern/ModernProjectHeader';
+import ModernPortfolio from './components/modern/ModernPortfolio';
+import ModernBoard from './components/modern/ModernBoard';
+import ModernTaskList from './components/modern/ModernTaskList';
+import { Celebration, EggEvent, HyperdriveOverlay, SpaceMode } from './components/modern/Eggs';
+import { Icon } from './components/modern/icons';
+import { createSequenceDetector } from './utils/easterEggs';
 
 const THEME_COLORS: Record<string, string> = {
   classic: '#2563eb',
@@ -74,6 +82,9 @@ const createSampleProject = (): Project =>
     resources: INITIAL_RESOURCES.map(r => ({ ...r, title: r.title || 'Uzman' })),
     objectives: INITIAL_OBJECTIVES,
   });
+
+/** Modern arayüzde proje başlığının gösterildiği ekranlar */
+const MODERN_PROJECT_VIEWS: View[] = [View.Roadmap, View.Tasks, View.Kanban, View.Risks, View.Resources, View.Goals, View.Requests, View.Notes, View.AI];
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<View>(View.Portfolio);
@@ -94,6 +105,10 @@ const App: React.FC = () => {
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
   const [isPaletteOpen, setIsPaletteOpen] = useState(false);
   const [isWpManagerOpen, setIsWpManagerOpen] = useState(false);
+  // Modern arayüz: dar ekranda kenar çubuğu çekmecesi, "yeni proje" isteği, sürprizler
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [newProjectRequest, setNewProjectRequest] = useState(0);
+  const [egg, setEgg] = useState<EggEvent | null>(null);
   const [undo, setUndo] = useState<{ message: string; snapshot: WorkspaceData } | null>(null);
   const undoTimer = useRef<number | undefined>(undefined);
   const workspaceRef = useRef<WorkspaceData | null>(null);
@@ -196,6 +211,18 @@ const App: React.FC = () => {
         e.preventDefault();
         setIsPaletteOpen(o => !o);
       }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  // Sürpriz: Konami kodu (↑↑↓↓←→←→BA) → uzay modu (yazı alanlarında dinlenmez)
+  useEffect(() => {
+    const feed = createSequenceDetector();
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
+      if (feed(e.key)) setEgg({ kind: 'space' });
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -548,6 +575,11 @@ const App: React.FC = () => {
     window.location.reload();
   }, []);
 
+  // Arayüz tercihi (Ayarlar → Arayüz ya da profil menüsündeki kısayol): anında geçiş
+  const handleSetUiStyle = useCallback((uiStyle: UiStyle) => {
+    updateWorkspace(ws => ({ ...ws, settings: { ...ws.settings, uiStyle } }));
+  }, [updateWorkspace]);
+
   const handleSaveSettings = (newDuration: number, newDate: string, enabled: boolean, aiEnabled: boolean, newTheme: string, dark: boolean) => {
     updateWorkspace(ws => ({
       ...ws,
@@ -576,6 +608,11 @@ const App: React.FC = () => {
   const handleUpdateTask = (updatedTask: Task) => {
     setTasks(prev => prev.map(t => t.id === updatedTask.id ? updatedTask : t));
   };
+
+  const isModern = settings?.uiStyle === 'modern';
+  // Proje bağlamındaki ekranlar (modern arayüzde proje başlığı ve segment gezinme gösterilir)
+  const inProjectView = !!activeProject && MODERN_PROJECT_VIEWS.includes(currentView) &&
+    !(workspace && isExecRole(workspace.currentRole) && (currentView === View.Notes || currentView === View.Requests));
 
   const renderView = () => {
     if (!isInitialized || !workspace) {
@@ -643,6 +680,26 @@ const App: React.FC = () => {
     }
 
     // Aktif proje yoksa tek anlamlı ekran portföydür
+    if ((!activeProject || currentView === View.Portfolio) && isModern) {
+      return (
+        <ModernPortfolio
+          projects={visibleProjects}
+          people={workspace.people}
+          identity={identity}
+          needsPerson={needsPerson}
+          todoItems={todoItems}
+          onTodoNavigate={handleTodoNavigate}
+          onOpenProject={handleOpenProject}
+          onCreateProject={handleCreateProject}
+          onDeleteProject={handleDeleteProject}
+          onRenameProject={handleRenameProject}
+          onSetRag={handleSetProjectRag}
+          onSetStatus={handleSetProjectStatus}
+          onSetOwner={handleSetProjectOwner}
+          createRequest={newProjectRequest}
+        />
+      );
+    }
     if (!activeProject || currentView === View.Portfolio) {
       return (
         <PortfolioView
@@ -664,6 +721,45 @@ const App: React.FC = () => {
 
     const { tasks, resources, notes, customerRequests, objectives } = activeProject;
     const ps = activeProject.settings;
+    const changeTaskStatus = (id: string, s: TaskStatus) => setTasks(prev => prev.map(t => t.id === id ? { ...t, status: s } : t));
+    const viewTask = (t: Task) => { setViewingTask(t); setIsDetailModalOpen(true); };
+    const editTask = (t: Task) => { setEditingTask(t); setIsFormModalOpen(true); };
+    const deleteTask = (taskId: string) => { if (window.confirm('Emin misiniz?')) setTasks(prev => prev.filter(t => t.id !== taskId)); };
+    const notifyTask = (t: Task) => { setTeamsTask(t); setIsTeamsModalOpen(true); };
+    const newTask = () => { setEditingTask(null); setIsFormModalOpen(true); };
+    const celebrate = (message: string) => setEgg({ kind: 'celebrate', message });
+
+    if (isModern && currentView === View.Roadmap) {
+      return (
+        <ModernBoard
+          tasks={tasks}
+          sprintNames={ps.sprintNames || {}}
+          onStatusChange={changeTaskStatus}
+          onViewTask={viewTask}
+          onEditTask={editTask}
+          onDeleteTask={deleteTask}
+          onNotifyTask={notifyTask}
+          onNewTask={newTask}
+          onCelebrate={celebrate}
+        />
+      );
+    }
+    if (isModern && currentView === View.Tasks) {
+      return (
+        <ModernTaskList
+          tasks={tasks}
+          resources={resources}
+          sprintNames={ps.sprintNames || {}}
+          onStatusChange={changeTaskStatus}
+          onViewTask={viewTask}
+          onEditTask={editTask}
+          onDeleteTask={deleteTask}
+          onNotifyTask={notifyTask}
+          onDataImport={(nt: Task[], nr: Resource[]) => { setTasks(prev => [...prev, ...nt]); setResources(prev => [...prev, ...nr]); }}
+          onCelebrate={celebrate}
+        />
+      );
+    }
 
     switch (currentView) {
       case View.AI: return <AIAssistant suggestions={aiSuggestions} />;
@@ -799,6 +895,18 @@ const App: React.FC = () => {
   const showProjectBar = !!activeProject;
   const mainHeightClass = showProjectBar ? 'h-[calc(100vh-6.75rem)]' : 'h-[calc(100vh-4rem)]';
 
+  // Modern arayüz yardımcıları
+  const peopleSummaries = useMemo(
+    () => (workspace?.people || []).map(p => ({ id: p.id, name: `${p.firstName} ${p.lastName}`.trim(), initials: `${p.firstName.charAt(0)}${p.lastName.charAt(0)}`, departmentCode: p.departmentCode })),
+    [workspace?.people],
+  );
+  const activeOwnerName = useMemo(() => {
+    const owner = activeProject?.pmPersonId ? workspace?.people.find(p => p.id === activeProject.pmPersonId) : undefined;
+    return owner ? `${owner.firstName} ${owner.lastName}`.trim() : undefined;
+  }, [activeProject, workspace?.people]);
+  const usesModernScreen = !inProjectView ? (currentView === View.Portfolio || !activeProject) && ![View.Executive, View.DataPool, View.Allocations, View.Calendar].includes(currentView)
+    : currentView === View.Roadmap || currentView === View.Tasks;
+
   // Komut paleti öğeleri (ekranlar + aksiyonlar + kapsamdaki projeler + kişiler)
   const commandItems = useMemo<CommandItem[]>(() => {
     if (!workspace) return [];
@@ -812,6 +920,7 @@ const App: React.FC = () => {
     items.push({ id: 'a-health', group: 'Aksiyonlar', label: 'Veri Sağlığı Denetimi', icon: 'fa-stethoscope', keywords: 'saglik hata yetim', run: () => setIsHealthModalOpen(true) });
     items.push({ id: 'a-audit', group: 'Aksiyonlar', label: 'Denetim Günlüğü', icon: 'fa-clock-rotate-left', keywords: 'audit log gunluk kayit', run: () => setIsAuditModalOpen(true) });
     if (activeProject) items.push({ id: 'a-wp', group: 'Aksiyonlar', label: `İş Paketleri — ${activeProject.name}`, icon: 'fa-briefcase', keywords: 'is paketi work package gorev', run: () => setIsWpManagerOpen(true) });
+    items.push({ id: 'egg-rocket', group: 'Sürpriz', label: 'Roketi fırlat', icon: 'fa-rocket', keywords: 'roket rocket uzay', hidden: true, run: () => setEgg({ kind: 'hyper' }) });
     visibleProjects.forEach(p => items.push({ id: `p-${p.id}`, group: 'Projeler', label: p.name, sublabel: 'Projeyi aç', icon: 'fa-folder-open', keywords: p.code || '', run: () => handleOpenProject(p.id) }));
     workspace.people.forEach(p => items.push({ id: `k-${p.id}`, group: 'Kişiler', label: `${p.firstName} ${p.lastName}`.trim(), sublabel: `${p.departmentCode || ''} · kişi profili`, icon: 'fa-user', keywords: p.sicil || '', run: () => setViewingPersonId(p.id) }));
     return items;
@@ -819,37 +928,99 @@ const App: React.FC = () => {
 
   return (
     <AssistantProvider enabled={isAIEnabled} getWorkspace={getAssistantWorkspace} getView={getAssistantView} onNavigate={handleAssistantNavigate} onApplyAction={handleApplyAiAction}>
-    <div className={`min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans theme-${settings?.theme || 'classic'}`}>
-      <Header
-        currentView={currentView} setCurrentView={setCurrentView}
-        onOpenSettings={() => setIsSettingsModalOpen(true)}
-        onSaveProject={handleSaveProject}
-        onLoadProject={handleLoadProject}
-        isLocalPersistenceEnabled={settings?.isLocalPersistenceEnabled !== false}
-        isAIEnabled={settings?.isAIEnabled !== false}
-        onOpenAbout={() => setIsAboutModalOpen(true)}
-        projects={visibleProjects.map(p => ({ id: p.id, name: p.name, rag: p.rag }))}
-        activeProjectId={activeProject?.id ?? null}
-        onSelectProject={handleOpenProject}
-        currentRole={workspace?.currentRole || 'py'}
-        currentPersonId={workspace?.currentPersonId}
-        people={(workspace?.people || []).map(p => ({ id: p.id, name: `${p.firstName} ${p.lastName}`.trim(), initials: `${p.firstName.charAt(0)}${p.lastName.charAt(0)}`, departmentCode: p.departmentCode }))}
-        identityNeedsPerson={needsPerson}
-        onChangeIdentity={handleChangeIdentity}
-        cloudLinked={!!loadCloudConfig()?.workspaceId}
-        onOpenCloudSync={() => setIsCloudModalOpen(true)}
-        todoItems={todoItems}
-        onTodoNavigate={handleTodoNavigate}
-        onOpenStatusReport={() => setIsStatusReportOpen(true)}
-        dataHealthAlerts={healthAlerts}
-        onOpenDataHealth={() => setIsHealthModalOpen(true)}
-        onOpenAuditLog={() => setIsAuditModalOpen(true)}
-        onOpenCommandPalette={() => setIsPaletteOpen(true)}
-        onOpenWorkPackages={() => setIsWpManagerOpen(true)}
-      />
-      <main className={`w-full max-w-[1920px] mx-auto ${isFullWidthView ? mainHeightClass : `px-4 sm:px-6 lg:px-8 py-6 ${mainHeightClass} overflow-auto`}`}>
-        {renderView()}
-      </main>
+    <div className={`min-h-screen font-sans theme-${settings?.theme || 'classic'} ${isModern ? 'ui-modern' : 'bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100'}`}>
+      {isModern ? (
+        <div className="flex min-h-screen">
+          <ModernSidebar
+            isOpen={isSidebarOpen}
+            onClose={() => setIsSidebarOpen(false)}
+            currentView={currentView}
+            hasActiveProject={inProjectView}
+            onNavigate={(v: View) => setCurrentView(v)}
+            exec={isExecRole(identity.role)}
+            projects={visibleProjects.map(p => ({ id: p.id, name: p.name, rag: p.rag, openTasks: p.tasks.filter(t => t.status !== TaskStatus.Done).length }))}
+            activeProjectId={activeProject?.id ?? null}
+            onOpenProject={handleOpenProject}
+            canCreateProject={canCreateProject(identity)}
+            onNewProject={() => { setCurrentView(View.Portfolio); setNewProjectRequest(n => n + 1); }}
+            onOpenSearch={() => setIsPaletteOpen(true)}
+            currentRole={workspace?.currentRole || 'py'}
+            currentPersonId={workspace?.currentPersonId}
+            people={peopleSummaries}
+            needsPerson={needsPerson}
+            onChangeIdentity={handleChangeIdentity}
+            onOpenSettings={() => setIsSettingsModalOpen(true)}
+            onSwitchToClassic={() => handleSetUiStyle('classic')}
+            onSaveBackup={handleSaveProject}
+            onLoadBackup={handleLoadProject}
+            cloudLinked={!!loadCloudConfig()?.workspaceId}
+            onOpenCloud={() => setIsCloudModalOpen(true)}
+            healthAlerts={healthAlerts}
+            onOpenHealth={() => setIsHealthModalOpen(true)}
+            onOpenAudit={() => setIsAuditModalOpen(true)}
+            onOpenAbout={() => setIsAboutModalOpen(true)}
+            onLogoLaunch={() => setCurrentView(inProjectView ? View.Roadmap : View.Portfolio)}
+            onHyperdrive={() => setEgg({ kind: 'hyper' })}
+          />
+          <div className="flex-1 min-w-0 flex flex-col">
+            <div className="lg:hidden sticky top-0 z-30 m-surface border-b m-sep flex items-center gap-1 px-1.5 h-14">
+              <button type="button" className="m-icon-btn" aria-label="Menüyü aç" onClick={() => setIsSidebarOpen(true)}><Icon name="menu" /></button>
+              <span className="flex-1 min-w-0 truncate text-[17px] font-semibold m-text">{inProjectView && activeProject ? activeProject.name : 'PlanAsistan'}</span>
+              <button type="button" className="m-icon-btn" aria-label="Ara" onClick={() => setIsPaletteOpen(true)}><Icon name="search" /></button>
+            </div>
+            <main className="flex-1 w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-10 py-6 lg:py-8">
+              {inProjectView && activeProject && (
+                <ModernProjectHeader
+                  project={activeProject}
+                  ownerName={activeOwnerName}
+                  currentView={currentView}
+                  onNavigate={(v: View) => setCurrentView(v)}
+                  onBack={() => setCurrentView(View.Portfolio)}
+                  exec={isExecRole(identity.role)}
+                  aiEnabled={isAIEnabled}
+                  onStatusReport={() => setIsStatusReportOpen(true)}
+                  onNewTask={() => { setEditingTask(null); setIsFormModalOpen(true); }}
+                  onOpenWorkPackages={() => setIsWpManagerOpen(true)}
+                />
+              )}
+              <div className={usesModernScreen ? '' : 'm-legacy'}>{renderView()}</div>
+            </main>
+          </div>
+        </div>
+      ) : (
+        <>
+        <Header
+          currentView={currentView} setCurrentView={setCurrentView}
+          onOpenSettings={() => setIsSettingsModalOpen(true)}
+          onSaveProject={handleSaveProject}
+          onLoadProject={handleLoadProject}
+          isLocalPersistenceEnabled={settings?.isLocalPersistenceEnabled !== false}
+          isAIEnabled={settings?.isAIEnabled !== false}
+          onOpenAbout={() => setIsAboutModalOpen(true)}
+          projects={visibleProjects.map(p => ({ id: p.id, name: p.name, rag: p.rag }))}
+          activeProjectId={activeProject?.id ?? null}
+          onSelectProject={handleOpenProject}
+          currentRole={workspace?.currentRole || 'py'}
+          currentPersonId={workspace?.currentPersonId}
+          people={(workspace?.people || []).map(p => ({ id: p.id, name: `${p.firstName} ${p.lastName}`.trim(), initials: `${p.firstName.charAt(0)}${p.lastName.charAt(0)}`, departmentCode: p.departmentCode }))}
+          identityNeedsPerson={needsPerson}
+          onChangeIdentity={handleChangeIdentity}
+          cloudLinked={!!loadCloudConfig()?.workspaceId}
+          onOpenCloudSync={() => setIsCloudModalOpen(true)}
+          todoItems={todoItems}
+          onTodoNavigate={handleTodoNavigate}
+          onOpenStatusReport={() => setIsStatusReportOpen(true)}
+          dataHealthAlerts={healthAlerts}
+          onOpenDataHealth={() => setIsHealthModalOpen(true)}
+          onOpenAuditLog={() => setIsAuditModalOpen(true)}
+          onOpenCommandPalette={() => setIsPaletteOpen(true)}
+          onOpenWorkPackages={() => setIsWpManagerOpen(true)}
+        />
+        <main className={`w-full max-w-[1920px] mx-auto ${isFullWidthView ? mainHeightClass : `px-4 sm:px-6 lg:px-8 py-6 ${mainHeightClass} overflow-auto`}`}>
+          {renderView()}
+        </main>
+        </>
+      )}
 
       {isFormModalOpen && activeProject && workspace && <TaskFormModal task={editingTask} resources={activeProject.resources} people={workspace.people} workPackages={activeProject.workPackages} tasks={activeProject.tasks} objectives={activeProject.objectives} onClose={() => setIsFormModalOpen(false)} onSave={(t) => {
           updateActiveProject(p => {
@@ -892,6 +1063,8 @@ const App: React.FC = () => {
           isAIEnabled={settings?.isAIEnabled !== false}
           currentTheme={settings?.theme || 'classic'}
           isDarkMode={settings?.isDarkMode || false}
+          currentUiStyle={settings?.uiStyle || 'classic'}
+          onChangeUiStyle={handleSetUiStyle}
           onSave={handleSaveSettings} onClose={() => setIsSettingsModalOpen(false)} onResetData={handleResetData}
         />
       )}
@@ -930,9 +1103,13 @@ const App: React.FC = () => {
       )}
       <AssistantPanel
         suggestions={aiSuggestions}
+        hideLauncher={isModern}
         hidden={currentView === View.AI && !!activeProject}
         onExpand={activeProject ? () => setCurrentView(View.AI) : undefined}
       />
+      {egg?.kind === 'hyper' && <HyperdriveOverlay onDone={() => setEgg(null)} />}
+      {egg?.kind === 'space' && <SpaceMode onDone={() => setEgg(null)} />}
+      {egg?.kind === 'celebrate' && <Celebration message={egg.message} onDone={() => setEgg(null)} />}
       {undo && (
         <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[250] flex items-center gap-3 bg-gray-900 dark:bg-gray-800 text-white rounded-xl shadow-2xl px-4 py-2.5 border border-gray-700">
           <i className="fa-solid fa-trash-can text-gray-400 text-xs"></i>
