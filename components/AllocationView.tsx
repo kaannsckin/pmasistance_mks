@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Allocation, Leave, Person, PlanLock, PlanLockStatus, Project, TitleDef, UserRole } from '../types';
 import {
   canApprovePlan, EffortField, findOverAllocations,
@@ -32,10 +32,30 @@ interface AllocationViewProps {
   onLockAction: (projectId: string, year: number, status: PlanLockStatus) => void;
   onApplySuggestions: (projectId: string, year: number, suggestions: AllocationSuggestion[], mode: ApplyMode) => void;
   onApplyBilledHours: (records: BilledHoursRecord[], options: BilledHoursOptions, mode: BilledApplyMode, autoCreate: boolean) => void;
+  /** Modern arayüz: başlık, süzgeçler ve sekmeler dışarıda; durum dışarıdan yönetilir */
+  control?: AllocationControl;
 }
 
-type Mode = 'plan' | 'actual' | 'compare';
-type Tab = 'grid' | 'person' | 'department' | 'project' | 'heatmap' | 'staffing' | 'roles' | 'scenario' | 'forecast';
+export type AllocationMode = 'plan' | 'actual' | 'compare';
+export type AllocationTab = 'grid' | 'person' | 'department' | 'project' | 'heatmap' | 'staffing' | 'roles' | 'scenario' | 'forecast';
+type Mode = AllocationMode;
+type Tab = AllocationTab;
+
+export interface AllocationControlState {
+  year: number;
+  mode: AllocationMode;
+  tab: AllocationTab;
+  projectFilter: string;
+  deptFilter: string;
+}
+
+export interface AllocationControl extends AllocationControlState {
+  onChange: (patch: Partial<AllocationControlState>) => void;
+  /** "Uygun kişi" aracını hazır süzgeçle açmak için (key değişince uygulanır) */
+  staffPreset?: { key: number; role: string; from: number; to: number; aa: number };
+  /** Her artışta Jira Billed Hours içe aktarma penceresini açar */
+  billedRequest?: number;
+}
 
 const YEAR_RANGE = (() => {
   const y = new Date().getFullYear();
@@ -53,20 +73,38 @@ const LOCK_STYLES: Record<PlanLockStatus, { label: string; cls: string; icon: st
   locked: { label: 'Kilitli', cls: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-300', icon: 'fa-lock' },
 };
 
-const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, projects, planLocks, leaves, titles, currentRole, identity, onSetCell, onAddAllocation, onDeleteAllocation, onLockAction, onApplySuggestions, onApplyBilledHours }) => {
+const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, projects, planLocks, leaves, titles, currentRole, identity, onSetCell, onAddAllocation, onDeleteAllocation, onLockAction, onApplySuggestions, onApplyBilledHours, control }) => {
   const wsLike = useMemo(() => ({ people, projects, allocations }), [people, projects, allocations]);
   // Kimlik kapsamına göre hücre/satır düzenlenebilirliği (RBAC)
   const canEnter = identity.role === 'py' || identity.role === 'bolum_sorumlu';
-  const [year, setYear] = useState(new Date().getFullYear());
-  const [mode, setMode] = useState<Mode>('plan');
-  const [tab, setTab] = useState<Tab>('grid');
-  const [projectFilter, setProjectFilter] = useState('all');
-  const [deptFilter, setDeptFilter] = useState('all');
+  const [yearState, setYearState] = useState(new Date().getFullYear());
+  const [modeState, setModeState] = useState<Mode>('plan');
+  const [tabState, setTabState] = useState<Tab>('grid');
+  const [projectFilterState, setProjectFilterState] = useState('all');
+  const [deptFilterState, setDeptFilterState] = useState('all');
+  // Dışarıdan yönetiliyorsa (modern arayüz) değerler ve değişiklikler oraya gider
+  const year = control ? control.year : yearState;
+  const mode = control ? control.mode : modeState;
+  const tab = control ? control.tab : tabState;
+  const projectFilter = control ? control.projectFilter : projectFilterState;
+  const deptFilter = control ? control.deptFilter : deptFilterState;
+  const setYear = (v: number) => (control ? control.onChange({ year: v }) : setYearState(v));
+  const setMode = (v: Mode) => (control ? control.onChange({ mode: v }) : setModeState(v));
+  const setTab = (v: Tab) => (control ? control.onChange({ tab: v }) : setTabState(v));
+  const setProjectFilter = (v: string) => (control ? control.onChange({ projectFilter: v }) : setProjectFilterState(v));
+  const setDeptFilter = (v: string) => (control ? control.onChange({ deptFilter: v }) : setDeptFilterState(v));
   const [newRow, setNewRow] = useState({ personId: '', projectId: '', workPackageId: '', role: '' });
   const [suggestModal, setSuggestModal] = useState<{ projectId: string; projectName: string; result: SuggestionResult } | null>(null);
   const [showBilled, setShowBilled] = useState(false);
   const [applyMode, setApplyMode] = useState<ApplyMode>('fill');
   const [staff, setStaff] = useState({ role: '', from: 1, to: 12, aa: 0.5 });
+  const presetKey = control?.staffPreset?.key;
+  useEffect(() => {
+    const p = control?.staffPreset;
+    if (p) setStaff({ role: p.role, from: p.from, to: p.to, aa: p.aa });
+  }, [presetKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const billedRequest = control?.billedRequest;
+  useEffect(() => { if (billedRequest) setShowBilled(true); }, [billedRequest]);
 
   const openSuggestions = (projectId: string) => {
     const project = projectMap.get(projectId);
@@ -616,6 +654,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
 
   return (
     <div className="space-y-4">
+      {!control && (
       <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
         <div>
           <h2 className="text-2xl font-semibold text-gray-800 dark:text-white tracking-tight">İşgücü Tahsisi</h2>
@@ -651,6 +690,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
           )}
         </div>
       </div>
+      )}
 
       {showBilled && (
         <BilledHoursImportModal
@@ -670,6 +710,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
         />
       )}
 
+      {!control && (
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center space-x-2 flex-wrap gap-y-2">
           {([['grid', 'fa-table-cells', 'Tahsis Tablosu'], ['person', 'fa-user', 'Kişi Özeti'], ['department', 'fa-building', 'Bölüm Özeti'], ['project', 'fa-folder-open', 'Proje Özeti'], ['heatmap', 'fa-fire', 'Doluluk'], ['staffing', 'fa-user-check', 'Uygun Kişi'], ['roles', 'fa-id-badge', 'Kapasite-Talep'], ['forecast', 'fa-chart-line', 'Öngörü'], ['scenario', 'fa-flask', 'Senaryo']] as [Tab, string, string][]).map(([t, icon, label]) => (
@@ -682,6 +723,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
           Rol: <span style={{ color: 'var(--app-primary)' }}>{ROLE_LABELS[currentRole]}</span>
         </span>
       </div>
+      )}
 
       {overAllocations.length > 0 && (
         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl px-4 py-3">

@@ -62,6 +62,7 @@ import ModernProjectHeader from './components/modern/ModernProjectHeader';
 import ModernPortfolio from './components/modern/ModernPortfolio';
 import ModernBoard from './components/modern/ModernBoard';
 import ModernTaskList from './components/modern/ModernTaskList';
+import ModernAllocation from './components/modern/ModernAllocation';
 import { Celebration, EggEvent, HyperdriveOverlay, SpaceMode } from './components/modern/Eggs';
 import { Icon } from './components/modern/icons';
 import { createSequenceDetector } from './utils/easterEggs';
@@ -654,6 +655,27 @@ const App: React.FC = () => {
         />
       );
     }
+    if (currentView === View.Allocations && isModern) {
+      return (
+        <ModernAllocation
+          allocations={workspace.allocations}
+          people={workspace.people}
+          projects={workspace.projects}
+          planLocks={workspace.planLocks}
+          leaves={workspace.leaves || []}
+          titles={workspace.titles}
+          currentRole={workspace.currentRole || 'py'}
+          identity={identity}
+          onSetCell={handleSetAllocationCell}
+          onAddAllocation={handleAddAllocation}
+          onDeleteAllocation={handleDeleteAllocation}
+          onLockAction={handleLockAction}
+          onApplySuggestions={handleApplySuggestions}
+          onApplyBilledHours={handleApplyBilledHours}
+          onViewPerson={setViewingPersonId}
+        />
+      );
+    }
     if (currentView === View.Allocations) {
       return (
         <AllocationView
@@ -904,8 +926,10 @@ const App: React.FC = () => {
     const owner = activeProject?.pmPersonId ? workspace?.people.find(p => p.id === activeProject.pmPersonId) : undefined;
     return owner ? `${owner.firstName} ${owner.lastName}`.trim() : undefined;
   }, [activeProject, workspace?.people]);
-  const usesModernScreen = !inProjectView ? (currentView === View.Portfolio || !activeProject) && ![View.Executive, View.DataPool, View.Allocations, View.Calendar].includes(currentView)
-    : currentView === View.Roadmap || currentView === View.Tasks;
+  // Yeniden yazılmış ekranlar m-legacy yumuşatma katmanının dışında kalır
+  const usesModernScreen = inProjectView
+    ? currentView === View.Roadmap || currentView === View.Tasks
+    : currentView === View.Allocations || ((currentView === View.Portfolio || !activeProject) && ![View.Executive, View.DataPool, View.Calendar].includes(currentView));
 
   // Komut paleti öğeleri (ekranlar + aksiyonlar + kapsamdaki projeler + kişiler)
   const commandItems = useMemo<CommandItem[]>(() => {
