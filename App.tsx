@@ -71,6 +71,8 @@ import ModernExpectations from './components/modern/ModernExpectations';
 import ModernGoals from './components/modern/ModernGoals';
 import ModernRequests from './components/modern/ModernRequests';
 import TaskFormSheet from './components/modern/TaskFormSheet';
+import ModernTimeline, { CalendarSettings } from './components/modern/ModernTimeline';
+import ModernTeam from './components/modern/ModernTeam';
 import TaskDetailSheet from './components/modern/TaskDetailSheet';
 import { markConverted, taskDraftFromRequest } from './utils/customerRequests';
 import {
@@ -905,6 +907,44 @@ const App: React.FC = () => {
       setIsFormModalOpen(true);
     };
 
+    // Sürüm ekleme/silme (klasik pano ve modern zaman çizelgesi ortak)
+    const insertSprint = (n: number) => setTasks(prev => prev.map(t => t.version >= n ? { ...t, version: t.version + 1 } : t));
+    const deleteSprint = (n: number) => setTasks(prev => prev.map(t => t.version === n ? { ...t, version: 0, status: TaskStatus.Backlog } : t.version > n ? { ...t, version: t.version - 1 } : t));
+    if (isModern && currentView === View.Kanban) {
+      return (
+        <ModernTimeline
+          project={activeProject}
+          canEdit={!execRole}
+          onMoveTask={(id: string, v: number) => setTasks(prev => prev.map(t => t.id === id ? { ...t, version: v } : t))}
+          onPlanGenerated={setTasks}
+          onInsertSprint={insertSprint}
+          onDeleteSprint={deleteSprint}
+          onRenameSprint={(v: number, name: string) => setSprintNames(prev => {
+            const next = { ...prev };
+            if (name) next[v] = name; else delete next[v];
+            return next;
+          })}
+          onUpdateCalendar={(c: CalendarSettings) => updateActiveProject(p => ({ ...p, settings: { ...p.settings, ...c } }))}
+          onViewTask={viewTask}
+          onNewTask={newTask}
+        />
+      );
+    }
+    if (isModern && currentView === View.Resources) {
+      return (
+        <ModernTeam
+          resources={resources}
+          tasks={tasks}
+          people={workspace.people}
+          canEdit={!execRole}
+          onUpdate={(rs: Resource[], ts?: Task[]) => updateActiveProject(p => ({ ...p, resources: rs, tasks: ts ?? p.tasks }))}
+          setResources={setResources}
+          titleCosts={ps.titleCosts || {}}
+          setTitleCosts={setTitleCosts}
+          costTableColor={ps.costTableColor || '#10b981'}
+        />
+      );
+    }
     if (isModern && currentView === View.Goals) {
       return (
         <ModernGoals
@@ -1019,8 +1059,8 @@ const App: React.FC = () => {
             globalTestDays={ps.globalTestDays || 4} setGlobalTestDays={setGlobalTestDays as React.Dispatch<React.SetStateAction<number>>}
             onPlanGenerated={setTasks} onTaskSprintChange={(id, v) => setTasks(prev => prev.map(t => t.id === id ? { ...t, version: v } : t))}
             onTaskStatusChange={(id, s) => setTasks(prev => prev.map(t => t.id === id ? { ...t, status: s } : t))}
-            onInsertSprint={(n) => setTasks(prev => prev.map(t => t.version >= n ? { ...t, version: t.version + 1 } : t))}
-            onDeleteSprint={(n) => setTasks(prev => prev.map(t => t.version === n ? { ...t, version: 0, status: TaskStatus.Backlog } : t.version > n ? { ...t, version: t.version - 1 } : t))}
+            onInsertSprint={insertSprint}
+            onDeleteSprint={deleteSprint}
             onOpenSettings={() => setIsSettingsModalOpen(true)}
             onNewTask={() => { setEditingTask(null); setIsFormModalOpen(true); }}
             onViewTaskDetails={(taskId) => { const t = tasks.find(x => x.id === taskId); if(t) { setViewingTask(t); setIsDetailModalOpen(true); } }}
@@ -1134,7 +1174,7 @@ const App: React.FC = () => {
   const showsExecutive = currentView === View.Executive ||
     (!!workspace && isExecRole(workspace.currentRole) && (currentView === View.Notes || currentView === View.Requests));
   const usesModernScreen = inProjectView
-    ? [View.Overview, View.Roadmap, View.Tasks, View.Risks, View.Goals, View.Requests].includes(currentView)
+    ? [View.Overview, View.Roadmap, View.Tasks, View.Kanban, View.Risks, View.Resources, View.Goals, View.Requests].includes(currentView)
     : showsExecutive || currentView === View.Allocations || currentView === View.RiskReport || currentView === View.Expectations || ((currentView === View.Portfolio || !activeProject) && ![View.DataPool, View.Calendar].includes(currentView));
 
   // Komut paleti öğeleri (ekranlar + aksiyonlar + kapsamdaki projeler + kişiler)
