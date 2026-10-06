@@ -29,6 +29,12 @@
   --m-hold: #8E8E93; --m-hold-ink: #48484A; --m-hold-tint: #EBEBF0;
   --m-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
   --m-pop-shadow: 0 10px 30px rgba(0, 0, 0, 0.14), 0 1px 3px rgba(0, 0, 0, 0.08);
+  /* Doluluk ısı haritası: düzeyler açıklık farkıyla da ayrışır */
+  --m-heat-low-bg: #F2F2F7;   --m-heat-low-ink: #48484A;
+  --m-heat-ok-bg: #E5F0FC;    --m-heat-ok-ink: #00449A;
+  --m-heat-full-bg: #8CBDF0;  --m-heat-full-ink: #00285C;
+  --m-heat-over-bg: #B00020;  --m-heat-over-ink: #FFFFFF;
+  --m-heat-leave-bg: #FFF1DB; --m-heat-leave-ink: #8F4300;
 
   /* Eski ekranlar da aynı vurgu rengini kullansın */
   --app-primary: var(--m-accent);
@@ -71,6 +77,11 @@
     --m-hold: #8E8E93; --m-hold-ink: #C7C7CC; --m-hold-tint: rgba(142, 142, 147, 0.2);
     --m-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
     --m-pop-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+    --m-heat-low-bg: #242426;   --m-heat-low-ink: #C7C7CC;
+    --m-heat-ok-bg: rgba(77, 162, 255, 0.2);  --m-heat-ok-ink: #A9D1FF;
+    --m-heat-full-bg: #3D7CC9;  --m-heat-full-ink: #FFFFFF;
+    --m-heat-over-bg: #FF453A;  --m-heat-over-ink: #1C0000;
+    --m-heat-leave-bg: rgba(255, 159, 10, 0.18); --m-heat-leave-ink: #FFC56B;
   }
   .ui-modern.theme-emerald { --m-accent: #3CCFB4; --m-accent-ink: #7ADFCB; --m-accent-tint: rgba(60, 207, 180, 0.16); }
   .ui-modern.theme-purple  { --m-accent: #A48BFF; --m-accent-ink: #C2B2FF; --m-accent-tint: rgba(164, 139, 255, 0.18); }
