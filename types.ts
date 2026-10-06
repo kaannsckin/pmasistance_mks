@@ -402,7 +402,8 @@ export type AuditAction =
   | 'project.create' | 'project.delete' | 'project.owner' | 'project.rag'
   | 'risk.add' | 'risk.close'
   | 'plan.submit' | 'plan.approve' | 'plan.reject' | 'plan.unlock'
-  | 'data.import' | 'identity.change' | 'health.fix' | 'snapshot.create';
+  | 'data.import' | 'identity.change' | 'health.fix' | 'snapshot.create'
+  | 'ai.apply';
 
 export interface AuditEntry {
   id: string;

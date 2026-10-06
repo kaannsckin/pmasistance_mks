@@ -256,3 +256,36 @@ describe('bilgi_ara (RAG)', () => {
         expect(denied.ok).toBe(false);
     });
 });
+
+describe('değişiklik öneri araçları', () => {
+    it('yalnızca veri girebilen rollere sunulur', () => {
+        expect(toolSpecsFor(buildToolContext(buildWs(), NOW)).map(t => t.name)).toContain('oner_risk_ekle');
+        expect(toolSpecsFor(buildToolContext(buildWs('mudur', null), NOW)).some(t => t.name.startsWith('oner_'))).toBe(false);
+        expect(toolSpecsFor(buildToolContext(buildWs('py', null), NOW)).some(t => t.name.startsWith('oner_'))).toBe(false);
+    });
+
+    it('öneri üretir ama veriyi DEĞİŞTİRMEZ', async () => {
+        const ws = buildWs();
+        const ctx = buildToolContext(ws, NOW);
+        const before = JSON.stringify(ws);
+        const r = JSON.parse((await executeTool({ name: 'oner_risk_ekle', arguments: { baslik: 'Kur riski', olasilik: 3, etki: 4, sahip: 'mehmet demir' } }, ctx)).content);
+        expect(r.oneri_no).toBe(1);
+        expect(r.durum).toMatch(/onay/);
+        expect(ctx.proposals[0].action).toMatchObject({ type: 'risk_ekle', projectId: 'altay', ownerPersonId: 'p2', probability: 3, impact: 4 });
+        expect(JSON.stringify(ws)).toBe(before);
+    });
+
+    it('yetki ve doğrulama hataları modele döner', async () => {
+        const ctx = buildToolContext(buildWs(), NOW);
+        const other = await executeTool({ name: 'oner_tahsis_ayarla', arguments: { kisi: 'Mehmet Demir', proje: 'Gizli Proje', ay: 7, aa: 0.5 } }, ctx);
+        expect(other.ok).toBe(false);
+        expect(JSON.parse(other.content).hata).toMatch(/yetkiniz yok/);
+        const ambiguous = await executeTool({ name: 'oner_gorev_durumu', arguments: { gorev: 'i', durum: 'Done' } }, ctx); // 'Arayüz tasarımı' + 'Test planı'
+        expect(ambiguous.ok).toBe(false);
+        const ok = JSON.parse((await executeTool({ name: 'oner_gorev_durumu', arguments: { gorev: 'test planı', durum: 'Done' } }, ctx)).content);
+        expect(ok.ozet).toMatch(/Test planı/);
+        const bad = await executeTool({ name: 'oner_risk_ekle', arguments: { baslik: 'x', olasilik: 7, etki: 1 } }, ctx);
+        expect(JSON.parse(bad.content).hata).toMatch(/1-5/);
+        expect(ctx.proposals).toHaveLength(1);
+    });
+});

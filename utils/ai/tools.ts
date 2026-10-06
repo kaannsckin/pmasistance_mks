@@ -16,6 +16,7 @@ import { buildStatusReport } from '../statusReport';
 import { buildUtilization } from '../utilization';
 import { RAG_SOURCE_LABELS, RagSourceType } from '../rag/sources';
 import { summarizeWorkPackages } from '../workPackages';
+import { AiAction, AiProposal, describeAction, validateAction } from './actions';
 import { JsonSchema, ToolCall, ToolSpec } from './protocol';
 import {
     clampLimit, maskSicil, matchByText, months12, personName, r2, resolveDepartmentCode, resolvePerson,
@@ -36,6 +37,8 @@ export interface ToolDef {
     label: string;
     /** Yalnızca not/istek görebilen roller (yönetici rollerine hiç sunulmaz) */
     privateOnly?: boolean;
+    /** Değişiklik ÖNERİSİ üreten araç — yalnızca veri girebilen rollere sunulur */
+    writeOnly?: boolean;
     run: (args: Args, ctx: ToolContext) => unknown | Promise<unknown>;
 }
 
@@ -748,11 +751,169 @@ export const AI_TOOLS: ToolDef[] = [
     },
 ];
 
+
+// ---------------------------------------------------------------------------
+// Değişiklik ÖNERİ araçları — hiçbir şeyi değiştirmez; kullanıcı onayına
+// sunulacak bir öneri kartı üretir (bkz. utils/ai/actions.ts)
+// ---------------------------------------------------------------------------
+
+const PENDING_NOTE = 'Öneri hazırlandı; kullanıcı sohbetteki karttan "Uygula" derse uygulanacak. Değişikliği yaptığını SÖYLEME; kullanıcıdan kartı onaylamasını iste.';
+
+const propose = (ctx: ToolContext, action: AiAction) => {
+    const err = validateAction(ctx.ws, action);
+    if (err) throw new ToolError(err);
+    const d = describeAction(ctx.ws, action);
+    const proposal: AiProposal = { id: `oneri-${Date.now().toString(36)}-${ctx.proposals.length + 1}`, action, title: d.title, details: d.details, status: 'pending' };
+    ctx.proposals.push(proposal);
+    return { oneri_no: ctx.proposals.length, ozet: d.title, ayrintilar: d.details, durum: PENDING_NOTE };
+};
+
+const level = (v: unknown, name: string): 1 | 2 | 3 | 4 | 5 => {
+    const n = Number(v);
+    if (!Number.isInteger(n) || n < 1 || n > 5) throw new ToolError(`${name} 1-5 arasında bir tam sayı olmalı.`);
+    return n as 1 | 2 | 3 | 4 | 5;
+};
+
+const days = (v: unknown): number => {
+    const n = Number(v);
+    return Number.isFinite(n) && n >= 0 ? Math.round(n * 10) / 10 : 0;
+};
+
+const PROPOSAL_TOOLS: ToolDef[] = [
+    {
+        label: 'Risk önerisi',
+        writeOnly: true,
+        spec: {
+            name: 'oner_risk_ekle',
+            description: 'Projeye yeni risk eklemeyi ÖNERİR (kullanıcı onaylamadan uygulanmaz). Kullanıcı açıkça risk eklemek istediğinde ya da notlardan/gecikmelerden net bir risk çıkardığında kullan.',
+            parameters: S.obj({
+                proje: P.project,
+                baslik: S.str('Risk başlığı (kısa, net).'),
+                aciklama: S.str('Riskin açıklaması.'),
+                olasilik: S.int('Olasılık 1-5.'),
+                etki: S.int('Etki 1-5.'),
+                aksiyon: S.str('Azaltıcı aksiyon.'),
+                sahip: S.str('Risk sahibi kişinin adı soyadı (veri havuzundan).'),
+            }, ['baslik', 'olasilik', 'etki']),
+        },
+        run: (a, ctx) => {
+            const project = resolveProject(ctx, a.proje);
+            const owner = str(a.sahip) ? resolvePerson(ctx, a.sahip) : undefined;
+            return propose(ctx, {
+                type: 'risk_ekle', projectId: project.id, title: str(a.baslik), description: str(a.aciklama) || undefined,
+                probability: level(a.olasilik, 'Olasılık'), impact: level(a.etki, 'Etki'), mitigation: str(a.aksiyon) || undefined, ownerPersonId: owner?.id,
+            });
+        },
+    },
+    {
+        label: 'Görev önerisi',
+        writeOnly: true,
+        spec: {
+            name: 'oner_gorev_ekle',
+            description: 'Projeye yeni görev eklemeyi ÖNERİR (kullanıcı onaylamadan uygulanmaz).',
+            parameters: S.obj({
+                proje: P.project,
+                ad: S.str('Görev adı.'),
+                oncelik: S.str('Öncelik (varsayılan Medium).', ['Blocker', 'High', 'Medium', 'Low']),
+                atanan: S.str('Atanacak kişinin adı soyadı (veri havuzundan).'),
+                bitis: S.str('Bitiş tarihi YYYY-AA-GG.'),
+                sure_iyimser: S.num('İyimser süre (gün).'),
+                sure_ortalama: S.num('Ortalama süre (gün).'),
+                sure_kotumser: S.num('Kötümser süre (gün).'),
+                aciklama: S.str('Görev açıklaması.'),
+            }, ['ad']),
+        },
+        run: (a, ctx) => {
+            const project = resolveProject(ctx, a.proje);
+            const person = str(a.atanan) ? resolvePerson(ctx, a.atanan) : undefined;
+            const pr = str(a.oncelik);
+            const hasTime = [a.sure_iyimser, a.sure_ortalama, a.sure_kotumser].some(v => v !== undefined && v !== null && v !== '');
+            return propose(ctx, {
+                type: 'gorev_ekle', projectId: project.id, name: str(a.ad),
+                priority: (['Blocker', 'High', 'Medium', 'Low'].includes(pr) ? pr : 'Medium') as Task['priority'],
+                resourceName: person ? personName(person) : undefined,
+                dueDate: str(a.bitis) || undefined,
+                time: hasTime ? { best: days(a.sure_iyimser), avg: days(a.sure_ortalama), worst: days(a.sure_kotumser) } : undefined,
+                notes: str(a.aciklama) || undefined,
+            });
+        },
+    },
+    {
+        label: 'Görev durumu önerisi',
+        writeOnly: true,
+        spec: {
+            name: 'oner_gorev_durumu',
+            description: 'Bir görevin durumunu değiştirmeyi ÖNERİR (kullanıcı onaylamadan uygulanmaz).',
+            parameters: S.obj({
+                proje: P.project,
+                gorev: S.str('Görevin adı (kısmi olabilir).'),
+                durum: S.str('Yeni durum.', ['Backlog', 'ToDo', 'InProgress', 'Done']),
+            }, ['gorev', 'durum']),
+        },
+        run: (a, ctx) => {
+            const project = resolveProject(ctx, a.proje);
+            const status = str(a.durum) as TaskStatus;
+            if (!Object.values(TaskStatus).includes(status)) throw new ToolError('Durum Backlog, ToDo, InProgress ya da Done olmalı.');
+            const hits = matchByText(project.tasks, str(a.gorev), t => [t.name]);
+            if (hits.length === 0) throw new ToolError(`"${str(a.gorev)}" adlı görev ${project.name} projesinde bulunamadı.`);
+            if (hits.length > 1) throw new ToolError(`"${str(a.gorev)}" birden fazla görevle eşleşti: ${hits.slice(0, 8).map(t => t.name).join(', ')}.`);
+            return propose(ctx, { type: 'gorev_durumu', projectId: project.id, taskId: hits[0].id, status });
+        },
+    },
+    {
+        label: 'RAG önerisi',
+        writeOnly: true,
+        spec: {
+            name: 'oner_rag_guncelle',
+            description: 'Projenin haftalık RAG durumunu (ve durum notunu) güncellemeyi ÖNERİR (kullanıcı onaylamadan uygulanmaz).',
+            parameters: S.obj({
+                proje: P.project,
+                rag: S.str('green=Yolunda, amber=Riskli, red=Kritik.', ['green', 'amber', 'red']),
+                not: S.str('Haftalık durum notu (isteğe bağlı).'),
+            }, ['rag']),
+        },
+        run: (a, ctx) => {
+            const project = resolveProject(ctx, a.proje);
+            const rag = str(a.rag) as RagStatus;
+            if (!['green', 'amber', 'red'].includes(rag)) throw new ToolError('rag green, amber ya da red olmalı.');
+            return propose(ctx, { type: 'rag_guncelle', projectId: project.id, rag, ragNote: str(a.not) || undefined });
+        },
+    },
+    {
+        label: 'Tahsis önerisi',
+        writeOnly: true,
+        spec: {
+            name: 'oner_tahsis_ayarla',
+            description: 'Bir kişinin bir projedeki belirli ayının plan ya da gerçekleşen adam-ay değerini ayarlamayı ÖNERİR (kullanıcı onaylamadan uygulanmaz). Birden çok ay için ayrı ayrı çağır. Plan kilitliyse yalnızca gerçekleşen değiştirilebilir.',
+            parameters: S.obj({
+                kisi: S.str('Kişinin adı soyadı.'),
+                proje: S.str('Proje adı ya da kodu.'),
+                yil: P.year,
+                ay: S.int('Ay (1-12).'),
+                alan: P.field,
+                aa: S.num('Yeni adam-ay değeri (0-1,5; 0 = boşalt).'),
+            }, ['kisi', 'proje', 'ay', 'aa']),
+        },
+        run: (a, ctx) => {
+            const person = resolvePerson(ctx, a.kisi);
+            const project = resolveProject(ctx, a.proje, { anyProject: true });
+            const value = Number(a.aa);
+            if (!Number.isFinite(value)) throw new ToolError('aa sayısal olmalı.');
+            return propose(ctx, {
+                type: 'tahsis_ayarla', personId: person.id, projectId: project.id, year: resolveYear(ctx, a.yil),
+                month: Number(a.ay), field: effortField(a.alan), value: Math.round(value * 100) / 100,
+            });
+        },
+    },
+];
+
+AI_TOOLS.push(...PROPOSAL_TOOLS);
+
 const TOOL_MAP = new Map(AI_TOOLS.map(t => [t.spec.name, t]));
 
 /** Bu kullanıcıya sunulacak araç tanımları (yönetici rollerine not/istek araçları hiç gönderilmez) */
 export const toolSpecsFor = (ctx: ToolContext): ToolSpec[] =>
-    AI_TOOLS.filter(t => !t.privateOnly || ctx.canSeePrivate).map(t => t.spec);
+    AI_TOOLS.filter(t => (!t.privateOnly || ctx.canSeePrivate) && (!t.writeOnly || ctx.canWrite)).map(t => t.spec);
 
 export const toolLabel = (name: string): string => TOOL_MAP.get(name)?.label || name;
 
@@ -769,7 +930,7 @@ const serialize = (value: unknown): string => {
 /** Aracı çalıştırır; sonuç (ya da hata açıklaması) modele gidecek JSON metnidir */
 export const executeTool = async (call: Pick<ToolCall, 'name' | 'arguments'>, ctx: ToolContext): Promise<{ content: string; ok: boolean }> => {
     const def = TOOL_MAP.get(call.name);
-    if (!def || (def.privateOnly && !ctx.canSeePrivate)) {
+    if (!def || (def.privateOnly && !ctx.canSeePrivate) || (def.writeOnly && !ctx.canWrite)) {
         return { content: JSON.stringify({ hata: `Bilinmeyen ya da bu rol için kullanılamayan araç: ${call.name}` }), ok: false };
     }
     try {

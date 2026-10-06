@@ -24,6 +24,7 @@ export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
     'identity.change': 'Kimlik/rol değişti',
     'health.fix': 'Veri düzeltmesi uygulandı',
     'snapshot.create': 'Anlık görüntü alındı',
+    'ai.apply': 'AI önerisi uygulandı',
 };
 
 export const AUDIT_ACTION_ICONS: Record<AuditAction, string> = {
@@ -41,6 +42,7 @@ export const AUDIT_ACTION_ICONS: Record<AuditAction, string> = {
     'identity.change': 'fa-user-shield',
     'health.fix': 'fa-wrench',
     'snapshot.create': 'fa-camera',
+    'ai.apply': 'fa-wand-magic-sparkles',
 };
 
 const newId = (): string => `audit-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;

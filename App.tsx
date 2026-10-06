@@ -49,6 +49,7 @@ import { AssistantProvider } from './components/assistant/AssistantContext';
 import AssistantPanel, { AssistantCommandPalette } from './components/assistant/AssistantPanel';
 import { buildSuggestions } from './utils/ai/suggestions';
 import { RagRef } from './utils/rag/sources';
+import { AiAction, applyAction, validateAction } from './utils/ai/actions';
 import WorkPackageManager from './components/WorkPackageManager';
 import CalendarView from './components/CalendarView';
 import { analyzeDataHealth, applyHealthFix, HealthFix } from './utils/dataHealth';
@@ -734,6 +735,7 @@ const App: React.FC = () => {
             onUpdateRisks={handleUpdateActiveRisks}
             onUpdatePestel={(pestelItems) => updateActiveProject(p => ({ ...p, pestelItems }))}
             onUpdateSwot={(swotItems) => updateActiveProject(p => ({ ...p, swotItems }))}
+            project={activeProject}
           />
         );
       case View.Notes:
@@ -763,6 +765,26 @@ const App: React.FC = () => {
   currentViewRef.current = currentView;
   const getAssistantWorkspace = useCallback(() => workspaceRef.current, []);
   const getAssistantView = useCallback(() => currentViewRef.current, []);
+  // Asistanın önerdiği değişiklik kullanıcı onaylayınca: güncel veriyle yeniden
+  // doğrula (yetki, plan kilidi), uygula, denetim günlüğüne yaz, geri-al sun
+  const handleApplyAiAction = useCallback((action: AiAction): { ok: boolean; message: string } => {
+    const current = workspaceRef.current;
+    if (!current) return { ok: false, message: 'Çalışma alanı hazır değil.' };
+    const problem = validateAction(current, action);
+    if (problem) return { ok: false, message: problem };
+    let summary = '';
+    try {
+      const result = applyAction(current, action);
+      summary = result.summary;
+      setWorkspace(result.ws);
+      workspaceRef.current = result.ws;
+    } catch (e) {
+      return { ok: false, message: (e as Error).message || 'Uygulanamadı.' };
+    }
+    showUndo(`AI önerisi uygulandı: ${summary}`, current);
+    return { ok: true, message: `${summary} (Geri almak için alttaki "Geri Al").` };
+  }, [showUndo]);
+
   // Asistan kaynağına tıklanınca: ilgili projeyi aç ve ekrana geç
   const handleAssistantNavigate = useCallback((ref: RagRef) => {
     if (ref.kind !== 'project-view') return;
@@ -796,7 +818,7 @@ const App: React.FC = () => {
   }, [workspace, visibleProjects, identity, handleOpenProject, activeProject]);
 
   return (
-    <AssistantProvider enabled={isAIEnabled} getWorkspace={getAssistantWorkspace} getView={getAssistantView} onNavigate={handleAssistantNavigate}>
+    <AssistantProvider enabled={isAIEnabled} getWorkspace={getAssistantWorkspace} getView={getAssistantView} onNavigate={handleAssistantNavigate} onApplyAction={handleApplyAiAction}>
     <div className={`min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans theme-${settings?.theme || 'classic'}`}>
       <Header
         currentView={currentView} setCurrentView={setCurrentView}

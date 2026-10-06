@@ -1,5 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { EMBED_SYSTEM, parsePertEstimate, pertEstimatePrompt } from '../utils/ai/embedded';
+import { AiButton, AiErrorNote, useAiRun } from './assistant/AiButton';
 import { Task, Resource, TaskStatus, Objective, Person, WorkPackage } from '../types';
 
 interface TaskFormModalProps {
@@ -32,6 +34,16 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, people, 
   });
 
   const [selectedObjectiveId, setSelectedObjectiveId] = useState<string>('');
+  const ai = useAiRun();
+  const [aiRationale, setAiRationale] = useState<string | null>(null);
+
+  const estimateWithAi = async () => {
+    const est = await ai.run(EMBED_SYSTEM, pertEstimatePrompt({ name: formData.name, notes: formData.notes }, tasks), parsePertEstimate);
+    if (est) {
+      setFormData(prev => ({ ...prev, time: { best: est.best, avg: est.avg, worst: est.worst } }));
+      setAiRationale(est.rationale || 'AI tahmini uygulandı.');
+    }
+  };
 
   const inputStyle = "bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-50 sm:text-sm rounded-md focus:ring-primary focus:border-primary focus:outline-none py-2 px-3";
 
@@ -257,12 +269,19 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, people, 
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-black dark:text-white">Zaman Tahmini (Gün)</label>
+            <div className="flex items-center justify-between gap-2">
+              <label className="block text-sm font-medium text-black dark:text-white">Zaman Tahmini (Gün)</label>
+              {ai.available && (
+                <AiButton size="sm" label="AI ile tahmin et" loading={ai.loading} onClick={estimateWithAi} disabled={!formData.name.trim()} title="Görev adı/açıklaması ve projedeki benzer görevlerin tahminlerinden PERT süresi önerir" />
+              )}
+            </div>
             <div className="grid grid-cols-3 gap-4 mt-1">
                 <input type="number" name="best" value={formData.time.best} onChange={handleTimeChange} placeholder="En İyi" className={`w-full ${inputStyle}`} />
                 <input type="number" name="avg" value={formData.time.avg} onChange={handleTimeChange} placeholder="Ortalama" className={`w-full ${inputStyle}`} />
                 <input type="number" name="worst" value={formData.time.worst} onChange={handleTimeChange} placeholder="En Kötü" className={`w-full ${inputStyle}`} />
             </div>
+            {aiRationale && <p className="mt-1.5 text-[11px] text-indigo-600 dark:text-indigo-300"><i className="fa-solid fa-wand-magic-sparkles mr-1"></i>{aiRationale} <span className="text-gray-400">(değerleri değiştirebilirsiniz)</span></p>}
+            <div className="mt-1.5"><AiErrorNote message={ai.error} onClose={() => ai.setError(null)} /></div>
           </div>
 
           <div>

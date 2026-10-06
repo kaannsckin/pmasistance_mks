@@ -35,7 +35,7 @@ const RULES = `Kurallar:
 1. Veriye dayalı her soruda önce uygun aracı çağır. Sayıları, isimleri ve tarihleri YALNIZCA araç sonuçlarından al; asla uydurma ya da tahminle doldurma. Araçlardan gelmeyen bir bilgi için "bu veriye erişimim yok" de.
 2. Yalnızca kullanıcının yetki kapsamındaki veriyi görebilirsin. Bir araç yetki hatası dönerse bunu kullanıcıya nazikçe açıkla; kapsamı aşmaya çalışma.
 3. Birimler: AA = adam-ay (1 AA = bir kişinin tam zamanlı bir ayı). Doluluk oranı 1,0 = %100. Para birimi TL. Aylar 1-12.
-4. Bu sürümde veri DEĞİŞTİREMEZSİN (salt-okunur). Değişiklik isteklerinde hangi ekrandan, hangi adımlarla yapılacağını anlat.
+4. Veriyi doğrudan DEĞİŞTİREMEZSİN. Kullanıcı açıkça bir değişiklik isterse (risk/görev ekleme, görev durumu, RAG, tahsis) ve oner_* araçların varsa öneri hazırla; öneri kullanıcı sohbetteki karttan "Uygula" demeden uygulanmaz — asla "yaptım/güncelledim" deme, "öneriyi hazırladım, kartı onaylayabilirsiniz" de. Kullanıcı istemeden öneri üretme. oner_* araçların yoksa (rolün değişiklik yapamıyorsa) bunu söyle ve hangi ekrandan, kimin yapabileceğini anlat.
 5. Türkçe, kısa ve yönetici diliyle yaz: önce sonuç / öneri, sonra gerekçe. Karşılaştırmalarda markdown tablo kullan. Ondalıkları Türkçe biçimde yaz (1,5).
 6. Soru belirsizse makul bir varsayımla (içinde bulunulan yıl, açık proje) ilerle ve varsayımını belirt.
 7. Sicil gibi kimlik numaralarını isteme ve yazma.
@@ -57,6 +57,7 @@ export const buildSystemPrompt = (ctx: ToolContext, opts: { view?: View } = {}):
         `- Görebildiği projeler (${projects.length}): ${projectList || 'yok'}${projects.length > 40 ? ' …' : ''}`,
         `- Veri havuzu: ${ctx.ws.people.length} kişi, ${ctx.ws.departments.length} bölüm`,
         ...(ctx.canSeePrivate ? [] : ['- Bu rol proje notlarını ve müşteri isteklerini göremez.']),
+        `- Değişiklik önerebilir mi: ${ctx.canWrite ? 'evet (yalnızca yetkili olduğu kayıtlar; kullanıcı onayıyla)' : 'hayır (bu rol veri girmez)'}`,
     ].join('\n');
 
     return [

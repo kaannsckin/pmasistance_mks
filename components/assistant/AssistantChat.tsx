@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Markdown from '../Markdown';
 import { AgentStep } from '../../utils/ai/agent';
+import { AiProposal } from '../../utils/ai/actions';
 import { Citation, RAG_SOURCE_LABELS } from '../../utils/rag/sources';
 import { useAssistant } from './AssistantContext';
 
@@ -96,6 +97,45 @@ const SourcePreview: React.FC<{ c: Citation; onClose: () => void; onOpenKb: () =
   document.body
 );
 
+const PROPOSAL_STATUS: Record<AiProposal['status'], { label: string; cls: string; icon: string }> = {
+  pending: { label: 'Onayınızı bekliyor', cls: 'text-amber-600 dark:text-amber-300', icon: 'fa-hourglass-half' },
+  applied: { label: 'Uygulandı', cls: 'text-emerald-600 dark:text-emerald-300', icon: 'fa-circle-check' },
+  rejected: { label: 'Vazgeçildi', cls: 'text-gray-400', icon: 'fa-ban' },
+  failed: { label: 'Uygulanamadı', cls: 'text-red-600 dark:text-red-300', icon: 'fa-triangle-exclamation' },
+};
+
+/** AI'nın önerdiği değişiklikler — kullanıcı onaylamadan hiçbir veri değişmez */
+const ProposalCards: React.FC<{ proposals: AiProposal[]; onResolve: (id: string, d: 'apply' | 'reject') => void }> = ({ proposals, onResolve }) => (
+  <div className="mt-3 space-y-2">
+    {proposals.map((p, i) => {
+      const st = PROPOSAL_STATUS[p.status];
+      return (
+        <div key={p.id} className="rounded-xl border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-gray-900 p-3">
+          <div className="flex items-start justify-between gap-2">
+            <div className="text-xs font-bold text-gray-800 dark:text-gray-100"><i className="fa-solid fa-pen-to-square text-indigo-500 mr-1.5"></i>Öneri {i + 1}: {p.title}</div>
+            <span className={`text-[10px] font-semibold flex-none ${st.cls}`}><i className={`fa-solid ${st.icon} mr-1`}></i>{st.label}</span>
+          </div>
+          <dl className="mt-2 grid grid-cols-[auto,1fr] gap-x-3 gap-y-0.5 text-[11px]">
+            {p.details.map(d => (
+              <React.Fragment key={d.label}>
+                <dt className="text-gray-400">{d.label}</dt>
+                <dd className="text-gray-700 dark:text-gray-200 break-words">{d.value}</dd>
+              </React.Fragment>
+            ))}
+          </dl>
+          {p.message && p.status !== 'pending' && <p className={`mt-2 text-[11px] ${st.cls}`}>{p.message}</p>}
+          {p.status === 'pending' && (
+            <div className="mt-2.5 flex gap-2">
+              <button onClick={() => onResolve(p.id, 'apply')} className="text-[11px] font-bold px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white"><i className="fa-solid fa-check mr-1"></i>Uygula</button>
+              <button onClick={() => onResolve(p.id, 'reject')} className="text-[11px] font-bold px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-500 hover:text-red-500">Vazgeç</button>
+            </div>
+          )}
+        </div>
+      );
+    })}
+  </div>
+);
+
 const Dots = () => (
   <div className="flex items-center space-x-1.5 py-1">
     <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-bounce"></div>
@@ -137,7 +177,7 @@ const AssistantChat: React.FC<Props> = ({ variant, suggestions, onClose, onExpan
         <div className="min-w-0">
           <div className="text-sm font-black text-gray-800 dark:text-white leading-tight">AI Asistan</div>
           <div className="text-[10px] text-gray-400 truncate">
-            {a.phase === 'ready' ? `Bağlı${a.status?.model ? ` · ${a.status.model}` : ''} · salt-okunur` : a.phase === 'loading' ? 'Bağlanıyor…' : 'Hazır değil'}
+            {a.phase === 'ready' ? `Bağlı${a.status?.model ? ` · ${a.status.model}` : ''} · onaylı değişiklik` : a.phase === 'loading' ? 'Bağlanıyor…' : 'Hazır değil'}
           </div>
         </div>
       </div>
@@ -249,6 +289,9 @@ const AssistantChat: React.FC<Props> = ({ variant, suggestions, onClose, onExpan
                 <>
                   {msg.steps && msg.steps.length > 0 && <StepChips steps={msg.steps} />}
                   {msg.content ? <Markdown text={msg.content} /> : msg.streaming ? <Dots /> : null}
+                  {msg.proposals && msg.proposals.length > 0 && (
+                    <ProposalCards proposals={msg.proposals} onResolve={(pid, d) => a.resolveProposal(msg.id, pid, d)} />
+                  )}
                   {msg.citations && msg.citations.length > 0 && (
                     <SourceList
                       content={msg.content}
@@ -298,7 +341,7 @@ const AssistantChat: React.FC<Props> = ({ variant, suggestions, onClose, onExpan
               </button>
             )}
           </div>
-          <p className="text-[10px] text-gray-400 mt-1.5 text-center">Asistan veriyi okuyabilir, değiştiremez. Önemli kararlardan önce sayıları ilgili ekranda doğrulayın.</p>
+          <p className="text-[10px] text-gray-400 mt-1.5 text-center">Asistan değişiklikleri yalnızca önerir; siz "Uygula" demeden hiçbir veri değişmez. Önemli kararlardan önce sayıları ilgili ekranda doğrulayın.</p>
         </div>
       )}
     </div>

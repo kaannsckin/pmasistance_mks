@@ -2,6 +2,7 @@ import { Person, Project, WorkspaceData } from '../../types';
 import { Identity, identityOf, isExecViewer, visibleProjectIds } from '../rbac';
 import type { RagHit } from '../rag/retriever';
 import type { Citation, RagSourceType } from '../rag/sources';
+import type { AiProposal } from './actions';
 
 /**
  * AI araçlarının veri kapsamı — asistan, kullanıcının arayüzde görebildiğinden
@@ -34,6 +35,10 @@ export interface ToolContext {
     };
     /** Bu turda modele verilen kaynaklar (yanıtın altında numaralı gösterilir) */
     citations: Citation[];
+    /** Veri girebilen rol mü (Proje Yöneticisi / Bölüm Sorumlusu + kişi seçili) — öneri araçları buna bağlı */
+    canWrite: boolean;
+    /** Bu turda üretilen değişiklik önerileri (kullanıcı onayı bekler) */
+    proposals: AiProposal[];
 }
 
 export const buildToolContext = (ws: WorkspaceData, now: Date = new Date()): ToolContext => {
@@ -58,6 +63,8 @@ export const buildToolContext = (ws: WorkspaceData, now: Date = new Date()): Too
         year: now.getFullYear(),
         now,
         citations: [],
+        canWrite: (identity.role === 'py' || identity.role === 'bolum_sorumlu') && !!identity.personId,
+        proposals: [],
     };
 };
 

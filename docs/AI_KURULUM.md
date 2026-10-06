@@ -27,7 +27,7 @@ Tarayıcı (asistan paneli) ──► /api/ai/chat  (proxy: anahtar burada) ─�
 - **Her ekrandan erişim:** Sağ alttaki <kbd>✨</kbd> düğmesi sağdan açılan paneli açar; ⌘K / Ctrl+K komut paletine yazılan serbest metin "AI Asistanı'na sor" ile doğrudan sorulabilir; proje çubuğundaki **Zekâ** sekmesi aynı sohbeti tam ekranda gösterir. Sohbet ekranlar arasında korunur, yalnızca bellekte tutulur (sayfa yenilenince silinir).
 - **Bağlam:** Her soruda modele kim olduğunuz (rol + kişi), hangi ekranda olduğunuz, açık proje ve görebildiğiniz projelerin adları gider — **veri gitmez**.
 - **Araçlar (tool calling):** Model veriye ihtiyaç duyunca bir araç çağırır; araç **tarayıcıda**, uygulamanın test edilmiş hesap motorlarıyla çalışır ve yalnızca gereken özeti modele döndürür. Sayıları model değil, uygulama hesaplar. Panelde hangi araçların kullanıldığı etiket olarak görünür.
-- **Salt-okunur:** Bu sürümde asistan veri değiştiremez; değişiklik isteklerinde hangi ekrandan nasıl yapılacağını anlatır.
+- **Onaylı değişiklik:** Asistan veriyi kendisi değiştirmez; değişiklik isteklerinde öneri kartı hazırlar, kullanıcı onaylarsa uygulanır (aşağıya bakın).
 
 | Araç | Ne döndürür | Kapsam |
 |---|---|---|
@@ -37,6 +37,26 @@ Tarayıcı (asistan paneli) ──► /api/ai/chat  (proxy: anahtar burada) ─�
 | `kisi_profili`, `uygun_kisi_bul`, `doluluk_analizi`, `departman_karnesi`, `kapasite_talep`, `tahsis_ozeti`, `is_yuku_ongorusu`, `maliyet_raporu`, `veri_sagligi` | Kapasite, doluluk, tahsis, öngörü, maliyet, veri kalitesi | Tahsis / Veri Havuzu ekranlarıyla aynı (tüm roller) |
 
 **Kapsam kuralı:** Asistan, kullanıcının arayüzde görebildiğinden fazlasını göremez (`utils/ai/scope.ts`). Proje içeriği `rbac.visibleProjectIds` ile sınırlıdır; yönetici rollerinde notlar ve müşteri istekleri veriden tamamen çıkarılır; **sicil numaraları hiçbir araç çıktısında yer almaz**. Araç sonuçları 12.000 karakterle, bir yanıt 6 araç adımıyla sınırlıdır.
+
+## Onaylı değişiklikler ve ekran içi AI özellikleri
+
+**Asistan veriyi kendisi değiştirmez, öneri hazırlar.** Proje Yöneticisi ve Bölüm Sorumlusu rollerinde (kişi seçiliyken) asistana şu araçlar açılır: `oner_risk_ekle`, `oner_gorev_ekle`, `oner_gorev_durumu`, `oner_rag_guncelle`, `oner_tahsis_ayarla`.
+- Araç yalnızca bir **öneri kartı** üretir (ne değişecek, önce/sonra). Veri, kullanıcı karttaki **Uygula** düğmesine basmadan değişmez.
+- "Uygula" anında güncel veriyle **yeniden doğrulanır**: proje sahipliği (RBAC), plan kilidi (kilitli planda yalnızca gerçekleşen), kaydın hâlâ var olması, değer aralıkları (`utils/ai/actions.ts`).
+- Her uygulama denetim günlüğüne **"AI önerisi uygulandı"** (`ai.apply`) olarak yazılır ve ekranın altında **Geri Al** sunulur. Aynı karta çift tıklama iki kez uygulamaz.
+- Müdür, PYB Sorumlusu ve PYB Destek rollerine öneri araçları hiç sunulmaz.
+
+**Ekranlara gömülü AI** (Ayarlar'da AI açıksa görünür; çıktı hiçbir zaman kendiliğinden kaydedilmez):
+
+| Ekran | Düğme | Ne yapar |
+|---|---|---|
+| Durum Raporu | AI ile e-postaya dönüştür | Taslağı verileri değiştirmeden yönetici e-postasına çevirir; "Taslağa dön" ile geri alınır |
+| Yönetim → Brifing | AI ile yönetici özeti yaz | Brifing verilerinden üst yönetime özet paragraf |
+| Riskler | AI Risk Önerisi | Gecikmeler, notlar, PESTEL ve hedeflerden yeni risk önerir; seçilenler eklenir (yalnızca proje sahibi) |
+| PESTEL / SWOT | AI ile taslak öner | Madde önerir; tek tek ya da tümü eklenir (yalnızca proje sahibi) |
+| Görev formu | AI ile tahmin et | Benzer görevlerin tahminlerinden iyimser/ortalama/kötümser süre + gerekçe |
+
+Yapılandırılmış çıktılar (öneri listeleri, süre tahmini) JSON modu gerektirmez: model yanıtından JSON güvenle ayıklanır ve doğrulanır (`utils/ai/json.ts`, `utils/ai/embedded.ts`); geçersiz/tekrar eden öneriler atılır.
 
 ## Bilgi tabanı (RAG)
 

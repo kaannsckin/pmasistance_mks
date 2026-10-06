@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { View, WorkspaceData } from '../../types';
 import { AgentStep, runAgentTurn } from '../../utils/ai/agent';
+import { AiAction, AiProposal } from '../../utils/ai/actions';
 import { AiError, embedTexts, fetchAiStatus, hasCredentials, saveAccessToken, streamChat } from '../../utils/ai/client';
 import { AiStatus, ChatMessage } from '../../utils/ai/protocol';
 import { buildToolContext } from '../../utils/ai/scope';
@@ -23,6 +24,13 @@ export interface UiMessage {
   steps?: AgentStep[];
   /** bilgi_ara ile modele verilen kaynaklar */
   citations?: Citation[];
+  /** Kullanıcı onayı bekleyen değişiklik önerileri */
+  proposals?: AiProposal[];
+}
+
+export interface ApplyResult {
+  ok: boolean;
+  message: string;
 }
 
 export type AssistantPhase = 'idle' | 'loading' | 'unavailable' | 'needs_token' | 'needs_login' | 'ready';
@@ -52,9 +60,16 @@ interface AssistantApi {
   refreshIndex: () => Promise<void>;
   /** Kaynağa git (proje ekranı); kılavuz/doküman kaynakları sohbette önizlenir */
   navigate: (ref: RagRef) => void;
+  /** Öneri kartı: uygula ya da vazgeç */
+  resolveProposal: (messageId: number, proposalId: string, decision: 'apply' | 'reject') => void;
+  /** Tek seferlik AI tamamlama (araçsız) — ekranlara gömülü özellikler için */
+  complete: (system: string, prompt: string, signal?: AbortSignal) => Promise<string>;
 }
 
 const Ctx = createContext<AssistantApi | null>(null);
+
+/** Sağlayıcı dışında da güvenle çağrılabilir (yoksa null) */
+export const useAssistantOptional = (): AssistantApi | null => useContext(Ctx);
 
 export const useAssistant = (): AssistantApi => {
   const v = useContext(Ctx);
@@ -71,10 +86,12 @@ interface ProviderProps {
   getWorkspace: () => WorkspaceData | null;
   getView: () => View;
   onNavigate?: (ref: RagRef) => void;
+  /** Onaylanan öneriyi uygular (App: yetki/kilit yeniden doğrulanır, denetim + geri-al) */
+  onApplyAction?: (action: AiAction) => ApplyResult;
   children: React.ReactNode;
 }
 
-export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, getWorkspace, getView, onNavigate, children }) => {
+export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, getWorkspace, getView, onNavigate, onApplyAction, children }) => {
   const [phase, setPhase] = useState<AssistantPhase>('idle');
   const [status, setStatus] = useState<AiStatus | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -85,6 +102,7 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, getWorkspa
   const messagesRef = useRef<UiMessage[]>([]);
   const abortRef = useRef<AbortController | null>(null);
   const pendingAsk = useRef<string | null>(null);
+  const resolvedProposals = useRef(new Set<string>());
   messagesRef.current = messages;
 
   const checkStatus = useCallback(async () => {
@@ -175,7 +193,7 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, getWorkspa
         execute: call => executeTool(call, ctx),
         stream: (body, onDelta) => streamChat(body, { authMode: status.authMode, signal: ctrl.signal, onDelta: (_, full) => onDelta(full) }),
         onText: text => update(replyId, { content: text }),
-        onSteps: steps => update(replyId, { steps, citations: [...ctx.citations] }),
+        onSteps: steps => update(replyId, { steps, citations: [...ctx.citations], proposals: [...ctx.proposals] }),
         labelFor: toolLabel,
       });
       const notes: string[] = [];
@@ -250,10 +268,50 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, getWorkspa
     if (ref.kind === 'project-view') onNavigate?.(ref);
   }, [onNavigate]);
 
+  const resolveProposal = useCallback((messageId: number, proposalId: string, decision: 'apply' | 'reject') => {
+    const msg = messagesRef.current.find(m => m.id === messageId);
+    const proposal = msg?.proposals?.find(p => p.id === proposalId);
+    if (!msg || !proposal || proposal.status !== 'pending') return;
+    // Aynı karede çift tıklama: ekran güncellenmeden ikinci kez uygulanmasın
+    if (resolvedProposals.current.has(proposalId)) return;
+    resolvedProposals.current.add(proposalId);
+    let patch: Partial<AiProposal>;
+    if (decision === 'reject') {
+      patch = { status: 'rejected', message: 'Vazgeçildi.' };
+    } else {
+      const r = onApplyAction ? onApplyAction(proposal.action) : { ok: false, message: 'Bu ekranda değişiklik uygulanamıyor.' };
+      patch = { status: r.ok ? 'applied' : 'failed', message: r.message };
+    }
+    setMessages(prev => prev.map(m => (m.id === messageId
+      ? { ...m, proposals: m.proposals?.map(p => (p.id === proposalId ? { ...p, ...patch } : p)) }
+      : m)));
+  }, [onApplyAction]);
+
+  const complete = useCallback(async (system: string, prompt: string, signal?: AbortSignal): Promise<string> => {
+    if (!enabled) throw new AiError('Yapay zekâ asistanı Ayarlar\'dan kapatılmış.', 'config');
+    let s = phase === 'ready' ? status : null;
+    if (!s) {
+      s = await fetchAiStatus(signal);
+      setStatus(s);
+      if (!s.configured) {
+        setPhase('unavailable');
+        throw new AiError(s.problem || 'AI yapılandırılmamış.', 'config');
+      }
+      if (!(await hasCredentials(s.authMode))) {
+        setPhase(s.authMode === 'token' ? 'needs_token' : 'needs_login');
+        throw new AiError(s.authMode === 'token' ? 'AI erişim kodu gerekli — asistan panelinden girin.' : 'AI için bulut penceresinden giriş yapın.', 'auth');
+      }
+      setPhase('ready');
+    }
+    const r = await streamChat({ system, messages: [{ role: 'user', content: prompt }] }, { authMode: s.authMode, signal });
+    if (!r.text.trim()) throw new AiError('Model boş yanıt döndü; tekrar deneyin.', 'upstream');
+    return r.text;
+  }, [enabled, phase, status]);
+
   const api = useMemo<AssistantApi>(() => ({
     enabled, phase, status, authError, messages, isStreaming, isOpen, setOpen,
-    ensureReady, recheck, send, ask, stop, clear, saveToken, isKbOpen, setKbOpen, refreshIndex, navigate,
-  }), [enabled, phase, status, authError, messages, isStreaming, isOpen, ensureReady, recheck, send, ask, stop, clear, saveToken, isKbOpen, refreshIndex, navigate]);
+    ensureReady, recheck, send, ask, stop, clear, saveToken, isKbOpen, setKbOpen, refreshIndex, navigate, resolveProposal, complete,
+  }), [enabled, phase, status, authError, messages, isStreaming, isOpen, ensureReady, recheck, send, ask, stop, clear, saveToken, isKbOpen, refreshIndex, navigate, resolveProposal, complete]);
 
   return <Ctx.Provider value={api}>{children}</Ctx.Provider>;
 };
