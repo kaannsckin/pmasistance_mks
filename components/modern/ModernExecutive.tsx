@@ -15,6 +15,7 @@ import ExecutiveView from '../ExecutiveView';
 import { Icon, IconName } from './icons';
 import { PROJECT_STATUS_LABEL, RAG_TONE } from './ModernProjectHeader';
 import { RAG_DOT } from './ModernSidebar';
+import { BAND_META, Card, LinkButton } from './ui';
 
 /**
  * Modern yönetim ekranı. Yönetici 30+ projeyi tek tek görmek yerine:
@@ -36,34 +37,11 @@ interface ModernExecutiveProps {
 type Screen = 'overview' | 'projects' | 'details';
 type BandFilter = HealthBand | 'all' | 'attention';
 
-const BAND_META: Record<HealthBand, { label: string; dot: string; tone: string; ink: string }> = {
-    bad: { label: 'Sorunlu', dot: 'var(--m-bad)', tone: 'm-tone-bad', ink: 'm-ink-bad' },
-    warn: { label: 'İzlemede', dot: 'var(--m-warn)', tone: 'm-tone-warn', ink: 'm-ink-warn' },
-    good: { label: 'Sağlıklı', dot: 'var(--m-ok)', tone: 'm-tone-ok', ink: 'm-ink-ok' },
-};
-
 const LOCK_LABEL: Record<PlanLockStatus, string> = { draft: 'Taslak', submitted: 'Onay bekliyor', locked: 'Onaylı' };
 const MONTH_LONG = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
 
 const num = (v: number, digits = 2) => v.toLocaleString('tr-TR', { maximumFractionDigits: digits });
 const idx = (v: number | null) => (v === null ? '—' : num(v));
-
-const Card: React.FC<{ title: string; action?: React.ReactNode; children: React.ReactNode; labelledBy?: string }> = ({ title, action, children, labelledBy }) => (
-    <section aria-labelledby={labelledBy} className="m-surface rounded-2xl p-5 flex flex-col gap-3 min-w-0">
-        <div className="flex items-center justify-between gap-3">
-            <h2 id={labelledBy} className="m-0 text-[17px] font-semibold m-text">{title}</h2>
-            {action}
-        </div>
-        {children}
-    </section>
-);
-
-const LinkButton: React.FC<{ onClick: () => void; children: React.ReactNode }> = ({ onClick, children }) => (
-    <button type="button" onClick={onClick} className="inline-flex items-center gap-0.5 min-h-[44px] -my-2 px-2 -mr-2 rounded-xl text-[15px] font-semibold m-accent bg-transparent border-0 cursor-pointer whitespace-nowrap">
-        {children}
-        <Icon name="chevronRight" size={18} strokeWidth={2.2} />
-    </button>
-);
 
 const BackButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
     <button type="button" onClick={onClick} className="self-start inline-flex items-center min-h-[44px] -ml-2 pr-2 rounded-xl text-[17px] m-accent bg-transparent border-0 cursor-pointer">

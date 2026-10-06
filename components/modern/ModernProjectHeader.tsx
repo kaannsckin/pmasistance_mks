@@ -37,6 +37,7 @@ interface ModernProjectHeaderProps {
 }
 
 const TABS: Tab[] = [
+    { view: View.Overview, label: 'Genel bakış' },
     { view: View.Roadmap, label: 'Pano' },
     { view: View.Tasks, label: 'Liste' },
     { view: View.Kanban, label: 'Zaman çizelgesi' },
