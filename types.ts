@@ -117,6 +117,7 @@ export enum View {
   Executive,
   Risks,
   Calendar,
+  Overview, // Proje genel bakış (modern arayüz)
 }
 
 export interface UnitLoad {

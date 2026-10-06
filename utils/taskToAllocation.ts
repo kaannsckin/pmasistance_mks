@@ -45,7 +45,7 @@ const getNextWorkday = (date: Date): Date => {
     return d;
 };
 
-interface SprintWindow {
+export interface SprintWindow {
     sprint: number;
     start: Date;
     end: Date; // iş bitişi (test hariç)
@@ -54,7 +54,7 @@ interface SprintWindow {
     totalWorkdays: number;
 }
 
-const buildSprintWindows = (project: Project, maxSprint: number): SprintWindow[] => {
+export const buildSprintWindows = (project: Project, maxSprint: number): SprintWindow[] => {
     const weeks = project.settings.sprintDuration || 3;
     const testDays = project.settings.globalTestDays || 4;
     const parts = (project.settings.projectStartDate || new Date().toISOString().split('T')[0]).split('-').map(Number);

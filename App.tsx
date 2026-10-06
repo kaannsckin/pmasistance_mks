@@ -61,6 +61,7 @@ import ModernSidebar from './components/modern/ModernSidebar';
 import ModernProjectHeader from './components/modern/ModernProjectHeader';
 import ModernPortfolio from './components/modern/ModernPortfolio';
 import ModernBoard from './components/modern/ModernBoard';
+import ModernProjectOverview from './components/modern/ModernProjectOverview';
 import ModernTaskList from './components/modern/ModernTaskList';
 import ModernAllocation from './components/modern/ModernAllocation';
 import ModernExecutive from './components/modern/ModernExecutive';
@@ -86,7 +87,7 @@ const createSampleProject = (): Project =>
   });
 
 /** Modern arayüzde proje başlığının gösterildiği ekranlar */
-const MODERN_PROJECT_VIEWS: View[] = [View.Roadmap, View.Tasks, View.Kanban, View.Risks, View.Resources, View.Goals, View.Requests, View.Notes, View.AI];
+const MODERN_PROJECT_VIEWS: View[] = [View.Overview, View.Roadmap, View.Tasks, View.Kanban, View.Risks, View.Resources, View.Goals, View.Requests, View.Notes, View.AI];
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<View>(View.Portfolio);
@@ -314,6 +315,8 @@ const App: React.FC = () => {
   const setCostTableColor = makeProjectSettingSetter('costTableColor');
 
   // ---- Proje yaşam döngüsü ----
+  // Modern arayüzde proje "Genel bakış" ile açılır; klasikte pano ile
+  const projectHomeView = settings?.uiStyle === 'modern' ? View.Overview : View.Roadmap;
   const handleCreateProject = useCallback((name: string) => {
     updateWorkspace(ws => {
       const project = createProject(name);
@@ -323,8 +326,8 @@ const App: React.FC = () => {
       const next = { ...ws, projects: [...ws.projects, project], activeProjectId: project.id };
       return appendAudit(next, 'project.create', `"${name}" projesi oluşturuldu`, project.id);
     });
-    setCurrentView(View.Roadmap);
-  }, [updateWorkspace]);
+    setCurrentView(projectHomeView);
+  }, [updateWorkspace, projectHomeView]);
 
   const handleSetProjectOwner = useCallback((projectId: string, personId: string | undefined) => {
     updateWorkspace(ws => {
@@ -340,8 +343,8 @@ const App: React.FC = () => {
 
   const handleOpenProject = useCallback((projectId: string) => {
     updateWorkspace(ws => ({ ...ws, activeProjectId: projectId }));
-    setCurrentView(View.Roadmap);
-  }, [updateWorkspace]);
+    setCurrentView(projectHomeView);
+  }, [updateWorkspace, projectHomeView]);
 
   const handleSetLeave = useCallback((personId: string, year: number, month: number, aa: number, reason?: string) => {
     updateWorkspace(ws => ({ ...ws, leaves: upsertLeave(ws.leaves || [], personId, year, month, aa, reason) }));
@@ -580,6 +583,8 @@ const App: React.FC = () => {
   // Arayüz tercihi (Ayarlar → Arayüz ya da profil menüsündeki kısayol): anında geçiş
   const handleSetUiStyle = useCallback((uiStyle: UiStyle) => {
     updateWorkspace(ws => ({ ...ws, settings: { ...ws.settings, uiStyle } }));
+    // Genel bakış yalnız modern arayüzde var
+    if (uiStyle === 'classic') setCurrentView(v => (v === View.Overview ? View.Roadmap : v));
   }, [updateWorkspace]);
 
   const handleSaveSettings = (newDuration: number, newDate: string, enabled: boolean, aiEnabled: boolean, newTheme: string, dark: boolean) => {
@@ -764,6 +769,20 @@ const App: React.FC = () => {
     const newTask = () => { setEditingTask(null); setIsFormModalOpen(true); };
     const celebrate = (message: string) => setEgg({ kind: 'celebrate', message });
 
+    if (isModern && currentView === View.Overview) {
+      return (
+        <ModernProjectOverview
+          workspace={workspace}
+          project={activeProject}
+          canEdit={canEditProjectContent(workspace, identity, activeProject.id)}
+          onNavigate={setCurrentView}
+          onViewTask={viewTask}
+          onNewTask={newTask}
+          onSetRag={handleSetProjectRag}
+          onCelebrate={celebrate}
+        />
+      );
+    }
     if (isModern && currentView === View.Roadmap) {
       return (
         <ModernBoard
@@ -836,6 +855,7 @@ const App: React.FC = () => {
             onViewTaskDetails={(taskId) => { const t = tasks.find(x => x.id === taskId); if(t) { setViewingTask(t); setIsDetailModalOpen(true); } }}
           />
         );
+      case View.Overview: // klasik arayüzde karşılığı pano
       case View.Roadmap:
         return (
           <RoadmapView
@@ -943,7 +963,7 @@ const App: React.FC = () => {
   const showsExecutive = currentView === View.Executive ||
     (!!workspace && isExecRole(workspace.currentRole) && (currentView === View.Notes || currentView === View.Requests));
   const usesModernScreen = inProjectView
-    ? currentView === View.Roadmap || currentView === View.Tasks
+    ? currentView === View.Overview || currentView === View.Roadmap || currentView === View.Tasks
     : showsExecutive || currentView === View.Allocations || ((currentView === View.Portfolio || !activeProject) && ![View.DataPool, View.Calendar].includes(currentView));
 
   // Komut paleti öğeleri (ekranlar + aksiyonlar + kapsamdaki projeler + kişiler)
@@ -998,7 +1018,7 @@ const App: React.FC = () => {
             onOpenHealth={() => setIsHealthModalOpen(true)}
             onOpenAudit={() => setIsAuditModalOpen(true)}
             onOpenAbout={() => setIsAboutModalOpen(true)}
-            onLogoLaunch={() => setCurrentView(inProjectView ? View.Roadmap : View.Portfolio)}
+            onLogoLaunch={() => setCurrentView(inProjectView ? View.Overview : View.Portfolio)}
             onHyperdrive={() => setEgg({ kind: 'hyper' })}
           />
           <div className="flex-1 min-w-0 flex flex-col">

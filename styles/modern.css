@@ -170,6 +170,10 @@
 
 .ui-modern .m-row-link { color: var(--m-label); text-align: left; width: 100%; background: transparent; border: 0; font: inherit; cursor: pointer; }
 .ui-modern .m-row-link:hover { background: var(--m-fill-2); }
+/* border:0 ayırıcı rengini ve kart zeminini ezmesin */
+.ui-modern .m-row-link.m-sep { border-color: var(--m-sep); }
+.ui-modern .m-row-link.m-surface { background: var(--m-surface); }
+.ui-modern .m-row-link.m-surface:hover { background: var(--m-fill-2); }
 
 .ui-modern :focus-visible { outline: 3px solid var(--m-accent); outline-offset: 2px; }
 
