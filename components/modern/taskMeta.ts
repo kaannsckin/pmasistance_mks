@@ -18,6 +18,14 @@ export const COLUMN_META: Record<BoardColumn, { label: string; ring: string; fil
     [TaskStatus.Done]: { label: 'Tamamlandı', ring: 'var(--m-ok)', fill: 'var(--m-ok)' },
 };
 
+/** Görev formunda ve ayrıntısında durum adları */
+export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
+    [TaskStatus.Backlog]: 'Bekleyen',
+    [TaskStatus.ToDo]: 'Yapılacak',
+    [TaskStatus.InProgress]: 'Süreçte',
+    [TaskStatus.Done]: 'Tamamlandı',
+};
+
 /** Backlog, panoda "Yapılacak" sütununda görünür (klasik panoyla aynı) */
 export const columnOf = (status: TaskStatus): BoardColumn =>
     status === TaskStatus.Backlog ? TaskStatus.ToDo : (status as BoardColumn);

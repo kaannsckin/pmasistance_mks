@@ -68,6 +68,13 @@ import ModernExecutive from './components/modern/ModernExecutive';
 import ModernRisks from './components/modern/ModernRisks';
 import ModernRiskReport from './components/modern/ModernRiskReport';
 import ModernExpectations from './components/modern/ModernExpectations';
+import ModernGoals from './components/modern/ModernGoals';
+import ModernRequests from './components/modern/ModernRequests';
+import TaskFormSheet from './components/modern/TaskFormSheet';
+import ModernTimeline, { CalendarSettings } from './components/modern/ModernTimeline';
+import ModernTeam from './components/modern/ModernTeam';
+import TaskDetailSheet from './components/modern/TaskDetailSheet';
+import { markConverted, taskDraftFromRequest } from './utils/customerRequests';
 import {
   canEditExpectation, canRespondExpectation, CATEGORY_LABELS, createExpectation, ExpectationDraft, isOwnExpectation,
   respondExpectation, setExpectationStatus, updateExpectationDraft, URGENCY_LABELS, urgencyCounts, visibleExpectations,
@@ -102,6 +109,8 @@ const App: React.FC = () => {
 
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  // Müşteri isteğinden açılan görev formu: kaydedilince istek "dönüştü" işaretlenir
+  const [convertingRequestId, setConvertingRequestId] = useState<string | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [viewingTask, setViewingTask] = useState<Task | null>(null);
   const [isTeamsModalOpen, setIsTeamsModalOpen] = useState(false);
@@ -680,6 +689,41 @@ const App: React.FC = () => {
     setTasks(prev => prev.map(t => t.id === updatedTask.id ? updatedTask : t));
   };
 
+  // Görev formu (klasik + modern ortak): kaydet; havuzdan atanan kişi proje
+  // kaynağı değilse otomatik eklenir; müşteri isteğinden açıldıysa istek
+  // "göreve dönüştü" olarak işaretlenir
+  const saveTaskFromForm = (t: Task) => {
+    const requestId = convertingRequestId;
+    updateActiveProject(p => {
+      const tasks = p.tasks.some(x => x.id === t.id) ? p.tasks.map(x => x.id === t.id ? t : x) : [...p.tasks, t];
+      let resources = p.resources;
+      const assignee = t.resourceName?.trim();
+      if (assignee && workspace && !resources.some(r => r.name.trim().toLocaleLowerCase('tr-TR') === assignee.toLocaleLowerCase('tr-TR'))) {
+        const person = workspace.people.find(pp => `${pp.firstName} ${pp.lastName}`.trim().toLocaleLowerCase('tr-TR') === assignee.toLocaleLowerCase('tr-TR'));
+        if (person) {
+          resources = [...resources, {
+            id: `res-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+            name: assignee,
+            participation: 100,
+            unit: person.departmentCode || t.unit || '',
+            title: person.titleCode || 'Uzman',
+          }];
+        }
+      }
+      const customerRequests = requestId ? markConverted(p.customerRequests, requestId, t.id) : p.customerRequests;
+      return { ...p, tasks, resources, customerRequests };
+    });
+    setConvertingRequestId(null);
+    setIsFormModalOpen(false);
+  };
+  const closeTaskForm = () => { setConvertingRequestId(null); setIsFormModalOpen(false); };
+  // Ayrıntı penceresi canlı görevi gösterir (yorum/durum değişikliği hemen görünür)
+  const liveViewingTask = viewingTask ? (activeProject?.tasks.find(t => t.id === viewingTask.id) || viewingTask) : null;
+  const currentActorName = useMemo(() => {
+    const p = workspace?.people.find(x => x.id === workspace?.currentPersonId);
+    return p ? `${p.firstName} ${p.lastName}`.trim() : ROLE_LABELS[identity.role] || 'Siz';
+  }, [workspace?.people, workspace?.currentPersonId, identity.role]);
+
   const isModern = settings?.uiStyle === 'modern';
   // Proje bağlamındaki ekranlar (modern arayüzde proje başlığı ve segment gezinme gösterilir)
   const inProjectView = !!activeProject && MODERN_PROJECT_VIEWS.includes(currentView) &&
@@ -857,7 +901,73 @@ const App: React.FC = () => {
     const notifyTask = (t: Task) => { setTeamsTask(t); setIsTeamsModalOpen(true); };
     const newTask = () => { setEditingTask(null); setIsFormModalOpen(true); };
     const celebrate = (message: string) => setEgg({ kind: 'celebrate', message });
+    const convertRequest = (r: CustomerRequest) => {
+      setConvertingRequestId(r.id);
+      setEditingTask(taskDraftFromRequest(r, resources[0]?.name || ''));
+      setIsFormModalOpen(true);
+    };
 
+    // Sürüm ekleme/silme (klasik pano ve modern zaman çizelgesi ortak)
+    const insertSprint = (n: number) => setTasks(prev => prev.map(t => t.version >= n ? { ...t, version: t.version + 1 } : t));
+    const deleteSprint = (n: number) => setTasks(prev => prev.map(t => t.version === n ? { ...t, version: 0, status: TaskStatus.Backlog } : t.version > n ? { ...t, version: t.version - 1 } : t));
+    if (isModern && currentView === View.Kanban) {
+      return (
+        <ModernTimeline
+          project={activeProject}
+          canEdit={!execRole}
+          onMoveTask={(id: string, v: number) => setTasks(prev => prev.map(t => t.id === id ? { ...t, version: v } : t))}
+          onPlanGenerated={setTasks}
+          onInsertSprint={insertSprint}
+          onDeleteSprint={deleteSprint}
+          onRenameSprint={(v: number, name: string) => setSprintNames(prev => {
+            const next = { ...prev };
+            if (name) next[v] = name; else delete next[v];
+            return next;
+          })}
+          onUpdateCalendar={(c: CalendarSettings) => updateActiveProject(p => ({ ...p, settings: { ...p.settings, ...c } }))}
+          onViewTask={viewTask}
+          onNewTask={newTask}
+        />
+      );
+    }
+    if (isModern && currentView === View.Resources) {
+      return (
+        <ModernTeam
+          resources={resources}
+          tasks={tasks}
+          people={workspace.people}
+          canEdit={!execRole}
+          onUpdate={(rs: Resource[], ts?: Task[]) => updateActiveProject(p => ({ ...p, resources: rs, tasks: ts ?? p.tasks }))}
+          setResources={setResources}
+          titleCosts={ps.titleCosts || {}}
+          setTitleCosts={setTitleCosts}
+          costTableColor={ps.costTableColor || '#10b981'}
+        />
+      );
+    }
+    if (isModern && currentView === View.Goals) {
+      return (
+        <ModernGoals
+          objectives={objectives}
+          tasks={tasks}
+          canEdit={!execRole}
+          onUpdateObjectives={setObjectives}
+          onViewTask={viewTask}
+          onNavigate={setCurrentView}
+        />
+      );
+    }
+    if (isModern && currentView === View.Requests) {
+      return (
+        <ModernRequests
+          requests={customerRequests}
+          tasks={tasks}
+          onChange={(next: CustomerRequest[]) => setCustomerRequests(next)}
+          onConvert={convertRequest}
+          onViewTask={viewTask}
+        />
+      );
+    }
     if (isModern && currentView === View.Risks) {
       return (
         <ModernRisks
@@ -949,8 +1059,8 @@ const App: React.FC = () => {
             globalTestDays={ps.globalTestDays || 4} setGlobalTestDays={setGlobalTestDays as React.Dispatch<React.SetStateAction<number>>}
             onPlanGenerated={setTasks} onTaskSprintChange={(id, v) => setTasks(prev => prev.map(t => t.id === id ? { ...t, version: v } : t))}
             onTaskStatusChange={(id, s) => setTasks(prev => prev.map(t => t.id === id ? { ...t, status: s } : t))}
-            onInsertSprint={(n) => setTasks(prev => prev.map(t => t.version >= n ? { ...t, version: t.version + 1 } : t))}
-            onDeleteSprint={(n) => setTasks(prev => prev.map(t => t.version === n ? { ...t, version: 0, status: TaskStatus.Backlog } : t.version > n ? { ...t, version: t.version - 1 } : t))}
+            onInsertSprint={insertSprint}
+            onDeleteSprint={deleteSprint}
             onOpenSettings={() => setIsSettingsModalOpen(true)}
             onNewTask={() => { setEditingTask(null); setIsFormModalOpen(true); }}
             onViewTaskDetails={(taskId) => { const t = tasks.find(x => x.id === taskId); if(t) { setViewingTask(t); setIsDetailModalOpen(true); } }}
@@ -1001,7 +1111,7 @@ const App: React.FC = () => {
         return (
           <CustomerRequestsView
             requests={customerRequests} setRequests={setCustomerRequests}
-            onConvertToTask={(r) => { setEditingTask({ id: `req-${r.id}`, name: r.title, status: TaskStatus.Backlog, version: 0, priority: 'Medium', unit: 'Müşteri', resourceName: resources[0]?.name || '', time: { best: 0, avg: 0, worst: 0 }, notes: r.description, jiraId: '', availability: false, predecessor: null, includeInSprints: true }); setIsFormModalOpen(true); }}
+            onConvertToTask={convertRequest}
           />
         );
       default:
@@ -1064,7 +1174,7 @@ const App: React.FC = () => {
   const showsExecutive = currentView === View.Executive ||
     (!!workspace && isExecRole(workspace.currentRole) && (currentView === View.Notes || currentView === View.Requests));
   const usesModernScreen = inProjectView
-    ? [View.Overview, View.Roadmap, View.Tasks, View.Risks].includes(currentView)
+    ? [View.Overview, View.Roadmap, View.Tasks, View.Kanban, View.Risks, View.Resources, View.Goals, View.Requests].includes(currentView)
     : showsExecutive || currentView === View.Allocations || currentView === View.RiskReport || currentView === View.Expectations || ((currentView === View.Portfolio || !activeProject) && ![View.DataPool, View.Calendar].includes(currentView));
 
   // Komut paleti öğeleri (ekranlar + aksiyonlar + kapsamdaki projeler + kişiler)
@@ -1185,28 +1295,21 @@ const App: React.FC = () => {
         </>
       )}
 
-      {isFormModalOpen && activeProject && workspace && <TaskFormModal task={editingTask} resources={activeProject.resources} people={workspace.people} workPackages={activeProject.workPackages} tasks={activeProject.tasks} objectives={activeProject.objectives} onClose={() => setIsFormModalOpen(false)} onSave={(t) => {
-          updateActiveProject(p => {
-            const tasks = p.tasks.some(x => x.id === t.id) ? p.tasks.map(x => x.id === t.id ? t : x) : [...p.tasks, t];
-            // Havuzdan atanan kişi proje kaynağı değilse otomatik ekle (isim eşleşmesi korunur)
-            let resources = p.resources;
-            const assignee = t.resourceName?.trim();
-            if (assignee && !resources.some(r => r.name.trim().toLocaleLowerCase('tr-TR') === assignee.toLocaleLowerCase('tr-TR'))) {
-              const person = workspace.people.find(pp => `${pp.firstName} ${pp.lastName}`.trim().toLocaleLowerCase('tr-TR') === assignee.toLocaleLowerCase('tr-TR'));
-              if (person) {
-                resources = [...resources, {
-                  id: `res-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
-                  name: assignee,
-                  participation: 100,
-                  unit: person.departmentCode || t.unit || '',
-                  title: person.titleCode || 'Uzman',
-                }];
-              }
-            }
-            return { ...p, tasks, resources };
-          });
-          setIsFormModalOpen(false);
-      }} />}
+      {isFormModalOpen && activeProject && workspace && (isModern ? (
+        <TaskFormSheet
+          task={editingTask}
+          tasks={activeProject.tasks}
+          resources={activeProject.resources}
+          people={workspace.people}
+          workPackages={activeProject.workPackages}
+          objectives={activeProject.objectives}
+          sprintNames={activeProject.settings.sprintNames || {}}
+          onClose={closeTaskForm}
+          onSave={saveTaskFromForm}
+        />
+      ) : (
+        <TaskFormModal task={editingTask} resources={activeProject.resources} people={workspace.people} workPackages={activeProject.workPackages} tasks={activeProject.tasks} objectives={activeProject.objectives} onClose={closeTaskForm} onSave={saveTaskFromForm} />
+      ))}
       {isWpManagerOpen && activeProject && (
         <WorkPackageManager
           isOpen={isWpManagerOpen}
@@ -1216,7 +1319,19 @@ const App: React.FC = () => {
           setWorkPackages={setWorkPackages}
         />
       )}
-      {isDetailModalOpen && viewingTask && <TaskDetailModal task={viewingTask} onClose={() => setIsDetailModalOpen(false)} onEdit={(t) => { setIsDetailModalOpen(false); setEditingTask(t); setIsFormModalOpen(true); }} onSave={handleUpdateTask} />}
+      {isDetailModalOpen && liveViewingTask && (isModern && activeProject ? (
+        <TaskDetailSheet
+          task={liveViewingTask}
+          project={activeProject}
+          authorName={currentActorName}
+          canEdit={!isExecRole(identity.role)}
+          onClose={() => setIsDetailModalOpen(false)}
+          onEdit={(t: Task) => { setIsDetailModalOpen(false); setEditingTask(t); setIsFormModalOpen(true); }}
+          onSave={handleUpdateTask}
+        />
+      ) : (
+        <TaskDetailModal task={liveViewingTask} onClose={() => setIsDetailModalOpen(false)} onEdit={(t) => { setIsDetailModalOpen(false); setEditingTask(t); setIsFormModalOpen(true); }} onSave={handleUpdateTask} />
+      ))}
       {isTeamsModalOpen && teamsTask && <TeamsMessageModal task={teamsTask} onClose={() => setIsTeamsModalOpen(false)} />}
       {isSettingsModalOpen && (
         <SettingsModal

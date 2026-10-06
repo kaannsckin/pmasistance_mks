@@ -49,6 +49,8 @@ export interface SprintWindow {
     sprint: number;
     start: Date;
     end: Date; // iş bitişi (test hariç)
+    testStart: Date;
+    testEnd: Date;
     /** "yıl-ay" → penceredeki iş günü sayısı */
     workdaysByMonth: Map<string, number>;
     totalWorkdays: number;
@@ -72,9 +74,9 @@ export const buildSprintWindows = (project: Project, maxSprint: number): SprintW
             workdaysByMonth.set(key, (workdaysByMonth.get(key) || 0) + 1);
             total++;
         }
-        windows.push({ sprint: s, start, end, workdaysByMonth, totalWorkdays: total });
         const testStart = getNextWorkday(end);
         const testEnd = addWorkdays(testStart, testDays);
+        windows.push({ sprint: s, start, end, testStart, testEnd, workdaysByMonth, totalWorkdays: total });
         cursor = getNextWorkday(testEnd);
     }
     return windows;
