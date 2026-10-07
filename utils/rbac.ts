@@ -1,5 +1,6 @@
-import { PlanLock, Project, UserRole, WorkspaceData } from '../types';
+import { PermissionKey, PlanLock, Project, UserRole, WorkspaceData } from '../types';
 import { getPlanLockStatus } from './allocations';
+import { can, canFor, PermissionHolder, permissionsFor } from './permissions';
 
 /**
  * RBAC — kimlik + sahiplik + net kapsam.
@@ -11,9 +12,14 @@ import { getPlanLockStatus } from './allocations';
  *  |-----------------|--------------------------------|-------------------------------------------|
  *  | Müdür           | Her şey                        | Hiçbir şey (salt-okunur yönetim)          |
  *  | PYB Sorumlusu   | Her şey                        | Hiçbir şey; plan onaylar/kilitler         |
- *  | PYB Destek      | Her şey                        | Veri havuzu (tümü); plan onaylar/kilitler |
+ *  | PYB Destek      | Her şey                        | Veri havuzu (tümü); rapor denetimi/yayını |
  *  | Proje Yöneticisi| Sahip olduğu projeler          | Kendi projelerinin görev/plan/risk        |
  *  | Bölüm Sorumlusu | Bölümü personelinin işi         | Bölümü personelinin tahsisi (tüm projeler)|
+ *  | Admin           | Her şey (salt okunur)          | Rol yetkileri ve kişi profilleri          |
+ *
+ * Özellik yetkileri (yönetim ekranı, plan onayı, veri havuzu…) rol bazlıdır ve
+ * admin tarafından değiştirilebilir: utils/permissions.ts. Bu dosyadaki
+ * sahiplik/kapsam kuralları ise kimlik kuralıdır, değiştirilmez.
  *
  * Not: Bu istemci tarafı kapsamdır; sunucu tarafı zorlama Supabase RLS fazında.
  */
@@ -21,23 +27,24 @@ import { getPlanLockStatus } from './allocations';
 export interface Identity {
     role: UserRole;
     personId?: string;
+    /** Rolün geçerli yetkileri (admin değişiklikleriyle); yoksa varsayılanlar */
+    perms?: ReadonlySet<PermissionKey>;
 }
+
+/** Çalışma alanındaki yetki değişiklikleriyle birlikte bir kimlik kurar */
+export const identityFor = (ws: Pick<WorkspaceData, 'rolePermissions'>, role: UserRole, personId?: string): Identity => ({
+    role,
+    personId,
+    perms: permissionsFor(role, ws.rolePermissions),
+});
 
 type WsLike = Pick<WorkspaceData, 'people' | 'projects' | 'allocations'>;
 
-export const identityOf = (ws: WorkspaceData): Identity => ({
-    role: ws.currentRole || 'py',
-    personId: ws.currentPersonId,
-});
+export const identityOf = (ws: Pick<WorkspaceData, 'currentRole' | 'currentPersonId' | 'rolePermissions'>): Identity =>
+    identityFor(ws, ws.currentRole || 'py', ws.currentPersonId);
 
-export const isExecViewer = (role: UserRole | undefined): boolean =>
-    role === 'mudur' || role === 'pyb_sorumlu';
-
-export const isSteward = (role: UserRole | undefined): boolean => role === 'pyb_destek';
-
-/** Portföyün tamamını görebilen roller */
-export const seesAllProjects = (role: UserRole | undefined): boolean =>
-    isExecViewer(role) || isSteward(role);
+/** Portföyün tamamını görebilir mi (rol adı → varsayılan yetki, kimlik → geçerli yetki) */
+export const seesAllProjects = (who: UserRole | PermissionHolder | undefined): boolean => canFor(who, 'portfolio.viewAll');
 
 /** py/bölüm sorumlusu rollerinin çalışması için bir kişi seçilmiş olmalı */
 export const identityNeedsPerson = (id: Identity): boolean =>
@@ -62,7 +69,7 @@ export const managesPerson = (ws: WsLike, id: Identity, personId: string): boole
 
 /** Görünür proje id kümesi (kapsam) */
 export const visibleProjectIds = (ws: WsLike, id: Identity): Set<string> => {
-    if (seesAllProjects(id.role)) return new Set(ws.projects.map(p => p.id));
+    if (can(id, 'portfolio.viewAll')) return new Set(ws.projects.map(p => p.id));
     if (id.role === 'py') return new Set(ws.projects.filter(p => ownsProject(p, id)).map(p => p.id));
     if (id.role === 'bolum_sorumlu') {
         const dept = managedDepartmentCode(ws, id);
@@ -89,12 +96,11 @@ export const canEditProjectContent = (ws: WsLike, id: Identity, projectId: strin
 };
 
 /** Yeni proje oluşturabilir mi? */
-export const canCreateProject = (id: Identity): boolean =>
-    id.role === 'py' || id.role === 'pyb_destek';
+export const canCreateProject = (id: Identity): boolean => can(id, 'project.create');
 
 /** Proje sahipliğini/durumunu atayabilir mi? (sahip PM veya veri sorumlusu) */
 export const canAssignProjectOwner = (ws: WsLike, id: Identity, projectId: string): boolean =>
-    id.role === 'pyb_destek' || canEditProjectContent(ws, id, projectId);
+    can(id, 'project.assignOwner') || canEditProjectContent(ws, id, projectId);
 
 /**
  * Bir tahsis hücresini (kişi × proje) düzenleyebilir mi?

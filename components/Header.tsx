@@ -2,7 +2,6 @@
 import React, { useRef, useState } from 'react';
 import { View, RagStatus, UserRole } from '../types';
 import { ROLE_LABELS } from '../utils/allocations';
-import { isExecRole } from '../utils/execReport';
 import { TodoItem, todoBadgeCount } from '../utils/todoItems';
 
 export interface HeaderProjectSummary {
@@ -34,7 +33,11 @@ interface HeaderProps {
   currentPersonId?: string;
   people: HeaderPersonSummary[];
   identityNeedsPerson: boolean;
-  onChangeIdentity: (role: UserRole, personId?: string) => void;
+  /** Profil değiştirme penceresi */
+  onOpenProfile: () => void;
+  /** Yönetim ekranı yetkisi / PY'ye özel sekmeleri (Günlük, İstekler) gizle */
+  canExecutive: boolean;
+  hidePrivate: boolean;
   cloudLinked: boolean;
   onOpenCloudSync: () => void;
   todoItems: TodoItem[];
@@ -114,6 +117,7 @@ const ROLE_ICONS: Record<UserRole, string> = {
   pyb_destek: 'fa-database',
   py: 'fa-user-gear',
   bolum_sorumlu: 'fa-people-group',
+  admin: 'fa-user-lock',
 };
 
 // ---------------------------------------------------------------------------
@@ -233,78 +237,35 @@ const ProjectSwitcher: React.FC<{
 
 const SCOPED_ROLES: UserRole[] = ['py', 'bolum_sorumlu'];
 
+/** Profil düğmesi: seçim "Profil değiştir" penceresinde yapılır */
 const IdentitySwitcher: React.FC<{
   currentRole: UserRole;
   currentPersonId?: string;
   people: HeaderPersonSummary[];
   needsPerson: boolean;
-  onChangeIdentity: (role: UserRole, personId?: string) => void;
-}> = ({ currentRole, currentPersonId, people, needsPerson, onChangeIdentity }) => {
-  const [isOpen, setIsOpen] = useState(false);
+  onOpenProfile: () => void;
+}> = ({ currentRole, currentPersonId, people, needsPerson, onOpenProfile }) => {
   const activePerson = people.find(p => p.id === currentPersonId);
   const scoped = SCOPED_ROLES.includes(currentRole);
-
   return (
-    <div className="relative">
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className={`h-10 flex items-center gap-2 px-3 bg-white dark:bg-gray-700 rounded-lg border transition-colors ${needsPerson ? 'border-amber-400 text-amber-600' : 'border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-500'}`}
-        title="Kimlik / rol değiştir (RBAC)"
-      >
-        <i className={`fa-solid ${ROLE_ICONS[currentRole]} text-[11px]`} style={{ color: 'var(--app-primary)' }}></i>
-        <span className="hidden xl:flex flex-col items-start leading-none">
-          <span className="text-xs font-medium">{ROLE_LABELS[currentRole]}</span>
-          {scoped && <span className="text-[9px] text-gray-400 mt-0.5">{activePerson ? `${activePerson.name}` : 'kişi seçilmedi'}</span>}
-        </span>
-        {needsPerson && <i className="fa-solid fa-triangle-exclamation text-[10px] text-amber-500"></i>}
-        <i className={`fa-solid fa-chevron-down text-[9px] text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}></i>
-      </button>
-      {isOpen && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)}></div>
-          <div className="absolute top-full right-0 mt-1.5 w-72 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-50 py-1.5 max-h-[70vh] overflow-y-auto">
-            <p className="px-3.5 pt-1.5 pb-1 text-[11px] font-medium text-gray-400">Rol</p>
-            {(Object.keys(ROLE_LABELS) as UserRole[]).map(r => (
-              <button
-                key={r}
-                onClick={() => { onChangeIdentity(r, SCOPED_ROLES.includes(r) ? currentPersonId : undefined); }}
-                className="w-full flex items-center gap-2.5 px-3.5 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-                style={r === currentRole ? { backgroundColor: 'var(--app-accent-light)' } : {}}
-              >
-                <i className={`fa-solid ${ROLE_ICONS[r]} text-[11px] w-4`} style={{ color: 'var(--app-primary)' }}></i>
-                <span className="text-sm text-gray-700 dark:text-gray-200">{ROLE_LABELS[r]}</span>
-                {r === currentRole && <i className="fa-solid fa-check text-[10px] ml-auto" style={{ color: 'var(--app-primary)' }}></i>}
-              </button>
-            ))}
-            {scoped && (
-              <div className="border-t border-gray-100 dark:border-gray-700 mt-1 pt-1">
-                <p className="px-3.5 pt-1 pb-1 text-[11px] font-medium text-gray-400">
-                  {currentRole === 'py' ? 'Hangi PM olarak?' : 'Hangi bölüm sorumlusu olarak?'}
-                </p>
-                {people.length === 0 && <p className="px-3.5 py-2 text-[11px] text-gray-400">Havuzda kişi yok — Veri Havuzu'na personel ekleyin.</p>}
-                {people.map(p => (
-                  <button
-                    key={p.id}
-                    onClick={() => { onChangeIdentity(currentRole, p.id); setIsOpen(false); }}
-                    className="w-full flex items-center gap-2.5 px-3.5 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-                    style={p.id === currentPersonId ? { backgroundColor: 'var(--app-accent-light)' } : {}}
-                  >
-                    <span className="w-6 h-6 rounded-md flex items-center justify-center text-white text-[9px] font-semibold flex-none" style={{ backgroundColor: 'var(--app-primary)' }}>{p.initials}</span>
-                    <span className="text-sm text-gray-700 dark:text-gray-200 truncate">{p.name}</span>
-                    <span className="text-[10px] text-gray-400 ml-auto flex-none">{p.departmentCode}</span>
-                    {p.id === currentPersonId && <i className="fa-solid fa-check text-[10px] flex-none" style={{ color: 'var(--app-primary)' }}></i>}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </>
-      )}
-    </div>
+    <button
+      onClick={onOpenProfile}
+      className={`h-10 flex items-center gap-2 px-3 bg-white dark:bg-gray-700 rounded-lg border transition-colors ${needsPerson ? 'border-amber-400 text-amber-600' : 'border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-500'}`}
+      title="Profil değiştir"
+      aria-haspopup="dialog"
+    >
+      <i className={`fa-solid ${ROLE_ICONS[currentRole]} text-[11px]`} style={{ color: 'var(--app-primary)' }}></i>
+      <span className="hidden xl:flex flex-col items-start leading-none">
+        <span className="text-xs font-medium">{ROLE_LABELS[currentRole]}</span>
+        {(scoped || activePerson) && <span className="text-[9px] text-gray-400 mt-0.5">{activePerson ? `${activePerson.name}` : 'kişi seçilmedi'}</span>}
+      </span>
+      {needsPerson && <i className="fa-solid fa-triangle-exclamation text-[10px] text-amber-500"></i>}
+      <i className="fa-solid fa-arrow-right-arrow-left text-[9px] text-gray-400"></i>
+    </button>
   );
 };
 
-const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSettings, onSaveProject, onLoadProject, isAIEnabled = true, onOpenAbout, projects, activeProjectId, onSelectProject, currentRole, currentPersonId, people, identityNeedsPerson, onChangeIdentity, cloudLinked, onOpenCloudSync, todoItems, onTodoNavigate, onOpenStatusReport, dataHealthAlerts, onOpenDataHealth, onOpenAuditLog, onOpenCommandPalette, onOpenWorkPackages }) => {
+const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSettings, onSaveProject, onLoadProject, isAIEnabled = true, onOpenAbout, projects, activeProjectId, onSelectProject, currentRole, currentPersonId, people, identityNeedsPerson, onOpenProfile, canExecutive, hidePrivate, cloudLinked, onOpenCloudSync, todoItems, onTodoNavigate, onOpenStatusReport, dataHealthAlerts, onOpenDataHealth, onOpenAuditLog, onOpenCommandPalette, onOpenWorkPackages }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
@@ -313,7 +274,6 @@ const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSett
   const [showVFX, setShowVFX] = useState(false);
   const [isShaking, setIsShaking] = useState(false);
 
-  const exec = isExecRole(currentRole);
   const showProjectBar = !!activeProjectId;
 
   const handleLaunch = () => {
@@ -407,7 +367,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSett
           </div>
 
           <nav className="hidden md:flex items-center gap-1 bg-gray-100/60 dark:bg-gray-900/40 p-1 rounded-xl border border-gray-200/60 dark:border-gray-700/60">
-            {exec && <WorkspaceNavItem view={View.Executive} currentView={currentView} setCurrentView={setCurrentView} icon="fa-gauge-high" label="Yönetim" />}
+            {canExecutive && <WorkspaceNavItem view={View.Executive} currentView={currentView} setCurrentView={setCurrentView} icon="fa-gauge-high" label="Yönetim" />}
             <WorkspaceNavItem view={View.Portfolio} currentView={currentView} setCurrentView={setCurrentView} icon="fa-table-cells-large" label="Portföy" />
             <WorkspaceNavItem view={View.Allocations} currentView={currentView} setCurrentView={setCurrentView} icon="fa-people-arrows" label="Tahsis" />
             <WorkspaceNavItem view={View.Calendar} currentView={currentView} setCurrentView={setCurrentView} icon="fa-calendar-days" label="Takvim" />
@@ -428,7 +388,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSett
               <i className="fa-solid fa-cloud text-[13px]" style={cloudLinked ? { color: 'var(--app-primary)' } : { color: '#9ca3af' }}></i>
               {cloudLinked && <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-emerald-400 border border-white dark:border-gray-700"></span>}
             </button>
-            <IdentitySwitcher currentRole={currentRole} currentPersonId={currentPersonId} people={people} needsPerson={identityNeedsPerson} onChangeIdentity={onChangeIdentity} />
+            <IdentitySwitcher currentRole={currentRole} currentPersonId={currentPersonId} people={people} needsPerson={identityNeedsPerson} onOpenProfile={onOpenProfile} />
             <div className="hidden sm:flex items-center bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
               <input type="file" ref={fileInputRef} className="hidden" accept=".json" onChange={(e) => {
                 const file = e.target.files?.[0];
@@ -486,7 +446,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSett
               <ProjectTab view={View.Tasks} currentView={currentView} setCurrentView={setCurrentView} icon="fa-list-check" label="Görevler" />
               <ProjectTab view={View.Risks} currentView={currentView} setCurrentView={setCurrentView} icon="fa-shield-halved" label="Riskler" />
               <ProjectTab view={View.Resources} currentView={currentView} setCurrentView={setCurrentView} icon="fa-users-gear" label="Ekip" />
-              {!exec && (
+              {!hidePrivate && (
                 <>
                   <ProjectTab view={View.Requests} currentView={currentView} setCurrentView={setCurrentView} icon="fa-users-viewfinder" label="İstekler" />
                   <ProjectTab view={View.Notes} currentView={currentView} setCurrentView={setCurrentView} icon="fa-pen-nib" label="Günlük" />

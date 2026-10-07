@@ -7,7 +7,7 @@ import { describeNotify, IntegrationHealth, sendNotification } from '../../../ut
 import { Identity } from '../../../utils/rbac';
 import { relativeTime } from '../../../utils/recentChanges';
 import {
-    buildEml, consolidate, glossaryFor, isPyds, itemDisplay, renderReportHtml, renderReportText, reportTitle, weekProgress,
+    buildEml, consolidate, glossaryFor, isReportSteward, itemDisplay, renderReportHtml, renderReportText, reportTitle, weekProgress,
 } from '../../../utils/weeklyReport';
 import { useAiRun } from '../../assistant/AiButton';
 import { Icon } from '../icons';
@@ -84,7 +84,7 @@ export interface ConsolidatedReportProps {
 const ConsolidatedReport: React.FC<ConsolidatedReportProps> = ({
     workspace, identity, year, week, dictionary, settings, health, departmentCode, publication, onPublish, onUnpublish, onMarkEmailed, onOpenReport, onRatePmo, onSetAiAssessment,
 }) => {
-    const steward = isPyds(identity.role);
+    const steward = isReportSteward(identity);
     const [mode, setMode] = useState<'approved' | 'all'>(steward && !publication ? 'all' : 'approved');
     const [notice, setNotice] = useState<NoticeState>(null);
     const [sending, setSending] = useState(false);

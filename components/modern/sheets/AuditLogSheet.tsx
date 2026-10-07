@@ -7,7 +7,7 @@ import { downloadFile } from '../weekly/shared';
 
 const GROUP_ICON: Record<string, string> = {
     project: 'briefcase', risk: 'shield', plan: 'calendar', data: 'upload', identity: 'users', health: 'activity',
-    snapshot: 'history', ai: 'sparkles', expectation: 'flag', report: 'report', meeting: 'calendarCheck',
+    snapshot: 'history', ai: 'sparkles', expectation: 'flag', report: 'report', meeting: 'calendarCheck', access: 'key',
 };
 const iconOf = (a: AuditAction) => GROUP_ICON[a.split('.')[0]] || 'history';
 

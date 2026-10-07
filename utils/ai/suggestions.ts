@@ -1,8 +1,8 @@
 import { UserRole } from '../../types';
-import { isExecViewer } from '../rbac';
+import { canFor, PermissionHolder } from '../permissions';
 
 /** Boş sohbette gösterilen, role ve bağlama göre örnek sorular */
-export const buildSuggestions = (role: UserRole, activeProjectName?: string): { label: string; prompt: string }[] => {
+export const buildSuggestions = (who: UserRole | PermissionHolder, activeProjectName?: string): { label: string; prompt: string }[] => {
     const list: { label: string; prompt: string }[] = [];
     if (activeProjectName) {
         list.push({ label: `${activeProjectName}: durum özeti`, prompt: `${activeProjectName} projesinin genel durumunu özetle: sağlık, geciken işler, en yüksek riskler ve bu yılın tahsisi.` });
@@ -10,7 +10,7 @@ export const buildSuggestions = (role: UserRole, activeProjectName?: string): { 
     }
     list.push({ label: 'Portföyün genel durumu', prompt: 'Portföyün genel durumu nasıl? Dikkat etmem gereken başlıca konular neler?' });
     list.push({ label: 'Kapasitesini aşanlar', prompt: 'Bu yıl hangi aylarda kapasitesini aşan kişiler var? En kritik olanları göster.' });
-    if (isExecViewer(role)) {
+    if (canFor(who, 'screen.executive')) {
         list.push({ label: 'Bütçe / takvim sapması (EVM)', prompt: 'EVM göstergelerine göre bütçe ya da takvim sapması olan projeler hangileri?' });
         list.push({ label: 'Personel açığı', prompt: 'Kapasite-talep analizine göre hangi bölüm ve rollerde personel açığı var?' });
     } else {

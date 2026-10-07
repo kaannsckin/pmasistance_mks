@@ -9,6 +9,8 @@ interface DataPoolViewProps {
   roleCatalog: RoleCatalogEntry[];
   titles: TitleDef[];
   currentRole: UserRole;
+  /** Veri havuzu düzenleme yetkisi (admin değiştirebilir); verilmezse rolün varsayılanı */
+  canEdit?: boolean;
   onUpdatePeople: (people: Person[]) => void;
   onUpdateDepartments: (departments: Department[]) => void;
   onUpdateRoleCatalog: (roles: RoleCatalogEntry[]) => void;
@@ -69,14 +71,14 @@ const AddButton: React.FC<{ onClick: () => void; label: string; icon?: string }>
   </button>
 );
 
-const DataPoolView: React.FC<DataPoolViewProps> = ({ people, departments, roleCatalog, titles, currentRole, onUpdatePeople, onUpdateDepartments, onUpdateRoleCatalog, onUpdateTitles, onApplyImport, onViewPerson }) => {
+const DataPoolView: React.FC<DataPoolViewProps> = ({ people, departments, roleCatalog, titles, currentRole, canEdit, onUpdatePeople, onUpdateDepartments, onUpdateRoleCatalog, onUpdateTitles, onApplyImport, onViewPerson }) => {
   const [tab, setTab] = useState<PoolTab>('people');
   const [isImporting, setIsImporting] = useState(false);
   const [deptFilter, setDeptFilter] = useState('all');
   const [feedback, setFeedback] = useState<Feedback>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const flashTimer = useRef<number | undefined>(undefined);
-  const editable = canEditPool(currentRole);
+  const editable = canEdit ?? canEditPool(currentRole);
 
   const [newPerson, setNewPerson] = useState<{ firstName: string; lastName: string; sicil: string; departmentCode: string; titleCode: string; availableAA: number; roles: string[] }>(
     { firstName: '', lastName: '', sicil: '', departmentCode: '', titleCode: '', availableAA: 1, roles: [] }
@@ -527,7 +529,7 @@ const DataPoolView: React.FC<DataPoolViewProps> = ({ people, departments, roleCa
         <div className="flex items-center space-x-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-2xl px-4 py-3">
           <i className="fa-solid fa-lock text-amber-500"></i>
           <p className="text-[11px] text-amber-700 dark:text-amber-300">
-            Veri havuzunu yalnızca <b>PYB Destek</b> rolü düzenleyebilir. Şu anki rolünüz: <b>{ROLE_LABELS[currentRole]}</b> (salt-okunur görünüm).
+            Veri havuzunu düzenleme yetkiniz yok (varsayılan: <b>PYB Destek</b>). Şu anki rolünüz: <b>{ROLE_LABELS[currentRole]}</b> (salt-okunur görünüm).
           </p>
         </div>
       )}

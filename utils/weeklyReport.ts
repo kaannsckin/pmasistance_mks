@@ -3,7 +3,8 @@ import {
     WeeklyReport, WorkspaceData,
 } from '../types';
 import { ROLE_LABELS } from './allocations';
-import { Identity, isExecViewer, managedDepartmentCode, ownsProject } from './rbac';
+import { can, PermissionHolder } from './permissions';
+import { Identity, managedDepartmentCode, ownsProject } from './rbac';
 
 /**
  * Haftalık rapor — kurum rapor kılavuzuna göre yazım, onay akışı ve
@@ -111,7 +112,8 @@ export interface Actor {
     name?: string;
 }
 
-export const isPyds = (role: UserRole | undefined): boolean => role === 'pyb_destek';
+/** Rapor denetçisi (varsayılan PYB destek): format denetimi, yayın, rapor ayarları, AI metin puanı */
+export const isReportSteward = (id: PermissionHolder): boolean => can(id, 'report.review');
 
 /** Projenin bölümü = proje yöneticisinin bölümü */
 export const projectDepartment = (ws: Pick<WorkspaceData, 'people'>, project: Pick<Project, 'pmPersonId'>): string =>
@@ -134,7 +136,7 @@ export const canEditReport = (ws: WsLike, id: Identity, r: WeeklyReport): boolea
         }
         case 'bs_review': return deptHeadOf(ws, id, r.departmentCode);
         case 'pyds_review':
-        case 'approved': return isPyds(id.role);
+        case 'approved': return isReportSteward(id);
     }
 };
 
@@ -214,8 +216,8 @@ export const returnReport = (r: WeeklyReport, actor: Actor, note: string, now: D
  */
 export const visibleReports = (ws: WsLike, id: Identity): WeeklyReport[] => {
     const all = ws.weeklyReports || [];
-    if (isPyds(id.role)) return all;
-    if (isExecViewer(id.role)) return all.filter(r => r.stage === 'approved' && isWeekPublished(ws, r.year, r.week));
+    if (isReportSteward(id)) return all;
+    if (can(id, 'portfolio.viewAll')) return all.filter(r => r.stage === 'approved' && isWeekPublished(ws, r.year, r.week));
     if (id.role === 'py') {
         const mine = new Set(ws.projects.filter(p => ownsProject(p, id)).map(p => p.id));
         return all.filter(r => r.kind === 'project' && !!r.projectId && mine.has(r.projectId));
@@ -286,7 +288,7 @@ export const saveReport = (
  */
 export const setReportAiAssessment = (ws: Pick<WorkspaceData, 'weeklyReports'>, id: Identity, reportId: string, assessment: AiReportAssessment): WeeklyReport[] | null => {
     const reports = ws.weeklyReports || [];
-    if (!isPyds(id.role) || !reports.some(r => r.id === reportId && r.kind === 'project')) return null;
+    if (!isReportSteward(id) || !reports.some(r => r.id === reportId && r.kind === 'project')) return null;
     return reports.map(r => (r.id === reportId ? { ...r, aiAssessment: assessment } : r));
 };
 
@@ -301,14 +303,14 @@ export const returnReportIn = (ws: SaveWs, id: Identity, reportId: string, actor
 
 /** Haftayı yayınla (PYB destek): en az bir onaylı rapor olmalı */
 export const publishWeek = (ws: WsLike, id: Identity, year: number, week: number, byName: string | undefined, now: Date = new Date()): WeeklyPublication[] | null => {
-    if (!isPyds(id.role) || isWeekPublished(ws, year, week)) return null;
+    if (!isReportSteward(id) || isWeekPublished(ws, year, week)) return null;
     if (!(ws.weeklyReports || []).some(r => r.year === year && r.week === week && r.stage === 'approved')) return null;
     return [...(ws.weeklyPublications || []), { year, week, publishedAt: now.toISOString(), publishedByName: byName }];
 };
 
 /** Yayından kaldır (düzeltme için; PYB destek) */
 export const unpublishWeek = (ws: WsLike, id: Identity, year: number, week: number): WeeklyPublication[] | null =>
-    isPyds(id.role) && isWeekPublished(ws, year, week) ? (ws.weeklyPublications || []).filter(p => !(p.year === year && p.week === week)) : null;
+    isReportSteward(id) && isWeekPublished(ws, year, week) ? (ws.weeklyPublications || []).filter(p => !(p.year === year && p.week === week)) : null;
 
 export const markWeekEmailed = (pubs: WeeklyPublication[], year: number, week: number, now: Date = new Date()): WeeklyPublication[] =>
     pubs.map(p => (p.year === year && p.week === week ? { ...p, emailedAt: now.toISOString() } : p));

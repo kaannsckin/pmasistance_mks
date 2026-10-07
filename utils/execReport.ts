@@ -6,12 +6,12 @@ import {
 import { buildRoleAnalysis, EFFORT_TYPE_LABELS, RoleAnalysisRow } from './roleAnalysis';
 import { buildCostReport, CostReport } from './costing';
 import { PortfolioRisk, RISK_BAND_LABELS, RISK_STATUS_LABELS, summarizeRisks, topPortfolioRisks } from './risks';
+import { canFor } from './permissions';
 
 declare const XLSX: any;
 
-/** Üst yönetim ekranını görebilen ama girdi yapmayan roller */
-export const isExecRole = (role: UserRole | undefined): boolean =>
-    role === 'mudur' || role === 'pyb_sorumlu';
+/** Rolün varsayılan yetkisiyle yönetim ekranını görür mü (kimliğe göre: can(id, 'screen.executive')) */
+export const isExecRole = (role: UserRole | undefined): boolean => canFor(role, 'screen.executive');
 
 export interface ExecProjectRow {
     projectId: string;

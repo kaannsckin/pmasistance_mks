@@ -1,7 +1,8 @@
 import { View, WorkspaceData } from '../types';
 import { awaitingOutcome, isOwnMeeting } from './customerMeetings';
-import { identityOf, isExecViewer, managedDepartmentCode, ownsProject } from './rbac';
-import { dueDate, isoWeekOf, isPyds, isWeekPublished, reportSettingsOf, weekLabel } from './weeklyReport';
+import { can } from './permissions';
+import { identityOf, managedDepartmentCode, ownsProject } from './rbac';
+import { dueDate, isoWeekOf, isReportSteward, isWeekPublished, reportSettingsOf, weekLabel } from './weeklyReport';
 
 /**
  * Haftalık rapor ve müşteri görüşmeleri için role göre hatırlatmalar:
@@ -63,7 +64,7 @@ export const reportAttention = (ws: WorkspaceData, now: Date = new Date()): Repo
         reportBadge += waiting;
     }
 
-    if (isPyds(id.role)) {
+    if (isReportSteward(id)) {
         const waiting = reports.filter(r => r.stage === 'pyds_review').length;
         if (waiting) items.push({ id: 'wr-pyds', severity: 'warn', icon: 'fa-file-circle-check', view: View.WeeklyReport, text: `${waiting} haftalık rapor format denetiminizi bekliyor` });
         reportBadge += waiting;
@@ -73,7 +74,7 @@ export const reportAttention = (ws: WorkspaceData, now: Date = new Date()): Repo
         }
     }
 
-    if (isExecViewer(id.role)) {
+    if (can(id, 'meeting.review')) {
         const pending = meetings.filter(m => m.status === 'pending');
         if (pending.length) {
             const withMgmt = pending.filter(m => m.managementAttendance).length;
@@ -83,6 +84,10 @@ export const reportAttention = (ws: WorkspaceData, now: Date = new Date()): Repo
             });
         }
         meetingBadge += pending.length;
+    }
+
+    // Yönetim ekranını görenlere: enstitü raporu yayınlandı
+    if (can(id, 'screen.executive')) {
         const prev = isoWeekOf(new Date(now.getTime() - 7 * DAY));
         const latest = [...(ws.weeklyPublications || [])].sort((a, b) => b.year - a.year || b.week - a.week)[0];
         if (latest && ((latest.year === year && latest.week === week) || (latest.year === prev.year && latest.week === prev.week))) {

@@ -122,6 +122,7 @@ export enum View {
   Expectations, // Yönetimden beklentiler (modern arayüz)
   WeeklyReport, // Haftalık rapor (PY → BS → PYDS → müdür)
   Meetings, // Planlanan müşteri görüşmeleri
+  Admin, // Yönetici (admin): rol yetkileri ve profiller
 }
 
 export interface UnitLoad {
@@ -171,8 +172,28 @@ export interface ProjectData {
  *    eşleştirmeler) girer ve hiyerarşiyi korur
  *  - py: proje yöneticisi; kendi projelerinin planını girer
  *  - bolum_sorumlu: bölüm personelinin tahsisini girer/izler
+ *  - admin: rollerin yetkilerini ve kişi profillerini yönetir
+ * Rollerin özellik yetkileri varsayılanları utils/permissions.ts'tedir; admin
+ * bunları WorkspaceData.rolePermissions ile değiştirebilir.
  */
-export type UserRole = 'mudur' | 'pyb_sorumlu' | 'pyb_destek' | 'py' | 'bolum_sorumlu';
+export type UserRole = 'mudur' | 'pyb_sorumlu' | 'pyb_destek' | 'py' | 'bolum_sorumlu' | 'admin';
+
+/** Rol bazlı özellik yetkileri (katalog ve varsayılanlar: utils/permissions.ts) */
+export type PermissionKey =
+  | 'screen.executive' | 'screen.admin' | 'portfolio.viewAll'
+  | 'project.create' | 'project.assignOwner' | 'datapool.edit' | 'plan.approve'
+  | 'report.review' | 'health.rate' | 'expectation.respond' | 'meeting.review'
+  | 'notes.private';
+
+/** Admin'in değiştirdiği roller: rol → verilen yetkilerin tam listesi (olmayan rol varsayılanı kullanır) */
+export type RolePermissions = Partial<Record<UserRole, PermissionKey[]>>;
+
+/** Profil: bir kişinin hangi rolle çalıştığı (admin tanımlar; profil değiştirme penceresinde listelenir) */
+export interface UserProfile {
+  id: string;
+  role: UserRole;
+  personId?: string; // kişi bazlı roller (PY, bölüm sorumlusu) için zorunlu
+}
 
 /** Excel'deki "Proje Durumu" karşılığı + yaşam döngüsü ekleri */
 export type ProjectStatus = 'devam' | 'teklif' | 'beklemede' | 'tamamlandi';
@@ -396,6 +417,8 @@ export interface WorkspaceData {
   reportSettings?: ReportSettings; // Rapor ayarları (alıcılar, kurum kısaltma sözlüğü)
   pmoRatings?: PmoRating[]; // PMO'nun haftalık proje sağlığı puanları (sağlık modelinin hedef değişkeni)
   healthHistory?: HealthWeekSnapshot[]; // Haftalık sağlık fotoğrafları (özellik vektörü + skor)
+  rolePermissions?: RolePermissions; // Admin'in rol yetkisi değişiklikleri
+  profiles?: UserProfile[]; // Admin'in tanımladığı profiller (kişi ↔ rol)
   auditLog?: AuditEntry[]; // Kritik aksiyonların günlüğü (en yeni başta)
   settings: WorkspaceSettings;
   appVersion: string;
@@ -614,7 +637,7 @@ export type AuditAction =
   | 'project.create' | 'project.delete' | 'project.owner' | 'project.rag'
   | 'risk.add' | 'risk.close'
   | 'plan.submit' | 'plan.approve' | 'plan.reject' | 'plan.unlock'
-  | 'data.import' | 'identity.change' | 'health.fix' | 'health.rate' | 'snapshot.create'
+  | 'data.import' | 'identity.change' | 'health.fix' | 'health.rate' | 'snapshot.create' | 'access.update'
   | 'ai.apply'
   | 'expectation.create' | 'expectation.respond' | 'expectation.close'
   | 'report.submit' | 'report.approve' | 'report.return' | 'report.publish'

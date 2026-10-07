@@ -1,6 +1,7 @@
 import { TaskStatus, View, WorkspaceData } from '../types';
-import { canApprovePlan, canEnterData, findOverAllocations, getPlanLockStatus, MONTHS_TR } from './allocations';
-import { isExecRole } from './execReport';
+import { canApprovePlan, canEditPool, canEnterData, findOverAllocations, getPlanLockStatus, MONTHS_TR } from './allocations';
+import { can } from './permissions';
+import { identityOf } from './rbac';
 import { reportAttention } from './reportAttention';
 
 /**
@@ -21,6 +22,7 @@ const SEVERITY_ORDER: Record<TodoItem['severity'], number> = { danger: 0, warn: 
 
 export const buildTodoItems = (ws: WorkspaceData, now: Date = new Date()): TodoItem[] => {
     const role = ws.currentRole;
+    const id = identityOf(ws);
     const year = now.getFullYear();
     const currentMonth = now.getMonth() + 1; // 1-12
     const items: TodoItem[] = [];
@@ -32,7 +34,7 @@ export const buildTodoItems = (ws: WorkspaceData, now: Date = new Date()): TodoI
     );
 
     // 1) Onay bekleyen planlar (onaylayan roller)
-    if (canApprovePlan(role)) {
+    if (canApprovePlan(id)) {
         ws.planLocks.filter(l => l.status === 'submitted').forEach(l => {
             items.push({
                 id: `approve-${l.projectId}-${l.year}`,
@@ -99,12 +101,12 @@ export const buildTodoItems = (ws: WorkspaceData, now: Date = new Date()): TodoI
             severity: 'danger',
             icon: 'fa-heart-pulse',
             text: `${p.name} kritik durumda${p.ragNote ? ` — ${p.ragNote}` : ''}`,
-            view: isExecRole(role) ? View.Executive : View.Portfolio,
+            view: can(id, 'screen.executive') ? View.Executive : View.Portfolio,
         });
     });
 
     // 5b) Yönetimden beklentiler — yanıt bekleyen kritik/önemli olanlar yönetime hatırlatılır
-    if (role === 'mudur' || role === 'pyb_sorumlu') {
+    if (can(id, 'expectation.respond')) {
         const waiting = (ws.expectations || []).filter(e => e.status === 'open');
         const critical = waiting.filter(e => e.urgency === 'critical').length;
         const important = waiting.filter(e => e.urgency === 'important').length;
@@ -136,8 +138,8 @@ export const buildTodoItems = (ws: WorkspaceData, now: Date = new Date()): TodoI
         });
     }
 
-    // 7) Veri havuzu eksikleri (PYB Destek)
-    if (role === 'pyb_destek') {
+    // 7) Veri havuzu eksikleri (havuzu düzenleyen)
+    if (canEditPool(id)) {
         const missingTitle = ws.people.filter(p => !p.titleCode).length;
         if (missingTitle > 0) {
             items.push({

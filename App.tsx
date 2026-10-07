@@ -1,6 +1,6 @@
 
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { View, Task, Resource, TaskStatus, Note, CustomerRequest, Objective, Project, Person, WorkspaceData, RagStatus, ProjectStatus, UserRole, PlanLockStatus, WorkPackage, UiStyle } from './types';
+import { View, Task, Resource, TaskStatus, Note, CustomerRequest, Objective, Project, Person, WorkspaceData, RagStatus, ProjectStatus, UserRole, PlanLockStatus, WorkPackage, UiStyle, PermissionKey } from './types';
 import { INITIAL_TASKS, INITIAL_RESOURCES, INITIAL_OBJECTIVES } from './constants';
 import {
   WORKSPACE_STORAGE_KEY,
@@ -13,8 +13,8 @@ import {
 } from './utils/workspace';
 import { canEditPool, createAllocation, EffortField, getPlanLockStatus, ROLE_LABELS, setAllocationCell, upsertPlanLock } from './utils/allocations';
 import { applyPoolImport, PoolImportResult } from './utils/poolImporter';
-import { isExecRole } from './utils/execReport';
-import { canCreateProject, canEditProjectContent, identityOf, identityNeedsPerson as computeNeedsPerson, ownsProject, visibleProjectIds } from './utils/rbac';
+import { canCreateProject, canEditProjectContent, identityFor, identityOf, identityNeedsPerson as computeNeedsPerson, ownsProject, visibleProjectIds } from './utils/rbac';
+import { can, isManagementRole, PERMISSION_BY_KEY, resetRolePermissions, setRolePermission } from './utils/permissions';
 import { addSnapshot, buildSnapshot, ensureMonthlySnapshot } from './utils/snapshots';
 import { ensureWeeklyHealthSnapshot, pmoRatingFor, setPmoRating } from './utils/healthModel';
 import { AllocationSuggestion, ApplyMode, applyAllocationSuggestions } from './utils/taskToAllocation';
@@ -82,6 +82,9 @@ import {
 } from './utils/expectations';
 import { Celebration, EggEvent, HyperdriveOverlay, SpaceMode } from './components/modern/Eggs';
 import ModernWeeklyReport from './components/modern/ModernWeeklyReport';
+import ModernAdmin from './components/modern/ModernAdmin';
+import ProfileSwitcherSheet from './components/modern/ProfileSwitcherSheet';
+import { addProfile, initialsOf, removeProfile } from './utils/profiles';
 import ModernMeetings from './components/modern/ModernMeetings';
 import ModernNotes from './components/modern/ModernNotes';
 import ModernCalendar from './components/modern/ModernCalendar';
@@ -93,7 +96,7 @@ import DataHealthSheet from './components/modern/sheets/DataHealthSheet';
 import AuditLogSheet from './components/modern/sheets/AuditLogSheet';
 import StatusReportSheet from './components/modern/sheets/StatusReportSheet';
 import {
-  actorOf, isPyds, markWeekEmailed, publishWeek, reportDictionary, reportSettingsOf, returnReportIn, saveReport, setReportAiAssessment, STAGE_LABELS, unpublishWeek, weekLabel,
+  actorOf, isReportSteward, markWeekEmailed, publishWeek, reportDictionary, reportSettingsOf, returnReportIn, saveReport, setReportAiAssessment, STAGE_LABELS, unpublishWeek, weekLabel,
 } from './utils/weeklyReport';
 import {
   canEditMeeting, canPlanMeeting, canReviewMeeting, createMeeting, isOwnMeeting, markHeld, MeetingDraft, reviewMeeting, setMeetingStatus, updateMeeting,
@@ -142,6 +145,7 @@ const App: React.FC = () => {
   const [isHealthModalOpen, setIsHealthModalOpen] = useState(false);
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
   const [isPaletteOpen, setIsPaletteOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isWpManagerOpen, setIsWpManagerOpen] = useState(false);
   // Modern arayüz: dar ekranda kenar çubuğu çekmecesi, "yeni proje" isteği, sürprizler
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -179,6 +183,17 @@ const App: React.FC = () => {
 
   // ---- Kimlik + kapsam ----
   const identity = useMemo(() => (workspace ? identityOf(workspace) : { role: 'py' as UserRole }), [workspace]);
+  // Ekran yetkileri (admin değiştirebilir; not gizliliği kilitli)
+  const canExecutive = can(identity, 'screen.executive');
+  const canAdmin = can(identity, 'screen.admin');
+  const canNotes = can(identity, 'notes.private');
+  const notesBlocked = !canNotes && (currentView === View.Notes || currentView === View.Requests);
+  // Yetkisi olmayan ekrandan çık: notlar → yönetim (görebiliyorsa) ya da portföy
+  useEffect(() => {
+    if (!workspace) return;
+    if (notesBlocked) setCurrentView(canExecutive ? View.Executive : View.Portfolio);
+    else if ((currentView === View.Executive && !canExecutive) || (currentView === View.Admin && !canAdmin)) setCurrentView(View.Portfolio);
+  }, [workspace, currentView, notesBlocked, canExecutive, canAdmin]);
   const visibleProjects = useMemo(() => {
     if (!workspace) return [];
     const ids = visibleProjectIds(workspace, identity);
@@ -453,17 +468,14 @@ const App: React.FC = () => {
     updateWorkspace(ws => {
       const next = { ...ws, currentRole: role, currentPersonId: personId };
       // Kapsam değişince görünmeyen bir proje aktifse ilk görünür projeye/portföye geç
-      const visible = visibleProjectIds(next, { role, personId });
+      const visible = visibleProjectIds(next, identityFor(next, role, personId));
       if (next.activeProjectId && !visible.has(next.activeProjectId)) {
         next.activeProjectId = null;
       }
       const who = personId ? (() => { const p = next.people.find(x => x.id === personId); return p ? ` (${p.firstName} ${p.lastName})`.trimEnd() : ''; })() : '';
       return appendAudit(next, 'identity.change', `Kimlik: ${ROLE_LABELS[role]}${who}`);
     });
-    // Yönetici rolüne geçişte PM'e özel ekranlardan çık
-    if (isExecRole(role)) {
-      setCurrentView(prev => (prev === View.Notes || prev === View.Requests ? View.Executive : prev));
-    }
+    // Yetkisi olmayan ekrandan çıkışı yukarıdaki etki yapar
   }, [updateWorkspace]);
 
   const handleSetAllocationCell = useCallback((allocationId: string, field: EffortField, month: number, value: number | undefined) => {
@@ -726,11 +738,43 @@ const App: React.FC = () => {
   }, [commitWorkspace]);
 
   // PMO puanı: yalnız PYB rolleri; puan değişince denetim günlüğüne (değer yazılmadan) düşer
+  // ---- Yönetici (admin): rol yetkileri ve profiller — işlem anında yetki yeniden doğrulanır ----
+  const handleSetRolePermission = useCallback((role: UserRole, key: PermissionKey, on: boolean) => {
+    updateWorkspace(ws => {
+      if (!can(identityOf(ws), 'screen.admin')) return ws;
+      const rolePermissions = setRolePermission(ws.rolePermissions, role, key, on);
+      if (!rolePermissions) return ws;
+      return appendAudit({ ...ws, rolePermissions }, 'access.update', `${ROLE_LABELS[role]}: "${PERMISSION_BY_KEY.get(key)?.label || key}" yetkisi ${on ? 'verildi' : 'kaldırıldı'}`);
+    });
+  }, [updateWorkspace]);
+  const handleResetRolePermissions = useCallback((role: UserRole) => {
+    updateWorkspace(ws => (can(identityOf(ws), 'screen.admin')
+      ? appendAudit({ ...ws, rolePermissions: resetRolePermissions(ws.rolePermissions, role) }, 'access.update', `${ROLE_LABELS[role]} yetkileri varsayılana döndü`)
+      : ws));
+  }, [updateWorkspace]);
+  const handleAddProfile = useCallback((role: UserRole, personId?: string): boolean => {
+    const ws = workspaceRef.current;
+    if (!ws || !can(identityOf(ws), 'screen.admin')) return false;
+    const profiles = addProfile(ws.profiles, role, personId);
+    if (!profiles) return false;
+    const p = personId ? ws.people.find(x => x.id === personId) : undefined;
+    commitWorkspace(appendAudit({ ...ws, profiles }, 'access.update', `Profil eklendi: ${p ? `${p.firstName} ${p.lastName}`.trim() : 'kişisiz'} · ${ROLE_LABELS[role]}`));
+    return true;
+  }, [commitWorkspace]);
+  const handleRemoveProfile = useCallback((id: string) => {
+    updateWorkspace(ws => {
+      const prof = (ws.profiles || []).find(x => x.id === id);
+      if (!prof || !can(identityOf(ws), 'screen.admin')) return ws;
+      const p = prof.personId ? ws.people.find(x => x.id === prof.personId) : undefined;
+      return appendAudit({ ...ws, profiles: removeProfile(ws.profiles, id) }, 'access.update', `Profil kaldırıldı: ${p ? `${p.firstName} ${p.lastName}`.trim() : 'kişisiz'} · ${ROLE_LABELS[prof.role]}`);
+    });
+  }, [updateWorkspace]);
+
   const handleRatePmo = useCallback((projectId: string, year: number, week: number, score: number | null, note?: string): boolean => {
     const ws = workspaceRef.current;
     if (!ws) return false;
     const prev = pmoRatingFor(ws.pmoRatings, projectId, year, week);
-    const ratings = setPmoRating(ws.pmoRatings, actorOf(ws), { projectId, year, week, score, note });
+    const ratings = setPmoRating(ws.pmoRatings, { ...actorOf(ws), perms: identityOf(ws).perms }, { projectId, year, week, score, note });
     if (!ratings) return false;
     let next: WorkspaceData = { ...ws, pmoRatings: ratings };
     if ((prev?.score ?? null) !== score) {
@@ -754,7 +798,7 @@ const App: React.FC = () => {
   }, [updateWorkspace]);
 
   const handleUpdateReportSettings = useCallback((reportSettings: ReportSettings) => {
-    updateWorkspace(ws => (isPyds(identityOf(ws).role) ? { ...ws, reportSettings } : ws));
+    updateWorkspace(ws => (isReportSteward(identityOf(ws)) ? { ...ws, reportSettings } : ws));
   }, [updateWorkspace]);
 
   const handleSetJiraKey = useCallback((projectId: string, key: string) => {
@@ -902,20 +946,33 @@ const App: React.FC = () => {
   const isModern = settings?.uiStyle === 'modern';
   // Proje bağlamındaki ekranlar (modern arayüzde proje başlığı ve segment gezinme gösterilir)
   const inProjectView = !!activeProject && MODERN_PROJECT_VIEWS.includes(currentView) &&
-    !(workspace && isExecRole(workspace.currentRole) && (currentView === View.Notes || currentView === View.Requests));
+    !notesBlocked;
 
   const renderView = () => {
     if (!isInitialized || !workspace) {
       return <div className="h-[60vh] flex items-center justify-center"><i className="fa-solid fa-spinner fa-spin text-4xl text-blue-500"></i></div>;
     }
 
-    const execRole = isExecRole(workspace.currentRole);
+    // Rol bazlı yetkilendirme: notları göremeyen roller (yönetim) PM'e özel
+    // ekranlar (Günlük, İstekler) yerine yönetim ekranına yönlendirilir. Zekâ
+    // (AI) açıktır; asistanın araçları bu rollerde not/isteklere erişmez.
+    // Yetkisi olmayan ekran bir an bile çizilmez; yönlendirmeyi etki yapar.
+    if ((currentView === View.Executive && !canExecutive) || (currentView === View.Admin && !canAdmin) || (notesBlocked && !canExecutive)) return null;
 
-    // Rol bazlı yetkilendirme: yönetici rolleri PM'e özel ekranları (Günlük,
-    // İstekler) göremez — doğrudan yönetim ekranına yönlendirilir. Zekâ (AI)
-    // açıktır; asistanın araçları yönetici rolünde not/isteklere erişmez.
-    if (currentView === View.Executive ||
-        (execRole && (currentView === View.Notes || currentView === View.Requests))) {
+    if (currentView === View.Admin) {
+      const page = (
+        <ModernAdmin
+          workspace={workspace}
+          onSetPermission={handleSetRolePermission}
+          onResetRole={handleResetRolePermissions}
+          onAddProfile={handleAddProfile}
+          onRemoveProfile={handleRemoveProfile}
+        />
+      );
+      return isModern ? page : <div className="ui-modern rounded-3xl p-4 sm:p-6">{page}</div>;
+    }
+
+    if (currentView === View.Executive || notesBlocked) {
       if (isModern) {
         return (
           <ModernExecutive
@@ -1007,6 +1064,7 @@ const App: React.FC = () => {
           roleCatalog={workspace.roleCatalog}
           titles={workspace.titles}
           currentRole={workspace.currentRole || 'py'}
+          canEdit={canEditPool(identity)}
           onUpdatePeople={(people: Person[]) => updateWorkspace(ws => ({ ...ws, people }))}
           onUpdateDepartments={(departments: WorkspaceData['departments']) => updateWorkspace(ws => ({ ...ws, departments }))}
           onUpdateRoleCatalog={(roleCatalog: WorkspaceData['roleCatalog']) => updateWorkspace(ws => ({ ...ws, roleCatalog }))}
@@ -1024,6 +1082,7 @@ const App: React.FC = () => {
           roleCatalog={workspace.roleCatalog}
           titles={workspace.titles}
           currentRole={workspace.currentRole || 'py'}
+          canEdit={canEditPool(identity)}
           onUpdatePeople={(people) => updateWorkspace(ws => ({ ...ws, people }))}
           onUpdateDepartments={(departments) => updateWorkspace(ws => ({ ...ws, departments }))}
           onUpdateRoleCatalog={(roleCatalog) => updateWorkspace(ws => ({ ...ws, roleCatalog }))}
@@ -1151,7 +1210,7 @@ const App: React.FC = () => {
       return (
         <ModernTimeline
           project={activeProject}
-          canEdit={!execRole}
+          canEdit={!isManagementRole(identity.role)}
           onMoveTask={(id: string, v: number) => setTasks(prev => prev.map(t => t.id === id ? { ...t, version: v } : t))}
           onPlanGenerated={setTasks}
           onInsertSprint={insertSprint}
@@ -1173,7 +1232,7 @@ const App: React.FC = () => {
           resources={resources}
           tasks={tasks}
           people={workspace.people}
-          canEdit={!execRole}
+          canEdit={!isManagementRole(identity.role)}
           onUpdate={(rs: Resource[], ts?: Task[]) => updateActiveProject(p => ({ ...p, resources: rs, tasks: ts ?? p.tasks }))}
           setResources={setResources}
           titleCosts={ps.titleCosts || {}}
@@ -1187,7 +1246,7 @@ const App: React.FC = () => {
         <ModernGoals
           objectives={objectives}
           tasks={tasks}
-          canEdit={!execRole}
+          canEdit={!isManagementRole(identity.role)}
           onUpdateObjectives={setObjectives}
           onViewTask={viewTask}
           onNavigate={setCurrentView}
@@ -1414,8 +1473,8 @@ const App: React.FC = () => {
     setCurrentView(ref.view);
   }, [handleOpenProject]);
   const aiSuggestions = useMemo(
-    () => buildSuggestions(identity.role, activeProject && visibleProjects.some(p => p.id === activeProject.id) ? activeProject.name : undefined),
-    [identity.role, activeProject, visibleProjects]
+    () => buildSuggestions(identity, activeProject && visibleProjects.some(p => p.id === activeProject.id) ? activeProject.name : undefined),
+    [identity, activeProject, visibleProjects]
   );
   // Header tek satır 4rem; proje seçiliyken bağlam çubuğuyla 6.75rem
   const showProjectBar = !!activeProject;
@@ -1431,8 +1490,7 @@ const App: React.FC = () => {
     return owner ? `${owner.firstName} ${owner.lastName}`.trim() : undefined;
   }, [activeProject, workspace?.people]);
   // Yeniden yazılmış ekranlar m-legacy yumuşatma katmanının dışında kalır
-  const showsExecutive = currentView === View.Executive ||
-    (!!workspace && isExecRole(workspace.currentRole) && (currentView === View.Notes || currentView === View.Requests));
+  const showsExecutive = currentView === View.Executive || currentView === View.Admin || notesBlocked;
   const usesModernScreen = inProjectView
     ? [View.Overview, View.Roadmap, View.Tasks, View.Kanban, View.Risks, View.Resources, View.Goals, View.Requests, View.Notes, View.AI].includes(currentView)
     : showsExecutive || currentView === View.Allocations || currentView === View.RiskReport || currentView === View.Expectations || currentView === View.WeeklyReport || currentView === View.Meetings || currentView === View.Calendar || currentView === View.DataPool || ((currentView === View.Portfolio || !activeProject) && ![View.DataPool, View.Calendar].includes(currentView));
@@ -1450,7 +1508,9 @@ const App: React.FC = () => {
     items.push({ id: 'v-weekly', group: 'Ekranlar', label: 'Haftalık rapor', icon: 'fa-file-lines', keywords: 'haftalik rapor gelisme plan mudur bolum onay yayin', run: go(View.WeeklyReport) });
     items.push({ id: 'v-meetings', group: 'Ekranlar', label: 'Müşteri görüşmeleri', icon: 'fa-handshake', keywords: 'musteri gorusme toplanti demo onay plan', run: go(View.Meetings) });
     items.push({ id: 'v-pool', group: 'Ekranlar', label: 'Veri Havuzu', icon: 'fa-database', keywords: 'personel bolum rol unvan havuz', run: go(View.DataPool) });
-    if (isExecRole(identity.role)) items.push({ id: 'v-exec', group: 'Ekranlar', label: 'Yönetim (EVM · riskler · baseline)', icon: 'fa-gauge-high', keywords: 'yonetim evm butce risk', run: go(View.Executive) });
+    if (canExecutive) items.push({ id: 'v-exec', group: 'Ekranlar', label: 'Yönetim (EVM · riskler · baseline)', icon: 'fa-gauge-high', keywords: 'yonetim evm butce risk', run: go(View.Executive) });
+    if (canAdmin) items.push({ id: 'v-admin', group: 'Ekranlar', label: 'Yönetici (admin): yetkiler ve profiller', icon: 'fa-user-lock', keywords: 'admin yetki rol izin profil kullanici', run: go(View.Admin) });
+    items.push({ id: 'a-profile', group: 'Aksiyonlar', label: 'Profil değiştir', icon: 'fa-user-gear', keywords: 'profil rol kimlik kisi degistir', run: () => setIsProfileOpen(true) });
     items.push({ id: 'a-health', group: 'Aksiyonlar', label: 'Veri Sağlığı Denetimi', icon: 'fa-stethoscope', keywords: 'saglik hata yetim', run: () => setIsHealthModalOpen(true) });
     items.push({ id: 'a-audit', group: 'Aksiyonlar', label: 'Denetim Günlüğü', icon: 'fa-clock-rotate-left', keywords: 'audit log gunluk kayit', run: () => setIsAuditModalOpen(true) });
     if (activeProject) items.push({ id: 'a-wp', group: 'Aksiyonlar', label: `İş Paketleri — ${activeProject.name}`, icon: 'fa-briefcase', keywords: 'is paketi work package gorev', run: () => setIsWpManagerOpen(true) });
@@ -1471,7 +1531,9 @@ const App: React.FC = () => {
             currentView={currentView}
             hasActiveProject={inProjectView}
             onNavigate={(v: View) => setCurrentView(v)}
-            exec={isExecRole(identity.role)}
+            exec={canExecutive}
+            canAdmin={canAdmin}
+            onOpenProfile={() => setIsProfileOpen(true)}
             expectationBadge={expectationBadge}
             reportBadge={attention.reportBadge}
             meetingBadge={attention.meetingBadge}
@@ -1485,7 +1547,6 @@ const App: React.FC = () => {
             currentPersonId={workspace?.currentPersonId}
             people={peopleSummaries}
             needsPerson={needsPerson}
-            onChangeIdentity={handleChangeIdentity}
             onOpenSettings={() => setIsSettingsModalOpen(true)}
             onSwitchToClassic={() => handleSetUiStyle('classic')}
             onSaveBackup={handleSaveProject}
@@ -1504,6 +1565,9 @@ const App: React.FC = () => {
               <button type="button" className="m-icon-btn" aria-label="Menüyü aç" onClick={() => setIsSidebarOpen(true)}><Icon name="menu" /></button>
               <span className="flex-1 min-w-0 truncate text-[17px] font-semibold m-text">{inProjectView && activeProject ? activeProject.name : 'PlanAsistan'}</span>
               <button type="button" className="m-icon-btn" aria-label="Ara" onClick={() => setIsPaletteOpen(true)}><Icon name="search" /></button>
+              <button type="button" className="m-icon-btn" aria-label={`Profil: ${currentActorName}. Profil değiştir`} title="Profil değiştir" onClick={() => setIsProfileOpen(true)}>
+                <span aria-hidden="true" className="w-8 h-8 rounded-full m-fill flex items-center justify-center text-[12px] font-semibold m-text">{initialsOf(currentActorName)}</span>
+              </button>
             </div>
             <main className="flex-1 w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-10 py-6 lg:py-8">
               {inProjectView && activeProject && (
@@ -1513,7 +1577,7 @@ const App: React.FC = () => {
                   currentView={currentView}
                   onNavigate={(v: View) => setCurrentView(v)}
                   onBack={() => setCurrentView(View.Portfolio)}
-                  exec={isExecRole(identity.role)}
+                  exec={isManagementRole(identity.role)}
                   aiEnabled={isAIEnabled}
                   onStatusReport={() => setIsStatusReportOpen(true)}
                   onNewTask={() => { setEditingTask(null); setIsFormModalOpen(true); }}
@@ -1541,7 +1605,9 @@ const App: React.FC = () => {
           currentPersonId={workspace?.currentPersonId}
           people={(workspace?.people || []).map(p => ({ id: p.id, name: `${p.firstName} ${p.lastName}`.trim(), initials: `${p.firstName.charAt(0)}${p.lastName.charAt(0)}`, departmentCode: p.departmentCode }))}
           identityNeedsPerson={needsPerson}
-          onChangeIdentity={handleChangeIdentity}
+          onOpenProfile={() => setIsProfileOpen(true)}
+          canExecutive={canExecutive}
+          hidePrivate={isManagementRole(identity.role)}
           cloudLinked={!!loadCloudConfig()?.workspaceId}
           onOpenCloudSync={() => setIsCloudModalOpen(true)}
           todoItems={todoItems}
@@ -1597,7 +1663,7 @@ const App: React.FC = () => {
           task={liveViewingTask}
           project={activeProject}
           authorName={currentActorName}
-          canEdit={!isExecRole(identity.role)}
+          canEdit={!isManagementRole(identity.role)}
           onClose={() => setIsDetailModalOpen(false)}
           onEdit={(t: Task) => { setIsDetailModalOpen(false); setEditingTask(t); setIsFormModalOpen(true); }}
           onSave={handleUpdateTask}
@@ -1632,7 +1698,7 @@ const App: React.FC = () => {
           key={viewingPersonId}
           workspace={workspace}
           personId={viewingPersonId}
-          canEditLeave={canEditPool(workspace.currentRole)}
+          canEditLeave={canEditPool(identity)}
           onSetLeave={handleSetLeave}
           onOpenProject={(projectId: string) => handleOpenProject(projectId)}
           onClose={() => setViewingPersonId(null)}
@@ -1642,7 +1708,7 @@ const App: React.FC = () => {
         <PersonDetailModal
           workspace={workspace}
           personId={viewingPersonId}
-          canEditLeave={canEditPool(workspace.currentRole)}
+          canEditLeave={canEditPool(identity)}
           onSetLeave={handleSetLeave}
           onClose={() => setViewingPersonId(null)}
         />
@@ -1666,6 +1732,11 @@ const App: React.FC = () => {
           onClose={() => setIsAuditModalOpen(false)}
         />
       )}
+      {isProfileOpen && workspace && (() => {
+        const sheet = <ProfileSwitcherSheet workspace={workspace} onSelect={handleChangeIdentity} onClose={() => setIsProfileOpen(false)} />;
+        // Klasik arayüzde modern pencere kendi stil kabında açılır
+        return isModern ? sheet : <div className="ui-modern">{sheet}</div>;
+      })()}
       {isPaletteOpen && (
         <AssistantCommandPalette items={commandItems} onClose={() => setIsPaletteOpen(false)} modern={isModern} />
       )}

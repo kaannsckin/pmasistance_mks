@@ -1,6 +1,7 @@
 import { CustomerMeeting, MeetingDetails, MeetingLocation, MeetingStatus, WorkspaceData } from '../types';
-import { Identity, isExecViewer, managedDepartmentCode, ownsProject, visibleProjectIds } from './rbac';
-import { isPyds, isoWeekOf } from './weeklyReport';
+import { can } from './permissions';
+import { Identity, managedDepartmentCode, ownsProject, visibleProjectIds } from './rbac';
+import { isoWeekOf } from './weeklyReport';
 
 /**
  * Planlanan müşteri görüşmeleri: PY ya da bölüm sorumlusu görüşmeyi planlar,
@@ -25,7 +26,7 @@ export const LOCATION_LABELS: Record<MeetingLocation, string> = {
 };
 
 export const canPlanMeeting = (id: Identity): boolean => (id.role === 'py' || id.role === 'bolum_sorumlu') && !!id.personId;
-export const canReviewMeeting = (id: Identity): boolean => isExecViewer(id.role);
+export const canReviewMeeting = (id: Identity): boolean => can(id, 'meeting.review');
 
 export const isOwnMeeting = (m: CustomerMeeting, id: Identity): boolean =>
     !!id.personId && m.createdByPersonId === id.personId && m.createdByRole === id.role;
@@ -39,7 +40,7 @@ type WsLike = Pick<WorkspaceData, 'people' | 'projects' | 'allocations'> & Parti
 /** Yönetim ve PYB hepsini; PY kendi açtıklarını ve projelerininkileri; BS bölümününkileri görür (taslaklar yalnız sahibine) */
 export const visibleMeetings = (ws: WsLike, id: Identity): CustomerMeeting[] => {
     const all = (ws.customerMeetings || []).filter(m => m.status !== 'draft' || isOwnMeeting(m, id));
-    if (isExecViewer(id.role) || isPyds(id.role)) return all;
+    if (can(id, 'meeting.review') || can(id, 'portfolio.viewAll')) return all;
     if (id.role === 'py') {
         const mine = visibleProjectIds(ws, id);
         return all.filter(m => isOwnMeeting(m, id) || (!!m.projectId && mine.has(m.projectId)));

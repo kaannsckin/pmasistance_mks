@@ -2,7 +2,8 @@ import {
     ExpectationCategory, ExpectationLink, ExpectationStatus, ExpectationUrgency, ManagementExpectation,
     Project, Risk, Task, WorkspaceData,
 } from '../types';
-import { Identity, isExecViewer, isSteward, managedDepartmentCode, visibleProjectIds } from './rbac';
+import { can } from './permissions';
+import { Identity, managedDepartmentCode, visibleProjectIds } from './rbac';
 
 /**
  * Yönetimden beklentiler: PM ve bölüm sorumlusunun yönetimden karar/onay/
@@ -56,7 +57,7 @@ export const canRaiseExpectation = (id: Identity): boolean =>
     (id.role === 'py' || id.role === 'bolum_sorumlu') && !!id.personId;
 
 /** Yanıtlayan/kapatan: yönetim (müdür, PYB sorumlusu) */
-export const canRespondExpectation = (id: Identity): boolean => isExecViewer(id.role);
+export const canRespondExpectation = (id: Identity): boolean => can(id, 'expectation.respond');
 
 export const isOwnExpectation = (e: ManagementExpectation, id: Identity): boolean =>
     !!id.personId && e.createdByPersonId === id.personId && e.createdByRole === id.role;
@@ -73,7 +74,7 @@ type WsLike = Pick<WorkspaceData, 'people' | 'projects' | 'allocations' | 'expec
  */
 export const visibleExpectations = (ws: WsLike, id: Identity): ManagementExpectation[] => {
     const all = ws.expectations || [];
-    if (isExecViewer(id.role) || isSteward(id.role)) return all;
+    if (can(id, 'expectation.respond') || can(id, 'portfolio.viewAll')) return all;
     if (id.role === 'py') {
         const mine = visibleProjectIds(ws, id);
         return all.filter(e => isOwnExpectation(e, id) || (!!e.projectId && mine.has(e.projectId)));

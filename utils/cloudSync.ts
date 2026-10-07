@@ -83,6 +83,9 @@ export const splitWorkspaceDoc = (ws: WorkspaceData): { core: Record<string, unk
         // Sağlık modeli: PMO puanları (hedef değişken) ve haftalık fotoğraflar
         pmoRatings: ws.pmoRatings || [],
         healthHistory: ws.healthHistory || [],
+        // Admin'in rol yetkileri ve profilleri tüm kullanıcılara uygulanır
+        rolePermissions: ws.rolePermissions || {},
+        profiles: ws.profiles || [],
     };
     return { core, privateDoc };
 };

@@ -25,7 +25,10 @@ interface ModernSidebarProps {
     currentView: View;
     hasActiveProject: boolean;
     onNavigate: (view: View) => void;
-    exec: boolean;
+    exec: boolean; // Yönetim ekranı yetkisi
+    canAdmin: boolean; // Yönetici (admin) ekranı yetkisi
+    /** Profil değiştirme penceresini aç */
+    onOpenProfile: () => void;
     /** Yönetimden beklentiler rozeti (yönetim: yanıtsız, diğerleri: aktif) */
     expectationBadge?: number;
     /** Haftalık rapor: rolün beklenen işi (gönderilmemiş, onay bekleyen) */
@@ -43,7 +46,6 @@ interface ModernSidebarProps {
     currentPersonId?: string;
     people: SidebarPerson[];
     needsPerson: boolean;
-    onChangeIdentity: (role: UserRole, personId?: string) => void;
     // Ayarlar ve veri işlemleri
     onOpenSettings: () => void;
     onSwitchToClassic: () => void;
@@ -59,8 +61,6 @@ interface ModernSidebarProps {
     onLogoLaunch: () => void;
     onHyperdrive: () => void;
 }
-
-const SCOPED_ROLES: UserRole[] = ['py', 'bolum_sorumlu'];
 
 /** Kenar çubuğunda en fazla bu kadar proje; açık proje her zaman görünür, önce sorunlular */
 export const SIDEBAR_PROJECT_LIMIT = 8;
@@ -93,10 +93,9 @@ const NavItem: React.FC<{ icon: IconName; label: string; active: boolean; onClic
     </button>
 );
 
-/** Profil satırının açtığı menü: rol/kişi, arayüz, yedek ve araçlar */
-const ProfileMenu: React.FC<Omit<ModernSidebarProps, 'isOpen' | 'onClose' | 'currentView' | 'hasActiveProject' | 'onNavigate' | 'exec' | 'expectationBadge' | 'reportBadge' | 'meetingBadge' | 'projects' | 'activeProjectId' | 'onOpenProject' | 'canCreateProject' | 'onNewProject' | 'onOpenSearch' | 'onLogoLaunch' | 'onHyperdrive' | 'onOpenSettings'> & { onDone: () => void }> = (p) => {
+/** "Diğer" menüsü: yedek, bulut, veri sağlığı, denetim ve arayüz (profil seçimi ayrı pencerede) */
+const ToolsMenu: React.FC<Pick<ModernSidebarProps, 'onSwitchToClassic' | 'onSaveBackup' | 'onLoadBackup' | 'cloudLinked' | 'onOpenCloud' | 'healthAlerts' | 'onOpenHealth' | 'onOpenAudit' | 'onOpenAbout' | 'onOpenProfile'> & { onDone: () => void }> = (p) => {
     const fileRef = useRef<HTMLInputElement>(null);
-    const scoped = SCOPED_ROLES.includes(p.currentRole);
     const item = (icon: IconName, label: string, run: () => void, trailing?: React.ReactNode) => (
         <button type="button" role="menuitem" onClick={() => { run(); p.onDone(); }} className="m-row-link w-full flex items-center gap-3 min-h-[44px] px-3.5 text-[15px]">
             <span className="m-text-3"><Icon name={icon} size={18} /></span>
@@ -105,44 +104,8 @@ const ProfileMenu: React.FC<Omit<ModernSidebarProps, 'isOpen' | 'onClose' | 'cur
         </button>
     );
     return (
-        <div role="menu" aria-label="Profil ve araçlar" className="absolute bottom-full left-2 right-2 mb-2 m-surface m-pop rounded-2xl py-1.5 z-50 max-h-[70vh] overflow-y-auto">
-            <p className="px-3.5 pt-1.5 pb-1 text-[13px] font-semibold m-text-3">Rol</p>
-            {(Object.keys(ROLE_LABELS) as UserRole[]).map(r => (
-                <button
-                    key={r}
-                    type="button"
-                    role="menuitemradio"
-                    aria-checked={r === p.currentRole}
-                    onClick={() => p.onChangeIdentity(r, SCOPED_ROLES.includes(r) ? p.currentPersonId : undefined)}
-                    className="m-row-link w-full flex items-center gap-3 min-h-[44px] px-3.5 text-[15px]"
-                >
-                    <span className="flex-1 min-w-0 truncate">{ROLE_LABELS[r]}</span>
-                    {r === p.currentRole && <span className="m-accent"><Icon name="check" size={18} strokeWidth={2.2} /></span>}
-                </button>
-            ))}
-            {scoped && (
-                <>
-                    <p className="px-3.5 pt-2 pb-1 text-[13px] font-semibold m-text-3 border-t m-sep mt-1">
-                        {p.currentRole === 'py' ? 'Hangi proje yöneticisi olarak?' : 'Hangi bölüm sorumlusu olarak?'}
-                    </p>
-                    {p.people.length === 0 && <p className="px-3.5 py-2 text-[14px] m-text-3">Havuzda kişi yok; Veri havuzuna personel ekleyin.</p>}
-                    {p.people.map(person => (
-                        <button
-                            key={person.id}
-                            type="button"
-                            role="menuitemradio"
-                            aria-checked={person.id === p.currentPersonId}
-                            onClick={() => { p.onChangeIdentity(p.currentRole, person.id); p.onDone(); }}
-                            className="m-row-link w-full flex items-center gap-3 min-h-[44px] px-3.5 text-[15px]"
-                        >
-                            <span className="w-7 h-7 rounded-full m-fill flex items-center justify-center text-[11px] font-bold flex-none">{person.initials}</span>
-                            <span className="flex-1 min-w-0 truncate">{person.name}</span>
-                            <span className="text-[13px] m-text-3">{person.departmentCode}</span>
-                            {person.id === p.currentPersonId && <span className="m-accent"><Icon name="check" size={18} strokeWidth={2.2} /></span>}
-                        </button>
-                    ))}
-                </>
-            )}
+        <div role="menu" aria-label="Diğer araçlar" className="absolute bottom-full left-2 right-2 mb-2 m-surface m-pop rounded-2xl py-1.5 z-50 max-h-[70vh] overflow-y-auto">
+            {item('userCog', 'Profil değiştir', p.onOpenProfile)}
             <div className="border-t m-sep my-1"></div>
             {item('download', 'Yedeği indir', p.onSaveBackup)}
             {item('upload', 'Yedekten yükle', () => fileRef.current?.click())}
@@ -164,7 +127,7 @@ const ProfileMenu: React.FC<Omit<ModernSidebarProps, 'isOpen' | 'onClose' | 'cur
 };
 
 const ModernSidebar: React.FC<ModernSidebarProps> = (props) => {
-    const { isOpen, onClose, currentView, hasActiveProject, onNavigate, exec, expectationBadge, reportBadge, meetingBadge, projects, activeProjectId, onOpenProject, canCreateProject, onNewProject, onOpenSearch, currentRole, currentPersonId, people, needsPerson, onOpenSettings, onLogoLaunch, onHyperdrive } = props;
+    const { isOpen, onClose, currentView, hasActiveProject, onNavigate, exec, canAdmin, onOpenProfile, expectationBadge, reportBadge, meetingBadge, projects, activeProjectId, onOpenProject, canCreateProject, onNewProject, onOpenSearch, currentRole, currentPersonId, people, needsPerson, onOpenSettings, onLogoLaunch, onHyperdrive } = props;
     const [menuOpen, setMenuOpen] = useState(false);
     const assistant = useAssistantOptional();
     const person = people.find(p => p.id === currentPersonId);
@@ -205,6 +168,7 @@ const ModernSidebar: React.FC<ModernSidebarProps> = (props) => {
                     <NavItem icon="calendarCheck" label="Görüşmeler" active={isActive(View.Meetings)} onClick={() => go(View.Meetings)} badge={meetingBadge} />
                     <NavItem icon="flag" label="Beklentiler" active={isActive(View.Expectations)} onClick={() => go(View.Expectations)} badge={expectationBadge} />
                     <NavItem icon="database" label="Veri havuzu" active={isActive(View.DataPool)} onClick={() => go(View.DataPool)} />
+                    {canAdmin && <NavItem icon="key" label="Yönetici" active={isActive(View.Admin)} onClick={() => go(View.Admin)} />}
                 </div>
 
                 <div className="flex flex-col gap-0.5">
@@ -252,9 +216,9 @@ const ModernSidebar: React.FC<ModernSidebarProps> = (props) => {
                     <div className="relative flex items-center gap-1 pt-2 border-t m-sep">
                         <button
                             type="button"
-                            onClick={() => setMenuOpen(o => !o)}
-                            aria-haspopup="menu"
-                            aria-expanded={menuOpen}
+                            onClick={() => { onOpenProfile(); onClose(); }}
+                            aria-haspopup="dialog"
+                            title="Profil değiştir"
                             className="m-row-link flex-1 min-w-0 flex items-center gap-2.5 min-h-[52px] px-2 rounded-xl"
                         >
                             <span className="w-9 h-9 rounded-full m-fill flex items-center justify-center text-[13px] font-semibold flex-none" aria-hidden="true">
@@ -263,16 +227,16 @@ const ModernSidebar: React.FC<ModernSidebarProps> = (props) => {
                             <span className="flex-1 min-w-0 flex flex-col leading-tight">
                                 <span className="text-[15px] font-semibold truncate">{person ? person.name : ROLE_LABELS[currentRole]}</span>
                                 <span className={`text-[13px] truncate ${needsPerson ? 'm-ink-warn font-semibold' : 'm-text-3'}`}>
-                                    {needsPerson ? 'Kişi seçin' : person ? ROLE_LABELS[currentRole] : 'Rolü değiştir'}
+                                    {needsPerson ? 'Kişi seçin' : person ? ROLE_LABELS[currentRole] : 'Profil değiştir'}
                                 </span>
                             </span>
-                            <span className="m-text-3"><Icon name="chevronDown" size={16} strokeWidth={2} /></span>
                         </button>
+                        <button type="button" className="m-icon-btn" aria-label="Diğer araçlar" aria-haspopup="menu" aria-expanded={menuOpen} onClick={() => setMenuOpen(o => !o)}><Icon name="more" /></button>
                         <button type="button" className="m-icon-btn" aria-label="Ayarlar" onClick={onOpenSettings}><Icon name="sliders" /></button>
                         {menuOpen && (
                             <>
                                 <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} aria-hidden="true"></div>
-                                <ProfileMenu {...props} onDone={() => setMenuOpen(false)} />
+                                <ToolsMenu {...props} onOpenProfile={() => { onOpenProfile(); onClose(); }} onDone={() => setMenuOpen(false)} />
                             </>
                         )}
                     </div>

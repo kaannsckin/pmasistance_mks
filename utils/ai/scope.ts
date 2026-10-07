@@ -1,5 +1,6 @@
 import { Person, Project, WorkspaceData } from '../../types';
-import { Identity, identityOf, isExecViewer, visibleProjectIds } from '../rbac';
+import { can } from '../permissions';
+import { Identity, identityOf, visibleProjectIds } from '../rbac';
 import type { RagHit } from '../rag/retriever';
 import type { Citation, RagSourceType } from '../rag/sources';
 import type { AiProposal } from './actions';
@@ -44,7 +45,7 @@ export interface ToolContext {
 export const buildToolContext = (ws: WorkspaceData, now: Date = new Date()): ToolContext => {
     const identity = identityOf(ws);
     const visible = visibleProjectIds(ws, identity);
-    const canSeePrivate = !isExecViewer(identity.role);
+    const canSeePrivate = can(identity, 'notes.private');
     const projects = ws.projects
         .filter(p => visible.has(p.id))
         .map(p => (canSeePrivate ? p : { ...p, notes: [], customerRequests: [] }));
