@@ -82,6 +82,9 @@ import {
 import { Celebration, EggEvent, HyperdriveOverlay, SpaceMode } from './components/modern/Eggs';
 import ModernWeeklyReport from './components/modern/ModernWeeklyReport';
 import ModernMeetings from './components/modern/ModernMeetings';
+import ModernNotes from './components/modern/ModernNotes';
+import ModernCalendar from './components/modern/ModernCalendar';
+import ModernDataPool from './components/modern/ModernDataPool';
 import {
   actorOf, isPyds, markWeekEmailed, publishWeek, reportDictionary, reportSettingsOf, returnReportIn, saveReport, STAGE_LABELS, unpublishWeek, weekLabel,
 } from './utils/weeklyReport';
@@ -961,6 +964,23 @@ const App: React.FC = () => {
     }
 
     // Çalışma alanı seviyesi ekranlar (aktif proje gerektirmez)
+    if (currentView === View.DataPool && isModern) {
+      return (
+        <ModernDataPool
+          people={workspace.people}
+          departments={workspace.departments}
+          roleCatalog={workspace.roleCatalog}
+          titles={workspace.titles}
+          currentRole={workspace.currentRole || 'py'}
+          onUpdatePeople={(people: Person[]) => updateWorkspace(ws => ({ ...ws, people }))}
+          onUpdateDepartments={(departments: WorkspaceData['departments']) => updateWorkspace(ws => ({ ...ws, departments }))}
+          onUpdateRoleCatalog={(roleCatalog: WorkspaceData['roleCatalog']) => updateWorkspace(ws => ({ ...ws, roleCatalog }))}
+          onUpdateTitles={(titles: WorkspaceData['titles']) => updateWorkspace(ws => ({ ...ws, titles }))}
+          onApplyImport={handleApplyPoolImport}
+          onViewPerson={setViewingPersonId}
+        />
+      );
+    }
     if (currentView === View.DataPool) {
       return (
         <DataPoolView
@@ -1020,6 +1040,16 @@ const App: React.FC = () => {
       );
     }
 
+    if (currentView === View.Calendar && isModern) {
+      return (
+        <ModernCalendar
+          workspace={workspace}
+          identity={identity}
+          onViewPerson={setViewingPersonId}
+          onOpenProject={(projectId: string) => { handleOpenProject(projectId); setCurrentView(View.Tasks); }}
+        />
+      );
+    }
     if (currentView === View.Calendar) {
       return <CalendarView workspace={workspace} identity={identity} onViewPerson={setViewingPersonId} />;
     }
@@ -1126,6 +1156,22 @@ const App: React.FC = () => {
           onUpdateObjectives={setObjectives}
           onViewTask={viewTask}
           onNavigate={setCurrentView}
+        />
+      );
+    }
+    if (isModern && currentView === View.Notes) {
+      return (
+        <ModernNotes
+          key={activeProject.id}
+          notes={notes}
+          mentionNames={resources.map(r => r.name)}
+          tagColors={ps.tagColors || {}}
+          canEdit={canEditProjectContent(workspace, identity, activeProject.id)}
+          onAdd={(n: Note) => setNotes(prev => [n, ...prev])}
+          onUpdate={(n: Note) => setNotes(prev => prev.map(x => (x.id === n.id ? n : x)))}
+          onDelete={(id: string) => setNotes(prev => prev.filter(x => x.id !== id))}
+          onSetTagColors={(c: Record<string, string>) => setTagColors(c)}
+          onOpenWeeklyReport={() => setCurrentView(View.WeeklyReport)}
         />
       );
     }
@@ -1346,8 +1392,8 @@ const App: React.FC = () => {
   const showsExecutive = currentView === View.Executive ||
     (!!workspace && isExecRole(workspace.currentRole) && (currentView === View.Notes || currentView === View.Requests));
   const usesModernScreen = inProjectView
-    ? [View.Overview, View.Roadmap, View.Tasks, View.Kanban, View.Risks, View.Resources, View.Goals, View.Requests].includes(currentView)
-    : showsExecutive || currentView === View.Allocations || currentView === View.RiskReport || currentView === View.Expectations || currentView === View.WeeklyReport || currentView === View.Meetings || ((currentView === View.Portfolio || !activeProject) && ![View.DataPool, View.Calendar].includes(currentView));
+    ? [View.Overview, View.Roadmap, View.Tasks, View.Kanban, View.Risks, View.Resources, View.Goals, View.Requests, View.Notes].includes(currentView)
+    : showsExecutive || currentView === View.Allocations || currentView === View.RiskReport || currentView === View.Expectations || currentView === View.WeeklyReport || currentView === View.Meetings || currentView === View.Calendar || currentView === View.DataPool || ((currentView === View.Portfolio || !activeProject) && ![View.DataPool, View.Calendar].includes(currentView));
 
   // Komut paleti öğeleri (ekranlar + aksiyonlar + kapsamdaki projeler + kişiler)
   const commandItems = useMemo<CommandItem[]>(() => {
