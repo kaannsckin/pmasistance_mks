@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Project, Task, TaskStatus } from '../../types';
 import { calculatePertFuzzyPert } from '../../utils/timeline';
 import { relativeTime } from '../../utils/recentChanges';
+import { ISSUE_TYPE_LABELS, taskDurations } from '../../utils/planning/lifecycle';
 import { daysLate, initialsOf, PRIORITY_META, shortDate, sprintLabel, TASK_STATUS_LABELS } from './taskMeta';
 import { Sheet } from './ui';
 
@@ -43,7 +44,17 @@ const TaskDetailSheet: React.FC<TaskDetailSheetProps> = ({ task, project, author
     };
     const toggleSub = (i: number) => onSave({ ...task, subtasks: subtasks.map((s, j) => (j === i ? { ...s, completed: !s.completed } : s)) });
 
+    // Yaşam döngüsü: açılış → başlama → kapanış ve iş günü cinsinden süre
+    const dur = taskDurations(task);
+    const lifecycle = [
+        task.createdAt ? `Açıldı ${shortDate(task.createdAt)}` : task.importedAt ? `İçe aktarıldı ${shortDate(task.importedAt)}` : '',
+        task.startedAt ? `başladı ${shortDate(task.startedAt)}` : '',
+        task.resolvedAt ? `kapandı ${shortDate(task.resolvedAt)}` : '',
+    ].filter(Boolean).join(' · ');
+    const closedIn = dur.cycleDays ?? dur.leadDays;
     const rows: [string, React.ReactNode][] = [
+        ['Tür', task.issueType ? ISSUE_TYPE_LABELS[task.issueType] : '—'],
+        ['Yaşam döngüsü', lifecycle ? <>{lifecycle}{closedIn !== null && <span className="ml-2 font-semibold">{closedIn} iş gününde {dur.cycleDays !== null ? 'tamamlandı' : 'kapandı'}</span>}{dur.reopened > 0 && <span className="ml-2 m-ink-warn">{dur.reopened} kez yeniden açıldı</span>}</> : <span className="m-text-3">Kayıt yok</span>],
         ['Sorumlu', task.resourceName || <span className="m-ink-warn">Atanmadı</span>],
         ['Birim', task.unit || '—'],
         ['Sürüm', sprintLabel(task.version, project.settings.sprintNames)],
@@ -52,7 +63,7 @@ const TaskDetailSheet: React.FC<TaskDetailSheetProps> = ({ task, project, author
         ['Öncül', pred ? pred.name : task.predecessor ? 'Silinmiş görev' : '—'],
         ['İş paketi', wp?.name || '—'],
         ['Hedef', objective ? `${objective.name}${kr ? ` · ${kr.name}` : ''}` : '—'],
-        ['Jira', task.jiraId || '—'],
+        ['Jira', task.jiraId ? `${task.jiraId}${task.fixVersion ? ` · ${task.fixVersion}` : ''}${task.storyPoints ? ` · ${task.storyPoints} SP` : ''}${task.actualHours ? ` · ${task.actualHours} sa harcandı` : ''}` : '—'],
         ['Planlama', task.includeInSprints !== false ? 'Sürüm planına dahil' : 'Sürüm planı dışında'],
     ];
 
