@@ -17,6 +17,8 @@ interface CommandPaletteProps {
   onClose: () => void;
   /** Verilirse yazılan metin için "AI Asistanı'na sor" seçeneği eklenir */
   onAskAI?: (query: string) => void;
+  /** Modern arayüz görünümü (davranış aynı) */
+  modern?: boolean;
 }
 
 const lower = (s: string): string => s.toLocaleLowerCase('tr-TR');
@@ -52,7 +54,7 @@ const scoreItem = (query: string, item: CommandItem): number => {
   return 0;
 };
 
-const CommandPalette: React.FC<CommandPaletteProps> = ({ items, onClose, onAskAI }) => {
+const CommandPalette: React.FC<CommandPaletteProps> = ({ items, onClose, onAskAI, modern }) => {
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -97,6 +99,60 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ items, onClose, onAskAI
 
   // Grup başlıklarını satır sırasına göre yerleştir
   let lastGroup = '';
+
+  if (modern) {
+    return (
+      <div className="fixed inset-0 z-[300] flex items-start justify-center bg-black/40 pt-[12vh] px-4" onClick={onClose}>
+        <div role="dialog" aria-label="Komut paleti" className="m-bg w-full max-w-xl rounded-2xl m-pop overflow-hidden" onClick={e => e.stopPropagation()}>
+          <div className="flex items-center gap-3 px-4 h-14 border-b m-sep" style={{ borderBottomStyle: 'solid', borderBottomWidth: 1 }}>
+            <i className="fa-solid fa-magnifying-glass m-text-3"></i>
+            <input
+              ref={inputRef}
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              onKeyDown={onKeyDown}
+              aria-label="Komut ara"
+              role="combobox"
+              aria-expanded="true"
+              aria-controls="cmd-list"
+              placeholder={onAskAI ? "Projeye, kişiye, ekrana git — ya da asistana sor…" : "Projeye, kişiye ya da ekrana git…"}
+              className="flex-1 bg-transparent border-0 outline-none text-[17px] m-text"
+            />
+            <kbd className="hidden sm:inline text-[12px] px-1.5 rounded-[5px] border m-sep m-text-3 font-sans">Esc</kbd>
+          </div>
+          <div ref={listRef} id="cmd-list" role="listbox" className="max-h-[52vh] overflow-y-auto p-1.5">
+            {filtered.length === 0 && <p className="m-0 text-center text-[15px] m-text-3 py-8">Sonuç yok.</p>}
+            {filtered.map((it, idx) => {
+              const showGroup = !query.trim() && it.group !== lastGroup;
+              lastGroup = it.group;
+              return (
+                <React.Fragment key={it.id}>
+                  {showGroup && <div className="px-3 pt-2.5 pb-1 text-[13px] font-semibold m-text-3">{it.group}</div>}
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={idx === active}
+                    data-idx={idx}
+                    onMouseEnter={() => setActive(idx)}
+                    onClick={() => run(idx)}
+                    className="w-full flex items-center gap-3 px-3 min-h-[48px] rounded-xl text-left border-0 cursor-pointer"
+                    style={{ background: idx === active ? 'var(--m-fill)' : 'transparent' }}
+                  >
+                    <span className="w-8 h-8 rounded-[9px] m-tone-accent flex items-center justify-center flex-none"><i className={`fa-solid ${it.icon} text-[13px]`}></i></span>
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-[15px] m-text truncate">{it.label}</span>
+                      {it.sublabel && <span className="block text-[13px] m-text-3 truncate">{it.sublabel}</span>}
+                    </span>
+                    {idx === active && <kbd className="text-[12px] px-1.5 rounded-[5px] border m-sep m-text-3 font-sans flex-none">↵</kbd>}
+                  </button>
+                </React.Fragment>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-[300] flex items-start justify-center bg-black/50 backdrop-blur-sm pt-[12vh] px-4" onClick={onClose}>

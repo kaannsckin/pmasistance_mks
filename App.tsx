@@ -85,6 +85,7 @@ import ModernMeetings from './components/modern/ModernMeetings';
 import ModernNotes from './components/modern/ModernNotes';
 import ModernCalendar from './components/modern/ModernCalendar';
 import ModernDataPool from './components/modern/ModernDataPool';
+import { ModernAssistantPanel, ModernChat } from './components/modern/ModernAssistant';
 import WorkPackagesSheet from './components/modern/sheets/WorkPackagesSheet';
 import PersonProfileSheet from './components/modern/sheets/PersonProfileSheet';
 import DataHealthSheet from './components/modern/sheets/DataHealthSheet';
@@ -1164,6 +1165,13 @@ const App: React.FC = () => {
         />
       );
     }
+    if (isModern && currentView === View.AI) {
+      return (
+        <div className="m-surface rounded-2xl overflow-hidden h-[calc(100vh-16rem)] min-h-[480px]">
+          <ModernChat variant="page" suggestions={aiSuggestions} />
+        </div>
+      );
+    }
     if (isModern && currentView === View.Notes) {
       return (
         <ModernNotes
@@ -1397,7 +1405,7 @@ const App: React.FC = () => {
   const showsExecutive = currentView === View.Executive ||
     (!!workspace && isExecRole(workspace.currentRole) && (currentView === View.Notes || currentView === View.Requests));
   const usesModernScreen = inProjectView
-    ? [View.Overview, View.Roadmap, View.Tasks, View.Kanban, View.Risks, View.Resources, View.Goals, View.Requests, View.Notes].includes(currentView)
+    ? [View.Overview, View.Roadmap, View.Tasks, View.Kanban, View.Risks, View.Resources, View.Goals, View.Requests, View.Notes, View.AI].includes(currentView)
     : showsExecutive || currentView === View.Allocations || currentView === View.RiskReport || currentView === View.Expectations || currentView === View.WeeklyReport || currentView === View.Meetings || currentView === View.Calendar || currentView === View.DataPool || ((currentView === View.Portfolio || !activeProject) && ![View.DataPool, View.Calendar].includes(currentView));
 
   // Komut paleti öğeleri (ekranlar + aksiyonlar + kapsamdaki projeler + kişiler)
@@ -1630,14 +1638,21 @@ const App: React.FC = () => {
         />
       )}
       {isPaletteOpen && (
-        <AssistantCommandPalette items={commandItems} onClose={() => setIsPaletteOpen(false)} />
+        <AssistantCommandPalette items={commandItems} onClose={() => setIsPaletteOpen(false)} modern={isModern} />
       )}
-      <AssistantPanel
-        suggestions={aiSuggestions}
-        hideLauncher={isModern}
-        hidden={currentView === View.AI && !!activeProject}
-        onExpand={activeProject ? () => setCurrentView(View.AI) : undefined}
-      />
+      {isModern ? (
+        <ModernAssistantPanel
+          suggestions={aiSuggestions}
+          hidden={currentView === View.AI && !!activeProject}
+          onExpand={activeProject ? () => setCurrentView(View.AI) : undefined}
+        />
+      ) : (
+        <AssistantPanel
+          suggestions={aiSuggestions}
+          hidden={currentView === View.AI && !!activeProject}
+          onExpand={activeProject ? () => setCurrentView(View.AI) : undefined}
+        />
+      )}
       {egg?.kind === 'hyper' && <HyperdriveOverlay onDone={() => setEgg(null)} />}
       {egg?.kind === 'space' && <SpaceMode onDone={() => setEgg(null)} />}
       {egg?.kind === 'celebrate' && <Celebration message={egg.message} onDone={() => setEgg(null)} />}
