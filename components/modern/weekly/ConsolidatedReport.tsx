@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Abbreviation, AiReportAssessment, PmoRating, ReportItem, ReportSettings, ReportStage, WeeklyPublication, WeeklyReport, WorkspaceData } from '../../../types';
 import { ROLE_LABELS } from '../../../utils/allocations';
-import { assessmentInput, ASSESSMENT_SYSTEM, buildAssessmentPrompt, needsAssessment, parseAssessment } from '../../../utils/ai/reportAssessment';
+import { aiPolicyOf } from '../../../utils/ai/policy';
+import { assessmentInput, ASSESSMENT_SYSTEM, buildAssessmentPrompt, finalizeAssessment, needsAssessment, parseAssessment } from '../../../utils/ai/reportAssessment';
 import { pmoRatingFor } from '../../../utils/healthModel';
 import { describeNotify, IntegrationHealth, sendNotification } from '../../../utils/integrations';
 import { Identity } from '../../../utils/rbac';
@@ -107,7 +108,7 @@ const ConsolidatedReport: React.FC<ConsolidatedReportProps> = ({
     const approvedSections = useMemo(() => consolidate(workspace, year, week, ['approved']), [workspace, year, week]);
 
     // AI metin puanı: PYB destek yayınlarken onaylı raporların metni 1–10 değerlendirilir (puanlar burada gösterilmez)
-    const ai = useAiRun();
+    const ai = useAiRun('scoring');
     const alive = useRef(true);
     useEffect(() => {
         alive.current = true; // StrictMode'da efekt temizlenip yeniden kurulur
@@ -116,6 +117,8 @@ const ConsolidatedReport: React.FC<ConsolidatedReportProps> = ({
     const [aiProgress, setAiProgress] = useState<{ done: number; failed: number; total: number; running: boolean } | null>(null);
     const approvedReports = useMemo(() => approvedSections.flatMap(s => s.projects.map(p => p.report)), [approvedSections]);
     const aiPending = useMemo(() => approvedReports.filter(needsAssessment), [approvedReports]);
+    const scoring = aiPolicyOf(workspace).scoring;
+    const lowConfidence = approvedReports.filter(r => !needsAssessment(r) && r.aiAssessment?.confidence === 'low').length;
     const canAssess = steward && !departmentCode && !!onSetAiAssessment && ai.available;
     const assess = async (list: WeeklyReport[]) => {
         let done = 0, failed = 0, streak = 0;
@@ -123,9 +126,14 @@ const ConsolidatedReport: React.FC<ConsolidatedReportProps> = ({
         for (const r of list) {
             if (!alive.current) return;
             const p = workspace.projects.find(x => x.id === r.projectId);
-            const res = p ? await ai.run(ASSESSMENT_SYSTEM, buildAssessmentPrompt(assessmentInput(p, r)), t => parseAssessment(t, r)) : null;
-            if (!alive.current) return;
-            if (res) { onSetAiAssessment!(r.id, res); done++; streak = 0; } else { failed++; streak++; }
+            // Aynı rapor admin'in belirlediği sayıda bağımsız puanlanır; skor medyan, dağılım güveni belirler
+            const runs: AiReportAssessment[] = [];
+            for (let k = 0; p && k < scoring.runs; k++) {
+                const one = await ai.run(ASSESSMENT_SYSTEM, buildAssessmentPrompt(assessmentInput(p, r)), t => parseAssessment(t, r));
+                if (!alive.current) return;
+                if (one) runs.push(one); else if (!runs.length) break; // ilk deneme başarısızsa tekrarlamaya gerek yok
+            }
+            if (runs.length) { onSetAiAssessment!(r.id, finalizeAssessment(runs, r, scoring)); done++; streak = 0; } else { failed++; streak++; }
             setAiProgress({ done, failed, total: list.length, running: true });
             // Art arda iki hata büyük olasılıkla yapılandırma/erişim sorunudur: kalanları boşuna deneme
             if (streak >= 2) break;
@@ -235,7 +243,7 @@ const ConsolidatedReport: React.FC<ConsolidatedReportProps> = ({
                         <span className="text-[13px] m-text-3" aria-live="polite">
                             {aiProgress?.running
                                 ? `Değerlendiriliyor… ${aiProgress.done + aiProgress.failed}/${aiProgress.total}`
-                                : `${approvedReports.length - aiPending.length}/${approvedReports.length} onaylı rapor değerlendirildi${aiProgress?.failed ? ` · ${aiProgress.failed} rapor değerlendirilemedi` : ''}. Onaylı rapor metinleri 1–10 puanlanır; sağlık skorunun girdisidir, puanlar burada gösterilmez.`}
+                                : `${approvedReports.length - aiPending.length}/${approvedReports.length} onaylı rapor değerlendirildi${aiProgress?.failed ? ` · ${aiProgress.failed} rapor değerlendirilemedi` : ''}${lowConfidence ? ` · ${lowConfidence} değerlendirmenin güveni düşük${scoring.lowConfidence === 'exclude' ? ' (sağlık skoruna girmedi)' : ''}` : ''}. Onaylı rapor metinleri ${scoring.runs > 1 ? `${scoring.runs} kez bağımsız ` : ''}1–10 puanlanır; sağlık skorunun girdisidir, puanlar burada gösterilmez.`}
                         </span>
                         {ai.error && !aiProgress?.running && <span className="text-[13px] m-ink-bad">{ai.error}</span>}
                     </div>

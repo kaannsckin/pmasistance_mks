@@ -88,6 +88,7 @@ export const splitWorkspaceDoc = (ws: WorkspaceData): { core: Record<string, unk
         profiles: ws.profiles || [],
         viewConfig: ws.viewConfig || {},
         healthConfig: ws.healthConfig || {},
+        aiPolicy: ws.aiPolicy || {},
     };
     return { core, privateDoc };
 };

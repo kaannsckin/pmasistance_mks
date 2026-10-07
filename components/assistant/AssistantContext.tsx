@@ -37,6 +37,9 @@ export type AssistantPhase = 'idle' | 'loading' | 'unavailable' | 'needs_token' 
 
 interface AssistantApi {
   enabled: boolean;
+  /** Admin politikası: asistan sohbeti ve ekran içi AI ayrı ayrı kapatılabilir */
+  chatEnabled: boolean;
+  embeddedEnabled: boolean;
   phase: AssistantPhase;
   status: AiStatus | null;
   authError: string | null;
@@ -83,6 +86,8 @@ let nextId = 1;
 
 interface ProviderProps {
   enabled: boolean;
+  chat?: boolean;
+  embedded?: boolean;
   getWorkspace: () => WorkspaceData | null;
   getView: () => View;
   onNavigate?: (ref: RagRef) => void;
@@ -91,7 +96,7 @@ interface ProviderProps {
   children: React.ReactNode;
 }
 
-export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, getWorkspace, getView, onNavigate, onApplyAction, children }) => {
+export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, chat = true, embedded = true, getWorkspace, getView, onNavigate, onApplyAction, children }) => {
   const [phase, setPhase] = useState<AssistantPhase>('idle');
   const [status, setStatus] = useState<AiStatus | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -309,9 +314,9 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, getWorkspa
   }, [enabled, phase, status]);
 
   const api = useMemo<AssistantApi>(() => ({
-    enabled, phase, status, authError, messages, isStreaming, isOpen, setOpen,
+    enabled, chatEnabled: enabled && chat, embeddedEnabled: enabled && embedded, phase, status, authError, messages, isStreaming, isOpen, setOpen,
     ensureReady, recheck, send, ask, stop, clear, saveToken, isKbOpen, setKbOpen, refreshIndex, navigate, resolveProposal, complete,
-  }), [enabled, phase, status, authError, messages, isStreaming, isOpen, ensureReady, recheck, send, ask, stop, clear, saveToken, isKbOpen, refreshIndex, navigate, resolveProposal, complete]);
+  }), [enabled, chat, embedded, phase, status, authError, messages, isStreaming, isOpen, ensureReady, recheck, send, ask, stop, clear, saveToken, isKbOpen, refreshIndex, navigate, resolveProposal, complete]);
 
   return <Ctx.Provider value={api}>{children}</Ctx.Provider>;
 };

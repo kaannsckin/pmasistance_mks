@@ -1,5 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { HealthConfig, HealthFactorKey, PermissionKey, ProjectStatus, ReportFlow, RoleViewConfig, UserRole, WorkspaceData } from '../../types';
+import { AiAssessmentFlag, AiPolicy, AiScoringPolicy, HealthConfig, HealthFactorKey, PermissionKey, ProjectStatus, ReportFlow, RoleViewConfig, UserRole, WorkspaceData } from '../../types';
+import { fetchAiStatus } from '../../utils/ai/client';
+import { aiPolicyOf } from '../../utils/ai/policy';
+import { FLAG_LABELS } from '../../utils/ai/reportAssessment';
+import { scoringStats } from '../../utils/ai/scoringStats';
+import { AiStatus } from '../../utils/ai/protocol';
 import { ROLE_LABELS } from '../../utils/allocations';
 import { HealthFix } from '../../utils/dataHealth';
 import { portfolioHealth } from '../../utils/executive';
@@ -47,6 +52,7 @@ export interface ModernAdminProps {
     onResetRoleView: (role: UserRole) => void;
     onSaveHealthConfig: (draft: HealthConfig | undefined, label: string) => boolean;
     onUpdateReportFlow: (patch: Partial<ReportFlow> & { dueWeekday?: number }, label: string) => void;
+    onUpdateAiPolicy: (patch: Partial<Omit<AiPolicy, 'scoring'>> & { scoring?: Partial<AiScoringPolicy> }, label: string) => void;
     canAudit: boolean;
     onSaveBackup?: () => void;
     onLoadBackup?: (file: File) => void;
@@ -551,6 +557,116 @@ const HealthMethodSettings: React.FC<Pick<ModernAdminProps, 'workspace' | 'onSav
     );
 };
 
+// ------------------------------------------------------------------ yapay zekâ
+
+const SegmentedNumber: React.FC<{ label: string; options: { value: number; label: string }[]; value: number; onChange: (v: number) => void }> = ({ label, options, value, onChange }) => (
+    <div className="m-segmented self-start" role="group" aria-label={label}>
+        {options.map(o => <button key={o.value} type="button" className="m-segment" aria-pressed={value === o.value} onClick={() => onChange(o.value)}>{o.label}</button>)}
+    </div>
+);
+
+const AiSettings: React.FC<Pick<ModernAdminProps, 'workspace' | 'onUpdateAiPolicy' | 'onUpdateReportFlow' | 'onSection'>> = ({ workspace, onUpdateAiPolicy, onUpdateReportFlow, onSection }) => {
+    const policy = aiPolicyOf(workspace);
+    const sc = policy.scoring;
+    const flow = reportFlowOf(workspace);
+    const health = healthSettingsOf(workspace);
+    const stats = useMemo(() => scoringStats(workspace), [workspace]);
+    const [status, setStatus] = useState<(AiStatus & { unreachable?: boolean }) | null>(null);
+    useEffect(() => {
+        const c = new AbortController();
+        fetchAiStatus(c.signal).then(setStatus).catch(() => setStatus({ configured: false, authMode: 'none', unreachable: true }));
+        return () => c.abort();
+    }, []);
+    const set = (patch: Parameters<ModernAdminProps['onUpdateAiPolicy']>[0], label: string) => onUpdateAiPolicy(patch, label);
+    const setScoring = (patch: Partial<AiScoringPolicy>, label: string) => set({ scoring: patch }, label);
+    const pctNum = (v: number) => `%${Math.round(v * 100)}`;
+    const num = (v: number | null) => (v === null ? '—' : String(v).replace('.', ','));
+    const flags = (Object.keys(FLAG_LABELS) as AiAssessmentFlag[]).filter(f => stats.byFlag[f]);
+
+    return (
+        <div className="flex flex-col gap-4">
+            <Note>
+                Sağlayıcı, model ve API anahtarı güvenlik gereği yalnız sunucu ortam değişkenlerindedir (AI_PROVIDER, AI_MODEL, AI_API_KEY; bkz. docs/AI_KURULUM.md) ve bu panele ya da tarayıcıya girmez. Buradan kurum genelinde AI kullanımını, özellikleri ve rapor puanlamasının güvencelerini yönetirsiniz; hangi rolün AI kullanacağı Yetkiler bölümündeki “Yapay zekâ özelliklerini kullanır” satırındadır.
+            </Note>
+            <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(360px, 100%), 1fr))' }}>
+                <Card title="Kurum geneli" subtitle="Kapalı özellik hiçbir kullanıcıda görünmez">
+                    <div className="flex flex-col -my-1">
+                        <SwitchRow index={0} label="Yapay zekâ özellikleri" hint="Ana anahtar: kapalıysa asistan, ekran içi AI ve puanlama çalışmaz" on={policy.enabled} onChange={on => set({ enabled: on }, `yapay zekâ ${on ? 'açıldı' : 'kapatıldı'}`)} />
+                        <SwitchRow index={1} label="Asistan sohbeti" hint="Sağ alttaki asistan, ⌘K'den soru ve projedeki tam ekran sohbet" on={policy.chat} disabled={!policy.enabled} onChange={on => set({ chat: on }, `asistan sohbeti ${on ? 'açıldı' : 'kapatıldı'}`)} />
+                        <SwitchRow index={2} label="Ekran içi AI" hint="Rapor taslağı, risk önerisi, PERT tahmini, brifing ve durum raporu metni" on={policy.embedded} disabled={!policy.enabled} onChange={on => set({ embedded: on }, `ekran içi AI ${on ? 'açıldı' : 'kapatıldı'}`)} />
+                        <SwitchRow index={3} label="Değişiklik önerileri" hint="Asistan “şu riski ekle” gibi istekte öneri kartı hazırlar; kullanıcı onaylamadan hiçbir şey değişmez" on={policy.proposals} disabled={!policy.enabled} onChange={on => set({ proposals: on }, `değişiklik önerileri ${on ? 'açıldı' : 'kapatıldı'}`)} />
+                    </div>
+                </Card>
+                <Card title="Sunucu bağlantısı" subtitle="Ortam değişkenlerinden, salt okunur">
+                    {!status ? <p className="m-0 text-[14px] m-text-3">Denetleniyor…</p> : (
+                        <div className="flex flex-col gap-2.5">
+                            <span className={`self-start inline-flex items-center h-7 px-3 rounded-full text-[13px] font-semibold ${status.configured ? 'm-tone-ok' : 'm-tone-warn'}`}>{status.configured ? 'Hazır' : status.unreachable ? 'Sunucuya ulaşılamadı' : 'Yapılandırılmamış'}</span>
+                            <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-[14px]">
+                                <dt className="m-text-3">Sağlayıcı</dt><dd className="m-0 m-text">{status.provider || '—'}</dd>
+                                <dt className="m-text-3">Model</dt><dd className="m-0 m-text break-all">{status.model || '—'}</dd>
+                                <dt className="m-text-3">Anlamsal arama</dt><dd className="m-0 m-text break-all">{status.embeddingModel || 'Kapalı (anahtar kelime araması)'}</dd>
+                                <dt className="m-text-3">Erişim koruması</dt><dd className="m-0 m-text">{status.authMode === 'token' ? 'Erişim kodu' : status.authMode === 'supabase' ? 'Supabase üyeliği' : 'Yok (yalnız kurum içi ağ)'}</dd>
+                            </dl>
+                            {status.problem && <p className="m-0 text-[13px] m-ink-warn">{status.problem}</p>}
+                        </div>
+                    )}
+                </Card>
+            </div>
+
+            <section aria-labelledby="ad-ai-guard" className="m-surface rounded-2xl p-5 flex flex-col gap-4">
+                <div>
+                    <h2 id="ad-ai-guard" className="m-0 text-[17px] font-semibold m-text">Rapor metni puanlama — halüsinasyon güvenceleri</h2>
+                    <p className="m-0 mt-0.5 text-[14px] m-text-3">Model yalnız onaylı rapor metnini görür, önce rapordan birebir alıntı çıkarır sonra puanlar; metinde geçmeyen alıntı atılır. Aşağıdaki kurallardan biri karşılanmazsa değerlendirme “düşük güven” olur.</p>
+                </div>
+                <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(300px, 100%), 1fr))' }}>
+                    <Field label="Bağımsız değerlendirme sayısı" hint="Aynı rapor N kez puanlanır; skor medyandır. 3 önerilir (maliyet N katı).">
+                        <SegmentedNumber label="Değerlendirme sayısı" value={sc.runs} options={[{ value: 1, label: '1' }, { value: 3, label: '3' }, { value: 5, label: '5' }]} onChange={v => setScoring({ runs: v }, `değerlendirme sayısı ${v}`)} />
+                    </Field>
+                    <Field label="Kabul edilen en büyük dağılım" hint="Tekrarlar arasındaki en yüksek − en düşük puan farkı">
+                        <SegmentedNumber label="Dağılım" value={sc.maxSpread} options={[1, 2, 3, 4].map(v => ({ value: v, label: `${v} puan` }))} onChange={v => setScoring({ maxSpread: v }, `dağılım sınırı ${v}`)} />
+                    </Field>
+                    <Field label="Doğrulanmış kanıt alt sınırı" hint="Rapor metninde birebir bulunan alıntı sayısı">
+                        <SegmentedNumber label="Kanıt" value={sc.minEvidence} options={[0, 1, 2, 3].map(v => ({ value: v, label: v === 0 ? 'Yok' : String(v) }))} onChange={v => setScoring({ minEvidence: v }, `kanıt alt sınırı ${v}`)} />
+                    </Field>
+                    <Field label="Kural göstergesiyle en büyük fark" hint="Tarih, tutar, teslimat, genel ifade ve olumsuzluk sayan kural tabanlı göstergeyle karşılaştırma">
+                        <SegmentedNumber label="Kural farkı" value={sc.maxRuleGap} options={[2, 3, 4, 5, 6].map(v => ({ value: v, label: String(v) }))} onChange={v => setScoring({ maxRuleGap: v }, `kural farkı sınırı ${v}`)} />
+                    </Field>
+                </div>
+                <div className="flex flex-col -my-1">
+                    <SwitchRow index={0} label="Güveni düşük puan sağlık skoruna girmesin" hint={sc.lowConfidence === 'exclude' ? 'Düşük güvenli değerlendirme dışarıda kalır; proje sağlığında bir önceki güvenilir değerlendirme kullanılır' : 'Düşük güvenli değerlendirme “güven düşük” notuyla skora girer'} on={sc.lowConfidence === 'exclude'} onChange={on => setScoring({ lowConfidence: on ? 'exclude' : 'flag' }, on ? 'düşük güvenli puan dışarıda' : 'düşük güvenli puan işaretli girer')} />
+                    <SwitchRow index={1} label="Hafta yayınlanırken otomatik puanla" hint="Haftalık rapor akışındaki ayarla aynıdır" on={flow.aiOnPublish} onChange={on => onUpdateReportFlow({ aiOnPublish: on }, `yayında AI metin puanı ${on ? 'açıldı' : 'kapatıldı'}`)} />
+                </div>
+                <div className="flex flex-wrap items-center gap-2 text-[14px] m-text-2">
+                    <span>Sağlık skorundaki ağırlığı: <b className="m-text">{health.weights.ai > 0 ? pctNum(health.weights.ai) : 'Kapalı'}</b></span>
+                    <button type="button" className="m-btn m-btn-plain !min-h-[34px] !px-2.5" onClick={() => onSection('health')}>Sağlık puanında değiştir</button>
+                </div>
+            </section>
+
+            <section aria-labelledby="ad-ai-mon" className="m-surface rounded-2xl p-5 flex flex-col gap-3">
+                <div>
+                    <h2 id="ad-ai-mon" className="m-0 text-[17px] font-semibold m-text">İzleme (son {stats.weeks} hafta)</h2>
+                    <p className="m-0 mt-0.5 text-[14px] m-text-3">PMO'nun 1–10 puanı insan ölçüsüdür: AI puanının ne kadar güvenilir olduğu ona göre izlenir.</p>
+                </div>
+                <div className="grid gap-2.5 grid-cols-2 sm:grid-cols-4">
+                    {[
+                        { label: 'Değerlendirme', value: String(stats.assessed) },
+                        { label: 'Güveni düşük', value: stats.assessed ? `${stats.low} (${pctNum(stats.low / stats.assessed)})` : '0', tone: stats.low ? 'm-ink-warn' : 'm-text' },
+                        { label: 'PMO ile ortalama fark', value: stats.pmo.mae === null ? '—' : `${num(stats.pmo.mae)} puan`, tone: stats.pmo.mae !== null && stats.pmo.mae > 2 ? 'm-ink-bad' : 'm-text' },
+                        { label: 'Tekrarlar arası dağılım', value: stats.avgSpread === null ? '—' : `${num(stats.avgSpread)} puan` },
+                    ].map(t => (
+                        <div key={t.label} className="rounded-xl m-fill-2 px-3 py-2.5 flex flex-col">
+                            <span className="text-[12.5px] m-text-3">{t.label}</span>
+                            <span className={`text-[20px] font-bold m-tabular ${t.tone || 'm-text'}`}>{t.value}</span>
+                        </div>
+                    ))}
+                </div>
+                <p className="m-0 text-[13px] m-text-3">PMO eşleşmesi: {stats.pmo.n} değerlendirme{stats.pmo.r !== null ? ` · korelasyon r = ${num(stats.pmo.r)}` : ''} · kural göstergesiyle ortalama fark: {stats.rule.mae === null ? '—' : `${num(stats.rule.mae)} puan`}{flags.length ? ` · ${flags.map(f => `${FLAG_LABELS[f]}: ${stats.byFlag[f]}`).join(' · ')}` : ''}</p>
+                {stats.advice.map(a => <p key={a} className="m-0 text-[14px] m-text-2 flex items-start gap-2"><span className="m-accent" style={{ marginTop: 2 }}><Icon name="info" size={16} /></span>{a}</p>)}
+            </section>
+        </div>
+    );
+};
+
 // ------------------------------------------------------------------ profiller
 
 const SOURCE_LABEL = (o: ProfileOption): { text: string; tone: string } =>
@@ -720,6 +836,7 @@ const ModernAdmin: React.FC<ModernAdminProps> = props => {
             {active.key === 'views' && <ViewSettings {...props} />}
             {active.key === 'report' && <ReportFlowSettings {...props} />}
             {active.key === 'health' && <HealthMethodSettings {...props} />}
+            {active.key === 'ai' && <AiSettings {...props} />}
             {active.key === 'profiles' && <ProfileManager {...props} />}
             {active.key === 'audit' && canAudit && <div className="flex flex-col gap-4"><AuditLogPanel workspace={workspace} /></div>}
             {active.key === 'app' && <AppTools {...props} />}

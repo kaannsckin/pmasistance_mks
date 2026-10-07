@@ -14,11 +14,11 @@ import { createEmptyWorkspace, createProject } from './workspace';
 
 describe('varsayılan yetkiler (önceki sabit kurallarla aynı)', () => {
     it('rol başına beklenen yetkiler', () => {
-        expect(defaultPermissions('py').sort()).toEqual(['notes.private', 'project.create']);
-        expect(defaultPermissions('bolum_sorumlu')).toEqual(['notes.private']);
-        expect(defaultPermissions('pyb_destek').sort()).toEqual(['datapool.edit', 'health.rate', 'notes.private', 'portfolio.viewAll', 'project.assignOwner', 'project.create', 'report.review']);
-        expect(defaultPermissions('pyb_sorumlu').sort()).toEqual(['expectation.respond', 'health.rate', 'meeting.review', 'plan.approve', 'portfolio.viewAll', 'screen.executive']);
-        expect(defaultPermissions('mudur').sort()).toEqual(['expectation.respond', 'meeting.review', 'plan.approve', 'portfolio.viewAll', 'screen.executive']);
+        expect(defaultPermissions('py').sort()).toEqual(['ai.use', 'notes.private', 'project.create']);
+        expect(defaultPermissions('bolum_sorumlu').sort()).toEqual(['ai.use', 'notes.private']);
+        expect(defaultPermissions('pyb_destek').sort()).toEqual(['ai.use', 'datapool.edit', 'health.rate', 'notes.private', 'portfolio.viewAll', 'project.assignOwner', 'project.create', 'report.review']);
+        expect(defaultPermissions('pyb_sorumlu').sort()).toEqual(['ai.use', 'expectation.respond', 'health.rate', 'meeting.review', 'plan.approve', 'portfolio.viewAll', 'screen.executive']);
+        expect(defaultPermissions('mudur').sort()).toEqual(['ai.use', 'expectation.respond', 'meeting.review', 'plan.approve', 'portfolio.viewAll', 'screen.executive']);
         expect(defaultPermissions('admin').sort()).toEqual(['app.audit', 'app.backup', 'app.dataHealth', 'screen.admin']);
     });
 
@@ -35,7 +35,7 @@ describe('varsayılan yetkiler (önceki sabit kurallarla aynı)', () => {
 describe('setRolePermission', () => {
     it('yetki verir/kaldırır; varsayılana dönünce değişiklik silinir', () => {
         let o = setRolePermission(undefined, 'py', 'health.rate', true)!;
-        expect(o.py).toEqual(['project.create', 'health.rate']);
+        expect(o.py).toEqual(['ai.use', 'project.create', 'health.rate']);
         expect(permissionsFor('py', o).has('health.rate')).toBe(true);
         expect(customizedRoles(o)).toEqual(['py']);
         expect(permissionDiff('py', o)).toEqual({ added: ['health.rate'], removed: [] });

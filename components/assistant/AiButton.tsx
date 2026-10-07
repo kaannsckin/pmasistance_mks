@@ -8,7 +8,8 @@ import { useAssistantOptional } from './AssistantContext';
  * AI ayarlardan kapalıysa ya da sağlayıcı yoksa düğmeler hiç görünmez.
  */
 
-export const useAiRun = () => {
+/** kind: 'embedded' ekran içi özellikler (admin kapatabilir); 'scoring' rapor metni puanlaması */
+export const useAiRun = (kind: 'embedded' | 'scoring' = 'embedded') => {
   const a = useAssistantOptional();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,7 +35,7 @@ export const useAiRun = () => {
     }
   }, [a]);
 
-  return { available: !!a?.enabled, run, loading, error, setError };
+  return { available: !!a?.enabled && (kind === 'scoring' || !!a?.embeddedEnabled), run, loading, error, setError };
 };
 
 interface AiButtonProps {

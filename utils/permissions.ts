@@ -39,6 +39,7 @@ export const PERMISSION_GROUP_LABELS: Record<PermissionGroup, string> = {
 export const PERMISSIONS: PermissionDef[] = [
     { key: 'screen.executive', group: 'screens', label: 'Yönetim ekranı', description: 'Portföy sağlığı, EVM, dikkat isteyenler, brifing ve yönetici paketleri', defaults: ['mudur', 'pyb_sorumlu'] },
     { key: 'screen.admin', group: 'screens', label: 'Yönetici (admin) ekranı', description: 'Rol yetkilerini ve kişi profillerini yönetir', defaults: ['admin'], alwaysFor: ['admin'] },
+    { key: 'ai.use', group: 'screens', label: 'Yapay zekâ özelliklerini kullanır', description: 'Asistan sohbeti, ekran içi AI (taslak, öneri, özet) ve rapor metni puanlaması; kurum geneli açık/kapalı ayarı Yapay zekâ bölümündedir', defaults: ['py', 'bolum_sorumlu', 'pyb_destek', 'pyb_sorumlu', 'mudur'] },
     { key: 'portfolio.viewAll', group: 'portfolio', label: 'Tüm projeleri görür', description: 'Kapsamı dışındaki projeler dahil tüm portföy (salt okunur)', defaults: ['mudur', 'pyb_sorumlu', 'pyb_destek'] },
     { key: 'project.create', group: 'portfolio', label: 'Proje oluşturur', description: 'Yeni proje açar', defaults: ['py', 'pyb_destek'] },
     { key: 'project.assignOwner', group: 'portfolio', label: 'Proje sahibini atar', description: 'Tüm projelerde proje yöneticisini ve durumu değiştirir (PY kendi projesinde her zaman yapabilir)', defaults: ['pyb_destek'] },

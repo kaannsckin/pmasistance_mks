@@ -4,6 +4,8 @@ import { canFor, PermissionHolder } from './permissions';
 import { buildProjectEVM, defaultStatusMonth, ProjectEVM } from './evm';
 import { daysUntilNeed, isActiveExpectation } from './expectations';
 import { riskScore } from './risks';
+import { aiPolicyOf } from './ai/policy';
+import { assessmentUsable } from './ai/reportAssessment';
 import { isoWeekOf, weekStart } from './weeklyReport';
 
 /**
@@ -50,7 +52,7 @@ export const HEALTH_FACTORS: HealthFactorDef[] = [
     { key: 'commitment', label: 'Söz tutma', weight: 0.08, rule: 'Gerçekleşen plan oranı (kısmen = yarım, iptal sayılmaz), son 4 hafta: %50 ve altı → 0 · %90 ve üstü → 1', source: 'Haftalık raporda geçen haftanın planı' },
     { key: 'rag', label: 'Haftalık durum', weight: 0.08, rule: 'Yolunda 1 · Riskli 0,5 · Kritik 0', source: "PY'nin haftalık durumu (RAG)" },
     { key: 'pm', label: 'PY puanı', weight: 0.08, rule: '(puan − 1) ÷ 9 · son 4 haftanın en yeni puanı', source: 'Haftalık rapordaki 1–10 puan' },
-    { key: 'ai', label: 'AI metin puanı', weight: 0.08, rule: '(puan − 1) ÷ 9 · son 4 haftanın en yeni değerlendirmesi', source: 'Onaylı rapor metninin AI değerlendirmesi (hafta yayınlanırken)' },
+    { key: 'ai', label: 'AI metin puanı', weight: 0.08, rule: '(puan − 1) ÷ 9 · son 4 haftanın en yeni değerlendirmesi', source: 'Onaylı rapor metninin AI değerlendirmesi (hafta yayınlanırken; güveni düşük olanlar hariç)' },
     { key: 'resource', label: 'Kaynak', weight: 0.06, rule: 'Ekipte kapasite üstü kişi oranı: %0 → 1 · %50 ve üstü → 0 (bu ay ve sonraki 2 ay)', source: 'Plan tahsisi ve izinler' },
     { key: 'expectations', label: 'Yönetim beklentileri', weight: 0.05, rule: 'Kritik ya da süresi geçmiş her açık beklenti −0,5', source: 'Yönetimden beklentiler' },
 ];
@@ -250,10 +252,15 @@ export const latestPmScore = (reports: WeeklyReport[] | undefined, projectId: st
     return r ? { score: r.pmScore!, year: r.year, week: r.week, note: r.pmScoreNote } : undefined;
 };
 
-/** Projenin son 4 haftadaki en yeni AI metin değerlendirmesi */
-export const latestAiAssessment = (reports: WeeklyReport[] | undefined, projectId: string, now: Date = new Date()): { score: number; week: number; rationale: string } | undefined => {
-    const r = recentReports(reports, projectId, now).find(x => x.aiAssessment);
-    return r ? { score: r.aiAssessment!.score, week: r.week, rationale: r.aiAssessment!.rationale } : undefined;
+/**
+ * Projenin son 4 haftadaki en yeni AI metin değerlendirmesi. Güveni düşük
+ * değerlendirme (admin "sağlık skoruna girmesin" dediyse) atlanır.
+ */
+export const latestAiAssessment = (
+    reports: WeeklyReport[] | undefined, projectId: string, now: Date = new Date(), lowConfidence: 'exclude' | 'flag' = 'exclude',
+): { score: number; week: number; rationale: string; lowConfidence: boolean } | undefined => {
+    const r = recentReports(reports, projectId, now).find(x => assessmentUsable(x.aiAssessment, { lowConfidence }));
+    return r ? { score: r.aiAssessment!.score, week: r.week, rationale: r.aiAssessment!.rationale, lowConfidence: r.aiAssessment!.confidence === 'low' } : undefined;
 };
 
 /**
@@ -331,8 +338,9 @@ const computeInputs = (ws: WorkspaceData, project: Project, ctx: HealthContext):
     out.push(factor('pm', pm ? (pm.score - 1) / 9 : null, pm ? `${pm.score}/10 (${pm.week}. hafta)` : 'Son 4 haftada puan yok'));
 
     // AI metin puanı (onaylı rapor metninden)
-    const ai = latestAiAssessment(ws.weeklyReports, project.id, ctx.now);
-    out.push(factor('ai', ai ? (ai.score - 1) / 9 : null, ai ? `${ai.score}/10 (${ai.week}. hafta)` : 'Son 4 haftada değerlendirme yok', ai?.rationale));
+    const ai = latestAiAssessment(ws.weeklyReports, project.id, ctx.now, aiPolicyOf(ws).scoring.lowConfidence);
+    out.push(factor('ai', ai ? (ai.score - 1) / 9 : null,
+        ai ? `${ai.score}/10 (${ai.week}. hafta)${ai.lowConfidence ? ' · güven düşük' : ''}` : 'Son 4 haftada güvenilir değerlendirme yok', ai?.rationale));
 
     // Kaynak: projede planı olan kişilerden kapasite üstü olanların oranı (yakın dönem)
     const from = Math.max(1, ctx.statusMonth || 1);
