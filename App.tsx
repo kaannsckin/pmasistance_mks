@@ -57,7 +57,7 @@ import { analyzeDataHealth, applyHealthFix, HealthFix } from './utils/dataHealth
 import { appendAudit, AUDIT_ACTION_LABELS } from './utils/audit';
 import { riskScore } from './utils/risks';
 import { upsertLeave } from './utils/availability';
-import { ExpectationStatus, ExpectationUrgency, MeetingStatus, PestelItem, ReportSettings, Risk, SwotItem, WeeklyReport } from './types';
+import { AiReportAssessment, ExpectationStatus, ExpectationUrgency, MeetingStatus, PestelItem, ReportSettings, Risk, SwotItem, WeeklyReport } from './types';
 import ModernSidebar from './components/modern/ModernSidebar';
 import ModernProjectHeader from './components/modern/ModernProjectHeader';
 import ModernPortfolio from './components/modern/ModernPortfolio';
@@ -93,7 +93,7 @@ import DataHealthSheet from './components/modern/sheets/DataHealthSheet';
 import AuditLogSheet from './components/modern/sheets/AuditLogSheet';
 import StatusReportSheet from './components/modern/sheets/StatusReportSheet';
 import {
-  actorOf, isPyds, markWeekEmailed, publishWeek, reportDictionary, reportSettingsOf, returnReportIn, saveReport, STAGE_LABELS, unpublishWeek, weekLabel,
+  actorOf, isPyds, markWeekEmailed, publishWeek, reportDictionary, reportSettingsOf, returnReportIn, saveReport, setReportAiAssessment, STAGE_LABELS, unpublishWeek, weekLabel,
 } from './utils/weeklyReport';
 import {
   canEditMeeting, canPlanMeeting, canReviewMeeting, createMeeting, isOwnMeeting, markHeld, MeetingDraft, reviewMeeting, setMeetingStatus, updateMeeting,
@@ -741,6 +741,14 @@ const App: React.FC = () => {
     return true;
   }, [commitWorkspace]);
 
+  // AI metin puanı: sistem alanı, yalnız PYB destek yazar (sıralı yazımlar birbirini ezmesin diye güncel durumdan)
+  const handleSetAiAssessment = useCallback((reportId: string, assessment: AiReportAssessment) => {
+    updateWorkspace(ws => {
+      const reports = setReportAiAssessment(ws, identityOf(ws), reportId, assessment);
+      return reports ? { ...ws, weeklyReports: reports } : ws;
+    });
+  }, [updateWorkspace]);
+
   const handleMarkReportEmailed = useCallback((year: number, week: number) => {
     updateWorkspace(ws => ({ ...ws, weeklyPublications: markWeekEmailed(ws.weeklyPublications || [], year, week) }));
   }, [updateWorkspace]);
@@ -972,6 +980,7 @@ const App: React.FC = () => {
           onSetJiraKey={handleSetJiraKey}
           onOpenMeetings={() => setCurrentView(View.Meetings)}
           onRatePmo={handleRatePmo}
+          onSetAiAssessment={handleSetAiAssessment}
         />
       ) : (
         <ModernMeetings

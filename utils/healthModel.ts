@@ -6,17 +6,20 @@ import { riskScore } from './risks';
 import { isoWeekOf, weekStart } from './weeklyReport';
 
 /**
- * Proje sağlık modeli — 1. adım: uzman ağırlıklı bileşik skor.
+ * Proje sağlık modeli — uzman ağırlıklı bileşik skor.
  *
  *  1. Özellik katmanı: her metrik 0–1 arasına normalize edilir (1 = sağlıklı).
  *     Verisi olmayan metrik null'dır ve skora girmez.
  *  2. Skor = 100 × Σ wᵢ·xᵢ / Σ wᵢ — yalnız verisi olan metrikler üzerinden.
  *     Kapsam = Σ wᵢ (0–1) skorun ne kadar veriye dayandığını (güveni) gösterir.
- *  3. Algı farkı: PM'in öznel değerlendirmesi (RAG + puan) ile nesnel
- *     metrikler arasındaki fark; ≥ 0,3 ise "karpuz proje" uyarısı.
+ *  3. Algı farkı: PY'nin öznel değerlendirmesi (RAG + puan) ile nesnel
+ *     metrikler arasındaki fark; ≥ 0,3 ise "karpuz proje" uyarısı. AI metin
+ *     puanı PY'nin kendi metninden türediği için iki tarafa da girmez.
  *  4. Her ISO haftası proje başına özellik vektörü ve skor saklanır. PMO'nun
  *     haftalık 1–10 puanı hedef değişkendir (Y); yeterli etiketli gözlem
- *     biriktiğinde ağırlıklar regresyonla kalibre edilir (2. adım).
+ *     biriktiğinde ağırlıklar regresyonla kalibre edilir.
+ *
+ * Sürümler: uzman-1 (8 girdi) → uzman-2 (+ söz tutma oranı, AI metin puanı).
  *
  * Saf/test edilebilir; ekranlar executive.projectHealth üzerinden kullanır.
  */
@@ -24,7 +27,7 @@ import { isoWeekOf, weekStart } from './weeklyReport';
 export type HealthBand = 'good' | 'warn' | 'bad';
 export type HealthConfidence = 'high' | 'medium' | 'low';
 
-export const HEALTH_MODEL_VERSION = 'uzman-1';
+export const HEALTH_MODEL_VERSION = 'uzman-2';
 export const BAND_GOOD = 75;
 export const BAND_WARN = 50;
 
@@ -37,23 +40,27 @@ export interface HealthFactorDef {
 }
 
 export const HEALTH_FACTORS: HealthFactorDef[] = [
-    { key: 'spi', label: 'Takvim (SPI)', weight: 0.2, rule: 'SPI ≤ 0,80 → 0 · SPI ≥ 1,00 → 1 · arası doğrusal', source: 'EVM: kazanılmış değer ÷ planlı değer' },
-    { key: 'cpi', label: 'Bütçe (CPI)', weight: 0.15, rule: 'CPI ≤ 0,80 → 0 · CPI ≥ 1,00 → 1 · arası doğrusal', source: 'EVM: kazanılmış değer ÷ gerçek maliyet' },
-    { key: 'overdue', label: 'Geciken görevler', weight: 0.15, rule: 'Açık görevlerde geciken oranı: %0 → 1 · %30 ve üstü → 0', source: 'Termini geçmiş, bitmemiş görevler' },
-    { key: 'risk', label: 'Riskler', weight: 0.15, rule: 'Her yüksek risk (15+) −0,4 · her orta risk (8–14) −0,1', source: 'Risk kaydı (açık ve izlenen)' },
-    { key: 'rag', label: 'Haftalık durum', weight: 0.1, rule: 'Yolunda 1 · Riskli 0,5 · Kritik 0', source: "PY'nin haftalık durumu (RAG)" },
-    { key: 'pm', label: 'PY puanı', weight: 0.1, rule: '(puan − 1) ÷ 9 · son 4 haftanın en yeni puanı', source: 'Haftalık rapordaki 1–10 puan' },
-    { key: 'resource', label: 'Kaynak', weight: 0.08, rule: 'Ekipte kapasite üstü kişi oranı: %0 → 1 · %50 ve üstü → 0 (bu ay ve sonraki 2 ay)', source: 'Plan tahsisi ve izinler' },
-    { key: 'expectations', label: 'Yönetim beklentileri', weight: 0.07, rule: 'Kritik ya da süresi geçmiş her açık beklenti −0,5', source: 'Yönetimden beklentiler' },
+    { key: 'spi', label: 'Takvim (SPI)', weight: 0.18, rule: 'SPI ≤ 0,80 → 0 · SPI ≥ 1,00 → 1 · arası doğrusal', source: 'EVM: kazanılmış değer ÷ planlı değer' },
+    { key: 'cpi', label: 'Bütçe (CPI)', weight: 0.13, rule: 'CPI ≤ 0,80 → 0 · CPI ≥ 1,00 → 1 · arası doğrusal', source: 'EVM: kazanılmış değer ÷ gerçek maliyet' },
+    { key: 'overdue', label: 'Geciken görevler', weight: 0.13, rule: 'Açık görevlerde geciken oranı: %0 → 1 · %30 ve üstü → 0', source: 'Termini geçmiş, bitmemiş görevler' },
+    { key: 'risk', label: 'Riskler', weight: 0.13, rule: 'Her yüksek risk (15+) −0,4 · her orta risk (8–14) −0,1', source: 'Risk kaydı (açık ve izlenen)' },
+    { key: 'commitment', label: 'Söz tutma', weight: 0.08, rule: 'Gerçekleşen plan oranı (kısmen = yarım, iptal sayılmaz), son 4 hafta: %50 ve altı → 0 · %90 ve üstü → 1', source: 'Haftalık raporda geçen haftanın planı' },
+    { key: 'rag', label: 'Haftalık durum', weight: 0.08, rule: 'Yolunda 1 · Riskli 0,5 · Kritik 0', source: "PY'nin haftalık durumu (RAG)" },
+    { key: 'pm', label: 'PY puanı', weight: 0.08, rule: '(puan − 1) ÷ 9 · son 4 haftanın en yeni puanı', source: 'Haftalık rapordaki 1–10 puan' },
+    { key: 'ai', label: 'AI metin puanı', weight: 0.08, rule: '(puan − 1) ÷ 9 · son 4 haftanın en yeni değerlendirmesi', source: 'Onaylı rapor metninin AI değerlendirmesi (hafta yayınlanırken)' },
+    { key: 'resource', label: 'Kaynak', weight: 0.06, rule: 'Ekipte kapasite üstü kişi oranı: %0 → 1 · %50 ve üstü → 0 (bu ay ve sonraki 2 ay)', source: 'Plan tahsisi ve izinler' },
+    { key: 'expectations', label: 'Yönetim beklentileri', weight: 0.05, rule: 'Kritik ya da süresi geçmiş her açık beklenti −0,5', source: 'Yönetimden beklentiler' },
 ];
 
 const FACTOR_BY_KEY = new Map(HEALTH_FACTORS.map(f => [f.key, f]));
 const SUBJECTIVE: HealthFactorKey[] = ['rag', 'pm'];
+/** Algı farkında nesnel tarafa girmeyenler: öznel girdiler ve PY metninden türeyen AI puanı */
+const NOT_OBJECTIVE: HealthFactorKey[] = [...SUBJECTIVE, 'ai'];
 /** Algı farkı ancak nesnel metriklerin ağırlığı bu kadarsa hesaplanır */
 const MIN_OBJECTIVE_COVERAGE = 0.3;
 export const PERCEPTION_GAP_ALERT = 0.3;
-/** PY puanı bu kadar hafta geçerli sayılır (bu hafta + önceki 3) */
-const PM_SCORE_WEEKS = 4;
+/** Rapordan gelen girdiler (PY/AI puanı, söz tutma) bu kadar hafta geçerli: bu hafta + önceki 3 */
+const REPORT_WEEKS = 4;
 /** Regresyon için gereken etiketli gözlem: değişken başına ~10 */
 export const MIN_LABELED_OBSERVATIONS = HEALTH_FACTORS.length * 10;
 const MAX_HISTORY_WEEKS = 104;
@@ -65,6 +72,7 @@ export interface HealthFactor {
     value: number | null; // 0–1; null = veri yok
     detail: string; // ham değer, ör. "SPI 0,85"
     points: number; // skordan düşürdüğü puan (0–100 ölçeği)
+    note?: string; // açıklama (ör. AI değerlendirmesinin gerekçesi)
 }
 
 export interface HealthEvaluation {
@@ -114,22 +122,49 @@ export const buildHealthContext = (ws: WorkspaceData, year: number, statusMonth:
 const weeksBetween = (from: { year: number; week: number }, to: { year: number; week: number }): number =>
     Math.round((weekStart(to.year, to.week).getTime() - weekStart(from.year, from.week).getTime()) / (7 * 86_400_000));
 
-/** Projenin son PM_SCORE_WEEKS hafta içindeki en yeni PY puanı */
-export const latestPmScore = (reports: WeeklyReport[] | undefined, projectId: string, now: Date = new Date()): { score: number; year: number; week: number; note?: string } | undefined => {
+/** Projenin son REPORT_WEEKS haftadaki raporları (gelecek haftalar hariç), en yenisi başta */
+const recentReports = (reports: WeeklyReport[] | undefined, projectId: string, now: Date): WeeklyReport[] => {
     const cur = isoWeekOf(now);
-    let best: WeeklyReport | undefined;
-    (reports || []).forEach(r => {
-        if (r.kind !== 'project' || r.projectId !== projectId || typeof r.pmScore !== 'number') return;
-        const age = weeksBetween({ year: r.year, week: r.week }, cur);
-        if (age < 0 || age >= PM_SCORE_WEEKS) return;
-        if (!best || r.year > best.year || (r.year === best.year && r.week > best.week)) best = r;
-    });
-    return best ? { score: best.pmScore!, year: best.year, week: best.week, note: best.pmScoreNote } : undefined;
+    return (reports || [])
+        .filter(r => {
+            if (r.kind !== 'project' || r.projectId !== projectId) return false;
+            const age = weeksBetween({ year: r.year, week: r.week }, cur);
+            return age >= 0 && age < REPORT_WEEKS;
+        })
+        .sort((a, b) => b.year - a.year || b.week - a.week);
 };
 
-const factor = (key: HealthFactorKey, value: number | null, detail: string): HealthFactor => {
+/** Projenin son 4 haftadaki en yeni PY puanı */
+export const latestPmScore = (reports: WeeklyReport[] | undefined, projectId: string, now: Date = new Date()): { score: number; year: number; week: number; note?: string } | undefined => {
+    const r = recentReports(reports, projectId, now).find(x => typeof x.pmScore === 'number');
+    return r ? { score: r.pmScore!, year: r.year, week: r.week, note: r.pmScoreNote } : undefined;
+};
+
+/** Projenin son 4 haftadaki en yeni AI metin değerlendirmesi */
+export const latestAiAssessment = (reports: WeeklyReport[] | undefined, projectId: string, now: Date = new Date()): { score: number; week: number; rationale: string } | undefined => {
+    const r = recentReports(reports, projectId, now).find(x => x.aiAssessment);
+    return r ? { score: r.aiAssessment!.score, week: r.week, rationale: r.aiAssessment!.rationale } : undefined;
+};
+
+/**
+ * Söz tutma oranı: son 4 haftanın raporlarında değerlendirilen geçen hafta
+ * planlarından gerçekleşenlerin payı (yapıldı 1, kısmen 0,5, ertelendi 0;
+ * iptal edilenler paydan çıkar). Değerlendirilmiş plan yoksa undefined.
+ */
+export const commitmentRatio = (reports: WeeklyReport[] | undefined, projectId: string, now: Date = new Date()): { ratio: number; plans: number } | undefined => {
+    let earned = 0;
+    let plans = 0;
+    recentReports(reports, projectId, now).forEach(r => (r.planReview || []).forEach(p => {
+        if (p.status === 'dropped') return;
+        plans++;
+        earned += p.status === 'done' ? 1 : p.status === 'partial' ? 0.5 : 0;
+    }));
+    return plans ? { ratio: earned / plans, plans } : undefined;
+};
+
+const factor = (key: HealthFactorKey, value: number | null, detail: string, note?: string): HealthFactor => {
     const def = FACTOR_BY_KEY.get(key)!;
-    return { key, label: def.label, weight: def.weight, value: value === null ? null : round2(clamp01(value)), detail, points: 0 };
+    return { key, label: def.label, weight: def.weight, value: value === null ? null : round2(clamp01(value)), detail, points: 0, ...(note ? { note } : {}) };
 };
 
 interface RawInputs {
@@ -141,6 +176,8 @@ interface RawInputs {
     overPeople: number;
     blockingExpectations: number;
     pmScore?: number;
+    aiScore?: number;
+    commitment?: number; // 0–1 oran
 }
 
 const computeInputs = (ws: WorkspaceData, project: Project, ctx: HealthContext): RawInputs => {
@@ -169,6 +206,11 @@ const computeInputs = (ws: WorkspaceData, project: Project, ctx: HealthContext):
     out.push(factor('risk', 1 - 0.4 * highRisks - 0.1 * mediumRisks,
         highRisks || mediumRisks ? [highRisks ? `${highRisks} yüksek` : '', mediumRisks ? `${mediumRisks} orta` : ''].filter(Boolean).join(', ') + ' risk' : 'Yüksek/orta risk yok'));
 
+    // Söz tutma: geçen haftaların planından gerçekleşenler
+    const kept = commitmentRatio(ws.weeklyReports, project.id, ctx.now);
+    out.push(factor('commitment', kept ? (kept.ratio - 0.5) / 0.4 : null,
+        kept ? `%${Math.round(kept.ratio * 100)} gerçekleşti (${kept.plans} plan, son 4 hafta)` : 'Değerlendirilmiş plan yok'));
+
     // Haftalık durum (PY)
     const ragValue = project.rag === 'green' ? 1 : project.rag === 'amber' ? 0.5 : project.rag === 'red' ? 0 : null;
     out.push(factor('rag', ragValue, project.rag === 'green' ? 'Yolunda' : project.rag === 'amber' ? 'Riskli' : project.rag === 'red' ? 'Kritik' : 'Girilmedi'));
@@ -176,6 +218,10 @@ const computeInputs = (ws: WorkspaceData, project: Project, ctx: HealthContext):
     // PY puanı
     const pm = latestPmScore(ws.weeklyReports, project.id, ctx.now);
     out.push(factor('pm', pm ? (pm.score - 1) / 9 : null, pm ? `${pm.score}/10 (${pm.week}. hafta)` : 'Son 4 haftada puan yok'));
+
+    // AI metin puanı (onaylı rapor metninden)
+    const ai = latestAiAssessment(ws.weeklyReports, project.id, ctx.now);
+    out.push(factor('ai', ai ? (ai.score - 1) / 9 : null, ai ? `${ai.score}/10 (${ai.week}. hafta)` : 'Son 4 haftada değerlendirme yok', ai?.rationale));
 
     // Kaynak: projede planı olan kişilerden kapasite üstü olanların oranı (yakın dönem)
     const from = Math.max(1, ctx.statusMonth || 1);
@@ -198,7 +244,7 @@ const computeInputs = (ws: WorkspaceData, project: Project, ctx: HealthContext):
         && (e.urgency === 'critical' || (daysUntilNeed(e, ctx.now) ?? 0) < 0)).length;
     out.push(factor('expectations', 1 - 0.5 * blocking, blocking ? `${blocking} kritik / süresi geçmiş beklenti` : 'Bekleyen kritik karar yok'));
 
-    return { factors: out, evm, highRisks, mediumRisks, overdue, overPeople: overTeam.size, blockingExpectations: blocking, pmScore: pm?.score };
+    return { factors: out, evm, highRisks, mediumRisks, overdue, overPeople: overTeam.size, blockingExpectations: blocking, pmScore: pm?.score, aiScore: ai?.score, commitment: kept?.ratio };
 };
 
 // ---------------------------------------------------------------- skor
@@ -218,6 +264,8 @@ const reasonFor = (f: HealthFactor, raw: RawInputs, project: Project): string =>
         case 'overdue': return `${raw.overdue} geciken görev`;
         case 'risk': return raw.highRisks ? `${raw.highRisks} yüksek risk` : `${raw.mediumRisks} orta risk`;
         case 'pm': return `PY puanı ${raw.pmScore}/10`;
+        case 'ai': return `AI metin puanı ${raw.aiScore}/10`;
+        case 'commitment': return `Söz tutma %${Math.round((raw.commitment ?? 0) * 100)}`;
         case 'resource': return `Ekipte ${raw.overPeople} kişi kapasite üstü`;
         case 'expectations': return `${raw.blockingExpectations} kritik yönetim beklentisi`;
     }
@@ -234,7 +282,7 @@ export const evaluateProjectHealth = (ws: WorkspaceData, project: Project, ctx: 
 
     // Algı farkı: öznel (RAG, PY puanı) − nesnel metrikler
     const subj = factors.filter(f => SUBJECTIVE.includes(f.key) && f.value !== null);
-    const obj = weightedMean(factors.filter(f => !SUBJECTIVE.includes(f.key)));
+    const obj = weightedMean(factors.filter(f => !NOT_OBJECTIVE.includes(f.key)));
     const perceptionGap = subj.length && obj.coverage >= MIN_OBJECTIVE_COVERAGE
         ? round2(subj.reduce((s, f) => s + (f.value as number), 0) / subj.length - obj.mean)
         : null;

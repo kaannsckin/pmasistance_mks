@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Abbreviation, PmoRating, ReportItem, ReportSettings, ReportStage, WeeklyPublication, WeeklyReport, WorkspaceData } from '../../../types';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Abbreviation, AiReportAssessment, PmoRating, ReportItem, ReportSettings, ReportStage, WeeklyPublication, WeeklyReport, WorkspaceData } from '../../../types';
 import { ROLE_LABELS } from '../../../utils/allocations';
+import { assessmentInput, ASSESSMENT_SYSTEM, buildAssessmentPrompt, needsAssessment, parseAssessment } from '../../../utils/ai/reportAssessment';
 import { pmoRatingFor } from '../../../utils/healthModel';
 import { describeNotify, IntegrationHealth, sendNotification } from '../../../utils/integrations';
 import { Identity } from '../../../utils/rbac';
@@ -8,6 +9,7 @@ import { relativeTime } from '../../../utils/recentChanges';
 import {
     buildEml, consolidate, glossaryFor, isPyds, itemDisplay, renderReportHtml, renderReportText, reportTitle, weekProgress,
 } from '../../../utils/weeklyReport';
+import { useAiRun } from '../../assistant/AiButton';
 import { Icon } from '../icons';
 import ScoreScale from '../ScoreScale';
 import { EmptyState, copyText, downloadFile, Notice, NoticeState, Pill, printHtml, StagePill } from './shared';
@@ -75,10 +77,12 @@ export interface ConsolidatedReportProps {
     onOpenReport?: (r: WeeklyReport) => void;
     /** PMO rolleri: projeye haftalık 1–10 sağlık puanı */
     onRatePmo?: (projectId: string, score: number | null, note?: string) => boolean;
+    /** PYB destek: onaylı rapor metninin AI değerlendirmesini kaydet */
+    onSetAiAssessment?: (reportId: string, assessment: AiReportAssessment) => void;
 }
 
 const ConsolidatedReport: React.FC<ConsolidatedReportProps> = ({
-    workspace, identity, year, week, dictionary, settings, health, departmentCode, publication, onPublish, onUnpublish, onMarkEmailed, onOpenReport, onRatePmo,
+    workspace, identity, year, week, dictionary, settings, health, departmentCode, publication, onPublish, onUnpublish, onMarkEmailed, onOpenReport, onRatePmo, onSetAiAssessment,
 }) => {
     const steward = isPyds(identity.role);
     const [mode, setMode] = useState<'approved' | 'all'>(steward && !publication ? 'all' : 'approved');
@@ -101,6 +105,33 @@ const ConsolidatedReport: React.FC<ConsolidatedReportProps> = ({
     const approved = progress.reduce((s, d) => s + d.byStage.approved, 0);
 
     const approvedSections = useMemo(() => consolidate(workspace, year, week, ['approved']), [workspace, year, week]);
+
+    // AI metin puanı: PYB destek yayınlarken onaylı raporların metni 1–10 değerlendirilir (puanlar burada gösterilmez)
+    const ai = useAiRun();
+    const alive = useRef(true);
+    useEffect(() => {
+        alive.current = true; // StrictMode'da efekt temizlenip yeniden kurulur
+        return () => { alive.current = false; };
+    }, []);
+    const [aiProgress, setAiProgress] = useState<{ done: number; failed: number; total: number; running: boolean } | null>(null);
+    const approvedReports = useMemo(() => approvedSections.flatMap(s => s.projects.map(p => p.report)), [approvedSections]);
+    const aiPending = useMemo(() => approvedReports.filter(needsAssessment), [approvedReports]);
+    const canAssess = steward && !departmentCode && !!onSetAiAssessment && ai.available;
+    const assess = async (list: WeeklyReport[]) => {
+        let done = 0, failed = 0, streak = 0;
+        setAiProgress({ done, failed, total: list.length, running: true });
+        for (const r of list) {
+            if (!alive.current) return;
+            const p = workspace.projects.find(x => x.id === r.projectId);
+            const res = p ? await ai.run(ASSESSMENT_SYSTEM, buildAssessmentPrompt(assessmentInput(p, r)), t => parseAssessment(t, r)) : null;
+            if (!alive.current) return;
+            if (res) { onSetAiAssessment!(r.id, res); done++; streak = 0; } else { failed++; streak++; }
+            setAiProgress({ done, failed, total: list.length, running: true });
+            // Art arda iki hata büyük olasılıkla yapılandırma/erişim sorunudur: kalanları boşuna deneme
+            if (streak >= 2) break;
+        }
+        setAiProgress({ done, failed, total: list.length, running: false });
+    };
     const approvedGlossary = useMemo(() => glossaryFor(approvedSections.flatMap(s => [...s.projects.map(p => p.report), ...(s.additions ? [s.additions] : [])]), dictionary), [approvedSections, dictionary]);
     // Dışarı çıkan metin (kopyala, yazdır, e-posta) PYB destek için daima yalnız onaylı raporlardır
     const html = () => (steward ? renderReportHtml(approvedSections, approvedGlossary, year, week) : renderReportHtml(sections, glossary, year, week));
@@ -130,7 +161,11 @@ const ConsolidatedReport: React.FC<ConsolidatedReportProps> = ({
     const publish = () => {
         const missing = expected - approved;
         if (missing > 0 && !window.confirm(`${missing} aktif projenin raporu henüz onaylanmadı. Onaylananlarla yayınlansın mı?`)) return;
-        if (onPublish?.()) { setMode('approved'); setNotice({ kind: 'ok', text: 'Hafta yayınlandı: müdür ve PYB sorumlusu raporu bölüm bazında görebilir.' }); }
+        if (onPublish?.()) {
+            setMode('approved');
+            setNotice({ kind: 'ok', text: 'Hafta yayınlandı: müdür ve PYB sorumlusu raporu bölüm bazında görebilir.' });
+            if (canAssess && aiPending.length) assess(aiPending);
+        }
     };
 
     const exec = !steward && !departmentCode;
@@ -189,6 +224,26 @@ const ConsolidatedReport: React.FC<ConsolidatedReportProps> = ({
                     <button type="button" className="m-btn m-btn-primary" disabled={sending || !health?.email || !settings.directorEmails.length} onClick={autoSend}>
                         <Icon name="send" size={17} />{sending ? 'Gönderiliyor…' : publication.emailedAt ? 'Yeniden gönder' : 'Gönder'}
                     </button>
+                </div>
+            )}
+
+            {canAssess && approvedReports.length > 0 && (aiPending.length > 0 || aiProgress) && (
+                <div className="m-surface rounded-2xl p-4 flex flex-wrap items-center gap-3">
+                    <Icon name="sparkles" size={20} />
+                    <div className="flex-1 min-w-[220px] flex flex-col gap-0.5">
+                        <span className="text-[15px] font-semibold m-text">AI metin puanı</span>
+                        <span className="text-[13px] m-text-3" aria-live="polite">
+                            {aiProgress?.running
+                                ? `Değerlendiriliyor… ${aiProgress.done + aiProgress.failed}/${aiProgress.total}`
+                                : `${approvedReports.length - aiPending.length}/${approvedReports.length} onaylı rapor değerlendirildi${aiProgress?.failed ? ` · ${aiProgress.failed} rapor değerlendirilemedi` : ''}. Onaylı rapor metinleri 1–10 puanlanır; sağlık skorunun girdisidir, puanlar burada gösterilmez.`}
+                        </span>
+                        {ai.error && !aiProgress?.running && <span className="text-[13px] m-ink-bad">{ai.error}</span>}
+                    </div>
+                    {aiPending.length > 0 && (
+                        <button type="button" className="m-btn m-btn-gray" disabled={!!aiProgress?.running} onClick={() => assess(aiPending)}>
+                            <Icon name="sparkles" size={17} />{aiProgress?.running ? 'Değerlendiriliyor…' : `Değerlendir (${aiPending.length})`}
+                        </button>
+                    )}
                 </div>
             )}
 

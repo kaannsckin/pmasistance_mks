@@ -528,11 +528,34 @@ export interface WeeklyReport {
   /** PY'nin bu hafta projenin genel sağlığına verdiği puan (1–10); sağlık modelinin girdisi */
   pmScore?: number;
   pmScoreNote?: string; // tek cümlelik gerekçe
+  /** Geçen haftanın "gelecek hafta planı" maddeleri ne oldu? (söz tutma oranı) */
+  planReview?: PlanReviewItem[];
+  /** AI'nın rapor metnine verdiği puan (PYB destek haftayı yayınlarken hesaplanır) */
+  aiAssessment?: AiReportAssessment;
   authorPersonId?: string;
   authorName?: string;
   createdAt: string;
   updatedAt: string;
   history: ReportEvent[];
+}
+
+/** done: yapıldı · partial: kısmen · slipped: ertelendi · dropped: iptal / kapsam dışı (orana girmez) */
+export type PlanReviewStatus = 'done' | 'partial' | 'slipped' | 'dropped';
+
+export interface PlanReviewItem {
+  itemId: string; // geçen haftanın plan maddesi
+  text: string; // değerlendirildiği andaki metin (madde sonradan değişse de okunur)
+  status: PlanReviewStatus;
+}
+
+/** Rapor metninin AI değerlendirmesi: nitel puan, gerekçe ve rapordan birebir alıntılar */
+export interface AiReportAssessment {
+  score: number; // 1–10
+  rationale: string;
+  evidence: string[]; // rapordan birebir alıntılar (doğrulanmış)
+  signals: string[]; // engel, belirsizlik, müşteri sorunu…
+  at: string; // ISO
+  inputHash: string; // değerlendirilen metnin özeti — rapor değişirse yeniden hesaplanır
 }
 
 export interface WeeklyPublication {
@@ -613,7 +636,7 @@ export interface AuditEntry {
 // ---------------------------------------------------------------------------
 
 /** Sağlık skorunun girdileri (her biri 0–1'e normalize edilir, 1 = sağlıklı) */
-export type HealthFactorKey = 'spi' | 'cpi' | 'overdue' | 'risk' | 'rag' | 'pm' | 'resource' | 'expectations';
+export type HealthFactorKey = 'spi' | 'cpi' | 'overdue' | 'risk' | 'rag' | 'pm' | 'ai' | 'commitment' | 'resource' | 'expectations';
 
 /**
  * PMO'nun (PYB sorumlusu / PYB destek) bir projeye o ISO haftası için verdiği

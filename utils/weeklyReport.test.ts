@@ -4,7 +4,7 @@ import {
     actorOf, advanceReport, buildEml, DEFAULT_REPORT_SETTINGS, dueDate, latestPublication, markWeekEmailed, publishWeek, reminderText, reportDictionary,
     returnReportIn, saveReport, unpublishWeek, canEditReport, consolidate, createReport, editReport, findAbbreviations, fineTuneLines, glossaryFor, isoWeekOf,
     lintCounts, lintReport, locative, mailtoLink, meetingSentence, newItem, pendingAuthors, projectDepartment, renderReportHtml, renderReportText,
-    returnReport, shiftWeek, teamsChatLink, visibleReports, weekLabel, weekProgress, weekStart,
+    returnReport, setPlanReview, setReportAiAssessment, shiftWeek, teamsChatLink, visibleReports, weekLabel, weekProgress, weekStart,
 } from './weeklyReport';
 import { createEmptyWorkspace, createProject } from './workspace';
 
@@ -233,6 +233,37 @@ describe('akış işlemleri (yetki işlem anında)', () => {
         const ws2 = { ...ws, weeklyReports: saved.reports };
         const bsSave = saveReport(ws2, { role: 'bolum_sorumlu', personId: 'bs1' }, { ...saved.report, pmScore: 10, pmScoreNote: undefined }, bs)!;
         expect(bsSave.report).toMatchObject({ pmScore: 7, pmScoreNote: 'Test ortamı gecikti.' });
+    });
+
+    it('geçen haftanın planı içeriktir; AI değerlendirmesi kayıtla yazılamaz, yalnız PYB destek yazar', () => {
+        const ws = { ...buildWs(), currentRole: 'py' as const, currentPersonId: 'pm1' };
+        const id = { role: 'py' as const, personId: 'pm1' };
+        const prevPlan = newItem('plan', '13 Ekim 2026 tarihinde kabul toplantısı yapılacak.');
+        let review = setPlanReview(undefined, prevPlan, 'done');
+        expect(review).toEqual([{ itemId: prevPlan.id, text: '13 Ekim 2026 tarihinde kabul toplantısı yapılacak.', status: 'done' }]);
+        review = setPlanReview(review, prevPlan, 'partial');
+        expect(review).toHaveLength(1);
+        expect(setPlanReview(review, prevPlan, null)).toBeUndefined();
+
+        const fake = { score: 10, rationale: 'x', evidence: [], signals: [], at: '', inputHash: '' };
+        const draft = {
+            ...createReport({ kind: 'project', projectId: 'a', departmentCode: 'U310', year: 2026, week: 41 }, py, NOW), thisWeek: good, nextWeek: plan,
+            planReview: [...review!, { itemId: prevPlan.id, text: 'tekrar', status: 'done' as const }, { itemId: 'y', text: 'geçersiz', status: 'bilinmiyor' as never }],
+            aiAssessment: fake,
+        };
+        const saved = saveReport(ws, id, draft, py, { now: NOW })!;
+        expect(saved.report.planReview).toEqual([{ itemId: prevPlan.id, text: '13 Ekim 2026 tarihinde kabul toplantısı yapılacak.', status: 'partial' }]); // tekrar ve geçersiz atıldı
+        expect(saved.report.aiAssessment).toBeUndefined();
+
+        const ws2 = { ...ws, weeklyReports: saved.reports };
+        expect(setReportAiAssessment(ws2, id, saved.report.id, fake)).toBeNull();
+        expect(setReportAiAssessment(ws2, { role: 'pyb_sorumlu' }, saved.report.id, fake)).toBeNull();
+        expect(setReportAiAssessment(ws2, { role: 'pyb_destek' }, 'yok', fake)).toBeNull();
+        const withAi = setReportAiAssessment(ws2, { role: 'pyb_destek' }, saved.report.id, fake)!;
+        expect(withAi[0].aiAssessment).toEqual(fake);
+        // Sonraki kayıt değerlendirmeyi silmez
+        const again = saveReport({ ...ws, weeklyReports: withAi }, id, { ...withAi[0], aiAssessment: undefined }, py, { now: NOW })!;
+        expect(again.report.aiAssessment).toEqual(fake);
     });
 
     it('yayınla / kaldır yalnız PYB destek ve onaylı rapor varken', () => {
