@@ -19,7 +19,8 @@ const buildProject = (): Project => {
     p.tasks = [
         task('havuz', 0, 'U310', 'Ayşe', 3),
         task('a', 1, 'U310', 'Ayşe', 10),
-        task('b', 1, 'U310', 'Ali', 6, { status: TaskStatus.Done }), // 6 / 0.5 = 12 gün
+        task('b', 1, 'U310', 'Ali', 6, { status: TaskStatus.Done }), // %50 katılım: yük yine 6 gün (efor)
+        task('e', 1, 'U310', 'Ali', 2),
         task('c', 1, 'U320', 'Kaan', 5),
         task('d', 2, 'U320', 'Kaan', 20),
         task('dis', 2, 'U320', 'Kaan', 50, { includeInSprints: false }),
@@ -45,12 +46,22 @@ describe('buildLanes', () => {
         expect(lanes[0].overloaded).toEqual([]);
     });
 
-    it('yük katılıma göre büyür; aşan birimler işaretlenir', () => {
+    it('yük efordur, katılım yalnız kapasitede sayılır; aşan birimler işaretlenir', () => {
         const s1 = lanes[1];
-        expect(s1.units.find(u => u.unit === 'U310')).toEqual({ unit: 'U310', load: 22, capacity: 16.5 });
+        // 10 + 6 + 2 = 18 gün efor > 11 × (1 + 0,5) = 16,5 gün kapasite
+        expect(s1.units.find(u => u.unit === 'U310')).toEqual({ unit: 'U310', load: 18, capacity: 16.5 });
         expect(s1.overloaded).toEqual(['U310']);
         expect(s1.done).toBe(1);
         expect(lanes[2].overloaded).toEqual(['U320']); // 20 > 11
+    });
+
+    it('katılım iki kez sayılmaz: %50 kişinin kapasitesine sığan iş aşım göstermez', () => {
+        const p = buildProject();
+        p.tasks = [task('x', 1, 'U310', 'Ali', 5)];
+        p.resources = p.resources.filter(r => r.name === 'Ali');
+        const u = buildLanes(p)[1].units.find(x => x.unit === 'U310')!;
+        expect(u).toEqual({ unit: 'U310', load: 5, capacity: 5.5 }); // eskiden 10 > 5,5 aşım görünürdü
+        expect(buildLanes(p)[1].overloaded).toEqual([]);
     });
 
     it('takvim panoyla aynı: sürüm 1 6–24 Temmuz, test 27–30 Temmuz', () => {

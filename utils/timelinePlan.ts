@@ -5,7 +5,9 @@ import { buildSprintWindows } from './taskToAllocation';
 /**
  * Zaman çizelgesi (sürüm planı) hesapları. Klasik sürüm panosuyla aynı
  * kurallar: sürüm = hafta × 5 iş günü, ardından test dönemi; kapasite birim
- * bazında (net iş günü × katılım), yük = PERT süresi / katılım oranı.
+ * bazında efor günü (net iş günü × katılım), yük = PERT eforu. Katılım oranı
+ * yalnız kapasitede bir kez sayılır: %50 katılımlı kişinin 6 günlük işi 6 gün
+ * yüktür, kişinin 11 günlük sürümdeki kapasitesi 5,5 gündür.
  */
 
 export interface LaneUnitLoad {
@@ -31,12 +33,8 @@ export interface SprintLane {
 
 const UNASSIGNED = 'Atanmamış';
 
-/** Görevin sürüme yüklediği gün: PERT / katılım oranı */
-export const taskLoadDays = (task: Task, participationByName: Map<string, number>): number => {
-    const { pert } = calculatePertFuzzyPert(task.time);
-    const p = participationByName.get(task.resourceName) || 100;
-    return pert / (p / 100);
-};
+/** Görevin sürüme yüklediği efor (gün): PERT. Katılım kapasite tarafında sayılır. */
+export const taskLoadDays = (task: Task): number => calculatePertFuzzyPert(task.time).pert;
 
 /** Bir sürümde birim başına kapasite (gün): (hafta×5 − test günü) × katılım */
 export const unitCapacities = (project: Project): Map<string, number> => {
@@ -59,7 +57,6 @@ export const buildLanes = (project: Project, extraLanes = 0): SprintLane[] => {
     const planned = project.tasks.filter(t => t.includeInSprints !== false);
     const maxVersion = Math.max(0, ...planned.map(t => t.version || 0)) + extraLanes;
     const windows = buildSprintWindows(project, maxVersion);
-    const participation = new Map(project.resources.map(r => [r.name, r.participation || 100]));
     const caps = unitCapacities(project);
 
     return Array.from({ length: maxVersion + 1 }, (_, v) => {
@@ -67,7 +64,7 @@ export const buildLanes = (project: Project, extraLanes = 0): SprintLane[] => {
         const loads = new Map<string, number>();
         tasks.forEach(t => {
             const unit = t.unit || UNASSIGNED;
-            loads.set(unit, (loads.get(unit) || 0) + taskLoadDays(t, participation));
+            loads.set(unit, (loads.get(unit) || 0) + taskLoadDays(t));
         });
         const unitNames = v === 0 ? [...loads.keys()] : [...new Set([...caps.keys(), ...loads.keys()])];
         const units = unitNames

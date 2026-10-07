@@ -158,11 +158,10 @@ const KanbanView: React.FC<KanbanViewProps> = ({ tasks, resources, sprintDuratio
       const completedLoadPerUnit: Record<string, number> = {};
       sprint.tasks.forEach(task => {
         const unit = task.unit || 'Atanmamış';
+        // Yük efordur (PERT); katılım oranı yalnız kapasitede bir kez sayılır
         const { pert } = calculatePertFuzzyPert(task.time);
-        const res = resources.find(r => r.name === task.resourceName);
-        const duration = pert / ((res?.participation || 100) / 100);
-        loadPerUnit[unit] = (loadPerUnit[unit] || 0) + duration;
-        if (task.status === TaskStatus.Done) completedLoadPerUnit[unit] = (completedLoadPerUnit[unit] || 0) + duration;
+        loadPerUnit[unit] = (loadPerUnit[unit] || 0) + pert;
+        if (task.status === TaskStatus.Done) completedLoadPerUnit[unit] = (completedLoadPerUnit[unit] || 0) + pert;
       });
 
       const combined: Record<string, UnitLoad> = {};
