@@ -4,13 +4,14 @@
 PlanAsistan; projeleri, işgücü (adam-ay, AA) tahsisini ve portföyü tek çalışma alanında yönetir. Üst menüde çalışma alanı ekranları bulunur: Yönetim (yalnızca Müdür ve PYB Sorumlusu), Portföy, Tahsis, Takvim ve Veri Havuzu. Bir proje açıldığında ikinci satırda proje bağlam çubuğu görünür: Pano, Yol Haritası, Hedefler, Görevler, Riskler, Ekip, İstekler, Günlük ve Zekâ sekmeleri ile İş Paketleri ve Durum Raporu düğmeleri. Sağ üstte Yapılacaklar zili, bulut senkronizasyonu, kimlik (rol + kişi) seçici, JSON yedek indir/yükle, ⌘K / Ctrl+K hızlı git, veri sağlığı, denetim günlüğü, ayarlar ve hakkında düğmeleri yer alır.
 
 ## Roller ve yetkiler
-Kimlik, rol ve (Proje Yöneticisi ile Bölüm Sorumlusu için) havuzdaki bir kişiden oluşur; sağ üstteki kimlik seçiciden değiştirilir.
+Kimlik (profil), rol ve (Proje Yöneticisi ile Bölüm Sorumlusu için) havuzdaki bir kişiden oluşur. Kenar çubuğunun altındaki profil satırına (telefonda üst çubuktaki baş harflere) dokununca "Profil değiştir" penceresi açılır: proje yöneticileri, bölüm sorumluları ve admin'in tanımladığı profiller role göre gruplu ve aranabilir listelenir; listede olmayan kişi "Başka bir kişi olarak çalışın" ile seçilir. Yedek, bulut, veri sağlığı ve denetim günlüğü "⋯" menüsündedir.
 - Müdür: her şeyi görür, girdi yapmaz; planları onaylar/kilitler.
 - PYB Sorumlusu: program/portföy yöneticisi; projeleri izler, planları onaylar/kilitler, girdi yapmaz.
 - PYB Destek: veri havuzu sorumlusu; personel, bölüm, rol, ünvan ve maliyetleri yönetir.
 - Proje Yöneticisi: yalnızca sahibi olduğu projeleri görür ve onların görev, plan ve risklerini girer.
 - Bölüm Sorumlusu: bölümündeki personelin tüm projelerdeki tahsisini girer ve izler.
-Yönetici rolleri (Müdür, PYB Sorumlusu) Günlük (notlar) ve İstekler ekranlarını göremez. Proje Yöneticisi veya Bölüm Sorumlusu rolünde kişi seçilmezse kapsamda proje görünmez.
+- Admin: rollerin yetkilerini ve profilleri yönetir ("Yönetici" ekranı).
+Yukarıdakiler varsayılan yetkilerdir. Admin, "Yönetici" ekranındaki rol × özellik matrisinden bir rolün yetkilerini değiştirebilir: yönetim ekranı, tüm projeleri görme, proje oluşturma, proje sahibi atama, veri havuzunu düzenleme, plan onayı, beklentileri yanıtlama, görüşme onayı, haftalık rapor denetimi/yayını ve PMO puanı. Değişiklikler hemen uygulanır, denetim günlüğüne yazılır ve bulut eşitlemesiyle tüm kullanıcılara geçer; "Varsayılana dön" rolü sıfırlar. Not gizliliği kilitlidir: Yönetici rolleri (Müdür, PYB Sorumlusu, Admin) Günlük (notlar) ve İstekler ekranlarını göremez. Sahiplik kuralları (PY yalnız kendi projesini, bölüm sorumlusu yalnız kendi bölümünü düzenler) yetkiyle değişmez. Proje Yöneticisi veya Bölüm Sorumlusu rolünde kişi seçilmezse kapsamda proje görünmez.
 
 ## Yeni proje oluşturma ve proje sahibi atama
 Portföy ekranında "Yeni Proje Ekle" ile proje oluşturulur. Proje kartından durum (Devam Eden, Teklif Aşaması, Beklemede, Tamamlandı), haftalık RAG durumu (Yolunda / Riskli / Kritik) ve durum notu girilir. Proje sahibi (Proje Yöneticisi) karttaki sahip alanından veri havuzundaki bir kişi seçilerek atanır; RBAC sahipliği bu atamaya göre çalışır. Proje silme ve yeniden adlandırma da karttaki düğmelerle yapılır; silme geri alınabilir.

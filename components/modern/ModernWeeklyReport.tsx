@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AiReportAssessment, ReportSettings, WeeklyReport, WorkspaceData } from '../../types';
-import { isPmoRole } from '../../utils/healthModel';
 import { fetchIntegrationHealth, IntegrationHealth } from '../../utils/integrations';
-import { Identity, isExecViewer, managedDepartmentCode, ownsProject } from '../../utils/rbac';
+import { can } from '../../utils/permissions';
+import { Identity, managedDepartmentCode, ownsProject } from '../../utils/rbac';
 import { relativeTime } from '../../utils/recentChanges';
 import {
-    actorOf, createReport, dueDate, findReport, isoWeekOf, isPyds, isWeekPublished, latestPublication, lintCounts, lintReport, pendingAuthors,
+    actorOf, createReport, dueDate, findReport, isoWeekOf, isReportSteward, isWeekPublished, latestPublication, lintCounts, lintReport, pendingAuthors,
     projectDepartment, reportDictionary, reportSettingsOf, shiftWeek, STAGE_LABELS, visibleReports, weekLabel, weekProgress,
 } from '../../utils/weeklyReport';
 import { Icon } from './icons';
@@ -79,9 +79,10 @@ const ModernWeeklyReport: React.FC<ModernWeeklyReportProps> = ({
     workspace, identity, onSaveReport, onAdvanceReport, onReturnReport, onPublishWeek, onUnpublishWeek, onMarkEmailed, onUpdateSettings, onSetJiraKey, onOpenMeetings, onRatePmo, onSetAiAssessment,
 }) => {
     const role = identity.role;
-    const exec = isExecViewer(role);
-    const steward = isPyds(role);
-    const bs = role === 'bolum_sorumlu';
+    // Ekran kipi: rapor denetçisi (yetki), bölüm sorumlusu ve PY kimlik kuralı; diğerleri yayınlanan raporu okur
+    const steward = isReportSteward(identity);
+    const bs = !steward && role === 'bolum_sorumlu';
+    const exec = !steward && !bs && role !== 'py';
     const dept = bs ? managedDepartmentCode(workspace, identity) : undefined;
 
     const [wk, setWk] = useState(() => {
@@ -346,7 +347,7 @@ const ModernWeeklyReport: React.FC<ModernWeeklyReportProps> = ({
                         onUnpublish={steward ? () => onUnpublishWeek(year, week) : undefined}
                         onMarkEmailed={steward ? () => onMarkEmailed(year, week) : undefined}
                         onOpenReport={bs || steward ? (r: WeeklyReport) => setOpen(r) : undefined}
-                        onRatePmo={isPmoRole(role) ? (projectId: string, score: number | null, note?: string) => onRatePmo(projectId, year, week, score, note) : undefined}
+                        onRatePmo={can(identity, 'health.rate') ? (projectId: string, score: number | null, note?: string) => onRatePmo(projectId, year, week, score, note) : undefined}
                         onSetAiAssessment={steward ? onSetAiAssessment : undefined}
                     />
                 )

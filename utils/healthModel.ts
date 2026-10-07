@@ -1,5 +1,6 @@
 import { HealthFactorKey, HealthSnapshotEntry, HealthWeekSnapshot, PmoRating, Project, TaskStatus, UserRole, WeeklyReport, WorkspaceData } from '../types';
 import { findOverAllocations } from './allocations';
+import { canFor, PermissionHolder } from './permissions';
 import { buildProjectEVM, defaultStatusMonth, ProjectEVM } from './evm';
 import { daysUntilNeed, isActiveExpectation } from './expectations';
 import { riskScore } from './risks';
@@ -309,8 +310,8 @@ export const evaluateProjectHealth = (ws: WorkspaceData, project: Project, ctx: 
 
 // ---------------------------------------------------------------- PMO puanı
 
-/** PMO puanı verebilen roller: PYB sorumlusu ve PYB destek */
-export const isPmoRole = (role: UserRole | undefined): boolean => role === 'pyb_sorumlu' || role === 'pyb_destek';
+/** PMO puanı verebilir mi (varsayılan PYB sorumlusu ve PYB destek; admin değiştirebilir) */
+export const isPmoRole = (who: UserRole | PermissionHolder | undefined): boolean => canFor(who, 'health.rate');
 
 export const validScore = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= 10;
 
@@ -323,11 +324,11 @@ export const pmoRatingFor = (ratings: PmoRating[] | undefined, projectId: string
  */
 export const setPmoRating = (
     ratings: PmoRating[] | undefined,
-    actor: { role: UserRole; personId?: string; name?: string },
+    actor: PermissionHolder & { personId?: string; name?: string },
     input: { projectId: string; year: number; week: number; score: number | null; note?: string },
     now: Date = new Date(),
 ): PmoRating[] | null => {
-    if (!isPmoRole(actor.role)) return null;
+    if (!isPmoRole(actor)) return null;
     if (input.score !== null && !validScore(input.score)) return null;
     const rest = (ratings || []).filter(r => !(r.projectId === input.projectId && r.year === input.year && r.week === input.week));
     if (input.score === null) return rest;

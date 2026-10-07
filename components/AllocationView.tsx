@@ -247,7 +247,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
             <i className="fa-solid fa-paper-plane mr-1"></i>Onaya Gönder
           </button>
         )}
-        {status === 'submitted' && canApprovePlan(currentRole) && (
+        {status === 'submitted' && canApprovePlan(identity) && (
           <>
             <button onClick={() => onLockAction(projectId, year, 'locked')} className="text-[11px] font-semibold px-2.5 py-1 rounded-lg text-white bg-emerald-500 hover:bg-emerald-600">
               <i className="fa-solid fa-check mr-1"></i>Onayla & Kilitle
@@ -257,7 +257,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
             </button>
           </>
         )}
-        {status === 'locked' && canApprovePlan(currentRole) && (
+        {status === 'locked' && canApprovePlan(identity) && (
           <button onClick={() => { if (window.confirm('Plan kilidi açılsın mı? Plan hücreleri yeniden düzenlenebilir olur.')) onLockAction(projectId, year, 'draft'); }} className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-300">
             <i className="fa-solid fa-lock-open mr-1"></i>Kilidi Aç
           </button>

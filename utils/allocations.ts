@@ -1,5 +1,6 @@
 import { Allocation, Leave, Person, PlanLock, PlanLockStatus, UserRole, WorkspaceData } from '../types';
 import { effectiveCapacity } from './availability';
+import { canFor, PermissionHolder } from './permissions';
 
 export const MONTHS_TR = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
 export const MONTH_INDEXES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
@@ -10,6 +11,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
     pyb_destek: 'PYB Destek',
     py: 'Proje Yöneticisi',
     bolum_sorumlu: 'Bölüm Sorumlusu',
+    admin: 'Admin',
 };
 
 // ---------------------------------------------------------------------------
@@ -18,13 +20,15 @@ export const ROLE_LABELS: Record<UserRole, string> = {
 //  PYB Sorumlusu ve Müdür kontrol eder (onay/kilit), girdi yapmaz.
 // ---------------------------------------------------------------------------
 
-export const canEditPool = (role: UserRole | undefined): boolean => role === 'pyb_destek';
+// Özellik yetkileri admin tarafından değiştirilebilir (utils/permissions.ts):
+// rol adıyla çağrılırsa varsayılan, kimlikle çağrılırsa geçerli yetki.
+export const canEditPool = (who: UserRole | PermissionHolder | undefined): boolean => canFor(who, 'datapool.edit');
 
+/** Tahsis girişi kimlik kuralıdır (kendi projesi / bölümü): yetkiyle değişmez */
 export const canEnterData = (role: UserRole | undefined): boolean =>
     role === 'py' || role === 'bolum_sorumlu';
 
-export const canApprovePlan = (role: UserRole | undefined): boolean =>
-    role === 'pyb_sorumlu' || role === 'mudur';
+export const canApprovePlan = (who: UserRole | PermissionHolder | undefined): boolean => canFor(who, 'plan.approve');
 
 // ---------------------------------------------------------------------------
 // Plan kilidi yardımcıları

@@ -210,6 +210,8 @@ export interface ModernDataPoolProps {
     roleCatalog: RoleCatalogEntry[];
     titles: TitleDef[];
     currentRole: UserRole;
+    /** Veri havuzu düzenleme yetkisi (admin değiştirebilir); verilmezse rolün varsayılanı */
+    canEdit?: boolean;
     onUpdatePeople: (people: Person[]) => void;
     onUpdateDepartments: (departments: Department[]) => void;
     onUpdateRoleCatalog: (roles: RoleCatalogEntry[]) => void;
@@ -221,9 +223,9 @@ export interface ModernDataPoolProps {
 const ISSUE_FILTERS: (PersonIssue | 'any')[] = ['any', 'department', 'title', 'cost', 'email'];
 
 const ModernDataPool: React.FC<ModernDataPoolProps> = ({
-    people, departments, roleCatalog, titles, currentRole, onUpdatePeople, onUpdateDepartments, onUpdateRoleCatalog, onUpdateTitles, onApplyImport, onViewPerson,
+    people, departments, roleCatalog, titles, currentRole, canEdit, onUpdatePeople, onUpdateDepartments, onUpdateRoleCatalog, onUpdateTitles, onApplyImport, onViewPerson,
 }) => {
-    const editable = canEditPool(currentRole);
+    const editable = canEdit ?? canEditPool(currentRole);
     const [tab, setTab] = useState<Tab>('people');
     const [query, setQuery] = useState('');
     const [dept, setDept] = useState('all');
@@ -327,7 +329,7 @@ const ModernDataPool: React.FC<ModernDataPoolProps> = ({
             {!editable && (
                 <div role="status" className="rounded-2xl px-4 py-3 m-tone-accent flex items-center gap-3 text-[15px]">
                     <Icon name="eye" size={18} />
-                    Veri havuzunu yalnız PYB Destek düzenler; {ROLE_LABELS[currentRole]} olarak salt okunur görüyorsunuz.
+                    Veri havuzunu düzenleme yetkiniz yok (varsayılan: PYB Destek); {ROLE_LABELS[currentRole]} olarak salt okunur görüyorsunuz.
                 </div>
             )}
             {notice && (
