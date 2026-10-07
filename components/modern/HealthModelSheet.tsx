@@ -52,18 +52,16 @@ const NEXT_STEPS: { icon: IconName; title: string; text: React.ReactNode }[] = [
         title: 'Regresyonla kalibrasyon',
         text: <>Yeterli etiketli gözlem birikince ağırlıklar, uzman ağırlıklarına doğru büzülen ridge regresyonla yeniden tahmin edilir. Veri azken sonuç uzman ağırlıklarında (β<sub>0</sub>) kalır, veri arttıkça veriye yaklaşır. Doğrulama proje bazlı çapraz doğrulamayla yapılır (aynı projenin haftaları birbirinden bağımsız değildir); yeni ağırlıklar PMO onayıyla, sürümlenerek devreye girer.</>,
     },
-    { icon: 'sparkles', title: 'AI metin puanı', text: 'Haftalık rapor metninden yapılandırılmış puan, gerekçe ve alıntılanan kanıt. Sayıları yeniden yorumlamaz (o bilgi zaten SPI ve görevlerden geliyor); metnin nitel yanını, engelleri ve belirsizlikleri değerlendirir.' },
-    { icon: 'check', title: 'Söz tutma oranı', text: 'Geçen haftanın “gelecek hafta planı” maddelerinden bu hafta gerçekleşenlerin payı. Öznel değil ölçülebilir bir güvenilirlik göstergesi.' },
     { icon: 'flag', title: 'Erken uyarı', text: 'Hedef olarak gelecekteki sonuç kullanılır: lojistik regresyonla “önümüzdeki 8 hafta içinde kritik duruma düşme olasılığı”.' },
     { icon: 'clock', title: 'Kazanılmış takvim (earned schedule)', text: "SPI'ın proje sonuna doğru kendiliğinden 1'e yaklaşma sorununu giderir; takvim sapmasını zaman cinsinden ölçer." },
-];
+]
 
 const HealthModelSheet: React.FC<{ workspace: WorkspaceData; onClose: () => void; health?: ProjectHealth }> = ({ workspace, onClose, health }) => {
     const cal = useMemo(() => calibrationStatus(workspace), [workspace]);
     const progress = Math.min(1, cal.labeled / cal.needed);
 
     return (
-        <Sheet wide title="Sağlık skoru nasıl hesaplanır?" subtitle={`Model ${HEALTH_MODEL_VERSION} · 1. adım: uzman ağırlıklı bileşik skor`} onClose={onClose}>
+        <Sheet wide title="Sağlık skoru nasıl hesaplanır?" subtitle={`Model ${HEALTH_MODEL_VERSION} · uzman ağırlıklı bileşik skor`} onClose={onClose}>
             {health && (
                 <Section title={health.name} icon="gauge" subtitle="Bu projenin girdileri ve skora katkıları">
                     <div className="flex flex-wrap items-center gap-3">
@@ -80,6 +78,7 @@ const HealthModelSheet: React.FC<{ workspace: WorkspaceData; onClose: () => void
                                     <span className="flex-1 min-w-0 flex flex-col gap-0.5">
                                         <span className={`text-[15px] ${none ? 'm-text-3' : 'm-text'}`}>{f.label} <span className="text-[12.5px] m-text-3 m-tabular">· w {num(f.weight)}</span></span>
                                         <span className="text-[13px] m-text-3 truncate">{f.detail}</span>
+                                        {f.note && <span className="text-[13px] m-text-2 leading-snug">{f.note}</span>}
                                     </span>
                                     <span className="w-24 sm:w-32 flex-none flex items-center gap-2" aria-label={none ? 'Veri yok' : `x = ${num(f.value!)}`}>
                                         <span aria-hidden="true" className="flex-1 h-1.5 rounded-full m-fill overflow-hidden">
@@ -111,7 +110,7 @@ const HealthModelSheet: React.FC<{ workspace: WorkspaceData; onClose: () => void
                     <><b>Kapsam</b> = verisi olan girdilerin Σw<sub>i</sub>'si → güven: %70 ve üstü yüksek, %45–69 orta, altı düşük.</>,
                     <><b>Bantlar</b>: {BAND_GOOD} ve üstü Sağlıklı · {BAND_WARN}–{BAND_GOOD - 1} İzlemede · {BAND_WARN} altı Sorunlu.</>,
                     <><b>Skoru düşürenler</b>: her girdinin kaybı 100 × w<sub>i</sub>(1 − x<sub>i</sub>) ÷ Σw<sub>i</sub>; en büyük kayıp başta listelenir.</>,
-                    <><b>Algı farkı</b> = ort(RAG, PY puanı) − nesnel girdilerin ağırlıklı ortalaması. +{num(PERCEPTION_GAP_ALERT)} ve üstü “karpuz proje” uyarısıdır: dışı yeşil, içi kırmızı.</>,
+                    <><b>Algı farkı</b> = ort(RAG, PY puanı) − nesnel girdilerin ağırlıklı ortalaması (AI metin puanı PY'nin kendi metninden türediği için iki tarafa da girmez). +{num(PERCEPTION_GAP_ALERT)} ve üstü “karpuz proje” uyarısıdır: dışı yeşil, içi kırmızı.</>,
                 ]} />
             </Section>
 
@@ -135,7 +134,7 @@ const HealthModelSheet: React.FC<{ workspace: WorkspaceData; onClose: () => void
 
             <Section title="Veri toplama" icon="history" subtitle="PMO puanı modelin hedef değişkeni (Y)">
                 <p className="m-0 text-[14.5px] leading-relaxed m-text-2">
-                    Her ISO haftasında aktif projelerin girdileri ve skoru kaydedilir (hafta içinde günde en çok bir kez tazelenir). PMO (PYB sorumlusu ya da PYB destek) haftalık raporda her projeye 1–10 puan verir. Çapa etkisini azaltmak için puanın verildiği yerde model skoru gösterilmez.
+                    Her ISO haftasında aktif projelerin girdileri ve skoru kaydedilir (hafta içinde günde en çok bir kez tazelenir). PMO (PYB sorumlusu ya da PYB destek) haftalık raporda her projeye 1–10 puan verir. Çapa etkisini azaltmak için puanın verildiği yerde model skoru gösterilmez. AI metin puanı, PYB destek haftayı yayınlarken onaylı rapor metinlerinden hesaplanır; söz tutma oranı PY'nin geçen haftanın planını değerlendirmesinden gelir.
                 </p>
                 <div className="grid gap-2.5 grid-cols-2 sm:grid-cols-4">
                     {[
@@ -166,7 +165,7 @@ const HealthModelSheet: React.FC<{ workspace: WorkspaceData; onClose: () => void
                 </p>
             </Section>
 
-            <Section title="Sırada ne var" icon="target" subtitle="2. adım ve sonrası">
+            <Section title="Sırada ne var" icon="target" subtitle="Veri biriktikçe">
                 <Formula label="Beta şapka eşittir, X devrik X artı lambda I'nın tersi, çarpı X devrik y artı lambda beta sıfır">
                     <span className="relative inline-block">β<span aria-hidden="true" className="absolute inset-x-0 text-center" style={{ top: '-0.62em', fontSize: '0.85em' }}>ˆ</span></span> = (X<sup>T</sup>X + λI)<sup>−1</sup> (X<sup>T</sup>y + λβ<sub>0</sub>)
                 </Formula>

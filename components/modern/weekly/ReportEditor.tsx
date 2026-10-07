@@ -8,7 +8,7 @@ import { Identity } from '../../../utils/rbac';
 import { relativeTime } from '../../../utils/recentChanges';
 import {
     canEditReport, CATEGORY_META, findAbbreviations, findReport, glossaryFor, itemDisplay, lintCounts, LintIssue, lintReport, locative, meetingSentence,
-    newItem, nextStage, returnStage, shiftWeek, STAGE_LABELS, THIS_WEEK_CATEGORIES, weekLabel, weekStart,
+    newItem, nextStage, PLAN_REVIEW_LABELS, PLAN_REVIEW_STATUSES, returnStage, setPlanReview, shiftWeek, STAGE_LABELS, THIS_WEEK_CATEGORIES, weekLabel, weekStart,
 } from '../../../utils/weeklyReport';
 import { parseWorklogRows, summarizeWorklog, worklogInWeek } from '../../../utils/worklog';
 import { useAiRun } from '../../assistant/AiButton';
@@ -233,6 +233,10 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
     })()), [meetings, draft.projectId, year, week]);
     const planned = useMemo(() => meetingsPlannedInWeek(meetings, draft.projectId, nextWk.year, nextWk.week), [meetings, draft.projectId, nextWk.year, nextWk.week]);
     const prevReport = findReport(workspace.weeklyReports || [], prevWk.year, prevWk.week, draft.projectId, draft.kind, draft.departmentCode);
+    // Geçen haftanın planı ne oldu? (söz tutma oranı — sağlık skorunun girdisi)
+    const prevPlans = draft.kind === 'project' ? prevReport?.nextWeek || [] : [];
+    const reviewOf = (id: string) => draft.planReview?.find(p => p.itemId === id)?.status;
+    const unreviewed = prevPlans.filter(p => !reviewOf(p.id)).length;
     const notes = useMemo(() => (project?.notes || []).filter(n => n.year === year && n.weekNumber === week), [project, year, week]);
     const worklog = useMemo(() => summarizeWorklog(draft.worklog || []), [draft.worklog]);
     const worklogHours = Math.round((draft.worklog || []).reduce((s, e) => s + e.hours, 0) * 10) / 10;
@@ -401,6 +405,38 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
 
             <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px] items-start">
                 <div className="flex flex-col gap-5 min-w-0">
+                    {prevPlans.length > 0 && (
+                        <Card
+                            title="Geçen haftanın planı"
+                            subtitle={editable ? 'Geçen hafta planladıklarınız ne oldu? Söz tutma oranı sağlık skorunun girdilerinden biridir; iptal edilenler orana girmez.' : 'Geçen hafta planlananların bu haftaki durumu.'}
+                        >
+                            <div className="-mx-1 flex flex-col">
+                                {prevPlans.map((plan, i) => {
+                                    const status = reviewOf(plan.id);
+                                    return (
+                                        <div key={plan.id} className={`flex flex-col gap-2 px-1 py-2.5 ${i > 0 ? 'border-t m-sep' : ''}`} style={i > 0 ? { borderTopStyle: 'solid', borderTopWidth: 1 } : undefined}>
+                                            <span className="text-[15px] leading-relaxed m-text">{itemDisplay(plan)}</span>
+                                            {editable ? (
+                                                <div className="m-segmented self-start" role="group" aria-label={`Plan ${i + 1} durumu`}>
+                                                    {PLAN_REVIEW_STATUSES.map(st => (
+                                                        <button key={st} type="button" className="m-segment !min-h-[34px] !px-3" aria-pressed={status === st}
+                                                            onClick={() => update(d => ({ ...d, planReview: setPlanReview(d.planReview, plan, status === st ? null : st) }))}>
+                                                            {PLAN_REVIEW_LABELS[st]}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <span className={`self-start text-[13px] font-semibold ${status === 'done' ? 'm-ink-ok' : status === 'partial' ? 'm-ink-warn' : status === 'slipped' ? 'm-ink-bad' : 'm-text-3'}`}>
+                                                    {status ? PLAN_REVIEW_LABELS[status] : 'Değerlendirilmedi'}
+                                                </span>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </Card>
+                    )}
+
                     <Card
                         title="Bu hafta gelişmeler"
                         subtitle="Takvim, bütçe ve risk açısından önemli gelişmeler — her gelişme ayrı madde, kısa cümlelerle."
@@ -688,6 +724,7 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
                         <span className="text-[14px] m-text-3 flex-1 min-w-[180px]">
                             {counts.errors > 0 && next ? `Göndermeden önce ${counts.errors} format hatasını düzeltin.` : next ? `Sonraki aşama: ${STAGE_LABELS[next.stage]}` : 'Onaylandı — yayınlanmayı bekliyor.'}
                             {pmCanRate && draft.pmScore === undefined && ' · Proje sağlığı puanı verilmedi'}
+                            {editable && unreviewed > 0 && ` · Geçen haftanın planından ${unreviewed} madde değerlendirilmedi`}
                         </span>
                         {canReturn && (
                             <button type="button" className="m-btn m-btn-danger" onClick={() => { setReturnNote(''); setReturning(true); }}>

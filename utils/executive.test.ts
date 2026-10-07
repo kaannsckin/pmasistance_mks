@@ -30,14 +30,14 @@ describe('projectHealth', () => {
     it('kırmızı RAG + yüksek risk + geciken iş skoru düşürür; yeşil 100', () => {
         const ws = buildWs();
         const red = projectHealth(ws, ws.projects[0], 2026, 7, NOW);
-        // Verisi olan girdiler: RAG 0 (w .10), risk 0,6 (.15), geciken 0 (.15), beklenti 1 (.07)
-        // 100 × (0 + .09 + 0 + .07) / .47 = 34
-        expect(red.score).toBe(34);
+        // Verisi olan girdiler: RAG 0 (w .08), risk 0,6 (.13), geciken 0 (.13), beklenti 1 (.05)
+        // 100 × (0 + .078 + 0 + .05) / .39 = 33
+        expect(red.score).toBe(33);
         expect(red.band).toBe('bad');
         expect(red.reasons).toContain('Kritik RAG');
         expect(red.reasons[0]).toBe('1 geciken görev'); // en büyük kayıp başta
         expect(red.highRisks).toBe(1);
-        expect(red.coverage).toBe(0.47);
+        expect(red.coverage).toBe(0.39);
         const green = projectHealth(ws, ws.projects[1], 2026, 7, NOW);
         expect(green.score).toBe(100);
         expect(green.band).toBe('good');
@@ -49,7 +49,7 @@ describe('portfolioHealth', () => {
     it('org skoru proje ortalaması, en düşük önce sıralı', () => {
         const h = portfolioHealth(buildWs(), 2026, 7, NOW);
         expect(h.projects[0].projectId).toBe('red'); // en düşük başta
-        expect(h.orgScore).toBe(67); // (34+100)/2
+        expect(h.orgScore).toBe(67); // (33+100)/2 = 66,5 → 67
     });
 });
 

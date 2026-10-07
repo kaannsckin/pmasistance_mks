@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Allocation, HealthFactorKey, HealthWeekSnapshot, ManagementExpectation, Person, Project, Risk, Task, TaskStatus, WorkspaceData } from '../types';
 import {
-    buildHealthContext, calibrationStatus, ensureWeeklyHealthSnapshot, evaluateProjectHealth, HEALTH_FACTORS, HealthEvaluation, latestPmScore,
+    buildHealthContext, calibrationStatus, commitmentRatio, ensureWeeklyHealthSnapshot, evaluateProjectHealth, HEALTH_FACTORS, HealthEvaluation, latestPmScore,
     MIN_LABELED_OBSERVATIONS, setPmoRating,
 } from './healthModel';
 import { createReport } from './weeklyReport';
@@ -35,7 +35,7 @@ const f = (h: HealthEvaluation, key: HealthFactorKey) => h.factors.find(x => x.k
 describe('uzman ağırlıkları', () => {
     it('toplamı 1; regresyon için girdi başına ~10 gözlem gerekir', () => {
         expect(HEALTH_FACTORS.reduce((s, x) => s + x.weight, 0)).toBeCloseTo(1, 10);
-        expect(MIN_LABELED_OBSERVATIONS).toBe(80);
+        expect(MIN_LABELED_OBSERVATIONS).toBe(100);
     });
 });
 
@@ -53,11 +53,11 @@ describe('evaluateProjectHealth', () => {
         expect(f(h, 'cpi').value).toBe(0.5);
         expect(f(h, 'pm').value).toBeNull();
         expect(f(h, 'pm').points).toBe(0);
-        // Verisi olanlar: spi .5, cpi .5, geciken 1, risk 1, RAG 1, kaynak 1, beklenti 1 → kapsam .90
-        expect(h.coverage).toBe(0.9);
+        // Verisi olanlar: spi .5, cpi .5, geciken 1, risk 1, RAG 1, kaynak 1, beklenti 1 → kapsam .76
+        expect(h.coverage).toBe(0.76);
         expect(h.confidence).toBe('high');
-        expect(h.score).toBe(81); // 100 × .725 / .90
-        expect(f(h, 'spi').points).toBe(11.1); // 100 × .20 × (1 − .5) / .90
+        expect(h.score).toBe(80); // 100 × .605 / .76
+        expect(f(h, 'spi').points).toBe(11.8); // 100 × .18 × (1 − .5) / .76
         expect(h.reasons.slice(0, 2)).toEqual(['Takvim hafif geride (SPI 0,9)', 'Bütçe hafif aşımda (CPI 0,9)']);
         // Kayıpların toplamı 100 − skor
         expect(h.factors.reduce((s, x) => s + x.points, 0)).toBeCloseTo(100 - h.score, 0);
@@ -65,9 +65,9 @@ describe('evaluateProjectHealth', () => {
 
     it('verisi olmayan girdi skora girmez; ağırlığı diğerlerine dağılır', () => {
         const h = evaluate(wsOf({ projects: [project('p')] }), 'p');
-        expect(h.factors.filter(x => x.value === null).map(x => x.key)).toEqual(['spi', 'cpi', 'overdue', 'rag', 'pm', 'resource']);
+        expect(h.factors.filter(x => x.value === null).map(x => x.key)).toEqual(['spi', 'cpi', 'overdue', 'commitment', 'rag', 'pm', 'ai', 'resource']);
         expect(h.score).toBe(100);
-        expect(h.coverage).toBe(0.22);
+        expect(h.coverage).toBe(0.18);
         expect(h.confidence).toBe('low');
         expect(h.reasons).toEqual([]);
         expect(h.perceptionGap).toBeNull();
@@ -129,9 +129,37 @@ describe('evaluateProjectHealth', () => {
             weeklyReports: [{ ...createReport({ kind: 'project', projectId: 'p', departmentCode: 'U310', year: 2026, week: 29 }, actor, NOW), pmScore: 10 }],
         });
         const h = evaluate(ws, 'p');
-        // nesnel: geciken 0 (.15), risk .6 (.15), beklenti 1 (.07) → .432; öznel: (1 + 1) / 2
-        expect(h.perceptionGap).toBe(0.57);
+        // nesnel: geciken 0 (.13), risk .6 (.13), beklenti 1 (.05) → .413; öznel: (1 + 1) / 2
+        expect(h.perceptionGap).toBe(0.59);
         expect(h.reasons[h.reasons.length - 1]).toBe('Algı farkı: PY değerlendirmesi verilerden belirgin iyimser');
+        // AI metin puanı PY'nin metninden türer: algı farkının iki tarafına da girmez
+        const withAi = { ...ws, weeklyReports: ws.weeklyReports!.map(r => ({ ...r, aiAssessment: { score: 1, rationale: 'Kriz', evidence: [], signals: [], at: '', inputHash: '' } })) };
+        expect(evaluate(withAi, 'p').perceptionGap).toBe(0.59);
+    });
+
+    it('söz tutma: son 4 haftada değerlendirilen planlardan gerçekleşenlerin payı', () => {
+        const actor = { role: 'py' as const, personId: 'pm', name: 'PM' };
+        const rep = (week: number, statuses: ('done' | 'partial' | 'slipped' | 'dropped')[]) => ({
+            ...createReport({ kind: 'project', projectId: 'p', departmentCode: 'U310', year: 2026, week }, actor, NOW),
+            planReview: statuses.map((status, i) => ({ itemId: `${week}-${i}`, text: 'plan', status })),
+        });
+        const reports = [rep(29, ['done', 'partial', 'dropped']), rep(28, ['done', 'slipped']), rep(25, ['slipped', 'slipped'])]; // 25. hafta pencere dışı
+        expect(commitmentRatio(reports, 'p', NOW)).toEqual({ ratio: 0.625, plans: 4 }); // (1 + .5 + 1 + 0) / 4
+        expect(commitmentRatio([rep(29, ['dropped'])], 'p', NOW)).toBeUndefined();
+        const h = evaluate(wsOf({ projects: [project('p')], weeklyReports: reports }), 'p');
+        expect(f(h, 'commitment')).toMatchObject({ value: 0.31, detail: '%63 gerçekleşti (4 plan, son 4 hafta)' }); // (.625 − .5) / .4
+        expect(h.reasons).toContain('Söz tutma %63');
+    });
+
+    it('AI metin puanı: son 4 haftanın en yeni değerlendirmesi; gerekçe açıklama olarak taşınır', () => {
+        const actor = { role: 'py' as const, personId: 'pm', name: 'PM' };
+        const rep = (week: number, score: number) => ({
+            ...createReport({ kind: 'project', projectId: 'p', departmentCode: 'U310', year: 2026, week }, actor, NOW),
+            aiAssessment: { score, rationale: `${week}. hafta gerekçesi`, evidence: [], signals: [], at: '', inputHash: '' },
+        });
+        const h = evaluate(wsOf({ projects: [project('p')], weeklyReports: [rep(27, 4), rep(28, 7)] }), 'p');
+        expect(f(h, 'ai')).toMatchObject({ value: 0.67, detail: '7/10 (28. hafta)', note: '28. hafta gerekçesi' }); // (7 − 1) / 9
+        expect(f(evaluate(wsOf({ projects: [project('p')], weeklyReports: [rep(24, 9)] }), 'p'), 'ai').value).toBeNull();
     });
 });
 
@@ -164,7 +192,7 @@ describe('ensureWeeklyHealthSnapshot', () => {
         const ws1 = ensureWeeklyHealthSnapshot(base(), NOW)!;
         expect(ws1.healthHistory).toHaveLength(1);
         const snap = ws1.healthHistory![0];
-        expect(snap).toMatchObject({ year: 2026, week: 29, model: 'uzman-1', takenAt: NOW.toISOString() });
+        expect(snap).toMatchObject({ year: 2026, week: 29, model: 'uzman-2', takenAt: NOW.toISOString() });
         expect(snap.projects.map(e => e.projectId)).toEqual(['p']); // yalnız devam eden
         expect(snap.projects[0].x).toEqual({ risk: 1, rag: 0.5, expectations: 1 }); // verisi olmayan yazılmaz
 
@@ -201,7 +229,7 @@ describe('calibrationStatus', () => {
             healthHistory: [snap(28, [['p', 80]]), snap(29, [['p', 60], ['q', 40]])],
             pmoRatings: [rating('p', 28, 7), rating('p', 29, 6), rating('q', 29, 5), rating('p', 30, 9)],
         });
-        expect(s).toMatchObject({ weeks: 2, ratings: 4, labeled: 3, labeledProjects: 2, needed: 80, correlation: null });
+        expect(s).toMatchObject({ weeks: 2, ratings: 4, labeled: 3, labeledProjects: 2, needed: 100, correlation: null });
         expect(s.mae).toBe(0.7); // (|8−7| + |6−6| + |4−5|) / 3
 
         const perfect = calibrationStatus({

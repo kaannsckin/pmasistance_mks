@@ -1,5 +1,6 @@
 import {
-    Abbreviation, MeetingDetails, Project, ReportCategory, ReportEvent, ReportItem, ReportSettings, ReportStage, UserRole, WeeklyPublication, WeeklyReport, WorkspaceData,
+    Abbreviation, AiReportAssessment, MeetingDetails, PlanReviewItem, PlanReviewStatus, Project, ReportCategory, ReportEvent, ReportItem, ReportSettings, ReportStage, UserRole, WeeklyPublication,
+    WeeklyReport, WorkspaceData,
 } from '../types';
 import { ROLE_LABELS } from './allocations';
 import { Identity, isExecViewer, managedDepartmentCode, ownsProject } from './rbac';
@@ -77,6 +78,28 @@ export const STAGE_LABELS: Record<ReportStage, string> = {
 
 const newId = (p: string) => `${p}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 export const newItem = (category: ReportCategory, text = '', extra: Partial<ReportItem> = {}): ReportItem => ({ id: newId('ri'), category, text, ...extra });
+
+// ---------------------------------------------------------------- geçen haftanın planı
+
+export const PLAN_REVIEW_STATUSES: PlanReviewStatus[] = ['done', 'partial', 'slipped', 'dropped'];
+export const PLAN_REVIEW_LABELS: Record<PlanReviewStatus, string> = { done: 'Yapıldı', partial: 'Kısmen', slipped: 'Ertelendi', dropped: 'İptal' };
+
+const cleanPlanReview = (items: PlanReviewItem[] | undefined): PlanReviewItem[] | undefined => {
+    const seen = new Set<string>();
+    const out = (items || []).filter(p => {
+        if (!p || typeof p.itemId !== 'string' || !PLAN_REVIEW_STATUSES.includes(p.status) || seen.has(p.itemId)) return false;
+        seen.add(p.itemId);
+        return true;
+    }).map(p => ({ itemId: p.itemId, text: String(p.text || '').slice(0, 500), status: p.status }));
+    return out.length ? out : undefined;
+};
+
+/** Plan değerlendirmesini günceller; status = null maddeyi değerlendirmeden çıkarır */
+export const setPlanReview = (items: PlanReviewItem[] | undefined, plan: ReportItem, status: PlanReviewStatus | null): PlanReviewItem[] | undefined => {
+    const rest = (items || []).filter(p => p.itemId !== plan.id);
+    const next = status ? [...rest, { itemId: plan.id, text: itemDisplay(plan), status }] : rest;
+    return next.length ? next : undefined;
+};
 
 // ---------------------------------------------------------------- roller ve akış
 
@@ -161,7 +184,7 @@ export const createReport = (
 });
 
 /** İçerik düzenlemesi; yazar dışındaki aşamalarda kimin değiştirdiği kayda geçer */
-export const editReport = (r: WeeklyReport, patch: Partial<Pick<WeeklyReport, 'thisWeek' | 'nextWeek' | 'abbreviations' | 'worklog' | 'aiDraft' | 'pmScore' | 'pmScoreNote'>>, actor: Actor, now: Date = new Date()): WeeklyReport => {
+export const editReport = (r: WeeklyReport, patch: Partial<Pick<WeeklyReport, 'thisWeek' | 'nextWeek' | 'abbreviations' | 'worklog' | 'aiDraft' | 'pmScore' | 'pmScoreNote' | 'planReview'>>, actor: Actor, now: Date = new Date()): WeeklyReport => {
     const last = r.history[r.history.length - 1];
     const sameEditor = last && last.byRole === actor.role && last.byName === actor.name && (last.action === 'edit' || last.action === 'create');
     return {
@@ -246,13 +269,25 @@ export const saveReport = (
     const pmRates = draft.kind === 'project' && (existing?.stage ?? 'draft') === 'draft';
     const pmScore = pmRates ? (Number.isInteger(draft.pmScore) && draft.pmScore! >= 1 && draft.pmScore! <= 10 ? draft.pmScore : undefined) : existing?.pmScore;
     const pmScoreNote = pmRates ? (pmScore !== undefined ? draft.pmScoreNote?.trim() || undefined : undefined) : existing?.pmScoreNote;
-    const content = { thisWeek: draft.thisWeek, nextWeek: draft.nextWeek, abbreviations: draft.abbreviations, worklog: draft.worklog, aiDraft: draft.aiDraft, pmScore, pmScoreNote };
+    // Geçen haftanın planı rapor içeriğidir (aşamanın sahibi düzeltebilir); AI değerlendirmesi buradan yazılmaz
+    const planReview = draft.kind === 'project' ? cleanPlanReview(draft.planReview) : undefined;
+    const content = { thisWeek: draft.thisWeek, nextWeek: draft.nextWeek, abbreviations: draft.abbreviations, worklog: draft.worklog, aiDraft: draft.aiDraft, pmScore, pmScoreNote, planReview };
     let r: WeeklyReport = existing ? editReport(existing, content, actor, now) : { ...createReport({ kind: draft.kind, projectId: draft.projectId, departmentCode: draft.departmentCode, year: draft.year, week: draft.week }, actor, now), ...content, id: draft.id };
     if (o.advance) {
         if (lintCounts(lintReport(r, o.dictionary)).errors > 0 || !nextStage(r)) return null;
         r = advanceReport(r, actor, now);
     }
     return { reports: existing ? reports.map(x => (x.id === r.id ? r : x)) : [...reports, r], report: r, from: existing?.stage || 'draft' };
+};
+
+/**
+ * AI metin değerlendirmesini rapora yazar. Sistem alanıdır: aşama ya da
+ * yayın kilidinden bağımsızdır, yalnız PYB destek (haftayı yayınlayan) yazar.
+ */
+export const setReportAiAssessment = (ws: Pick<WorkspaceData, 'weeklyReports'>, id: Identity, reportId: string, assessment: AiReportAssessment): WeeklyReport[] | null => {
+    const reports = ws.weeklyReports || [];
+    if (!isPyds(id.role) || !reports.some(r => r.id === reportId && r.kind === 'project')) return null;
+    return reports.map(r => (r.id === reportId ? { ...r, aiAssessment: assessment } : r));
 };
 
 /** Bir önceki sahibine iade (yalnız aşamanın sahibi) */
