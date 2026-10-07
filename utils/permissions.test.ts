@@ -5,12 +5,12 @@ import { canReviewMeeting } from './customerMeetings';
 import { canRespondExpectation, visibleExpectations } from './expectations';
 import { setPmoRating } from './healthModel';
 import {
-    can, canFor, customizedRoles, defaultPermissions, isEditable, isManagementRole, permissionDiff, PERMISSIONS, permissionsFor, resetRolePermissions, ROLE_ORDER,
+    can, canFor, customizedRoles, defaultPermissions, isEditable, isManagementRole, migrateRolePermissions, permissionDiff, PERMISSIONS, PERMISSIONS_REV, permissionsFor, resetRolePermissions, ROLE_ORDER,
     setRolePermission,
 } from './permissions';
 import { canCreateProject, identityFor, identityOf, visibleProjectIds } from './rbac';
 import { isReportSteward, publishWeek, visibleReports } from './weeklyReport';
-import { createEmptyWorkspace, createProject } from './workspace';
+import { createEmptyWorkspace, createProject, normalizeWorkspace } from './workspace';
 
 describe('varsayılan yetkiler (önceki sabit kurallarla aynı)', () => {
     it('rol başına beklenen yetkiler', () => {
@@ -110,5 +110,20 @@ describe('admin değişiklikleri kontrol noktalarına yansır', () => {
         expect(canEditPool(destek)).toBe(false);
         expect(canCreateProject(destek)).toBe(false);
         expect(setPmoRating([], { ...destek, name: 'Destek' }, { projectId: 'a', year: 2026, week: 41, score: 7 })).toBeNull();
+    });
+});
+
+describe('yetki kataloğu geçişi', () => {
+    it('eski sürümde özelleştirilmiş rollere yeni varsayılan yetki bir kez eklenir', () => {
+        const old = { py: ['project.create' as const], admin: [] };
+        const m = migrateRolePermissions(old, undefined)!;
+        expect(m.py).toEqual(['project.create', 'ai.use']);
+        expect(m.admin).toEqual([]); // admin varsayılanında ai.use yok
+        // Güncel sürümde admin'in kaldırdığı yetki geri gelmez
+        expect(migrateRolePermissions({ py: ['project.create'] }, PERMISSIONS_REV)).toEqual({ py: ['project.create'] });
+        expect(migrateRolePermissions(undefined, undefined)).toBeUndefined();
+        const ws = normalizeWorkspace({ rolePermissions: { mudur: ['screen.executive'] } });
+        expect(ws).toMatchObject({ rolePermissionsRev: PERMISSIONS_REV, rolePermissions: { mudur: ['screen.executive', 'ai.use'] } });
+        expect(normalizeWorkspace(ws).rolePermissions).toEqual({ mudur: ['screen.executive', 'ai.use'] });
     });
 });

@@ -451,6 +451,7 @@ export interface WorkspaceData {
   pmoRatings?: PmoRating[]; // PMO'nun haftalık proje sağlığı puanları (sağlık modelinin hedef değişkeni)
   healthHistory?: HealthWeekSnapshot[]; // Haftalık sağlık fotoğrafları (özellik vektörü + skor)
   rolePermissions?: RolePermissions; // Admin'in rol yetkisi değişiklikleri
+  rolePermissionsRev?: number; // yetki kataloğu sürümü (yeni yetkilerin geçişi için)
   viewConfig?: ViewConfig; // Admin'in rol bazlı görünüm, filtre ve sıralama ayarları
   aiPolicy?: AiPolicy; // Admin'in yapay zekâ politikası
   healthConfig?: HealthConfig; // Admin'in sağlık puanı yöntemi ayarları
