@@ -43,6 +43,7 @@ const TABS: Tab[] = [
     { view: View.Roadmap, label: 'Pano', section: 'board' },
     { view: View.Tasks, label: 'Liste', section: 'list' },
     { view: View.Kanban, label: 'Zaman çizelgesi', section: 'timeline' },
+    { view: View.Planning, label: 'Planlama', section: 'planning' },
     { view: View.Risks, label: 'Riskler', section: 'risks' },
     { view: View.Resources, label: 'Ekip', section: 'team' },
 ];

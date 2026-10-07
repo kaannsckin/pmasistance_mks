@@ -7,7 +7,8 @@ import { ISSUE_TYPE_LABELS, taskDurations } from './lifecycle';
  * süresi ölçüldükten sonra şu testlerden geçer:
  *  - tarih eksik / tutarsız (kapanış açılıştan önce)
  *  - toplu kapatma: aynı gün aynı projede çok sayıda kapanış ("temizlik günü")
- *  - aykırı süre: tür × birim grubunda log ölçekte Q3 + 3·IQR üstü ya da
+ *  - aykırı süre: tür × birim grubunda log ölçekte Q3 + 3·IQR üstü (IQR en
+ *    az ln 1,5; süreler birbirine çok yakınsa Q3'ün 3,4 katı) ya da
  *    mutlak sınırın (250 iş günü) üstü (askıda kalmış kayıt)
  * Yeniden açılan, aynı gün kapanan ve tahmini/türü olmayan kayıtlar elenmez,
  * bilgi olarak işaretlenir (ağırlıklandırma tahmin katmanının işi).
@@ -34,6 +35,7 @@ export const BULK_MIN = 10; // aynı gün en az bu kadar kapanış
 export const BULK_SHARE = 0.3; // ve projenin kapanışlarının en az bu payı
 export const MAX_REASONABLE_DAYS = 250;
 const MIN_GROUP_FOR_IQR = 8;
+const MIN_LOG_IQR = Math.log(1.5);
 
 export interface RecordRow {
     projectId: string;
@@ -113,9 +115,10 @@ export const analyzeRecords = (projects: Pick<Project, 'id' | 'name' | 'tasks'>[
         if (g.length >= MIN_GROUP_FOR_IQR) {
             const logs = g.map(r => Math.log(r.days!)).sort((a, b) => a - b);
             const q1 = quantile(logs, 0.25), q3 = quantile(logs, 0.75);
-            limit = Math.min(limit, Math.exp(q3 + 3 * (q3 - q1)));
+            // Süreler neredeyse aynıysa IQR ≈ 0 olur; Q3'ün biraz üstü aykırı sayılmasın diye en az ln 1,5 yayılım
+            limit = Math.min(limit, Math.exp(q3 + 3 * Math.max(q3 - q1, MIN_LOG_IQR)));
         }
-        g.forEach(r => { if (r.days! > limit && !r.issues.includes('outlier')) r.issues.push('outlier'); });
+        g.forEach(r => { if (r.days! > limit * (1 + 1e-9) && !r.issues.includes('outlier')) r.issues.push('outlier'); });
     });
     rows.forEach(r => { r.usable = r.days !== null && !r.issues.some(i => EXCLUDING.includes(i)); });
 

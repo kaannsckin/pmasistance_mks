@@ -65,6 +65,7 @@ import { upsertLeave } from './utils/availability';
 import { AiReportAssessment, ExpectationStatus, ExpectationUrgency, HealthConfig, MeetingStatus, PestelItem, ReportFlow, ReportSettings, Risk, RoleViewConfig, SwotItem, WeeklyReport } from './types';
 import ModernSidebar from './components/modern/ModernSidebar';
 import ModernProjectHeader from './components/modern/ModernProjectHeader';
+import ModernPlanning from './components/modern/ModernPlanning';
 import ModernPortfolio from './components/modern/ModernPortfolio';
 import ModernBoard from './components/modern/ModernBoard';
 import ModernProjectOverview from './components/modern/ModernProjectOverview';
@@ -128,7 +129,7 @@ const createSampleProject = (): Project =>
   });
 
 /** Modern arayüzde proje başlığının gösterildiği ekranlar */
-const MODERN_PROJECT_VIEWS: View[] = [View.Overview, View.Roadmap, View.Tasks, View.Kanban, View.Risks, View.Resources, View.Goals, View.Requests, View.Notes, View.AI];
+const MODERN_PROJECT_VIEWS: View[] = [View.Overview, View.Roadmap, View.Tasks, View.Kanban, View.Planning, View.Risks, View.Resources, View.Goals, View.Requests, View.Notes, View.AI];
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<View>(View.Portfolio);
@@ -213,6 +214,8 @@ const App: React.FC = () => {
   useEffect(() => {
     const key = settings?.uiStyle === 'modern' ? sectionOfView(currentView) : undefined;
     if (key && !roleView.projectSections.has(key)) setCurrentView(View.Overview);
+    // Planlama asistanı yalnız modern arayüzde var
+    else if (settings && settings.uiStyle !== 'modern' && currentView === View.Planning) setCurrentView(View.Tasks);
   }, [currentView, roleView, settings?.uiStyle]);
   const visibleProjects = useMemo(() => {
     if (!workspace || consoleMode) return [];
@@ -1323,6 +1326,19 @@ const App: React.FC = () => {
         />
       );
     }
+    if (isModern && currentView === View.Planning) {
+      return (
+        <ModernPlanning
+          project={activeProject}
+          workspace={workspace}
+          visibleProjectIds={visibleProjectIdSet}
+          canEdit={canEditProjectContent(workspace, identity, activeProject.id)}
+          onAddTask={(t: Task) => updateActiveProject(p => ({ ...p, tasks: [...p.tasks, t] }))}
+          onViewTask={viewTask}
+          onOpenList={() => setCurrentView(View.Tasks)}
+        />
+      );
+    }
     if (isModern && currentView === View.Resources) {
       return (
         <ModernTeam
@@ -1600,7 +1616,7 @@ const App: React.FC = () => {
   // Yeniden yazılmış ekranlar m-legacy yumuşatma katmanının dışında kalır
   const showsExecutive = currentView === View.Executive || currentView === View.Admin || notesBlocked;
   const usesModernScreen = inProjectView
-    ? [View.Overview, View.Roadmap, View.Tasks, View.Kanban, View.Risks, View.Resources, View.Goals, View.Requests, View.Notes, View.AI].includes(currentView)
+    ? MODERN_PROJECT_VIEWS.includes(currentView)
     : showsExecutive || currentView === View.Allocations || currentView === View.RiskReport || currentView === View.Expectations || currentView === View.WeeklyReport || currentView === View.Meetings || currentView === View.Calendar || currentView === View.DataPool || ((currentView === View.Portfolio || !activeProject) && ![View.DataPool, View.Calendar].includes(currentView));
 
   // Komut paleti öğeleri (ekranlar + aksiyonlar + kapsamdaki projeler + kişiler)
@@ -1627,12 +1643,13 @@ const App: React.FC = () => {
     items.push({ id: 'a-profile', group: 'Aksiyonlar', label: 'Profil değiştir', icon: 'fa-user-gear', keywords: 'profil rol kimlik kisi degistir', run: () => setIsProfileOpen(true) });
     if (canDataHealth) items.push({ id: 'a-health', group: 'Aksiyonlar', label: 'Veri Sağlığı Denetimi', icon: 'fa-stethoscope', keywords: 'saglik hata yetim', run: () => setIsHealthModalOpen(true) });
     if (canAudit) items.push({ id: 'a-audit', group: 'Aksiyonlar', label: 'Denetim Günlüğü', icon: 'fa-clock-rotate-left', keywords: 'audit log gunluk kayit', run: () => setIsAuditModalOpen(true) });
+    if (activeProject && isModern && roleView.projectSections.has('planning')) items.push({ id: 'v-planning', group: 'Ekranlar', label: `Planlama asistanı — ${activeProject.name}`, icon: 'fa-chart-area', keywords: 'planlama simulasyon monte carlo tahmin olasilik surum yeni kayit benzer', run: go(View.Planning) });
     if (activeProject) items.push({ id: 'a-wp', group: 'Aksiyonlar', label: `İş Paketleri — ${activeProject.name}`, icon: 'fa-briefcase', keywords: 'is paketi work package gorev', run: () => setIsWpManagerOpen(true) });
     items.push({ id: 'egg-rocket', group: 'Sürpriz', label: 'Roketi fırlat', icon: 'fa-rocket', keywords: 'roket rocket uzay', hidden: true, run: () => setEgg({ kind: 'hyper' }) });
     visibleProjects.forEach(p => items.push({ id: `p-${p.id}`, group: 'Projeler', label: p.name, sublabel: 'Projeyi aç', icon: 'fa-folder-open', keywords: p.code || '', run: () => handleOpenProject(p.id) }));
     workspace.people.forEach(p => items.push({ id: `k-${p.id}`, group: 'Kişiler', label: `${p.firstName} ${p.lastName}`.trim(), sublabel: `${p.departmentCode || ''} · kişi profili`, icon: 'fa-user', keywords: p.sicil || '', run: () => setViewingPersonId(p.id) }));
     return items;
-  }, [workspace, visibleProjects, identity, handleOpenProject, activeProject, consoleMode, canAudit, canDataHealth]);
+  }, [workspace, visibleProjects, identity, handleOpenProject, activeProject, consoleMode, canAudit, canDataHealth, isModern, roleView]);
 
   return (
     <AssistantProvider enabled={isAIEnabled && !consoleMode} chat={aiPolicy.chat} embedded={aiPolicy.embedded} getWorkspace={getAssistantWorkspace} getView={getAssistantView} onNavigate={handleAssistantNavigate} onApplyAction={handleApplyAiAction}>

@@ -130,4 +130,11 @@ describe('kayıt verisi kalitesi', () => {
         expect(csv.split('\n')).toHaveLength(10); // başlık + 9 uygun kayıt
         expect(csv).not.toContain('resourceName');
     });
+
+    it('süreleri aynı ya da birbirine çok yakın kayıtlar aykırı sayılmaz', () => {
+        const same = Array.from({ length: 8 }, (_, i) => closed(`s${i}`, '2026-09-01T09:00:00', '2026-09-03T09:00:00'));
+        const report = analyzeRecords([{ id: 'p', name: 'Safir', tasks: [...same, closed('biraz', '2026-09-01T09:00:00', '2026-09-08T09:00:00')] }]);
+        expect(report.byIssue.outlier).toBeUndefined();
+        expect(report.usable).toBe(9);
+    });
 });

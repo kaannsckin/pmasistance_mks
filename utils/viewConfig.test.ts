@@ -13,7 +13,7 @@ const task = (name: string, priority: Task['priority'], dueDate?: string, status
 describe('viewFor', () => {
     it('ayar yoksa her şey görünür, ekranların sıralaması geçerli', () => {
         const v = viewFor(undefined, 'mudur');
-        expect(v.projectSections.size).toBe(9);
+        expect(v.projectSections.size).toBe(10);
         expect(v.execSections.size).toBe(10);
         expect(v).toMatchObject({ projectStatuses: null, minTaskPriority: 'Low', minRiskScore: 0, showClosedRisks: true, taskSort: 'smart', riskSort: 'score', projectSort: null, customized: false });
         expect(viewSummary(v)).toEqual([]);
