@@ -26,6 +26,8 @@ export const VIEW_LABELS: Record<View, string> = {
     [View.Overview]: 'Proje genel bakış',
     [View.RiskReport]: 'Risk raporu',
     [View.Expectations]: 'Yönetimden beklentiler',
+    [View.WeeklyReport]: 'Haftalık rapor',
+    [View.Meetings]: 'Müşteri görüşmeleri',
 };
 
 const APP_MAP = `Uygulama haritası ("nasıl yapılır" sorularında ekranları buna göre tarif et):

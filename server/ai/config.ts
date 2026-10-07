@@ -59,7 +59,7 @@ const positiveInt = (v: string | undefined, fallback: number): number => {
     return Number.isFinite(n) && n > 0 ? Math.floor(n) : fallback;
 };
 
-const resolveAuthMode = (env: Env, isDev: boolean): { mode: AiAuthMode; problem?: string } => {
+export const resolveAuthMode = (env: Env, isDev: boolean): { mode: AiAuthMode; problem?: string } => {
     const explicit = clean(env.AI_AUTH_MODE)?.toLowerCase();
     const hasToken = !!clean(env.AI_ACCESS_TOKEN);
     const hasSupabase = !!clean(env.SUPABASE_URL) && !!clean(env.SUPABASE_ANON_KEY);

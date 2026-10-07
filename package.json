@@ -12,6 +12,7 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.110.1",
     "jszip": "^3.10.2",
+    "nodemailer": "^10.0.15",
     "pdfjs-dist": "^6.4.299",
     "pptxgenjs": "^4.0.1",
     "react": "^19.2.0",

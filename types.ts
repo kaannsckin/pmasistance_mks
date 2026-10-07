@@ -120,6 +120,8 @@ export enum View {
   Overview, // Proje genel bakış (modern arayüz)
   RiskReport, // Portföy risk raporu (modern arayüz)
   Expectations, // Yönetimden beklentiler (modern arayüz)
+  WeeklyReport, // Haftalık rapor (PY → BS → PYDS → müdür)
+  Meetings, // Planlanan müşteri görüşmeleri
 }
 
 export interface UnitLoad {
@@ -246,6 +248,7 @@ export interface Project {
   rag?: RagStatus;
   ragNote?: string; // Haftalık durum açıklaması (PM girer)
   pmPersonId?: string; // Proje Yöneticisi (havuzdaki kişi) — RBAC sahipliği
+  jiraProjectKey?: string; // Jira proje anahtarı (worklog çekmek için, ör. MKS)
   risks?: Risk[];
   pestelItems?: PestelItem[]; // PESTEL dış çevre analizi
   swotItems?: SwotItem[]; // SWOT stratejik analizi
@@ -286,6 +289,7 @@ export interface Person {
   titleCode?: string; // UNVAN kısaltması (ARŞ, UAR, BUA...)
   availableAA: number; // Kullanılabilir AA / ay (tam zamanlı = 1)
   roles: string[]; // Kişinin üstlenebileceği roller
+  email?: string; // Kurumsal e-posta — rapor hatırlatması ve bildirimler (Teams/e-posta)
 }
 
 export interface Department {
@@ -386,6 +390,10 @@ export interface WorkspaceData {
   snapshots: Snapshot[];
   leaves?: Leave[]; // Kişi uygunluğu — izin/tatil/yarı-zaman (kapasiteyi aya özel düşürür)
   expectations?: ManagementExpectation[]; // Yönetimden beklentiler (PM / bölüm sorumlusu → yönetim)
+  weeklyReports?: WeeklyReport[]; // Haftalık raporlar (PY → BS → PYDS → müdür bilgisine)
+  weeklyPublications?: WeeklyPublication[]; // Yayınlanan haftalar (müdürlere sunulan birleşik rapor)
+  customerMeetings?: CustomerMeeting[]; // Planlanan müşteri görüşmeleri (yönetici onayına)
+  reportSettings?: ReportSettings; // Rapor ayarları (alıcılar, kurum kısaltma sözlüğü)
   auditLog?: AuditEntry[]; // Kritik aksiyonların günlüğü (en yeni başta)
   settings: WorkspaceSettings;
   appVersion: string;
@@ -446,6 +454,133 @@ export interface ManagementExpectation {
   respondedByRole?: UserRole;
 }
 
+// ---------------------------------------------------------------------------
+// Haftalık rapor: PY yazar → bölüm sorumlusu düzenler/onaylar (+ bölüm
+// eklemeleri) → PYB destek format kontrolü → müdürlere birleşik rapor
+// ---------------------------------------------------------------------------
+
+/** Raporda istenen gelişme türleri (kurum rapor kılavuzu) */
+export type ReportCategory =
+  | 'contract' | 'sales' | 'invoice' | 'milestone' | 'delivery' | 'meeting'
+  | 'schedule_budget' | 'event' | 'customer_feature' | 'ongoing' | 'plan';
+
+/** Toplantı/sunum maddesi: zaman, yer, katılımcılar, gündem, kararlar */
+export interface MeetingDetails {
+  date: string; // ISO tarih
+  place: string;
+  participants: string;
+  agenda: string;
+  decisions: string;
+}
+
+export interface ReportItem {
+  id: string;
+  category: ReportCategory;
+  text: string;
+  meeting?: MeetingDetails;
+  source?: 'ai' | 'note' | 'worklog' | 'meeting' | 'task' | 'manual';
+}
+
+export interface Abbreviation {
+  abbr: string;
+  expansion: string;
+}
+
+/** draft: PY yazıyor · bs_review: bölüm sorumlusunda · pyds_review: PYB destekte · approved: yayına hazır */
+export type ReportStage = 'draft' | 'bs_review' | 'pyds_review' | 'approved';
+
+export interface ReportEvent {
+  at: string;
+  action: 'create' | 'submit' | 'bs_approve' | 'pyds_approve' | 'return' | 'edit' | 'reopen';
+  byRole: UserRole;
+  byName?: string;
+  note?: string;
+}
+
+/** Jira worklog kaydı (dosyadan ya da Jira API'den) */
+export interface WorklogEntry {
+  date: string; // ISO tarih
+  author: string;
+  issueKey?: string;
+  summary: string;
+  hours: number;
+  comment?: string;
+  source: 'file' | 'jira';
+}
+
+export interface WeeklyReport {
+  id: string;
+  year: number; // ISO hafta yılı
+  week: number; // ISO hafta
+  kind: 'project' | 'department'; // proje raporu ya da bölüm sorumlusunun eklemeleri
+  projectId?: string;
+  departmentCode: string;
+  thisWeek: ReportItem[]; // Bu hafta gelişmeler
+  nextWeek: ReportItem[]; // Gelecek hafta planlanan
+  abbreviations: Abbreviation[];
+  stage: ReportStage;
+  returnNote?: string; // iade gerekçesi (bir önceki aşamaya)
+  worklog?: WorklogEntry[];
+  /** AI'nın ilk önerisi — onaylı son hâliyle birlikte ince ayar veri setine girer */
+  aiDraft?: { generatedAt: string; input: string; output: string };
+  authorPersonId?: string;
+  authorName?: string;
+  createdAt: string;
+  updatedAt: string;
+  history: ReportEvent[];
+}
+
+export interface WeeklyPublication {
+  year: number;
+  week: number;
+  publishedAt: string;
+  publishedByName?: string;
+  emailedAt?: string;
+}
+
+export interface ReportSettings {
+  /** Birleşik raporun gönderileceği müdür/yönetim e-postaları */
+  directorEmails: string[];
+  /** Kurum kısaltma sözlüğü (raporda kullanılan kısaltmalar otomatik açılır) */
+  abbreviations: Abbreviation[];
+  /** Raporun son günü (1 = Pazartesi … 5 = Cuma) */
+  dueWeekday: number;
+}
+
+// ---------------------------------------------------------------------------
+// Planlanan müşteri görüşmeleri (PY / bölüm sorumlusu → yönetici onayı)
+// ---------------------------------------------------------------------------
+
+export type MeetingStatus = 'draft' | 'pending' | 'approved' | 'rejected' | 'held' | 'cancelled';
+export type MeetingLocation = 'bilgem' | 'customer' | 'online' | 'other';
+
+export interface CustomerMeeting {
+  id: string;
+  title: string; // konu / amaç
+  customer: string; // müşteri / paydaş kurum
+  projectId?: string;
+  departmentCode?: string;
+  date: string; // ISO tarih-saat
+  locationType: MeetingLocation;
+  location: string; // adres / salon / bağlantı
+  ourParticipants: string;
+  customerParticipants: string;
+  agenda: string;
+  expectedOutcome: string; // beklenen karar / çıktı
+  needs?: string; // demo ortamı, araç, sunum vb.
+  managementAttendance: boolean; // yönetimin katılımı isteniyor mu
+  status: MeetingStatus;
+  decisions?: string; // gerçekleştikten sonra alınan kararlar
+  reviewNote?: string; // onay/ret notu
+  reviewedByName?: string;
+  reviewedAt?: string;
+  createdByRole: UserRole;
+  createdByPersonId?: string;
+  createdByName?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 /** Denetim günlüğü — kim, ne zaman, hangi kritik aksiyonu yaptı */
 export type AuditAction =
   | 'project.create' | 'project.delete' | 'project.owner' | 'project.rag'
@@ -453,7 +588,9 @@ export type AuditAction =
   | 'plan.submit' | 'plan.approve' | 'plan.reject' | 'plan.unlock'
   | 'data.import' | 'identity.change' | 'health.fix' | 'snapshot.create'
   | 'ai.apply'
-  | 'expectation.create' | 'expectation.respond' | 'expectation.close';
+  | 'expectation.create' | 'expectation.respond' | 'expectation.close'
+  | 'report.submit' | 'report.approve' | 'report.return' | 'report.publish'
+  | 'meeting.submit' | 'meeting.approve' | 'meeting.reject' | 'meeting.held';
 
 export interface AuditEntry {
   id: string;

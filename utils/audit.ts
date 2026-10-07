@@ -28,6 +28,14 @@ export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
     'expectation.create': 'Yönetimden beklenti eklendi',
     'expectation.respond': 'Beklenti yanıtlandı',
     'expectation.close': 'Beklenti kapandı',
+    'report.submit': 'Haftalık rapor gönderildi',
+    'report.approve': 'Haftalık rapor onaylandı',
+    'report.return': 'Haftalık rapor iade edildi',
+    'report.publish': 'Haftalık rapor yayınlandı',
+    'meeting.submit': 'Müşteri görüşmesi onaya sunuldu',
+    'meeting.approve': 'Müşteri görüşmesi onaylandı',
+    'meeting.reject': 'Müşteri görüşmesi reddedildi',
+    'meeting.held': 'Müşteri görüşmesi gerçekleşti',
 };
 
 export const AUDIT_ACTION_ICONS: Record<AuditAction, string> = {
@@ -49,6 +57,14 @@ export const AUDIT_ACTION_ICONS: Record<AuditAction, string> = {
     'expectation.create': 'fa-flag',
     'expectation.respond': 'fa-reply',
     'expectation.close': 'fa-circle-check',
+    'report.submit': 'fa-paper-plane',
+    'report.approve': 'fa-check-double',
+    'report.return': 'fa-rotate-left',
+    'report.publish': 'fa-bullhorn',
+    'meeting.submit': 'fa-handshake',
+    'meeting.approve': 'fa-circle-check',
+    'meeting.reject': 'fa-circle-xmark',
+    'meeting.held': 'fa-people-group',
 };
 
 const newId = (): string => `audit-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;

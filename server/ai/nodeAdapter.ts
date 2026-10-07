@@ -27,7 +27,9 @@ const readBody = (req: IncomingMessage): Promise<Buffer> =>
         req.on('error', reject);
     });
 
-export const createAiMiddleware = (getEnv: () => Env, opts: { isDev?: boolean; mountPath?: string } = {}) =>
+type WebHandler = (request: Request, env: Env, opts: { isDev?: boolean }) => Promise<Response>;
+
+export const createAiMiddleware = (getEnv: () => Env, opts: { isDev?: boolean; mountPath?: string; handler?: WebHandler } = {}) =>
     async (req: IncomingMessage & { originalUrl?: string }, res: ServerResponse): Promise<void> => {
         const mount = opts.mountPath || '/api/ai';
         const host = req.headers.host || 'localhost';
@@ -49,7 +51,7 @@ export const createAiMiddleware = (getEnv: () => Env, opts: { isDev?: boolean; m
             const method = req.method || 'GET';
             const body = method === 'GET' || method === 'HEAD' || method === 'OPTIONS' ? undefined : await readBody(req);
             const request = new Request(url, { method, headers, body, signal: abort.signal });
-            const response = await handleAiRequest(request, getEnv(), { isDev: opts.isDev });
+            const response = await (opts.handler || handleAiRequest)(request, getEnv(), { isDev: opts.isDev });
 
             res.statusCode = response.status;
             response.headers.forEach((value, key) => res.setHeader(key, value));

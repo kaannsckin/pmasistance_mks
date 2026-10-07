@@ -76,6 +76,10 @@ export const splitWorkspaceDoc = (ws: WorkspaceData): { core: Record<string, unk
         snapshots: ws.snapshots,
         // Yönetimden beklentiler PM ile yönetim arasında paylaşılır
         expectations: ws.expectations || [],
+        weeklyReports: ws.weeklyReports || [],
+        weeklyPublications: ws.weeklyPublications || [],
+        customerMeetings: ws.customerMeetings || [],
+        reportSettings: ws.reportSettings,
     };
     return { core, privateDoc };
 };
