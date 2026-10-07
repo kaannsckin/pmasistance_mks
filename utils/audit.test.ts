@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { appendAudit, createAuditEntry, actorLabel } from './audit';
+import { appendAudit, auditToCsv, createAuditEntry, actorLabel, filterAudit } from './audit';
 import { createEmptyWorkspace } from './workspace';
-import { WorkspaceData } from '../types';
+import { AuditEntry, WorkspaceData } from '../types';
 
 const ws = (): WorkspaceData => ({
     ...createEmptyWorkspace(),
@@ -46,5 +46,28 @@ describe('audit', () => {
         const w = { ...ws(), currentPersonId: 'yok' };
         const e = createAuditEntry(w, 'identity.change', 'rol değişti');
         expect(e.actorName).toBeUndefined();
+    });
+});
+
+describe('denetim günlüğü süzme ve CSV', () => {
+    const entries = [
+        { id: '1', at: '2026-10-07T08:00:00Z', actorRole: 'py', actorName: 'Ayşe Yılmaz', action: 'report.submit', summary: 'Safir; rapor "gönderildi"', projectId: 'a' },
+        { id: '2', at: '2026-10-06T08:00:00Z', actorRole: 'mudur', action: 'meeting.approve', summary: 'Demo onaylandı' },
+    ] as AuditEntry[];
+    const name = (id: string) => (id === 'a' ? 'Safir Posta' : undefined);
+
+    it('grup, proje ve metin (proje adı dahil)', () => {
+        expect(filterAudit(entries, { group: 'report' }).map(e => e.id)).toEqual(['1']);
+        expect(filterAudit(entries, { projectId: 'a' }).map(e => e.id)).toEqual(['1']);
+        expect(filterAudit(entries, { query: 'safir posta' }, name).map(e => e.id)).toEqual(['1']);
+        expect(filterAudit(entries, { query: 'MÜDÜR' }).map(e => e.id)).toEqual([]);
+        expect(filterAudit(entries, { query: 'görüşmesi' }).map(e => e.id)).toEqual(['2']);
+    });
+
+    it('CSV: BOM, noktalı virgül, tırnak kaçışı', () => {
+        const csv = auditToCsv(entries, name);
+        expect(csv.startsWith('﻿Tarih;Eylem;Özet;Kişi / rol;Proje')).toBe(true);
+        expect(csv).toContain('"Safir; rapor ""gönderildi"""');
+        expect(csv).toContain('Proje Yöneticisi · Ayşe Yılmaz;Safir Posta');
     });
 });

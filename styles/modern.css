@@ -27,6 +27,8 @@
   --m-warn: #E07800; --m-warn-ink: #8F4300; --m-warn-tint: #FFF1DB;
   --m-bad: #D70015;  --m-bad-ink: #B00020;  --m-bad-tint: #FDE7EA;
   --m-hold: #8E8E93; --m-hold-ink: #48484A; --m-hold-tint: #EBEBF0;
+  /* Grafik seri renkleri (tema rengine bağlı değil; renk körlüğü denetiminden geçti) */
+  --m-series-1: #0066D6; --m-series-2: #EB6834;
   /* Dolu durum rengi üstündeki yazı (risk matrisi) */
   --m-on-ok: #FFFFFF; --m-on-warn: #1C1C1E; --m-on-bad: #FFFFFF;
   --m-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
@@ -78,6 +80,7 @@
     --m-on-ok: #000000; --m-on-warn: #000000; --m-on-bad: #000000;
     --m-bad: #FF453A;  --m-bad-ink: #FF8A82;  --m-bad-tint: rgba(255, 69, 58, 0.16);
     --m-hold: #8E8E93; --m-hold-ink: #C7C7CC; --m-hold-tint: rgba(142, 142, 147, 0.2);
+    --m-series-1: #3987E5; --m-series-2: #D95926;
     --m-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
     --m-pop-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
     --m-heat-low-bg: #242426;   --m-heat-low-ink: #C7C7CC;

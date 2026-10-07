@@ -108,3 +108,36 @@ export const actorLabel = (entry: Pick<AuditEntry, 'actorRole' | 'actorName'>): 
     const role = ROLE_LABELS[entry.actorRole as UserRole] || entry.actorRole;
     return entry.actorName ? `${role} · ${entry.actorName}` : role;
 };
+
+/** Denetim günlüğü süzgeci: eylem grubu (ör. "report"), proje ve metin */
+export const filterAudit = (
+    entries: AuditEntry[],
+    f: { group?: string; projectId?: string; query?: string },
+    projectName: (id: string) => string | undefined = () => undefined,
+): AuditEntry[] => {
+    const q = f.query?.trim().toLocaleLowerCase('tr-TR');
+    return entries.filter(e =>
+        (!f.group || e.action.split('.')[0] === f.group)
+        && (!f.projectId || e.projectId === f.projectId)
+        && (!q || [e.summary, e.actorName, AUDIT_ACTION_LABELS[e.action], e.projectId ? projectName(e.projectId) : ''].join(' ').toLocaleLowerCase('tr-TR').includes(q)));
+};
+
+export const AUDIT_GROUP_LABELS: Record<string, string> = {
+    project: 'Proje', risk: 'Risk', plan: 'Plan', data: 'Veri', identity: 'Kimlik', health: 'Veri sağlığı',
+    snapshot: 'Anlık görüntü', ai: 'AI', expectation: 'Beklenti', report: 'Haftalık rapor', meeting: 'Görüşme',
+};
+
+const csvCell = (v: string) => (/[";\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+
+/** Excel'de açılan CSV (noktalı virgül ayraçlı, UTF-8 BOM) */
+export const auditToCsv = (entries: AuditEntry[], projectName: (id: string) => string | undefined = () => undefined): string => {
+    const rows = [['Tarih', 'Eylem', 'Özet', 'Kişi / rol', 'Proje']];
+    entries.forEach(e => rows.push([
+        new Date(e.at).toLocaleString('tr-TR'),
+        AUDIT_ACTION_LABELS[e.action] || e.action,
+        e.summary,
+        actorLabel(e),
+        e.projectId ? projectName(e.projectId) || '' : '',
+    ]));
+    return `﻿${rows.map(r => r.map(csvCell).join(';')).join('\r\n')}`;
+};
