@@ -2,7 +2,10 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { WorkspaceData } from '../types';
 import { MONTHS_TR, MONTH_INDEXES } from '../utils/allocations';
 import { STATUS_LABELS, STATUS_COLORS } from '../constants';
+import { addLeaveRange } from '../utils/availability';
+import { DayRange, formatRange } from '../utils/calendarRange';
 import { buildPersonProfile } from '../utils/personProfile';
+import { DateRangeField } from './modern/DateRangePicker';
 import { RISK_BAND_HEX, RISK_STATUS_LABELS } from '../utils/risks';
 
 interface PersonDetailModalProps {
@@ -26,6 +29,9 @@ const YEAR_RANGE = (() => {
 const PersonDetailModal: React.FC<PersonDetailModalProps> = ({ workspace, personId, canEditLeave = false, onSetLeave, onClose }) => {
   const [year, setYear] = useState(new Date().getFullYear());
   const [showLeave, setShowLeave] = useState(false);
+  const [leaveRange, setLeaveRange] = useState<DayRange | null>(null);
+  const [leaveNote, setLeaveNote] = useState('');
+  const rangePlan = useMemo(() => (leaveRange ? addLeaveRange(workspace.leaves || [], personId, leaveRange.start, leaveRange.end) : []), [leaveRange, workspace.leaves, personId]);
 
   // Esc ile kapat (kozmetik/hız)
   useEffect(() => {
@@ -163,8 +169,30 @@ const PersonDetailModal: React.FC<PersonDetailModalProps> = ({ workspace, person
                 );
               })}
             </div>
+            {showLeave && canEditLeave && onSetLeave && (
+              <div className="mt-3 rounded-xl bg-gray-50 dark:bg-gray-800/60 p-3 space-y-2">
+                <div className="text-[11px] font-semibold text-gray-500 dark:text-gray-300">Takvimden izin ekle</div>
+                {/* Takvim seçici modern stil kabında açılır */}
+                <div className="ui-modern flex flex-wrap items-center gap-2" style={{ background: 'transparent' }}>
+                  <div className="flex-1 min-w-[220px]">
+                    <DateRangeField value={leaveRange} onChange={r => { setLeaveRange(r); setLeaveNote(''); }} placeholder="İzin başlangıç – bitiş" ariaLabel="İzin aralığı" clearable />
+                  </div>
+                  <button type="button" className="m-btn m-btn-primary" disabled={!rangePlan.length} onClick={() => {
+                    rangePlan.forEach(r => onSetLeave(person.id, r.year, r.month, r.aa));
+                    setLeaveNote(`${formatRange(leaveRange)} izni eklendi.`);
+                    setLeaveRange(null);
+                  }}>Ekle</button>
+                </div>
+                {leaveRange && (
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                    {rangePlan.length ? `${rangePlan.map(r => `${MONTHS_TR[r.month - 1]}${r.year !== year ? ` ${r.year}` : ''}: +${fmt(r.added)} AA`).join(' · ')} (hafta içi günlere göre; ay başına en fazla 1 AA)` : 'Seçilen aralıkta hafta içi gün yok.'}
+                  </p>
+                )}
+                {leaveNote && <p className="text-[11px] text-emerald-600 dark:text-emerald-400">{leaveNote}</p>}
+              </div>
+            )}
             {showLeave && (
-              <p className="text-[10px] text-gray-400 mt-2">İzin AA: 1 = tam ay yok, 0,5 = yarım ay. Efektif kapasite ve aşırı-tahsis anında güncellenir.</p>
+              <p className="text-[10px] text-gray-400 mt-2">İzin AA: 1 = tam ay yok, 0,5 = yarım ay. Takvimden eklenen izin hafta içi günlere göre AA'ya çevrilip mevcut izne eklenir. Efektif kapasite ve aşırı-tahsis anında güncellenir.</p>
             )}
           </div>
 

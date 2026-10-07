@@ -12,6 +12,7 @@ import { canAddAllocationToProject, canEditActualCell, canEditAllocationCell, ca
 import { effectiveCapacity } from '../utils/availability';
 import { allPersonRoles, findAvailablePeople } from '../utils/staffing';
 import ScenarioView from './ScenarioView';
+import { MonthRangeField } from './modern/DateRangePicker';
 import ForecastView from './ForecastView';
 import UtilizationHeatmap from './UtilizationHeatmap';
 import BilledHoursImportModal from './BilledHoursImportModal';
@@ -495,16 +496,13 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
               {roles.map(r => <option key={r} value={r}>{r}</option>)}
             </select>
           </label>
-          <label className="text-[11px] font-semibold text-gray-500 dark:text-gray-300">Başlangıç ay
-            <select value={staff.from} onChange={e => setStaff({ ...staff, from: parseInt(e.target.value, 10) })} className="mt-1 block bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1.5 text-[11px] focus:outline-none">
-              {MONTHS_TR.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
-            </select>
-          </label>
-          <label className="text-[11px] font-semibold text-gray-500 dark:text-gray-300">Bitiş ay
-            <select value={staff.to} onChange={e => setStaff({ ...staff, to: parseInt(e.target.value, 10) })} className="mt-1 block bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1.5 text-[11px] focus:outline-none">
-              {MONTHS_TR.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
-            </select>
-          </label>
+          {/* Ay aralığı: basınca açılan takvimden başlangıç ve bitiş ayı (klasik arayüzde de modern stil kabıyla) */}
+          <div className="text-[11px] font-semibold text-gray-500 dark:text-gray-300">
+            <span id="staff-range-label">Ay aralığı ({year})</span>
+            <span className="ui-modern block mt-1 min-w-[190px]" style={{ background: 'transparent' }}>
+              <MonthRangeField year={year} value={{ from: lo, to: hi }} ariaLabel="Ay aralığı" onChange={r => setStaff({ ...staff, from: r.from, to: r.to })} />
+            </span>
+          </div>
           <label className="text-[11px] font-semibold text-gray-500 dark:text-gray-300">Gerekli AA/ay
             <input type="number" min={0.05} max={1} step={0.05} value={staff.aa} onChange={e => setStaff({ ...staff, aa: parseFloat(e.target.value) || 0 })} className="mt-1 block w-24 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1.5 text-[11px] focus:outline-none" />
           </label>

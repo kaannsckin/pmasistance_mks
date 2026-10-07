@@ -64,6 +64,12 @@ describe('denetim günlüğü süzme ve CSV', () => {
         expect(filterAudit(entries, { query: 'görüşmesi' }).map(e => e.id)).toEqual(['2']);
     });
 
+    it('tarih aralığı (yerel gün, uçlar dahil)', () => {
+        expect(filterAudit(entries, { from: '2026-10-07', to: '2026-10-07' }).map(e => e.id)).toEqual(['1']);
+        expect(filterAudit(entries, { from: '2026-10-01', to: '2026-10-06' }).map(e => e.id)).toEqual(['2']);
+        expect(filterAudit(entries, { from: '2026-10-08' })).toEqual([]);
+    });
+
     it('CSV: BOM, noktalı virgül, tırnak kaçışı', () => {
         const csv = auditToCsv(entries, name);
         expect(csv.startsWith('﻿Tarih;Eylem;Özet;Kişi / rol;Proje')).toBe(true);

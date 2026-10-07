@@ -6,8 +6,9 @@ import { Identity, managedDepartmentCode, ownsProject } from '../../utils/rbac';
 import { relativeTime } from '../../utils/recentChanges';
 import {
     actorOf, createReport, dueDate, findReport, isoWeekOf, isReportSteward, isWeekPublished, latestPublication, lintCounts, lintReport, pendingAuthors,
-    nextStage, projectDepartment, reportDictionary, reportFlowOf, reportSettingsOf, shiftWeek, STAGE_LABELS, visibleReports, weekLabel, weekProgress,
+    nextStage, projectDepartment, reportDictionary, reportFlowOf, reportSettingsOf, STAGE_LABELS, visibleReports, weekLabel, weekProgress,
 } from '../../utils/weeklyReport';
+import { WeekPicker } from './DateRangePicker';
 import { Icon } from './icons';
 import { rowSep } from './ui';
 import ConsolidatedReport from './weekly/ConsolidatedReport';
@@ -111,7 +112,6 @@ const ModernWeeklyReport: React.FC<ModernWeeklyReportProps> = ({
     const due = dueDate(year, week, settings.dueWeekday);
     const peopleName = useMemo(() => new Map(workspace.people.map(p => [p.id, `${p.firstName} ${p.lastName}`.trim()])), [workspace.people]);
 
-    const go = (delta: number) => { setWk(shiftWeek(year, week, delta)); setOpen(null); };
     const openNew = (init: Parameters<typeof createReport>[0]) => setOpen(createReport(init, actorOf(workspace)));
 
     // PY: kendi projeleri (aktif ya da bu hafta raporu olan)
@@ -222,9 +222,7 @@ const ModernWeeklyReport: React.FC<ModernWeeklyReportProps> = ({
                     </p>
                 </div>
                 <div className="flex items-center gap-1">
-                    <button type="button" className="m-icon-btn" aria-label="Önceki hafta" onClick={() => go(-1)}><Icon name="chevronLeft" /></button>
-                    <span className="min-w-[170px] text-center text-[15px] font-semibold m-text m-tabular">{weekLabel(year, week)}</span>
-                    <button type="button" className="m-icon-btn" aria-label="Sonraki hafta" onClick={() => go(1)}><Icon name="chevronRight" /></button>
+                    <WeekPicker year={year} week={week} label={weekLabel(year, week)} onChange={(y, w) => { setWk({ year: y, week: w }); setOpen(null); }} />
                     {!isCurrent && <button type="button" className="m-btn m-btn-plain !min-h-[40px]" onClick={() => { setWk(current); setOpen(null); }}>Bu hafta</button>}
                 </div>
             </header>
