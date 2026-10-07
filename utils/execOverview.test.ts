@@ -30,8 +30,9 @@ describe('buildExecProjectRows', () => {
         const rows = buildExecProjectRows(buildWs(), 2026, NOW);
         const red = rows.find(r => r.projectId === 'red')!;
         expect(red.pmName).toBe('Ayşe Yılmaz');
-        expect(red.score).toBe(50); // 100 - 35 (kırmızı) - 15 (2 yüksek risk)
-        expect(red.band).toBe('warn');
+        // RAG 0 (w .10), risk 0,2 (2 yüksek, .15), geciken 0 (.15), beklenti 1 (.07): 100 × .10 / .47 = 21
+        expect(red.score).toBe(21);
+        expect(red.band).toBe('bad');
         expect(red.overdueTasks).toBe(1);
         expect(red.progressPct).toBe(50);
         expect(red.highRisks).toBe(2);

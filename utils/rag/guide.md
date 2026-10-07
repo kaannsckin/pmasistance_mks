@@ -69,6 +69,9 @@ Günlük sekmesinde haftalık notlar, etiketler ve bahsetmelerle tutulur. İstek
 ## Yönetim ekranı
 Yalnızca Müdür ve PYB Sorumlusu görür: portföy KPI'ları (tıklanınca detay açılır), proje sağlık panosu ve "Dikkat Gerektirenler", aylık plan-gerçekleşen grafiği, bölüm dağılımı, departman karnesi, EVM, kritik riskler, "Ne Değişti?" akışı ve baseline geçmişi. "Brifing" tek sayfalık yönetici özetini açar (kopyala / indir); "Yönetici Paketi (Excel)" çok sayfalı Excel raporu, PowerPoint düğmesi yönetici sunumu indirir; "Anlık Görüntü Al" elle baseline kaydeder.
 
+## Proje sağlık skoru
+Sağlık skoru (0–100) sekiz girdinin ağırlıklı ortalamasıdır: takvim (SPI, %20), bütçe (CPI, %15), geciken görevler (%15), riskler (%15), haftalık durum (RAG, %10), PY puanı (%10), kaynak (kapasite üstü ekip, %8) ve kritik yönetim beklentileri (%7). Her girdi 0–1'e normalize edilir (1 = sağlıklı); verisi olmayan girdi skora girmez ve ağırlığı diğerlerine dağılır. Verisi olan girdilerin ağırlık toplamı "güven"i verir. 75 ve üstü Sağlıklı, 50–74 İzlemede, altı Sorunlu. PY'nin öznel değerlendirmesi (RAG + puan) verilerden 0,3 ve daha fazla iyimserse "algı farkı" uyarısı çıkar. PY puanını haftalık raporda verir (1–10); PMO (PYB sorumlusu / PYB destek) birleşik raporda her projeye kendi 1–10 puanını verir; bu puan modelin hedef değişkenidir ve PY'lere gösterilmez. Her hafta girdiler ve skor kaydedilir; yeterli puan biriktiğinde ağırlıklar regresyonla kalibre edilecek. Yönetim ve proje genel bakış ekranlarındaki (i) düğmesi hesaplamayı ve projenin girdi dökümünü gösterir.
+
 ## Takvim
 Takvim ekranı Takvimim, Ekip, Proje ve İş Paketi kapsamlarında aylık zaman çizelgesi gösterir; kişi adına tıklanınca kişi sayfası açılır.
 

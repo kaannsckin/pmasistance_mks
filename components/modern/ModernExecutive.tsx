@@ -13,6 +13,7 @@ import { recentChanges, relativeTime } from '../../utils/recentChanges';
 import { topPortfolioRisks } from '../../utils/risks';
 import ExecBriefModal from '../ExecBriefModal';
 import ExecutiveView from '../ExecutiveView';
+import HealthModelSheet, { HealthInfoButton } from './HealthModelSheet';
 import { Icon, IconName } from './icons';
 import { PROJECT_STATUS_LABEL, RAG_TONE } from './ModernProjectHeader';
 import { RAG_DOT } from './ModernSidebar';
@@ -84,7 +85,8 @@ const AllProjects: React.FC<{
     onBack: () => void;
     onOpenProject: (id: string) => void;
     onExport: () => void;
-}> = ({ rows, year, initialBand, onBack, onOpenProject, onExport }) => {
+    onInfo: () => void;
+}> = ({ rows, year, initialBand, onBack, onOpenProject, onExport, onInfo }) => {
     const [query, setQuery] = useState('');
     const [band, setBand] = useState<BandFilter>(initialBand);
     const [status, setStatus] = useState<ProjectStatus | 'all'>('all');
@@ -185,7 +187,10 @@ const AllProjects: React.FC<{
                     ))}
                 </div>
             </div>
-            <p className="m-0 text-[13px] m-text-3">Sağlık: haftalık durum, SPI, CPI ve yüksek risklerden 0–100. SPI takvim, CPI bütçe performansıdır; 1'in altı geride ya da aşımda demektir (maliyetlenmemiş projede —). Risk: skoru 15 ve üstü açık riskler.</p>
+            <div className="flex items-start gap-1.5">
+                <p className="m-0 flex-1 text-[13px] m-text-3">Sağlık: takvim (SPI), bütçe (CPI), geciken görev, risk, haftalık durum, PY puanı, kaynak ve yönetim beklentilerinden ağırlıklı 0–100. SPI takvim, CPI bütçe performansıdır; 1'in altı geride ya da aşımda demektir (maliyetlenmemiş projede —). Risk: skoru 15 ve üstü açık riskler.</p>
+                <HealthInfoButton onClick={onInfo} />
+            </div>
         </div>
     );
 };
@@ -200,6 +205,7 @@ const ModernExecutive: React.FC<ModernExecutiveProps> = ({ workspace, currentRol
     const [reportsOpen, setReportsOpen] = useState(false);
     const [showBrief, setShowBrief] = useState(false);
     const [pptBusy, setPptBusy] = useState(false);
+    const [healthInfo, setHealthInfo] = useState(false);
 
     const rows = useMemo(() => buildExecProjectRows(workspace, year), [workspace, year]);
     const dist = useMemo(() => healthDistribution(rows), [rows]);
@@ -238,8 +244,15 @@ const ModernExecutive: React.FC<ModernExecutiveProps> = ({ workspace, currentRol
         finally { setPptBusy(false); }
     };
 
+    const infoSheet = healthInfo ? <HealthModelSheet workspace={workspace} onClose={() => setHealthInfo(false)} /> : null;
+
     if (screen === 'projects') {
-        return <AllProjects rows={rows} year={year} initialBand={projectsBand} onBack={() => setScreen('overview')} onOpenProject={onOpenProject} onExport={() => exportExecReportToExcel(report)} />;
+        return (
+            <>
+                {infoSheet}
+                <AllProjects rows={rows} year={year} initialBand={projectsBand} onBack={() => setScreen('overview')} onOpenProject={onOpenProject} onExport={() => exportExecReportToExcel(report)} onInfo={() => setHealthInfo(true)} />
+            </>
+        );
     }
     if (screen === 'details') {
         return (
@@ -291,6 +304,7 @@ const ModernExecutive: React.FC<ModernExecutiveProps> = ({ workspace, currentRol
     return (
         <div className="flex flex-col gap-7">
             {showBrief && <ExecBriefModal brief={brief} year={year} onClose={() => setShowBrief(false)} />}
+            {infoSheet}
 
             <header className="flex flex-wrap items-end justify-between gap-4">
                 <div>
@@ -414,9 +428,12 @@ const ModernExecutive: React.FC<ModernExecutiveProps> = ({ workspace, currentRol
 
             <section aria-labelledby="ex-dist" className="m-surface rounded-2xl p-5 flex flex-col gap-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                        <h2 id="ex-dist" className="m-0 text-[17px] font-semibold m-text">Proje sağlığı</h2>
-                        <p className="m-0 mt-0.5 text-[14px] m-text-3">Haftalık durum, takvim, bütçe ve yüksek risklerden hesaplanır</p>
+                    <div className="flex items-start gap-1.5 min-w-0">
+                        <div className="min-w-0">
+                            <h2 id="ex-dist" className="m-0 text-[17px] font-semibold m-text">Proje sağlığı</h2>
+                            <p className="m-0 mt-0.5 text-[14px] m-text-3">Takvim, bütçe, geciken iş, risk, haftalık durum, PY puanı, kaynak ve beklentilerden ağırlıklı skor</p>
+                        </div>
+                        <HealthInfoButton onClick={() => setHealthInfo(true)} />
                     </div>
                     <LinkButton onClick={() => openProjects('all')}>Tüm projeler ({rows.length})</LinkButton>
                 </div>

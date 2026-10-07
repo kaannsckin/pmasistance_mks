@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ReportSettings, WeeklyReport, WorkspaceData } from '../../types';
+import { isPmoRole } from '../../utils/healthModel';
 import { fetchIntegrationHealth, IntegrationHealth } from '../../utils/integrations';
 import { Identity, isExecViewer, managedDepartmentCode, ownsProject } from '../../utils/rbac';
 import { relativeTime } from '../../utils/recentChanges';
@@ -19,7 +20,8 @@ import { EmptyState, Notice, NoticeState, Pill, STAGE_TONE, StagePill } from './
  * görüşmelerden yararlanarak) yazar → bölüm sorumlusu düzenler, onaylar ve
  * bölüm eklemelerini yazar → PYB destek formatı denetler, haftayı yayınlar ve
  * müdürlere gönderir. Müdür / PYB sorumlusu yayınlanan enstitü raporunu bölüm
- * bazında okur (bilgilerine sunulur).
+ * bazında okur (bilgilerine sunulur). PY rapora proje sağlığı puanını, PMO
+ * (PYB sorumlusu / PYB destek) birleşik raporda kendi puanını verir.
  */
 
 export interface ModernWeeklyReportProps {
@@ -34,6 +36,8 @@ export interface ModernWeeklyReportProps {
     onUpdateSettings: (s: ReportSettings) => void;
     onSetJiraKey: (projectId: string, key: string) => void;
     onOpenMeetings: () => void;
+    /** PMO puanı (PYB sorumlusu / PYB destek): proje × hafta, 1–10 ya da null = kaldır */
+    onRatePmo: (projectId: string, year: number, week: number, score: number | null, note?: string) => boolean;
 }
 
 type Tab = 'mine' | 'inbox' | 'status' | 'report' | 'settings';
@@ -70,7 +74,7 @@ const ReportRows: React.FC<{ rows: Row[]; dictionary: ReturnType<typeof reportDi
 );
 
 const ModernWeeklyReport: React.FC<ModernWeeklyReportProps> = ({
-    workspace, identity, onSaveReport, onAdvanceReport, onReturnReport, onPublishWeek, onUnpublishWeek, onMarkEmailed, onUpdateSettings, onSetJiraKey, onOpenMeetings,
+    workspace, identity, onSaveReport, onAdvanceReport, onReturnReport, onPublishWeek, onUnpublishWeek, onMarkEmailed, onUpdateSettings, onSetJiraKey, onOpenMeetings, onRatePmo,
 }) => {
     const role = identity.role;
     const exec = isExecViewer(role);
@@ -340,6 +344,7 @@ const ModernWeeklyReport: React.FC<ModernWeeklyReportProps> = ({
                         onUnpublish={steward ? () => onUnpublishWeek(year, week) : undefined}
                         onMarkEmailed={steward ? () => onMarkEmailed(year, week) : undefined}
                         onOpenReport={bs || steward ? (r: WeeklyReport) => setOpen(r) : undefined}
+                        onRatePmo={isPmoRole(role) ? (projectId: string, score: number | null, note?: string) => onRatePmo(projectId, year, week, score, note) : undefined}
                     />
                 )
             )}

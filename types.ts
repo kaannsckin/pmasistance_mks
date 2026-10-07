@@ -394,6 +394,8 @@ export interface WorkspaceData {
   weeklyPublications?: WeeklyPublication[]; // Yayınlanan haftalar (müdürlere sunulan birleşik rapor)
   customerMeetings?: CustomerMeeting[]; // Planlanan müşteri görüşmeleri (yönetici onayına)
   reportSettings?: ReportSettings; // Rapor ayarları (alıcılar, kurum kısaltma sözlüğü)
+  pmoRatings?: PmoRating[]; // PMO'nun haftalık proje sağlığı puanları (sağlık modelinin hedef değişkeni)
+  healthHistory?: HealthWeekSnapshot[]; // Haftalık sağlık fotoğrafları (özellik vektörü + skor)
   auditLog?: AuditEntry[]; // Kritik aksiyonların günlüğü (en yeni başta)
   settings: WorkspaceSettings;
   appVersion: string;
@@ -523,6 +525,9 @@ export interface WeeklyReport {
   worklog?: WorklogEntry[];
   /** AI'nın ilk önerisi — onaylı son hâliyle birlikte ince ayar veri setine girer */
   aiDraft?: { generatedAt: string; input: string; output: string };
+  /** PY'nin bu hafta projenin genel sağlığına verdiği puan (1–10); sağlık modelinin girdisi */
+  pmScore?: number;
+  pmScoreNote?: string; // tek cümlelik gerekçe
   authorPersonId?: string;
   authorName?: string;
   createdAt: string;
@@ -586,7 +591,7 @@ export type AuditAction =
   | 'project.create' | 'project.delete' | 'project.owner' | 'project.rag'
   | 'risk.add' | 'risk.close'
   | 'plan.submit' | 'plan.approve' | 'plan.reject' | 'plan.unlock'
-  | 'data.import' | 'identity.change' | 'health.fix' | 'snapshot.create'
+  | 'data.import' | 'identity.change' | 'health.fix' | 'health.rate' | 'snapshot.create'
   | 'ai.apply'
   | 'expectation.create' | 'expectation.respond' | 'expectation.close'
   | 'report.submit' | 'report.approve' | 'report.return' | 'report.publish'
@@ -601,4 +606,45 @@ export interface AuditEntry {
   action: AuditAction;
   summary: string; // insan-okur Türkçe özet
   projectId?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Proje sağlık modeli: PMO puanı (hedef değişken) ve haftalık sağlık fotoğrafı
+// ---------------------------------------------------------------------------
+
+/** Sağlık skorunun girdileri (her biri 0–1'e normalize edilir, 1 = sağlıklı) */
+export type HealthFactorKey = 'spi' | 'cpi' | 'overdue' | 'risk' | 'rag' | 'pm' | 'resource' | 'expectations';
+
+/**
+ * PMO'nun (PYB sorumlusu / PYB destek) bir projeye o ISO haftası için verdiği
+ * 1–10 puan. Regresyonun hedef değişkenidir (Y); proje × hafta başına tek kayıt.
+ */
+export interface PmoRating {
+  id: string;
+  projectId: string;
+  year: number; // ISO hafta yılı
+  week: number; // ISO hafta
+  score: number; // 1–10
+  note?: string;
+  byRole: UserRole;
+  byPersonId?: string;
+  byName?: string;
+  at: string; // ISO
+}
+
+/** Bir projenin o haftaki sağlık fotoğrafı: skor, kapsam ve normalize girdiler */
+export interface HealthSnapshotEntry {
+  projectId: string;
+  score: number; // 0–100
+  coverage: number; // 0–1 (verisi olan girdilerin ağırlık toplamı)
+  x: Partial<Record<HealthFactorKey, number>>; // verisi olmayan girdi yazılmaz
+}
+
+/** ISO haftası başına tek fotoğraf; hafta içinde günde en çok bir kez tazelenir */
+export interface HealthWeekSnapshot {
+  year: number; // ISO hafta yılı
+  week: number;
+  takenAt: string; // ISO
+  model: string; // skoru üreten model sürümü (ör. "uzman-1")
+  projects: HealthSnapshotEntry[];
 }

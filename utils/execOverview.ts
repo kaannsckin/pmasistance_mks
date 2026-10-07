@@ -32,7 +32,7 @@ export interface ExecProjectRow {
 
 export const buildExecProjectRows = (ws: WorkspaceData, year: number, now: Date = new Date()): ExecProjectRow[] => {
     const report = buildExecReport(ws, year);
-    const health = new Map(portfolioHealth(ws, year).projects.map(h => [h.projectId, h]));
+    const health = new Map(portfolioHealth(ws, year, undefined, now).projects.map(h => [h.projectId, h]));
     const people = new Map(ws.people.map(p => [p.id, `${p.firstName} ${p.lastName}`.trim()]));
     const projects = new Map(ws.projects.map(p => [p.id, p]));
     const today = now.toISOString().slice(0, 10);

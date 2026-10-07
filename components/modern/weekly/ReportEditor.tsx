@@ -14,6 +14,7 @@ import { parseWorklogRows, summarizeWorklog, worklogInWeek } from '../../../util
 import { useAiRun } from '../../assistant/AiButton';
 import { Icon } from '../icons';
 import { readRows } from '../readRows';
+import ScoreScale from '../ScoreScale';
 import { Card, Field, Sheet } from '../ui';
 import { Notice, NoticeState, Pill, StagePill } from './shared';
 
@@ -198,6 +199,8 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
 
     const { year, week } = draft;
     const editable = canEditReport(workspace, identity, report);
+    // PY puanını yalnız proje sahibi PY taslakta verir (kayıt sırasında da doğrulanır)
+    const pmCanRate = editable && draft.kind === 'project' && report.stage === 'draft';
     const project = draft.projectId ? workspace.projects.find(p => p.id === draft.projectId) : undefined;
     const pm = project?.pmPersonId ? workspace.people.find(p => p.id === project.pmPersonId) : undefined;
     const deptName = workspace.departments.find(d => d.code === draft.departmentCode)?.name || draft.departmentCode;
@@ -479,6 +482,26 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
                         ) : <ReadOnlyList items={draft.nextWeek} />}
                     </Card>
 
+                    {draft.kind === 'project' && (
+                        <Card title="Proje sağlığı puanı" subtitle={pmCanRate ? 'Bu hafta projenin genel durumuna 1–10 arası puanınız. Sağlık skorunun girdilerinden biridir.' : 'Proje yöneticisinin bu haftaki değerlendirmesi.'}>
+                            {pmCanRate ? (
+                                <div className="flex flex-col gap-3">
+                                    <ScoreScale label="Proje sağlığı puanı" value={draft.pmScore} onChange={v => update(d => ({ ...d, pmScore: v, pmScoreNote: v === undefined ? undefined : d.pmScoreNote }))} />
+                                    {draft.pmScore !== undefined && (
+                                        <Field label="Tek cümlelik gerekçe (isteğe bağlı)" htmlFor="wr-pm-note">
+                                            <input id="wr-pm-note" className="m-input" maxLength={200} value={draft.pmScoreNote || ''} placeholder="Ör. Entegrasyon testleri planın bir hafta gerisinde." onChange={e => update(d => ({ ...d, pmScoreNote: e.target.value }))} />
+                                        </Field>
+                                    )}
+                                </div>
+                            ) : draft.pmScore !== undefined ? (
+                                <p className="m-0 text-[15px] m-text">
+                                    <span className="text-[22px] font-bold m-tabular">{draft.pmScore}</span><span className="m-text-3"> / 10</span>
+                                    {draft.pmScoreNote && <span className="m-text-2"> — {draft.pmScoreNote}</span>}
+                                </p>
+                            ) : <p className="m-0 text-[15px] m-text-3">Proje yöneticisi bu hafta puan vermedi.</p>}
+                        </Card>
+                    )}
+
                     <Card title="Kısaltmalar" subtitle="Raporda geçen her kısaltmanın açılımı yazılır; kurum sözlüğündekiler otomatik açılır.">
                         {editable && unknownAbbr.length > 0 && (
                             <div className="flex flex-col gap-2">
@@ -664,6 +687,7 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
                     <div className="px-4 py-3 flex flex-wrap items-center gap-2">
                         <span className="text-[14px] m-text-3 flex-1 min-w-[180px]">
                             {counts.errors > 0 && next ? `Göndermeden önce ${counts.errors} format hatasını düzeltin.` : next ? `Sonraki aşama: ${STAGE_LABELS[next.stage]}` : 'Onaylandı — yayınlanmayı bekliyor.'}
+                            {pmCanRate && draft.pmScore === undefined && ' · Proje sağlığı puanı verilmedi'}
                         </span>
                         {canReturn && (
                             <button type="button" className="m-btn m-btn-danger" onClick={() => { setReturnNote(''); setReturning(true); }}>

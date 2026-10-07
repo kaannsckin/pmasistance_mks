@@ -1,5 +1,7 @@
-import React, { useMemo, useState } from 'react';
-import { Abbreviation, ReportItem, ReportSettings, ReportStage, WeeklyPublication, WeeklyReport, WorkspaceData } from '../../../types';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Abbreviation, PmoRating, ReportItem, ReportSettings, ReportStage, WeeklyPublication, WeeklyReport, WorkspaceData } from '../../../types';
+import { ROLE_LABELS } from '../../../utils/allocations';
+import { pmoRatingFor } from '../../../utils/healthModel';
 import { describeNotify, IntegrationHealth, sendNotification } from '../../../utils/integrations';
 import { Identity } from '../../../utils/rbac';
 import { relativeTime } from '../../../utils/recentChanges';
@@ -7,6 +9,7 @@ import {
     buildEml, consolidate, glossaryFor, isPyds, itemDisplay, renderReportHtml, renderReportText, reportTitle, weekProgress,
 } from '../../../utils/weeklyReport';
 import { Icon } from '../icons';
+import ScoreScale from '../ScoreScale';
 import { EmptyState, copyText, downloadFile, Notice, NoticeState, Pill, printHtml, StagePill } from './shared';
 
 /**
@@ -26,6 +29,36 @@ const Items: React.FC<{ title: string; items: ReportItem[] }> = ({ title, items 
         </div>
     ) : null;
 
+/**
+ * PMO değerlendirmesi: projeye bu hafta için 1–10 puan (sağlık modelinin hedef
+ * değişkeni). Çapa etkisini azaltmak için yanında model skoru ve PY puanı yok.
+ */
+const PmoRatingRow: React.FC<{ projectName: string; rating?: PmoRating; onRate: (score: number | null, note?: string) => boolean }> = ({ projectName, rating, onRate }) => {
+    const [note, setNote] = useState(rating?.note || '');
+    useEffect(() => setNote(rating?.note || ''), [rating?.note]);
+    return (
+        <div className="rounded-xl m-fill-2 px-3 py-2.5 flex flex-col gap-2">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                <span className="text-[13px] font-semibold m-text-2">PMO puanı</span>
+                <ScoreScale compact label={`${projectName} için PMO puanı`} value={rating?.score} onChange={v => onRate(v ?? null, note)} />
+                {rating && <span className="text-[12.5px] m-text-3">{rating.byName || ROLE_LABELS[rating.byRole]} · {relativeTime(rating.at)}</span>}
+            </div>
+            {rating && (
+                <input
+                    aria-label={`${projectName} için PMO gerekçesi`}
+                    className="m-input !min-h-[38px] text-[14px]"
+                    maxLength={200}
+                    value={note}
+                    placeholder="Gerekçe (isteğe bağlı) — alandan çıkınca kaydedilir"
+                    onChange={e => setNote(e.target.value)}
+                    onBlur={() => { if (note.trim() !== (rating.note || '')) onRate(rating.score, note); }}
+                    onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                />
+            )}
+        </div>
+    );
+};
+
 export interface ConsolidatedReportProps {
     workspace: WorkspaceData;
     identity: Identity;
@@ -40,10 +73,12 @@ export interface ConsolidatedReportProps {
     onUnpublish?: () => boolean;
     onMarkEmailed?: () => void;
     onOpenReport?: (r: WeeklyReport) => void;
+    /** PMO rolleri: projeye haftalık 1–10 sağlık puanı */
+    onRatePmo?: (projectId: string, score: number | null, note?: string) => boolean;
 }
 
 const ConsolidatedReport: React.FC<ConsolidatedReportProps> = ({
-    workspace, identity, year, week, dictionary, settings, health, departmentCode, publication, onPublish, onUnpublish, onMarkEmailed, onOpenReport,
+    workspace, identity, year, week, dictionary, settings, health, departmentCode, publication, onPublish, onUnpublish, onMarkEmailed, onOpenReport, onRatePmo,
 }) => {
     const steward = isPyds(identity.role);
     const [mode, setMode] = useState<'approved' | 'all'>(steward && !publication ? 'all' : 'approved');
@@ -61,6 +96,8 @@ const ConsolidatedReport: React.FC<ConsolidatedReportProps> = ({
     const glossary = useMemo(() => glossaryFor(reports, dictionary), [reports, dictionary]);
     const progress = useMemo(() => weekProgress(workspace, year, week).filter(d => !departmentCode || d.code === departmentCode), [workspace, year, week, departmentCode]);
     const expected = progress.reduce((s, d) => s + d.expected, 0);
+    const shownProjects = sections.flatMap(s => s.projects.map(p => p.projectId));
+    const ratedCount = shownProjects.filter(id => pmoRatingFor(workspace.pmoRatings, id, year, week)).length;
     const approved = progress.reduce((s, d) => s + d.byStage.approved, 0);
 
     const approvedSections = useMemo(() => consolidate(workspace, year, week, ['approved']), [workspace, year, week]);
@@ -157,6 +194,15 @@ const ConsolidatedReport: React.FC<ConsolidatedReportProps> = ({
 
             <Notice notice={notice} onClose={() => setNotice(null)} />
 
+            {onRatePmo && shownProjects.length > 0 && (
+                <div className="m-surface rounded-2xl px-4 py-3 flex items-start gap-3">
+                    <span className="m-accent" style={{ marginTop: 2 }}><Icon name="info" size={18} /></span>
+                    <p className="m-0 flex-1 text-[14px] m-text-2">
+                        Raporu okurken her projeye bu hafta için <b>1–10 PMO puanı</b> verin ({ratedCount}/{shownProjects.length} puanlandı). Puanlar proje sağlık modelinin hedef değişkenidir; yeterli veri birikince skorun ağırlıkları bu puanlara göre kalibre edilir. Proje yöneticileri puanları görmez.
+                    </p>
+                </div>
+            )}
+
             {sections.length === 0 ? (
                 <EmptyState icon="report" title={mode === 'approved' ? 'Bu hafta onaylanmış rapor yok' : 'Bu hafta incelemeye gönderilmiş rapor yok'}>
                     <span className="text-[15px] m-text-3 max-w-[52ch]">Raporlar proje yöneticisi gönderdikten sonra burada bölüm bazında birleşir.</span>
@@ -180,6 +226,7 @@ const ConsolidatedReport: React.FC<ConsolidatedReportProps> = ({
                                     </div>
                                     <Items title="Bu hafta" items={p.report.thisWeek} />
                                     <Items title="Gelecek hafta" items={p.report.nextWeek} />
+                                    {onRatePmo && <PmoRatingRow projectName={p.name} rating={pmoRatingFor(workspace.pmoRatings, p.projectId, year, week)} onRate={(score, note) => onRatePmo(p.projectId, score, note)} />}
                                 </div>
                             ))}
                             {s.additions && (s.additions.thisWeek.length > 0 || s.additions.nextWeek.length > 0) && (

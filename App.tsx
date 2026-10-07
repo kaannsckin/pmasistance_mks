@@ -16,6 +16,7 @@ import { applyPoolImport, PoolImportResult } from './utils/poolImporter';
 import { isExecRole } from './utils/execReport';
 import { canCreateProject, canEditProjectContent, identityOf, identityNeedsPerson as computeNeedsPerson, ownsProject, visibleProjectIds } from './utils/rbac';
 import { addSnapshot, buildSnapshot, ensureMonthlySnapshot } from './utils/snapshots';
+import { ensureWeeklyHealthSnapshot, pmoRatingFor, setPmoRating } from './utils/healthModel';
 import { AllocationSuggestion, ApplyMode, applyAllocationSuggestions } from './utils/taskToAllocation';
 import { applyBilledHoursActuals, planBilledHoursPoolAdditions, suggestBilledHoursActuals, BilledApplyMode, BilledHoursOptions, BilledHoursRecord } from './utils/billedHours';
 import { buildTodoItems, TodoItem } from './utils/todoItems';
@@ -159,8 +160,10 @@ const App: React.FC = () => {
       localStorage.getItem(LEGACY_STORAGE_KEY)
     );
     if (resolved) {
-      // Ayın ilk açılışında otomatik baseline (plan kayması trendi için)
-      setWorkspace(ensureMonthlySnapshot(resolved) || resolved);
+      // Ayın ilk açılışında otomatik baseline (plan kayması trendi için) ve
+      // haftalık sağlık fotoğrafı (sağlık modelinin eğitim verisi)
+      const withBaseline = ensureMonthlySnapshot(resolved) || resolved;
+      setWorkspace(ensureWeeklyHealthSnapshot(withBaseline) || withBaseline);
     } else {
       const sample = createSampleProject();
       setWorkspace({ ...createEmptyWorkspace(), projects: [sample], activeProjectId: sample.id });
@@ -722,6 +725,22 @@ const App: React.FC = () => {
     return true;
   }, [commitWorkspace]);
 
+  // PMO puanı: yalnız PYB rolleri; puan değişince denetim günlüğüne (değer yazılmadan) düşer
+  const handleRatePmo = useCallback((projectId: string, year: number, week: number, score: number | null, note?: string): boolean => {
+    const ws = workspaceRef.current;
+    if (!ws) return false;
+    const prev = pmoRatingFor(ws.pmoRatings, projectId, year, week);
+    const ratings = setPmoRating(ws.pmoRatings, actorOf(ws), { projectId, year, week, score, note });
+    if (!ratings) return false;
+    let next: WorkspaceData = { ...ws, pmoRatings: ratings };
+    if ((prev?.score ?? null) !== score) {
+      const name = ws.projects.find(p => p.id === projectId)?.name || 'Proje';
+      next = appendAudit(next, 'health.rate', `"${name}" · ${weekLabel(year, week)} PMO değerlendirmesi ${score === null ? 'kaldırıldı' : 'kaydedildi'}`, projectId);
+    }
+    commitWorkspace(next);
+    return true;
+  }, [commitWorkspace]);
+
   const handleMarkReportEmailed = useCallback((year: number, week: number) => {
     updateWorkspace(ws => ({ ...ws, weeklyPublications: markWeekEmailed(ws.weeklyPublications || [], year, week) }));
   }, [updateWorkspace]);
@@ -952,6 +971,7 @@ const App: React.FC = () => {
           onUpdateSettings={handleUpdateReportSettings}
           onSetJiraKey={handleSetJiraKey}
           onOpenMeetings={() => setCurrentView(View.Meetings)}
+          onRatePmo={handleRatePmo}
         />
       ) : (
         <ModernMeetings

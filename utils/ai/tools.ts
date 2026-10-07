@@ -210,7 +210,7 @@ export const AI_TOOLS: ToolDef[] = [
         label: 'Portföy özeti',
         spec: {
             name: 'portfoy_ozeti',
-            description: 'Portföy sağlık skoru (0-100), proje bazında sağlık/SPI/CPI ve skoru düşüren nedenler, "dikkat gerektirenler" listesi (onay bekleyen plan, bütçe/takvim sapması, kritik RAG, geciken iş, aşırı tahsis, veri sorunları) ve risk özeti. Genel durum soruları için ilk tercih.',
+            description: 'Portföy sağlık skoru (0-100; takvim, bütçe, geciken iş, risk, haftalık durum, PY puanı, kaynak ve yönetim beklentilerinin ağırlıklı ortalaması), proje bazında sağlık/güven/SPI/CPI ve skoru düşüren nedenler, "dikkat gerektirenler" listesi (onay bekleyen plan, bütçe/takvim sapması, kritik RAG, geciken iş, aşırı tahsis, veri sorunları) ve risk özeti. Genel durum soruları için ilk tercih.',
             parameters: S.obj({ yil: P.year }),
         },
         run: (a, ctx) => {
@@ -223,7 +223,7 @@ export const AI_TOOLS: ToolDef[] = [
                 saglik_bandi: health.orgBand,
                 ozet: maskSicil(executiveSummary(ctx.scoped, year, ctx.now), ctx.ws.people),
                 projeler: health.projects.slice(0, 40).map(h => ({
-                    proje: h.name, skor: h.score, bant: h.band, rag: h.rag ? RAG_TR[h.rag] : undefined,
+                    proje: h.name, skor: h.score, bant: h.band, guven: h.confidence, rag: h.rag ? RAG_TR[h.rag] : undefined,
                     spi: r2(h.spi), cpi: r2(h.cpi), yuksek_risk: h.highRisks, nedenler: h.reasons,
                 })),
                 dikkat_gerektirenler: attn.slice(0, 20).map(i => ({
@@ -239,7 +239,7 @@ export const AI_TOOLS: ToolDef[] = [
         label: 'Proje detayı',
         spec: {
             name: 'proje_detayi',
-            description: 'Tek projenin ayrıntılı durumu: sağlık skoru ve nedenleri, görev istatistikleri, geciken ve 14 gün içinde bitecek görevler, en yüksek riskler, iş paketleri, hedefler, bu yılın plan/gerçekleşen adam-ayı, plan kilidi ve EVM özeti.',
+            description: 'Tek projenin ayrıntılı durumu: sağlık skoru, nedenleri ve girdi dökümü (her girdinin değeri, ağırlığı, skordan düşürdüğü puan), görev istatistikleri, geciken ve 14 gün içinde bitecek görevler, en yüksek riskler, iş paketleri, hedefler, bu yılın plan/gerçekleşen adam-ayı, plan kilidi ve EVM özeti.',
             parameters: S.obj({ proje: P.project, yil: P.year }),
         },
         run: (a, ctx) => {
@@ -267,7 +267,12 @@ export const AI_TOOLS: ToolDef[] = [
                 proje_yoneticisi: projectPmName(ctx, p.pmPersonId),
                 baslangic: p.settings.projectStartDate,
                 surum_suresi_hafta: p.settings.sprintDuration,
-                saglik: { skor: h.score, bant: h.band, spi: r2(h.spi), cpi: r2(h.cpi), nedenler: h.reasons },
+                saglik: {
+                    skor: h.score, bant: h.band, guven: h.confidence, kapsam: h.coverage, spi: r2(h.spi), cpi: r2(h.cpi), nedenler: h.reasons,
+                    // Skorun girdileri: normalize değer (0-1, null = veri yok), ağırlık ve skordan düşürdüğü puan
+                    girdiler: h.factors.map(f => ({ girdi: f.label, deger: f.value, agirlik: f.weight, kayip_puan: f.points, ayrinti: f.detail })),
+                    algi_farki: h.perceptionGap,
+                },
                 gorevler: {
                     toplam: p.tasks.length,
                     durumlara_gore: Object.fromEntries(Object.values(TaskStatus).map(s => [TASK_STATUS_TR[s], p.tasks.filter(t => t.status === s).length])),

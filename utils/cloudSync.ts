@@ -80,6 +80,9 @@ export const splitWorkspaceDoc = (ws: WorkspaceData): { core: Record<string, unk
         weeklyPublications: ws.weeklyPublications || [],
         customerMeetings: ws.customerMeetings || [],
         reportSettings: ws.reportSettings,
+        // Sağlık modeli: PMO puanları (hedef değişken) ve haftalık fotoğraflar
+        pmoRatings: ws.pmoRatings || [],
+        healthHistory: ws.healthHistory || [],
     };
     return { core, privateDoc };
 };

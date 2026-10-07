@@ -161,7 +161,7 @@ export const createReport = (
 });
 
 /** İçerik düzenlemesi; yazar dışındaki aşamalarda kimin değiştirdiği kayda geçer */
-export const editReport = (r: WeeklyReport, patch: Partial<Pick<WeeklyReport, 'thisWeek' | 'nextWeek' | 'abbreviations' | 'worklog' | 'aiDraft'>>, actor: Actor, now: Date = new Date()): WeeklyReport => {
+export const editReport = (r: WeeklyReport, patch: Partial<Pick<WeeklyReport, 'thisWeek' | 'nextWeek' | 'abbreviations' | 'worklog' | 'aiDraft' | 'pmScore' | 'pmScoreNote'>>, actor: Actor, now: Date = new Date()): WeeklyReport => {
     const last = r.history[r.history.length - 1];
     const sameEditor = last && last.byRole === actor.role && last.byName === actor.name && (last.action === 'edit' || last.action === 'create');
     return {
@@ -242,7 +242,11 @@ export const saveReport = (
         if (findReport(reports, draft.year, draft.week, draft.projectId, draft.kind, draft.departmentCode)) return null;
         if (!canCreateReport(ws, id, draft)) return null;
     }
-    const content = { thisWeek: draft.thisWeek, nextWeek: draft.nextWeek, abbreviations: draft.abbreviations, worklog: draft.worklog, aiDraft: draft.aiDraft };
+    // PY puanını yalnız proje sahibi PY taslak aşamasında verir; sonraki aşamalarda korunur
+    const pmRates = draft.kind === 'project' && (existing?.stage ?? 'draft') === 'draft';
+    const pmScore = pmRates ? (Number.isInteger(draft.pmScore) && draft.pmScore! >= 1 && draft.pmScore! <= 10 ? draft.pmScore : undefined) : existing?.pmScore;
+    const pmScoreNote = pmRates ? (pmScore !== undefined ? draft.pmScoreNote?.trim() || undefined : undefined) : existing?.pmScoreNote;
+    const content = { thisWeek: draft.thisWeek, nextWeek: draft.nextWeek, abbreviations: draft.abbreviations, worklog: draft.worklog, aiDraft: draft.aiDraft, pmScore, pmScoreNote };
     let r: WeeklyReport = existing ? editReport(existing, content, actor, now) : { ...createReport({ kind: draft.kind, projectId: draft.projectId, departmentCode: draft.departmentCode, year: draft.year, week: draft.week }, actor, now), ...content, id: draft.id };
     if (o.advance) {
         if (lintCounts(lintReport(r, o.dictionary)).errors > 0 || !nextStage(r)) return null;
