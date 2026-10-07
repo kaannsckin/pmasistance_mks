@@ -87,7 +87,7 @@ const PersonSheet: React.FC<{
                     <input id="tm-title" className="m-input" value={title} placeholder="Uzman" onChange={e => setTitle(e.target.value)} />
                 </Field>
             </div>
-            <Field label={`Bu ayki katılım: %${participation}`} htmlFor="tm-part" hint="Sürüm kapasitesi ve iş yükü bu orana göre hesaplanır">
+            <Field label={`Bu ayki katılım: %${participation}`} htmlFor="tm-part" hint="Kişinin sürüm kapasitesi bu orana göre hesaplanır (iş yükü görev eforudur)">
                 <input id="tm-part" type="range" min={0} max={100} step={5} value={participation} onChange={e => setParticipation(parseInt(e.target.value, 10))} />
             </Field>
             <div className="flex flex-col gap-1.5">
@@ -181,7 +181,7 @@ const ModernTeam: React.FC<ModernTeamProps> = ({ resources, tasks, people, canEd
                 <div className="m-surface rounded-2xl px-5 py-12 flex flex-col items-center gap-2 text-center">
                     <span className="w-11 h-11 rounded-full m-tone-accent flex items-center justify-center"><Icon name="users" size={22} /></span>
                     <span className="text-[17px] font-semibold m-text">Ekip henüz tanımlı değil</span>
-                    <span className="text-[15px] m-text-3 max-w-[52ch]">Kişileri personel havuzundan ekleyin; katılım oranları sürüm kapasitesini ve iş yükünü belirler.</span>
+                    <span className="text-[15px] m-text-3 max-w-[52ch]">Kişileri personel havuzundan ekleyin; katılım oranları sürüm kapasitesini belirler.</span>
                     {canEdit && <button type="button" className="m-btn m-btn-primary mt-1" onClick={() => setSheet({})}><Icon name="plus" size={18} strokeWidth={2.2} />İlk kişiyi ekle</button>}
                 </div>
             ) : (

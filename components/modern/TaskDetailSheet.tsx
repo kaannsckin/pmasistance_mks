@@ -59,7 +59,11 @@ const TaskDetailSheet: React.FC<TaskDetailSheetProps> = ({ task, project, author
         ['Birim', task.unit || '—'],
         ['Sürüm', sprintLabel(task.version, project.settings.sprintNames)],
         ['Termin', task.dueDate ? <>{shortDate(task.dueDate)}{late > 0 && <span className="ml-2 m-ink-bad font-semibold">{late} gün gecikti</span>}</> : '—'],
-        ['Süre', pert > 0 ? `${num(pert)} gün (PERT) · ${task.time.best} / ${task.time.avg} / ${task.time.worst}` : <span className="m-ink-warn">Tahmin yok</span>],
+        ['Süre', pert > 0 ? `${num(pert)} gün (PERT) · ${task.time.best} / ${task.time.avg} / ${task.time.worst}${task.estimateSource === 'reference' ? ' · geçmiş kayıtlardan' : ''}` : <span className="m-ink-warn">Tahmin yok</span>],
+        ...(task.forecast ? [['Açılış tahmini', <>
+            {num(task.forecast.p50Days)}–{num(task.forecast.p80Days)} iş günü <span className="m-text-3">(benzer {task.forecast.n} kayıt)</span>
+            {closedIn !== null && <span className={`ml-2 font-semibold ${closedIn <= task.forecast.p80Days ? 'm-ink-ok' : 'm-ink-warn'}`}>{closedIn <= task.forecast.p80Days ? 'aralıkta kapandı' : 'P80 aşıldı'}</span>}
+        </>] as [string, React.ReactNode]] : []),
         ['Öncül', pred ? pred.name : task.predecessor ? 'Silinmiş görev' : '—'],
         ['İş paketi', wp?.name || '—'],
         ['Hedef', objective ? `${objective.name}${kr ? ` · ${kr.name}` : ''}` : '—'],

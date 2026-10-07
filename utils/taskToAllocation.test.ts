@@ -55,15 +55,15 @@ describe('suggestAllocationsFromTasks', () => {
         expect(jan).toBeCloseTo((15 / 15) * (1 / 21), 2); // 1/15 pay × 15 gün = 1 gün ≈ 0.05 AA
     });
 
-    it('katılım oranı efektif süreyi artırır; havuzda eşleşmeyen kaynak uyarıya düşer', () => {
+    it('katılım oranı eforu (AA) büyütmez; havuzda eşleşmeyen kaynak uyarıya düşer', () => {
         const p = buildProject();
         p.tasks = [
-            task('t3', 1, 'Ayşe Demir', 5), // %50 katılım → 10 efektif gün
+            task('t3', 1, 'Ayşe Demir', 5), // %50 katılım: takvimde uzar ama efor yine 5 gün
             task('t4', 1, 'Bilinmeyen Kişi', 5),
         ];
         const r = suggestAllocationsFromTasks(p, [person('p2', 'Ayşe', 'Demir')], 2026);
         const ayse = r.suggestions.find(s => s.personLabel === 'Ayşe Demir')!;
-        expect(ayse.months[1]).toBeCloseTo(10 / 21, 2);
+        expect(ayse.months[1]).toBeCloseTo(5 / 21, 2);
         expect(r.unmatched).toEqual(['Bilinmeyen Kişi']);
         const unknown = r.suggestions.find(s => !s.matched)!;
         expect(unknown.resourceName).toBe('Bilinmeyen Kişi');

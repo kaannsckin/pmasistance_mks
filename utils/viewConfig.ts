@@ -20,6 +20,7 @@ export const PROJECT_SECTIONS: { key: ProjectSectionKey; label: string; view?: V
     { key: 'board', label: 'Pano', view: View.Roadmap },
     { key: 'list', label: 'Liste', view: View.Tasks },
     { key: 'timeline', label: 'Zaman çizelgesi', view: View.Kanban },
+    { key: 'planning', label: 'Planlama', view: View.Planning },
     { key: 'risks', label: 'Riskler', view: View.Risks },
     { key: 'team', label: 'Ekip', view: View.Resources },
     { key: 'goals', label: 'Hedefler', view: View.Goals },

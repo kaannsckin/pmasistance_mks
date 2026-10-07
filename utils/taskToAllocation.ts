@@ -5,8 +5,10 @@ import { createAllocationId, MONTH_INDEXES } from './allocations';
 /**
  * Görev planı → Tahsis köprüsü.
  *
- * Projenin sprint planındaki görev eforlarını (PERT süresi / katılım oranı)
- * sprint takvimine yayıp kişi × ay bazında AA önerisine çevirir. PM aynı
+ * Projenin sprint planındaki görev eforlarını (PERT, kişi-gün) sprint
+ * takvimine yayıp kişi × ay bazında AA önerisine çevirir. Efor katılım
+ * oranına bölünmez: %50 katılımlı kişinin 5 günlük işi takvimde 10 güne yayılır
+ * ama kişiden yine 5 gün (≈ 0,24 AA) yer. PM aynı
  * bilgiyi ikinci kez elle girmek zorunda kalmaz; öneri tahsis tablosuna
  * "boş ayları doldur" ya da "üzerine yaz" modlarıyla uygulanır.
  *
@@ -112,7 +114,6 @@ export const suggestAllocationsFromTasks = (
     if (!tasks.length || maxSprint === 0) return empty;
 
     const windows = buildSprintWindows(project, maxSprint);
-    const participationByResource = new Map(project.resources.map(r => [trKey(r.name), (r.participation || 100) / 100]));
     const personByName = new Map(people.map(p => [trKey(`${p.firstName} ${p.lastName}`), p]));
 
     // kaynak adı → ay → gün
@@ -124,14 +125,12 @@ export const suggestAllocationsFromTasks = (
         if (!win || win.totalWorkdays === 0) return;
         const { pert } = calculatePertFuzzyPert(task.time);
         if (pert <= 0) return;
-        const participation = participationByResource.get(trKey(task.resourceName || '')) ?? 1;
-        const effectiveDays = participation > 0 ? pert / participation : pert;
         const resource = (task.resourceName || 'Atanmamış').trim() || 'Atanmamış';
         if (!daysByResource.has(resource)) daysByResource.set(resource, new Map());
         const monthMap = daysByResource.get(resource)!;
         win.workdaysByMonth.forEach((count, key) => {
             const [y, m] = key.split('-').map(Number);
-            const share = effectiveDays * (count / win.totalWorkdays);
+            const share = pert * (count / win.totalWorkdays); // efor, takvim payına göre aylara
             if (y !== year) {
                 clipped = true;
                 return;

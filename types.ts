@@ -59,7 +59,8 @@ export interface Task {
   startedAt?: string; // ilk kez "Süreçte"ye geçtiği an
   resolvedAt?: string; // son kapanış (yeniden açılınca silinir)
   statusLog?: TaskStatusChange[]; // durum geçişleri (en yeni sonda, en çok 50)
-  estimateSource?: 'user' | 'ai' | 'jira' | 'import';
+  estimateSource?: 'user' | 'ai' | 'jira' | 'import' | 'reference'; // reference: benzer kapanmış kayıtların gerçek sürelerinden
+  forecast?: TaskForecast; // açılışta yapılan süre tahmini (kayıt kapanınca isabeti ölçülür)
   originalEstimateHours?: number; // kaynak sistemdeki ilk tahmin (Jira "Original Estimate")
   actualHours?: number; // harcanan efor (Jira "Time Spent" / worklog)
   storyPoints?: number;
@@ -67,6 +68,18 @@ export interface Task {
 }
 
 export type IssueType = 'bug' | 'feature' | 'improvement' | 'task' | 'other';
+
+/** Planlama asistanının kayıt açılırken verdiği tahmin (öğrenme döngüsü için saklanır) */
+export interface TaskForecast {
+  at: string; // ISO
+  method: 'similar' | 'group' | 'all';
+  n: number; // dayanılan kapanmış kayıt sayısı
+  confidence: 'high' | 'medium' | 'low';
+  p50Days: number; // kapanma süresi (iş günü)
+  p80Days: number;
+  effortDays?: number; // önerilen olası efor (gün)
+  accepted: boolean; // öneri tahmine uygulandı mı
+}
 
 export interface TaskStatusChange {
   at: string; // ISO
@@ -143,6 +156,7 @@ export enum View {
   WeeklyReport, // Haftalık rapor (PY → BS → PYDS → müdür)
   Meetings, // Planlanan müşteri görüşmeleri
   Admin, // Yönetici (admin): rol yetkileri ve profiller
+  Planning, // Planlama asistanı: yeni kayıt tahmini ve plan simülasyonu (modern arayüz)
 }
 
 export interface UnitLoad {
@@ -209,7 +223,7 @@ export type PermissionKey =
 export type RolePermissions = Partial<Record<UserRole, PermissionKey[]>>;
 
 /** Proje içi sekmeler (admin rol bazında gizleyebilir; genel bakış her zaman açık) */
-export type ProjectSectionKey = 'overview' | 'board' | 'list' | 'timeline' | 'risks' | 'team' | 'goals' | 'workPackages' | 'assistant';
+export type ProjectSectionKey = 'overview' | 'board' | 'list' | 'timeline' | 'planning' | 'risks' | 'team' | 'goals' | 'workPackages' | 'assistant';
 /** Yönetim ekranı kartları (admin rol bazında gizleyebilir) */
 export type ExecSectionKey = 'summary' | 'kpis' | 'expectations' | 'meetings' | 'health' | 'attention' | 'approvals' | 'risks' | 'departments' | 'changes';
 export type TaskSortKey = 'smart' | 'priority' | 'due' | 'name';
