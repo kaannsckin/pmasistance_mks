@@ -193,6 +193,14 @@
   .ui-modern .m-sidebar.is-open { transform: none; box-shadow: var(--m-pop-shadow); }
 }
 
+/* AI yanıtlarındaki markdown (ortak Markdown bileşeni) modern renklerle */
+.ui-modern .m-md code { background: var(--m-fill); color: var(--m-label); }
+.ui-modern .m-md pre code { background: transparent; color: inherit; }
+.ui-modern .m-md a { color: var(--m-accent); }
+.ui-modern .m-md blockquote { border-color: var(--m-accent); color: var(--m-label-2); }
+.ui-modern .m-md hr, .ui-modern .m-md table, .ui-modern .m-md th, .ui-modern .m-md tr { border-color: var(--m-sep); }
+.ui-modern .m-md thead { background: var(--m-fill-2); }
+
 /* 3. Yeniden yazılmamış ekranlar için yumuşatma -------------------------- */
 /* Büyük harf + harf aralıklı mini başlıklar (pencereler dahil) sade yazılır */
 .ui-modern .uppercase { text-transform: none; }
