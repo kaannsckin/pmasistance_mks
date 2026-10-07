@@ -1,5 +1,6 @@
 import { Allocation, Project, RagStatus, Resource, RiskLevel, Task, TaskStatus, WorkspaceData } from '../../types';
 import { createAllocation, getPlanLockStatus, setAllocationCell } from '../allocations';
+import { stampLifecycle } from '../planning/lifecycle';
 import { appendAudit } from '../audit';
 import { canEditActualCell, canEditPlanCell, canEditProjectContent, identityOf } from '../rbac';
 import { createRisk, riskScore } from '../risks';
@@ -154,7 +155,12 @@ const newTaskId = (): string => `task-${Date.now().toString(36)}-${Math.random()
 
 const touch = (ws: WorkspaceData, projectId: string, fn: (p: Project) => Project): WorkspaceData => ({
     ...ws,
-    projects: ws.projects.map(p => (p.id === projectId ? { ...fn(p), updatedAt: new Date().toISOString() } : p)),
+    projects: ws.projects.map(p => {
+        if (p.id !== projectId) return p;
+        const next = fn(p);
+        // Kayıt yaşam döngüsü (açılış, durum geçişi) uygulamadaki diğer değişikliklerle aynı biçimde damgalanır
+        return { ...next, tasks: next.tasks !== p.tasks ? stampLifecycle(p.tasks, next.tasks) : next.tasks, updatedAt: new Date().toISOString() };
+    }),
 });
 
 /**
@@ -190,6 +196,7 @@ export const applyAction = (ws: WorkspaceData, action: AiAction): { ws: Workspac
                 id: newTaskId(), name: action.name.trim(), availability: time.avg > 0, priority: action.priority, version: 1,
                 predecessor: null, unit: '', resourceName: action.resourceName || '', time, jiraId: '', notes: action.notes?.trim() || '',
                 status: TaskStatus.ToDo, labels: [], includeInSprints: true, ...(action.dueDate ? { dueDate: action.dueDate } : {}),
+                ...(time.avg > 0 ? { estimateSource: 'ai' as const } : {}),
             };
             next = touch(ws, project.id, p => {
                 // Havuzdan atanan kişi proje kaynağı değilse eklenir (görev formuyla aynı davranış)

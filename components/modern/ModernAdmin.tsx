@@ -22,6 +22,9 @@ import { AdminSection, ADMIN_SECTIONS } from './adminSections';
 import { Icon } from './icons';
 import { PROJECT_STATUS_LABEL } from './ModernProjectHeader';
 import { AuditLogPanel } from './sheets/AuditLogSheet';
+import { downloadFile } from './weekly/shared';
+import { analyzeRecords, EXCLUDING, QUALITY_LABELS, QualityIssue, recordsToCsv } from '../../utils/planning/recordQuality';
+import { HOLIDAY_TABLE_YEARS } from '../../utils/planning/workdays';
 import { DataHealthPanel } from './sheets/DataHealthSheet';
 import { BAND_META, Card, Field, rowSep } from './ui';
 
@@ -749,6 +752,77 @@ const ProfileManager: React.FC<Pick<ModernAdminProps, 'workspace' | 'onAddProfil
     );
 };
 
+// ------------------------------------------------------------------ kayıt verisi
+
+/** Planlama simülasyonu ve AI tahmini için geçmiş kayıtların kalitesi ve temiz veri kümesi */
+const RecordDataPanel: React.FC<{ workspace: WorkspaceData }> = ({ workspace }) => {
+    const report = useMemo(() => analyzeRecords(workspace.projects), [workspace.projects]);
+    const num = (v: number) => String(v).replace('.', ',');
+    const issues = (Object.keys(QUALITY_LABELS) as QualityIssue[]).filter(i => report.byIssue[i]);
+    const stamp = new Date().toISOString().slice(0, 10);
+    return (
+        <section aria-labelledby="ad-rec" className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+                <div className="min-w-0">
+                    <h2 id="ad-rec" className="m-0 text-[17px] font-semibold m-text">Kayıt verisi (planlama ve AI)</h2>
+                    <p className="m-0 mt-0.5 text-[14px] m-text-3">Kapanmış kayıtların kaç iş gününde kapandığı ölçülür ve tutarlılık testlerinden geçer; uygun olanlar planlama simülasyonunun ve AI tahmininin öğrenme verisidir.</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                    <button type="button" className="m-btn m-btn-gray" disabled={!report.usable} onClick={() => downloadFile(`kayit-verisi-temiz-${stamp}.csv`, recordsToCsv(report, true), 'text/csv;charset=utf-8')}><Icon name="download" size={18} />Temiz veri (CSV)</button>
+                    <button type="button" className="m-btn m-btn-plain" disabled={!report.closed} onClick={() => downloadFile(`kayit-verisi-tum-${stamp}.csv`, recordsToCsv(report, false), 'text/csv;charset=utf-8')}>Tümü + sorunlar</button>
+                </div>
+            </div>
+            <div className="grid gap-2.5 grid-cols-2 sm:grid-cols-4">
+                {[
+                    { label: 'Kayıt', value: String(report.total) },
+                    { label: 'Kapanmış', value: String(report.closed) },
+                    { label: 'Eğitime uygun', value: report.closed ? `${report.usable} (%${Math.round((report.usable / report.closed) * 100)})` : '0', tone: report.closed && report.usable / report.closed < 0.5 ? 'm-ink-warn' : 'm-text' },
+                    { label: 'Gerçek ÷ tahmin (medyan)', value: report.estimateRatio ? `${num(report.estimateRatio.median)}×` : '—', tone: report.estimateRatio && report.estimateRatio.median > 1.5 ? 'm-ink-warn' : 'm-text' },
+                ].map(t => (
+                    <div key={t.label} className="m-surface rounded-2xl px-4 py-3 flex flex-col">
+                        <span className="text-[13px] m-text-3">{t.label}</span>
+                        <span className={`text-[22px] font-bold m-tabular ${t.tone || 'm-text'}`}>{t.value}</span>
+                    </div>
+                ))}
+            </div>
+            {report.closed === 0 ? (
+                <Note>Henüz kapanmış kayıt yok. Uygulamada açılan kayıtların açılış, başlama ve kapanış anı artık otomatik kaydediliyor; geçmiş için Jira'dan "Created", "Resolved", "Status", "Issue Type", "Priority", "Original Estimate", "Time Spent" sütunlarıyla CSV içe aktarın.</Note>
+            ) : (
+                <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(340px, 100%), 1fr))' }}>
+                    <Card title="Testler" subtitle={`Elenenler: ${EXCLUDING.map(i => QUALITY_LABELS[i].toLocaleLowerCase('tr-TR')).join(', ')}`}>
+                        <div className="flex flex-col -my-1">
+                            {issues.length === 0 ? <p className="m-0 text-[14px] m-ink-ok">Tüm kapanmış kayıtlar testlerden geçti.</p> : issues.map((i, k) => {
+                                const sep = rowSep(k);
+                                return (
+                                    <div key={i} className={`flex items-center gap-3 py-2 ${sep.className}`} style={sep.style}>
+                                        <span className="flex-1 text-[14.5px] m-text">{QUALITY_LABELS[i]}</span>
+                                        <span className={`inline-flex items-center h-6 px-2.5 rounded-full text-[12px] font-semibold ${EXCLUDING.includes(i) ? 'm-tone-bad' : 'm-tone-hold'}`}>{EXCLUDING.includes(i) ? 'elenir' : 'bilgi'}</span>
+                                        <span className="w-10 text-right text-[14px] font-semibold m-tabular m-text">{report.byIssue[i]}</span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </Card>
+                    <Card title="Kapanma süresi (eğitime uygun)" subtitle="Türe göre medyan, iş günü">
+                        <div className="flex flex-col -my-1">
+                            {report.medianByType.length === 0 ? <p className="m-0 text-[14px] m-text-3">Uygun kayıt yok.</p> : report.medianByType.map((r, k) => {
+                                const sep = rowSep(k);
+                                return (
+                                    <div key={r.type} className={`flex items-center gap-3 py-2 ${sep.className}`} style={sep.style}>
+                                        <span className="flex-1 text-[14.5px] m-text">{r.label} <span className="m-text-3 m-tabular">· {r.n} kayıt</span></span>
+                                        <span className="text-[14px] font-semibold m-tabular m-text">{num(r.median)} gün</span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                        <p className="m-0 text-[12.5px] m-text-3">İş günü hesabı hafta sonlarını ve resmi tatilleri düşer (dini bayram tablosu {HOLIDAY_TABLE_YEARS[0]}–{HOLIDAY_TABLE_YEARS[HOLIDAY_TABLE_YEARS.length - 1]}).</p>
+                    </Card>
+                </div>
+            )}
+        </section>
+    );
+};
+
 // ------------------------------------------------------------------ uygulama araçları
 
 const AppTools: React.FC<Pick<ModernAdminProps, 'workspace' | 'onSaveBackup' | 'onLoadBackup' | 'onApplyHealthFix' | 'cloudLinked' | 'onOpenCloud'>> = ({ workspace, onSaveBackup, onLoadBackup, onApplyHealthFix, cloudLinked, onOpenCloud }) => {
@@ -788,6 +862,7 @@ const AppTools: React.FC<Pick<ModernAdminProps, 'workspace' | 'onSaveBackup' | '
                     <p className="m-0 text-[13px] m-text-3">Yetkiler, görünüm ayarları, rapor akışı ve sağlık yöntemi bulut eşitlemesiyle tüm kullanıcılara uygulanır.</p>
                 </Card>
             </div>
+            {onApplyHealthFix && <RecordDataPanel workspace={workspace} />}
             {onApplyHealthFix && (
                 <section aria-labelledby="ad-dh" className="flex flex-col gap-3">
                     <div>

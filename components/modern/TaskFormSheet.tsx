@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Objective, Person, Resource, Task, TaskStatus, WorkPackage } from '../../types';
 import { EMBED_SYSTEM, parsePertEstimate, pertEstimatePrompt } from '../../utils/ai/embedded';
+import { ISSUE_TYPE_LABELS } from '../../utils/planning/lifecycle';
 import { calculatePertFuzzyPert } from '../../utils/timeline';
 import { useAiRun } from '../assistant/AiButton';
 import { Icon } from './icons';
@@ -32,12 +33,14 @@ const PRIORITIES: Task['priority'][] = ['Blocker', 'High', 'Medium', 'Low'];
 const emptyDraft = (resources: Resource[]): Draft => ({
     name: '', priority: 'Medium', version: 1, predecessor: null, unit: resources[0]?.unit || '', resourceName: resources[0]?.name || '',
     time: { best: 0, avg: 0, worst: 0 }, jiraId: '', notes: '', status: TaskStatus.ToDo, labels: [], includeInSprints: true,
+    issueType: undefined, estimateSource: undefined,
 });
 
 const fromTask = (t: Task): Draft => ({
     name: t.name, priority: t.priority, version: t.version, predecessor: t.predecessor, unit: t.unit, resourceName: t.resourceName,
     time: { ...t.time }, jiraId: t.jiraId, notes: t.notes, status: t.status, labels: t.labels || [], includeInSprints: t.includeInSprints ?? true,
     keyResultId: t.keyResultId, workPackageId: t.workPackageId, dueDate: t.dueDate, subtasks: t.subtasks, comments: t.comments,
+    issueType: t.issueType, estimateSource: t.estimateSource,
 });
 
 const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
@@ -88,7 +91,7 @@ const TaskFormSheet: React.FC<TaskFormSheetProps> = ({ task, tasks, resources, p
     const estimate = async () => {
         const est = await ai.run(EMBED_SYSTEM, pertEstimatePrompt({ name: d.name, notes: d.notes }, tasks), parsePertEstimate);
         if (est) {
-            set({ time: { best: est.best, avg: est.avg, worst: est.worst } });
+            set({ time: { best: est.best, avg: est.avg, worst: est.worst }, estimateSource: 'ai' });
             setAiNote(est.rationale || 'AI tahmini uygulandı; değerleri değiştirebilirsiniz.');
         }
     };
@@ -104,6 +107,7 @@ const TaskFormSheet: React.FC<TaskFormSheetProps> = ({ task, tasks, resources, p
             dueDate: d.dueDate || undefined,
             id: task?.id || `task-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
             availability: d.time.avg > 0,
+            estimateSource: d.time.avg > 0 ? d.estimateSource || 'user' : undefined,
         });
     };
 
@@ -111,7 +115,7 @@ const TaskFormSheet: React.FC<TaskFormSheetProps> = ({ task, tasks, resources, p
         <label className="flex flex-col gap-1.5 min-w-0">
             <span className="text-[13px] font-semibold m-text-2">{label}</span>
             <input type="number" min={0} inputMode="numeric" className="m-input m-tabular" value={d.time[key] || ''} placeholder="0"
-                onChange={e => set({ time: { ...d.time, [key]: Math.max(0, parseInt(e.target.value, 10) || 0) } })} />
+                onChange={e => set({ time: { ...d.time, [key]: Math.max(0, parseInt(e.target.value, 10) || 0) }, estimateSource: 'user' })} />
         </label>
     );
 
@@ -140,6 +144,12 @@ const TaskFormSheet: React.FC<TaskFormSheetProps> = ({ task, tasks, resources, p
                             {STATUSES.map(s => <button key={s} type="button" className="m-segment" aria-pressed={d.status === s} onClick={() => set({ status: s })}>{TASK_STATUS_LABELS[s]}</button>)}
                         </div>
                     </div>
+                    <Field label="Kayıt türü" htmlFor="tf-type" hint="Planlama simülasyonu ve AI tahmini benzer kayıtları türüne göre karşılaştırır">
+                        <select id="tf-type" className="m-input" value={d.issueType || ''} onChange={e => set({ issueType: (e.target.value || undefined) as Task['issueType'] })}>
+                            <option value="">Belirtilmedi</option>
+                            {(Object.keys(ISSUE_TYPE_LABELS) as NonNullable<Task['issueType']>[]).map(k => <option key={k} value={k}>{ISSUE_TYPE_LABELS[k]}</option>)}
+                        </select>
+                    </Field>
                     <div className="flex flex-col gap-1.5">
                         <span className="text-[13px] font-semibold m-text-2">Öncelik</span>
                         <div className="m-segmented self-start" role="group" aria-label="Öncelik">

@@ -21,6 +21,7 @@ import { portfolioHealth } from './utils/executive';
 import { addSnapshot, buildSnapshot, ensureMonthlySnapshot } from './utils/snapshots';
 import { cleanHealthConfig, ensureWeeklyHealthSnapshot, pmoRatingFor, setPmoRating } from './utils/healthModel';
 import { aiPolicyOf, updateAiPolicy } from './utils/ai/policy';
+import { stampLifecycle } from './utils/planning/lifecycle';
 import { AllocationSuggestion, ApplyMode, applyAllocationSuggestions } from './utils/taskToAllocation';
 import { applyBilledHoursActuals, planBilledHoursPoolAdditions, suggestBilledHoursActuals, BilledApplyMode, BilledHoursOptions, BilledHoursRecord } from './utils/billedHours';
 import { buildTodoItems, TodoItem } from './utils/todoItems';
@@ -338,9 +339,14 @@ const App: React.FC = () => {
   const updateActiveProject = useCallback((updater: (p: Project) => Project) => {
     updateWorkspace(ws => ({
       ...ws,
-      projects: ws.projects.map(p =>
-        p.id === ws.activeProjectId ? { ...updater(p), updatedAt: new Date().toISOString() } : p
-      ),
+      projects: ws.projects.map(p => {
+        if (p.id !== ws.activeProjectId) return p;
+        const next = updater(p);
+        const now = new Date();
+        // Yerel değişikliklerde kayıt yaşam döngüsü damgalanır (açılış, başlama, kapanış, durum günlüğü)
+        const tasks = next.tasks !== p.tasks ? stampLifecycle(p.tasks, next.tasks, now) : next.tasks;
+        return { ...next, tasks, updatedAt: now.toISOString() };
+      }),
     }));
   }, [updateWorkspace]);
 
@@ -981,7 +987,8 @@ const App: React.FC = () => {
   const saveTaskFromForm = (t: Task) => {
     const requestId = convertingRequestId;
     updateActiveProject(p => {
-      const tasks = p.tasks.some(x => x.id === t.id) ? p.tasks.map(x => x.id === t.id ? t : x) : [...p.tasks, t];
+      // Formda olmayan alanlar (yaşam döngüsü damgaları, Jira alanları) korunur
+      const tasks = p.tasks.some(x => x.id === t.id) ? p.tasks.map(x => x.id === t.id ? { ...x, ...t } : x) : [...p.tasks, t];
       let resources = p.resources;
       const assignee = t.resourceName?.trim();
       if (assignee && workspace && !resources.some(r => r.name.trim().toLocaleLowerCase('tr-TR') === assignee.toLocaleLowerCase('tr-TR'))) {

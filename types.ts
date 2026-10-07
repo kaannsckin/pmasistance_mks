@@ -52,6 +52,26 @@ export interface Task {
   keyResultId?: string;
   // Fix: Add workPackageId property to Task interface to resolve error in utils/exporter.ts.
   workPackageId?: string;
+  // Kayıt yaşam döngüsü (planlama simülasyonu ve AI tahmini için; bkz. utils/planning)
+  issueType?: IssueType;
+  createdAt?: string; // ISO; uygulamada açılışta ya da içe aktarılan kaynaktan (Jira "Created")
+  importedAt?: string; // içe aktarıldıysa zamanı (açılış tarihi bilinmiyorsa lead time hesaplanmaz)
+  startedAt?: string; // ilk kez "Süreçte"ye geçtiği an
+  resolvedAt?: string; // son kapanış (yeniden açılınca silinir)
+  statusLog?: TaskStatusChange[]; // durum geçişleri (en yeni sonda, en çok 50)
+  estimateSource?: 'user' | 'ai' | 'jira' | 'import';
+  originalEstimateHours?: number; // kaynak sistemdeki ilk tahmin (Jira "Original Estimate")
+  actualHours?: number; // harcanan efor (Jira "Time Spent" / worklog)
+  storyPoints?: number;
+  fixVersion?: string; // kaynak sistemdeki hedef sürüm
+}
+
+export type IssueType = 'bug' | 'feature' | 'improvement' | 'task' | 'other';
+
+export interface TaskStatusChange {
+  at: string; // ISO
+  from: TaskStatus;
+  to: TaskStatus;
 }
 
 export interface Resource {
