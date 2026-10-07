@@ -456,7 +456,7 @@ const ModernExecutive: React.FC<ModernExecutiveProps> = ({ workspace, currentRol
                 </div>
             </section>
 
-            <div className="grid gap-5 items-start" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))' }}>
+            <div className="grid gap-5 items-start" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(420px, 100%), 1fr))' }}>
                 <Card
                     title="Dikkat isteyen projeler"
                     labelledBy="ex-attn"
@@ -518,7 +518,7 @@ const ModernExecutive: React.FC<ModernExecutiveProps> = ({ workspace, currentRol
                 </div>
             </div>
 
-            <div className="grid gap-5 items-start" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))' }}>
+            <div className="grid gap-5 items-start" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(420px, 100%), 1fr))' }}>
                 <Card title="Birim doluluğu" labelledBy="ex-dept" action={<LinkButton onClick={() => onNavigate(View.Allocations)}>Ekip ve tahsis</LinkButton>}>
                     {depts.length === 0 ? (
                         <p className="m-0 text-[15px] m-text-3">Birim kapasitesi tanımlı değil.</p>
