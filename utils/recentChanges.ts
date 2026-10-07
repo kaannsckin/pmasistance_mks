@@ -9,8 +9,9 @@ import { AuditAction, AuditEntry, WorkspaceData } from '../types';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-// Akışta gösterilmeyen (portföy değişimi sayılmayan) aksiyonlar
-const FEED_EXCLUDE = new Set<AuditAction>(['identity.change', 'snapshot.create']);
+// Akışta gösterilmeyen (portföy değişimi sayılmayan) aksiyonlar. PMO puanı da
+// görünmez: hedef değişkendir, PY puanı görüp davranışını değiştirmesin.
+const FEED_EXCLUDE = new Set<AuditAction>(['identity.change', 'snapshot.create', 'health.rate']);
 
 export interface RecentChange extends AuditEntry {
     projectName?: string;

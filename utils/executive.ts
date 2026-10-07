@@ -1,18 +1,20 @@
 import { Project, RagStatus, TaskStatus, WorkspaceData } from '../types';
 import { findOverAllocations, getPlanLockStatus } from './allocations';
-import { buildProjectEVM, defaultStatusMonth, ProjectEVM } from './evm';
+import { buildProjectEVM, defaultStatusMonth } from './evm';
 import { riskScore } from './risks';
 import { analyzeDataHealth } from './dataHealth';
+import { bandOf, buildHealthContext, evaluateProjectHealth, HealthBand, HealthConfidence, HealthContext, HealthFactor } from './healthModel';
+
+export type { HealthBand } from './healthModel';
 
 /**
  * Yönetim özeti motoru — "özet gör, istersen detaya in".
- *  - portfolioHealth: RAG + takvim(SPI) + bütçe(CPI) + risk'i tek skora indirir
+ *  - portfolioHealth: proje sağlık modelinin (healthModel) portföy görünümü —
+ *    takvim, bütçe, geciken iş, risk, RAG, PY puanı, kaynak ve beklentiler
  *  - attentionItems: yöneticinin dikkat etmesi gereken her şeyi tek listede
  *  - executiveSummary: sade, otomatik bir paragraf
  * Saf/test edilebilir; ExecutiveView bu veriyi render eder.
  */
-
-export type HealthBand = 'good' | 'warn' | 'bad';
 
 export interface ProjectHealth {
     projectId: string;
@@ -23,7 +25,12 @@ export interface ProjectHealth {
     spi: number | null;
     cpi: number | null;
     highRisks: number;
-    reasons: string[]; // skoru düşüren nedenler
+    reasons: string[]; // skoru düşüren nedenler (en etkilisi başta)
+    coverage: number; // 0-1: skorun dayandığı verinin ağırlığı
+    confidence: HealthConfidence;
+    factors: HealthFactor[]; // girdiler, normalize değerleri ve skora katkıları
+    pmScore?: number; // PY'nin son puanı (1-10)
+    perceptionGap: number | null; // öznel − nesnel (≥ 0,3 iyimser)
 }
 
 export interface PortfolioHealth {
@@ -33,53 +40,34 @@ export interface PortfolioHealth {
 }
 
 const round = (v: number): number => Math.round(v);
-const bandOf = (score: number): HealthBand => (score >= 75 ? 'good' : score >= 50 ? 'warn' : 'bad');
 
 const projectHighRisks = (project: Project): number =>
     (project.risks || []).filter(r => r.status !== 'closed' && riskScore(r) >= 15).length;
 
-export const projectHealth = (ws: WorkspaceData, project: Project, year: number, statusMonth: number): ProjectHealth => {
-    const evm: ProjectEVM = buildProjectEVM(ws, project.id, year, statusMonth);
-    const highRisks = projectHighRisks(project);
-    const reasons: string[] = [];
-    let score = 100;
-
-    // RAG
-    if (project.rag === 'red') { score -= 35; reasons.push('Kritik RAG'); }
-    else if (project.rag === 'amber') { score -= 15; reasons.push('Riskli RAG'); }
-    else if (!project.rag) { score -= 5; }
-
-    // Takvim (SPI) — yalnız maliyetlenebiliyorsa
-    if (evm.costed && evm.spi !== null) {
-        if (evm.spi < 0.9) { score -= 20; reasons.push('Takvim gerisinde (SPI<0,9)'); }
-        else if (evm.spi < 1) { score -= 10; reasons.push('Takvim hafif geride'); }
-    }
-    // Bütçe (CPI)
-    if (evm.costed && evm.cpi !== null) {
-        if (evm.cpi < 0.9) { score -= 20; reasons.push('Bütçe aşımı (CPI<0,9)'); }
-        else if (evm.cpi < 1) { score -= 10; reasons.push('Bütçe hafif aşımda'); }
-    }
-    // Risk
-    if (highRisks >= 2) { score -= 15; reasons.push(`${highRisks} yüksek risk`); }
-    else if (highRisks === 1) { score -= 8; reasons.push('1 yüksek risk'); }
-
-    score = Math.max(0, Math.min(100, score));
+export const projectHealth = (ws: WorkspaceData, project: Project, year: number, statusMonth: number, now: Date = new Date(), ctx?: HealthContext): ProjectHealth => {
+    const h = evaluateProjectHealth(ws, project, ctx || buildHealthContext(ws, year, statusMonth, now));
     return {
         projectId: project.id,
         name: project.name,
-        score: round(score),
-        band: bandOf(score),
+        score: h.score,
+        band: h.band,
         rag: project.rag,
-        spi: evm.costed ? evm.spi : null,
-        cpi: evm.costed ? evm.cpi : null,
-        highRisks,
-        reasons,
+        spi: h.evm.costed ? h.evm.spi : null,
+        cpi: h.evm.costed ? h.evm.cpi : null,
+        highRisks: h.highRisks,
+        reasons: h.reasons,
+        coverage: h.coverage,
+        confidence: h.confidence,
+        factors: h.factors,
+        pmScore: h.pmScore,
+        perceptionGap: h.perceptionGap,
     };
 };
 
-export const portfolioHealth = (ws: WorkspaceData, year: number, statusMonth?: number): PortfolioHealth => {
-    const sm = statusMonth === undefined ? defaultStatusMonth(year) : statusMonth;
-    const projects = ws.projects.map(p => projectHealth(ws, p, year, sm)).sort((a, b) => a.score - b.score);
+export const portfolioHealth = (ws: WorkspaceData, year: number, statusMonth?: number, now: Date = new Date()): PortfolioHealth => {
+    const sm = statusMonth === undefined ? defaultStatusMonth(year, now) : statusMonth;
+    const ctx = buildHealthContext(ws, year, sm, now);
+    const projects = ws.projects.map(p => projectHealth(ws, p, year, sm, now, ctx)).sort((a, b) => a.score - b.score);
     const orgScore = projects.length ? round(projects.reduce((s, p) => s + p.score, 0) / projects.length) : 100;
     return { projects, orgScore, orgBand: bandOf(orgScore) };
 };
@@ -155,7 +143,7 @@ export const executiveSummary = (ws: WorkspaceData, year: number, now: Date = ne
     const actualAA = round1(sum('actual'));
     const over = findOverAllocations(yearAllocs, ws.people, year, 'plan', ws.leaves || []).length;
     const highRisk = projects.reduce((s, p) => s + projectHighRisks(p), 0);
-    const health = portfolioHealth(ws, year);
+    const health = portfolioHealth(ws, year, undefined, now);
 
     const parts: string[] = [];
     parts.push(`${year}: ${projects.length} proje (${devam} devam, ${teklif} teklif).`);

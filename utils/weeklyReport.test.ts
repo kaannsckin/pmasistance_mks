@@ -221,6 +221,20 @@ describe('akış işlemleri (yetki işlem anında)', () => {
         expect(returnReportIn({ ...ws2, weeklyReports: bsSave.reports }, id, saved.report.id, py, 'x')).toBeNull();
     });
 
+    it('PY puanı: sahip PY taslakta verir; geçersiz puan düşer; sonraki aşamada değiştirilemez', () => {
+        const ws = { ...buildWs(), currentRole: 'py' as const, currentPersonId: 'pm1' };
+        const id = { role: 'py' as const, personId: 'pm1' };
+        const draft = { ...createReport({ kind: 'project', projectId: 'a', departmentCode: 'U310', year: 2026, week: 41 }, py, NOW), thisWeek: good, nextWeek: plan };
+        const bad = saveReport(ws, id, { ...draft, pmScore: 11, pmScoreNote: 'x' }, py, { now: NOW })!;
+        expect(bad.report.pmScore).toBeUndefined();
+        expect(bad.report.pmScoreNote).toBeUndefined(); // puansız gerekçe tutulmaz
+        const saved = saveReport(ws, id, { ...draft, pmScore: 7, pmScoreNote: '  Test ortamı gecikti.  ' }, py, { advance: true, now: NOW })!;
+        expect(saved.report).toMatchObject({ pmScore: 7, pmScoreNote: 'Test ortamı gecikti.', stage: 'bs_review' });
+        const ws2 = { ...ws, weeklyReports: saved.reports };
+        const bsSave = saveReport(ws2, { role: 'bolum_sorumlu', personId: 'bs1' }, { ...saved.report, pmScore: 10, pmScoreNote: undefined }, bs)!;
+        expect(bsSave.report).toMatchObject({ pmScore: 7, pmScoreNote: 'Test ortamı gecikti.' });
+    });
+
     it('yayınla / kaldır yalnız PYB destek ve onaylı rapor varken', () => {
         const ws = buildWs();
         const r = { ...createReport({ kind: 'project', projectId: 'a', departmentCode: 'U310', year: 2026, week: 41 }, py, NOW), stage: 'approved' as const };

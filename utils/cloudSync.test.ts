@@ -61,6 +61,18 @@ describe('mergeWorkspaceDoc', () => {
         expect(merged.settings.theme).toBe('orange'); // yerelden
     });
 
+    it('sağlık modelinin PMO puanları ve haftalık fotoğrafları paylaşılır', () => {
+        const ws: WorkspaceData = {
+            ...buildWs(),
+            pmoRatings: [{ id: 'r', projectId: 'p', year: 2026, week: 41, score: 7, byRole: 'pyb_destek', at: '2026-10-07T00:00:00Z' }],
+            healthHistory: [{ year: 2026, week: 41, takenAt: '2026-10-07T00:00:00Z', model: 'uzman-1', projects: [{ projectId: 'p', score: 70, coverage: 0.5, x: { rag: 1 } }] }],
+        };
+        const { core, privateDoc } = splitWorkspaceDoc(ws);
+        const merged = mergeWorkspaceDoc(createEmptyWorkspace(), core as Partial<WorkspaceData>, privateDoc);
+        expect(merged.pmoRatings).toEqual(ws.pmoRatings);
+        expect(merged.healthHistory).toEqual(ws.healthHistory);
+    });
+
     it('private belge yokken (yönetici RLS) notlar boş iner, çekirdek veri tam gelir', () => {
         const ws = buildWs();
         const { core } = splitWorkspaceDoc(ws);

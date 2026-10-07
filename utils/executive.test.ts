@@ -27,24 +27,29 @@ const buildWs = (): WorkspaceData => {
 };
 
 describe('projectHealth', () => {
-    it('kırmızı RAG + yüksek risk skoru düşürür; yeşil 100', () => {
+    it('kırmızı RAG + yüksek risk + geciken iş skoru düşürür; yeşil 100', () => {
         const ws = buildWs();
-        const red = projectHealth(ws, ws.projects[0], 2026, 7);
-        expect(red.score).toBe(57); // 100 - 35 (kırmızı) - 8 (1 yüksek risk)
-        expect(red.band).toBe('warn');
+        const red = projectHealth(ws, ws.projects[0], 2026, 7, NOW);
+        // Verisi olan girdiler: RAG 0 (w .10), risk 0,6 (.15), geciken 0 (.15), beklenti 1 (.07)
+        // 100 × (0 + .09 + 0 + .07) / .47 = 34
+        expect(red.score).toBe(34);
+        expect(red.band).toBe('bad');
         expect(red.reasons).toContain('Kritik RAG');
+        expect(red.reasons[0]).toBe('1 geciken görev'); // en büyük kayıp başta
         expect(red.highRisks).toBe(1);
-        const green = projectHealth(ws, ws.projects[1], 2026, 7);
+        expect(red.coverage).toBe(0.47);
+        const green = projectHealth(ws, ws.projects[1], 2026, 7, NOW);
         expect(green.score).toBe(100);
         expect(green.band).toBe('good');
+        expect(green.confidence).toBe('low'); // yalnız RAG, risk ve beklenti verisi var
     });
 });
 
 describe('portfolioHealth', () => {
     it('org skoru proje ortalaması, en düşük önce sıralı', () => {
-        const h = portfolioHealth(buildWs(), 2026, 7);
+        const h = portfolioHealth(buildWs(), 2026, 7, NOW);
         expect(h.projects[0].projectId).toBe('red'); // en düşük başta
-        expect(h.orgScore).toBe(79); // (57+100)/2 = 78.5 → 79
+        expect(h.orgScore).toBe(67); // (34+100)/2
     });
 });
 

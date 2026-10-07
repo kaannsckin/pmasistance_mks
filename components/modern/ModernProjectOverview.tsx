@@ -8,6 +8,7 @@ import { objectiveProgress } from '../../utils/goals';
 import { currentSprint, deadlineLabel, overviewStats, teamLoad, upcomingDeadlines } from '../../utils/projectOverview';
 import { recentChanges, relativeTime } from '../../utils/recentChanges';
 import { riskBand, riskScore } from '../../utils/risks';
+import HealthModelSheet, { HealthInfoButton } from './HealthModelSheet';
 import { Icon, IconName } from './icons';
 import { RAG_TONE } from './ModernProjectHeader';
 import { RAG_DOT } from './ModernSidebar';
@@ -69,18 +70,20 @@ const ModernProjectOverview: React.FC<ModernProjectOverviewProps> = ({ workspace
     const [note, setNote] = useState(project.ragNote || '');
     useEffect(() => { setRag(project.rag); setNote(project.ragNote || ''); }, [project.id, project.rag, project.ragNote]);
     const ragDirty = rag !== project.rag || note.trim() !== (project.ragNote || '').trim();
+    const [healthInfo, setHealthInfo] = useState(false);
 
     const complete = stats.total > 0 && stats.done === stats.total;
     // Görevi ve haftalık durumu olmayan projede skor anlamsız
     const noHealthData = stats.total === 0 && !project.rag;
-    const kpis: { key: string; label: string; value: React.ReactNode; note: string; noteTone: string; run?: () => void; hint?: string }[] = [
+    const kpis: { key: string; label: string; value: React.ReactNode; note: string; noteTone: string; run?: () => void; hint?: string; info?: () => void }[] = [
         {
             key: 'health',
             label: 'Proje sağlığı',
             value: noHealthData ? '—' : health.score,
-            note: noHealthData ? 'Henüz veri yok' : [BAND_META[health.band].label, ...(health.band === 'good' ? [] : health.reasons.slice(0, 1))].join(' · '),
+            note: noHealthData ? 'Henüz veri yok' : [BAND_META[health.band].label, ...(health.band === 'good' ? [] : health.reasons.slice(0, 1)), ...(health.confidence === 'low' ? ['güven düşük'] : [])].join(' · '),
             noteTone: noHealthData ? 'm-text-3' : BAND_META[health.band].ink,
             hint: health.reasons.length ? `Skoru düşürenler: ${health.reasons.join(', ')}` : undefined,
+            info: () => setHealthInfo(true),
         },
         {
             key: 'progress',
@@ -132,6 +135,7 @@ const ModernProjectOverview: React.FC<ModernProjectOverviewProps> = ({ workspace
 
     return (
         <div className="flex flex-col gap-5">
+            {healthInfo && <HealthModelSheet workspace={workspace} health={health} onClose={() => setHealthInfo(false)} />}
             <section aria-label="Göstergeler" className="grid gap-4 grid-cols-2 xl:grid-cols-4">
                 {kpis.map(kp => {
                     const body = (
@@ -144,7 +148,10 @@ const ModernProjectOverview: React.FC<ModernProjectOverviewProps> = ({ workspace
                     return kp.run ? (
                         <button key={kp.key} type="button" onClick={kp.run} title={kp.hint} className="m-surface m-row-link rounded-2xl px-5 py-4 flex flex-col items-start gap-1 text-left">{body}</button>
                     ) : (
-                        <div key={kp.key} title={kp.hint} className="m-surface rounded-2xl px-5 py-4 flex flex-col gap-1">{body}</div>
+                        <div key={kp.key} title={kp.hint} className="m-surface rounded-2xl px-5 py-4 flex flex-col gap-1 relative">
+                            {body}
+                            {kp.info && <span className="absolute top-2 right-2"><HealthInfoButton onClick={kp.info} /></span>}
+                        </div>
                     );
                 })}
             </section>
