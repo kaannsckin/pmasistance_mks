@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { mergeWorkspaceDoc, splitWorkspaceDoc } from './cloudSync';
+import { PERMISSIONS_REV } from './permissions';
 import { createEmptyWorkspace, createProject } from './workspace';
 import { Note, WorkspaceData } from '../types';
 
@@ -74,10 +75,11 @@ describe('mergeWorkspaceDoc', () => {
     });
 
     it('admin yetkileri ve profiller paylaşılır', () => {
-        const ws: WorkspaceData = { ...buildWs(), rolePermissions: { py: ['project.create', 'health.rate'] }, profiles: [{ id: 'p1', role: 'mudur', personId: 'k1' }], viewConfig: { mudur: { minRiskScore: 15 } }, healthConfig: { bandGood: 80 } };
+        const ws: WorkspaceData = { ...buildWs(), rolePermissions: { py: ['project.create', 'health.rate'] }, rolePermissionsRev: PERMISSIONS_REV, profiles: [{ id: 'p1', role: 'mudur', personId: 'k1' }], viewConfig: { mudur: { minRiskScore: 15 } }, healthConfig: { bandGood: 80 } };
         const { core, privateDoc } = splitWorkspaceDoc(ws);
         const merged = mergeWorkspaceDoc(createEmptyWorkspace(), core as Partial<WorkspaceData>, privateDoc);
         expect(merged.rolePermissions).toEqual(ws.rolePermissions);
+        expect(core.rolePermissionsRev).toBe(PERMISSIONS_REV); // güncel sürüm: kaldırılan yetki geri eklenmez
         expect(merged.profiles).toEqual(ws.profiles);
         expect(merged.viewConfig).toEqual(ws.viewConfig);
         expect(merged.healthConfig).toEqual(ws.healthConfig);

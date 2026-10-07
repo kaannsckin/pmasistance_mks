@@ -5,20 +5,20 @@ import { canReviewMeeting } from './customerMeetings';
 import { canRespondExpectation, visibleExpectations } from './expectations';
 import { setPmoRating } from './healthModel';
 import {
-    can, canFor, customizedRoles, defaultPermissions, isEditable, isManagementRole, permissionDiff, PERMISSIONS, permissionsFor, resetRolePermissions, ROLE_ORDER,
+    can, canFor, customizedRoles, defaultPermissions, isEditable, isManagementRole, migrateRolePermissions, permissionDiff, PERMISSIONS, PERMISSIONS_REV, permissionsFor, resetRolePermissions, ROLE_ORDER,
     setRolePermission,
 } from './permissions';
 import { canCreateProject, identityFor, identityOf, visibleProjectIds } from './rbac';
 import { isReportSteward, publishWeek, visibleReports } from './weeklyReport';
-import { createEmptyWorkspace, createProject } from './workspace';
+import { createEmptyWorkspace, createProject, normalizeWorkspace } from './workspace';
 
 describe('varsayılan yetkiler (önceki sabit kurallarla aynı)', () => {
     it('rol başına beklenen yetkiler', () => {
-        expect(defaultPermissions('py').sort()).toEqual(['notes.private', 'project.create']);
-        expect(defaultPermissions('bolum_sorumlu')).toEqual(['notes.private']);
-        expect(defaultPermissions('pyb_destek').sort()).toEqual(['datapool.edit', 'health.rate', 'notes.private', 'portfolio.viewAll', 'project.assignOwner', 'project.create', 'report.review']);
-        expect(defaultPermissions('pyb_sorumlu').sort()).toEqual(['expectation.respond', 'health.rate', 'meeting.review', 'plan.approve', 'portfolio.viewAll', 'screen.executive']);
-        expect(defaultPermissions('mudur').sort()).toEqual(['expectation.respond', 'meeting.review', 'plan.approve', 'portfolio.viewAll', 'screen.executive']);
+        expect(defaultPermissions('py').sort()).toEqual(['ai.use', 'notes.private', 'project.create']);
+        expect(defaultPermissions('bolum_sorumlu').sort()).toEqual(['ai.use', 'notes.private']);
+        expect(defaultPermissions('pyb_destek').sort()).toEqual(['ai.use', 'datapool.edit', 'health.rate', 'notes.private', 'portfolio.viewAll', 'project.assignOwner', 'project.create', 'report.review']);
+        expect(defaultPermissions('pyb_sorumlu').sort()).toEqual(['ai.use', 'expectation.respond', 'health.rate', 'meeting.review', 'plan.approve', 'portfolio.viewAll', 'screen.executive']);
+        expect(defaultPermissions('mudur').sort()).toEqual(['ai.use', 'expectation.respond', 'meeting.review', 'plan.approve', 'portfolio.viewAll', 'screen.executive']);
         expect(defaultPermissions('admin').sort()).toEqual(['app.audit', 'app.backup', 'app.dataHealth', 'screen.admin']);
     });
 
@@ -35,7 +35,7 @@ describe('varsayılan yetkiler (önceki sabit kurallarla aynı)', () => {
 describe('setRolePermission', () => {
     it('yetki verir/kaldırır; varsayılana dönünce değişiklik silinir', () => {
         let o = setRolePermission(undefined, 'py', 'health.rate', true)!;
-        expect(o.py).toEqual(['project.create', 'health.rate']);
+        expect(o.py).toEqual(['ai.use', 'project.create', 'health.rate']);
         expect(permissionsFor('py', o).has('health.rate')).toBe(true);
         expect(customizedRoles(o)).toEqual(['py']);
         expect(permissionDiff('py', o)).toEqual({ added: ['health.rate'], removed: [] });
@@ -110,5 +110,20 @@ describe('admin değişiklikleri kontrol noktalarına yansır', () => {
         expect(canEditPool(destek)).toBe(false);
         expect(canCreateProject(destek)).toBe(false);
         expect(setPmoRating([], { ...destek, name: 'Destek' }, { projectId: 'a', year: 2026, week: 41, score: 7 })).toBeNull();
+    });
+});
+
+describe('yetki kataloğu geçişi', () => {
+    it('eski sürümde özelleştirilmiş rollere yeni varsayılan yetki bir kez eklenir', () => {
+        const old = { py: ['project.create' as const], admin: [] };
+        const m = migrateRolePermissions(old, undefined)!;
+        expect(m.py).toEqual(['project.create', 'ai.use']);
+        expect(m.admin).toEqual([]); // admin varsayılanında ai.use yok
+        // Güncel sürümde admin'in kaldırdığı yetki geri gelmez
+        expect(migrateRolePermissions({ py: ['project.create'] }, PERMISSIONS_REV)).toEqual({ py: ['project.create'] });
+        expect(migrateRolePermissions(undefined, undefined)).toBeUndefined();
+        const ws = normalizeWorkspace({ rolePermissions: { mudur: ['screen.executive'] } });
+        expect(ws).toMatchObject({ rolePermissionsRev: PERMISSIONS_REV, rolePermissions: { mudur: ['screen.executive', 'ai.use'] } });
+        expect(normalizeWorkspace(ws).rolePermissions).toEqual({ mudur: ['screen.executive', 'ai.use'] });
     });
 });

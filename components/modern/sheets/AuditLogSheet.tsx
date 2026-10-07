@@ -1,6 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { AuditAction, WorkspaceData } from '../../../types';
 import { actorLabel, AUDIT_ACTION_LABELS, AUDIT_GROUP_LABELS, auditToCsv, filterAudit } from '../../../utils/audit';
+import { DayRange, toIsoDay } from '../../../utils/calendarRange';
+import { DateRangeField } from '../DateRangePicker';
 import { Icon } from '../icons';
 import { rowSep, Sheet } from '../ui';
 import { downloadFile } from '../weekly/shared';
@@ -17,6 +19,7 @@ export const AuditLogPanel: React.FC<{ workspace: WorkspaceData; showExport?: bo
     const [group, setGroup] = useState('');
     const [projectId, setProjectId] = useState('');
     const [query, setQuery] = useState('');
+    const [range, setRange] = useState<DayRange | null>(null);
     const [limit, setLimit] = useState(100);
     const projectName = useMemo(() => {
         const m = new Map(workspace.projects.map(p => [p.id, p.name]));
@@ -24,7 +27,7 @@ export const AuditLogPanel: React.FC<{ workspace: WorkspaceData; showExport?: bo
     }, [workspace.projects]);
     const groups = useMemo(() => [...new Set<string>(log.map(e => e.action.split('.')[0]))].sort((a, b) => (AUDIT_GROUP_LABELS[a] || a).localeCompare(AUDIT_GROUP_LABELS[b] || b, 'tr')), [log]);
     const projects = useMemo(() => [...new Set(log.map(e => e.projectId).filter((x): x is string => !!x))].map(id => ({ id, name: projectName(id) || 'Silinmiş proje' })).sort((a, b) => a.name.localeCompare(b.name, 'tr')), [log, projectName]);
-    const rows = useMemo(() => filterAudit(log, { group: group || undefined, projectId: projectId || undefined, query }, projectName), [log, group, projectId, query, projectName]);
+    const rows = useMemo(() => filterAudit(log, { group: group || undefined, projectId: projectId || undefined, query, from: range?.start, to: range?.end }, projectName), [log, group, projectId, query, range, projectName]);
     const days = useMemo(() => {
         const out: { key: string; label: string; items: typeof rows }[] = [];
         rows.slice(0, limit).forEach(e => {
@@ -56,6 +59,9 @@ export const AuditLogPanel: React.FC<{ workspace: WorkspaceData; showExport?: bo
                                 {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                             </select>
                         )}
+                        <div className="w-[230px] max-w-full">
+                            <DateRangeField value={range} onChange={setRange} placeholder="Tüm tarihler" ariaLabel="Tarih aralığı" presets clearable max={toIsoDay(new Date())} />
+                        </div>
                         <label className="m-search flex items-center gap-2 min-h-[40px] px-3 rounded-[10px] m-text-3 ml-auto">
                             <Icon name="search" size={16} />
                             <input aria-label="Günlükte ara" className="bg-transparent border-0 outline-none text-[15px] m-text w-44" placeholder="Özet, kişi, proje" value={query} onChange={e => setQuery(e.target.value)} />

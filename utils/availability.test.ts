@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+    addLeaveRange, leaveFromRange,
     annualEffectiveCapacity, annualLeaveAA, effectiveCapacity,
     monthlyEffectiveCapacity, monthLeaveAA, upsertLeave,
 } from './availability';
@@ -82,3 +83,23 @@ describe('izin, aşırı-tahsis ve rol açığına yansır', () => {
         expect(row.gap[1]).toBe(0.5);
     });
 });
+
+describe('takvimden izin aralığı', () => {
+    it('hafta içi günleri aylara böler ve AA değerine çevirir', () => {
+        // 27 Temmuz (Pzt) – 7 Ağustos 2026 (Cum): Temmuz 5 gün / 23, Ağustos 5 gün / 21
+        expect(leaveFromRange('2026-07-27', '2026-08-07')).toEqual([
+            { year: 2026, month: 7, days: 5, aa: 0.22 },
+            { year: 2026, month: 8, days: 5, aa: 0.24 },
+        ]);
+        expect(leaveFromRange('2026-10-10', '2026-10-11')).toEqual([]); // yalnız hafta sonu
+        expect(leaveFromRange('2026-08-07', '2026-07-27')).toHaveLength(2); // ters sıra
+        expect(leaveFromRange('2026-12-31', '2027-01-01').map(r => `${r.year}-${r.month}`)).toEqual(['2026-12', '2027-1']);
+    });
+
+    it('mevcut izne eklenir, ay başına en fazla 1 AA', () => {
+        const leaves: Leave[] = [{ id: 'l', personId: 'p', year: 2026, month: 8, aa: 0.9 }];
+        expect(addLeaveRange(leaves, 'p', '2026-08-03', '2026-08-07')).toEqual([{ year: 2026, month: 8, added: 0.24, aa: 1 }]);
+        expect(addLeaveRange(leaves, 'q', '2026-08-03', '2026-08-07')[0].aa).toBe(0.24);
+    });
+});
+

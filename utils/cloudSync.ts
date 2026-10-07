@@ -85,9 +85,11 @@ export const splitWorkspaceDoc = (ws: WorkspaceData): { core: Record<string, unk
         healthHistory: ws.healthHistory || [],
         // Admin'in rol yetkileri, profilleri ve uygulama ayarları tüm kullanıcılara uygulanır
         rolePermissions: ws.rolePermissions || {},
+        rolePermissionsRev: ws.rolePermissionsRev,
         profiles: ws.profiles || [],
         viewConfig: ws.viewConfig || {},
         healthConfig: ws.healthConfig || {},
+        aiPolicy: ws.aiPolicy || {},
     };
     return { core, privateDoc };
 };

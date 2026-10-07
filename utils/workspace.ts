@@ -1,4 +1,5 @@
 import { Project, ProjectData, ProjectSettings, WorkspaceData } from '../types';
+import { migrateRolePermissions, PERMISSIONS_REV } from './permissions';
 
 export const APP_VERSION = '2.2.0';
 export const WORKSPACE_SCHEMA_VERSION = 3; // 3: veri havuzu + tahsis + plan kilidi
@@ -131,6 +132,9 @@ export const normalizeWorkspace = (raw: Partial<WorkspaceData>): WorkspaceData =
         allocations: (raw.allocations || []).map(a => ({ ...a, plan: a.plan || {}, actual: a.actual || {} })),
         planLocks: raw.planLocks || [],
         snapshots: raw.snapshots || [],
+        // Yeni eklenen yetkiler, eski sürümde özelleştirilmiş rollere bir kez eklenir
+        rolePermissions: migrateRolePermissions(raw.rolePermissions, raw.rolePermissionsRev),
+        rolePermissionsRev: PERMISSIONS_REV,
         settings: { ...base.settings, ...(raw.settings || {}) },
         appVersion: APP_VERSION,
     };

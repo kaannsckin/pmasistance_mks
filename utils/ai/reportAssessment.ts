@@ -1,4 +1,4 @@
-import { AiReportAssessment, Project, WeeklyReport } from '../../types';
+import { AiAssessmentFlag, AiReportAssessment, AiScoringPolicy, Project, ReportItem, WeeklyReport } from '../../types';
 import { foldTr, hashText } from '../rag/text';
 import { CATEGORY_META, itemDisplay, weekLabel } from '../weeklyReport';
 import { extractJson } from './json';
@@ -7,9 +7,21 @@ import { extractJson } from './json';
  * Haftalık rapor metninin AI değerlendirmesi — sağlık modelinin "AI metin
  * puanı" girdisi. Model yalnız rapor metnini görür: PY puanı, plan
  * değerlendirmesi ve sayısal göstergeler (SPI, görev sayıları) ayrı girdiler
- * olduğu için verilmez; aynı bilgi iki kez sayılmasın. Kanıt olarak verilen
- * alıntılar rapor metninde birebir geçmiyorsa atılır.
+ * olduğu için verilmez; aynı bilgi iki kez sayılmasın.
+ *
+ * Halüsinasyon güvenceleri:
+ *  1. Dayanak: model yalnız rapor metnini görür; önce rapordan birebir alıntı
+ *     çıkarır, sonra puanlar. Metinde birebir geçmeyen alıntı atılır.
+ *  2. Kapalı çıktı: JSON şeması, 1–10 sıkıştırma, kapalı sinyal listesi.
+ *  3. Tutarlılık: aynı rapor N kez bağımsız puanlanır; skor medyandır,
+ *     tekrarlar arası fark (dağılım) güveni belirler.
+ *  4. Çapraz kontrol: kural tabanlı metin göstergesi (tarih, tutar, teslimat,
+ *     genel ifade, olumsuz sinyal) ve sinyal–puan çelişkisi.
+ *  5. Güven: kanıt yetersiz, tutarsız ya da çelişkili puan "düşük güven"
+ *     olur; admin ayarına göre sağlık skoruna girmez ya da işaretlenir.
  */
+
+export const ASSESSMENT_PROMPT_VERSION = 'rapor-puan-2';
 
 export const ASSESSMENT_SIGNALS = ['engel', 'belirsizlik', 'takvim_kaymasi', 'butce_etkisi', 'musteri_sorunu', 'kaynak_sorunu', 'somut_teslimat', 'musteri_kabulu'] as const;
 
@@ -39,9 +51,12 @@ Puan ölçeği:
 3–4: belirgin engel, takvim ya da bütçe etkisi, müşteri sorunu ya da kaynak sıkıntısı.
 1–2: ciddi kriz: kritik gecikme, iş durması, müşteri kaybı riski.
 
+Yöntem: ÖNCE puanı destekleyen ya da düşüren cümleleri rapordan BİREBİR kopyala (en fazla 3), sonra yalnız bu kanıtlara dayanarak puan ver. Rapordaki bir cümleyi değiştirme, özetleme ya da yeni cümle kurma.
+Metin değerlendirmeye yetmiyorsa (çok kısa ya da tamamen genel ifadeler) uydurma: "kanitlar" boş kalsın, puan 5 olsun ve gerekçede bunu söyle.
+
 Yanıtı YALNIZCA şu JSON biçiminde ver (açıklama, markdown ya da kod bloğu ekleme):
-{"puan":7,"gerekce":"Bir-iki cümle.","kanitlar":["rapordan birebir alıntı"],"sinyaller":["engel"]}
-"kanitlar": rapordan BİREBİR alıntılar, en fazla 3. "sinyaller" yalnızca şunlardan seçilir: ${ASSESSMENT_SIGNALS.join(', ')}.`;
+{"kanitlar":["rapordan birebir alıntı"],"sinyaller":["engel"],"gerekce":"Bir-iki cümle.","puan":7}
+"sinyaller" yalnızca şunlardan seçilir: ${ASSESSMENT_SIGNALS.join(', ')}.`;
 
 /** Modelin göreceği metin: yalnız rapor maddeleri */
 export const assessmentInput = (project: Pick<Project, 'name' | 'code'>, r: WeeklyReport): string => {
@@ -93,3 +108,91 @@ export const parseAssessment = (text: string, r: WeeklyReport, now: Date = new D
         inputHash: reportContentHash(r),
     };
 };
+
+// ---------------------------------------------------------------- güvenceler
+
+const NEGATIVE_SIGNALS = ['engel', 'takvim_kaymasi', 'butce_etkisi', 'musteri_sorunu', 'kaynak_sorunu'];
+const POSITIVE_SIGNALS = ['somut_teslimat', 'musteri_kabulu'];
+const CONCRETE_CATEGORIES = new Set(['contract', 'sales', 'invoice', 'milestone', 'delivery', 'customer_feature', 'event', 'meeting']);
+const MONTHS = 'ocak|subat|mart|nisan|mayis|haziran|temmuz|agustos|eylul|ekim|kasim|aralik';
+const DATE_RE = new RegExp(`\\b\\d{1,2}\\s+(${MONTHS})\\b|\\b\\d{1,2}[./]\\d{1,2}([./]\\d{2,4})?\\b`);
+const FIGURE_RE = /\d[\d.,]*\s*(tl|₺|adet|lisans|gun|kisi|bin|milyon|%)|%\s*\d/;
+const GENERIC_RE = /(devam edil|surduruldu|surdurulmekte|calismalara devam|calisilmaya devam|devam ediyor|devam etmektedir)/;
+const NEGATIVE_RE = /(gecik|ertelen|sorun|engel|iptal|askiya|sikayet|yetismedi|kayma|asim|bekleniyor|beklemede)/;
+
+/**
+ * Kural tabanlı metin göstergesi (1–10): AI puanının çapraz kontrolü. Somut
+ * madde payı (teslimat/kabul/sözleşme türü ya da tarih/tutar içeren), genel
+ * ifade payı, olumsuz ifadeler ve gelecek hafta planının tarihli olması.
+ * Model değildir; yalnız bariz uyumsuzlukları yakalamak içindir.
+ */
+export const ruleTextScore = (r: Pick<WeeklyReport, 'thisWeek' | 'nextWeek'>): number => {
+    const text = (i: ReportItem) => foldTr(itemDisplay(i));
+    const items = r.thisWeek;
+    if (!items.length) return 3;
+    const generic = items.filter(i => GENERIC_RE.test(text(i))).length;
+    const concrete = items.filter(i => !GENERIC_RE.test(text(i)) && (CONCRETE_CATEGORIES.has(i.category) || DATE_RE.test(text(i)) || FIGURE_RE.test(text(i)))).length;
+    const negative = items.filter(i => i.category === 'schedule_budget' || NEGATIVE_RE.test(text(i))).length;
+    const plans = r.nextWeek;
+    const planDated = plans.length ? plans.filter(i => DATE_RE.test(text(i))).length / plans.length : -0.5;
+    const raw = 4 + 4 * (concrete / items.length) - 2 * (generic / items.length) + planDated - Math.min(3, 1.5 * negative);
+    return Math.max(1, Math.min(10, Math.round(raw)));
+};
+
+const median = (xs: number[]): number => {
+    const s = [...xs].sort((a, b) => a - b);
+    const m = Math.floor(s.length / 2);
+    return s.length % 2 ? s[m] : Math.round((s[m - 1] + s[m]) / 2);
+};
+
+/**
+ * Bağımsız değerlendirmeleri birleştirir ve güveni belirler: skor medyan,
+ * dağılım = en yüksek − en düşük; kanıtlar birleşimi; sinyaller çoğunluğun
+ * gördükleri; gerekçe medyana en yakın değerlendirmeden.
+ */
+export const finalizeAssessment = (runs: AiReportAssessment[], r: WeeklyReport, policy: AiScoringPolicy, now: Date = new Date()): AiReportAssessment => {
+    if (!runs.length) throw new Error('Değerlendirme yok.');
+    const scores = runs.map(x => x.score);
+    const score = median(scores);
+    const spread = Math.max(...scores) - Math.min(...scores);
+    const evidence = [...new Set(runs.flatMap(x => x.evidence))].slice(0, 3);
+    const count = new Map<string, number>();
+    runs.forEach(x => x.signals.forEach(sg => count.set(sg, (count.get(sg) || 0) + 1)));
+    const signals = [...count.entries()].filter(([, n]) => n * 2 >= runs.length).map(([sg]) => sg);
+    const closest = [...runs].sort((a, b) => Math.abs(a.score - score) - Math.abs(b.score - score))[0];
+    const ruleScore = ruleTextScore(r);
+
+    const flags: AiAssessmentFlag[] = [];
+    if (evidence.length < policy.minEvidence) flags.push('no_evidence');
+    if (runs.length > 1 && spread > policy.maxSpread) flags.push('inconsistent');
+    if (Math.abs(score - ruleScore) > policy.maxRuleGap) flags.push('rule_gap');
+    const neg = signals.some(sg => NEGATIVE_SIGNALS.includes(sg));
+    const pos = signals.some(sg => POSITIVE_SIGNALS.includes(sg));
+    if ((neg && score >= 9) || (pos && !neg && score <= 2)) flags.push('signal_conflict');
+
+    return {
+        score,
+        rationale: closest.rationale,
+        evidence,
+        signals,
+        at: now.toISOString(),
+        inputHash: reportContentHash(r),
+        runs: scores,
+        spread,
+        ruleScore,
+        flags,
+        confidence: flags.length ? 'low' : 'high',
+        promptVersion: ASSESSMENT_PROMPT_VERSION,
+    };
+};
+
+export const FLAG_LABELS: Record<AiAssessmentFlag, string> = {
+    no_evidence: 'Yeterli kanıt yok',
+    inconsistent: 'Tekrarlar tutarsız',
+    rule_gap: 'Kural göstergesiyle uyumsuz',
+    signal_conflict: 'Sinyal–puan çelişkisi',
+};
+
+/** Değerlendirme sağlık skoruna girebilir mi (eski kayıtlarda güven alanı yoksa girer) */
+export const assessmentUsable = (a: AiReportAssessment | undefined, policy: Pick<AiScoringPolicy, 'lowConfidence'>): boolean =>
+    !!a && (a.confidence !== 'low' || policy.lowConfidence === 'flag');

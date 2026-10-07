@@ -20,6 +20,7 @@ import { AdminSection, ADMIN_SECTIONS } from './components/modern/adminSections'
 import { portfolioHealth } from './utils/executive';
 import { addSnapshot, buildSnapshot, ensureMonthlySnapshot } from './utils/snapshots';
 import { cleanHealthConfig, ensureWeeklyHealthSnapshot, pmoRatingFor, setPmoRating } from './utils/healthModel';
+import { aiPolicyOf, updateAiPolicy } from './utils/ai/policy';
 import { AllocationSuggestion, ApplyMode, applyAllocationSuggestions } from './utils/taskToAllocation';
 import { applyBilledHoursActuals, planBilledHoursPoolAdditions, suggestBilledHoursActuals, BilledApplyMode, BilledHoursOptions, BilledHoursRecord } from './utils/billedHours';
 import { buildTodoItems, TodoItem } from './utils/todoItems';
@@ -820,6 +821,11 @@ const App: React.FC = () => {
     commitWorkspace(appendAudit({ ...ws, healthConfig: next }, 'config.update', `Sağlık puanı yöntemi: ${label}`));
     return true;
   }, [commitWorkspace]);
+  const handleUpdateAiPolicy = useCallback((patch: Parameters<typeof updateAiPolicy>[1], label: string) => {
+    updateWorkspace(ws => (can(identityOf(ws), 'screen.admin')
+      ? appendAudit({ ...ws, aiPolicy: updateAiPolicy(ws.aiPolicy, patch) }, 'config.update', `Yapay zekâ: ${label}`)
+      : ws));
+  }, [updateWorkspace]);
   const handleUpdateReportFlow = useCallback((patch: Partial<ReportFlow> & { dueWeekday?: number }, label: string) => {
     updateWorkspace(ws => {
       if (!can(identityOf(ws), 'screen.admin')) return ws;
@@ -1037,6 +1043,7 @@ const App: React.FC = () => {
           onResetRoleView={handleResetRoleView}
           onSaveHealthConfig={handleSaveHealthConfig}
           onUpdateReportFlow={handleUpdateReportFlow}
+          onUpdateAiPolicy={handleUpdateAiPolicy}
           canAudit={canAudit}
           onSaveBackup={canBackup ? handleSaveProject : undefined}
           onLoadBackup={canBackup ? handleLoadProject : undefined}
@@ -1532,7 +1539,10 @@ const App: React.FC = () => {
   const isFullWidthView = currentView === View.Roadmap && !!activeProject;
 
   // ---- AI asistanı: ekran/proje bağlamı ve örnek sorular ----
-  const isAIEnabled = settings?.isAIEnabled !== false;
+  // AI: kullanıcı ayarı + admin politikası (kurum geneli) + rol yetkisi
+  const aiPolicy = aiPolicyOf(workspace || undefined);
+  const isAIEnabled = settings?.isAIEnabled !== false && aiPolicy.enabled && can(identity, 'ai.use');
+  const isAIChatEnabled = isAIEnabled && aiPolicy.chat;
   const currentViewRef = useRef(currentView);
   currentViewRef.current = currentView;
   const getAssistantWorkspace = useCallback(() => workspaceRef.current, []);
@@ -1618,7 +1628,7 @@ const App: React.FC = () => {
   }, [workspace, visibleProjects, identity, handleOpenProject, activeProject, consoleMode, canAudit, canDataHealth]);
 
   return (
-    <AssistantProvider enabled={isAIEnabled && !consoleMode} getWorkspace={getAssistantWorkspace} getView={getAssistantView} onNavigate={handleAssistantNavigate} onApplyAction={handleApplyAiAction}>
+    <AssistantProvider enabled={isAIEnabled && !consoleMode} chat={aiPolicy.chat} embedded={aiPolicy.embedded} getWorkspace={getAssistantWorkspace} getView={getAssistantView} onNavigate={handleAssistantNavigate} onApplyAction={handleApplyAiAction}>
     <div className={`min-h-screen font-sans theme-${settings?.theme || 'classic'} ${isModern ? 'ui-modern' : 'bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100'}`}>
       {isModern ? (
         <div className="flex min-h-screen">
@@ -1678,7 +1688,7 @@ const App: React.FC = () => {
                   onNavigate={(v: View) => setCurrentView(v)}
                   onBack={() => setCurrentView(View.Portfolio)}
                   exec={isManagementRole(identity.role)}
-                  aiEnabled={isAIEnabled}
+                  aiEnabled={isAIChatEnabled}
                   onStatusReport={() => setIsStatusReportOpen(true)}
                   onNewTask={() => { setEditingTask(null); setIsFormModalOpen(true); }}
                   onOpenWorkPackages={() => setIsWpManagerOpen(true)}
@@ -1697,7 +1707,7 @@ const App: React.FC = () => {
           onSaveProject={canBackup ? handleSaveProject : undefined}
           onLoadProject={canBackup ? handleLoadProject : undefined}
           isLocalPersistenceEnabled={settings?.isLocalPersistenceEnabled !== false}
-          isAIEnabled={settings?.isAIEnabled !== false}
+          isAIEnabled={isAIChatEnabled}
           onOpenAbout={() => setIsAboutModalOpen(true)}
           projects={visibleProjects.map(p => ({ id: p.id, name: p.name, rag: p.rag }))}
           activeProjectId={activeProject?.id ?? null}

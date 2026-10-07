@@ -223,6 +223,19 @@ describe('evaluateProjectHealth', () => {
         expect(f(h, 'ai')).toMatchObject({ value: 0.67, detail: '7/10 (28. hafta)', note: '28. hafta gerekçesi' }); // (7 − 1) / 9
         expect(f(evaluate(wsOf({ projects: [project('p')], weeklyReports: [rep(24, 9)] }), 'p'), 'ai').value).toBeNull();
     });
+
+    it('güveni düşük AI puanı varsayılanda atlanır (bir önceki güvenilir kullanılır); admin "işaretle" derse girer', () => {
+        const actor = { role: 'py' as const, personId: 'pm', name: 'PM' };
+        const rep = (week: number, score: number, confidence?: 'high' | 'low') => ({
+            ...createReport({ kind: 'project', projectId: 'p', departmentCode: 'U310', year: 2026, week }, actor, NOW),
+            aiAssessment: { score, rationale: '', evidence: [], signals: [], at: '', inputHash: '', ...(confidence ? { confidence } : {}) },
+        });
+        const reports = [rep(27, 4, 'high'), rep(28, 9, 'low')];
+        expect(f(evaluate(wsOf({ projects: [project('p')], weeklyReports: reports }), 'p'), 'ai')).toMatchObject({ detail: '4/10 (27. hafta)' });
+        const flagged = wsOf({ projects: [project('p')], weeklyReports: reports, aiPolicy: { scoring: { runs: 3, minEvidence: 1, maxSpread: 2, maxRuleGap: 4, lowConfidence: 'flag' } } });
+        expect(f(evaluate(flagged, 'p'), 'ai')).toMatchObject({ detail: '9/10 (28. hafta) · güven düşük' });
+        expect(f(evaluate(wsOf({ projects: [project('p')], weeklyReports: [rep(28, 9, 'low')] }), 'p'), 'ai').detail).toBe('Son 4 haftada güvenilir değerlendirme yok');
+    });
 });
 
 describe('setPmoRating', () => {

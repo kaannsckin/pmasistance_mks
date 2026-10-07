@@ -225,7 +225,7 @@ const ModernSidebar: React.FC<ModernSidebarProps> = (props) => {
                 </>}
 
                 <div className="mt-auto flex flex-col gap-1.5">
-                    {assistant?.enabled && !consoleMode && (
+                    {assistant?.chatEnabled && !consoleMode && (
                         <button type="button" onClick={() => { assistant.setOpen(true); onClose(); }} className="m-row-link w-full flex items-center gap-3 min-h-[44px] px-2.5 rounded-[10px] text-[15px] font-medium">
                             <span className="m-text-3"><Icon name="message" /></span>
                             Asistan

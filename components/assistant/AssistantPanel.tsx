@@ -31,7 +31,7 @@ const AssistantPanel: React.FC<Props> = ({ suggestions, hidden, hideLauncher, on
     return () => window.removeEventListener('keydown', onKey);
   }, [a.isOpen, a.isKbOpen, a.setOpen]);
 
-  if (!a.enabled) return null;
+  if (!a.chatEnabled) return null;
 
   return (
     <>
@@ -65,12 +65,12 @@ export default AssistantPanel;
 /** Komut paleti + AI: serbest metin asistana sorulabilir, "AI Asistan" ekran öğesi eklenir */
 export const AssistantCommandPalette: React.FC<{ items: CommandItem[]; onClose: () => void; modern?: boolean }> = ({ items, onClose, modern }) => {
   const a = useAssistant();
-  const all = a.enabled
+  const all = a.chatEnabled
     ? [
       { id: 'a-ai', group: 'Aksiyonlar', label: 'Asistan', sublabel: 'Sohbet panelini aç', icon: 'fa-wand-magic-sparkles', keywords: 'ai yapay zeka asistan zeka sor', run: () => a.setOpen(true) },
       { id: 'a-kb', group: 'Aksiyonlar', label: 'Bilgi Bankası', sublabel: 'AI bilgi tabanı ve kurumsal dokümanlar', icon: 'fa-book', keywords: 'rag dokuman pdf word bilgi tabani kilavuz', run: () => { a.ensureReady(); a.setKbOpen(true); } },
       ...items,
     ]
     : items;
-  return <CommandPalette items={all} onClose={onClose} onAskAI={a.enabled ? q => a.ask(q) : undefined} modern={modern} />;
+  return <CommandPalette items={all} onClose={onClose} onAskAI={a.chatEnabled ? q => a.ask(q) : undefined} modern={modern} />;
 };

@@ -25,6 +25,7 @@ export interface PermissionDef {
     defaults: UserRole[];
     locked?: string; // değiştirilemez; nedeni
     alwaysFor?: UserRole[]; // bu rollerden alınamaz
+    since?: number; // kataloğa eklendiği sürüm (yoksa 1)
 }
 
 export const PERMISSION_GROUP_LABELS: Record<PermissionGroup, string> = {
@@ -39,6 +40,7 @@ export const PERMISSION_GROUP_LABELS: Record<PermissionGroup, string> = {
 export const PERMISSIONS: PermissionDef[] = [
     { key: 'screen.executive', group: 'screens', label: 'Yönetim ekranı', description: 'Portföy sağlığı, EVM, dikkat isteyenler, brifing ve yönetici paketleri', defaults: ['mudur', 'pyb_sorumlu'] },
     { key: 'screen.admin', group: 'screens', label: 'Yönetici (admin) ekranı', description: 'Rol yetkilerini ve kişi profillerini yönetir', defaults: ['admin'], alwaysFor: ['admin'] },
+    { key: 'ai.use', since: 2, group: 'screens', label: 'Yapay zekâ özelliklerini kullanır', description: 'Asistan sohbeti, ekran içi AI (taslak, öneri, özet) ve rapor metni puanlaması; kurum geneli açık/kapalı ayarı Yapay zekâ bölümündedir', defaults: ['py', 'bolum_sorumlu', 'pyb_destek', 'pyb_sorumlu', 'mudur'] },
     { key: 'portfolio.viewAll', group: 'portfolio', label: 'Tüm projeleri görür', description: 'Kapsamı dışındaki projeler dahil tüm portföy (salt okunur)', defaults: ['mudur', 'pyb_sorumlu', 'pyb_destek'] },
     { key: 'project.create', group: 'portfolio', label: 'Proje oluşturur', description: 'Yeni proje açar', defaults: ['py', 'pyb_destek'] },
     { key: 'project.assignOwner', group: 'portfolio', label: 'Proje sahibini atar', description: 'Tüm projelerde proje yöneticisini ve durumu değiştirir (PY kendi projesinde her zaman yapabilir)', defaults: ['pyb_destek'] },
@@ -55,6 +57,28 @@ export const PERMISSIONS: PermissionDef[] = [
 ];
 
 export const PERMISSION_BY_KEY = new Map(PERMISSIONS.map(p => [p.key, p]));
+
+/** Yetki kataloğunun sürümü: yeni yetki eklenince artar (bkz. migrateRolePermissions) */
+export const PERMISSIONS_REV = 2;
+
+/**
+ * Özelleştirilmiş roller tam liste olarak saklanır; sonradan eklenen bir
+ * yetki o listelerde yoktur. Eski sürümle kaydedilmiş listelere, rolün
+ * varsayılanında olan yeni yetkiler bir kez eklenir (admin sonradan
+ * kaldırırsa sürüm güncel olduğu için yeniden eklenmez).
+ */
+export const migrateRolePermissions = (overrides: RolePermissions | undefined, rev: number | undefined): RolePermissions | undefined => {
+    const from = rev ?? 1;
+    if (!overrides || from >= PERMISSIONS_REV) return overrides;
+    const added = PERMISSIONS.filter(p => (p.since ?? 1) > from);
+    const next: RolePermissions = {};
+    (Object.keys(overrides) as UserRole[]).forEach(role => {
+        const list = overrides[role] || [];
+        const extra = added.filter(p => p.defaults.includes(role) && !list.includes(p.key)).map(p => p.key);
+        next[role] = [...list, ...extra];
+    });
+    return next;
+};
 
 /** Ekranlardaki rol sırası (en kapsamlı girdi yapandan yönetime) */
 export const ROLE_ORDER: UserRole[] = ['py', 'bolum_sorumlu', 'pyb_destek', 'pyb_sorumlu', 'mudur', 'admin'];

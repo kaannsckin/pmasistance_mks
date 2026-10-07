@@ -139,7 +139,7 @@ export const ModernChat: React.FC<{
     );
 
     const phaseScreen = () => {
-        if (!a.enabled) return center('x', 'Asistan kapalı', <p className="m-0 text-[15px] m-text-3">Yapay zekâ asistanı Ayarlar'dan kapatılmış.</p>);
+        if (!a.chatEnabled) return center('x', 'Asistan kapalı', <p className="m-0 text-[15px] m-text-3">{a.enabled ? 'Asistan sohbeti yönetici tarafından kapatılmış.' : "Yapay zekâ asistanı Ayarlar'dan ya da yönetici tarafından kapatılmış."}</p>);
         if (a.phase === 'idle' || a.phase === 'loading') return center('refresh', 'Bağlanıyor…', <p className="m-0 text-[15px] m-text-3">AI bağlantısı kontrol ediliyor.</p>);
         if (a.phase === 'unavailable') {
             return center('alert', 'Yapay zekâ henüz hazır değil', (
@@ -357,7 +357,7 @@ export const ModernAssistantPanel: React.FC<{ suggestions: { label: string; prom
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
     }, [a.isOpen, a.isKbOpen, a.setOpen]);
-    if (!a.enabled) return null;
+    if (!a.chatEnabled) return null;
     return (
         <>
             {a.isKbOpen && <ModernKnowledgeBase onClose={() => a.setKbOpen(false)} />}

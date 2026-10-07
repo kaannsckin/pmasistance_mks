@@ -183,7 +183,7 @@ export type PermissionKey =
   | 'screen.executive' | 'screen.admin' | 'portfolio.viewAll'
   | 'project.create' | 'project.assignOwner' | 'datapool.edit' | 'plan.approve'
   | 'report.review' | 'health.rate' | 'expectation.respond' | 'meeting.review'
-  | 'notes.private' | 'app.audit' | 'app.backup' | 'app.dataHealth';
+  | 'notes.private' | 'app.audit' | 'app.backup' | 'app.dataHealth' | 'ai.use';
 
 /** Admin'in değiştirdiği roller: rol → verilen yetkilerin tam listesi (olmayan rol varsayılanı kullanır) */
 export type RolePermissions = Partial<Record<UserRole, PermissionKey[]>>;
@@ -451,7 +451,9 @@ export interface WorkspaceData {
   pmoRatings?: PmoRating[]; // PMO'nun haftalık proje sağlığı puanları (sağlık modelinin hedef değişkeni)
   healthHistory?: HealthWeekSnapshot[]; // Haftalık sağlık fotoğrafları (özellik vektörü + skor)
   rolePermissions?: RolePermissions; // Admin'in rol yetkisi değişiklikleri
+  rolePermissionsRev?: number; // yetki kataloğu sürümü (yeni yetkilerin geçişi için)
   viewConfig?: ViewConfig; // Admin'in rol bazlı görünüm, filtre ve sıralama ayarları
+  aiPolicy?: AiPolicy; // Admin'in yapay zekâ politikası
   healthConfig?: HealthConfig; // Admin'in sağlık puanı yöntemi ayarları
   profiles?: UserProfile[]; // Admin'in tanımladığı profiller (kişi ↔ rol)
   auditLog?: AuditEntry[]; // Kritik aksiyonların günlüğü (en yeni başta)
@@ -614,6 +616,32 @@ export interface AiReportAssessment {
   signals: string[]; // engel, belirsizlik, müşteri sorunu…
   at: string; // ISO
   inputHash: string; // değerlendirilen metnin özeti — rapor değişirse yeniden hesaplanır
+  // Halüsinasyon güvenceleri (yoksa eski tek değerlendirme)
+  runs?: number[]; // bağımsız değerlendirmelerin puanları (skor = medyan)
+  spread?: number; // en yüksek − en düşük
+  ruleScore?: number; // kural tabanlı metin göstergesi (1–10), çapraz kontrol
+  flags?: AiAssessmentFlag[];
+  confidence?: 'high' | 'low';
+  promptVersion?: string;
+}
+
+export type AiAssessmentFlag = 'no_evidence' | 'inconsistent' | 'rule_gap' | 'signal_conflict';
+
+/** Admin'in AI politikası: kurum geneli açık/kapalı, özellikler ve puanlama güvenceleri */
+export interface AiPolicy {
+  enabled?: boolean; // kurum geneli (varsayılan açık)
+  chat?: boolean; // asistan sohbeti
+  embedded?: boolean; // ekran içi AI (taslak, öneri, özet)
+  proposals?: boolean; // asistanın değişiklik önerileri
+  scoring?: AiScoringPolicy;
+}
+
+export interface AiScoringPolicy {
+  runs: number; // 1 · 3 · 5 bağımsız değerlendirme
+  minEvidence: number; // doğrulanmış alıntı alt sınırı (0–3)
+  maxSpread: number; // tekrarlar arası kabul edilen en büyük fark
+  maxRuleGap: number; // kural tabanlı göstergeyle kabul edilen en büyük fark
+  lowConfidence: 'exclude' | 'flag'; // güveni düşük puan sağlık skoruna girmesin / işaretlenip girsin
 }
 
 export interface WeeklyPublication {

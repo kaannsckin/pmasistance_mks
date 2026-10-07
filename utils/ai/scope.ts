@@ -1,5 +1,6 @@
 import { Person, Project, WorkspaceData } from '../../types';
 import { can } from '../permissions';
+import { aiPolicyOf } from './policy';
 import { Identity, identityOf, visibleProjectIds } from '../rbac';
 import type { RagHit } from '../rag/retriever';
 import type { Citation, RagSourceType } from '../rag/sources';
@@ -64,7 +65,8 @@ export const buildToolContext = (ws: WorkspaceData, now: Date = new Date()): Too
         year: now.getFullYear(),
         now,
         citations: [],
-        canWrite: (identity.role === 'py' || identity.role === 'bolum_sorumlu') && !!identity.personId,
+        // Değişiklik önerileri admin politikasıyla kapatılabilir
+        canWrite: (identity.role === 'py' || identity.role === 'bolum_sorumlu') && !!identity.personId && aiPolicyOf(ws).proposals,
         proposals: [],
     };
 };

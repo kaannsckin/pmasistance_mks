@@ -118,12 +118,16 @@ export const actorLabel = (entry: Pick<AuditEntry, 'actorRole' | 'actorName'>): 
 /** Denetim günlüğü süzgeci: eylem grubu (ör. "report"), proje ve metin */
 export const filterAudit = (
     entries: AuditEntry[],
-    f: { group?: string; projectId?: string; query?: string },
+    f: { group?: string; projectId?: string; query?: string; from?: string; to?: string },
     projectName: (id: string) => string | undefined = () => undefined,
 ): AuditEntry[] => {
     const q = f.query?.trim().toLocaleLowerCase('tr-TR');
+    // Tarih aralığı yerel gün olarak karşılaştırılır ("YYYY-AA-GG", uçlar dahil)
+    const localDay = (iso: string) => { const d = new Date(iso); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
     return entries.filter(e =>
-        (!f.group || e.action.split('.')[0] === f.group)
+        (!f.from || localDay(e.at) >= f.from)
+        && (!f.to || localDay(e.at) <= f.to)
+        && (!f.group || e.action.split('.')[0] === f.group)
         && (!f.projectId || e.projectId === f.projectId)
         && (!q || [e.summary, e.actorName, AUDIT_ACTION_LABELS[e.action], e.projectId ? projectName(e.projectId) : ''].join(' ').toLocaleLowerCase('tr-TR').includes(q)));
 };
