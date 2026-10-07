@@ -85,6 +85,11 @@ import ModernMeetings from './components/modern/ModernMeetings';
 import ModernNotes from './components/modern/ModernNotes';
 import ModernCalendar from './components/modern/ModernCalendar';
 import ModernDataPool from './components/modern/ModernDataPool';
+import WorkPackagesSheet from './components/modern/sheets/WorkPackagesSheet';
+import PersonProfileSheet from './components/modern/sheets/PersonProfileSheet';
+import DataHealthSheet from './components/modern/sheets/DataHealthSheet';
+import AuditLogSheet from './components/modern/sheets/AuditLogSheet';
+import StatusReportSheet from './components/modern/sheets/StatusReportSheet';
 import {
   actorOf, isPyds, markWeekEmailed, publishWeek, reportDictionary, reportSettingsOf, returnReportIn, saveReport, STAGE_LABELS, unpublishWeek, weekLabel,
 } from './utils/weeklyReport';
@@ -1532,7 +1537,16 @@ const App: React.FC = () => {
       ) : (
         <TaskFormModal task={editingTask} resources={activeProject.resources} people={workspace.people} workPackages={activeProject.workPackages} tasks={activeProject.tasks} objectives={activeProject.objectives} onClose={closeTaskForm} onSave={saveTaskFromForm} />
       ))}
-      {isWpManagerOpen && activeProject && (
+      {isWpManagerOpen && activeProject && workspace && isModern && (
+        <WorkPackagesSheet
+          workPackages={activeProject.workPackages}
+          tasks={activeProject.tasks}
+          canEdit={canEditProjectContent(workspace, identity, activeProject.id)}
+          onChange={(next: WorkPackage[]) => setWorkPackages(next)}
+          onClose={() => setIsWpManagerOpen(false)}
+        />
+      )}
+      {isWpManagerOpen && activeProject && !isModern && (
         <WorkPackageManager
           isOpen={isWpManagerOpen}
           onClose={() => setIsWpManagerOpen(false)}
@@ -1576,7 +1590,18 @@ const App: React.FC = () => {
           onClose={() => setIsCloudModalOpen(false)}
         />
       )}
-      {viewingPersonId && workspace && (
+      {viewingPersonId && workspace && isModern && (
+        <PersonProfileSheet
+          key={viewingPersonId}
+          workspace={workspace}
+          personId={viewingPersonId}
+          canEditLeave={canEditPool(workspace.currentRole)}
+          onSetLeave={handleSetLeave}
+          onOpenProject={(projectId: string) => handleOpenProject(projectId)}
+          onClose={() => setViewingPersonId(null)}
+        />
+      )}
+      {viewingPersonId && workspace && !isModern && (
         <PersonDetailModal
           workspace={workspace}
           personId={viewingPersonId}
@@ -1585,14 +1610,20 @@ const App: React.FC = () => {
           onClose={() => setViewingPersonId(null)}
         />
       )}
-      {isHealthModalOpen && workspace && (
+      {isHealthModalOpen && workspace && isModern && (
+        <DataHealthSheet workspace={workspace} onApplyFix={handleApplyHealthFix} onClose={() => setIsHealthModalOpen(false)} />
+      )}
+      {isHealthModalOpen && workspace && !isModern && (
         <DataHealthModal
           workspace={workspace}
           onApplyFix={handleApplyHealthFix}
           onClose={() => setIsHealthModalOpen(false)}
         />
       )}
-      {isAuditModalOpen && workspace && (
+      {isAuditModalOpen && workspace && isModern && (
+        <AuditLogSheet workspace={workspace} onClose={() => setIsAuditModalOpen(false)} />
+      )}
+      {isAuditModalOpen && workspace && !isModern && (
         <AuditLogModal
           workspace={workspace}
           onClose={() => setIsAuditModalOpen(false)}
@@ -1620,7 +1651,10 @@ const App: React.FC = () => {
           <button onClick={() => setUndo(null)} className="text-gray-400 hover:text-white transition-colors" title="Kapat"><i className="fa-solid fa-xmark text-xs"></i></button>
         </div>
       )}
-      {isStatusReportOpen && workspace && activeProject && (
+      {isStatusReportOpen && workspace && activeProject && isModern && (
+        <StatusReportSheet workspace={workspace} projectId={activeProject.id} onClose={() => setIsStatusReportOpen(false)} />
+      )}
+      {isStatusReportOpen && workspace && activeProject && !isModern && (
         <StatusReportModal
           workspace={workspace}
           projectId={activeProject.id}

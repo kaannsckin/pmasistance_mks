@@ -36,7 +36,7 @@ export const BAND_META: Record<HealthBand, { label: string; dot: string; tone: s
 };
 
 /** Alt sayfa (dar ekranda alttan, genişte ortada) — Esc ile kapanır */
-export const Sheet: React.FC<{ title: string; onClose: () => void; children: React.ReactNode; footer: React.ReactNode; wide?: boolean }> = ({ title, onClose, children, footer, wide }) => {
+export const Sheet: React.FC<{ title: string; onClose: () => void; children: React.ReactNode; footer?: React.ReactNode; wide?: boolean; xl?: boolean; subtitle?: string; headerAction?: React.ReactNode }> = ({ title, onClose, children, footer, wide, xl, subtitle, headerAction }) => {
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
         window.addEventListener('keydown', onKey);
@@ -44,13 +44,19 @@ export const Sheet: React.FC<{ title: string; onClose: () => void; children: Rea
     }, [onClose]);
     return (
         <div className="fixed inset-0 z-[80] bg-black/40 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
-            <div role="dialog" aria-modal="true" aria-label={title} className={`m-bg w-full ${wide ? 'sm:max-w-2xl' : 'sm:max-w-lg'} rounded-t-2xl sm:rounded-2xl m-pop max-h-[92vh] flex flex-col`} onClick={e => e.stopPropagation()}>
-                <div className="flex items-center justify-between px-5 pt-4 pb-2">
-                    <h2 className="m-0 text-[20px] font-bold m-text">{title}</h2>
-                    <button type="button" className="m-icon-btn" aria-label="Kapat" onClick={onClose}><Icon name="x" /></button>
+            <div role="dialog" aria-modal="true" aria-label={title} className={`m-bg w-full ${xl ? 'sm:max-w-4xl' : wide ? 'sm:max-w-2xl' : 'sm:max-w-lg'} rounded-t-2xl sm:rounded-2xl m-pop max-h-[92vh] flex flex-col`} onClick={e => e.stopPropagation()}>
+                <div className="flex items-start justify-between gap-3 px-5 pt-4 pb-2">
+                    <div className="min-w-0">
+                        <h2 className="m-0 text-[20px] font-bold m-text">{title}</h2>
+                        {subtitle && <p className="m-0 mt-0.5 text-[14px] m-text-3">{subtitle}</p>}
+                    </div>
+                    <div className="flex items-center gap-1 flex-none">
+                        {headerAction}
+                        <button type="button" className="m-icon-btn" aria-label="Kapat" onClick={onClose}><Icon name="x" /></button>
+                    </div>
                 </div>
                 <div className="px-5 pb-4 overflow-y-auto flex flex-col gap-4">{children}</div>
-                <div className="px-5 py-4 border-t m-sep flex flex-wrap items-center gap-2">{footer}</div>
+                {footer && <div className="px-5 py-4 border-t m-sep flex flex-wrap items-center gap-2">{footer}</div>}
             </div>
         </div>
     );
