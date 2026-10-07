@@ -14,7 +14,7 @@ import {
 import { canEditPool, createAllocation, EffortField, getPlanLockStatus, ROLE_LABELS, setAllocationCell, upsertPlanLock } from './utils/allocations';
 import { applyPoolImport, PoolImportResult } from './utils/poolImporter';
 import { isExecRole } from './utils/execReport';
-import { canCreateProject, canEditProjectContent, identityOf, identityNeedsPerson as computeNeedsPerson, visibleProjectIds } from './utils/rbac';
+import { canCreateProject, canEditProjectContent, identityOf, identityNeedsPerson as computeNeedsPerson, ownsProject, visibleProjectIds } from './utils/rbac';
 import { addSnapshot, buildSnapshot, ensureMonthlySnapshot } from './utils/snapshots';
 import { AllocationSuggestion, ApplyMode, applyAllocationSuggestions } from './utils/taskToAllocation';
 import { applyBilledHoursActuals, planBilledHoursPoolAdditions, suggestBilledHoursActuals, BilledApplyMode, BilledHoursOptions, BilledHoursRecord } from './utils/billedHours';
@@ -56,7 +56,7 @@ import { analyzeDataHealth, applyHealthFix, HealthFix } from './utils/dataHealth
 import { appendAudit, AUDIT_ACTION_LABELS } from './utils/audit';
 import { riskScore } from './utils/risks';
 import { upsertLeave } from './utils/availability';
-import { ExpectationStatus, ExpectationUrgency, PestelItem, Risk, SwotItem } from './types';
+import { ExpectationStatus, ExpectationUrgency, MeetingStatus, PestelItem, ReportSettings, Risk, SwotItem, WeeklyReport } from './types';
 import ModernSidebar from './components/modern/ModernSidebar';
 import ModernProjectHeader from './components/modern/ModernProjectHeader';
 import ModernPortfolio from './components/modern/ModernPortfolio';
@@ -80,6 +80,15 @@ import {
   respondExpectation, setExpectationStatus, updateExpectationDraft, URGENCY_LABELS, urgencyCounts, visibleExpectations,
 } from './utils/expectations';
 import { Celebration, EggEvent, HyperdriveOverlay, SpaceMode } from './components/modern/Eggs';
+import ModernWeeklyReport from './components/modern/ModernWeeklyReport';
+import ModernMeetings from './components/modern/ModernMeetings';
+import {
+  actorOf, isPyds, markWeekEmailed, publishWeek, reportDictionary, reportSettingsOf, returnReportIn, saveReport, STAGE_LABELS, unpublishWeek, weekLabel,
+} from './utils/weeklyReport';
+import {
+  canEditMeeting, canPlanMeeting, canReviewMeeting, createMeeting, isOwnMeeting, markHeld, MeetingDraft, reviewMeeting, setMeetingStatus, updateMeeting,
+} from './utils/customerMeetings';
+import { reportAttention } from './utils/reportAttention';
 import { Icon } from './components/modern/icons';
 import { createSequenceDetector } from './utils/easterEggs';
 
@@ -188,6 +197,8 @@ const App: React.FC = () => {
 
   // ---- Yapılacaklar (mevcut veriden türetilir, role göre filtreli) ----
   const todoItems = useMemo(() => (workspace ? buildTodoItems(workspace) : []), [workspace]);
+  // Haftalık rapor / müşteri görüşmeleri rozetleri (kenar çubuğu)
+  const attention = useMemo(() => (workspace ? reportAttention(workspace) : { reportBadge: 0, meetingBadge: 0, items: [] }), [workspace]);
 
   const handleTodoNavigate = useCallback((item: TodoItem) => {
     // Proje bağlamı gerekiyorsa önce o projeyi aç, sonra ekrana geç
@@ -648,6 +659,134 @@ const App: React.FC = () => {
     });
   }, [updateWorkspace]);
 
+  // ---- Haftalık rapor: yetki ve akış işlem anında güncel veriyle doğrulanır ----
+  const commitWorkspace = useCallback((next: WorkspaceData) => {
+    workspaceRef.current = next;
+    setWorkspace(next);
+  }, []);
+  const reportLabel = (ws: WorkspaceData, r: WeeklyReport) => {
+    const name = r.kind === 'department'
+      ? `Bölüm eklemeleri (${ws.departments.find(d => d.code === r.departmentCode)?.name || r.departmentCode})`
+      : `"${ws.projects.find(p => p.id === r.projectId)?.name || 'Proje'}"`;
+    return `${name} · ${weekLabel(r.year, r.week)}`;
+  };
+  const handleSaveReport = useCallback((draft: WeeklyReport, advance = false): boolean => {
+    const ws = workspaceRef.current;
+    if (!ws) return false;
+    const res = saveReport(ws, identityOf(ws), draft, actorOf(ws), { advance, dictionary: reportDictionary(reportSettingsOf(ws)) });
+    if (!res) return false;
+    let next: WorkspaceData = { ...ws, weeklyReports: res.reports };
+    if (advance) {
+      next = res.from === 'draft'
+        ? appendAudit(next, 'report.submit', `${reportLabel(ws, res.report)} raporu gönderildi → ${STAGE_LABELS[res.report.stage]}`, res.report.projectId)
+        : appendAudit(next, 'report.approve', `${reportLabel(ws, res.report)} raporu onaylandı → ${STAGE_LABELS[res.report.stage]}`, res.report.projectId);
+    }
+    commitWorkspace(next);
+    return true;
+  }, [commitWorkspace]);
+
+  const handleReturnReport = useCallback((reportId: string, note: string): boolean => {
+    const ws = workspaceRef.current;
+    if (!ws) return false;
+    const res = returnReportIn(ws, identityOf(ws), reportId, actorOf(ws), note);
+    if (!res) return false;
+    commitWorkspace(appendAudit({ ...ws, weeklyReports: res.reports }, 'report.return',
+      `${reportLabel(ws, res.report)} raporu iade edildi → ${STAGE_LABELS[res.report.stage]}${note.trim() ? `: ${note.trim()}` : ''}`, res.report.projectId));
+    return true;
+  }, [commitWorkspace]);
+
+  const handlePublishWeek = useCallback((year: number, week: number): boolean => {
+    const ws = workspaceRef.current;
+    if (!ws) return false;
+    const pubs = publishWeek(ws, identityOf(ws), year, week, actorOf(ws).name);
+    if (!pubs) return false;
+    commitWorkspace(appendAudit({ ...ws, weeklyPublications: pubs }, 'report.publish', `${weekLabel(year, week)} enstitü haftalık raporu yayınlandı`));
+    return true;
+  }, [commitWorkspace]);
+
+  const handleUnpublishWeek = useCallback((year: number, week: number): boolean => {
+    const ws = workspaceRef.current;
+    if (!ws) return false;
+    const pubs = unpublishWeek(ws, identityOf(ws), year, week);
+    if (!pubs) return false;
+    commitWorkspace(appendAudit({ ...ws, weeklyPublications: pubs }, 'report.publish', `${weekLabel(year, week)} haftalık raporu yayından kaldırıldı`));
+    return true;
+  }, [commitWorkspace]);
+
+  const handleMarkReportEmailed = useCallback((year: number, week: number) => {
+    updateWorkspace(ws => ({ ...ws, weeklyPublications: markWeekEmailed(ws.weeklyPublications || [], year, week) }));
+  }, [updateWorkspace]);
+
+  const handleUpdateReportSettings = useCallback((reportSettings: ReportSettings) => {
+    updateWorkspace(ws => (isPyds(identityOf(ws).role) ? { ...ws, reportSettings } : ws));
+  }, [updateWorkspace]);
+
+  const handleSetJiraKey = useCallback((projectId: string, key: string) => {
+    updateWorkspace(ws => (canEditProjectContent(ws, identityOf(ws), projectId)
+      ? { ...ws, projects: ws.projects.map(p => (p.id === projectId ? { ...p, jiraProjectKey: key } : p)) }
+      : ws));
+  }, [updateWorkspace]);
+
+  // ---- Müşteri görüşmeleri: planla / onayla / sonuç ----
+  const meetingLabel = (m: { title: string; customer: string; date: string }) =>
+    `${m.title} (${m.customer}, ${new Date(m.date).toLocaleString('tr-TR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })})`;
+  const handleCreateMeeting = useCallback((draft: MeetingDraft, submit: boolean) => {
+    updateWorkspace(ws => {
+      if (!canPlanMeeting(identityOf(ws))) return ws;
+      const m = createMeeting(ws, draft, submit);
+      const next = { ...ws, customerMeetings: [m, ...(ws.customerMeetings || [])] };
+      return submit ? appendAudit(next, 'meeting.submit', `Müşteri görüşmesi onaya sunuldu: ${meetingLabel(m)}`, m.projectId) : next;
+    });
+  }, [updateWorkspace]);
+
+  const handleUpdateMeeting = useCallback((id: string, draft: MeetingDraft, submit: boolean) => {
+    updateWorkspace(ws => {
+      const m = (ws.customerMeetings || []).find(x => x.id === id);
+      if (!m || !canEditMeeting(m, identityOf(ws))) return ws;
+      const u = updateMeeting(m, draft, submit);
+      const next = { ...ws, customerMeetings: (ws.customerMeetings || []).map(x => (x.id === id ? u : x)) };
+      return u.status === 'pending' ? appendAudit(next, 'meeting.submit', `Müşteri görüşmesi onaya sunuldu: ${meetingLabel(u)}`, u.projectId) : next;
+    });
+  }, [updateWorkspace]);
+
+  const handleReviewMeeting = useCallback((id: string, approve: boolean, note: string) => {
+    updateWorkspace(ws => {
+      const m = (ws.customerMeetings || []).find(x => x.id === id);
+      if (!m || m.status !== 'pending' || !canReviewMeeting(identityOf(ws))) return ws;
+      const u = reviewMeeting(ws, m, approve, note);
+      const next = { ...ws, customerMeetings: (ws.customerMeetings || []).map(x => (x.id === id ? u : x)) };
+      return appendAudit(next, approve ? 'meeting.approve' : 'meeting.reject',
+        `Müşteri görüşmesi ${approve ? 'onaylandı' : 'reddedildi'}: ${meetingLabel(m)}${note.trim() ? ` — ${note.trim()}` : ''}`, m.projectId);
+    });
+  }, [updateWorkspace]);
+
+  const handleMarkMeetingHeld = useCallback((id: string, decisions: string) => {
+    updateWorkspace(ws => {
+      const m = (ws.customerMeetings || []).find(x => x.id === id);
+      const who = identityOf(ws);
+      const allowed = !!m && (isOwnMeeting(m, who) || (!!m.projectId && ws.projects.some(p => p.id === m.projectId && ownsProject(p, who))));
+      if (!m || !allowed || (m.status !== 'approved' && m.status !== 'held')) return ws;
+      const next = { ...ws, customerMeetings: (ws.customerMeetings || []).map(x => (x.id === id ? markHeld(x, decisions) : x)) };
+      return appendAudit(next, 'meeting.held', `Müşteri görüşmesi gerçekleşti: ${meetingLabel(m)}`, m.projectId);
+    });
+  }, [updateWorkspace]);
+
+  const handleSetMeetingStatus = useCallback((id: string, status: MeetingStatus) => {
+    updateWorkspace(ws => {
+      const m = (ws.customerMeetings || []).find(x => x.id === id);
+      if (!m || !isOwnMeeting(m, identityOf(ws)) || status !== 'cancelled' || (m.status !== 'pending' && m.status !== 'approved')) return ws;
+      return { ...ws, customerMeetings: (ws.customerMeetings || []).map(x => (x.id === id ? setMeetingStatus(x, status) : x)) };
+    });
+  }, [updateWorkspace]);
+
+  const handleDeleteMeeting = useCallback((id: string) => {
+    updateWorkspace(ws => {
+      const m = (ws.customerMeetings || []).find(x => x.id === id);
+      if (!m || !isOwnMeeting(m, identityOf(ws)) || m.status !== 'draft') return ws;
+      return { ...ws, customerMeetings: (ws.customerMeetings || []).filter(x => x.id !== id) };
+    });
+  }, [updateWorkspace]);
+
   const openExpectations = useCallback((urgency?: ExpectationUrgency) => {
     setCurrentView(View.Expectations);
     setExpectationUrgency(urgency);
@@ -783,6 +922,39 @@ const App: React.FC = () => {
           onUpdate={handleUpdateExpectation}
           onRespond={handleRespondExpectation}
           onSetStatus={handleSetExpectationStatus}
+        />
+      );
+      return isModern ? page : <div className="ui-modern rounded-3xl p-4 sm:p-6">{page}</div>;
+    }
+
+    // Haftalık rapor ve müşteri görüşmeleri (aktif proje gerektirmez)
+    if (currentView === View.WeeklyReport || currentView === View.Meetings) {
+      const page = currentView === View.WeeklyReport ? (
+        <ModernWeeklyReport
+          key={`wr-${identity.role}-${identity.personId || ''}`}
+          workspace={workspace}
+          identity={identity}
+          onSaveReport={(r: WeeklyReport) => handleSaveReport(r)}
+          onAdvanceReport={(r: WeeklyReport) => handleSaveReport(r, true)}
+          onReturnReport={handleReturnReport}
+          onPublishWeek={handlePublishWeek}
+          onUnpublishWeek={handleUnpublishWeek}
+          onMarkEmailed={handleMarkReportEmailed}
+          onUpdateSettings={handleUpdateReportSettings}
+          onSetJiraKey={handleSetJiraKey}
+          onOpenMeetings={() => setCurrentView(View.Meetings)}
+        />
+      ) : (
+        <ModernMeetings
+          key={`mt-${identity.role}-${identity.personId || ''}`}
+          workspace={workspace}
+          identity={identity}
+          onCreate={handleCreateMeeting}
+          onUpdate={handleUpdateMeeting}
+          onReview={handleReviewMeeting}
+          onMarkHeld={handleMarkMeetingHeld}
+          onSetStatus={handleSetMeetingStatus}
+          onDelete={handleDeleteMeeting}
         />
       );
       return isModern ? page : <div className="ui-modern rounded-3xl p-4 sm:p-6">{page}</div>;
@@ -1175,7 +1347,7 @@ const App: React.FC = () => {
     (!!workspace && isExecRole(workspace.currentRole) && (currentView === View.Notes || currentView === View.Requests));
   const usesModernScreen = inProjectView
     ? [View.Overview, View.Roadmap, View.Tasks, View.Kanban, View.Risks, View.Resources, View.Goals, View.Requests].includes(currentView)
-    : showsExecutive || currentView === View.Allocations || currentView === View.RiskReport || currentView === View.Expectations || ((currentView === View.Portfolio || !activeProject) && ![View.DataPool, View.Calendar].includes(currentView));
+    : showsExecutive || currentView === View.Allocations || currentView === View.RiskReport || currentView === View.Expectations || currentView === View.WeeklyReport || currentView === View.Meetings || ((currentView === View.Portfolio || !activeProject) && ![View.DataPool, View.Calendar].includes(currentView));
 
   // Komut paleti öğeleri (ekranlar + aksiyonlar + kapsamdaki projeler + kişiler)
   const commandItems = useMemo<CommandItem[]>(() => {
@@ -1187,6 +1359,8 @@ const App: React.FC = () => {
     items.push({ id: 'v-calendar', group: 'Ekranlar', label: 'Takvim', icon: 'fa-calendar-days', keywords: 'takvim zaman cizelge ekip is paketi', run: go(View.Calendar) });
     items.push({ id: 'v-risks', group: 'Ekranlar', label: 'Risk raporu', icon: 'fa-shield-halved', keywords: 'risk rapor matris yuksek', run: go(View.RiskReport) });
     items.push({ id: 'v-expect', group: 'Ekranlar', label: 'Yönetimden beklentiler', icon: 'fa-flag', keywords: 'beklenti yonetim karar onay talep eskalasyon', run: go(View.Expectations) });
+    items.push({ id: 'v-weekly', group: 'Ekranlar', label: 'Haftalık rapor', icon: 'fa-file-lines', keywords: 'haftalik rapor gelisme plan mudur bolum onay yayin', run: go(View.WeeklyReport) });
+    items.push({ id: 'v-meetings', group: 'Ekranlar', label: 'Müşteri görüşmeleri', icon: 'fa-handshake', keywords: 'musteri gorusme toplanti demo onay plan', run: go(View.Meetings) });
     items.push({ id: 'v-pool', group: 'Ekranlar', label: 'Veri Havuzu', icon: 'fa-database', keywords: 'personel bolum rol unvan havuz', run: go(View.DataPool) });
     if (isExecRole(identity.role)) items.push({ id: 'v-exec', group: 'Ekranlar', label: 'Yönetim (EVM · riskler · baseline)', icon: 'fa-gauge-high', keywords: 'yonetim evm butce risk', run: go(View.Executive) });
     items.push({ id: 'a-health', group: 'Aksiyonlar', label: 'Veri Sağlığı Denetimi', icon: 'fa-stethoscope', keywords: 'saglik hata yetim', run: () => setIsHealthModalOpen(true) });
@@ -1211,6 +1385,8 @@ const App: React.FC = () => {
             onNavigate={(v: View) => setCurrentView(v)}
             exec={isExecRole(identity.role)}
             expectationBadge={expectationBadge}
+            reportBadge={attention.reportBadge}
+            meetingBadge={attention.meetingBadge}
             projects={visibleProjects.map(p => ({ id: p.id, name: p.name, rag: p.rag, openTasks: p.tasks.filter(t => t.status !== TaskStatus.Done).length }))}
             activeProjectId={activeProject?.id ?? null}
             onOpenProject={handleOpenProject}

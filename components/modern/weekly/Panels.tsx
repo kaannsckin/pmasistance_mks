@@ -185,12 +185,12 @@ export const ReportSettingsPanel: React.FC<{
                 <ul className="m-0 p-0 list-none flex flex-wrap gap-2">
                     {settings.abbreviations.map(a => (
                         <li key={a.abbr} className="inline-flex items-center gap-1 pl-3 pr-1 h-8 rounded-full m-tone-accent text-[14px]">
-                            <b>{a.abbr}</b>: {a.expansion}
+                            <span><b>{a.abbr}</b>: {a.expansion}</span>
                             <button type="button" className="m-icon-btn !w-7 !h-7" aria-label={`${a.abbr} kısaltmasını sil`} onClick={() => onChange({ ...settings, abbreviations: settings.abbreviations.filter(x => x.abbr !== a.abbr) })}><Icon name="x" size={14} /></button>
                         </li>
                     ))}
                     {DEFAULT_ABBREVIATIONS.filter(d => !settings.abbreviations.some(a => a.abbr.toLocaleUpperCase('tr-TR') === d.abbr.toLocaleUpperCase('tr-TR'))).map(a => (
-                        <li key={a.abbr} className="inline-flex items-center px-3 h-8 rounded-full m-fill-2 text-[14px] m-text-2"><b className="mr-1">{a.abbr}</b>: {a.expansion}</li>
+                        <li key={a.abbr} className="inline-flex items-center px-3 h-8 rounded-full m-fill-2 text-[14px] m-text-2"><span><b>{a.abbr}</b>: {a.expansion}</span></li>
                     ))}
                 </ul>
             </Card>

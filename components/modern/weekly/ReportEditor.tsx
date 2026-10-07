@@ -403,7 +403,7 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
                         subtitle="Takvim, bütçe ve risk açısından önemli gelişmeler — her gelişme ayrı madde, kısa cümlelerle."
                         action={editable && (
                             <div className="relative">
-                                <button type="button" className="m-btn m-btn-gray" aria-haspopup="menu" aria-expanded={addMenu} onClick={() => setAddMenu(o => !o)}>
+                                <button type="button" className="m-btn m-btn-gray whitespace-nowrap" aria-haspopup="menu" aria-expanded={addMenu} onClick={() => setAddMenu(o => !o)}>
                                     <Icon name="plus" size={18} strokeWidth={2.2} />Madde ekle
                                 </button>
                                 {addMenu && (
@@ -452,7 +452,7 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
                         title="Gelecek hafta planlanan"
                         subtitle="Tarihli ve somut planlar."
                         action={editable && (
-                            <button type="button" className="m-btn m-btn-gray" onClick={() => addItem('nextWeek', newItem('plan', '', { source: 'manual' }))}>
+                            <button type="button" className="m-btn m-btn-gray whitespace-nowrap" onClick={() => addItem('nextWeek', newItem('plan', '', { source: 'manual' }))}>
                                 <Icon name="plus" size={18} strokeWidth={2.2} />Plan ekle
                             </button>
                         )}
@@ -502,7 +502,7 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
                             <ul className="m-0 p-0 list-none flex flex-wrap gap-2">
                                 {draft.abbreviations.map(a => (
                                     <li key={a.abbr} className="inline-flex items-center gap-1 pl-3 pr-1 h-8 rounded-full m-fill-2 text-[14px] m-text">
-                                        <b>{a.abbr}</b>: {a.expansion}
+                                        <span><b>{a.abbr}</b>: {a.expansion}</span>
                                         {editable && <button type="button" className="m-icon-btn !w-7 !h-7" aria-label={`${a.abbr} kısaltmasını kaldır`} onClick={() => update(d => ({ ...d, abbreviations: d.abbreviations.filter(x => x.abbr !== a.abbr) }))}><Icon name="x" size={14} /></button>}
                                     </li>
                                 ))}
@@ -530,7 +530,7 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
                     </section>
                 </div>
 
-                <aside className="flex flex-col gap-5 min-w-0 lg:sticky lg:top-4">
+                <aside className="flex flex-col gap-5 min-w-0">
                     <section aria-label="Format denetimi" className="m-surface rounded-2xl p-5 flex flex-col gap-3">
                         <div className="flex items-center justify-between gap-2">
                             <h2 className="m-0 text-[17px] font-semibold m-text">Format denetimi</h2>
