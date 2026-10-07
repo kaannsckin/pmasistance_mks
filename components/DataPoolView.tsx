@@ -282,10 +282,10 @@ const DataPoolView: React.FC<DataPoolViewProps> = ({ people, departments, roleCa
       )}
 
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[900px]">
+        <table className="w-full min-w-[1080px]">
           <thead className="bg-gray-50 dark:bg-gray-800/60 sticky top-0">
             <tr>
-              <th className={thCls}>Ad</th><th className={thCls}>Soyad</th><th className={thCls}>Sicil</th>
+              <th className={thCls}>Ad</th><th className={thCls}>Soyad</th><th className={thCls}>Sicil</th><th className={thCls}>E-posta</th>
               <th className={thCls}>Bölüm</th><th className={thCls}>Ünvan</th>
               <th className={thCls}>Kullanılabilir AA</th><th className={thCls}>Roller (virgülle)</th>
               <th className={thCls}></th>
@@ -297,6 +297,7 @@ const DataPoolView: React.FC<DataPoolViewProps> = ({ people, departments, roleCa
                 <td className={tdCls}><input disabled={!editable} className={inputCls} value={p.firstName} onChange={e => updatePerson(p.id, { firstName: e.target.value })} /></td>
                 <td className={tdCls}><input disabled={!editable} className={inputCls} value={p.lastName} onChange={e => updatePerson(p.id, { lastName: e.target.value })} /></td>
                 <td className={tdCls}><input disabled={!editable} className={inputCls} value={p.sicil || ''} onChange={e => updatePerson(p.id, { sicil: e.target.value || undefined })} /></td>
+                <td className={tdCls}><input disabled={!editable} type="email" className={`${inputCls} min-w-[180px]`} placeholder="ad.soyad@tubitak.gov.tr" title="Haftalık rapor hatırlatması ve bildirimler (Teams / e-posta) için" value={p.email || ''} onChange={e => updatePerson(p.id, { email: e.target.value.trim() || undefined })} /></td>
                 <td className={tdCls}>
                   <select disabled={!editable} className={inputCls} value={p.departmentCode} onChange={e => updatePerson(p.id, { departmentCode: e.target.value })}>
                     {!deptCodes.includes(p.departmentCode) && <option value={p.departmentCode}>{p.departmentCode || '—'}</option>}

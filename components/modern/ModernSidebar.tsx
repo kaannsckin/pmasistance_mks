@@ -28,6 +28,10 @@ interface ModernSidebarProps {
     exec: boolean;
     /** Yönetimden beklentiler rozeti (yönetim: yanıtsız, diğerleri: aktif) */
     expectationBadge?: number;
+    /** Haftalık rapor: rolün beklenen işi (gönderilmemiş, onay bekleyen) */
+    reportBadge?: number;
+    /** Müşteri görüşmeleri: yönetim için onay bekleyen, sahibi için sonucu yazılmamış */
+    meetingBadge?: number;
     projects: SidebarProject[];
     activeProjectId: string | null;
     onOpenProject: (id: string) => void;
@@ -90,7 +94,7 @@ const NavItem: React.FC<{ icon: IconName; label: string; active: boolean; onClic
 );
 
 /** Profil satırının açtığı menü: rol/kişi, arayüz, yedek ve araçlar */
-const ProfileMenu: React.FC<Omit<ModernSidebarProps, 'isOpen' | 'onClose' | 'currentView' | 'hasActiveProject' | 'onNavigate' | 'exec' | 'expectationBadge' | 'projects' | 'activeProjectId' | 'onOpenProject' | 'canCreateProject' | 'onNewProject' | 'onOpenSearch' | 'onLogoLaunch' | 'onHyperdrive' | 'onOpenSettings'> & { onDone: () => void }> = (p) => {
+const ProfileMenu: React.FC<Omit<ModernSidebarProps, 'isOpen' | 'onClose' | 'currentView' | 'hasActiveProject' | 'onNavigate' | 'exec' | 'expectationBadge' | 'reportBadge' | 'meetingBadge' | 'projects' | 'activeProjectId' | 'onOpenProject' | 'canCreateProject' | 'onNewProject' | 'onOpenSearch' | 'onLogoLaunch' | 'onHyperdrive' | 'onOpenSettings'> & { onDone: () => void }> = (p) => {
     const fileRef = useRef<HTMLInputElement>(null);
     const scoped = SCOPED_ROLES.includes(p.currentRole);
     const item = (icon: IconName, label: string, run: () => void, trailing?: React.ReactNode) => (
@@ -160,7 +164,7 @@ const ProfileMenu: React.FC<Omit<ModernSidebarProps, 'isOpen' | 'onClose' | 'cur
 };
 
 const ModernSidebar: React.FC<ModernSidebarProps> = (props) => {
-    const { isOpen, onClose, currentView, hasActiveProject, onNavigate, exec, expectationBadge, projects, activeProjectId, onOpenProject, canCreateProject, onNewProject, onOpenSearch, currentRole, currentPersonId, people, needsPerson, onOpenSettings, onLogoLaunch, onHyperdrive } = props;
+    const { isOpen, onClose, currentView, hasActiveProject, onNavigate, exec, expectationBadge, reportBadge, meetingBadge, projects, activeProjectId, onOpenProject, canCreateProject, onNewProject, onOpenSearch, currentRole, currentPersonId, people, needsPerson, onOpenSettings, onLogoLaunch, onHyperdrive } = props;
     const [menuOpen, setMenuOpen] = useState(false);
     const assistant = useAssistantOptional();
     const person = people.find(p => p.id === currentPersonId);
@@ -197,6 +201,8 @@ const ModernSidebar: React.FC<ModernSidebarProps> = (props) => {
                     <NavItem icon="users" label="Ekip ve tahsis" active={isActive(View.Allocations)} onClick={() => go(View.Allocations)} />
                     <NavItem icon="calendar" label="Takvim" active={isActive(View.Calendar)} onClick={() => go(View.Calendar)} />
                     <NavItem icon="shield" label="Risk raporu" active={isActive(View.RiskReport)} onClick={() => go(View.RiskReport)} />
+                    <NavItem icon="report" label="Haftalık rapor" active={isActive(View.WeeklyReport)} onClick={() => go(View.WeeklyReport)} badge={reportBadge} />
+                    <NavItem icon="calendarCheck" label="Görüşmeler" active={isActive(View.Meetings)} onClick={() => go(View.Meetings)} badge={meetingBadge} />
                     <NavItem icon="flag" label="Beklentiler" active={isActive(View.Expectations)} onClick={() => go(View.Expectations)} badge={expectationBadge} />
                     <NavItem icon="database" label="Veri havuzu" active={isActive(View.DataPool)} onClick={() => go(View.DataPool)} />
                 </div>

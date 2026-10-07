@@ -10,6 +10,9 @@ import { AiConfig } from './config.js';
  *               (workspace_members RLS'i yalnızca kendi üyeliklerini döndürür)
  */
 
+/** Kimlik doğrulama için gereken alanlar (AI dışındaki uçlar da kullanır) */
+export type AuthConfig = Pick<AiConfig, 'authMode' | 'accessToken' | 'supabaseUrl' | 'supabaseAnonKey'>;
+
 export type AuthResult =
     | { ok: true; subject: string }
     | { ok: false; status: number; message: string };
@@ -34,7 +37,7 @@ const bearer = (request: Request): string | undefined => {
 const SUPABASE_CACHE_MS = 60_000;
 const supabaseCache = new Map<string, { subject: string; until: number }>();
 
-const verifySupabase = async (config: AiConfig, jwt: string, fetchImpl: typeof fetch, now: number): Promise<AuthResult> => {
+const verifySupabase = async (config: AuthConfig, jwt: string, fetchImpl: typeof fetch, now: number): Promise<AuthResult> => {
     const cached = supabaseCache.get(jwt);
     if (cached && cached.until > now) return { ok: true, subject: cached.subject };
 
@@ -58,7 +61,7 @@ const verifySupabase = async (config: AiConfig, jwt: string, fetchImpl: typeof f
 
 export const authorize = async (
     request: Request,
-    config: AiConfig,
+    config: AuthConfig,
     fetchImpl: typeof fetch = fetch,
     now: number = Date.now()
 ): Promise<AuthResult> => {

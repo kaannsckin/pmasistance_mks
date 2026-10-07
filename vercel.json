@@ -1,5 +1,16 @@
 {
   "functions": {
-    "api/ai/*.ts": { "maxDuration": 60 }
-  }
+    "api/ai/*.ts": {
+      "maxDuration": 60
+    },
+    "api/integrations/*.ts": {
+      "maxDuration": 60
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/integrations/cron-reminder",
+      "schedule": "0 7 * * 4"
+    }
+  ]
 }

@@ -38,7 +38,7 @@ export const saveAccessToken = (token: string | null): void => {
     }
 };
 
-const authHeaders = async (mode: AiAuthMode): Promise<Record<string, string>> => {
+export const authHeaders = async (mode: AiAuthMode): Promise<Record<string, string>> => {
     if (mode === 'token') {
         const t = loadAccessToken();
         return t ? { authorization: `Bearer ${t}` } : {};

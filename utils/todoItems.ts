@@ -1,6 +1,7 @@
 import { TaskStatus, View, WorkspaceData } from '../types';
 import { canApprovePlan, canEnterData, findOverAllocations, getPlanLockStatus, MONTHS_TR } from './allocations';
 import { isExecRole } from './execReport';
+import { reportAttention } from './reportAttention';
 
 /**
  * Yapılacaklar paneli: tamamen mevcut veriden türetilen, role göre filtrelenen
@@ -158,6 +159,9 @@ export const buildTodoItems = (ws: WorkspaceData, now: Date = new Date()): TodoI
             });
         }
     }
+
+    // 8) Haftalık rapor ve müşteri görüşmeleri (role göre)
+    items.push(...reportAttention(ws, now).items);
 
     return items.sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] || a.text.localeCompare(b.text, 'tr'));
 };

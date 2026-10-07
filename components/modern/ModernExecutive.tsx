@@ -17,6 +17,7 @@ import { Icon, IconName } from './icons';
 import { PROJECT_STATUS_LABEL, RAG_TONE } from './ModernProjectHeader';
 import { RAG_DOT } from './ModernSidebar';
 import { URGENCY_TONE } from './ModernExpectations';
+import { latestPublication, weekLabel } from '../../utils/weeklyReport';
 import { BAND_META, Card, LinkButton, rowSep } from './ui';
 
 /**
@@ -207,6 +208,14 @@ const ModernExecutive: React.FC<ModernExecutiveProps> = ({ workspace, currentRol
     const expCounts = useMemo(() => urgencyCounts(workspace.expectations || []), [workspace.expectations]);
     const topExpectations = useMemo(() => sortExpectations((workspace.expectations || []).filter(isActiveExpectation)).slice(0, 3), [workspace.expectations]);
     const projectNames = useMemo(() => new Map(workspace.projects.map(p => [p.id, p.name])), [workspace.projects]);
+    const meetingsPending = useMemo(() => (workspace.customerMeetings || []).filter(m => m.status === 'pending'), [workspace.customerMeetings]);
+    // Önce onay bekleyenler, sonra yaklaşan onaylı görüşmeler (en fazla 3)
+    const meetingsShown = useMemo(() => {
+        const now = Date.now();
+        const upcoming = (workspace.customerMeetings || []).filter(m => m.status === 'approved' && new Date(m.date).getTime() >= now);
+        return [...meetingsPending, ...upcoming].sort((a, b) => (a.status === b.status ? a.date.localeCompare(b.date) : a.status === 'pending' ? -1 : 1)).slice(0, 3);
+    }, [workspace.customerMeetings, meetingsPending]);
+    const latestPub = useMemo(() => latestPublication(workspace), [workspace]);
     const report = useMemo(() => buildExecReport(workspace, year), [workspace, year]);
     const summary = useMemo(() => executiveSummary(workspace, year), [workspace, year]);
     const evm = useMemo(() => buildPortfolioEVM(workspace, year), [workspace, year]);
@@ -359,6 +368,43 @@ const ModernExecutive: React.FC<ModernExecutiveProps> = ({ workspace, currentRol
                                     </span>
                                     {due !== null && due < 0 && <span className="inline-flex items-center h-6 px-2.5 rounded-full text-[12px] font-semibold m-tone-bad whitespace-nowrap">{-due} gün gecikti</span>}
                                     {e.status === 'acknowledged' && <span className="hidden sm:inline-flex items-center h-6 px-2.5 rounded-full text-[12px] font-semibold m-tone-accent">{STATUS_LABELS[e.status]}</span>}
+                                </button>
+                            );
+                        })}
+                    </div>
+                )}
+            </section>
+
+            <section aria-labelledby="ex-meet" className="m-surface rounded-2xl p-5 flex flex-col gap-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                        <h2 id="ex-meet" className="m-0 text-[17px] font-semibold m-text">Müşteri görüşmeleri ve haftalık rapor</h2>
+                        <p className="m-0 mt-0.5 text-[14px] m-text-3">
+                            {meetingsPending.length ? `${meetingsPending.length} görüşme onayınızı bekliyor` : 'Onay bekleyen görüşme yok'}
+                            {latestPub ? ` · Son yayınlanan rapor: ${weekLabel(latestPub.year, latestPub.week)}` : ' · Henüz yayınlanmış haftalık rapor yok'}
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                        <LinkButton onClick={() => onNavigate(View.WeeklyReport)}>Haftalık rapor</LinkButton>
+                        <LinkButton onClick={() => onNavigate(View.Meetings)}>Görüşmeler</LinkButton>
+                    </div>
+                </div>
+                {meetingsShown.length > 0 && (
+                    <div className="-mx-2 flex flex-col">
+                        {meetingsShown.map((m, i) => {
+                            const sep = rowSep(i);
+                            return (
+                                <button key={m.id} type="button" onClick={() => onNavigate(View.Meetings)} className={`m-row-link flex items-center gap-3 px-2 py-2.5 min-h-[56px] ${sep.className}`} style={sep.style}>
+                                    <span className="w-11 flex-none flex flex-col items-center rounded-lg m-fill-2 py-1" aria-hidden="true">
+                                        <span className="text-[10.5px] font-semibold m-ink-bad">{new Date(m.date).toLocaleDateString('tr-TR', { month: 'short' }).toLocaleUpperCase('tr-TR')}</span>
+                                        <span className="text-[17px] font-bold m-text leading-none m-tabular">{new Date(m.date).getDate()}</span>
+                                    </span>
+                                    <span className="flex-1 min-w-0 flex flex-col gap-0.5">
+                                        <span className="text-[15px] font-semibold m-text truncate">{m.title}</span>
+                                        <span className="text-[13px] m-text-3 truncate">{[m.customer, m.projectId ? projectNames.get(m.projectId) : '', m.createdByName].filter(Boolean).join(' · ')}</span>
+                                    </span>
+                                    {m.managementAttendance && <span className="hidden sm:inline-flex items-center h-6 px-2.5 rounded-full text-[12px] font-semibold m-tone-warn whitespace-nowrap">Katılımınız isteniyor</span>}
+                                    <span className={`inline-flex items-center h-6 px-2.5 rounded-full text-[12px] font-semibold whitespace-nowrap ${m.status === 'pending' ? 'm-tone-warn' : 'm-tone-accent'}`}>{m.status === 'pending' ? 'Onay bekliyor' : 'Onaylı'}</span>
                                 </button>
                             );
                         })}

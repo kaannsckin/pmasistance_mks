@@ -131,7 +131,9 @@ const WorkspaceNavItem: React.FC<{
   return (
     <button
       onClick={() => setCurrentView(view)}
-      className={`flex items-center gap-2 px-3.5 h-9 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${
+      title={label}
+      aria-label={label}
+      className={`flex items-center gap-2 px-3 xl:px-3.5 h-9 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${
         active
           ? 'text-white shadow-sm'
           : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/60'
@@ -139,7 +141,8 @@ const WorkspaceNavItem: React.FC<{
       style={active ? { backgroundColor: 'var(--app-primary)' } : {}}
     >
       <i className={`fa-solid ${icon} text-[11px] ${active ? 'text-white' : ''}`} style={!active ? { color: 'var(--app-primary)', opacity: 0.75 } : {}}></i>
-      <span>{label}</span>
+      {/* Dar masaüstünde yalnız ikon (menü taşmasın) */}
+      <span className="hidden xl:inline">{label}</span>
     </button>
   );
 };
@@ -409,6 +412,8 @@ const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSett
             <WorkspaceNavItem view={View.Allocations} currentView={currentView} setCurrentView={setCurrentView} icon="fa-people-arrows" label="Tahsis" />
             <WorkspaceNavItem view={View.Calendar} currentView={currentView} setCurrentView={setCurrentView} icon="fa-calendar-days" label="Takvim" />
             <WorkspaceNavItem view={View.RiskReport} currentView={currentView} setCurrentView={setCurrentView} icon="fa-shield-halved" label="Riskler" />
+            <WorkspaceNavItem view={View.WeeklyReport} currentView={currentView} setCurrentView={setCurrentView} icon="fa-file-lines" label="Haftalık Rapor" />
+            <WorkspaceNavItem view={View.Meetings} currentView={currentView} setCurrentView={setCurrentView} icon="fa-handshake" label="Görüşmeler" />
             <WorkspaceNavItem view={View.Expectations} currentView={currentView} setCurrentView={setCurrentView} icon="fa-flag" label="Beklentiler" />
             <WorkspaceNavItem view={View.DataPool} currentView={currentView} setCurrentView={setCurrentView} icon="fa-database" label="Veri Havuzu" />
           </nav>
