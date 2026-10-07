@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { WeeklyReport, WorkspaceData } from '../types';
 import {
-    actorOf, advanceReport, buildEml, DEFAULT_REPORT_SETTINGS, dueDate, latestPublication, markWeekEmailed, publishWeek, reminderText, reportDictionary,
+    actorOf, advanceReport, buildEml, DEFAULT_REPORT_FLOW, DEFAULT_REPORT_SETTINGS, flowBlockers, flowStages, nextStage, previousPlansOf, returnStage, dueDate, latestPublication, markWeekEmailed, publishWeek, reminderText, reportDictionary,
     returnReportIn, saveReport, unpublishWeek, canEditReport, consolidate, createReport, editReport, findAbbreviations, fineTuneLines, glossaryFor, isoWeekOf,
     lintCounts, lintReport, locative, mailtoLink, meetingSentence, newItem, pendingAuthors, projectDepartment, renderReportHtml, renderReportText,
     returnReport, setPlanReview, setReportAiAssessment, shiftWeek, teamsChatLink, visibleReports, weekLabel, weekProgress, weekStart,
@@ -194,6 +194,51 @@ describe('birleştirme ve çıktılar', () => {
         const parsed = JSON.parse(lines[0]);
         expect(parsed.messages.map((m: { role: string }) => m.role)).toEqual(['system', 'user', 'assistant']);
         expect(JSON.parse(parsed.messages[2].content).buHafta[0].tur).toBe('delivery');
+    });
+});
+
+describe('admin akış ayarları (reportSettings.flow)', () => {
+    const rep = (kind: WeeklyReport['kind'], stage: WeeklyReport['stage']): WeeklyReport => ({ ...createReport({ kind, projectId: kind === 'project' ? 'a' : undefined, departmentCode: 'U310', year: 2026, week: 41 }, py, NOW), stage });
+
+    it('kapalı onay adımı atlanır; iade bir önceki açık adıma döner', () => {
+        const noBs = { ...DEFAULT_REPORT_FLOW, bsReview: false };
+        const none = { ...DEFAULT_REPORT_FLOW, bsReview: false, pydsReview: false };
+        expect(nextStage(rep('project', 'draft'), noBs)).toMatchObject({ stage: 'pyds_review', label: 'PYB desteğe gönder' });
+        expect(nextStage(rep('project', 'draft'), none)).toMatchObject({ stage: 'approved', action: 'submit', label: 'Raporu gönder' });
+        expect(nextStage(rep('project', 'bs_review'), { ...DEFAULT_REPORT_FLOW, pydsReview: false })).toMatchObject({ stage: 'approved', action: 'bs_approve' });
+        expect(nextStage(rep('department', 'draft'), none)?.stage).toBe('approved');
+        expect(returnStage(rep('project', 'pyds_review'), noBs)).toBe('draft');
+        expect(returnStage(rep('project', 'approved'), { ...DEFAULT_REPORT_FLOW, pydsReview: false })).toBe('bs_review');
+        expect(returnStage(rep('project', 'approved'), none)).toBe('draft');
+        expect(returnStage(rep('project', 'approved'))).toBe('pyds_review'); // varsayılan
+        expect(flowStages(noBs)).toEqual(['draft', 'pyds_review', 'approved']);
+        expect(flowStages(DEFAULT_REPORT_FLOW, 'department')).toEqual(['draft', 'pyds_review', 'approved']);
+    });
+
+    it('gönderim kuralları: PY puanı ve geçen haftanın planı zorunlu olabilir', () => {
+        const strict = { ...DEFAULT_REPORT_FLOW, requirePmScore: true, requirePlanReview: true };
+        const plans = [newItem('plan', 'A yapılacak.'), newItem('plan', 'B yapılacak.')];
+        const r = rep('project', 'draft');
+        expect(flowBlockers(r, DEFAULT_REPORT_FLOW, plans)).toEqual([]);
+        expect(flowBlockers(r, strict, plans)).toEqual(['Proje sağlığı puanı verilmeli', 'Geçen haftanın planından 2 madde değerlendirilmeli']);
+        const ok = { ...r, pmScore: 7, planReview: setPlanReview(setPlanReview(undefined, plans[0], 'done'), plans[1], 'slipped') };
+        expect(flowBlockers(ok, strict, plans)).toEqual([]);
+        expect(flowBlockers({ ...r, stage: 'bs_review' }, strict, plans)).toEqual([]); // yalnız taslaktan gönderim
+        expect(flowBlockers(rep('department', 'draft'), strict, plans)).toEqual([]);
+    });
+
+    it('saveReport akışı ve kuralları uygular', () => {
+        const prev = { ...rep('project', 'approved'), id: 'prev', week: 40, nextWeek: [newItem('plan', '13 Ekim 2026 tarihinde kabul toplantısı yapılacak.')] };
+        const ws = { ...buildWs(), weeklyReports: [prev], reportSettings: { ...DEFAULT_REPORT_SETTINGS, flow: { ...DEFAULT_REPORT_FLOW, bsReview: false, requirePlanReview: true } } };
+        const id = { role: 'py' as const, personId: 'pm1' };
+        expect(previousPlansOf(ws.weeklyReports, rep('project', 'draft'))).toHaveLength(1);
+        const draft = { ...rep('project', 'draft'), thisWeek: [newItem('delivery', '3 Ekim 2026 tarihinde Gebze Belediyesine sürüm 2 teslim edildi.')] };
+        expect(saveReport(ws, id, draft, py, { advance: true, now: NOW })).toBeNull(); // plan değerlendirilmedi
+        const reviewed = { ...draft, planReview: setPlanReview(undefined, prev.nextWeek[0], 'done') };
+        const saved = saveReport(ws, id, reviewed, py, { advance: true, now: NOW })!;
+        expect(saved.report.stage).toBe('pyds_review'); // BS adımı kapalı
+        const back = returnReportIn({ ...ws, weeklyReports: saved.reports }, { role: 'pyb_destek' }, saved.report.id, pyds, 'Düzeltin')!;
+        expect(back.report.stage).toBe('draft');
     });
 });
 

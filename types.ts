@@ -183,10 +183,43 @@ export type PermissionKey =
   | 'screen.executive' | 'screen.admin' | 'portfolio.viewAll'
   | 'project.create' | 'project.assignOwner' | 'datapool.edit' | 'plan.approve'
   | 'report.review' | 'health.rate' | 'expectation.respond' | 'meeting.review'
-  | 'notes.private';
+  | 'notes.private' | 'app.audit' | 'app.backup' | 'app.dataHealth';
 
 /** Admin'in değiştirdiği roller: rol → verilen yetkilerin tam listesi (olmayan rol varsayılanı kullanır) */
 export type RolePermissions = Partial<Record<UserRole, PermissionKey[]>>;
+
+/** Proje içi sekmeler (admin rol bazında gizleyebilir; genel bakış her zaman açık) */
+export type ProjectSectionKey = 'overview' | 'board' | 'list' | 'timeline' | 'risks' | 'team' | 'goals' | 'workPackages' | 'assistant';
+/** Yönetim ekranı kartları (admin rol bazında gizleyebilir) */
+export type ExecSectionKey = 'summary' | 'kpis' | 'expectations' | 'meetings' | 'health' | 'attention' | 'approvals' | 'risks' | 'departments' | 'changes';
+export type TaskSortKey = 'smart' | 'priority' | 'due' | 'name';
+export type RiskSortKey = 'score' | 'recent';
+export type ProjectSortKey = 'health' | 'name' | 'progress' | 'overdue';
+
+/**
+ * Rolün göreceği kayıtlar ve varsayılan sıralamalar (admin ayarlar). Filtreler
+ * listeleri daraltır; sağlık skoru, EVM ve sayaçlar tam veriden hesaplanır.
+ * Olmayan alan varsayılanı kullanır (her şey görünür).
+ */
+export interface RoleViewConfig {
+  projectSections?: ProjectSectionKey[];
+  execSections?: ExecSectionKey[];
+  projectStatuses?: ProjectStatus[];
+  minTaskPriority?: 'Blocker' | 'High' | 'Medium' | 'Low';
+  minRiskScore?: number; // 0 · 8 (orta ve üstü) · 15 (yüksek)
+  showClosedRisks?: boolean;
+  taskSort?: TaskSortKey;
+  riskSort?: RiskSortKey;
+  projectSort?: ProjectSortKey;
+}
+export type ViewConfig = Partial<Record<UserRole, RoleViewConfig>>;
+
+/** Sağlık puanı yöntemi (admin ayarlar): girdi ağırlıkları (0 = kapalı) ve bant eşikleri */
+export interface HealthConfig {
+  weights?: Partial<Record<HealthFactorKey, number>>;
+  bandGood?: number;
+  bandWarn?: number;
+}
 
 /** Profil: bir kişinin hangi rolle çalıştığı (admin tanımlar; profil değiştirme penceresinde listelenir) */
 export interface UserProfile {
@@ -418,6 +451,8 @@ export interface WorkspaceData {
   pmoRatings?: PmoRating[]; // PMO'nun haftalık proje sağlığı puanları (sağlık modelinin hedef değişkeni)
   healthHistory?: HealthWeekSnapshot[]; // Haftalık sağlık fotoğrafları (özellik vektörü + skor)
   rolePermissions?: RolePermissions; // Admin'in rol yetkisi değişiklikleri
+  viewConfig?: ViewConfig; // Admin'in rol bazlı görünüm, filtre ve sıralama ayarları
+  healthConfig?: HealthConfig; // Admin'in sağlık puanı yöntemi ayarları
   profiles?: UserProfile[]; // Admin'in tanımladığı profiller (kişi ↔ rol)
   auditLog?: AuditEntry[]; // Kritik aksiyonların günlüğü (en yeni başta)
   settings: WorkspaceSettings;
@@ -596,6 +631,17 @@ export interface ReportSettings {
   abbreviations: Abbreviation[];
   /** Raporun son günü (1 = Pazartesi … 5 = Cuma) */
   dueWeekday: number;
+  /** Onay akışı ve kurallar (admin ayarlar); yoksa varsayılan akış */
+  flow?: ReportFlow;
+}
+
+/** Haftalık rapor akışı: hangi onay adımları var, gönderimde neler zorunlu */
+export interface ReportFlow {
+  bsReview: boolean; // bölüm sorumlusu onayı
+  pydsReview: boolean; // PYB destek format denetimi
+  requirePmScore: boolean; // PY sağlık puanı olmadan gönderilemez
+  requirePlanReview: boolean; // geçen haftanın planı değerlendirilmeden gönderilemez
+  aiOnPublish: boolean; // hafta yayınlanırken AI metin puanı
 }
 
 // ---------------------------------------------------------------------------
@@ -637,7 +683,7 @@ export type AuditAction =
   | 'project.create' | 'project.delete' | 'project.owner' | 'project.rag'
   | 'risk.add' | 'risk.close'
   | 'plan.submit' | 'plan.approve' | 'plan.reject' | 'plan.unlock'
-  | 'data.import' | 'identity.change' | 'health.fix' | 'health.rate' | 'snapshot.create' | 'access.update'
+  | 'data.import' | 'identity.change' | 'health.fix' | 'health.rate' | 'snapshot.create' | 'access.update' | 'config.update'
   | 'ai.apply'
   | 'expectation.create' | 'expectation.respond' | 'expectation.close'
   | 'report.submit' | 'report.approve' | 'report.return' | 'report.publish'

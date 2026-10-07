@@ -12,7 +12,7 @@ const SEV: Record<HealthSeverity, { label: string; tone: string; ink: string; ic
 const ORDER: HealthSeverity[] = ['error', 'warn', 'info'];
 
 /** Veri sağlığı denetimi: yetim tahsis, eşleşmeyen atama, mükerrer kayıt, eksik alan; tek tıkla düzeltme */
-const DataHealthSheet: React.FC<{ workspace: WorkspaceData; onApplyFix: (fix: HealthFix) => void; onClose: () => void }> = ({ workspace, onApplyFix, onClose }) => {
+export const DataHealthPanel: React.FC<{ workspace: WorkspaceData; onApplyFix: (fix: HealthFix) => void }> = ({ workspace, onApplyFix }) => {
     const report = useMemo(() => analyzeDataHealth(workspace), [workspace]);
     const [sev, setSev] = useState<HealthSeverity | null>(null);
     const [cat, setCat] = useState<HealthCategory | null>(null);
@@ -20,7 +20,7 @@ const DataHealthSheet: React.FC<{ workspace: WorkspaceData; onApplyFix: (fix: He
     const shown = report.issues.filter(i => (!sev || i.severity === sev) && (!cat || i.category === cat));
 
     return (
-        <Sheet xl title="Veri sağlığı" subtitle="Gerçek veriyle çalışmadan önce tutarsızlıkları bulun ve düzeltin." onClose={onClose}>
+        <>
             <section aria-label="Özet" className="grid grid-cols-3 gap-3">
                 {ORDER.map(s => {
                     const active = sev === s;
@@ -69,8 +69,14 @@ const DataHealthSheet: React.FC<{ workspace: WorkspaceData; onApplyFix: (fix: He
                     )}
                 </>
             )}
-        </Sheet>
+        </>
     );
 };
+
+const DataHealthSheet: React.FC<{ workspace: WorkspaceData; onApplyFix: (fix: HealthFix) => void; onClose: () => void }> = ({ workspace, onApplyFix, onClose }) => (
+    <Sheet xl title="Veri sağlığı" subtitle="Gerçek veriyle çalışmadan önce tutarsızlıkları bulun ve düzeltin." onClose={onClose}>
+        <DataHealthPanel workspace={workspace} onApplyFix={onApplyFix} />
+    </Sheet>
+);
 
 export default DataHealthSheet;

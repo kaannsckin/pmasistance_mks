@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { WorkspaceData } from '../../types';
 import { ProjectHealth } from '../../utils/executive';
-import { BAND_GOOD, BAND_WARN, calibrationStatus, CONFIDENCE_LABELS, HEALTH_FACTORS, HEALTH_MODEL_VERSION, PERCEPTION_GAP_ALERT } from '../../utils/healthModel';
+import { calibrationStatus, CONFIDENCE_LABELS, HEALTH_FACTORS, healthSettingsOf, PERCEPTION_GAP_ALERT } from '../../utils/healthModel';
 import { Icon, IconName } from './icons';
 import { BAND_META, rowSep, Sheet } from './ui';
 
@@ -58,10 +58,11 @@ const NEXT_STEPS: { icon: IconName; title: string; text: React.ReactNode }[] = [
 
 const HealthModelSheet: React.FC<{ workspace: WorkspaceData; onClose: () => void; health?: ProjectHealth }> = ({ workspace, onClose, health }) => {
     const cal = useMemo(() => calibrationStatus(workspace), [workspace]);
+    const settings = useMemo(() => healthSettingsOf(workspace), [workspace]);
     const progress = Math.min(1, cal.labeled / cal.needed);
 
     return (
-        <Sheet wide title="Sağlık skoru nasıl hesaplanır?" subtitle={`Model ${HEALTH_MODEL_VERSION} · uzman ağırlıklı bileşik skor`} onClose={onClose}>
+        <Sheet wide title="Sağlık skoru nasıl hesaplanır?" subtitle={`Model ${settings.version} · ${settings.customized ? 'yönetici ayarlı' : 'uzman ağırlıklı'} bileşik skor`} onClose={onClose}>
             {health && (
                 <Section title={health.name} icon="gauge" subtitle="Bu projenin girdileri ve skora katkıları">
                     <div className="flex flex-wrap items-center gap-3">
@@ -108,16 +109,17 @@ const HealthModelSheet: React.FC<{ workspace: WorkspaceData; onClose: () => void
                     <><b>x<sub>i</sub></b>: girdinin 0–1 arası normalize değeri (1 = sağlıklı). Kurallar aşağıdaki tabloda.</>,
                     <><b>w<sub>i</sub></b>: uzman ağırlığı, toplamı 1. Verisi olmayan girdi paydan da çıkar; ağırlığı diğerlerine orantılı dağılır.</>,
                     <><b>Kapsam</b> = verisi olan girdilerin Σw<sub>i</sub>'si → güven: %70 ve üstü yüksek, %45–69 orta, altı düşük.</>,
-                    <><b>Bantlar</b>: {BAND_GOOD} ve üstü Sağlıklı · {BAND_WARN}–{BAND_GOOD - 1} İzlemede · {BAND_WARN} altı Sorunlu.</>,
+                    <><b>Bantlar</b>: {settings.bandGood} ve üstü Sağlıklı · {settings.bandWarn}–{settings.bandGood - 1} İzlemede · {settings.bandWarn} altı Sorunlu.</>,
                     <><b>Skoru düşürenler</b>: her girdinin kaybı 100 × w<sub>i</sub>(1 − x<sub>i</sub>) ÷ Σw<sub>i</sub>; en büyük kayıp başta listelenir.</>,
                     <><b>Algı farkı</b> = ort(RAG, PY puanı) − nesnel girdilerin ağırlıklı ortalaması (AI metin puanı PY'nin kendi metninden türediği için iki tarafa da girmez). +{num(PERCEPTION_GAP_ALERT)} ve üstü “karpuz proje” uyarısıdır: dışı yeşil, içi kırmızı.</>,
                 ]} />
             </Section>
 
-            <Section title="Girdiler ve ağırlıklar" icon="sliders" subtitle="Uzman ağırlıkları (β₀) — regresyonun başlangıç noktası">
+            <Section title="Girdiler ve ağırlıklar" icon="sliders" subtitle={settings.customized ? 'Yöneticinin ayarladığı ağırlıklar; kapalı girdiler skora girmez' : 'Uzman ağırlıkları (β₀) — regresyonun başlangıç noktası'}>
                 <div className="-mx-1 flex flex-col">
                     {HEALTH_FACTORS.map((f, i) => {
                         const sep = rowSep(i);
+                        const w = settings.weights[f.key];
                         return (
                             <div key={f.key} className={`flex items-start gap-3 px-1 py-2 ${sep.className}`} style={sep.style}>
                                 <span className="flex-1 min-w-0 flex flex-col gap-0.5">
@@ -125,7 +127,7 @@ const HealthModelSheet: React.FC<{ workspace: WorkspaceData; onClose: () => void
                                     <span className="text-[13px] m-text-2">{f.rule}</span>
                                     <span className="text-[12.5px] m-text-3">{f.source}</span>
                                 </span>
-                                <span className="inline-flex items-center h-7 px-2.5 rounded-full text-[13px] font-semibold m-tabular m-tone-accent flex-none">{pct(f.weight)}</span>
+                                <span className={`inline-flex items-center h-7 px-2.5 rounded-full text-[13px] font-semibold m-tabular flex-none ${w > 0 ? 'm-tone-accent' : 'm-tone-hold'}`}>{w > 0 ? pct(w) : 'Kapalı'}</span>
                             </div>
                         );
                     })}
@@ -151,7 +153,7 @@ const HealthModelSheet: React.FC<{ workspace: WorkspaceData; onClose: () => void
                 </div>
                 <div className="flex flex-col gap-1.5">
                     <div className="flex justify-between text-[13px] m-text-2">
-                        <span>Regresyon için gereken: ~{cal.needed} etiketli gözlem (girdi başına ~10)</span>
+                        <span>Regresyon için gereken: ~{cal.needed} etiketli gözlem (açık girdi başına ~10)</span>
                         <span className="m-tabular">{cal.labeled}/{cal.needed}</span>
                     </div>
                     <span role="progressbar" aria-label="Kalibrasyon için toplanan veri" aria-valuemin={0} aria-valuemax={cal.needed} aria-valuenow={cal.labeled} className="block h-2 rounded-full m-fill overflow-hidden">

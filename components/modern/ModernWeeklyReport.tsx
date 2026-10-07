@@ -6,7 +6,7 @@ import { Identity, managedDepartmentCode, ownsProject } from '../../utils/rbac';
 import { relativeTime } from '../../utils/recentChanges';
 import {
     actorOf, createReport, dueDate, findReport, isoWeekOf, isReportSteward, isWeekPublished, latestPublication, lintCounts, lintReport, pendingAuthors,
-    projectDepartment, reportDictionary, reportSettingsOf, shiftWeek, STAGE_LABELS, visibleReports, weekLabel, weekProgress,
+    nextStage, projectDepartment, reportDictionary, reportFlowOf, reportSettingsOf, shiftWeek, STAGE_LABELS, visibleReports, weekLabel, weekProgress,
 } from '../../utils/weeklyReport';
 import { Icon } from './icons';
 import { rowSep } from './ui';
@@ -181,10 +181,11 @@ const ModernWeeklyReport: React.FC<ModernWeeklyReportProps> = ({
                 onSave={(r: WeeklyReport) => onSaveReport(r)}
                 onAdvance={(r: WeeklyReport) => {
                     const from = (live || open).stage;
+                    const to = nextStage(live || open, reportFlowOf(workspace))?.stage;
                     const ok = onAdvanceReport(r);
                     if (ok) {
                         setOpen(null);
-                        setNotice({ kind: 'ok', text: from === 'draft' ? (r.kind === 'department' ? 'PYB desteğe gönderildi.' : 'Bölüm sorumlusuna gönderildi.') : from === 'bs_review' ? 'Onaylandı, PYB desteğe gönderildi.' : 'Format onaylandı; hafta yayınlanmaya hazır.' });
+                        setNotice({ kind: 'ok', text: to === 'bs_review' ? 'Bölüm sorumlusuna gönderildi.' : to === 'pyds_review' ? (from === 'draft' ? 'PYB desteğe gönderildi.' : 'Onaylandı, PYB desteğe gönderildi.') : from === 'pyds_review' ? 'Format onaylandı; hafta yayınlanmaya hazır.' : 'Onaylandı; hafta yayınlanmaya hazır.' });
                     }
                     return ok;
                 }}
@@ -238,7 +239,7 @@ const ModernWeeklyReport: React.FC<ModernWeeklyReportProps> = ({
                 <div role="status" className={`rounded-2xl px-4 py-3 flex items-center gap-3 text-[15px] ${overdue ? 'm-tone-bad' : 'm-tone-warn'}`}>
                     <Icon name="clock" size={18} />
                     {overdue ? 'Son gün geçti: ' : 'Son gün: '}
-                    {due.toLocaleDateString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long' })} — {myUnsent} proje raporu henüz bölüm sorumlusuna gönderilmedi.
+                    {due.toLocaleDateString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long' })} — {myUnsent} proje raporu henüz gönderilmedi.
                 </div>
             )}
             <Notice notice={notice} onClose={() => setNotice(null)} />

@@ -7,6 +7,8 @@ import { buildExecutiveBrief } from '../../utils/execBrief';
 import { attentionProjects, attentionReasons, buildExecProjectRows, ExecProjectRow, ExecSortKey, filterExecRows, healthDistribution, SortDir, sortExecRows } from '../../utils/execOverview';
 import { buildExecReport, exportExecReportToExcel } from '../../utils/execReport';
 import { executiveSummary, HealthBand } from '../../utils/executive';
+import { bandOf, healthSettingsOf } from '../../utils/healthModel';
+import { projectPassesView, riskPassesView, RoleView, viewFor } from '../../utils/viewConfig';
 import { CATEGORY_LABELS, daysUntilNeed, isActiveExpectation, sortExpectations, STATUS_LABELS, URGENCY_LABELS, URGENCY_ORDER, urgencyCounts, waitingLabel } from '../../utils/expectations';
 import { exportExecReportToPpt } from '../../utils/pptExport';
 import { recentChanges, relativeTime } from '../../utils/recentChanges';
@@ -35,9 +37,12 @@ interface ModernExecutiveProps {
     onOpenProject: (projectId: string) => void;
     onTakeSnapshot: (year: number) => void;
     onNavigate: (view: View) => void;
-    onOpenAudit: () => void;
+    /** Denetim günlüğü (app.audit yetkisi); yoksa "Son 7 gün" kartı gösterilmez */
+    onOpenAudit?: () => void;
     /** Yönetimden beklentiler sayfası (aciliyet süzgeciyle) */
     onOpenExpectations: (urgency?: ExpectationUrgency) => void;
+    /** Admin görünüm ayarı (kartlar, proje durumu, risk eşiği, sıralama) */
+    view?: RoleView;
 }
 
 type Screen = 'overview' | 'projects' | 'details';
@@ -86,11 +91,12 @@ const AllProjects: React.FC<{
     onOpenProject: (id: string) => void;
     onExport: () => void;
     onInfo: () => void;
-}> = ({ rows, year, initialBand, onBack, onOpenProject, onExport, onInfo }) => {
+    initialSort?: ExecSortKey;
+}> = ({ rows, year, initialBand, onBack, onOpenProject, onExport, onInfo, initialSort = 'health' as ExecSortKey }) => {
     const [query, setQuery] = useState('');
     const [band, setBand] = useState<BandFilter>(initialBand);
     const [status, setStatus] = useState<ProjectStatus | 'all'>('all');
-    const [sort, setSort] = useState<{ key: ExecSortKey; dir: SortDir }>({ key: 'health', dir: 'asc' });
+    const [sort, setSort] = useState<{ key: ExecSortKey; dir: SortDir }>({ key: initialSort, dir: initialSort === 'progress' || initialSort === 'name' || initialSort === 'health' ? 'asc' : 'desc' });
 
     const attentionIds = useMemo(() => new Set(attentionProjects(rows, rows.length).map(r => r.projectId)), [rows]);
     const shown = useMemo(() => {
@@ -197,7 +203,9 @@ const AllProjects: React.FC<{
 
 // ------------------------------------------------------------------ Genel bakış
 
-const ModernExecutive: React.FC<ModernExecutiveProps> = ({ workspace, currentRole, onOpenProject, onTakeSnapshot, onNavigate, onOpenAudit, onOpenExpectations }) => {
+const ModernExecutive: React.FC<ModernExecutiveProps> = ({ workspace, currentRole, onOpenProject, onTakeSnapshot, onNavigate, onOpenAudit, onOpenExpectations, view: viewProp }) => {
+    const view = viewProp || viewFor(undefined, currentRole);
+    const show = (k: Parameters<typeof view.execSections.has>[0]) => view.execSections.has(k);
     const thisYear = new Date().getFullYear();
     const [year, setYear] = useState(thisYear);
     const [screen, setScreen] = useState<Screen>('overview');
@@ -207,7 +215,9 @@ const ModernExecutive: React.FC<ModernExecutiveProps> = ({ workspace, currentRol
     const [pptBusy, setPptBusy] = useState(false);
     const [healthInfo, setHealthInfo] = useState(false);
 
-    const rows = useMemo(() => buildExecProjectRows(workspace, year), [workspace, year]);
+    // Admin ayarındaki proje durumları dışındaki projeler yönetim ekranının hesaplarına ve listelerine girmez
+    const scoped = useMemo(() => (view.projectStatuses ? { ...workspace, projects: workspace.projects.filter(p => projectPassesView(view, p)) } : workspace), [workspace, view]);
+    const rows = useMemo(() => buildExecProjectRows(scoped, year), [scoped, year]);
     const dist = useMemo(() => healthDistribution(rows), [rows]);
     const attention = useMemo(() => attentionProjects(rows, 6), [rows]);
     const attentionTotal = useMemo(() => attentionProjects(rows, rows.length).length, [rows]);
@@ -222,17 +232,17 @@ const ModernExecutive: React.FC<ModernExecutiveProps> = ({ workspace, currentRol
         return [...meetingsPending, ...upcoming].sort((a, b) => (a.status === b.status ? a.date.localeCompare(b.date) : a.status === 'pending' ? -1 : 1)).slice(0, 3);
     }, [workspace.customerMeetings, meetingsPending]);
     const latestPub = useMemo(() => latestPublication(workspace), [workspace]);
-    const report = useMemo(() => buildExecReport(workspace, year), [workspace, year]);
-    const summary = useMemo(() => executiveSummary(workspace, year), [workspace, year]);
-    const evm = useMemo(() => buildPortfolioEVM(workspace, year), [workspace, year]);
+    const report = useMemo(() => buildExecReport(scoped, year), [scoped, year]);
+    const summary = useMemo(() => executiveSummary(scoped, year), [scoped, year]);
+    const evm = useMemo(() => buildPortfolioEVM(scoped, year), [scoped, year]);
     const org = useMemo(() => orgCapacity(workspace, year), [workspace, year]);
-    const risks = useMemo(() => topPortfolioRisks(workspace).slice(0, 4), [workspace]);
+    const risks = useMemo(() => topPortfolioRisks(scoped).filter(r => riskPassesView(view, r)).slice(0, 4), [scoped, view]);
     const changes = useMemo(() => recentChanges(workspace, new Date(), 7), [workspace]);
-    const brief = useMemo(() => (showBrief ? buildExecutiveBrief(workspace, year) : ''), [showBrief, workspace, year]);
+    const brief = useMemo(() => (showBrief ? buildExecutiveBrief(scoped, year, new Date(), !!onOpenAudit) : ''), [showBrief, scoped, year, onOpenAudit]);
     const statusMonth = defaultStatusMonth(year);
     const pending = rows.filter(r => r.lockStatus === 'submitted');
     const orgScore = rows.length ? Math.round(rows.reduce((s, r) => s + r.score, 0) / rows.length) : 100;
-    const orgBand: HealthBand = orgScore >= 75 ? 'good' : orgScore >= 50 ? 'warn' : 'bad';
+    const orgBand: HealthBand = bandOf(orgScore, healthSettingsOf(workspace));
     const k = report.kpi;
     const depts = [...org.departments].filter(d => d.utilization !== null).sort((a, b) => (b.utilization || 0) - (a.utilization || 0)).slice(0, 6);
 
@@ -250,7 +260,7 @@ const ModernExecutive: React.FC<ModernExecutiveProps> = ({ workspace, currentRol
         return (
             <>
                 {infoSheet}
-                <AllProjects rows={rows} year={year} initialBand={projectsBand} onBack={() => setScreen('overview')} onOpenProject={onOpenProject} onExport={() => exportExecReportToExcel(report)} onInfo={() => setHealthInfo(true)} />
+                <AllProjects rows={rows} year={year} initialBand={projectsBand} onBack={() => setScreen('overview')} onOpenProject={onOpenProject} onExport={() => exportExecReportToExcel(report)} onInfo={() => setHealthInfo(true)} initialSort={view.projectSort ?? 'health'} />
             </>
         );
     }
@@ -259,7 +269,7 @@ const ModernExecutive: React.FC<ModernExecutiveProps> = ({ workspace, currentRol
             <div className="flex flex-col gap-4">
                 <BackButton onClick={() => setScreen('overview')} />
                 <div className="m-legacy">
-                    <ExecutiveView workspace={workspace} currentRole={currentRole} onOpenProject={onOpenProject} onTakeSnapshot={onTakeSnapshot} />
+                    <ExecutiveView workspace={workspace} currentRole={currentRole} onOpenProject={onOpenProject} onTakeSnapshot={onTakeSnapshot} showChanges={!!onOpenAudit} />
                 </div>
             </div>
         );
@@ -337,9 +347,9 @@ const ModernExecutive: React.FC<ModernExecutiveProps> = ({ workspace, currentRol
                 </div>
             </header>
 
-            <p className="m-0 text-[17px] leading-relaxed m-text-2 max-w-[78ch]">{summary}</p>
+            {show('summary') && <p className="m-0 text-[17px] leading-relaxed m-text-2 max-w-[78ch]">{summary}</p>}
 
-            <section aria-label="Göstergeler" className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+            {show('kpis') && <section aria-label="Göstergeler" className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
                 {kpis.map(kp => (
                     <div key={kp.label} className="m-surface rounded-2xl px-5 py-4 flex flex-col gap-1">
                         <span className="text-[15px] m-text-3">{kp.label}</span>
@@ -347,9 +357,9 @@ const ModernExecutive: React.FC<ModernExecutiveProps> = ({ workspace, currentRol
                         <span className={`text-[14px] ${kp.noteTone}`}>{kp.note}</span>
                     </div>
                 ))}
-            </section>
+            </section>}
 
-            <section aria-labelledby="ex-expect" className="m-surface rounded-2xl p-5 flex flex-col gap-4">
+            {show('expectations') && <section aria-labelledby="ex-expect" className="m-surface rounded-2xl p-5 flex flex-col gap-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                         <h2 id="ex-expect" className="m-0 text-[17px] font-semibold m-text">Yönetimden beklentiler</h2>
@@ -387,9 +397,9 @@ const ModernExecutive: React.FC<ModernExecutiveProps> = ({ workspace, currentRol
                         })}
                     </div>
                 )}
-            </section>
+            </section>}
 
-            <section aria-labelledby="ex-meet" className="m-surface rounded-2xl p-5 flex flex-col gap-4">
+            {show('meetings') && <section aria-labelledby="ex-meet" className="m-surface rounded-2xl p-5 flex flex-col gap-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                         <h2 id="ex-meet" className="m-0 text-[17px] font-semibold m-text">Müşteri görüşmeleri ve haftalık rapor</h2>
@@ -424,9 +434,9 @@ const ModernExecutive: React.FC<ModernExecutiveProps> = ({ workspace, currentRol
                         })}
                     </div>
                 )}
-            </section>
+            </section>}
 
-            <section aria-labelledby="ex-dist" className="m-surface rounded-2xl p-5 flex flex-col gap-4">
+            {show('health') && <section aria-labelledby="ex-dist" className="m-surface rounded-2xl p-5 flex flex-col gap-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="flex items-start gap-1.5 min-w-0">
                         <div className="min-w-0">
@@ -454,10 +464,10 @@ const ModernExecutive: React.FC<ModernExecutiveProps> = ({ workspace, currentRol
                         </button>
                     ))}
                 </div>
-            </section>
+            </section>}
 
-            <div className="grid gap-5 items-start" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(420px, 100%), 1fr))' }}>
-                <Card
+            {(show('attention') || show('approvals') || show('risks')) && <div className="grid gap-5 items-start" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(420px, 100%), 1fr))' }}>
+                {show('attention') && <Card
                     title="Dikkat isteyen projeler"
                     labelledBy="ex-attn"
                     action={attentionTotal > attention.length ? <LinkButton onClick={() => openProjects('attention')}>Tümü ({attentionTotal})</LinkButton> : undefined}
@@ -481,10 +491,10 @@ const ModernExecutive: React.FC<ModernExecutiveProps> = ({ workspace, currentRol
                             ))}
                         </div>
                     )}
-                </Card>
+                </Card>}
 
-                <div className="flex flex-col gap-5 min-w-0">
-                    <Card
+                {(show('approvals') || show('risks')) && <div className="flex flex-col gap-5 min-w-0">
+                    {show('approvals') && <Card
                         title="Bekleyen plan onayları"
                         labelledBy="ex-appr"
                         action={pending.length > 0 ? <LinkButton onClick={() => onNavigate(View.Allocations)}>Onayla</LinkButton> : undefined}
@@ -497,8 +507,8 @@ const ModernExecutive: React.FC<ModernExecutiveProps> = ({ workspace, currentRol
                                 {pending.slice(0, 3).map(p => p.name).join(', ')}{pending.length > 3 ? ` ve ${pending.length - 3} proje daha` : ''}
                             </p>
                         )}
-                    </Card>
-                    <Card title="En yüksek riskler" labelledBy="ex-risks" action={<LinkButton onClick={() => onNavigate(View.RiskReport)}>Risk raporu</LinkButton>}>
+                    </Card>}
+                    {show('risks') && <Card title="En yüksek riskler" labelledBy="ex-risks" subtitle={view.minRiskScore ? `Skoru ${view.minRiskScore} ve üstü` : undefined} action={<LinkButton onClick={() => onNavigate(View.RiskReport)}>Risk raporu</LinkButton>}>
                         {risks.length === 0 ? (
                             <p className="m-0 text-[15px] m-text-3">Açık risk yok.</p>
                         ) : (
@@ -514,12 +524,12 @@ const ModernExecutive: React.FC<ModernExecutiveProps> = ({ workspace, currentRol
                                 ))}
                             </div>
                         )}
-                    </Card>
-                </div>
-            </div>
+                    </Card>}
+                </div>}
+            </div>}
 
-            <div className="grid gap-5 items-start" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(420px, 100%), 1fr))' }}>
-                <Card title="Birim doluluğu" labelledBy="ex-dept" action={<LinkButton onClick={() => onNavigate(View.Allocations)}>Ekip ve tahsis</LinkButton>}>
+            {(show('departments') || (show('changes') && onOpenAudit)) && <div className="grid gap-5 items-start" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(420px, 100%), 1fr))' }}>
+                {show('departments') && <Card title="Birim doluluğu" labelledBy="ex-dept" action={<LinkButton onClick={() => onNavigate(View.Allocations)}>Ekip ve tahsis</LinkButton>}>
                     {depts.length === 0 ? (
                         <p className="m-0 text-[15px] m-text-3">Birim kapasitesi tanımlı değil.</p>
                     ) : depts.map(d => {
@@ -536,8 +546,8 @@ const ModernExecutive: React.FC<ModernExecutiveProps> = ({ workspace, currentRol
                             </div>
                         );
                     })}
-                </Card>
-                <Card title="Son 7 gün" labelledBy="ex-changes" action={<LinkButton onClick={onOpenAudit}>Denetim günlüğü</LinkButton>}>
+                </Card>}
+                {show('changes') && onOpenAudit && <Card title="Son 7 gün" labelledBy="ex-changes" action={<LinkButton onClick={onOpenAudit}>Denetim günlüğü</LinkButton>}>
                     {changes.length === 0 ? (
                         <p className="m-0 text-[15px] m-text-3">Son 7 günde kayıtlı değişiklik yok.</p>
                     ) : (
@@ -551,8 +561,8 @@ const ModernExecutive: React.FC<ModernExecutiveProps> = ({ workspace, currentRol
                             {changes.length > 5 && <span className="text-[13px] m-text-3">ve {changes.length - 5} değişiklik daha</span>}
                         </div>
                     )}
-                </Card>
-            </div>
+                </Card>}
+            </div>}
         </div>
     );
 };

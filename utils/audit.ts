@@ -25,6 +25,7 @@ export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
     'health.fix': 'Veri düzeltmesi uygulandı',
     'health.rate': 'PMO sağlık puanı verildi',
     'access.update': 'Yetki / profil değişti',
+    'config.update': 'Uygulama ayarı değişti',
     'snapshot.create': 'Anlık görüntü alındı',
     'ai.apply': 'AI önerisi uygulandı',
     'expectation.create': 'Yönetimden beklenti eklendi',
@@ -56,6 +57,7 @@ export const AUDIT_ACTION_ICONS: Record<AuditAction, string> = {
     'health.fix': 'fa-wrench',
     'health.rate': 'fa-heart-pulse',
     'access.update': 'fa-user-lock',
+    'config.update': 'fa-sliders',
     'snapshot.create': 'fa-camera',
     'ai.apply': 'fa-wand-magic-sparkles',
     'expectation.create': 'fa-flag',
@@ -128,7 +130,7 @@ export const filterAudit = (
 
 export const AUDIT_GROUP_LABELS: Record<string, string> = {
     project: 'Proje', risk: 'Risk', plan: 'Plan', data: 'Veri', identity: 'Kimlik', health: 'Veri sağlığı',
-    snapshot: 'Anlık görüntü', ai: 'AI', expectation: 'Beklenti', report: 'Haftalık rapor', meeting: 'Görüşme', access: 'Yetki',
+    snapshot: 'Anlık görüntü', ai: 'AI', expectation: 'Beklenti', report: 'Haftalık rapor', meeting: 'Görüşme', access: 'Yetki', config: 'Ayar',
 };
 
 const csvCell = (v: string) => (/[";\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);

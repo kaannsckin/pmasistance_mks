@@ -69,3 +69,10 @@ export const Field: React.FC<{ label: string; htmlFor?: string; children: React.
         {hint && <span className="text-[13px] m-text-3">{hint}</span>}
     </div>
 );
+
+/** Admin görünüm ayarının listeyi daralttığını belirten ince not */
+export const ViewFilterNote: React.FC<{ text: string }> = ({ text }) => (
+    <p role="note" className="m-0 self-start inline-flex items-center gap-2 min-h-[32px] px-3 rounded-full m-fill-2 text-[13px] m-text-2">
+        <Icon name="eye" size={15} />{text}
+    </p>
+);

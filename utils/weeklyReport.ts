@@ -1,5 +1,5 @@
 import {
-    Abbreviation, AiReportAssessment, MeetingDetails, PlanReviewItem, PlanReviewStatus, Project, ReportCategory, ReportEvent, ReportItem, ReportSettings, ReportStage, UserRole, WeeklyPublication,
+    Abbreviation, AiReportAssessment, MeetingDetails, PlanReviewItem, PlanReviewStatus, Project, ReportCategory, ReportEvent, ReportFlow, ReportItem, ReportSettings, ReportStage, UserRole, WeeklyPublication,
     WeeklyReport, WorkspaceData,
 } from '../types';
 import { ROLE_LABELS } from './allocations';
@@ -13,6 +13,8 @@ import { Identity, managedDepartmentCode, ownsProject } from './rbac';
  * Akış: PY projesinin raporunu yazar → bölüm sorumlusu (BS) düzenler/onaylar
  * ve bölüm eklemelerini yazar → PYB destek (PYDS) formatı denetler/düzenler →
  * hafta yayınlanır; müdürler bölüm gruplu birleşik raporu görür (bilgilerine).
+ * Admin onay adımlarını kapatabilir ve gönderim kuralları ekleyebilir
+ * (reportSettings.flow); kapalı adım atlanır.
  */
 
 // ---------------------------------------------------------------- haftalar
@@ -104,7 +106,7 @@ export const setPlanReview = (items: PlanReviewItem[] | undefined, plan: ReportI
 
 // ---------------------------------------------------------------- roller ve akış
 
-type WsLike = Pick<WorkspaceData, 'people' | 'projects' | 'allocations'> & Partial<Pick<WorkspaceData, 'weeklyReports' | 'weeklyPublications'>>;
+type WsLike = Pick<WorkspaceData, 'people' | 'projects' | 'allocations'> & Partial<Pick<WorkspaceData, 'weeklyReports' | 'weeklyPublications' | 'reportSettings'>>;
 
 export interface Actor {
     role: UserRole;
@@ -140,27 +142,65 @@ export const canEditReport = (ws: WsLike, id: Identity, r: WeeklyReport): boolea
     }
 };
 
-/** Bir sonraki aşamaya gönderme / onaylama (düğme metni ile) */
-export const nextStage = (r: WeeklyReport): { stage: ReportStage; action: ReportEvent['action']; label: string } | null => {
+// ---------------------------------------------------------------- akış ayarları
+
+/** Varsayılan akış: PY → BS → PYB destek → onaylı; gönderim kuralı yok, yayınlarken AI puanı */
+export const DEFAULT_REPORT_FLOW: ReportFlow = { bsReview: true, pydsReview: true, requirePmScore: false, requirePlanReview: false, aiOnPublish: true };
+
+export const reportFlowOf = (ws: Partial<Pick<WorkspaceData, 'reportSettings'>> | undefined): ReportFlow => ({ ...DEFAULT_REPORT_FLOW, ...(ws?.reportSettings?.flow || {}) });
+
+/** Akışın aşamaları (ekranlardaki adım göstergesi için) */
+export const flowStages = (flow: ReportFlow, kind: WeeklyReport['kind'] = 'project'): ReportStage[] =>
+    ['draft', ...(kind === 'project' && flow.bsReview ? ['bs_review' as const] : []), ...(flow.pydsReview ? ['pyds_review' as const] : []), 'approved'];
+
+/** Bir sonraki aşamaya gönderme / onaylama (düğme metni ile); kapalı adımlar atlanır */
+export const nextStage = (r: WeeklyReport, flow: ReportFlow = DEFAULT_REPORT_FLOW): { stage: ReportStage; action: ReportEvent['action']; label: string } | null => {
     switch (r.stage) {
         case 'draft':
-            return r.kind === 'department'
+            if (r.kind === 'project' && flow.bsReview) return { stage: 'bs_review', action: 'submit', label: 'Bölüm sorumlusuna gönder' };
+            return flow.pydsReview
                 ? { stage: 'pyds_review', action: 'submit', label: 'PYB desteğe gönder' }
-                : { stage: 'bs_review', action: 'submit', label: 'Bölüm sorumlusuna gönder' };
-        case 'bs_review': return { stage: 'pyds_review', action: 'bs_approve', label: 'Onayla, PYB desteğe gönder' };
+                : { stage: 'approved', action: 'submit', label: 'Raporu gönder' };
+        case 'bs_review': return flow.pydsReview
+            ? { stage: 'pyds_review', action: 'bs_approve', label: 'Onayla, PYB desteğe gönder' }
+            : { stage: 'approved', action: 'bs_approve', label: 'Onayla' };
         case 'pyds_review': return { stage: 'approved', action: 'pyds_approve', label: 'Formatı onayla' };
         case 'approved': return null;
     }
 };
 
-/** İade edilecek aşama (bir önceki sahip) */
-export const returnStage = (r: WeeklyReport): ReportStage | null => {
+/** İade edilecek aşama (bir önceki açık adımın sahibi) */
+export const returnStage = (r: WeeklyReport, flow: ReportFlow = DEFAULT_REPORT_FLOW): ReportStage | null => {
+    const bs = r.kind === 'project' && flow.bsReview;
     switch (r.stage) {
         case 'bs_review': return 'draft';
-        case 'pyds_review': return r.kind === 'department' ? 'draft' : 'bs_review';
-        case 'approved': return 'pyds_review';
+        case 'pyds_review': return bs ? 'bs_review' : 'draft';
+        case 'approved': return flow.pydsReview ? 'pyds_review' : bs ? 'bs_review' : 'draft';
         default: return null;
     }
+};
+
+/**
+ * Taslaktan göndermeyi engelleyen akış kuralları (yalnız proje raporları):
+ * PY sağlık puanı ve geçen haftanın planının değerlendirilmesi.
+ */
+export const flowBlockers = (r: Pick<WeeklyReport, 'kind' | 'stage' | 'pmScore' | 'planReview'>, flow: ReportFlow, previousPlans: ReportItem[] = []): string[] => {
+    if (r.kind !== 'project' || r.stage !== 'draft') return [];
+    const out: string[] = [];
+    if (flow.requirePmScore && r.pmScore === undefined) out.push('Proje sağlığı puanı verilmeli');
+    if (flow.requirePlanReview) {
+        const reviewed = new Set((r.planReview || []).map(p => p.itemId));
+        const left = previousPlans.filter(p => !reviewed.has(p.id)).length;
+        if (left) out.push(`Geçen haftanın planından ${left} madde değerlendirilmeli`);
+    }
+    return out;
+};
+
+/** Raporun bir önceki haftasındaki "gelecek hafta" planı (proje raporu) */
+export const previousPlansOf = (reports: WeeklyReport[] | undefined, r: Pick<WeeklyReport, 'kind' | 'year' | 'week' | 'projectId' | 'departmentCode'>): ReportItem[] => {
+    if (r.kind !== 'project') return [];
+    const prev = shiftWeek(r.year, r.week, -1);
+    return findReport(reports || [], prev.year, prev.week, r.projectId, 'project')?.nextWeek || [];
 };
 
 const event = (actor: Actor, action: ReportEvent['action'], now: Date, note?: string): ReportEvent => ({
@@ -197,14 +237,14 @@ export const editReport = (r: WeeklyReport, patch: Partial<Pick<WeeklyReport, 't
     };
 };
 
-export const advanceReport = (r: WeeklyReport, actor: Actor, now: Date = new Date()): WeeklyReport => {
-    const next = nextStage(r);
+export const advanceReport = (r: WeeklyReport, actor: Actor, now: Date = new Date(), flow: ReportFlow = DEFAULT_REPORT_FLOW): WeeklyReport => {
+    const next = nextStage(r, flow);
     if (!next) return r;
     return { ...r, stage: next.stage, returnNote: undefined, updatedAt: now.toISOString(), history: [...r.history, event(actor, next.action, now)] };
 };
 
-export const returnReport = (r: WeeklyReport, actor: Actor, note: string, now: Date = new Date()): WeeklyReport => {
-    const to = returnStage(r);
+export const returnReport = (r: WeeklyReport, actor: Actor, note: string, now: Date = new Date(), flow: ReportFlow = DEFAULT_REPORT_FLOW): WeeklyReport => {
+    const to = returnStage(r, flow);
     if (!to) return r;
     return { ...r, stage: to, returnNote: note.trim() || undefined, updatedAt: now.toISOString(), history: [...r.history, event(actor, 'return', now, note.trim() || undefined)] };
 };
@@ -252,7 +292,8 @@ type SaveWs = WsLike & Pick<WorkspaceData, 'people'>;
 /**
  * İçerik kaydı (yeni ya da mevcut) ve isteğe bağlı olarak sonraki aşamaya
  * gönderme. Yetki işlem anında doğrulanır; aynı proje/hafta için ikinci rapor
- * açılmaz; format hatası olan rapor ilerletilemez. Uygun değilse null.
+ * açılmaz; format hatası olan ya da akış kuralını karşılamayan rapor
+ * ilerletilemez. Uygun değilse null.
  */
 export const saveReport = (
     ws: SaveWs, id: Identity, draft: WeeklyReport, actor: Actor,
@@ -276,8 +317,10 @@ export const saveReport = (
     const content = { thisWeek: draft.thisWeek, nextWeek: draft.nextWeek, abbreviations: draft.abbreviations, worklog: draft.worklog, aiDraft: draft.aiDraft, pmScore, pmScoreNote, planReview };
     let r: WeeklyReport = existing ? editReport(existing, content, actor, now) : { ...createReport({ kind: draft.kind, projectId: draft.projectId, departmentCode: draft.departmentCode, year: draft.year, week: draft.week }, actor, now), ...content, id: draft.id };
     if (o.advance) {
-        if (lintCounts(lintReport(r, o.dictionary)).errors > 0 || !nextStage(r)) return null;
-        r = advanceReport(r, actor, now);
+        const flow = reportFlowOf(ws);
+        if (lintCounts(lintReport(r, o.dictionary)).errors > 0 || !nextStage(r, flow)) return null;
+        if (flowBlockers(r, flow, previousPlansOf(reports, r)).length) return null;
+        r = advanceReport(r, actor, now, flow);
     }
     return { reports: existing ? reports.map(x => (x.id === r.id ? r : x)) : [...reports, r], report: r, from: existing?.stage || 'draft' };
 };
@@ -296,8 +339,9 @@ export const setReportAiAssessment = (ws: Pick<WorkspaceData, 'weeklyReports'>, 
 export const returnReportIn = (ws: SaveWs, id: Identity, reportId: string, actor: Actor, note: string, now: Date = new Date()): { reports: WeeklyReport[]; report: WeeklyReport } | null => {
     const reports = ws.weeklyReports || [];
     const r = reports.find(x => x.id === reportId);
-    if (!r || r.stage === 'draft' || !canEditReport(ws, id, r) || !returnStage(r)) return null;
-    const next = returnReport(r, actor, note, now);
+    const flow = reportFlowOf(ws);
+    if (!r || r.stage === 'draft' || !canEditReport(ws, id, r) || !returnStage(r, flow)) return null;
+    const next = returnReport(r, actor, note, now, flow);
     return { reports: reports.map(x => (x.id === r.id ? next : x)), report: next };
 };
 
@@ -346,7 +390,7 @@ export const reminderText = (year: number, week: number, weekday: number, projec
         subject: `Haftalık proje raporu hatırlatması — ${weekLabel(year, week)}`,
         text: [
             `Merhaba, ${weekLabel(year, week, true)} haftalık raporu${projects.length ? ` (${projects.join(', ')})` : ''} henüz gönderilmedi.`,
-            `Lütfen ${due} mesai bitimine kadar PlanAsistan › Haftalık rapor sayfasından yazıp bölüm sorumlusuna gönderin. AI önerisi, haftalık notlarınız ve worklog'dan taslak çıkarabilir.`,
+            `Lütfen ${due} mesai bitimine kadar PlanAsistan › Haftalık rapor sayfasından yazıp onaya gönderin. AI önerisi, haftalık notlarınız ve worklog'dan taslak çıkarabilir.`,
             appUrl ? `Rapor sayfası: ${appUrl}` : '',
         ].filter(Boolean).join('\n'),
     };

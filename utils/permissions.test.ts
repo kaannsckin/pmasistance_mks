@@ -19,7 +19,7 @@ describe('varsayılan yetkiler (önceki sabit kurallarla aynı)', () => {
         expect(defaultPermissions('pyb_destek').sort()).toEqual(['datapool.edit', 'health.rate', 'notes.private', 'portfolio.viewAll', 'project.assignOwner', 'project.create', 'report.review']);
         expect(defaultPermissions('pyb_sorumlu').sort()).toEqual(['expectation.respond', 'health.rate', 'meeting.review', 'plan.approve', 'portfolio.viewAll', 'screen.executive']);
         expect(defaultPermissions('mudur').sort()).toEqual(['expectation.respond', 'meeting.review', 'plan.approve', 'portfolio.viewAll', 'screen.executive']);
-        expect(defaultPermissions('admin').sort()).toEqual(['portfolio.viewAll', 'screen.admin', 'screen.executive']);
+        expect(defaultPermissions('admin').sort()).toEqual(['app.audit', 'app.backup', 'app.dataHealth', 'screen.admin']);
     });
 
     it('her yetkinin anahtarı tekil, her rol sırada', () => {

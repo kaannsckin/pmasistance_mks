@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Person, Project, ProjectStatus, RagStatus, TaskStatus } from '../../types';
+import { Person, Project, ProjectSortKey, ProjectStatus, RagStatus, TaskStatus } from '../../types';
 import { canAssignProjectOwner, canCreateProject, canEditProjectContent, Identity } from '../../utils/rbac';
 import { timeGreeting } from '../../utils/easterEggs';
 import { TodoItem } from '../../utils/todoItems';
+import { projectComparator, PROJECT_SORT_LABELS } from '../../utils/viewConfig';
 import { Icon, IconName } from './icons';
 import { PROJECT_STATUS_LABEL, RAG_TONE } from './ModernProjectHeader';
 import { RAG_DOT } from './ModernSidebar';
@@ -24,6 +25,9 @@ interface ModernPortfolioProps {
     onSetOwner: (id: string, personId: string | undefined) => void;
     /** Kenar çubuğundaki "+" her basıldığında artar → yeni proje penceresi açılır */
     createRequest: number;
+    /** Admin görünüm ayarı: proje sırası (sağlık sırası için skorlar) */
+    sortKey?: ProjectSortKey | null;
+    healthScores?: Map<string, number>;
 }
 
 type Filter = 'all' | 'active' | 'waiting' | 'done';
@@ -129,7 +133,7 @@ const ProjectSheet: React.FC<{
 };
 
 const ModernPortfolio: React.FC<ModernPortfolioProps> = (props) => {
-    const { projects, people, identity, needsPerson, todoItems, onTodoNavigate, onOpenProject, onCreateProject, createRequest } = props;
+    const { projects, people, identity, needsPerson, todoItems, onTodoNavigate, onOpenProject, onCreateProject, createRequest, sortKey, healthScores } = props;
     const [filter, setFilter] = useState<Filter>('all');
     const [showAllTodos, setShowAllTodos] = useState(false);
     const [sheetId, setSheetId] = useState<string | null>(null);
@@ -173,7 +177,15 @@ const ModernPortfolio: React.FC<ModernPortfolioProps> = (props) => {
         ];
     }, [projects, rows]);
 
-    const filtered = rows.filter(r => FILTERS.find(f => f.id === filter)!.match(r.project.status));
+    const filtered = useMemo(() => {
+        const list = rows.filter(r => FILTERS.find(f => f.id === filter)!.match(r.project.status));
+        if (!sortKey) return list;
+        const cmp = projectComparator(sortKey);
+        return [...list].sort((a, b) => cmp(
+            { name: a.project.name, score: healthScores?.get(a.project.id), progress: a.pct, overdue: a.overdue },
+            { name: b.project.name, score: healthScores?.get(b.project.id), progress: b.pct, overdue: b.overdue },
+        ));
+    }, [rows, filter, sortKey, healthScores]);
     const todos = showAllTodos ? todoItems : todoItems.slice(0, 5);
 
     const now = new Date();
@@ -251,7 +263,10 @@ const ModernPortfolio: React.FC<ModernPortfolioProps> = (props) => {
 
             <section className="flex flex-col gap-3" aria-labelledby="mp-projects">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                    <h2 id="mp-projects" className="m-0 text-[22px] font-bold tracking-[-0.01em] m-text">Projeler</h2>
+                    <div className="min-w-0">
+                        <h2 id="mp-projects" className="m-0 text-[22px] font-bold tracking-[-0.01em] m-text">Projeler</h2>
+                        {sortKey && <p className="m-0 mt-0.5 text-[13px] m-text-3">Sıralama: {PROJECT_SORT_LABELS[sortKey].toLocaleLowerCase('tr-TR')}</p>}
+                    </div>
                     <div className="m-segmented" role="group" aria-label="Duruma göre süz">
                         {FILTERS.map(f => (
                             <button key={f.id} type="button" className="m-segment" aria-pressed={filter === f.id} onClick={() => setFilter(f.id)}>{f.label}</button>

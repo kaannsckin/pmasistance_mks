@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { Allocation, HealthFactorKey, HealthWeekSnapshot, ManagementExpectation, Person, Project, Risk, Task, TaskStatus, WorkspaceData } from '../types';
 import {
-    buildHealthContext, calibrationStatus, commitmentRatio, ensureWeeklyHealthSnapshot, evaluateProjectHealth, HEALTH_FACTORS, HealthEvaluation, latestPmScore,
-    MIN_LABELED_OBSERVATIONS, setPmoRating,
+    bandOf, buildHealthContext, buildHealthSnapshot, calibrationStatus, commitmentRatio, DEFAULT_HEALTH_SETTINGS, ensureWeeklyHealthSnapshot, evaluateProjectHealth, HEALTH_FACTORS,
+    cleanHealthConfig, HealthEvaluation, healthSettingsOf, latestPmScore, MIN_LABELED_OBSERVATIONS, setPmoRating, updateHealthConfig,
 } from './healthModel';
 import { createReport } from './weeklyReport';
 import { createEmptyWorkspace, createProject } from './workspace';
@@ -36,6 +36,68 @@ describe('uzman ağırlıkları', () => {
     it('toplamı 1; regresyon için girdi başına ~10 gözlem gerekir', () => {
         expect(HEALTH_FACTORS.reduce((s, x) => s + x.weight, 0)).toBeCloseTo(1, 10);
         expect(MIN_LABELED_OBSERVATIONS).toBe(100);
+    });
+});
+
+describe('admin yöntem ayarları (healthConfig)', () => {
+    it('ayar yoksa uzman yöntemi; ağırlıklar göreli girilir ve normalize edilir, 0 = kapalı', () => {
+        expect(healthSettingsOf(wsOf({}))).toBe(DEFAULT_HEALTH_SETTINGS);
+        const s = healthSettingsOf({ healthConfig: { weights: { spi: 0, cpi: 0 } } });
+        expect(s.weights.spi).toBe(0);
+        expect(s.weights.overdue).toBeCloseTo(0.13 / 0.69, 10);
+        expect(Object.values(s.weights).reduce((a, b) => a + b, 0)).toBeCloseTo(1, 10);
+        expect(s.enabled).not.toContain('spi');
+        expect(s).toMatchObject({ customized: true, version: 'uzman-2/özel', bandGood: 75, bandWarn: 50 });
+        // Hepsi 0 olamaz → varsayılan ağırlıklar
+        const zero = Object.fromEntries(HEALTH_FACTORS.map(x => [x.key, 0]));
+        expect(healthSettingsOf({ healthConfig: { weights: zero } }).weights).toBe(DEFAULT_HEALTH_SETTINGS.weights);
+    });
+
+    it('bantlar 0–100 aralığında ve izlemede < sağlıklı', () => {
+        const s = healthSettingsOf({ healthConfig: { bandGood: 80, bandWarn: 90 } });
+        expect(s).toMatchObject({ bandGood: 80, bandWarn: 79, version: 'uzman-2', customized: true });
+        expect(bandOf(79, s)).toBe('warn');
+        expect(bandOf(80, s)).toBe('good');
+        expect(bandOf(60)).toBe('warn'); // varsayılan 75/50
+    });
+
+    it('updateHealthConfig: varsayılana eşit değerler silinir; geçersiz değişiklik null', () => {
+        let c = updateHealthConfig(undefined, { weight: { key: 'ai', value: 0 } });
+        expect(c).toEqual({ weights: { ai: 0 } });
+        c = updateHealthConfig(c!, { bandGood: 70 });
+        expect(c).toEqual({ weights: { ai: 0 }, bandGood: 70 });
+        expect(updateHealthConfig(c!, { bandWarn: 70 })).toBeNull(); // izlemede ≥ sağlıklı
+        expect(updateHealthConfig(c!, { weight: { key: 'ai', value: -1 } })).toBeNull();
+        c = updateHealthConfig(c!, { weight: { key: 'ai', value: 0.08 } });
+        expect(c).toEqual({ bandGood: 70 });
+        expect(updateHealthConfig(c!, { bandGood: 75 })).toBeUndefined(); // tamamen varsayılan
+        let all: ReturnType<typeof updateHealthConfig> = undefined;
+        HEALTH_FACTORS.slice(0, -1).forEach(x => { all = updateHealthConfig(all || undefined, { weight: { key: x.key, value: 0 } }); });
+        expect(updateHealthConfig(all || undefined, { weight: { key: 'expectations', value: 0 } })).toBeNull(); // hepsi kapatılamaz
+    });
+
+    it('cleanHealthConfig: taslağı doğrular ve sadeleştirir', () => {
+        expect(cleanHealthConfig({ weights: { spi: 0.18, ai: 0 }, bandGood: 75, bandWarn: 40 })).toEqual({ weights: { ai: 0 }, bandWarn: 40 });
+        expect(cleanHealthConfig({ weights: { spi: 0.18 } })).toBeUndefined();
+        expect(cleanHealthConfig({ bandGood: 50, bandWarn: 60 })).toBeNull();
+        expect(cleanHealthConfig({ weights: Object.fromEntries(HEALTH_FACTORS.map(x => [x.key, 0])) })).toBeNull();
+    });
+
+    it('kapalı girdiler skora ve döküme girmez; bantlar ve fotoğraf sürümü ayardan', () => {
+        const base = wsOf({
+            projects: [project('p', { status: 'devam', rag: 'green', tasks: [task('t1', TaskStatus.Done, 9), task('t2', TaskStatus.ToDo, 11)] })],
+            people: [person('a', 'ARŞ')],
+            titles: [{ code: 'ARŞ', name: 'Araştırmacı', monthlyCost: 100 }],
+            allocations: [alloc('x', 'a', 'p', months(1, 12, 0.5), months(1, 6, 0.5))],
+        });
+        expect(evaluate(base, 'p', 6).score).toBe(80);
+        const ws = { ...base, healthConfig: { weights: { spi: 0, cpi: 0 }, bandGood: 90 } };
+        const h = evaluate(ws, 'p', 6);
+        expect(h.factors.map(x => x.key)).not.toContain('spi');
+        expect(h.score).toBe(100); // kalan verili girdilerin hepsi 1
+        expect(h.band).toBe('good');
+        expect(buildHealthSnapshot(ws, NOW).model).toBe('uzman-2/özel');
+        expect(calibrationStatus(ws).needed).toBe(80);
     });
 });
 

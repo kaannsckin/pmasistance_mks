@@ -7,12 +7,12 @@ import { downloadFile } from '../weekly/shared';
 
 const GROUP_ICON: Record<string, string> = {
     project: 'briefcase', risk: 'shield', plan: 'calendar', data: 'upload', identity: 'users', health: 'activity',
-    snapshot: 'history', ai: 'sparkles', expectation: 'flag', report: 'report', meeting: 'calendarCheck', access: 'key',
+    snapshot: 'history', ai: 'sparkles', expectation: 'flag', report: 'report', meeting: 'calendarCheck', access: 'key', config: 'sliders',
 };
 const iconOf = (a: AuditAction) => GROUP_ICON[a.split('.')[0]] || 'history';
 
-/** Denetim günlüğü: kim, ne zaman, ne yaptı — gruba / projeye göre süzme, arama, CSV */
-const AuditLogSheet: React.FC<{ workspace: WorkspaceData; onClose: () => void }> = ({ workspace, onClose }) => {
+/** Denetim günlüğü içeriği: kim, ne zaman, ne yaptı — gruba / projeye göre süzme, arama, CSV (pencere ve admin konsolu) */
+export const AuditLogPanel: React.FC<{ workspace: WorkspaceData; showExport?: boolean }> = ({ workspace, showExport = true }) => {
     const log = useMemo(() => workspace.auditLog || [], [workspace.auditLog]);
     const [group, setGroup] = useState('');
     const [projectId, setProjectId] = useState('');
@@ -37,14 +37,10 @@ const AuditLogSheet: React.FC<{ workspace: WorkspaceData; onClose: () => void }>
         return out;
     }, [rows, limit]);
 
+    const exportCsv = () => downloadFile(`denetim-gunlugu-${new Date().toISOString().slice(0, 10)}.csv`, auditToCsv(rows, projectName), 'text/csv;charset=utf-8');
+
     return (
-        <Sheet
-            xl
-            title="Denetim günlüğü"
-            subtitle={`Kritik işlemlerin kaydı — kim, ne zaman, ne yaptı (${log.length} kayıt)`}
-            onClose={onClose}
-            headerAction={log.length ? <button type="button" className="m-btn m-btn-gray !min-h-[40px]" onClick={() => downloadFile(`denetim-gunlugu-${new Date().toISOString().slice(0, 10)}.csv`, auditToCsv(rows, projectName), 'text/csv;charset=utf-8')}><Icon name="download" size={17} />CSV</button> : undefined}
-        >
+        <>
             {log.length === 0 ? (
                 <p className="m-0 py-10 text-center text-[15px] m-text-3">Henüz kayıt yok. Proje oluşturma/silme, plan onayı, içe aktarma, rapor ve görüşme onayları burada listelenir.</p>
             ) : (
@@ -64,6 +60,7 @@ const AuditLogSheet: React.FC<{ workspace: WorkspaceData; onClose: () => void }>
                             <Icon name="search" size={16} />
                             <input aria-label="Günlükte ara" className="bg-transparent border-0 outline-none text-[15px] m-text w-44" placeholder="Özet, kişi, proje" value={query} onChange={e => setQuery(e.target.value)} />
                         </label>
+                        {showExport && <button type="button" className="m-btn m-btn-gray !min-h-[40px]" onClick={exportCsv}><Icon name="download" size={17} />CSV</button>}
                     </div>
                     {rows.length === 0 ? <p className="m-0 py-6 text-center text-[15px] m-text-3">Bu süzgeçte kayıt yok.</p> : days.map(d => (
                         <section key={d.key} aria-label={d.label} className="flex flex-col gap-2">
@@ -88,8 +85,14 @@ const AuditLogSheet: React.FC<{ workspace: WorkspaceData; onClose: () => void }>
                     {rows.length > limit && <button type="button" className="m-btn m-btn-gray self-start" onClick={() => setLimit(l => l + 200)}>Daha fazla göster ({rows.length - limit})</button>}
                 </>
             )}
-        </Sheet>
+        </>
     );
 };
+
+const AuditLogSheet: React.FC<{ workspace: WorkspaceData; onClose: () => void }> = ({ workspace, onClose }) => (
+    <Sheet xl title="Denetim günlüğü" subtitle={`Kritik işlemlerin kaydı — kim, ne zaman, ne yaptı (${(workspace.auditLog || []).length} kayıt)`} onClose={onClose}>
+        <AuditLogPanel workspace={workspace} />
+    </Sheet>
+);
 
 export default AuditLogSheet;

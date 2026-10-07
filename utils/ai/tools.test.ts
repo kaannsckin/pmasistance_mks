@@ -127,8 +127,10 @@ describe('rol kapsamı', () => {
         expect((await run('musteri_istekleri', {})).json.istekler[0].baslik).toBe('Rapor ekranı');
     });
 
-    it('son değişiklikler görünmeyen projelerin kayıtlarını içermez', async () => {
-        const r = await run('son_degisiklikler', { gun: 30 });
+    it('son değişiklikler yalnız denetim yetkisiyle; görünmeyen projelerin kayıtlarını içermez', async () => {
+        expect((await run('son_degisiklikler', { gun: 30 })).ok).toBe(false); // varsayılanda yalnız admin
+        const ws = { ...buildWs(), rolePermissions: { py: ['project.create' as const, 'app.audit' as const] } };
+        const r = await run('son_degisiklikler', { gun: 30 }, ws);
         expect(r.json.degisiklikler.map((d: any) => d.ozet)).toEqual(['ALTAY RAG → Riskli']);
     });
 

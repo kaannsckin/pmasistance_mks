@@ -21,8 +21,9 @@ interface HeaderProps {
   currentView: View;
   setCurrentView: (view: View) => void;
   onOpenSettings: () => void;
-  onSaveProject: () => void;
-  onLoadProject: (file: File) => void;
+  /** Yedek al / yükle (yalnız app.backup yetkisiyle verilir) */
+  onSaveProject?: () => void;
+  onLoadProject?: (file: File) => void;
   isLocalPersistenceEnabled?: boolean;
   isAIEnabled?: boolean;
   onOpenAbout?: () => void;
@@ -44,8 +45,9 @@ interface HeaderProps {
   onTodoNavigate: (item: TodoItem) => void;
   onOpenStatusReport: () => void;
   dataHealthAlerts: number;
-  onOpenDataHealth: () => void;
-  onOpenAuditLog: () => void;
+  /** Veri sağlığı ve denetim günlüğü (yalnız ilgili app.* yetkisiyle verilir) */
+  onOpenDataHealth?: () => void;
+  onOpenAuditLog?: () => void;
   onOpenCommandPalette: () => void;
   onOpenWorkPackages: () => void;
 }
@@ -389,7 +391,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSett
               {cloudLinked && <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-emerald-400 border border-white dark:border-gray-700"></span>}
             </button>
             <IdentitySwitcher currentRole={currentRole} currentPersonId={currentPersonId} people={people} needsPerson={identityNeedsPerson} onOpenProfile={onOpenProfile} />
-            <div className="hidden sm:flex items-center bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+            {onSaveProject && onLoadProject && <div className="hidden sm:flex items-center bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
               <input type="file" ref={fileInputRef} className="hidden" accept=".json" onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (file) onLoadProject(file);
@@ -402,22 +404,22 @@ const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSett
               <button onClick={() => fileInputRef.current?.click()} className="w-10 h-10 text-gray-400 hover:text-primary transition-colors" title="Yedek yükle">
                 <i className="fa-solid fa-upload text-xs"></i>
               </button>
-            </div>
+            </div>}
             <button onClick={onOpenCommandPalette} className="hidden md:flex items-center gap-2 h-10 px-3 bg-white dark:bg-gray-700 text-gray-400 rounded-lg border border-gray-200 dark:border-gray-600 hover:text-primary transition-colors" title="Hızlı git — projeye, kişiye ya da ekrana (⌘K / Ctrl+K)">
               <i className="fa-solid fa-magnifying-glass text-[13px]"></i>
               <kbd className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-400">⌘K</kbd>
             </button>
-            <button onClick={onOpenDataHealth} className="relative w-10 h-10 flex items-center justify-center bg-white dark:bg-gray-700 text-gray-400 rounded-lg border border-gray-200 dark:border-gray-600 hover:text-primary transition-colors" title="Veri sağlığı denetimi (yetim tahsis, eşleşmeyen atama, mükerrer, eksik alan)">
+            {onOpenDataHealth && <button onClick={onOpenDataHealth} className="relative w-10 h-10 flex items-center justify-center bg-white dark:bg-gray-700 text-gray-400 rounded-lg border border-gray-200 dark:border-gray-600 hover:text-primary transition-colors" title="Veri sağlığı denetimi (yetim tahsis, eşleşmeyen atama, mükerrer, eksik alan)">
               <i className="fa-solid fa-stethoscope text-[13px]"></i>
               {dataHealthAlerts > 0 && (
                 <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center">
                   {dataHealthAlerts > 99 ? '99+' : dataHealthAlerts}
                 </span>
               )}
-            </button>
-            <button onClick={onOpenAuditLog} className="w-10 h-10 hidden md:flex items-center justify-center bg-white dark:bg-gray-700 text-gray-400 rounded-lg border border-gray-200 dark:border-gray-600 hover:text-primary transition-colors" title="Denetim günlüğü (kritik aksiyonların kaydı)">
+            </button>}
+            {onOpenAuditLog && <button onClick={onOpenAuditLog} className="w-10 h-10 hidden md:flex items-center justify-center bg-white dark:bg-gray-700 text-gray-400 rounded-lg border border-gray-200 dark:border-gray-600 hover:text-primary transition-colors" title="Denetim günlüğü (kritik aksiyonların kaydı)">
               <i className="fa-solid fa-clock-rotate-left text-[13px]"></i>
-            </button>
+            </button>}
             <button onClick={onOpenSettings} className="w-10 h-10 flex items-center justify-center bg-white dark:bg-gray-700 text-gray-400 rounded-lg border border-gray-200 dark:border-gray-600 hover:text-primary transition-colors" title="Ayarlar">
               <i className="fa-solid fa-sliders text-[13px]"></i>
             </button>

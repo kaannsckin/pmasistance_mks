@@ -8,7 +8,7 @@ import { Identity } from '../../../utils/rbac';
 import { relativeTime } from '../../../utils/recentChanges';
 import {
     canEditReport, CATEGORY_META, findAbbreviations, findReport, glossaryFor, itemDisplay, lintCounts, LintIssue, lintReport, locative, meetingSentence,
-    newItem, nextStage, PLAN_REVIEW_LABELS, PLAN_REVIEW_STATUSES, returnStage, setPlanReview, shiftWeek, STAGE_LABELS, THIS_WEEK_CATEGORIES, weekLabel, weekStart,
+    flowBlockers, newItem, nextStage, PLAN_REVIEW_LABELS, PLAN_REVIEW_STATUSES, reportFlowOf, returnStage, setPlanReview, shiftWeek, STAGE_LABELS, THIS_WEEK_CATEGORIES, weekLabel, weekStart,
 } from '../../../utils/weeklyReport';
 import { parseWorklogRows, summarizeWorklog, worklogInWeek } from '../../../utils/worklog';
 import { useAiRun } from '../../assistant/AiButton';
@@ -205,8 +205,10 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
     const pm = project?.pmPersonId ? workspace.people.find(p => p.id === project.pmPersonId) : undefined;
     const deptName = workspace.departments.find(d => d.code === draft.departmentCode)?.name || draft.departmentCode;
     const title = draft.kind === 'department' ? `Bölüm eklemeleri — ${deptName}` : project?.name || 'Silinmiş proje';
-    const next = nextStage(report);
-    const canReturn = editable && report.stage !== 'draft' && !!returnStage(report);
+    const flow = reportFlowOf(workspace);
+    const next = nextStage(report, flow);
+    const returnTo = returnStage(report, flow);
+    const canReturn = editable && report.stage !== 'draft' && !!returnTo;
     const defaultDate = isoDay(weekStart(year, week));
 
     const issues = useMemo(() => lintReport(draft, dictionary), [draft, dictionary]);
@@ -237,6 +239,8 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
     const prevPlans = draft.kind === 'project' ? prevReport?.nextWeek || [] : [];
     const reviewOf = (id: string) => draft.planReview?.find(p => p.itemId === id)?.status;
     const unreviewed = prevPlans.filter(p => !reviewOf(p.id)).length;
+    // Admin'in gönderim kuralları (PY puanı / plan değerlendirmesi zorunlu)
+    const blockers = editable ? flowBlockers({ ...draft, stage: report.stage }, flow, prevPlans) : [];
     const notes = useMemo(() => (project?.notes || []).filter(n => n.year === year && n.weekNumber === week), [project, year, week]);
     const worklog = useMemo(() => summarizeWorklog(draft.worklog || []), [draft.worklog]);
     const worklogHours = Math.round((draft.worklog || []).reduce((s, e) => s + e.hours, 0) * 10) / 10;
@@ -351,7 +355,7 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
         if (onSave(draft)) { setDirty(false); setNotice({ kind: 'ok', text: 'Kaydedildi.' }); } else setNotice({ kind: 'error', text: 'Kaydedilemedi: rapor başka bir aşamaya geçmiş ya da yetkiniz yok.' });
     };
     const advance = () => {
-        if (counts.errors) return;
+        if (counts.errors || blockers.length) return;
         if (!onAdvance(draft)) setNotice({ kind: 'error', text: 'Gönderilemedi: rapor başka bir aşamaya geçmiş ya da yetkiniz yok.' });
     };
     const doReturn = () => {
@@ -722,9 +726,11 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
                 <div className="sticky bottom-3 z-30 m-surface m-pop rounded-2xl">
                     <div className="px-4 py-3 flex flex-wrap items-center gap-2">
                         <span className="text-[14px] m-text-3 flex-1 min-w-[180px]">
-                            {counts.errors > 0 && next ? `Göndermeden önce ${counts.errors} format hatasını düzeltin.` : next ? `Sonraki aşama: ${STAGE_LABELS[next.stage]}` : 'Onaylandı — yayınlanmayı bekliyor.'}
-                            {pmCanRate && draft.pmScore === undefined && ' · Proje sağlığı puanı verilmedi'}
-                            {editable && unreviewed > 0 && ` · Geçen haftanın planından ${unreviewed} madde değerlendirilmedi`}
+                            {(counts.errors > 0 || blockers.length > 0) && next
+                                ? `Göndermeden önce: ${[...(counts.errors ? [`${counts.errors} format hatası düzeltilmeli`] : []), ...blockers].join(' · ')}.`
+                                : next ? `Sonraki aşama: ${STAGE_LABELS[next.stage]}` : 'Onaylandı — yayınlanmayı bekliyor.'}
+                            {!blockers.length && pmCanRate && draft.pmScore === undefined && ' · Proje sağlığı puanı verilmedi'}
+                            {!blockers.length && editable && unreviewed > 0 && ` · Geçen haftanın planından ${unreviewed} madde değerlendirilmedi`}
                         </span>
                         {canReturn && (
                             <button type="button" className="m-btn m-btn-danger" onClick={() => { setReturnNote(''); setReturning(true); }}>
@@ -733,7 +739,7 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
                         )}
                         {editable && <button type="button" className="m-btn m-btn-gray" disabled={!dirty && !isNew} onClick={save}>Kaydet</button>}
                         {editable && next && (
-                            <button type="button" className="m-btn m-btn-primary" disabled={counts.errors > 0} onClick={advance}>
+                            <button type="button" className="m-btn m-btn-primary" disabled={counts.errors > 0 || blockers.length > 0} onClick={advance}>
                                 <Icon name={next.stage === 'approved' ? 'check' : 'send'} size={18} />{next.label}
                             </button>
                         )}
@@ -782,7 +788,7 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
                     </>}
                 >
                     <p className="m-0 text-[15px] m-text-2">
-                        Rapor “{STAGE_LABELS[returnStage(report)!]}” aşamasına döner{report.stage !== 'approved' ? ' ve sahibine iade notu gösterilir' : ''}.
+                        Rapor “{returnTo ? STAGE_LABELS[returnTo] : ''}” aşamasına döner{report.stage !== 'approved' ? ' ve sahibine iade notu gösterilir' : ''}.
                     </p>
                     <Field label={report.stage === 'approved' ? 'Not (isteğe bağlı)' : 'İade gerekçesi'} htmlFor="wr-return">
                         <textarea id="wr-return" className="m-input py-2.5" rows={3} autoFocus value={returnNote} placeholder="Ör. Fatura tutarı ve tarihi eksik; “KYS” kısaltmasını açın." onChange={e => setReturnNote(e.target.value)} />

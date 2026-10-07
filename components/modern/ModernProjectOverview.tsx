@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Project, RagStatus, Task, View, WorkspaceData } from '../../types';
+import { Project, ProjectSectionKey, RagStatus, Task, View, WorkspaceData } from '../../types';
 import { actorLabel } from '../../utils/audit';
 import { getPlanLockStatus } from '../../utils/allocations';
 import { defaultStatusMonth } from '../../utils/evm';
@@ -8,6 +8,7 @@ import { objectiveProgress } from '../../utils/goals';
 import { currentSprint, deadlineLabel, overviewStats, teamLoad, upcomingDeadlines } from '../../utils/projectOverview';
 import { recentChanges, relativeTime } from '../../utils/recentChanges';
 import { riskBand, riskScore } from '../../utils/risks';
+import { sectionOfView } from '../../utils/viewConfig';
 import HealthModelSheet, { HealthInfoButton } from './HealthModelSheet';
 import { Icon, IconName } from './icons';
 import { RAG_TONE } from './ModernProjectHeader';
@@ -30,6 +31,11 @@ interface ModernProjectOverviewProps {
     onNewTask: () => void;
     onSetRag: (projectId: string, rag: RagStatus | undefined, note?: string) => void;
     onCelebrate: (message: string) => void;
+    /** Admin görünüm ayarı: görünen sekmeler (gizli sekmenin kartı ve bağlantısı gösterilmez), en düşük risk skoru */
+    sections?: ReadonlySet<ProjectSectionKey>;
+    minRiskScore?: number;
+    /** "Son değişiklikler" kartı (denetim günlüğü yetkisi) */
+    showChanges?: boolean;
 }
 
 const RAG_ORDER: RagStatus[] = ['green', 'amber', 'red'];
@@ -48,7 +54,13 @@ const EmptyLine: React.FC<{ children: React.ReactNode; ok?: boolean }> = ({ chil
     </div>
 );
 
-const ModernProjectOverview: React.FC<ModernProjectOverviewProps> = ({ workspace, project, canEdit, onNavigate, onViewTask, onNewTask, onSetRag, onCelebrate }) => {
+const ModernProjectOverview: React.FC<ModernProjectOverviewProps> = ({ workspace, project, canEdit, onNavigate: navigate, onViewTask, onNewTask, onSetRag, onCelebrate, sections, minRiskScore = 0, showChanges = true }) => {
+    const shows = (key: ProjectSectionKey) => !sections || sections.has(key);
+    const canGo = (v: View) => { const key = sectionOfView(v); return !key || shows(key); };
+    // Gizli sekmeye götüren bağlantı yerine aynı işi gören görünür sekme (liste ↔ pano)
+    const target = (v: View): View | null => (canGo(v) ? v : v === View.Tasks && canGo(View.Roadmap) ? View.Roadmap : v === View.Roadmap && canGo(View.Tasks) ? View.Tasks : null);
+    const onNavigate = (v: View) => { const t = target(v); if (t !== null) navigate(t); };
+    const linkable = (v: View) => target(v) !== null;
     const now = new Date();
     const year = now.getFullYear();
     const health = useMemo(() => projectHealth(workspace, project, year, defaultStatusMonth(year)), [workspace, project, year]);
@@ -58,10 +70,10 @@ const ModernProjectOverview: React.FC<ModernProjectOverviewProps> = ({ workspace
     const team = useMemo(() => teamLoad(project), [project]);
     const goals = useMemo(() => objectiveProgress(project), [project]);
     const risks = useMemo(
-        () => (project.risks || []).filter(r => r.status !== 'closed').sort((a, b) => riskScore(b) - riskScore(a)).slice(0, 3),
-        [project.risks],
+        () => (project.risks || []).filter(r => r.status !== 'closed' && riskScore(r) >= minRiskScore).sort((a, b) => riskScore(b) - riskScore(a)).slice(0, 3),
+        [project.risks, minRiskScore],
     );
-    const changes = useMemo(() => recentChanges(workspace, new Date(), 14).filter(c => c.projectId === project.id), [workspace, project.id]);
+    const changes = useMemo(() => (showChanges ? recentChanges(workspace, new Date(), 14).filter(c => c.projectId === project.id) : []), [workspace, project.id, showChanges]);
     const lockStatus = getPlanLockStatus(workspace.planLocks || [], project.id, year);
     const people = useMemo(() => new Map(workspace.people.map(p => [p.id, `${p.firstName} ${p.lastName}`.trim()])), [workspace.people]);
 
@@ -92,7 +104,7 @@ const ModernProjectOverview: React.FC<ModernProjectOverviewProps> = ({ workspace
             note: stats.total ? `${stats.done} / ${stats.total} görev tamamlandı` : 'Henüz görev yok',
             noteTone: complete ? 'm-ink-ok' : 'm-text-3',
             // Bitmiş projede küçük bir sürpriz: kutlama
-            run: complete ? () => onCelebrate('Proje tamamlandı! Tebrikler.') : () => onNavigate(View.Roadmap),
+            run: complete ? () => onCelebrate('Proje tamamlandı! Tebrikler.') : linkable(View.Roadmap) ? () => onNavigate(View.Roadmap) : undefined,
             hint: complete ? 'Kutla' : 'Panoyu aç',
         },
         {
@@ -101,7 +113,7 @@ const ModernProjectOverview: React.FC<ModernProjectOverviewProps> = ({ workspace
             value: stats.overdue,
             note: stats.overdue ? 'Termini geçmiş, bitmemiş' : 'Gecikme yok',
             noteTone: stats.overdue ? 'm-ink-bad' : 'm-ink-ok',
-            run: () => onNavigate(View.Tasks),
+            run: linkable(View.Tasks) ? () => onNavigate(View.Tasks) : undefined,
             hint: 'Listeyi aç',
         },
         {
@@ -110,12 +122,12 @@ const ModernProjectOverview: React.FC<ModernProjectOverviewProps> = ({ workspace
             value: stats.openRisks,
             note: stats.highRisks ? `${stats.highRisks} yüksek risk` : 'Yüksek risk yok',
             noteTone: stats.highRisks ? 'm-ink-bad' : 'm-text-3',
-            run: () => onNavigate(View.Risks),
+            run: linkable(View.Risks) ? () => onNavigate(View.Risks) : undefined,
             hint: 'Riskleri aç',
         },
     ];
 
-    const hints: { key: string; icon: IconName; text: string; run: () => void }[] = [
+    const hints: { key: string; icon: IconName; text: string; run: () => void }[] = !linkable(View.Tasks) ? [] : [
         ...(stats.missingEstimate ? [{ key: 'est', icon: 'clock' as IconName, text: `${stats.missingEstimate} görevin süre tahmini yok`, run: () => onNavigate(View.Tasks) }] : []),
         ...(team.unassigned ? [{ key: 'own', icon: 'users' as IconName, text: `${team.unassigned} görev kimseye atanmamış`, run: () => onNavigate(View.Tasks) }] : []),
         ...(lockStatus === 'submitted' ? [{ key: 'lock', icon: 'shield' as IconName, text: `${year} planı onay bekliyor`, run: () => onNavigate(View.Allocations) }] : []),
@@ -172,8 +184,8 @@ const ModernProjectOverview: React.FC<ModernProjectOverviewProps> = ({ workspace
                     <Card title="Başlayalım" labelledBy="po-start" subtitle="Projede henüz görev yok">
                         <div className="flex flex-wrap gap-2.5">
                             <button type="button" className="m-btn m-btn-primary" onClick={onNewTask}><Icon name="plus" size={18} strokeWidth={2.2} />Yeni görev</button>
-                            <button type="button" className="m-btn m-btn-gray" onClick={() => onNavigate(View.Tasks)}><Icon name="upload" size={18} />Excel'den aktar</button>
-                            <button type="button" className="m-btn m-btn-gray" onClick={() => onNavigate(View.Resources)}><Icon name="users" size={18} />Ekibi tanımla</button>
+                            {linkable(View.Tasks) && <button type="button" className="m-btn m-btn-gray" onClick={() => onNavigate(View.Tasks)}><Icon name="upload" size={18} />Excel'den aktar</button>}
+                            {linkable(View.Resources) && <button type="button" className="m-btn m-btn-gray" onClick={() => onNavigate(View.Resources)}><Icon name="users" size={18} />Ekibi tanımla</button>}
                         </div>
                     </Card>
                 ) : (
@@ -243,7 +255,7 @@ const ModernProjectOverview: React.FC<ModernProjectOverviewProps> = ({ workspace
                 <Card
                     title="Yaklaşan terminler"
                     labelledBy="po-due"
-                    action={<LinkButton onClick={() => onNavigate(View.Tasks)}>{deadlines.total > deadlines.items.length ? `Tümü (${deadlines.total})` : 'Liste'}</LinkButton>}
+                    action={linkable(View.Tasks) ? <LinkButton onClick={() => onNavigate(View.Tasks)}>{deadlines.total > deadlines.items.length ? `Tümü (${deadlines.total})` : 'Liste'}</LinkButton> : undefined}
                 >
                     {deadlines.items.length === 0 ? (
                         <EmptyLine>Terminli açık görev yok.</EmptyLine>
@@ -266,7 +278,7 @@ const ModernProjectOverview: React.FC<ModernProjectOverviewProps> = ({ workspace
                     )}
                 </Card>
 
-                <Card title="Riskler" labelledBy="po-risks" action={<LinkButton onClick={() => onNavigate(View.Risks)}>{stats.openRisks > risks.length ? `Tümü (${stats.openRisks})` : 'Riskler'}</LinkButton>}>
+                {shows('risks') && <Card title="Riskler" labelledBy="po-risks" subtitle={minRiskScore ? `Skoru ${minRiskScore} ve üstü` : undefined} action={<LinkButton onClick={() => onNavigate(View.Risks)}>{stats.openRisks > risks.length ? `Tümü (${stats.openRisks})` : 'Riskler'}</LinkButton>}>
                     {risks.length === 0 ? (
                         <EmptyLine ok>Açık risk yok.</EmptyLine>
                     ) : (
@@ -288,9 +300,9 @@ const ModernProjectOverview: React.FC<ModernProjectOverviewProps> = ({ workspace
                             })}
                         </div>
                     )}
-                </Card>
+                </Card>}
 
-                <Card title="Ekip" labelledBy="po-team" subtitle="Kişi başına açık görev" action={<LinkButton onClick={() => onNavigate(View.Resources)}>Ekip</LinkButton>}>
+                {shows('team') && <Card title="Ekip" labelledBy="po-team" subtitle="Kişi başına açık görev" action={<LinkButton onClick={() => onNavigate(View.Resources)}>Ekip</LinkButton>}>
                     {shownMembers.length === 0 ? (
                         <EmptyLine>Ekip tanımlı değil.</EmptyLine>
                     ) : (
@@ -311,9 +323,9 @@ const ModernProjectOverview: React.FC<ModernProjectOverviewProps> = ({ workspace
                             {team.members.length > shownMembers.length && <span className="text-[13px] m-text-3">ve {team.members.length - shownMembers.length} kişi daha</span>}
                         </div>
                     )}
-                </Card>
+                </Card>}
 
-                <Card title="Hedefler" labelledBy="po-goals" action={<LinkButton onClick={() => onNavigate(View.Goals)}>{goals.length ? 'Hedefler' : 'Hedef ekle'}</LinkButton>}>
+                {shows('goals') && <Card title="Hedefler" labelledBy="po-goals" action={<LinkButton onClick={() => onNavigate(View.Goals)}>{goals.length ? 'Hedefler' : 'Hedef ekle'}</LinkButton>}>
                     {goals.length === 0 ? (
                         <EmptyLine>Hedef tanımlı değil.</EmptyLine>
                     ) : (
@@ -331,7 +343,7 @@ const ModernProjectOverview: React.FC<ModernProjectOverviewProps> = ({ workspace
                             {goals.length > 4 && <span className="text-[13px] m-text-3">ve {goals.length - 4} hedef daha</span>}
                         </div>
                     )}
-                </Card>
+                </Card>}
 
                 {changes.length > 0 && (
                     <Card title="Son değişiklikler" labelledBy="po-changes" subtitle="Son 14 gün">

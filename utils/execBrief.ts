@@ -13,7 +13,8 @@ import { recentChanges } from './recentChanges';
 
 const pct = (u: number | null): string => (u === null ? '—' : `%${Math.round(u * 100)}`);
 
-export const buildExecutiveBrief = (ws: WorkspaceData, year: number, now: Date = new Date()): string => {
+/** includeChanges: denetim günlüğünden gelen "son değişiklikler" bölümü (yalnız app.audit yetkisiyle) */
+export const buildExecutiveBrief = (ws: WorkspaceData, year: number, now: Date = new Date(), includeChanges = true): string => {
     const lines: string[] = [];
     const health = portfolioHealth(ws, year);
 
@@ -45,10 +46,12 @@ export const buildExecutiveBrief = (ws: WorkspaceData, year: number, now: Date =
     else risks.forEach(r => lines.push(`- ${r.projectName}: ${r.title} (skor ${r.score})`));
     lines.push('');
 
-    const changes = recentChanges(ws, now, 7);
-    lines.push(`SON DEĞİŞİKLİKLER (son 7 gün, ${changes.length})`);
-    if (changes.length === 0) lines.push('- Kayıtlı değişiklik yok.');
-    else changes.slice(0, 6).forEach(c => lines.push(`- ${c.summary}`));
+    if (includeChanges) {
+        const changes = recentChanges(ws, now, 7);
+        lines.push(`SON DEĞİŞİKLİKLER (son 7 gün, ${changes.length})`);
+        if (changes.length === 0) lines.push('- Kayıtlı değişiklik yok.');
+        else changes.slice(0, 6).forEach(c => lines.push(`- ${c.summary}`));
+    }
 
-    return lines.join('\n');
+    return lines.join('\n').trimEnd();
 };

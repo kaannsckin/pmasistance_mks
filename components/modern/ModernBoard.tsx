@@ -1,6 +1,8 @@
 import React, { useMemo, useState } from 'react';
-import { Task, TaskStatus } from '../../types';
+import { Task, TaskSortKey, TaskStatus } from '../../types';
+import { MIN_PRIORITY_OPTIONS, taskComparator, TaskPriority, taskPassesView } from '../../utils/viewConfig';
 import { Icon } from './icons';
+import { ViewFilterNote } from './ui';
 import TaskActionsMenu from './TaskActionsMenu';
 import { BoardColumn, celebrationFor, COLUMN_META, columnOf, daysLate, initialsOf, missingEstimate, PRIORITY_META, shortDate, sprintLabel, uniq } from './taskMeta';
 
@@ -15,11 +17,14 @@ interface ModernBoardProps {
     onNewTask: () => void;
     /** Sürüm ya da proje tamamen bitince (sürpriz kutlama) */
     onCelebrate?: (message: string) => void;
+    /** Admin görünüm ayarı: en düşük öncelik ve sıralama */
+    minPriority?: TaskPriority;
+    sortKey?: TaskSortKey;
 }
 
 const COLUMNS: BoardColumn[] = [TaskStatus.ToDo, TaskStatus.InProgress, TaskStatus.Done];
 
-const ModernBoard: React.FC<ModernBoardProps> = ({ tasks, sprintNames, onStatusChange, onViewTask, onEditTask, onDeleteTask, onNotifyTask, onNewTask, onCelebrate }) => {
+const ModernBoard: React.FC<ModernBoardProps> = ({ tasks, sprintNames, onStatusChange, onViewTask, onEditTask, onDeleteTask, onNotifyTask, onNewTask, onCelebrate, minPriority = 'Low' as TaskPriority, sortKey = 'smart' as TaskSortKey }) => {
     const [sprint, setSprint] = useState<string>('all');
     const [person, setPerson] = useState<string>('all');
     const [dragOver, setDragOver] = useState<BoardColumn | null>(null);
@@ -28,17 +33,17 @@ const ModernBoard: React.FC<ModernBoardProps> = ({ tasks, sprintNames, onStatusC
     const people = useMemo(() => uniq<string>(tasks.map(t => t.resourceName).filter(Boolean)).sort((a, b) => a.localeCompare(b, 'tr')), [tasks]);
 
     const visible = useMemo(() => tasks.filter(t =>
-        (sprint === 'all' || String(t.version) === sprint) && (person === 'all' || t.resourceName === person)
-    ), [tasks, sprint, person]);
+        taskPassesView({ minTaskPriority: minPriority }, t) && (sprint === 'all' || String(t.version) === sprint) && (person === 'all' || t.resourceName === person)
+    ), [tasks, sprint, person, minPriority]);
+    const hiddenByView = minPriority === 'Low' ? 0 : tasks.filter(t => !taskPassesView({ minTaskPriority: minPriority }, t)).length;
 
     const byColumn = useMemo(() => {
         const map: Record<BoardColumn, Task[]> = { [TaskStatus.ToDo]: [], [TaskStatus.InProgress]: [], [TaskStatus.Done]: [] };
         visible.forEach(t => map[columnOf(t.status)].push(t));
-        (Object.keys(map) as BoardColumn[]).forEach(k => map[k].sort((a, b) =>
-            daysLate(b) - daysLate(a) || PRIORITY_META[a.priority].rank - PRIORITY_META[b.priority].rank || a.name.localeCompare(b.name, 'tr')
-        ));
+        const cmp = taskComparator(sortKey);
+        (Object.keys(map) as BoardColumn[]).forEach(k => map[k].sort(cmp));
         return map;
-    }, [visible]);
+    }, [visible, sortKey]);
 
     const done = byColumn[TaskStatus.Done].length;
     const pct = visible.length ? Math.round((done / visible.length) * 100) : 0;
@@ -69,6 +74,8 @@ const ModernBoard: React.FC<ModernBoardProps> = ({ tasks, sprintNames, onStatusC
                     <span className="text-[15px] m-text whitespace-nowrap"><b className="font-semibold m-tabular">{done}/{visible.length}</b> tamamlandı</span>
                 </div>
             </div>
+
+            {hiddenByView > 0 && <ViewFilterNote text={`Yönetici ayarı: ${MIN_PRIORITY_OPTIONS.find(o => o.value === minPriority)!.label.toLocaleLowerCase('tr-TR')} görevler gösteriliyor · ${hiddenByView} görev gizli`} />}
 
             <div className="grid gap-5 items-start" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}>
                 {COLUMNS.map(col => {
