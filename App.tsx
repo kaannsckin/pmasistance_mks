@@ -14,9 +14,12 @@ import {
 import { canEditPool, createAllocation, EffortField, getPlanLockStatus, ROLE_LABELS, setAllocationCell, upsertPlanLock } from './utils/allocations';
 import { applyPoolImport, PoolImportResult } from './utils/poolImporter';
 import { canCreateProject, canEditProjectContent, identityFor, identityOf, identityNeedsPerson as computeNeedsPerson, ownsProject, visibleProjectIds } from './utils/rbac';
-import { can, isManagementRole, PERMISSION_BY_KEY, resetRolePermissions, setRolePermission } from './utils/permissions';
+import { can, isConsoleRole, isManagementRole, PERMISSION_BY_KEY, resetRolePermissions, setRolePermission } from './utils/permissions';
+import { applyPreset, projectPassesView, resetRoleView, roleViewOf, sectionOfView, taskPassesView, updateRoleView, VIEW_PRESETS, ViewPresetKey } from './utils/viewConfig';
+import { AdminSection, ADMIN_SECTIONS } from './components/modern/adminSections';
+import { portfolioHealth } from './utils/executive';
 import { addSnapshot, buildSnapshot, ensureMonthlySnapshot } from './utils/snapshots';
-import { ensureWeeklyHealthSnapshot, pmoRatingFor, setPmoRating } from './utils/healthModel';
+import { cleanHealthConfig, ensureWeeklyHealthSnapshot, pmoRatingFor, setPmoRating } from './utils/healthModel';
 import { AllocationSuggestion, ApplyMode, applyAllocationSuggestions } from './utils/taskToAllocation';
 import { applyBilledHoursActuals, planBilledHoursPoolAdditions, suggestBilledHoursActuals, BilledApplyMode, BilledHoursOptions, BilledHoursRecord } from './utils/billedHours';
 import { buildTodoItems, TodoItem } from './utils/todoItems';
@@ -57,7 +60,7 @@ import { analyzeDataHealth, applyHealthFix, HealthFix } from './utils/dataHealth
 import { appendAudit, AUDIT_ACTION_LABELS } from './utils/audit';
 import { riskScore } from './utils/risks';
 import { upsertLeave } from './utils/availability';
-import { AiReportAssessment, ExpectationStatus, ExpectationUrgency, MeetingStatus, PestelItem, ReportSettings, Risk, SwotItem, WeeklyReport } from './types';
+import { AiReportAssessment, ExpectationStatus, ExpectationUrgency, HealthConfig, MeetingStatus, PestelItem, ReportFlow, ReportSettings, Risk, RoleViewConfig, SwotItem, WeeklyReport } from './types';
 import ModernSidebar from './components/modern/ModernSidebar';
 import ModernProjectHeader from './components/modern/ModernProjectHeader';
 import ModernPortfolio from './components/modern/ModernPortfolio';
@@ -96,7 +99,7 @@ import DataHealthSheet from './components/modern/sheets/DataHealthSheet';
 import AuditLogSheet from './components/modern/sheets/AuditLogSheet';
 import StatusReportSheet from './components/modern/sheets/StatusReportSheet';
 import {
-  actorOf, isReportSteward, markWeekEmailed, publishWeek, reportDictionary, reportSettingsOf, returnReportIn, saveReport, setReportAiAssessment, STAGE_LABELS, unpublishWeek, weekLabel,
+  actorOf, isReportSteward, markWeekEmailed, publishWeek, reportDictionary, reportFlowOf, reportSettingsOf, returnReportIn, saveReport, setReportAiAssessment, STAGE_LABELS, unpublishWeek, weekLabel,
 } from './utils/weeklyReport';
 import {
   canEditMeeting, canPlanMeeting, canReviewMeeting, createMeeting, isOwnMeeting, markHeld, MeetingDraft, reviewMeeting, setMeetingStatus, updateMeeting,
@@ -187,18 +190,38 @@ const App: React.FC = () => {
   const canExecutive = can(identity, 'screen.executive');
   const canAdmin = can(identity, 'screen.admin');
   const canNotes = can(identity, 'notes.private');
+  // Uygulama araçları (admin yetkileri): denetim günlüğü, yedek, veri sağlığı
+  const canAudit = can(identity, 'app.audit');
+  const canBackup = can(identity, 'app.backup');
+  const canDataHealth = can(identity, 'app.dataHealth');
+  // Admin rolü yalnız yönetici konsolunu kullanır (proje yönetimi ekranları yok)
+  const consoleMode = !!workspace && isConsoleRole(identity.role);
+  const [adminSection, setAdminSection] = useState<AdminSection>('permissions');
+  // Rolün görünüm ayarı (admin): sekmeler, kartlar, kayıt süzgeçleri, sıralamalar
+  const roleView = useMemo(() => roleViewOf({ viewConfig: workspace?.viewConfig, currentRole: identity.role }), [workspace?.viewConfig, identity.role]);
   const notesBlocked = !canNotes && (currentView === View.Notes || currentView === View.Requests);
-  // Yetkisi olmayan ekrandan çık: notlar → yönetim (görebiliyorsa) ya da portföy
+  // Yetkisi olmayan ekrandan çık: notlar → yönetim (görebiliyorsa) ya da portföy; admin → konsol
   useEffect(() => {
     if (!workspace) return;
-    if (notesBlocked) setCurrentView(canExecutive ? View.Executive : View.Portfolio);
+    if (consoleMode) { if (currentView !== View.Admin) setCurrentView(View.Admin); }
+    else if (notesBlocked) setCurrentView(canExecutive ? View.Executive : View.Portfolio);
     else if ((currentView === View.Executive && !canExecutive) || (currentView === View.Admin && !canAdmin)) setCurrentView(View.Portfolio);
-  }, [workspace, currentView, notesBlocked, canExecutive, canAdmin]);
+  }, [workspace, currentView, notesBlocked, canExecutive, canAdmin, consoleMode]);
+  // Admin'in gizlediği proje sekmesinden genel bakışa dön (modern arayüz)
+  useEffect(() => {
+    const key = settings?.uiStyle === 'modern' ? sectionOfView(currentView) : undefined;
+    if (key && !roleView.projectSections.has(key)) setCurrentView(View.Overview);
+  }, [currentView, roleView, settings?.uiStyle]);
   const visibleProjects = useMemo(() => {
-    if (!workspace) return [];
+    if (!workspace || consoleMode) return [];
     const ids = visibleProjectIds(workspace, identity);
-    return workspace.projects.filter(p => ids.has(p.id));
-  }, [workspace, identity]);
+    return workspace.projects.filter(p => ids.has(p.id) && projectPassesView(roleView, p));
+  }, [workspace, identity, roleView, consoleMode]);
+  // Portföy sağlık sırası için skorlar (yalnız admin bu sırayı seçtiyse hesaplanır)
+  const portfolioScores = useMemo(() => {
+    if (!workspace || roleView.projectSort !== 'health') return undefined;
+    return new Map(portfolioHealth(workspace, new Date().getFullYear()).projects.map(h => [h.projectId, h.score]));
+  }, [workspace, roleView.projectSort]);
   const needsPerson = useMemo(() => computeNeedsPerson(identity), [identity]);
   const visibleProjectIdSet = useMemo(() => new Set(visibleProjects.map(p => p.id)), [visibleProjects]);
 
@@ -264,6 +287,7 @@ const App: React.FC = () => {
 
   const handleApplyHealthFix = useCallback((fix: HealthFix) => {
     updateWorkspace(ws => {
+      if (!can(identityOf(ws), 'app.dataHealth')) return ws;
       const next = applyHealthFix(ws, fix);
       const summary = fix.kind === 'deleteAllocation' ? 'Yetim tahsis silindi'
         : fix.kind === 'addPersonFromName' ? `Havuza kişi eklendi: ${fix.name}`
@@ -587,7 +611,7 @@ const App: React.FC = () => {
 
   // ---- Yedekleme / içe aktarma ----
   const handleSaveProject = useCallback(() => {
-    if (!workspace) return;
+    if (!workspace || !can(identityOf(workspace), 'app.backup')) return;
     const jsonString = serializeWorkspace(workspace);
     const blob = new Blob([jsonString], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -601,6 +625,8 @@ const App: React.FC = () => {
   }, [workspace]);
 
   const handleLoadProject = useCallback((file: File) => {
+    const current = workspaceRef.current;
+    if (!current || !can(identityOf(current), 'app.backup')) return;
     if (!file || file.type !== 'application/json') {
       alert('Lütfen geçerli bir JSON yedek dosyası seçin.');
       return;
@@ -770,6 +796,40 @@ const App: React.FC = () => {
     });
   }, [updateWorkspace]);
 
+  // ---- Yönetici: görünüm, sağlık puanı ve rapor akışı ayarları (config.update) ----
+  const handleUpdateRoleView = useCallback((role: UserRole, patch: Partial<RoleViewConfig>, label: string) => {
+    updateWorkspace(ws => (can(identityOf(ws), 'screen.admin')
+      ? appendAudit({ ...ws, viewConfig: updateRoleView(ws.viewConfig, role, patch) }, 'config.update', `${ROLE_LABELS[role]} görünümü: ${label}`)
+      : ws));
+  }, [updateWorkspace]);
+  const handleApplyViewPreset = useCallback((role: UserRole, key: ViewPresetKey) => {
+    updateWorkspace(ws => (can(identityOf(ws), 'screen.admin')
+      ? appendAudit({ ...ws, viewConfig: applyPreset(ws.viewConfig, role, key) }, 'config.update', `${ROLE_LABELS[role]} görünümü: "${VIEW_PRESETS.find(p => p.key === key)?.label}" uygulandı`)
+      : ws));
+  }, [updateWorkspace]);
+  const handleResetRoleView = useCallback((role: UserRole) => {
+    updateWorkspace(ws => (can(identityOf(ws), 'screen.admin')
+      ? appendAudit({ ...ws, viewConfig: resetRoleView(ws.viewConfig, role) }, 'config.update', `${ROLE_LABELS[role]} görünümü varsayılana döndü`)
+      : ws));
+  }, [updateWorkspace]);
+  const handleSaveHealthConfig = useCallback((draft: HealthConfig | undefined, label: string): boolean => {
+    const ws = workspaceRef.current;
+    if (!ws || !can(identityOf(ws), 'screen.admin')) return false;
+    const next = cleanHealthConfig(draft);
+    if (next === null) return false;
+    commitWorkspace(appendAudit({ ...ws, healthConfig: next }, 'config.update', `Sağlık puanı yöntemi: ${label}`));
+    return true;
+  }, [commitWorkspace]);
+  const handleUpdateReportFlow = useCallback((patch: Partial<ReportFlow> & { dueWeekday?: number }, label: string) => {
+    updateWorkspace(ws => {
+      if (!can(identityOf(ws), 'screen.admin')) return ws;
+      const { dueWeekday, ...flowPatch } = patch;
+      const current = reportSettingsOf(ws);
+      const reportSettings: ReportSettings = { ...current, ...(dueWeekday !== undefined ? { dueWeekday } : {}), flow: { ...reportFlowOf(ws), ...flowPatch } };
+      return appendAudit({ ...ws, reportSettings }, 'config.update', `Haftalık rapor akışı: ${label}`);
+    });
+  }, [updateWorkspace]);
+
   const handleRatePmo = useCallback((projectId: string, year: number, week: number, score: number | null, note?: string): boolean => {
     const ws = workspaceRef.current;
     if (!ws) return false;
@@ -798,7 +858,8 @@ const App: React.FC = () => {
   }, [updateWorkspace]);
 
   const handleUpdateReportSettings = useCallback((reportSettings: ReportSettings) => {
-    updateWorkspace(ws => (isReportSteward(identityOf(ws)) ? { ...ws, reportSettings } : ws));
+    // Onay akışı admin ayarıdır; rapor denetçisinin ayar paneli onu değiştiremez
+    updateWorkspace(ws => (isReportSteward(identityOf(ws)) ? { ...ws, reportSettings: { ...reportSettings, flow: ws.reportSettings?.flow } } : ws));
   }, [updateWorkspace]);
 
   const handleSetJiraKey = useCallback((projectId: string, key: string) => {
@@ -943,7 +1004,8 @@ const App: React.FC = () => {
     return p ? `${p.firstName} ${p.lastName}`.trim() : ROLE_LABELS[identity.role] || 'Siz';
   }, [workspace?.people, workspace?.currentPersonId, identity.role]);
 
-  const isModern = settings?.uiStyle === 'modern';
+  // Admin konsolu her zaman modern arayüzle açılır
+  const isModern = settings?.uiStyle === 'modern' || consoleMode;
   // Proje bağlamındaki ekranlar (modern arayüzde proje başlığı ve segment gezinme gösterilir)
   const inProjectView = !!activeProject && MODERN_PROJECT_VIEWS.includes(currentView) &&
     !notesBlocked;
@@ -963,10 +1025,25 @@ const App: React.FC = () => {
       const page = (
         <ModernAdmin
           workspace={workspace}
+          section={adminSection}
+          onSection={setAdminSection}
+          showSectionNav={!consoleMode}
           onSetPermission={handleSetRolePermission}
           onResetRole={handleResetRolePermissions}
           onAddProfile={handleAddProfile}
           onRemoveProfile={handleRemoveProfile}
+          onUpdateRoleView={handleUpdateRoleView}
+          onApplyViewPreset={handleApplyViewPreset}
+          onResetRoleView={handleResetRoleView}
+          onSaveHealthConfig={handleSaveHealthConfig}
+          onUpdateReportFlow={handleUpdateReportFlow}
+          canAudit={canAudit}
+          onSaveBackup={canBackup ? handleSaveProject : undefined}
+          onLoadBackup={canBackup ? handleLoadProject : undefined}
+          onApplyHealthFix={canDataHealth ? handleApplyHealthFix : undefined}
+          cloudLinked={!!loadCloudConfig()?.workspaceId}
+          onOpenCloud={() => setIsCloudModalOpen(true)}
+          onOpenProfile={() => setIsProfileOpen(true)}
         />
       );
       return isModern ? page : <div className="ui-modern rounded-3xl p-4 sm:p-6">{page}</div>;
@@ -981,8 +1058,9 @@ const App: React.FC = () => {
             onOpenProject={handleOpenProject}
             onTakeSnapshot={handleTakeSnapshot}
             onNavigate={(v: View) => setCurrentView(v)}
-            onOpenAudit={() => setIsAuditModalOpen(true)}
+            onOpenAudit={canAudit ? () => setIsAuditModalOpen(true) : undefined}
             onOpenExpectations={openExpectations}
+            view={roleView}
           />
         );
       }
@@ -992,6 +1070,7 @@ const App: React.FC = () => {
           currentRole={workspace.currentRole || 'py'}
           onOpenProject={handleOpenProject}
           onTakeSnapshot={handleTakeSnapshot}
+          showChanges={canAudit}
         />
       );
     }
@@ -1003,7 +1082,8 @@ const App: React.FC = () => {
         <ModernRiskReport
           workspace={workspace}
           projectIds={visibleProjectIdSet}
-          onOpenProjectRisks={(projectId: string) => { handleOpenProject(projectId); setCurrentView(View.Risks); }}
+          onOpenProjectRisks={(projectId: string) => { handleOpenProject(projectId); setCurrentView(roleView.projectSections.has('risks') ? View.Risks : View.Overview); }}
+          riskView={roleView}
         />
       ) : (
         <ModernExpectations
@@ -1166,6 +1246,8 @@ const App: React.FC = () => {
           onSetStatus={handleSetProjectStatus}
           onSetOwner={handleSetProjectOwner}
           createRequest={newProjectRequest}
+          sortKey={roleView.projectSort}
+          healthScores={portfolioScores}
         />
       );
     }
@@ -1209,7 +1291,8 @@ const App: React.FC = () => {
     if (isModern && currentView === View.Kanban) {
       return (
         <ModernTimeline
-          project={activeProject}
+          // Salt okunur zaman çizelgesi admin'in öncelik süzgecini izler; düzenlenebilirde tüm görevler (otomatik plan gizlileri kaybetmesin)
+          project={isManagementRole(identity.role) && roleView.minTaskPriority !== 'Low' ? { ...activeProject, tasks: activeProject.tasks.filter(t => taskPassesView(roleView, t)) } : activeProject}
           canEdit={!isManagementRole(identity.role)}
           onMoveTask={(id: string, v: number) => setTasks(prev => prev.map(t => t.id === id ? { ...t, version: v } : t))}
           onPlanGenerated={setTasks}
@@ -1296,6 +1379,7 @@ const App: React.FC = () => {
           onUpdateRisks={handleUpdateActiveRisks}
           onUpdatePestel={(pestelItems: PestelItem[]) => updateActiveProject(p => ({ ...p, pestelItems }))}
           onUpdateSwot={(swotItems: SwotItem[]) => updateActiveProject(p => ({ ...p, swotItems }))}
+          riskView={roleView}
         />
       );
     }
@@ -1310,6 +1394,9 @@ const App: React.FC = () => {
           onNewTask={newTask}
           onSetRag={handleSetProjectRag}
           onCelebrate={celebrate}
+          sections={roleView.projectSections}
+          minRiskScore={roleView.minRiskScore}
+          showChanges={canAudit}
         />
       );
     }
@@ -1325,6 +1412,8 @@ const App: React.FC = () => {
           onNotifyTask={notifyTask}
           onNewTask={newTask}
           onCelebrate={celebrate}
+          minPriority={roleView.minTaskPriority}
+          sortKey={roleView.taskSort}
         />
       );
     }
@@ -1341,6 +1430,8 @@ const App: React.FC = () => {
           onNotifyTask={notifyTask}
           onDataImport={(nt: Task[], nr: Resource[]) => { setTasks(prev => [...prev, ...nt]); setResources(prev => [...prev, ...nr]); }}
           onCelebrate={celebrate}
+          minPriority={roleView.minTaskPriority}
+          sortKey={roleView.taskSort}
         />
       );
     }
@@ -1500,6 +1591,12 @@ const App: React.FC = () => {
     if (!workspace) return [];
     const items: CommandItem[] = [];
     const go = (view: View) => () => setCurrentView(view);
+    // Admin konsolu: yalnız konsol bölümleri ve profil değiştirme
+    if (consoleMode) {
+      ADMIN_SECTIONS.forEach(sec => items.push({ id: `adm-${sec.key}`, group: 'Yönetici konsolu', label: sec.label, sublabel: sec.description, icon: 'fa-user-lock', keywords: sec.description, run: () => { setAdminSection(sec.key); setCurrentView(View.Admin); } }));
+      items.push({ id: 'a-profile', group: 'Aksiyonlar', label: 'Profil değiştir', icon: 'fa-user-gear', keywords: 'profil rol kimlik kisi degistir', run: () => setIsProfileOpen(true) });
+      return items;
+    }
     items.push({ id: 'v-portfolio', group: 'Ekranlar', label: 'Portföy', icon: 'fa-table-cells-large', keywords: 'portfoy proje', run: go(View.Portfolio) });
     items.push({ id: 'v-alloc', group: 'Ekranlar', label: 'İşgücü Tahsisi', icon: 'fa-people-arrows', keywords: 'tahsis aa doluluk isi', run: go(View.Allocations) });
     items.push({ id: 'v-calendar', group: 'Ekranlar', label: 'Takvim', icon: 'fa-calendar-days', keywords: 'takvim zaman cizelge ekip is paketi', run: go(View.Calendar) });
@@ -1509,19 +1606,19 @@ const App: React.FC = () => {
     items.push({ id: 'v-meetings', group: 'Ekranlar', label: 'Müşteri görüşmeleri', icon: 'fa-handshake', keywords: 'musteri gorusme toplanti demo onay plan', run: go(View.Meetings) });
     items.push({ id: 'v-pool', group: 'Ekranlar', label: 'Veri Havuzu', icon: 'fa-database', keywords: 'personel bolum rol unvan havuz', run: go(View.DataPool) });
     if (canExecutive) items.push({ id: 'v-exec', group: 'Ekranlar', label: 'Yönetim (EVM · riskler · baseline)', icon: 'fa-gauge-high', keywords: 'yonetim evm butce risk', run: go(View.Executive) });
-    if (canAdmin) items.push({ id: 'v-admin', group: 'Ekranlar', label: 'Yönetici (admin): yetkiler ve profiller', icon: 'fa-user-lock', keywords: 'admin yetki rol izin profil kullanici', run: go(View.Admin) });
+    if (canAdmin) items.push({ id: 'v-admin', group: 'Ekranlar', label: 'Yönetici konsolu: yetkiler, görünüm, rapor akışı, puanlama', icon: 'fa-user-lock', keywords: 'admin yetki rol izin profil kullanici gorunum filtre siralama akis puan', run: go(View.Admin) });
     items.push({ id: 'a-profile', group: 'Aksiyonlar', label: 'Profil değiştir', icon: 'fa-user-gear', keywords: 'profil rol kimlik kisi degistir', run: () => setIsProfileOpen(true) });
-    items.push({ id: 'a-health', group: 'Aksiyonlar', label: 'Veri Sağlığı Denetimi', icon: 'fa-stethoscope', keywords: 'saglik hata yetim', run: () => setIsHealthModalOpen(true) });
-    items.push({ id: 'a-audit', group: 'Aksiyonlar', label: 'Denetim Günlüğü', icon: 'fa-clock-rotate-left', keywords: 'audit log gunluk kayit', run: () => setIsAuditModalOpen(true) });
+    if (canDataHealth) items.push({ id: 'a-health', group: 'Aksiyonlar', label: 'Veri Sağlığı Denetimi', icon: 'fa-stethoscope', keywords: 'saglik hata yetim', run: () => setIsHealthModalOpen(true) });
+    if (canAudit) items.push({ id: 'a-audit', group: 'Aksiyonlar', label: 'Denetim Günlüğü', icon: 'fa-clock-rotate-left', keywords: 'audit log gunluk kayit', run: () => setIsAuditModalOpen(true) });
     if (activeProject) items.push({ id: 'a-wp', group: 'Aksiyonlar', label: `İş Paketleri — ${activeProject.name}`, icon: 'fa-briefcase', keywords: 'is paketi work package gorev', run: () => setIsWpManagerOpen(true) });
     items.push({ id: 'egg-rocket', group: 'Sürpriz', label: 'Roketi fırlat', icon: 'fa-rocket', keywords: 'roket rocket uzay', hidden: true, run: () => setEgg({ kind: 'hyper' }) });
     visibleProjects.forEach(p => items.push({ id: `p-${p.id}`, group: 'Projeler', label: p.name, sublabel: 'Projeyi aç', icon: 'fa-folder-open', keywords: p.code || '', run: () => handleOpenProject(p.id) }));
     workspace.people.forEach(p => items.push({ id: `k-${p.id}`, group: 'Kişiler', label: `${p.firstName} ${p.lastName}`.trim(), sublabel: `${p.departmentCode || ''} · kişi profili`, icon: 'fa-user', keywords: p.sicil || '', run: () => setViewingPersonId(p.id) }));
     return items;
-  }, [workspace, visibleProjects, identity, handleOpenProject, activeProject]);
+  }, [workspace, visibleProjects, identity, handleOpenProject, activeProject, consoleMode, canAudit, canDataHealth]);
 
   return (
-    <AssistantProvider enabled={isAIEnabled} getWorkspace={getAssistantWorkspace} getView={getAssistantView} onNavigate={handleAssistantNavigate} onApplyAction={handleApplyAiAction}>
+    <AssistantProvider enabled={isAIEnabled && !consoleMode} getWorkspace={getAssistantWorkspace} getView={getAssistantView} onNavigate={handleAssistantNavigate} onApplyAction={handleApplyAiAction}>
     <div className={`min-h-screen font-sans theme-${settings?.theme || 'classic'} ${isModern ? 'ui-modern' : 'bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100'}`}>
       {isModern ? (
         <div className="flex min-h-screen">
@@ -1533,6 +1630,9 @@ const App: React.FC = () => {
             onNavigate={(v: View) => setCurrentView(v)}
             exec={canExecutive}
             canAdmin={canAdmin}
+            consoleMode={consoleMode}
+            adminSection={adminSection}
+            onAdminSection={setAdminSection}
             onOpenProfile={() => setIsProfileOpen(true)}
             expectationBadge={expectationBadge}
             reportBadge={attention.reportBadge}
@@ -1549,13 +1649,13 @@ const App: React.FC = () => {
             needsPerson={needsPerson}
             onOpenSettings={() => setIsSettingsModalOpen(true)}
             onSwitchToClassic={() => handleSetUiStyle('classic')}
-            onSaveBackup={handleSaveProject}
-            onLoadBackup={handleLoadProject}
+            onSaveBackup={canBackup ? handleSaveProject : undefined}
+            onLoadBackup={canBackup ? handleLoadProject : undefined}
             cloudLinked={!!loadCloudConfig()?.workspaceId}
             onOpenCloud={() => setIsCloudModalOpen(true)}
-            healthAlerts={healthAlerts}
-            onOpenHealth={() => setIsHealthModalOpen(true)}
-            onOpenAudit={() => setIsAuditModalOpen(true)}
+            healthAlerts={canDataHealth ? healthAlerts : 0}
+            onOpenHealth={canDataHealth ? () => setIsHealthModalOpen(true) : undefined}
+            onOpenAudit={canAudit ? () => setIsAuditModalOpen(true) : undefined}
             onOpenAbout={() => setIsAboutModalOpen(true)}
             onLogoLaunch={() => setCurrentView(inProjectView ? View.Overview : View.Portfolio)}
             onHyperdrive={() => setEgg({ kind: 'hyper' })}
@@ -1563,8 +1663,8 @@ const App: React.FC = () => {
           <div className="flex-1 min-w-0 flex flex-col">
             <div className="lg:hidden sticky top-0 z-30 m-surface border-b m-sep flex items-center gap-1 px-1.5 h-14">
               <button type="button" className="m-icon-btn" aria-label="Menüyü aç" onClick={() => setIsSidebarOpen(true)}><Icon name="menu" /></button>
-              <span className="flex-1 min-w-0 truncate text-[17px] font-semibold m-text">{inProjectView && activeProject ? activeProject.name : 'PlanAsistan'}</span>
-              <button type="button" className="m-icon-btn" aria-label="Ara" onClick={() => setIsPaletteOpen(true)}><Icon name="search" /></button>
+              <span className="flex-1 min-w-0 truncate text-[17px] font-semibold m-text">{inProjectView && activeProject ? activeProject.name : consoleMode ? 'Yönetici konsolu' : 'PlanAsistan'}</span>
+              {!consoleMode && <button type="button" className="m-icon-btn" aria-label="Ara" onClick={() => setIsPaletteOpen(true)}><Icon name="search" /></button>}
               <button type="button" className="m-icon-btn" aria-label={`Profil: ${currentActorName}. Profil değiştir`} title="Profil değiştir" onClick={() => setIsProfileOpen(true)}>
                 <span aria-hidden="true" className="w-8 h-8 rounded-full m-fill flex items-center justify-center text-[12px] font-semibold m-text">{initialsOf(currentActorName)}</span>
               </button>
@@ -1582,6 +1682,7 @@ const App: React.FC = () => {
                   onStatusReport={() => setIsStatusReportOpen(true)}
                   onNewTask={() => { setEditingTask(null); setIsFormModalOpen(true); }}
                   onOpenWorkPackages={() => setIsWpManagerOpen(true)}
+                  sections={roleView.projectSections}
                 />
               )}
               <div className={usesModernScreen ? '' : 'm-legacy'}>{renderView()}</div>
@@ -1593,8 +1694,8 @@ const App: React.FC = () => {
         <Header
           currentView={currentView} setCurrentView={setCurrentView}
           onOpenSettings={() => setIsSettingsModalOpen(true)}
-          onSaveProject={handleSaveProject}
-          onLoadProject={handleLoadProject}
+          onSaveProject={canBackup ? handleSaveProject : undefined}
+          onLoadProject={canBackup ? handleLoadProject : undefined}
           isLocalPersistenceEnabled={settings?.isLocalPersistenceEnabled !== false}
           isAIEnabled={settings?.isAIEnabled !== false}
           onOpenAbout={() => setIsAboutModalOpen(true)}
@@ -1613,9 +1714,9 @@ const App: React.FC = () => {
           todoItems={todoItems}
           onTodoNavigate={handleTodoNavigate}
           onOpenStatusReport={() => setIsStatusReportOpen(true)}
-          dataHealthAlerts={healthAlerts}
-          onOpenDataHealth={() => setIsHealthModalOpen(true)}
-          onOpenAuditLog={() => setIsAuditModalOpen(true)}
+          dataHealthAlerts={canDataHealth ? healthAlerts : 0}
+          onOpenDataHealth={canDataHealth ? () => setIsHealthModalOpen(true) : undefined}
+          onOpenAuditLog={canAudit ? () => setIsAuditModalOpen(true) : undefined}
           onOpenCommandPalette={() => setIsPaletteOpen(true)}
           onOpenWorkPackages={() => setIsWpManagerOpen(true)}
         />
@@ -1713,20 +1814,20 @@ const App: React.FC = () => {
           onClose={() => setViewingPersonId(null)}
         />
       )}
-      {isHealthModalOpen && workspace && isModern && (
+      {isHealthModalOpen && canDataHealth && workspace && isModern && (
         <DataHealthSheet workspace={workspace} onApplyFix={handleApplyHealthFix} onClose={() => setIsHealthModalOpen(false)} />
       )}
-      {isHealthModalOpen && workspace && !isModern && (
+      {isHealthModalOpen && canDataHealth && workspace && !isModern && (
         <DataHealthModal
           workspace={workspace}
           onApplyFix={handleApplyHealthFix}
           onClose={() => setIsHealthModalOpen(false)}
         />
       )}
-      {isAuditModalOpen && workspace && isModern && (
+      {isAuditModalOpen && canAudit && workspace && isModern && (
         <AuditLogSheet workspace={workspace} onClose={() => setIsAuditModalOpen(false)} />
       )}
-      {isAuditModalOpen && workspace && !isModern && (
+      {isAuditModalOpen && canAudit && workspace && !isModern && (
         <AuditLogModal
           workspace={workspace}
           onClose={() => setIsAuditModalOpen(false)}

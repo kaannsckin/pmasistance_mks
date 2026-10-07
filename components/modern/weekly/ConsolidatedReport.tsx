@@ -164,7 +164,7 @@ const ConsolidatedReport: React.FC<ConsolidatedReportProps> = ({
         if (onPublish?.()) {
             setMode('approved');
             setNotice({ kind: 'ok', text: 'Hafta yayınlandı: müdür ve PYB sorumlusu raporu bölüm bazında görebilir.' });
-            if (canAssess && aiPending.length) assess(aiPending);
+            if (canAssess && aiPending.length && (settings.flow?.aiOnPublish ?? true)) assess(aiPending);
         }
     };
 

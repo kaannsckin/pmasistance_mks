@@ -19,6 +19,8 @@ interface ExecutiveViewProps {
   currentRole: UserRole;
   onOpenProject: (projectId: string) => void;
   onTakeSnapshot: (year: number) => void;
+  /** "Ne Değişti?" akışı denetim günlüğünden gelir; yalnız app.audit yetkisiyle */
+  showChanges?: boolean;
 }
 
 const STATUS_TR: Record<ProjectStatus, string> = {
@@ -120,7 +122,7 @@ const PlanActualChart: React.FC<{ plan: number[]; actual: number[]; capacity: nu
   );
 };
 
-const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, onOpenProject, onTakeSnapshot }) => {
+const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, onOpenProject, onTakeSnapshot, showChanges = true }) => {
   const [year, setYear] = useState(new Date().getFullYear());
   const [isPptBusy, setIsPptBusy] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -160,7 +162,7 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
   const org = useMemo(() => orgCapacity(workspace, year), [workspace, year]);
   const [expandedDept, setExpandedDept] = useState<string | null>(null);
   const [showBrief, setShowBrief] = useState(false);
-  const brief = useMemo(() => buildExecutiveBrief(workspace, year), [workspace, year]);
+  const brief = useMemo(() => buildExecutiveBrief(workspace, year, new Date(), showChanges), [workspace, year, showChanges]);
   const [changeDays, setChangeDays] = useState<7 | 30>(7);
   const changes = useMemo(() => recentChanges(workspace, new Date(), changeDays), [workspace, changeDays]);
 
@@ -418,7 +420,7 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
       )}
 
       {/* Ne Değişti? — son değişikliklerin yönetici akışı (denetim günlüğünden) */}
-      <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm p-5">
+      {showChanges && <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm p-5">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
           <h3 className="text-sm font-semibold text-gray-800 dark:text-white flex items-center gap-2">
             <i className="fa-solid fa-clock-rotate-left" style={{ color: 'var(--app-primary)' }}></i>Ne Değişti?
@@ -447,7 +449,7 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
             {changes.length > 12 && <p className="text-[11px] text-gray-400 px-3 pt-1">ve {changes.length - 12} değişiklik daha…</p>}
           </div>
         )}
-      </div>
+      </div>}
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
         {/* Aylık plan vs gerçekleşen */}

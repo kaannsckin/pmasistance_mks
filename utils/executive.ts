@@ -69,7 +69,7 @@ export const portfolioHealth = (ws: WorkspaceData, year: number, statusMonth?: n
     const ctx = buildHealthContext(ws, year, sm, now);
     const projects = ws.projects.map(p => projectHealth(ws, p, year, sm, now, ctx)).sort((a, b) => a.score - b.score);
     const orgScore = projects.length ? round(projects.reduce((s, p) => s + p.score, 0) / projects.length) : 100;
-    return { projects, orgScore, orgBand: bandOf(orgScore) };
+    return { projects, orgScore, orgBand: bandOf(orgScore, ctx.settings) };
 };
 
 // ---------------------------------------------------------------- Dikkat

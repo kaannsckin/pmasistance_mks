@@ -5,12 +5,13 @@ import { riskDraftFromPestel, summarizePestel } from '../../utils/pestel';
 import { filterRisks, isActiveRisk, matrixCounts, reportRisks, riskKpis, RiskStatusFilter } from '../../utils/riskReport';
 import { createRisk, RISK_BAND_LABELS, RISK_STATUS_LABELS } from '../../utils/risks';
 import { summarizeSwot } from '../../utils/swot';
+import { applyRiskView, RoleView } from '../../utils/viewConfig';
 import { useAiRun } from '../assistant/AiButton';
 import PestelModal from '../PestelModal';
 import SwotModal from '../SwotModal';
 import { Icon } from './icons';
 import { RiskMatrix, RiskScorePill, RiskSheet, RISK_STATUS_TONE } from './RiskParts';
-import { Card, rowSep } from './ui';
+import { Card, rowSep, ViewFilterNote } from './ui';
 
 /**
  * Modern proje Riskler sekmesi: süzülebilir risk listesi, 5×5 matris ve
@@ -25,6 +26,8 @@ interface ModernRisksProps {
     onUpdateRisks: (risks: Risk[]) => void;
     onUpdatePestel: (items: PestelItem[]) => void;
     onUpdateSwot: (items: SwotItem[]) => void;
+    /** Admin görünüm ayarı: en düşük skor, kapananlar, sıralama */
+    riskView?: Pick<RoleView, 'minRiskScore' | 'showClosedRisks' | 'riskSort'>;
 }
 
 const STATUS_TABS: { key: RiskStatusFilter; label: string }[] = [
@@ -34,7 +37,7 @@ const STATUS_TABS: { key: RiskStatusFilter; label: string }[] = [
     { key: 'all', label: 'Tümü' },
 ];
 
-const ModernRisks: React.FC<ModernRisksProps> = ({ project, people, canEdit, onUpdateRisks, onUpdatePestel, onUpdateSwot }) => {
+const ModernRisks: React.FC<ModernRisksProps> = ({ project, people, canEdit, onUpdateRisks, onUpdatePestel, onUpdateSwot, riskView }) => {
     const risks = project.risks || [];
     const pestelItems = project.pestelItems || [];
     const swotItems = project.swotItems || [];
@@ -47,7 +50,10 @@ const ModernRisks: React.FC<ModernRisksProps> = ({ project, people, canEdit, onU
     const ai = useAiRun();
     const [aiRisks, setAiRisks] = useState<(RiskSuggestion & { selected: boolean })[] | null>(null);
 
-    const rows = useMemo(() => reportRisks({ projects: [project], people }), [project, people]);
+    const allRows = useMemo(() => reportRisks({ projects: [project], people }), [project, people]);
+    const rows = useMemo(() => (riskView ? applyRiskView(allRows, riskView as RoleView) : allRows), [allRows, riskView]);
+    const hiddenByView = allRows.length - rows.length;
+    const tabs = riskView && !riskView.showClosedRisks ? STATUS_TABS.filter(t => t.key !== 'closed') : STATUS_TABS;
     const kpis = useMemo(() => riskKpis(rows), [rows]);
     const counts = useMemo(() => matrixCounts(rows), [rows]);
     const shown = useMemo(() => filterRisks(rows, { status, cell }), [rows, status, cell]);
@@ -83,7 +89,7 @@ const ModernRisks: React.FC<ModernRisksProps> = ({ project, people, canEdit, onU
         <div className="flex flex-col gap-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="m-segmented" role="group" aria-label="Risk durumu">
-                    {STATUS_TABS.map(t => (
+                    {tabs.map(t => (
                         <button key={t.key} type="button" className="m-segment" aria-pressed={status === t.key} onClick={() => setStatus(t.key)}>
                             {t.label}<span className="m-text-3 m-tabular">{tabCount(t.key)}</span>
                         </button>
@@ -117,6 +123,8 @@ const ModernRisks: React.FC<ModernRisksProps> = ({ project, people, canEdit, onU
                     )}
                 </div>
             </div>
+
+            {hiddenByView > 0 && <ViewFilterNote text={`Yönetici ayarı: ${[riskView!.minRiskScore ? `skoru ${riskView!.minRiskScore} ve üstü riskler` : '', !riskView!.showClosedRisks ? 'kapananlar gizli' : ''].filter(Boolean).join(' · ')} · ${hiddenByView} risk gizli`} />}
 
             {ai.error && (
                 <div role="alert" className="m-surface rounded-2xl px-4 py-3 flex items-center gap-3">

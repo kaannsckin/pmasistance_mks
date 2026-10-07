@@ -1,9 +1,11 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { Resource, Task, TaskStatus } from '../../types';
+import { Resource, Task, TaskSortKey, TaskStatus } from '../../types';
 import { exportToExcel, exportToJiraCsv, exportToMsProjectCsv } from '../../utils/exporter';
 import { parseCustomCsv, parseImportedFile, parseJiraCsv } from '../../utils/importer';
 import { Icon } from './icons';
+import { ViewFilterNote } from './ui';
 import TaskActionsMenu from './TaskActionsMenu';
+import { MIN_PRIORITY_OPTIONS, taskComparator, TaskPriority, taskPassesView } from '../../utils/viewConfig';
 import { BoardColumn, celebrationFor, COLUMN_META, columnOf, daysLate, initialsOf, missingEstimate, PRIORITY_META, shortDate, sprintLabel, uniq } from './taskMeta';
 
 interface ModernTaskListProps {
@@ -17,6 +19,9 @@ interface ModernTaskListProps {
     onNotifyTask?: (task: Task) => void;
     onDataImport: (tasks: Task[], resources: Resource[]) => void;
     onCelebrate?: (message: string) => void;
+    /** Admin görünüm ayarı: en düşük öncelik ve sıralama */
+    minPriority?: TaskPriority;
+    sortKey?: TaskSortKey;
 }
 
 const GROUPS: BoardColumn[] = [TaskStatus.InProgress, TaskStatus.ToDo, TaskStatus.Done];
@@ -25,7 +30,7 @@ const lower = (s: string) => s.toLocaleLowerCase('tr-TR');
 
 type ImportKind = 'excel' | 'jira' | 'csv';
 
-const ModernTaskList: React.FC<ModernTaskListProps> = ({ tasks, resources, sprintNames, onStatusChange, onViewTask, onEditTask, onDeleteTask, onNotifyTask, onDataImport, onCelebrate }) => {
+const ModernTaskList: React.FC<ModernTaskListProps> = ({ tasks, resources, sprintNames, onStatusChange, onViewTask, onEditTask, onDeleteTask, onNotifyTask, onDataImport, onCelebrate, minPriority = 'Low' as TaskPriority, sortKey = 'smart' as TaskSortKey }) => {
     const [query, setQuery] = useState('');
     const [status, setStatus] = useState<string>('all');
     const [person, setPerson] = useState<string>('all');
@@ -45,19 +50,20 @@ const ModernTaskList: React.FC<ModernTaskListProps> = ({ tasks, resources, sprin
     const filtered = useMemo(() => {
         const q = lower(query.trim());
         return tasks.filter(t =>
+            taskPassesView({ minTaskPriority: minPriority }, t) &&
             (!q || lower(t.name).includes(q) || lower(t.jiraId || '').includes(q)) &&
             (status === 'all' || columnOf(t.status) === status) &&
             (person === 'all' || t.resourceName === person) &&
             (sprint === 'all' || String(t.version) === sprint) &&
             (unit === 'all' || t.unit === unit)
         );
-    }, [tasks, query, status, person, sprint, unit]);
+    }, [tasks, query, status, person, sprint, unit, minPriority]);
+    const hiddenByView = minPriority === 'Low' ? 0 : tasks.filter(t => !taskPassesView({ minTaskPriority: minPriority }, t)).length;
 
     const groups = useMemo(() => GROUPS.map(g => ({
         id: g,
-        rows: filtered.filter(t => columnOf(t.status) === g).sort((a, b) =>
-            daysLate(b) - daysLate(a) || PRIORITY_META[a.priority].rank - PRIORITY_META[b.priority].rank || a.name.localeCompare(b.name, 'tr')),
-    })).filter(g => g.rows.length > 0), [filtered]);
+        rows: filtered.filter(t => columnOf(t.status) === g).sort(taskComparator(sortKey)),
+    })).filter(g => g.rows.length > 0), [filtered, sortKey]);
 
     const changeStatus = (id: string, next: TaskStatus) => {
         const message = onCelebrate ? celebrationFor(tasks, id, next, sprintNames) : null;
@@ -165,6 +171,8 @@ const ModernTaskList: React.FC<ModernTaskListProps> = ({ tasks, resources, sprin
                     <button type="button" className="m-icon-btn" aria-label="Kapat" onClick={() => setNotice(null)}><Icon name="x" size={18} /></button>
                 </div>
             )}
+
+            {hiddenByView > 0 && <ViewFilterNote text={`Yönetici ayarı: ${MIN_PRIORITY_OPTIONS.find(o => o.value === minPriority)!.label.toLocaleLowerCase('tr-TR')} görevler gösteriliyor · ${hiddenByView} görev gizli`} />}
 
             {groups.length === 0 && (
                 <div className="m-surface rounded-2xl px-5 py-10 text-center">

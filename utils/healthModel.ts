@@ -1,4 +1,4 @@
-import { HealthFactorKey, HealthSnapshotEntry, HealthWeekSnapshot, PmoRating, Project, TaskStatus, UserRole, WeeklyReport, WorkspaceData } from '../types';
+import { HealthConfig, HealthFactorKey, HealthSnapshotEntry, HealthWeekSnapshot, PmoRating, Project, TaskStatus, UserRole, WeeklyReport, WorkspaceData } from '../types';
 import { findOverAllocations } from './allocations';
 import { canFor, PermissionHolder } from './permissions';
 import { buildProjectEVM, defaultStatusMonth, ProjectEVM } from './evm';
@@ -21,6 +21,8 @@ import { isoWeekOf, weekStart } from './weeklyReport';
  *     biriktiğinde ağırlıklar regresyonla kalibre edilir.
  *
  * Sürümler: uzman-1 (8 girdi) → uzman-2 (+ söz tutma oranı, AI metin puanı).
+ * Admin ağırlıkları (0 = girdi kapalı) ve bant eşiklerini değiştirebilir
+ * (healthConfig); o zaman sürüm "uzman-2/özel" olarak işaretlenir.
  *
  * Saf/test edilebilir; ekranlar executive.projectHealth üzerinden kullanır.
  */
@@ -63,7 +65,8 @@ export const PERCEPTION_GAP_ALERT = 0.3;
 /** Rapordan gelen girdiler (PY/AI puanı, söz tutma) bu kadar hafta geçerli: bu hafta + önceki 3 */
 const REPORT_WEEKS = 4;
 /** Regresyon için gereken etiketli gözlem: değişken başına ~10 */
-export const MIN_LABELED_OBSERVATIONS = HEALTH_FACTORS.length * 10;
+const OBSERVATIONS_PER_FACTOR = 10;
+export const MIN_LABELED_OBSERVATIONS = HEALTH_FACTORS.length * OBSERVATIONS_PER_FACTOR;
 const MAX_HISTORY_WEEKS = 104;
 
 export interface HealthFactor {
@@ -89,7 +92,112 @@ export interface HealthEvaluation {
     perceptionGap: number | null; // öznel − nesnel (−1..1)
 }
 
-export const bandOf = (score: number): HealthBand => (score >= BAND_GOOD ? 'good' : score >= BAND_WARN ? 'warn' : 'bad');
+// ---------------------------------------------------------------- yöntem ayarları
+
+/** Etkin yöntem: normalize ağırlıklar (toplam 1; 0 = kapalı) ve bant eşikleri */
+export interface HealthSettings {
+    weights: Record<HealthFactorKey, number>;
+    bandGood: number;
+    bandWarn: number;
+    customized: boolean;
+    version: string;
+    enabled: HealthFactorKey[];
+}
+
+const DEFAULT_WEIGHTS = Object.fromEntries(HEALTH_FACTORS.map(f => [f.key, f.weight])) as Record<HealthFactorKey, number>;
+
+export const DEFAULT_HEALTH_SETTINGS: HealthSettings = {
+    weights: DEFAULT_WEIGHTS,
+    bandGood: BAND_GOOD,
+    bandWarn: BAND_WARN,
+    customized: false,
+    version: HEALTH_MODEL_VERSION,
+    enabled: HEALTH_FACTORS.map(f => f.key),
+};
+
+const validWeight = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0;
+
+/**
+ * Admin ayarlarından etkin yöntemi çıkarır. Ağırlıklar göreli girilir ve
+ * normalize edilir; tümü 0 ya da geçersizse varsayılan ağırlıklar kullanılır.
+ * Bantlar 0–100 arasında ve "izlemede" < "sağlıklı" olacak şekilde düzeltilir.
+ */
+export const healthSettingsOf = (ws: Pick<WorkspaceData, 'healthConfig'> | undefined): HealthSettings => {
+    const cfg = ws?.healthConfig;
+    if (!cfg) return DEFAULT_HEALTH_SETTINGS;
+    const raw = HEALTH_FACTORS.map(f => {
+        const v = cfg.weights?.[f.key];
+        return [f.key, validWeight(v) ? v : f.weight] as const;
+    });
+    const total = raw.reduce((s, [, v]) => s + v, 0);
+    const weightsCustom = !!cfg.weights && Object.entries(cfg.weights).some(([k, v]) => FACTOR_BY_KEY.has(k as HealthFactorKey) && validWeight(v) && Math.abs(v - DEFAULT_WEIGHTS[k as HealthFactorKey]) > 1e-9);
+    const weights = total > 0 && weightsCustom
+        ? Object.fromEntries(raw.map(([k, v]) => [k, v / total])) as Record<HealthFactorKey, number>
+        : DEFAULT_WEIGHTS;
+    const good = typeof cfg.bandGood === 'number' && Number.isFinite(cfg.bandGood) ? Math.round(Math.max(1, Math.min(100, cfg.bandGood))) : BAND_GOOD;
+    const warnRaw = typeof cfg.bandWarn === 'number' && Number.isFinite(cfg.bandWarn) ? Math.round(Math.max(0, Math.min(99, cfg.bandWarn))) : BAND_WARN;
+    const warn = Math.min(warnRaw, good - 1);
+    const customized = weights !== DEFAULT_WEIGHTS || good !== BAND_GOOD || warn !== BAND_WARN;
+    return {
+        weights,
+        bandGood: good,
+        bandWarn: warn,
+        customized,
+        version: weights !== DEFAULT_WEIGHTS ? `${HEALTH_MODEL_VERSION}/özel` : HEALTH_MODEL_VERSION,
+        enabled: HEALTH_FACTORS.filter(f => weights[f.key] > 0).map(f => f.key),
+    };
+};
+
+/**
+ * Admin'in yöntem değişikliğini uygular. Varsayılana eşit değerler silinir;
+ * hiçbir şey kalmazsa undefined (varsayılan yöntem). Tüm girdiler kapatılamaz.
+ */
+export const updateHealthConfig = (
+    cfg: HealthConfig | undefined,
+    patch: { weight?: { key: HealthFactorKey; value: number }; bandGood?: number; bandWarn?: number },
+): HealthConfig | undefined | null => {
+    const weights: Partial<Record<HealthFactorKey, number>> = { ...(cfg?.weights || {}) };
+    if (patch.weight) {
+        const { key, value } = patch.weight;
+        if (!FACTOR_BY_KEY.has(key) || !validWeight(value)) return null;
+        weights[key] = Math.round(value * 1000) / 1000;
+        if (HEALTH_FACTORS.every(f => (weights[f.key] ?? f.weight) <= 0)) return null;
+    }
+    const bandGood = patch.bandGood ?? cfg?.bandGood;
+    const bandWarn = patch.bandWarn ?? cfg?.bandWarn;
+    const good = bandGood ?? BAND_GOOD;
+    const warn = bandWarn ?? BAND_WARN;
+    if (good < 1 || good > 100 || warn < 0 || warn >= good) return null;
+    const cleanWeights = Object.fromEntries(Object.entries(weights).filter(([k, v]) => Math.abs((v as number) - DEFAULT_WEIGHTS[k as HealthFactorKey]) > 1e-9));
+    const next: HealthConfig = {
+        ...(Object.keys(cleanWeights).length ? { weights: cleanWeights } : {}),
+        ...(good !== BAND_GOOD ? { bandGood: good } : {}),
+        ...(warn !== BAND_WARN ? { bandWarn: warn } : {}),
+    };
+    return Object.keys(next).length ? next : undefined;
+};
+
+/** Taslak yöntemi doğrular ve sadeleştirir (admin "Kaydet"); geçersizse null, tamamen varsayılansa undefined */
+export const cleanHealthConfig = (cfg: HealthConfig | undefined): HealthConfig | undefined | null => {
+    if (!cfg) return undefined;
+    let out: HealthConfig | undefined;
+    for (const f of HEALTH_FACTORS) {
+        const v = cfg.weights?.[f.key];
+        if (v === undefined) continue;
+        const next = updateHealthConfig(out, { weight: { key: f.key, value: v } });
+        if (next === null) return null;
+        out = next;
+    }
+    if (cfg.bandGood !== undefined || cfg.bandWarn !== undefined) {
+        const next = updateHealthConfig(out, { bandGood: cfg.bandGood, bandWarn: cfg.bandWarn });
+        if (next === null) return null;
+        out = next;
+    }
+    return out;
+};
+
+export const bandOf = (score: number, settings: Pick<HealthSettings, 'bandGood' | 'bandWarn'> = DEFAULT_HEALTH_SETTINGS): HealthBand =>
+    (score >= settings.bandGood ? 'good' : score >= settings.bandWarn ? 'warn' : 'bad');
 export const confidenceOf = (coverage: number): HealthConfidence => (coverage >= 0.7 ? 'high' : coverage >= 0.45 ? 'medium' : 'low');
 export const CONFIDENCE_LABELS: Record<HealthConfidence, string> = { high: 'Yüksek', medium: 'Orta', low: 'Düşük' };
 
@@ -106,6 +214,7 @@ export interface HealthContext {
     year: number;
     statusMonth: number;
     overPeopleByMonth: Map<number, Set<string>>; // ay → kapasite üstü kişi id'leri
+    settings: HealthSettings;
 }
 
 export const buildHealthContext = (ws: WorkspaceData, year: number, statusMonth: number, now: Date = new Date()): HealthContext => {
@@ -115,7 +224,7 @@ export const buildHealthContext = (ws: WorkspaceData, year: number, statusMonth:
         if (!overPeopleByMonth.has(o.month)) overPeopleByMonth.set(o.month, new Set());
         overPeopleByMonth.get(o.month)!.add(o.personId);
     });
-    return { now, year, statusMonth, overPeopleByMonth };
+    return { now, year, statusMonth, overPeopleByMonth, settings: healthSettingsOf(ws) };
 };
 
 // ---------------------------------------------------------------- girdiler
@@ -163,9 +272,9 @@ export const commitmentRatio = (reports: WeeklyReport[] | undefined, projectId: 
     return plans ? { ratio: earned / plans, plans } : undefined;
 };
 
-const factor = (key: HealthFactorKey, value: number | null, detail: string, note?: string): HealthFactor => {
+const makeFactor = (weights: Record<HealthFactorKey, number>) => (key: HealthFactorKey, value: number | null, detail: string, note?: string): HealthFactor => {
     const def = FACTOR_BY_KEY.get(key)!;
-    return { key, label: def.label, weight: def.weight, value: value === null ? null : round2(clamp01(value)), detail, points: 0, ...(note ? { note } : {}) };
+    return { key, label: def.label, weight: weights[key], value: value === null ? null : round2(clamp01(value)), detail, points: 0, ...(note ? { note } : {}) };
 };
 
 interface RawInputs {
@@ -184,6 +293,7 @@ interface RawInputs {
 const computeInputs = (ws: WorkspaceData, project: Project, ctx: HealthContext): RawInputs => {
     const evm = buildProjectEVM(ws, project.id, ctx.year, ctx.statusMonth);
     const out: HealthFactor[] = [];
+    const factor = makeFactor(ctx.settings.weights);
 
     // Takvim ve bütçe — yalnız maliyetlenebiliyorsa
     const spi = evm.costed ? evm.spi : null;
@@ -245,7 +355,8 @@ const computeInputs = (ws: WorkspaceData, project: Project, ctx: HealthContext):
         && (e.urgency === 'critical' || (daysUntilNeed(e, ctx.now) ?? 0) < 0)).length;
     out.push(factor('expectations', 1 - 0.5 * blocking, blocking ? `${blocking} kritik / süresi geçmiş beklenti` : 'Bekleyen kritik karar yok'));
 
-    return { factors: out, evm, highRisks, mediumRisks, overdue, overPeople: overTeam.size, blockingExpectations: blocking, pmScore: pm?.score, aiScore: ai?.score, commitment: kept?.ratio };
+    // Admin'in kapattığı (ağırlığı 0) girdiler skora ve listeye girmez
+    return { factors: out.filter(f => f.weight > 0), evm, highRisks, mediumRisks, overdue, overPeople: overTeam.size, blockingExpectations: blocking, pmScore: pm?.score, aiScore: ai?.score, commitment: kept?.ratio };
 };
 
 // ---------------------------------------------------------------- skor
@@ -296,7 +407,7 @@ export const evaluateProjectHealth = (ws: WorkspaceData, project: Project, ctx: 
 
     return {
         score,
-        band: bandOf(score),
+        band: bandOf(score, ctx.settings),
         coverage: round2(coverage),
         confidence: confidenceOf(coverage),
         factors,
@@ -360,7 +471,7 @@ export const buildHealthSnapshot = (ws: WorkspaceData, now: Date = new Date()): 
         h.factors.forEach(f => { if (f.value !== null) x[f.key] = f.value; });
         return { projectId: p.id, score: h.score, coverage: h.coverage, x };
     });
-    return { year: wk.year, week: wk.week, takenAt: now.toISOString(), model: HEALTH_MODEL_VERSION, projects };
+    return { year: wk.year, week: wk.week, takenAt: now.toISOString(), model: ctx.settings.version, projects };
 };
 
 const sameDay = (iso: string, now: Date): boolean => {
@@ -413,7 +524,7 @@ const pearson = (xs: number[], ys: number[]): number | null => {
 };
 
 /** Eğitim verisi: PMO puanı (Y) ile aynı haftanın fotoğrafındaki skor/girdiler (X) */
-export const calibrationStatus = (ws: Pick<WorkspaceData, 'healthHistory' | 'pmoRatings'>): CalibrationStatus => {
+export const calibrationStatus = (ws: Pick<WorkspaceData, 'healthHistory' | 'pmoRatings'> & Partial<Pick<WorkspaceData, 'healthConfig'>>): CalibrationStatus => {
     const history = ws.healthHistory || [];
     const ratings = ws.pmoRatings || [];
     const model: number[] = [];
@@ -431,7 +542,7 @@ export const calibrationStatus = (ws: Pick<WorkspaceData, 'healthHistory' | 'pmo
         ratings: ratings.length,
         labeled: model.length,
         labeledProjects: projects.size,
-        needed: MIN_LABELED_OBSERVATIONS,
+        needed: healthSettingsOf(ws).enabled.length * OBSERVATIONS_PER_FACTOR,
         mae: model.length ? round1(model.reduce((s, v, i) => s + Math.abs(v - pmo[i]), 0) / model.length) : null,
         correlation: pearson(model, pmo),
     };

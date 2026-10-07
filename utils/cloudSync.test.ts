@@ -74,11 +74,13 @@ describe('mergeWorkspaceDoc', () => {
     });
 
     it('admin yetkileri ve profiller paylaşılır', () => {
-        const ws: WorkspaceData = { ...buildWs(), rolePermissions: { py: ['project.create', 'health.rate'] }, profiles: [{ id: 'p1', role: 'mudur', personId: 'k1' }] };
+        const ws: WorkspaceData = { ...buildWs(), rolePermissions: { py: ['project.create', 'health.rate'] }, profiles: [{ id: 'p1', role: 'mudur', personId: 'k1' }], viewConfig: { mudur: { minRiskScore: 15 } }, healthConfig: { bandGood: 80 } };
         const { core, privateDoc } = splitWorkspaceDoc(ws);
         const merged = mergeWorkspaceDoc(createEmptyWorkspace(), core as Partial<WorkspaceData>, privateDoc);
         expect(merged.rolePermissions).toEqual(ws.rolePermissions);
         expect(merged.profiles).toEqual(ws.profiles);
+        expect(merged.viewConfig).toEqual(ws.viewConfig);
+        expect(merged.healthConfig).toEqual(ws.healthConfig);
     });
 
     it('private belge yokken (yönetici RLS) notlar boş iner, çekirdek veri tam gelir', () => {

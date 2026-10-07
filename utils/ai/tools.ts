@@ -1,4 +1,4 @@
-import { ProjectStatus, RagStatus, RiskStatus, Task, TaskStatus } from '../../types';
+import { PermissionKey, ProjectStatus, RagStatus, RiskStatus, Task, TaskStatus } from '../../types';
 import { getPlanLockStatus, MONTH_INDEXES, ROLE_LABELS, summarizeByProject } from '../allocations';
 import { AUDIT_ACTION_LABELS } from '../audit';
 import { buildCostReport } from '../costing';
@@ -16,6 +16,7 @@ import { buildStatusReport } from '../statusReport';
 import { buildUtilization } from '../utilization';
 import { RAG_SOURCE_LABELS, RagSourceType } from '../rag/sources';
 import { summarizeWorkPackages } from '../workPackages';
+import { can } from '../permissions';
 import { AiAction, AiProposal, describeAction, validateAction } from './actions';
 import { JsonSchema, ToolCall, ToolSpec } from './protocol';
 import {
@@ -39,6 +40,8 @@ export interface ToolDef {
     privateOnly?: boolean;
     /** Değişiklik ÖNERİSİ üreten araç — yalnızca veri girebilen rollere sunulur */
     writeOnly?: boolean;
+    /** Yalnız bu yetkiyi taşıyan rollere sunulur (ör. denetim günlüğü, veri sağlığı) */
+    permission?: PermissionKey;
     run: (args: Args, ctx: ToolContext) => unknown | Promise<unknown>;
 }
 
@@ -648,6 +651,7 @@ export const AI_TOOLS: ToolDef[] = [
     },
     {
         label: 'Veri sağlığı',
+        permission: 'app.dataHealth',
         spec: {
             name: 'veri_sagligi',
             description: 'Veri kalitesi denetimi: yetim tahsis, eşleşmeyen görev ataması/risk sahibi, mükerrer personel, bölümü veya ünvan maliyeti eksik kayıt, sahipsiz proje.',
@@ -666,6 +670,7 @@ export const AI_TOOLS: ToolDef[] = [
     },
     {
         label: 'Son değişiklikler',
+        permission: 'app.audit',
         spec: {
             name: 'son_degisiklikler',
             description: 'Denetim günlüğünden son değişiklikler (proje oluşturma/silme, RAG değişimi, plan onay/red/kilit, risk ekleme/kapatma, veri içe aktarma…): kim, ne zaman, ne yaptı.',
@@ -917,8 +922,10 @@ AI_TOOLS.push(...PROPOSAL_TOOLS);
 const TOOL_MAP = new Map(AI_TOOLS.map(t => [t.spec.name, t]));
 
 /** Bu kullanıcıya sunulacak araç tanımları (yönetici rollerine not/istek araçları hiç gönderilmez) */
-export const toolSpecsFor = (ctx: ToolContext): ToolSpec[] =>
-    AI_TOOLS.filter(t => (!t.privateOnly || ctx.canSeePrivate) && (!t.writeOnly || ctx.canWrite)).map(t => t.spec);
+const toolAvailable = (t: ToolDef, ctx: ToolContext): boolean =>
+    (!t.privateOnly || ctx.canSeePrivate) && (!t.writeOnly || ctx.canWrite) && (!t.permission || can(ctx.identity, t.permission));
+
+export const toolSpecsFor = (ctx: ToolContext): ToolSpec[] => AI_TOOLS.filter(t => toolAvailable(t, ctx)).map(t => t.spec);
 
 export const toolLabel = (name: string): string => TOOL_MAP.get(name)?.label || name;
 
@@ -935,7 +942,7 @@ const serialize = (value: unknown): string => {
 /** Aracı çalıştırır; sonuç (ya da hata açıklaması) modele gidecek JSON metnidir */
 export const executeTool = async (call: Pick<ToolCall, 'name' | 'arguments'>, ctx: ToolContext): Promise<{ content: string; ok: boolean }> => {
     const def = TOOL_MAP.get(call.name);
-    if (!def || (def.privateOnly && !ctx.canSeePrivate) || (def.writeOnly && !ctx.canWrite)) {
+    if (!def || !toolAvailable(def, ctx)) {
         return { content: JSON.stringify({ hata: `Bilinmeyen ya da bu rol için kullanılamayan araç: ${call.name}` }), ok: false };
     }
     try {

@@ -4,6 +4,7 @@ import { ROLE_LABELS } from '../../utils/allocations';
 import { useAssistantOptional } from '../assistant/AssistantContext';
 import { RocketLogo } from './Eggs';
 import { Icon, IconName } from './icons';
+import { AdminSection, ADMIN_SECTIONS } from './adminSections';
 
 export interface SidebarProject {
     id: string;
@@ -27,6 +28,10 @@ interface ModernSidebarProps {
     onNavigate: (view: View) => void;
     exec: boolean; // Yönetim ekranı yetkisi
     canAdmin: boolean; // Yönetici (admin) ekranı yetkisi
+    /** Admin rolü: yalnız yönetici konsolu (proje yönetimi ekranları yok) */
+    consoleMode?: boolean;
+    adminSection?: AdminSection;
+    onAdminSection?: (s: AdminSection) => void;
     /** Profil değiştirme penceresini aç */
     onOpenProfile: () => void;
     /** Yönetimden beklentiler rozeti (yönetim: yanıtsız, diğerleri: aktif) */
@@ -49,13 +54,14 @@ interface ModernSidebarProps {
     // Ayarlar ve veri işlemleri
     onOpenSettings: () => void;
     onSwitchToClassic: () => void;
-    onSaveBackup: () => void;
-    onLoadBackup: (file: File) => void;
+    /** Yedek, veri sağlığı ve denetim günlüğü yalnız ilgili app.* yetkisiyle verilir */
+    onSaveBackup?: () => void;
+    onLoadBackup?: (file: File) => void;
     cloudLinked: boolean;
     onOpenCloud: () => void;
     healthAlerts: number;
-    onOpenHealth: () => void;
-    onOpenAudit: () => void;
+    onOpenHealth?: () => void;
+    onOpenAudit?: () => void;
     onOpenAbout: () => void;
     // Sürprizler
     onLogoLaunch: () => void;
@@ -94,7 +100,7 @@ const NavItem: React.FC<{ icon: IconName; label: string; active: boolean; onClic
 );
 
 /** "Diğer" menüsü: yedek, bulut, veri sağlığı, denetim ve arayüz (profil seçimi ayrı pencerede) */
-const ToolsMenu: React.FC<Pick<ModernSidebarProps, 'onSwitchToClassic' | 'onSaveBackup' | 'onLoadBackup' | 'cloudLinked' | 'onOpenCloud' | 'healthAlerts' | 'onOpenHealth' | 'onOpenAudit' | 'onOpenAbout' | 'onOpenProfile'> & { onDone: () => void }> = (p) => {
+const ToolsMenu: React.FC<Pick<ModernSidebarProps, 'onSwitchToClassic' | 'onSaveBackup' | 'onLoadBackup' | 'cloudLinked' | 'onOpenCloud' | 'healthAlerts' | 'onOpenHealth' | 'onOpenAudit' | 'onOpenAbout' | 'onOpenProfile' | 'consoleMode'> & { onDone: () => void }> = (p) => {
     const fileRef = useRef<HTMLInputElement>(null);
     const item = (icon: IconName, label: string, run: () => void, trailing?: React.ReactNode) => (
         <button type="button" role="menuitem" onClick={() => { run(); p.onDone(); }} className="m-row-link w-full flex items-center gap-3 min-h-[44px] px-3.5 text-[15px]">
@@ -107,26 +113,29 @@ const ToolsMenu: React.FC<Pick<ModernSidebarProps, 'onSwitchToClassic' | 'onSave
         <div role="menu" aria-label="Diğer araçlar" className="absolute bottom-full left-2 right-2 mb-2 m-surface m-pop rounded-2xl py-1.5 z-50 max-h-[70vh] overflow-y-auto">
             {item('userCog', 'Profil değiştir', p.onOpenProfile)}
             <div className="border-t m-sep my-1"></div>
-            {item('download', 'Yedeği indir', p.onSaveBackup)}
-            {item('upload', 'Yedekten yükle', () => fileRef.current?.click())}
+            {p.onSaveBackup && item('download', 'Yedeği indir', p.onSaveBackup)}
+            {p.onLoadBackup && item('upload', 'Yedekten yükle', () => fileRef.current?.click())}
             {item('cloud', 'Bulut eşitleme', p.onOpenCloud, p.cloudLinked ? <span className="text-[13px] m-ink-ok font-semibold">Bağlı</span> : undefined)}
-            {item('activity', 'Veri sağlığı', p.onOpenHealth, p.healthAlerts > 0 ? <span className="text-[13px] font-semibold m-ink-warn">{p.healthAlerts}</span> : undefined)}
-            {item('history', 'Denetim günlüğü', p.onOpenAudit)}
+            {p.onOpenHealth && item('activity', 'Veri sağlığı', p.onOpenHealth, p.healthAlerts > 0 ? <span className="text-[13px] font-semibold m-ink-warn">{p.healthAlerts}</span> : undefined)}
+            {p.onOpenAudit && item('history', 'Denetim günlüğü', p.onOpenAudit)}
             {item('info', 'Hakkında', p.onOpenAbout)}
-            <div className="border-t m-sep my-1"></div>
-            {item('swap', 'Klasik arayüze dön', p.onSwitchToClassic)}
-            <input
-                ref={fileRef}
-                type="file"
-                accept=".json"
-                className="hidden"
-                onChange={(e) => { const f = e.target.files?.[0]; if (f) p.onLoadBackup(f); e.target.value = ''; p.onDone(); }}
-            />
+            {!p.consoleMode && <div className="border-t m-sep my-1"></div>}
+            {!p.consoleMode && item('swap', 'Klasik arayüze dön', p.onSwitchToClassic)}
+            {p.onLoadBackup && (
+                <input
+                    ref={fileRef}
+                    type="file"
+                    accept=".json"
+                    className="hidden"
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) p.onLoadBackup!(f); e.target.value = ''; p.onDone(); }}
+                />
+            )}
         </div>
     );
 };
 
 const ModernSidebar: React.FC<ModernSidebarProps> = (props) => {
+    const { consoleMode, adminSection, onAdminSection } = props;
     const { isOpen, onClose, currentView, hasActiveProject, onNavigate, exec, canAdmin, onOpenProfile, expectationBadge, reportBadge, meetingBadge, projects, activeProjectId, onOpenProject, canCreateProject, onNewProject, onOpenSearch, currentRole, currentPersonId, people, needsPerson, onOpenSettings, onLogoLaunch, onHyperdrive } = props;
     const [menuOpen, setMenuOpen] = useState(false);
     const assistant = useAssistantOptional();
@@ -147,7 +156,7 @@ const ModernSidebar: React.FC<ModernSidebarProps> = (props) => {
                     <button type="button" className="m-icon-btn lg:hidden" aria-label="Menüyü kapat" onClick={onClose}><Icon name="x" /></button>
                 </div>
 
-                <button
+                {!consoleMode && <button
                     type="button"
                     onClick={() => { onOpenSearch(); onClose(); }}
                     className="m-search flex items-center gap-2 min-h-[40px] px-2.5 rounded-[10px] text-[15px] m-text-3 text-left"
@@ -156,8 +165,16 @@ const ModernSidebar: React.FC<ModernSidebarProps> = (props) => {
                     <Icon name="search" size={18} strokeWidth={2} />
                     <span className="flex-1">Ara</span>
                     <kbd className="text-[12px] px-1.5 rounded-[5px] border m-sep font-sans">⌘K</kbd>
-                </button>
+                </button>}
 
+                {consoleMode ? (
+                    <div className="flex flex-col gap-0.5">
+                        <span className="pl-2.5 pb-1 text-[13px] font-semibold m-text-3">Yönetici konsolu</span>
+                        {ADMIN_SECTIONS.map(s => (
+                            <NavItem key={s.key} icon={s.icon} label={s.label} active={currentView === View.Admin && adminSection === s.key} onClick={() => { onAdminSection?.(s.key); go(View.Admin); }} />
+                        ))}
+                    </div>
+                ) : <>
                 <div className="flex flex-col gap-0.5">
                     {exec && <NavItem icon="gauge" label="Yönetim" active={isActive(View.Executive)} onClick={() => go(View.Executive)} />}
                     <NavItem icon="grid" label="Portföy" active={isActive(View.Portfolio)} onClick={() => go(View.Portfolio)} />
@@ -205,9 +222,10 @@ const ModernSidebar: React.FC<ModernSidebarProps> = (props) => {
                         </button>
                     )}
                 </div>
+                </>}
 
                 <div className="mt-auto flex flex-col gap-1.5">
-                    {assistant?.enabled && (
+                    {assistant?.enabled && !consoleMode && (
                         <button type="button" onClick={() => { assistant.setOpen(true); onClose(); }} className="m-row-link w-full flex items-center gap-3 min-h-[44px] px-2.5 rounded-[10px] text-[15px] font-medium">
                             <span className="m-text-3"><Icon name="message" /></span>
                             Asistan

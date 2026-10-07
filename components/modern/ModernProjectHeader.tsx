@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Project, ProjectStatus, RagStatus, View } from '../../types';
+import { Project, ProjectSectionKey, ProjectStatus, RagStatus, View } from '../../types';
 import { Icon, IconName } from './icons';
 
 /**
@@ -20,8 +20,8 @@ export const PROJECT_STATUS_LABEL: Record<ProjectStatus, string> = {
     tamamlandi: 'Tamamlandı',
 };
 
-interface Tab { view: View; label: string }
-interface MoreItem { key: string; label: string; icon: IconName; view?: View; run?: () => void }
+interface Tab { view: View; label: string; section: ProjectSectionKey }
+interface MoreItem { key: string; label: string; icon: IconName; view?: View; run?: () => void; section?: ProjectSectionKey }
 
 interface ModernProjectHeaderProps {
     project: Project;
@@ -34,15 +34,17 @@ interface ModernProjectHeaderProps {
     onStatusReport: () => void;
     onNewTask: () => void;
     onOpenWorkPackages: () => void;
+    /** Rolün görebildiği sekmeler (admin görünüm ayarı); yoksa hepsi */
+    sections?: ReadonlySet<ProjectSectionKey>;
 }
 
 const TABS: Tab[] = [
-    { view: View.Overview, label: 'Genel bakış' },
-    { view: View.Roadmap, label: 'Pano' },
-    { view: View.Tasks, label: 'Liste' },
-    { view: View.Kanban, label: 'Zaman çizelgesi' },
-    { view: View.Risks, label: 'Riskler' },
-    { view: View.Resources, label: 'Ekip' },
+    { view: View.Overview, label: 'Genel bakış', section: 'overview' },
+    { view: View.Roadmap, label: 'Pano', section: 'board' },
+    { view: View.Tasks, label: 'Liste', section: 'list' },
+    { view: View.Kanban, label: 'Zaman çizelgesi', section: 'timeline' },
+    { view: View.Risks, label: 'Riskler', section: 'risks' },
+    { view: View.Resources, label: 'Ekip', section: 'team' },
 ];
 
 const fmt = (iso?: string) => {
@@ -51,18 +53,20 @@ const fmt = (iso?: string) => {
     return isNaN(d.getTime()) ? '' : d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric' });
 };
 
-const ModernProjectHeader: React.FC<ModernProjectHeaderProps> = ({ project, ownerName, currentView, onNavigate, onBack, exec, aiEnabled, onStatusReport, onNewTask, onOpenWorkPackages }) => {
+const ModernProjectHeader: React.FC<ModernProjectHeaderProps> = ({ project, ownerName, currentView, onNavigate, onBack, exec, aiEnabled, onStatusReport, onNewTask, onOpenWorkPackages, sections }) => {
     const [moreOpen, setMoreOpen] = useState(false);
+    const shows = (s?: ProjectSectionKey) => !s || !sections || sections.has(s);
+    const tabs = TABS.filter(t => shows(t.section));
 
-    const more: MoreItem[] = [
-        { key: 'goals', label: 'Hedefler', icon: 'target', view: View.Goals },
+    const more: MoreItem[] = ([
+        { key: 'goals', label: 'Hedefler', icon: 'target', view: View.Goals, section: 'goals' },
         ...(!exec ? [
             { key: 'requests', label: 'Müşteri istekleri', icon: 'inbox' as IconName, view: View.Requests },
             { key: 'notes', label: 'Günlük', icon: 'pen' as IconName, view: View.Notes },
         ] : []),
-        { key: 'wp', label: 'İş paketleri', icon: 'briefcase', run: onOpenWorkPackages },
-        ...(aiEnabled ? [{ key: 'ai', label: 'Asistan (tam ekran)', icon: 'message' as IconName, view: View.AI }] : []),
-    ];
+        { key: 'wp', label: 'İş paketleri', icon: 'briefcase', run: onOpenWorkPackages, section: 'workPackages' },
+        ...(aiEnabled ? [{ key: 'ai', label: 'Asistan (tam ekran)', icon: 'message' as IconName, view: View.AI, section: 'assistant' as ProjectSectionKey }] : []),
+    ] as MoreItem[]).filter(m => shows(m.section));
     const moreActive = more.find(m => m.view === currentView);
 
     const start = fmt(project.settings.projectStartDate);
@@ -100,7 +104,7 @@ const ModernProjectHeader: React.FC<ModernProjectHeaderProps> = ({ project, owne
 
             <div className="flex flex-wrap items-center gap-2">
                 <div className="m-segmented" role="tablist" aria-label="Proje görünümleri">
-                    {TABS.map(t => (
+                    {tabs.map(t => (
                         <button
                             key={t.view}
                             type="button"
@@ -112,7 +116,7 @@ const ModernProjectHeader: React.FC<ModernProjectHeaderProps> = ({ project, owne
                             {t.label}
                         </button>
                     ))}
-                    <div className="relative">
+                    {more.length > 0 && <div className="relative">
                         <button
                             type="button"
                             className="m-segment"
@@ -144,7 +148,7 @@ const ModernProjectHeader: React.FC<ModernProjectHeaderProps> = ({ project, owne
                                 </div>
                             </>
                         )}
-                    </div>
+                    </div>}
                 </div>
             </div>
         </div>

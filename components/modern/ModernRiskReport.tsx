@@ -2,9 +2,10 @@ import React, { useMemo, useState } from 'react';
 import { WorkspaceData } from '../../types';
 import { exportRiskReportToExcel, filterRisks, groupByProject, isActiveRisk, matrixCounts, ReportRisk, reportRisks, riskKpis } from '../../utils/riskReport';
 import { RiskBand, RISK_BAND_LABELS, RISK_STATUS_LABELS } from '../../utils/risks';
+import { applyRiskView, RoleView } from '../../utils/viewConfig';
 import { Icon } from './icons';
 import { RiskMatrix, RiskScorePill, RiskSheet, RISK_STATUS_TONE, RISK_TONE } from './RiskParts';
-import { Card, rowSep } from './ui';
+import { Card, rowSep, ViewFilterNote } from './ui';
 
 /**
  * Portföy risk raporu. Yönetim önce yüksek riskleri ve dağılımı tek bakışta
@@ -16,12 +17,16 @@ interface ModernRiskReportProps {
     workspace: WorkspaceData;
     projectIds: Set<string>;
     onOpenProjectRisks: (projectId: string) => void;
+    /** Admin görünüm ayarı: en düşük skor, kapananlar, sıralama */
+    riskView?: Pick<RoleView, 'minRiskScore' | 'showClosedRisks' | 'riskSort'>;
 }
 
 const HIGH_LIMIT = 8;
 
-const ModernRiskReport: React.FC<ModernRiskReportProps> = ({ workspace, projectIds, onOpenProjectRisks }) => {
-    const rows = useMemo(() => reportRisks(workspace, projectIds), [workspace, projectIds]);
+const ModernRiskReport: React.FC<ModernRiskReportProps> = ({ workspace, projectIds, onOpenProjectRisks, riskView }) => {
+    const allRows = useMemo(() => reportRisks(workspace, projectIds), [workspace, projectIds]);
+    const rows = useMemo(() => (riskView ? applyRiskView(allRows, riskView as RoleView) : allRows), [allRows, riskView]);
+    const hiddenByView = allRows.length - rows.length;
     const kpis = useMemo(() => riskKpis(rows), [rows]);
     const counts = useMemo(() => matrixCounts(rows), [rows]);
     const highRisks = useMemo(() => rows.filter(r => isActiveRisk(r) && r.band === 'high'), [rows]);
@@ -73,6 +78,7 @@ const ModernRiskReport: React.FC<ModernRiskReportProps> = ({ workspace, projectI
             </header>
 
             <p className="m-0 text-[17px] leading-relaxed m-text-2 max-w-[78ch]">{summary}</p>
+            {hiddenByView > 0 && <ViewFilterNote text={`Yönetici ayarı: ${[riskView!.minRiskScore ? `skoru ${riskView!.minRiskScore} ve üstü riskler` : '', !riskView!.showClosedRisks ? 'kapananlar gizli' : ''].filter(Boolean).join(' · ')} · ${hiddenByView} risk gizli`} />}
 
             <section aria-label="Göstergeler" className="grid gap-4 grid-cols-2 xl:grid-cols-4">
                 {kpiTiles.map(k => (

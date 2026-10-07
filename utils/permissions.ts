@@ -15,7 +15,7 @@ import { PermissionKey, RolePermissions, UserRole } from '../types';
  * Saf/test edilebilir; kontrol noktaları can(kimlik, yetki) çağırır.
  */
 
-export type PermissionGroup = 'screens' | 'portfolio' | 'report' | 'decisions' | 'privacy';
+export type PermissionGroup = 'screens' | 'portfolio' | 'report' | 'decisions' | 'app' | 'privacy';
 
 export interface PermissionDef {
     key: PermissionKey;
@@ -32,13 +32,14 @@ export const PERMISSION_GROUP_LABELS: Record<PermissionGroup, string> = {
     portfolio: 'Portföy ve veri',
     report: 'Haftalık rapor ve sağlık',
     decisions: 'Yönetim kararları',
+    app: 'Uygulama yönetimi',
     privacy: 'Gizlilik',
 };
 
 export const PERMISSIONS: PermissionDef[] = [
-    { key: 'screen.executive', group: 'screens', label: 'Yönetim ekranı', description: 'Portföy sağlığı, EVM, dikkat isteyenler, brifing ve yönetici paketleri', defaults: ['mudur', 'pyb_sorumlu', 'admin'] },
+    { key: 'screen.executive', group: 'screens', label: 'Yönetim ekranı', description: 'Portföy sağlığı, EVM, dikkat isteyenler, brifing ve yönetici paketleri', defaults: ['mudur', 'pyb_sorumlu'] },
     { key: 'screen.admin', group: 'screens', label: 'Yönetici (admin) ekranı', description: 'Rol yetkilerini ve kişi profillerini yönetir', defaults: ['admin'], alwaysFor: ['admin'] },
-    { key: 'portfolio.viewAll', group: 'portfolio', label: 'Tüm projeleri görür', description: 'Kapsamı dışındaki projeler dahil tüm portföy (salt okunur)', defaults: ['mudur', 'pyb_sorumlu', 'pyb_destek', 'admin'] },
+    { key: 'portfolio.viewAll', group: 'portfolio', label: 'Tüm projeleri görür', description: 'Kapsamı dışındaki projeler dahil tüm portföy (salt okunur)', defaults: ['mudur', 'pyb_sorumlu', 'pyb_destek'] },
     { key: 'project.create', group: 'portfolio', label: 'Proje oluşturur', description: 'Yeni proje açar', defaults: ['py', 'pyb_destek'] },
     { key: 'project.assignOwner', group: 'portfolio', label: 'Proje sahibini atar', description: 'Tüm projelerde proje yöneticisini ve durumu değiştirir (PY kendi projesinde her zaman yapabilir)', defaults: ['pyb_destek'] },
     { key: 'datapool.edit', group: 'portfolio', label: 'Veri havuzunu düzenler', description: 'Personel, bölüm, rol kataloğu, ünvan, izinler ve Excel içe aktarma', defaults: ['pyb_destek'] },
@@ -47,6 +48,9 @@ export const PERMISSIONS: PermissionDef[] = [
     { key: 'meeting.review', group: 'decisions', label: 'Müşteri görüşmelerini onaylar', description: 'Onaya sunulan görüşmeleri onaylar ya da reddeder', defaults: ['mudur', 'pyb_sorumlu'] },
     { key: 'report.review', group: 'report', label: 'Haftalık raporu denetler ve yayınlar', description: 'Format denetimi, haftayı yayınlama, müdürlere gönderim, rapor ayarları ve AI metin puanı', defaults: ['pyb_destek'] },
     { key: 'health.rate', group: 'report', label: 'PMO sağlık puanı verir', description: 'Birleşik raporda projelere haftalık 1–10 puan (sağlık modelinin hedef değişkeni)', defaults: ['pyb_sorumlu', 'pyb_destek'] },
+    { key: 'app.audit', group: 'app', label: 'Denetim günlüğü ve değişiklik akışları', description: 'Kim, ne zaman, ne yaptı; yönetim ve proje ekranlarındaki "son değişiklikler" kartları', defaults: ['admin'], alwaysFor: ['admin'] },
+    { key: 'app.backup', group: 'app', label: 'Yedek alır ve yedekten yükler', description: 'Çalışma alanının JSON yedeği; yedekten yükleme mevcut veriyi değiştirir', defaults: ['admin'], alwaysFor: ['admin'] },
+    { key: 'app.dataHealth', group: 'app', label: 'Veri sağlığı denetimi', description: 'Yetim tahsis, eşleşmeyen atama, eksik alan denetimi ve tek tıkla düzeltme', defaults: ['admin'], alwaysFor: ['admin'] },
     { key: 'notes.private', group: 'privacy', label: 'Günlük ve müşteri isteklerini görür', description: "PY'ye özel notlar ve müşteri istekleri", defaults: ['py', 'bolum_sorumlu', 'pyb_destek'], locked: 'Gizlilik kuralı: bulutta veritabanı politikasıyla (RLS) da korunur; buradan değiştirilemez.' },
 ];
 
@@ -61,21 +65,27 @@ export const ROLE_DESCRIPTIONS: Record<UserRole, string> = {
     pyb_destek: 'Veri havuzu, rapor denetimi ve yayını',
     pyb_sorumlu: 'Portföy izleme, plan onayı ve PMO değerlendirmesi',
     mudur: 'Yönetim ekranı, onaylar ve kararlar',
-    admin: 'Rol yetkileri ve kişi profilleri',
+    admin: 'Yetkiler, görünüm, rapor akışı, puanlama ve uygulama yönetimi',
 };
+
+/**
+ * Admin yalnız yönetim konsolunu kullanır: proje yönetimi ekranları ona
+ * açılmaz (yetki verilse de). Konsolda yetki ve uygulama ayarları vardır.
+ */
+export const isConsoleRole = (role: UserRole): boolean => role === 'admin';
 
 export const defaultPermissions = (role: UserRole): PermissionKey[] =>
     PERMISSIONS.filter(p => p.defaults.includes(role)).map(p => p.key);
 
-/** Bu rolde bu yetki admin tarafından değiştirilebilir mi? */
+/** Bu rolde bu yetki admin tarafından değiştirilebilir mi? (konsol rolünün yetkileri sabittir) */
 export const isEditable = (key: PermissionKey, role: UserRole): boolean => {
     const def = PERMISSION_BY_KEY.get(key);
-    return !!def && !def.locked && !def.alwaysFor?.includes(role);
+    return !!def && !def.locked && !def.alwaysFor?.includes(role) && !isConsoleRole(role);
 };
 
 /** Rolün geçerli yetkileri: değişiklik varsa o, yoksa varsayılan; kilitli ve "her zaman" kurallarıyla */
 export const permissionsFor = (role: UserRole, overrides?: RolePermissions): Set<PermissionKey> => {
-    const custom = overrides?.[role];
+    const custom = isConsoleRole(role) ? undefined : overrides?.[role];
     const out = new Set<PermissionKey>();
     PERMISSIONS.forEach(p => {
         const granted = p.locked || !custom ? p.defaults.includes(role) : custom.includes(p.key);
