@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildMySchedule, buildTeamSchedule, buildProjectSchedule, buildWorkPackageSchedule, taskDueMonth } from './schedule';
+import { buildMySchedule, buildTeamSchedule, buildProjectSchedule, buildWorkPackageSchedule, taskDueMonth, upcomingDeadlines } from './schedule';
 import { createEmptyWorkspace, createProject } from './workspace';
 import { Allocation, Leave, Person, Task, TaskStatus, WorkspaceData } from '../types';
 
@@ -78,5 +78,18 @@ describe('buildProjectSchedule / buildWorkPackageSchedule', () => {
         expect(wp1.cells[2].tasks).toBe(1); // t1 Mart (t3 terminsiz → sayılmaz)
         const none = s.rows.find(r => r.id === '__none')!;
         expect(none.cells[6].tasks).toBe(1); // t2 Temmuz, İP yok
+    });
+});
+
+describe('upcomingDeadlines', () => {
+    it('geciken + ufuk içindeki açık görevler; kişi ve proje kapsamı', () => {
+        const ws = buildWs();
+        ws.projects[0].tasks.push({ ...task('t4', undefined, 'Berk T', '2026-03-20'), status: TaskStatus.Done });
+        ws.projects[0].tasks.push(task('t5', undefined, 'Berk T', '2026-03-18'));
+        const now = new Date(2026, 2, 16);
+        expect(upcomingDeadlines(ws, {}, now).map(d => [d.taskName, d.days])).toEqual([['t1', -1], ['t5', 2]]);
+        expect(upcomingDeadlines(ws, { personNames: ['ali  t'] }, now).map(d => d.taskName)).toEqual(['t1']);
+        expect(upcomingDeadlines(ws, { projectIds: new Set(['x']) }, now)).toEqual([]);
+        expect(upcomingDeadlines(ws, {}, now, 200).map(d => d.taskName)).toEqual(['t1', 't5', 't2']);
     });
 });

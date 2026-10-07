@@ -1,4 +1,4 @@
-import { Person, WorkspaceData } from '../types';
+import { Person, TaskStatus, WorkspaceData } from '../types';
 import { MONTH_INDEXES, personMonthTotal } from './allocations';
 import { effectiveCapacity, monthlyEffectiveCapacity, personYearLeaveMonths } from './availability';
 
@@ -159,4 +159,44 @@ export const buildWorkPackageSchedule = (ws: WorkspaceData, projectId: string, y
         metric: 'tasks',
         rows: Array.from(rows.values()).filter(r => !(r.id === '__none' && r.total === 0)),
     };
+};
+
+export interface DeadlineItem {
+    projectId: string;
+    projectName: string;
+    taskId: string;
+    taskName: string;
+    dueDate: string; // YYYY-MM-DD
+    resourceName?: string;
+    days: number; // bugünden kaç gün sonra (negatif: gecikmiş)
+}
+
+const dayStart = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+
+/**
+ * Yaklaşan ve geciken görev terminleri (tamamlananlar hariç). Kapsam:
+ * proje kümesi ve/veya kişi adları (görevin sorumlusu).
+ */
+export const upcomingDeadlines = (
+    ws: Pick<WorkspaceData, 'projects'>,
+    scope: { projectIds?: Set<string>; personNames?: string[] },
+    now: Date = new Date(),
+    horizonDays = 30,
+): DeadlineItem[] => {
+    const names = scope.personNames ? new Set(scope.personNames.map(trKey)) : null;
+    const today = dayStart(now);
+    const out: DeadlineItem[] = [];
+    ws.projects.forEach(p => {
+        if (scope.projectIds && !scope.projectIds.has(p.id)) return;
+        p.tasks.forEach(t => {
+            if (!t.dueDate || t.status === TaskStatus.Done) return;
+            if (names && !names.has(trKey(t.resourceName || ''))) return;
+            const d = new Date(t.dueDate.length === 10 ? `${t.dueDate}T00:00:00` : t.dueDate);
+            if (isNaN(d.getTime())) return;
+            const days = Math.round((dayStart(d) - today) / 86_400_000);
+            if (days > horizonDays) return;
+            out.push({ projectId: p.id, projectName: p.name, taskId: t.id, taskName: t.name, dueDate: t.dueDate.slice(0, 10), resourceName: t.resourceName || undefined, days });
+        });
+    });
+    return out.sort((a, b) => a.days - b.days || a.taskName.localeCompare(b.taskName, 'tr'));
 };
