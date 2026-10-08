@@ -3,7 +3,7 @@ import { authHeaders } from './ai/client';
 import { WorklogEntry } from '../types';
 
 /**
- * Sunucu entegrasyonları (Jira worklog, Teams/e-posta bildirimi) için istemci.
+ * Sunucu entegrasyonları (Jira worklog ve kayıt geçmişi, Teams/e-posta bildirimi) için istemci.
  * Gizli bilgiler (Jira jetonu, SMTP parolası, Teams webhook) yalnız sunucu
  * ortam değişkenlerindedir; tarayıcı yalnızca neyin yapılandırıldığını bilir.
  */
@@ -54,6 +54,71 @@ const post = async <T>(route: string, body: unknown, authMode: AiAuthMode): Prom
 
 export const fetchJiraWorklogs = (o: { projectKey: string; from: string; to: string }, authMode: AiAuthMode): Promise<WorklogEntry[]> =>
     post<{ entries: WorklogEntry[] }>('jira-worklogs', o, authMode).then(r => r.entries || []);
+
+/** Sunucunun döndürdüğü sadeleştirilmiş Jira kaydı (bkz. server/integrations/handler.ts) */
+export interface JiraIssueRecord {
+    key: string;
+    summary: string;
+    description: string;
+    issueType: string;
+    status: string;
+    statusCategory: 'new' | 'indeterminate' | 'done' | null;
+    priority: string;
+    created: string | null;
+    resolved: string | null;
+    components: string[];
+    labels: string[];
+    fixVersions: string[];
+    originalEstimateSeconds: number | null;
+    timeSpentSeconds: number | null;
+    storyPoints: number | null;
+    assignee: string;
+    blockedBy: string[];
+    transitions: { at: string; from: string; to: string; fromCategory: JiraIssueRecord['statusCategory']; toCategory: JiraIssueRecord['statusCategory'] }[];
+}
+
+export interface JiraIssuePage {
+    issues: JiraIssueRecord[];
+    total: number | null;
+    next: string | null;
+}
+
+const sleep = (ms: number, signal?: AbortSignal) => new Promise<void>((resolve, reject) => {
+    const t = setTimeout(resolve, ms);
+    signal?.addEventListener('abort', () => { clearTimeout(t); reject(new DOMException('Durduruldu', 'AbortError')); }, { once: true });
+});
+
+/** Jira kayıt geçmişinden bir sayfa; hız sınırına takılırsa bekleyip yeniden dener */
+export const fetchJiraIssuesPage = async (
+    o: { projectKey: string; scope: 'done' | 'all'; since?: string; cursor?: string | null },
+    authMode: AiAuthMode,
+    signal?: AbortSignal,
+): Promise<JiraIssuePage> => {
+    for (let attempt = 0; ; attempt++) {
+        let res: Response;
+        try {
+            res = await fetch(`${BASE}/jira-issues`, {
+                method: 'POST',
+                headers: { 'content-type': 'application/json', ...(await authHeaders(authMode)) },
+                body: JSON.stringify({ projectKey: o.projectKey, scope: o.scope, since: o.since, cursor: o.cursor ?? undefined }),
+                signal,
+            });
+        } catch (e) {
+            if ((e as Error)?.name === 'AbortError') throw e;
+            throw new Error('Sunucuya ulaşılamadı.');
+        }
+        if (res.status === 429 && attempt < 3) {
+            await sleep(Math.min(60, Number(res.headers.get('retry-after')) || 5) * 1000, signal);
+            continue;
+        }
+        const j = await res.json().catch(() => ({})) as Partial<JiraIssuePage> & { error?: string };
+        if (!res.ok) {
+            if (res.status === 401) throw new Error(authMode === 'token' ? 'Erişim kodu gerekli: AI asistan panelinden erişim kodunu girin.' : 'Oturum açmanız gerekiyor.');
+            throw new Error(j.error || `İstek başarısız (${res.status}).`);
+        }
+        return { issues: j.issues || [], total: typeof j.total === 'number' ? j.total : null, next: j.next || null };
+    }
+};
 
 export interface NotifyResult {
     teams?: string; // 'sent' | 'not_configured' | hata metni

@@ -1,10 +1,14 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { EstimateLogEntry, Project, ReleasePlan, Task, WorkspaceData } from '../../types';
 import { CommitResult } from '../../utils/planning/releasePlan';
+import { JiraIssueRecord } from '../../utils/integrations';
+import { JiraImportOptions } from '../../utils/planning/jiraImport';
 import { aiPolicyOf } from '../../utils/ai/policy';
 import { estimateGate } from '../../utils/ai/estimateEval';
 import { useAssistantOptional } from '../assistant/AssistantContext';
 import { buildHistory, calibrator, PlanningHistory } from '../../utils/planning/history';
+import { Icon } from './icons';
+import JiraHistoryImport from './planning/JiraHistoryImport';
 import NewRecordPlanner from './planning/NewRecordPlanner';
 import PlanSimulator from './planning/PlanSimulator';
 import ReleasePlanner from './planning/ReleasePlanner';
@@ -29,14 +33,17 @@ interface Props {
     onDeleteReleasePlan: (id: string) => void;
     onCommitReleasePlan: (result: CommitResult) => void;
     onOpenGoals: () => void;
+    /** Jira'dan kayıt geçmişi aktarımı (yalnız düzenleyebilen) */
+    onImportJira?: (key: string, issues: JiraIssueRecord[], opts: JiraImportOptions, label: string) => void;
 }
 
 type Mode = 'record' | 'release' | 'simulate';
 
 const num = (v: number) => v.toLocaleString('tr-TR', { maximumFractionDigits: 1 });
 
-const ModernPlanning: React.FC<Props> = ({ project, workspace, visibleProjectIds, canEdit, onAddTask, onViewTask, onOpenList, onSaveReleasePlan, onDeleteReleasePlan, onCommitReleasePlan, onOpenGoals }) => {
+const ModernPlanning: React.FC<Props> = ({ project, workspace, visibleProjectIds, canEdit, onAddTask, onViewTask, onOpenList, onSaveReleasePlan, onDeleteReleasePlan, onCommitReleasePlan, onOpenGoals, onImportJira }) => {
     const [mode, setMode] = useState<Mode>('record');
+    const [jiraOpen, setJiraOpen] = useState(false);
     // Geçmiş yalnız görevler ya da ekip değişince yeniden kurulur (sürüm taslağı kaydı onu bozmasın)
     const histRef = useRef<{ keys: unknown[]; h: PlanningHistory } | null>(null);
     const keys = workspace.projects.flatMap(p => [p.id, p.tasks, p.resources]);
@@ -60,12 +67,20 @@ const ModernPlanning: React.FC<Props> = ({ project, workspace, visibleProjectIds
                         {overall ? ` · gerçekleşen efor tahminin medyan ${num(overall.median)} katı` : ''}
                     </p>
                 </div>
-                <div className="m-segmented" role="tablist" aria-label="Planlama kipi">
-                    <button type="button" role="tab" className="m-segment" aria-selected={mode === 'record'} onClick={() => setMode('record')}>Yeni kayıt</button>
-                    <button type="button" role="tab" className="m-segment" aria-selected={mode === 'release'} onClick={() => setMode('release')}>Sürüm planı</button>
-                    <button type="button" role="tab" className="m-segment" aria-selected={mode === 'simulate'} onClick={() => setMode('simulate')}>Plan simülasyonu</button>
+                <div className="flex flex-wrap items-center gap-2">
+                    {canEdit && onImportJira && (
+                        <button type="button" className="m-btn m-btn-gray" aria-expanded={jiraOpen} onClick={() => setJiraOpen(v => !v)}><Icon name="download" size={18} />Jira'dan geçmiş</button>
+                    )}
+                    <div className="m-segmented" role="tablist" aria-label="Planlama kipi">
+                        <button type="button" role="tab" className="m-segment" aria-selected={mode === 'record'} onClick={() => setMode('record')}>Yeni kayıt</button>
+                        <button type="button" role="tab" className="m-segment" aria-selected={mode === 'release'} onClick={() => setMode('release')}>Sürüm planı</button>
+                        <button type="button" role="tab" className="m-segment" aria-selected={mode === 'simulate'} onClick={() => setMode('simulate')}>Plan simülasyonu</button>
+                    </div>
                 </div>
             </div>
+            {jiraOpen && canEdit && onImportJira && (
+                <JiraHistoryImport key={`jira-${project.id}`} project={project} onImport={onImportJira} onOpenList={onOpenList} onClose={() => setJiraOpen(false)} />
+            )}
             {mode === 'record' ? (
                 <NewRecordPlanner key={project.id} project={project} history={history} people={people} leaves={leaves} visibleProjectIds={visibleProjectIds} canEdit={canEdit} blindEstimate={aiPolicyOf(workspace).blindEstimate} aiBlocked={aiBlocked} onAddTask={onAddTask} onOpenList={onOpenList} />
             ) : mode === 'release' ? (

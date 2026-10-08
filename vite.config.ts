@@ -18,7 +18,7 @@ const aiProxyPlugin = (mode: string): Plugin => {
     mountPath: '/api/integrations',
     handler: (request, env, opts) => {
       const route = new URL(request.url).pathname.split('/').pop() as IntegrationRoute;
-      if (!['health', 'jira-worklogs', 'notify', 'cron-reminder'].includes(route)) return Promise.resolve(new Response('Not found', { status: 404 }));
+      if (!['health', 'jira-worklogs', 'jira-issues', 'notify', 'cron-reminder'].includes(route)) return Promise.resolve(new Response('Not found', { status: 404 }));
       return handleIntegrationRequest(request, env, { route, isDev: opts.isDev });
     },
   });
