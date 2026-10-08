@@ -1,6 +1,6 @@
 
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { View, Task, Resource, TaskStatus, Note, CustomerRequest, Objective, Project, Person, WorkspaceData, RagStatus, ProjectStatus, UserRole, PlanLockStatus, WorkPackage, UiStyle, PermissionKey, EstimateLogEntry, ReleasePlan, GoldenItem, EvalRun } from './types';
+import { View, Task, Resource, TaskStatus, Note, CustomerRequest, Objective, Project, Person, WorkspaceData, RagStatus, ProjectStatus, UserRole, PlanLockStatus, WorkPackage, UiStyle, PermissionKey, EstimateLogEntry, ReleasePlan, GoldenItem, EvalRun, ModelEvalRun } from './types';
 import { INITIAL_TASKS, INITIAL_RESOURCES, INITIAL_OBJECTIVES } from './constants';
 import {
   WORKSPACE_STORAGE_KEY,
@@ -69,6 +69,7 @@ import ModernPlanning from './components/modern/ModernPlanning';
 import { appendEstimateLog } from './utils/planning/estimateLog';
 import { CommitResult } from './utils/planning/releasePlan';
 import { appendEvalRun } from './utils/planning/evaluation';
+import { appendModelEval } from './utils/planning/ml/estimateModel';
 import { JiraImportOptions, mergeJiraIssues } from './utils/planning/jiraImport';
 import { JiraIssueRecord } from './utils/integrations';
 import ModernPortfolio from './components/modern/ModernPortfolio';
@@ -854,6 +855,14 @@ const App: React.FC = () => {
         `Tahmin değerlendirmesi (${run.promptVersion}, ${run.n} kayıt): ${verdict}`);
     });
   }, [updateWorkspace]);
+  const handleAddModelEval = useCallback((run: ModelEvalRun) => {
+    updateWorkspace(ws => {
+      if (!can(identityOf(ws), 'screen.admin')) return ws;
+      const verdict = run.better === null ? 'karar yok' : run.better ? 'geçmiş kayıt tahmininden isabetli' : 'daha isabetli değil';
+      return appendAudit({ ...ws, modelEvals: appendModelEval(ws.modelEvals, run) }, 'config.update',
+        `ML modeli sınandı (${run.nTrain} eğitim, ${run.nTest} sınama kaydı): ${verdict}`);
+    });
+  }, [updateWorkspace]);
   const handleUpdateReportFlow = useCallback((patch: Partial<ReportFlow> & { dueWeekday?: number }, label: string) => {
     updateWorkspace(ws => {
       if (!can(identityOf(ws), 'screen.admin')) return ws;
@@ -1110,6 +1119,7 @@ const App: React.FC = () => {
           onUpdateAiPolicy={handleUpdateAiPolicy}
           onSetGolden={handleSetGolden}
           onAddEvalRun={handleAddEvalRun}
+          onAddModelEval={handleAddModelEval}
           canAudit={canAudit}
           onSaveBackup={canBackup ? handleSaveProject : undefined}
           onLoadBackup={canBackup ? handleLoadProject : undefined}

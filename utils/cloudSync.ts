@@ -95,6 +95,7 @@ export const splitWorkspaceDoc = (ws: WorkspaceData): { core: Record<string, unk
         // Tahmin değerlendirmesi: altın set ve kalite kapısı çalıştırmaları
         goldenSet: ws.goldenSet || [],
         evalRuns: ws.evalRuns || [],
+        modelEvals: ws.modelEvals || [],
     };
     return { core, privateDoc };
 };

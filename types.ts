@@ -59,7 +59,7 @@ export interface Task {
   startedAt?: string; // ilk kez "Süreçte"ye geçtiği an
   resolvedAt?: string; // son kapanış (yeniden açılınca silinir)
   statusLog?: TaskStatusChange[]; // durum geçişleri (en yeni sonda, en çok 50)
-  estimateSource?: 'user' | 'ai' | 'jira' | 'import' | 'reference'; // reference: benzer kapanmış kayıtların gerçek sürelerinden
+  estimateSource?: 'user' | 'ai' | 'jira' | 'import' | 'reference' | 'model'; // reference: benzer kapanmış kayıtların gerçek sürelerinden; model: klasik ML modeli
   forecast?: TaskForecast; // açılışta yapılan süre tahmini (kayıt kapanınca isabeti ölçülür)
   originalEstimateHours?: number; // kaynak sistemdeki ilk tahmin (Jira "Original Estimate")
   actualHours?: number; // harcanan efor (Jira "Time Spent" / worklog)
@@ -116,8 +116,17 @@ export interface EstimateLogEntry {
     evidence: string[]; // dayanak gösterilen geçmiş kayıt kimlikleri
     questions: number; // sorduğu eksik bilgi sayısı
   };
+  /** Klasik ML modeli (geçmiş kayıtlardan eğitilen) */
+  model?: {
+    version: string;
+    effort: EffortRange;
+    p50Days: number;
+    p80Days: number;
+    priority?: Task['priority'];
+    issueType?: IssueType;
+  };
   final: {
-    source: 'reference' | 'ai' | 'user' | 'calibrated' | 'none';
+    source: 'reference' | 'ai' | 'user' | 'calibrated' | 'model' | 'none';
     priority: Task['priority'];
     issueType?: IssueType;
     effort?: EffortRange;
@@ -130,7 +139,7 @@ export interface EstimateLogEntry {
  * kalınan adımdan devam edilir; aktarılınca kayıtlar göreve, kilometre taşları
  * hedefin anahtar sonuçlarına dönüşür ve plan taban çizgisi olarak donar.
  */
-export type ReleaseItemChoice = 'reference' | 'ai' | 'own' | 'manual';
+export type ReleaseItemChoice = 'reference' | 'ai' | 'model' | 'own' | 'manual';
 
 export interface ReleasePlanItem {
   id: string;
@@ -148,6 +157,7 @@ export interface ReleasePlanItem {
   blind?: { effortDays?: number; priority?: Task['priority'] };
   reference?: EstimateLogEntry['reference'];
   ai?: NonNullable<EstimateLogEntry['ai']> & { rationale?: string; questionList?: string[] };
+  model?: NonNullable<EstimateLogEntry['model']>;
   choice?: ReleaseItemChoice;
   manual?: EffortRange;
   excluded?: boolean;
@@ -640,6 +650,7 @@ export interface WorkspaceData {
   estimateLog?: EstimateLogEntry[]; // Kayıt tahmini öneri günlüğü (en yeni sonda)
   goldenSet?: GoldenItem[]; // Tahmin değerlendirmesi için doğrulanmış kapanmış kayıtlar
   evalRuns?: EvalRun[]; // Altın set değerlendirmeleri (en yeni sonda)
+  modelEvals?: ModelEvalRun[]; // Klasik ML modelinin zaman ayrımlı sınamaları (en yeni sonda)
   healthConfig?: HealthConfig; // Admin'in sağlık puanı yöntemi ayarları
   profiles?: UserProfile[]; // Admin'in tanımladığı profiller (kişi ↔ rol)
   auditLog?: AuditEntry[]; // Kritik aksiyonların günlüğü (en yeni başta)
@@ -821,10 +832,41 @@ export interface AiPolicy {
   proposals?: boolean; // asistanın değişiklik önerileri
   blindEstimate?: boolean; // kör tahmin: öneriler, kullanıcı kendi tahminini girdikten sonra görünür (varsayılan açık)
   estimateGate?: EstimateGatePolicy; // AI tahmin önerisinin kalite kapısı
+  modelEstimate?: ModelEstimatePolicy; // planlamada klasik ML modeli önerisi (varsayılan: otomatik)
   scoring?: AiScoringPolicy;
 }
 
 /** Kalite kapısı: altın sette AI önerisi bu eşikleri geçmezse (zorunluysa) öneri gösterilmez */
+/** Klasik ML modelinin ölçüleri (zaman ayrımlı sınama kümesinde) */
+export interface ModelMetrics {
+  mae: number | null; // efor ortalama mutlak hata (gün)
+  coverage: number | null; // gerçek efor [iyimser, kötümser] içinde
+  daysMae: number | null; // kapanma süresi P50 hatası (iş günü)
+  p80Coverage: number | null; // kapanma ≤ P80 oranı
+  priorityAccuracy: number | null;
+  typeAccuracy: number | null;
+}
+
+/** Klasik ML modelinin geçmiş kayıt tahminiyle karşılaştırması */
+export interface ModelEvalRun {
+  id: string;
+  at: string;
+  version: string;
+  nTrain: number;
+  nTest: number;
+  cutoff: string; // sınama kümesinin ilk kapanışı (ISO)
+  model: ModelMetrics;
+  reference: ModelMetrics;
+  better: boolean | null; // ekip tahmini olmadan; null: yetersiz veri
+  /** Ekibin ilk tahmini de verildiğinde (yalnız kendi tahmini olan kayıtlar) */
+  withEstimate: { n: number; mae: number | null; referenceMae: number | null; coverage: number | null; better: boolean | null };
+  reasons: string[];
+  importance: { label: string; share: number }[];
+}
+
+/** auto: son sınamada geçmiş kayıt tahmininden isabetliyse gösterilir */
+export type ModelEstimatePolicy = 'auto' | 'on' | 'off';
+
 export interface EstimateGatePolicy {
   enforce: boolean;
   maxMaeRatio: number; // AI ortalama hatası ≤ geçmiş kayıt tahmininin hatası × oran

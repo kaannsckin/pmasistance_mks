@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { EffortRange, IssueType, Leave, Person, Project, ReleaseItemChoice, ReleaseMilestone, ReleasePlan, ReleasePlanItem, Task, TaskStatus } from '../../../types';
 import { EMBED_SYSTEM } from '../../../utils/ai/embedded';
 import { GATE_BLOCK_MESSAGE } from '../../../utils/ai/estimateEval';
+import { logModel } from '../../../utils/planning/ml/estimateModel';
+import { modelFor, PlanningModel } from '../../../utils/planning/ml/runModel';
 import { AI_FLAG_LABELS, ESTIMATE_PROMPT_VERSION, estimateSuggestionPrompt, finalizeEstimateSuggestion, parseEstimateSuggestion } from '../../../utils/ai/estimateSuggestion';
 import { milestonePrompt, parseMilestones } from '../../../utils/ai/milestoneSuggestion';
 import { PlanningHistory } from '../../../utils/planning/history';
@@ -39,6 +41,8 @@ interface Props {
     blindEstimate: boolean;
     /** Kalite kapısı: AI tahmin önerisi kapalı (kilometre taşı önerisi etkilenmez) */
     aiBlocked?: boolean;
+    /** Klasik ML modeli (sınamayı geçtiyse) */
+    ml?: PlanningModel | null;
     onSave: (plan: ReleasePlan) => void;
     onCommit: (result: CommitResult) => void;
     onClose: () => void;
@@ -58,7 +62,7 @@ const DECISION_META: Record<ItemDecision, { label: string; tone: string }> = {
 const probInk = (p: number) => (p >= 0.8 ? 'm-ink-ok' : p >= 0.5 ? 'm-ink-warn' : 'm-ink-bad');
 const range = (e: EffortRange) => `${num(e.best)} · ${num(e.likely)} · ${num(e.worst)} gün`;
 
-const ReleaseWizard: React.FC<Props> = ({ project, initial, history, people, leaves, visibleProjectIds, canEdit, blindEstimate, aiBlocked = false, onSave, onCommit, onClose }) => {
+const ReleaseWizard: React.FC<Props> = ({ project, initial, history, people, leaves, visibleProjectIds, canEdit, blindEstimate, aiBlocked = false, ml = null, onSave, onCommit, onClose }) => {
     const [plan, setPlan] = useState<ReleasePlan>(initial);
     const latest = useRef(plan);
     latest.current = plan;
@@ -141,7 +145,7 @@ const ReleaseWizard: React.FC<Props> = ({ project, initial, history, people, lea
 
             {step === 1 && <StepDefine plan={plan} project={project} canEdit={canEdit} update={update} />}
             {step === 2 && <StepItems plan={plan} project={project} canEdit={canEdit} blindEstimate={blindEstimate} update={update} />}
-            {step === 3 && <StepSuggestions plan={plan} project={project} history={history} visibleProjectIds={visibleProjectIds} canEdit={canEdit} aiBlocked={aiBlocked} update={update} />}
+            {step === 3 && <StepSuggestions plan={plan} project={project} history={history} visibleProjectIds={visibleProjectIds} canEdit={canEdit} aiBlocked={aiBlocked} ml={ml} update={update} />}
             {step === 4 && <StepSimulation plan={plan} project={project} history={history} ctx={ctx} visibleProjectIds={visibleProjectIds} sim={sim} canEdit={canEdit} update={update} />}
             {step === 5 && <StepMilestones plan={plan} project={project} sim={sim} canEdit={canEdit} update={update} />}
             {step === 6 && <StepCommit plan={plan} project={project} history={history} ctx={ctx} sim={sim} canEdit={canEdit} onCommit={onCommit} />}
@@ -322,7 +326,7 @@ const StepItems: React.FC<{ plan: ReleasePlan; project: Project; canEdit: boolea
 
 // ------------------------------------------------------------------ 3. öneriler
 
-const StepSuggestions: React.FC<{ plan: ReleasePlan; project: Project; history: PlanningHistory; visibleProjectIds: ReadonlySet<string>; canEdit: boolean; aiBlocked: boolean; update: Update }> = ({ plan, project, history, visibleProjectIds, canEdit, aiBlocked, update }) => {
+const StepSuggestions: React.FC<{ plan: ReleasePlan; project: Project; history: PlanningHistory; visibleProjectIds: ReadonlySet<string>; canEdit: boolean; aiBlocked: boolean; ml: PlanningModel | null; update: Update }> = ({ plan, project, history, visibleProjectIds, canEdit, aiBlocked, ml, update }) => {
     const ai = useAiRun();
     const aiOn = ai.available && !aiBlocked;
     const model = useAssistantOptional()?.status?.model;
@@ -330,13 +334,21 @@ const StepSuggestions: React.FC<{ plan: ReleasePlan; project: Project; history: 
     const cancel = useRef(false);
 
     // Geçmiş kayıt önerileri: adım açılınca ve satır metni değiştikçe güncellenir
-    const refKey = JSON.stringify(plan.items.map(i => [i.id, i.name, i.notes, i.issueType, i.unit, i.priority, i.workPackageId]));
+    const refKey = JSON.stringify(plan.items.map(i => [i.id, i.name, i.notes, i.issueType, i.unit, i.priority, i.workPackageId, i.ownEstimateDays]));
     useEffect(() => {
         if (!canEdit) return;
-        const t = setTimeout(() => update(p => ({ ...p, items: p.items.map(i => (i.name.trim() ? withReference(i, history, project.id, visibleProjectIds) : i)) })), 50);
+        const t = setTimeout(() => update(p => ({
+            ...p,
+            items: p.items.map(i => {
+                if (!i.name.trim()) return i;
+                const r = withReference(i, history, project.id, visibleProjectIds);
+                const m = modelFor(ml, itemDraft(i, project.id));
+                return { ...r, model: m ? logModel(m) : undefined };
+            }),
+        })), 50);
         return () => clearTimeout(t);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [refKey, history]);
+    }, [refKey, history, ml]);
 
     const askOne = async (i: ReleasePlanItem): Promise<boolean> => {
         const draft = itemDraft(i, project.id);
@@ -432,6 +444,7 @@ const SuggestionRow: React.FC<{ item: ReleasePlanItem; canEdit: boolean; aiAvail
                 {radio('ai', i.ai ? <>AI: <b className="m-tabular">{range(i.ai.effort)}</b> <span className={`ml-1 inline-flex items-center h-5 px-2 rounded-full text-[11px] font-semibold ${CONF_TONE[i.ai.confidence]}`}>{CONFIDENCE_LABELS[i.ai.confidence]}</span></> : (
                     <span className="inline-flex items-center gap-2 m-text-3">AI önerisi yok{aiAvailable && canEdit && <button type="button" className="m-btn m-btn-plain !min-h-[30px] !px-2" disabled={aiLoading} onClick={onAsk}>AI'ya sor</button>}</span>
                 ), !!i.ai)}
+                {i.model && radio('model', <>Model: <b className="m-tabular">{range(i.model.effort)}</b> <span className="text-[12px] m-text-3">· kapanma {num(i.model.p50Days)}–{num(i.model.p80Days)} iş günü</span></>)}
                 {radio('manual', <span className="inline-flex flex-wrap items-center gap-1.5">Elle:
                     {(['best', 'likely', 'worst'] as (keyof EffortRange)[]).map(k => (
                         <input key={k} aria-label={`${i.name} ${k === 'best' ? 'iyimser' : k === 'likely' ? 'olası' : 'kötümser'} efor`} className="m-input m-tabular !min-h-[32px] !w-[64px] !px-2 text-[14px]" inputMode="decimal" disabled={!canEdit || !!i.excluded}

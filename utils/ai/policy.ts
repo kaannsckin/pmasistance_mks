@@ -1,4 +1,4 @@
-import { AiPolicy, AiScoringPolicy, EstimateGatePolicy, WorkspaceData } from '../../types';
+import { AiPolicy, AiScoringPolicy, EstimateGatePolicy, ModelEstimatePolicy, WorkspaceData } from '../../types';
 
 /**
  * Admin'in yapay zekâ politikası (çalışma alanında, bulutla paylaşılır).
@@ -16,6 +16,8 @@ export interface ResolvedAiPolicy {
     proposals: boolean;
     blindEstimate: boolean;
     estimateGate: EstimateGatePolicy;
+    /** Planlamada klasik ML modeli önerisi */
+    modelEstimate: ModelEstimatePolicy;
     scoring: AiScoringPolicy;
 }
 
@@ -44,6 +46,7 @@ export const aiPolicyOf = (ws: Partial<Pick<WorkspaceData, 'aiPolicy'>> | undefi
             minPriorityAccuracy: clampNum(p.estimateGate?.minPriorityAccuracy, 0, 1, DEFAULT_GATE.minPriorityAccuracy),
             minCoverage: clampNum(p.estimateGate?.minCoverage, 0, 1, DEFAULT_GATE.minCoverage),
         },
+        modelEstimate: p.modelEstimate === 'on' || p.modelEstimate === 'off' ? p.modelEstimate : 'auto',
         scoring: {
             runs: [1, 3, 5].includes(Number(s.runs)) ? Number(s.runs) : DEFAULT_SCORING.runs,
             minEvidence: clampInt(s.minEvidence, 0, 3, DEFAULT_SCORING.minEvidence),
@@ -67,6 +70,7 @@ export const updateAiPolicy = (cur: AiPolicy | undefined, patch: Partial<Omit<Ai
     if (!r.embedded) out.embedded = false;
     if (!r.proposals) out.proposals = false;
     if (!r.blindEstimate) out.blindEstimate = false;
+    if (r.modelEstimate !== 'auto') out.modelEstimate = r.modelEstimate;
     const diff = (Object.keys(DEFAULT_SCORING) as (keyof AiScoringPolicy)[]).some(k => r.scoring[k] !== DEFAULT_SCORING[k]);
     if (diff) out.scoring = r.scoring;
     if ((Object.keys(DEFAULT_GATE) as (keyof EstimateGatePolicy)[]).some(k => r.estimateGate[k] !== DEFAULT_GATE[k])) out.estimateGate = r.estimateGate;

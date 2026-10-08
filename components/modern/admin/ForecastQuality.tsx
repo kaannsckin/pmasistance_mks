@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { EstimateGatePolicy, EvalRun, GoldenItem, IssueType, Task, WorkspaceData } from '../../../types';
+import { EstimateGatePolicy, EvalRun, GoldenItem, IssueType, ModelEstimatePolicy, ModelEvalRun, ModelMetrics, Task, WorkspaceData } from '../../../types';
 import { fetchAiStatus, streamChat } from '../../../utils/ai/client';
 import { goldAnswer, goldenJsonl, goldPrompt } from '../../../utils/ai/estimateEval';
 import { EMBED_SYSTEM } from '../../../utils/ai/embedded';
@@ -13,6 +13,8 @@ import {
 } from '../../../utils/planning/evaluation';
 import { buildHistory, PlanningHistory } from '../../../utils/planning/history';
 import { ISSUE_TYPE_LABELS } from '../../../utils/planning/lifecycle';
+import { MIN_TRAIN, MODEL_VERSION } from '../../../utils/planning/ml/estimateModel';
+import { evaluateModelAsync } from '../../../utils/planning/ml/runModel';
 import { runSimulationAsync } from '../../../utils/planning/runSimulation';
 import { dateAtOffset } from '../../../utils/planning/simulationInput';
 import { toIsoDay } from '../../../utils/calendarRange';
@@ -31,13 +33,15 @@ import { Note, SwitchRow } from './controls';
 
 interface Props {
     workspace: WorkspaceData;
-    onUpdateAiPolicy: (patch: { estimateGate?: Partial<EstimateGatePolicy> }, label: string) => void;
+    onUpdateAiPolicy: (patch: { estimateGate?: Partial<EstimateGatePolicy>; modelEstimate?: ModelEstimatePolicy }, label: string) => void;
     onSetGolden: (items: GoldenItem[], label: string) => void;
     onAddEvalRun: (run: EvalRun) => void;
+    onAddModelEval: (run: ModelEvalRun) => void;
 }
 
 const pct = (v: number | null | undefined) => (v === null || v === undefined ? '—' : `%${Math.round(v * 100)}`);
 const gun = (v: number | null | undefined) => (v === null || v === undefined ? '—' : `${String(v).replace('.', ',')} gün`);
+const num = (v: number) => v.toLocaleString('tr-TR');
 const fmtDay = (iso?: string) => (iso ? new Date(`${iso}T00:00:00`).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric' }) : '—');
 /** Kapsama ideal değere yakınsa iyi: ±0,1 içinde yeşil, ±0,2 içinde sarı */
 const idealTone = (v: number | null, ideal: number) => (v === null ? 'm-text' : Math.abs(v - ideal) <= 0.1 ? 'm-ink-ok' : Math.abs(v - ideal) <= 0.2 ? 'm-ink-warn' : 'm-ink-bad');
@@ -54,7 +58,7 @@ const Advice: React.FC<{ items: string[] }> = ({ items }) => (
     <>{items.map(a => <p key={a} className="m-0 text-[14px] m-text-2 flex items-start gap-2"><span className="m-accent" style={{ marginTop: 2 }}><Icon name="info" size={16} /></span>{a}</p>)}</>
 );
 
-const ForecastQuality: React.FC<Props> = ({ workspace, onUpdateAiPolicy, onSetGolden, onAddEvalRun }) => {
+const ForecastQuality: React.FC<Props> = ({ workspace, onUpdateAiPolicy, onSetGolden, onAddEvalRun, onAddModelEval }) => {
     const history = useMemo(() => buildHistory(workspace.projects), [workspace.projects]);
     return (
         <div className="flex flex-col gap-4">
@@ -65,6 +69,7 @@ const ForecastQuality: React.FC<Props> = ({ workspace, onUpdateAiPolicy, onSetGo
             <RecordBacktest history={history} />
             <ReleaseBacktest workspace={workspace} history={history} />
             <CalibrationCard history={history} />
+            <ModelCard workspace={workspace} history={history} onUpdateAiPolicy={onUpdateAiPolicy} onAddModelEval={onAddModelEval} />
             <GoldenGate workspace={workspace} history={history} onUpdateAiPolicy={onUpdateAiPolicy} onSetGolden={onSetGolden} onAddEvalRun={onAddEvalRun} />
             <EstimateMonitor workspace={workspace} history={history} />
         </div>
@@ -388,6 +393,124 @@ const GoldenGate: React.FC<Props & { history: PlanningHistory }> = ({ workspace,
     );
 };
 
+// ------------------------------------------------------------------ klasik ML modeli
+
+const MODEL_POLICIES: { value: ModelEstimatePolicy; label: string }[] = [
+    { value: 'auto', label: 'Otomatik: sınamada geçmiş kayıt tahmininden isabetliyse' },
+    { value: 'on', label: 'Her zaman göster' },
+    { value: 'off', label: 'Kapalı' },
+];
+const METRIC_ROWS: { key: keyof ModelMetrics; label: string; fmt: (v: number | null) => string; hint?: string }[] = [
+    { key: 'mae', label: 'Efor hatası (olası değer)', fmt: gun },
+    { key: 'coverage', label: 'Gerçek efor aralıkta', fmt: pct, hint: 'hedef ≈ %80' },
+    { key: 'daysMae', label: 'Kapanma süresi hatası (P50)', fmt: v => (v === null ? '—' : `${String(v).replace('.', ',')} iş günü`) },
+    { key: 'p80Coverage', label: "Kapanma P80'e yetişti", fmt: pct, hint: 'hedef ≈ %80' },
+    { key: 'priorityAccuracy', label: 'Önem doğruluğu', fmt: pct },
+    { key: 'typeAccuracy', label: 'Tür doğruluğu', fmt: pct },
+];
+
+const ModelCard: React.FC<{ workspace: WorkspaceData; history: PlanningHistory } & Pick<Props, 'onUpdateAiPolicy' | 'onAddModelEval'>> = ({ workspace, history, onUpdateAiPolicy, onAddModelEval }) => {
+    const policy = aiPolicyOf(workspace).modelEstimate;
+    const runs = (workspace.modelEvals || []).filter(r => r.version === MODEL_VERSION);
+    const last = runs[runs.length - 1];
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const abort = useRef<AbortController | null>(null);
+    useEffect(() => () => abort.current?.abort(), []);
+    const run = async () => {
+        setBusy(true); setError(null);
+        const c = new AbortController();
+        abort.current = c;
+        try {
+            onAddModelEval(await evaluateModelAsync(history.records, `ml-${Date.now().toString(36)}`, c.signal));
+        } catch (e) {
+            if ((e as Error)?.name !== 'AbortError') setError(e instanceof Error ? e.message : String(e));
+        } finally {
+            setBusy(false);
+        }
+    };
+    // Gösterildiği durumlar: ekip tahmini olmadan ve/veya ekibin kendi tahmini girildiğinde
+    const shown = last ? [last.better && 'ekip tahmini olmadan', last.withEstimate.better && 'ekibin kendi tahmini girildiğinde'].filter((x): x is string => !!x) : [];
+    // Karar verilebilen durumlar (veri yoksa o durum sayılmaz)
+    const decided = last ? [last.better, last.withEstimate.better].filter(v => v !== null) : [];
+    const status = !last ? { label: 'Sınanmadı', tone: 'm-tone-warn' }
+        : !decided.length ? { label: 'Veri yetersiz', tone: 'm-tone-warn' }
+        : shown.length === decided.length ? { label: 'Geçmiş kayıt tahmininden isabetli', tone: 'm-tone-ok' }
+        : shown.length ? { label: 'Kısmen isabetli', tone: 'm-tone-warn' }
+        : { label: 'Henüz daha isabetli değil', tone: 'm-tone-bad' };
+    const fmtAt = (iso: string) => new Date(iso).toLocaleString('tr-TR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    return (
+        <section aria-labelledby="fq-ml" className="m-surface rounded-2xl p-5 flex flex-col gap-3.5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                    <h2 id="fq-ml" className="m-0 text-[17px] font-semibold m-text">Makine öğrenmesi modeli</h2>
+                    <p className="m-0 mt-0.5 text-[14px] m-text-3">Gradyan artırmalı karar ağaçları (efor, kapanma süresi) ve lojistik regresyon (önem, tür). Tür, birim, proje, önem, iş paketi, ekibin ilk tahmini ve metindeki sık sözcüklerden öğrenir; kişi adı kullanılmaz. Tarayıcıda eğitilir, kayıtlar dışarı gönderilmez.</p>
+                </div>
+                <span className={`inline-flex items-center h-7 px-3 rounded-full text-[13px] font-semibold ${status.tone}`}>{status.label}</span>
+            </div>
+            <div className="flex flex-wrap items-end gap-3">
+                <label className="flex flex-col gap-1 text-[13px] font-semibold m-text-2 min-w-[260px] flex-1 max-w-[460px]">Planlamada model önerisi
+                    <select className="m-input" value={policy} onChange={e => onUpdateAiPolicy({ modelEstimate: e.target.value as ModelEstimatePolicy }, `model önerisi: ${MODEL_POLICIES.find(p => p.value === e.target.value)?.label}`)}>
+                        {MODEL_POLICIES.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                    </select>
+                </label>
+                <button type="button" className="m-btn m-btn-gray" disabled={busy || history.records.length < MIN_TRAIN} onClick={run}><Icon name="refresh" size={18} />{busy ? 'Eğitiliyor ve sınanıyor…' : last ? 'Yeniden eğit ve sına' : 'Eğit ve sına'}</button>
+                {busy && <button type="button" className="m-btn m-btn-plain" onClick={() => abort.current?.abort()}>Durdur</button>}
+            </div>
+            {history.records.length < MIN_TRAIN && <p className="m-0 text-[14px] m-text-2">Model için en az {MIN_TRAIN} eğitime uygun kapanmış kayıt gerekir (şu an {history.records.length}). Jira'dan kayıt geçmişi aktarılabilir.</p>}
+            {error && <p role="alert" className="m-0 text-[14px] m-ink-bad">{error}</p>}
+            {last && (
+                <>
+                    <p className="m-0 text-[13px] m-text-3">Son sınama {fmtAt(last.at)}: model {num(last.nTrain)} kayıtla eğitildi (kapanışı {fmtDay(last.cutoff.slice(0, 10))} öncesi), sonra kapanan {num(last.nTest)} kayıtta geçmiş kayıt tahminiyle aynı bilgiyle karşılaştırıldı.</p>
+                    {last.nTest > 0 && (
+                        <div className="relative overflow-x-auto -mx-1">
+                            <table className="w-full min-w-[480px] text-[14px] border-collapse">
+                                <thead><tr className="text-left m-text-3 text-[13px]">
+                                    <th className="font-semibold py-2 px-1">Ölçü</th><th className="font-semibold py-2 px-1 text-right">Model</th><th className="font-semibold py-2 px-1 text-right">Geçmiş kayıtlar</th>
+                                </tr></thead>
+                                <tbody>{METRIC_ROWS.map((m, i) => { const sep = rowSep(i); return (
+                                    <tr key={m.key} className={sep.className} style={sep.style}>
+                                        <td className="py-2 px-1 m-text">{m.label}{m.hint && <span className="ml-1.5 text-[12px] m-text-3">{m.hint}</span>}</td>
+                                        <td className="py-2 px-1 text-right m-tabular font-semibold m-text">{m.fmt(last.model[m.key])}</td>
+                                        <td className="py-2 px-1 text-right m-tabular m-text-2">{m.fmt(last.reference[m.key])}</td>
+                                    </tr>
+                                ); })}</tbody>
+                            </table>
+                        </div>
+                    )}
+                    <Advice items={last.reasons} />
+                    {last.importance.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-1.5 text-[13px]">
+                            <span className="m-text-3">Efora en çok etki eden özellikler:</span>
+                            {last.importance.map(f => <span key={f.label} className="inline-flex items-center h-6 px-2 rounded-full m-fill-2 m-text-2">{f.label} {pct(f.share)}</span>)}
+                        </div>
+                    )}
+                    <p className="m-0 text-[13px] m-text-3">
+                        {policy === 'off' ? 'Model önerisi planlamada kapalı.' : policy === 'on' ? 'Model önerisi planlamada her zaman gösterilir.'
+                            : shown.length ? `Otomatik: model ${shown.join(' ve ')} planlamada gösterilir.` : 'Otomatik: model sınamayı geçmediği için planlamada gösterilmez.'}
+                        {' '}Gösterilen model önerileri öneri günlüğüne yazılır; isabeti aşağıdaki kartta izlenir.
+                    </p>
+                </>
+            )}
+            {runs.length > 1 && (
+                <details>
+                    <summary className="cursor-pointer text-[14px] font-semibold m-accent min-h-[34px] flex items-center">Önceki sınamalar ({runs.length - 1})</summary>
+                    <ul className="m-0 mt-1 pl-0 list-none flex flex-col">
+                        {[...runs].reverse().slice(1, 8).map((r, i) => { const sep = rowSep(i); return (
+                            <li key={r.id} className={`flex flex-wrap items-center gap-3 py-1.5 text-[14px] ${sep.className}`} style={sep.style}>
+                                <span className="m-text whitespace-nowrap">{fmtAt(r.at)}</span>
+                                <span className="m-text-3">{num(r.nTest)} kayıt</span>
+                                <span className="flex-1 m-text-2 m-tabular">model {gun(r.model.mae)} · geçmiş {gun(r.reference.mae)}</span>
+                                <span className={`font-semibold ${r.better ? 'm-ink-ok' : r.better === false ? 'm-ink-bad' : 'm-text-3'}`}>{r.better ? 'Geçti' : r.better === false ? 'Geçmedi' : 'Karar yok'}</span>
+                            </li>
+                        ); })}
+                    </ul>
+                </details>
+            )}
+        </section>
+    );
+};
+
 // ------------------------------------------------------------------ öneri günlüğü
 
 /** Planlama asistanının kayıt tahmini önerileri: isabet, kabul oranı ve eğitim verisi */
@@ -398,6 +521,7 @@ const EstimateMonitor: React.FC<{ workspace: WorkspaceData; history: PlanningHis
     const rows: { label: string; a: SourceAccuracy; extra?: string }[] = [
         { label: 'Geçmiş kayıtlar', a: st.reference, extra: `P80 tuttu: ${pct(st.reference.p80Coverage)}` },
         { label: 'AI önerisi', a: st.ai },
+        { label: 'Model tahmini', a: st.model },
         { label: 'Kör tahmin (kullanıcı)', a: st.blind },
         { label: 'Nihai karar', a: st.final },
     ];

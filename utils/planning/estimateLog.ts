@@ -6,7 +6,7 @@ import { ISSUE_TYPE_LABELS } from './lifecycle';
  * Öneri günlüğü: yeni kayıt açılırken gösterilen öneriler ve kullanıcının
  * kararı. Kayıt kapandığında gerçekleşen değerler `taskId` ile planlama
  * geçmişinden eşlenir (yazma gerekmez). Buradan:
- *  - her kaynağın (geçmiş kayıtlar, AI, kullanıcının kör tahmini, nihai
+ *  - her kaynağın (geçmiş kayıtlar, AI, ML modeli, kullanıcının kör tahmini, nihai
  *    karar) efor isabeti: ortalama mutlak hata, aralığın gerçeği kapsama oranı
  *  - kapanma süresi P80'inin tutma oranı (dürüst aralık ≈ %80)
  *  - AI önerisinin kabul oranı (efor, önem, tür)
@@ -35,6 +35,7 @@ export interface EstimateStats {
     blindShare: number | null; // kör tahmin girilen kayıtların payı
     reference: SourceAccuracy & { p80Coverage: number | null };
     ai: SourceAccuracy;
+    model: SourceAccuracy;
     blind: SourceAccuracy;
     final: SourceAccuracy;
     /** Aynı kayıtlarda AI ve kör tahmin (ikisi de varsa) */
@@ -91,6 +92,7 @@ export const estimateStats = (ws: Pick<WorkspaceData, 'estimateLog'>, history: P
             p80Coverage: rate(refClosed.map(e => actual.get(e.taskId!)!.days <= e.reference!.p80Days + 1e-9)),
         },
         ai: accuracy(pairs(e => e.ai?.effort)),
+        model: accuracy(pairs(e => e.model?.effort)),
         blind: accuracy(pairs(e => (e.blind?.effortDays ? point(e.blind.effortDays) : undefined))),
         final: accuracy(pairs(e => e.final.effort)),
         aiVsBlind: {
@@ -136,6 +138,7 @@ export const estimateLogCsv = (ws: Pick<WorkspaceData, 'estimateLog'> & { projec
         'Kör efor', 'Kör önem',
         'Geçmiş yöntem', 'Geçmiş n', 'Geçmiş güven', 'Geçmiş efor (iyimser)', 'Geçmiş efor (olası)', 'Geçmiş efor (kötümser)', 'Geçmiş kapanma P50', 'Geçmiş kapanma P80', 'Geçmiş önem',
         'AI istem sürümü', 'AI model', 'AI tür', 'AI önem', 'AI efor (iyimser)', 'AI efor (olası)', 'AI efor (kötümser)', 'AI güven', 'AI işaretler', 'AI dayanak sayısı',
+        'ML sürümü', 'ML efor (iyimser)', 'ML efor (olası)', 'ML efor (kötümser)', 'ML kapanma P50', 'ML kapanma P80', 'ML önem',
         'Nihai kaynak', 'Nihai önem', 'Nihai tür', 'Nihai efor (olası)', 'Sürüm',
         'Gerçek efor', 'Gerçek kapanma (iş günü)', 'Kapandı'];
     const rows = (ws.estimateLog || []).map(e => {
@@ -145,6 +148,7 @@ export const estimateLogCsv = (ws: Pick<WorkspaceData, 'estimateLog'> & { projec
             n2(e.blind?.effortDays), e.blind?.priority || '',
             e.reference?.method || '', e.reference?.n ?? '', e.reference?.confidence || '', n2(e.reference?.effort.best), n2(e.reference?.effort.likely), n2(e.reference?.effort.worst), n2(e.reference?.p50Days), n2(e.reference?.p80Days), e.reference?.priority || '',
             e.ai?.promptVersion || '', e.ai?.model || '', e.ai?.issueType || '', e.ai?.priority || '', n2(e.ai?.effort.best), n2(e.ai?.effort.likely), n2(e.ai?.effort.worst), e.ai?.confidence || '', (e.ai?.flags || []).join(','), e.ai ? e.ai.evidence.length : '',
+            e.model?.version || '', n2(e.model?.effort.best), n2(e.model?.effort.likely), n2(e.model?.effort.worst), n2(e.model?.p50Days), n2(e.model?.p80Days), e.model?.priority || '',
             e.final.source, e.final.priority, e.final.issueType || '', n2(e.final.effort?.likely), e.final.version,
             n2(a?.effortDays), n2(a?.days), a ? 'evet' : 'hayır',
         ].map(csvCell).join(';');

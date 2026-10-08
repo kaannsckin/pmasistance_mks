@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { AiAssessmentFlag, AiPolicy, AiScoringPolicy, EstimateGatePolicy, EvalRun, GoldenItem, HealthConfig, HealthFactorKey, PermissionKey, ProjectStatus, ReportFlow, RoleViewConfig, UserRole, WorkspaceData } from '../../types';
+import { AiAssessmentFlag, AiPolicy, AiScoringPolicy, EstimateGatePolicy, EvalRun, GoldenItem, HealthConfig, ModelEvalRun, HealthFactorKey, PermissionKey, ProjectStatus, ReportFlow, RoleViewConfig, UserRole, WorkspaceData } from '../../types';
 import { fetchAiStatus } from '../../utils/ai/client';
 import { aiPolicyOf } from '../../utils/ai/policy';
 import { FLAG_LABELS } from '../../utils/ai/reportAssessment';
@@ -60,6 +60,7 @@ export interface ModernAdminProps {
     onUpdateAiPolicy: (patch: Partial<Omit<AiPolicy, 'scoring' | 'estimateGate'>> & { scoring?: Partial<AiScoringPolicy>; estimateGate?: Partial<EstimateGatePolicy> }, label: string) => void;
     onSetGolden: (items: GoldenItem[], label: string) => void;
     onAddEvalRun: (run: EvalRun) => void;
+    onAddModelEval: (run: ModelEvalRun) => void;
     canAudit: boolean;
     onSaveBackup?: () => void;
     onLoadBackup?: (file: File) => void;
