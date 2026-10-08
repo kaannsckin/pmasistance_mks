@@ -130,7 +130,7 @@ const PLANNING: Guide = {
 
 const FORECAST: Guide = {
     id: 'forecast',
-    version: 1,
+    version: 2,
     title: 'Tahmin kalitesi rehberi',
     steps: [
         {
@@ -139,7 +139,7 @@ const FORECAST: Guide = {
             how: [
                 'Her kayıt yalnız kendisinden önce kapanmış kayıtlarla tahmin edilir; her geçmiş sürüm başladığı günkü verilerle simüle edilir.',
                 'Dürüst bir aralıkta gerçeklerin yaklaşık yarısı P50\'nin, yaklaşık %80\'i P80\'in altında kalır.',
-                'Kartlar: geriye dönük testler, kalibrasyon, makine öğrenmesi modeli, altın set ve kalite kapısı, öneri isabeti.',
+                'Kartlar: geriye dönük testler, kalibrasyon, makine öğrenmesi modeli, altın set ve kalite kapısı, ince ayar kararı, öneri isabeti.',
             ],
             scenario: { title: 'Ne zaman bakmalı?', text: 'Jira\'dan büyük bir geçmiş aktarıldığında, ekip ya da süreç değiştiğinde ve ayda bir rutin olarak testleri yeniden çalıştırın.' },
             tip: 'Bu rehberi istediğiniz an başlıktaki "?" düğmesiyle yeniden açabilirsiniz.',
@@ -196,6 +196,18 @@ const FORECAST: Guide = {
                 '"Kalite kapısı zorunlu" açıksa ve sonuç geçmediyse planlamada AI tahmin önerisi kapanır.',
             ],
             scenario: { title: 'Örnek senaryo', text: 'Sunucudaki AI modeli değişti; kapı "eski" görünür. 40 kayıtlık altın sette yeniden değerlendirirsiniz ve önem doğruluğu sınırın altında kalır. Kapı zorunlu olduğundan AI önerisi kapanır, geçmiş kayıt önerisi çalışmaya devam eder.' },
+        },
+        {
+            id: 'finetune', icon: 'sparkles', title: 'İnce ayar kararı',
+            summary: "AI'yı kurumun kayıt geçmişiyle ince ayarlamanın (fine-tuning) gerekip gerekmediğini ölçülere bakarak söyler; gerekirse veri kümesini hazırlar.",
+            how: [
+                'Kart kayıt sayısını, altın seti, AI ve model sınamasını ve gerçek kullanımı denetler.',
+                'Karar dört durumdan biridir: veri yetersiz, gerekmiyor, düşünülebilir ya da önerilir; altında gerekçe ve sonraki adımlar yazar.',
+                '"Veri kümesini hazırla" eğitim ve doğrulama dosyalarını ve veri kartını üretir. Altın setteki kayıtlar dışarıda kalır, kişi adları maskelenir.',
+                'İnce ayarlı model sunucuda ayrı bir model adıyla tanımlanır ve altın sette aynı kapıyla değerlendirilir; geçerse kullanıma alınır.',
+            ],
+            scenario: { title: 'Örnek senaryo', text: 'Altın sette AI hatası geçmiş kayıt tahmininin 1,4 katı, makine öğrenmesi modelininki 0,85 katı. Kart "İnce ayar gerekmiyor" der: sayısal tahmini model yapar, AI gerekçe ve sorular için kalır. İnce ayarın maliyetinden ve bakım yükünden kaçınırsınız.' },
+            tip: 'Ayrıntılı karar ölçütleri ve uygulama adımları depodaki docs/INCE_AYAR_KARARI.md belgesindedir.',
         },
         {
             id: 'log', icon: 'list', title: 'Kayıt tahmini önerileri',

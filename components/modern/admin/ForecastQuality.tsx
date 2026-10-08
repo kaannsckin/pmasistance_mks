@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { EstimateGatePolicy, EvalRun, GoldenItem, IssueType, ModelEstimatePolicy, ModelEvalRun, ModelMetrics, Task, WorkspaceData } from '../../../types';
 import { fetchAiStatus, streamChat } from '../../../utils/ai/client';
 import { goldAnswer, goldenJsonl, goldPrompt } from '../../../utils/ai/estimateEval';
+import { buildFineTuneDataset, CheckStatus, FineTuneDataset, fineTuneReadiness, FineTuneVerdict, VERDICT_LABELS } from '../../../utils/ai/fineTune';
 import { EMBED_SYSTEM } from '../../../utils/ai/embedded';
 import { ESTIMATE_PROMPT_VERSION } from '../../../utils/ai/estimateSuggestion';
 import { aiPolicyOf } from '../../../utils/ai/policy';
@@ -71,6 +72,7 @@ const ForecastQuality: React.FC<Props> = ({ workspace, onUpdateAiPolicy, onSetGo
             <CalibrationCard history={history} />
             <ModelCard workspace={workspace} history={history} onUpdateAiPolicy={onUpdateAiPolicy} onAddModelEval={onAddModelEval} />
             <GoldenGate workspace={workspace} history={history} onUpdateAiPolicy={onUpdateAiPolicy} onSetGolden={onSetGolden} onAddEvalRun={onAddEvalRun} />
+            <FineTuneCard workspace={workspace} history={history} />
             <EstimateMonitor workspace={workspace} history={history} />
         </div>
     );
@@ -507,6 +509,92 @@ const ModelCard: React.FC<{ workspace: WorkspaceData; history: PlanningHistory }
                     </ul>
                 </details>
             )}
+        </section>
+    );
+};
+
+// ------------------------------------------------------------------ ince ayar kararı
+
+const VERDICT_TONE: Record<FineTuneVerdict, string> = { not_ready: 'm-tone-warn', not_needed: 'm-tone-ok', consider: 'm-tone-warn', recommended: 'm-tone-bad' };
+const CHECK_META: Record<CheckStatus, { icon: 'check' | 'alert' | 'x' | 'info'; ink: string; label: string }> = {
+    ok: { icon: 'check', ink: 'm-ink-ok', label: 'uygun' },
+    warn: { icon: 'alert', ink: 'm-ink-warn', label: 'sınırda' },
+    fail: { icon: 'x', ink: 'm-ink-bad', label: 'eksik' },
+    info: { icon: 'info', ink: 'm-text-3', label: 'bilgi' },
+};
+
+const FineTuneCard: React.FC<{ workspace: WorkspaceData; history: PlanningHistory }> = ({ workspace, history }) => {
+    const [status, setStatus] = useState<AiStatus | null>(null);
+    const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+    const [data, setData] = useState<FineTuneDataset | null>(null);
+    const [error, setError] = useState<string | null>(null);
+    const abort = useRef<AbortController | null>(null);
+    useEffect(() => {
+        const c = new AbortController();
+        fetchAiStatus(c.signal).then(setStatus).catch(() => setStatus(null));
+        return () => { c.abort(); abort.current?.abort(); };
+    }, []);
+    const r = useMemo(() => fineTuneReadiness(workspace, history, status), [workspace, history, status]);
+    useEffect(() => { setData(null); }, [history, workspace.goldenSet]);
+    const prepare = async () => {
+        setError(null); setData(null);
+        const c = new AbortController();
+        abort.current = c;
+        setProgress({ done: 0, total: history.records.length });
+        try {
+            setData(await buildFineTuneDataset(workspace, history, { signal: c.signal, onProgress: (done, total) => setProgress({ done, total }) }));
+        } catch (e) {
+            if ((e as Error)?.name !== 'AbortError') setError(e instanceof Error ? e.message : String(e));
+        } finally {
+            setProgress(null);
+        }
+    };
+    const stamp = new Date().toISOString().slice(0, 10);
+    return (
+        <section aria-labelledby="fq-ft" className="m-surface rounded-2xl p-5 flex flex-col gap-3.5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                    <h2 id="fq-ft" className="m-0 text-[17px] font-semibold m-text">İnce ayar kararı</h2>
+                    <p className="m-0 mt-0.5 text-[14px] m-text-3">AI'yı kurumun kayıt geçmişiyle ince ayarlamak (fine-tuning) gerekli mi? Altın set, makine öğrenmesi sınaması ve öneri günlüğü bu soruyu ölçüyle yanıtlar. İstem ve bağlam ya da klasik model yetiyorsa ince ayarın maliyeti ve bakım yükü gereksizdir.</p>
+                </div>
+                <span className={`inline-flex items-center h-7 px-3 rounded-full text-[13px] font-semibold ${VERDICT_TONE[r.verdict]}`}>{VERDICT_LABELS[r.verdict]}</span>
+            </div>
+            <p className="m-0 text-[15px] font-semibold m-text">{r.headline}</p>
+            <ul className="m-0 p-0 list-none flex flex-col" aria-label="Hazırlık denetimi">
+                {r.checks.map((c, i) => { const sep = rowSep(i); const m = CHECK_META[c.status]; return (
+                    <li key={c.label} className={`flex items-start gap-2.5 py-2 ${sep.className}`} style={sep.style}>
+                        <span className={`flex-none mt-0.5 ${m.ink}`} aria-label={m.label}><Icon name={m.icon} size={16} /></span>
+                        <span className="flex-1 min-w-0 text-[14px]"><b className="m-text">{c.label}</b> <span className="m-text-2">— {c.detail}</span></span>
+                    </li>
+                ); })}
+            </ul>
+            {r.next.length > 0 && (
+                <div className="flex flex-col gap-1.5">
+                    <span className="text-[13px] font-semibold m-text-2">Sonraki adımlar</span>
+                    <ol className="m-0 pl-5 list-decimal text-[14px] m-text-2 flex flex-col gap-1">{r.next.map(n => <li key={n}>{n}</li>)}</ol>
+                </div>
+            )}
+            <div className="rounded-xl m-fill-2 p-3.5 flex flex-col gap-2.5">
+                <span className="text-[15px] font-semibold m-text">İnce ayar veri kümesi</span>
+                <p className="m-0 text-[13px] m-text-2">Her kapanmış kayıt, açıldığı anda bilinen benzer kayıtlarla planlamadaki istemin aynısıyla sorulur; hedef yanıt gerçekleşen değerlerdir. Altın setteki kayıtlar dışarıda tutulur (ince ayarlı model onlarla değerlendirilir), en son kapanan %15 doğrulama kümesidir. Sorumlu alanı girmez, metinlerdeki kişi adları maskelenir.{r.verdict === 'not_needed' ? ' Karar "gerekmiyor" olsa da denemek için hazırlanabilir.' : ''}</p>
+                <div className="flex flex-wrap items-center gap-2">
+                    <button type="button" className="m-btn m-btn-gray" disabled={!!progress || !history.records.length} onClick={prepare}><Icon name="refresh" size={18} />{progress ? `Hazırlanıyor… ${progress.done}/${progress.total}` : data ? 'Yeniden hazırla' : 'Veri kümesini hazırla'}</button>
+                    {progress && <button type="button" className="m-btn m-btn-plain" onClick={() => abort.current?.abort()}>Durdur</button>}
+                    {data && (
+                        <>
+                            <button type="button" className="m-btn m-btn-plain" disabled={!data.stats.train} onClick={() => downloadFile(`ince-ayar-egitim-${stamp}.jsonl`, data.train, 'application/jsonl')}><Icon name="download" size={18} />Eğitim (JSONL)</button>
+                            <button type="button" className="m-btn m-btn-plain" disabled={!data.stats.validation} onClick={() => downloadFile(`ince-ayar-dogrulama-${stamp}.jsonl`, data.validation, 'application/jsonl')}><Icon name="download" size={18} />Doğrulama (JSONL)</button>
+                            <button type="button" className="m-btn m-btn-plain" onClick={() => downloadFile(`ince-ayar-veri-karti-${stamp}.json`, JSON.stringify(data.card, null, 2), 'application/json')}><Icon name="download" size={18} />Veri kartı</button>
+                        </>
+                    )}
+                </div>
+                {data && (
+                    <p className="m-0 text-[13px] m-text-3" role="status">
+                        Eğitim {num(data.stats.train)} · doğrulama {num(data.stats.validation)} örnek · altın setten dışarıda {num(data.stats.excludedGolden)} · öncesinde benzer kayıt olmadığı için atlanan {num(data.stats.noContext)} · maskelenen kişi adı {num(data.stats.redactions)}.
+                    </p>
+                )}
+                {error && <p role="alert" className="m-0 text-[14px] m-ink-bad">{error}</p>}
+            </div>
         </section>
     );
 };
