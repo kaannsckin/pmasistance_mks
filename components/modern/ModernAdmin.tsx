@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { AiAssessmentFlag, AiPolicy, AiScoringPolicy, HealthConfig, HealthFactorKey, PermissionKey, ProjectStatus, ReportFlow, RoleViewConfig, UserRole, WorkspaceData } from '../../types';
+import { AiAssessmentFlag, AiPolicy, AiScoringPolicy, EstimateGatePolicy, EvalRun, GoldenItem, HealthConfig, HealthFactorKey, PermissionKey, ProjectStatus, ReportFlow, RoleViewConfig, UserRole, WorkspaceData } from '../../types';
 import { fetchAiStatus } from '../../utils/ai/client';
 import { aiPolicyOf } from '../../utils/ai/policy';
 import { FLAG_LABELS } from '../../utils/ai/reportAssessment';
@@ -25,10 +25,10 @@ import { AuditLogPanel } from './sheets/AuditLogSheet';
 import { downloadFile } from './weekly/shared';
 import { analyzeRecords, EXCLUDING, QUALITY_LABELS, QualityIssue, recordsToCsv } from '../../utils/planning/recordQuality';
 import { HOLIDAY_TABLE_YEARS } from '../../utils/planning/workdays';
-import { estimateLogCsv, estimateStats, SourceAccuracy } from '../../utils/planning/estimateLog';
-import { buildHistory } from '../../utils/planning/history';
 import { DataHealthPanel } from './sheets/DataHealthSheet';
 import { BAND_META, Card, Field, rowSep } from './ui';
+import { Note, Switch, SwitchRow } from './admin/controls';
+import ForecastQuality from './admin/ForecastQuality';
 
 /**
  * Yönetici konsolu — yalnız yetki ve uygulama yönetimi (proje yönetimi yok):
@@ -57,7 +57,9 @@ export interface ModernAdminProps {
     onResetRoleView: (role: UserRole) => void;
     onSaveHealthConfig: (draft: HealthConfig | undefined, label: string) => boolean;
     onUpdateReportFlow: (patch: Partial<ReportFlow> & { dueWeekday?: number }, label: string) => void;
-    onUpdateAiPolicy: (patch: Partial<Omit<AiPolicy, 'scoring'>> & { scoring?: Partial<AiScoringPolicy> }, label: string) => void;
+    onUpdateAiPolicy: (patch: Partial<Omit<AiPolicy, 'scoring' | 'estimateGate'>> & { scoring?: Partial<AiScoringPolicy>; estimateGate?: Partial<EstimateGatePolicy> }, label: string) => void;
+    onSetGolden: (items: GoldenItem[], label: string) => void;
+    onAddEvalRun: (run: EvalRun) => void;
     canAudit: boolean;
     onSaveBackup?: () => void;
     onLoadBackup?: (file: File) => void;
@@ -73,48 +75,6 @@ const SHORT_ROLE: Record<UserRole, string> = {
 const GROUP_ORDER: PermissionGroup[] = ['screens', 'portfolio', 'decisions', 'report', 'app', 'privacy'];
 /** Yetki ve görünüm ayarı yapılan roller (admin'in kendi yetkileri sabittir) */
 const MANAGED_ROLES = ROLE_ORDER.filter(r => !isConsoleRole(r));
-
-const Switch: React.FC<{ on: boolean; label: string; disabled?: boolean; changed?: boolean; title?: string; onChange: (on: boolean) => void }> = ({ on, label, disabled, changed, title, onChange }) => (
-    <button
-        type="button"
-        role="switch"
-        aria-checked={on}
-        aria-label={label}
-        title={title}
-        disabled={disabled}
-        onClick={() => onChange(!on)}
-        className="relative inline-flex flex-none w-[46px] h-7 rounded-full border-0 cursor-pointer disabled:cursor-not-allowed"
-        style={{
-            background: on ? 'var(--m-accent)' : 'var(--m-fill)',
-            boxShadow: changed ? '0 0 0 2px var(--m-surface), 0 0 0 4px var(--m-warn)' : undefined,
-            opacity: disabled ? 0.5 : 1,
-            transition: 'background-color .15s ease',
-        }}
-    >
-        <span aria-hidden="true" className="absolute top-[3px] w-[22px] h-[22px] rounded-full bg-white" style={{ left: on ? 21 : 3, boxShadow: '0 1px 3px rgba(0,0,0,.25)', transition: 'left .15s ease' }}></span>
-    </button>
-);
-
-/** Etiket + açıklama + anahtar satırı */
-const SwitchRow: React.FC<{ index: number; label: string; hint?: string; on: boolean; disabled?: boolean; title?: string; onChange: (on: boolean) => void }> = ({ index, label, hint, on, disabled, title, onChange }) => {
-    const sep = rowSep(index);
-    return (
-        <div className={`flex items-center gap-3 py-2.5 ${sep.className}`} style={sep.style}>
-            <span className="flex-1 min-w-0 flex flex-col gap-0.5">
-                <span className="text-[15px] m-text">{label}</span>
-                {hint && <span className="text-[13px] m-text-3">{hint}</span>}
-            </span>
-            <Switch on={on} label={label} disabled={disabled} title={title} onChange={onChange} />
-        </div>
-    );
-};
-
-const Note: React.FC<{ children: React.ReactNode; tone?: 'info' | 'warn' }> = ({ children, tone = 'info' }) => (
-    <div className={`rounded-2xl px-4 py-3 flex items-start gap-3 ${tone === 'warn' ? 'm-tone-warn' : 'm-surface'}`}>
-        <span className={tone === 'warn' ? '' : 'm-accent'} style={{ marginTop: 2 }}><Icon name={tone === 'warn' ? 'alert' : 'info'} size={18} /></span>
-        <p className="m-0 flex-1 text-[14px] leading-relaxed m-text-2">{children}</p>
-    </div>
-);
 
 // ------------------------------------------------------------------ yetkiler
 
@@ -670,78 +630,8 @@ const AiSettings: React.FC<Pick<ModernAdminProps, 'workspace' | 'onUpdateAiPolic
                 {stats.advice.map(a => <p key={a} className="m-0 text-[14px] m-text-2 flex items-start gap-2"><span className="m-accent" style={{ marginTop: 2 }}><Icon name="info" size={16} /></span>{a}</p>)}
             </section>
 
-            <EstimateMonitor workspace={workspace} />
+            <Note>Kayıt tahmini önerilerinin isabeti, geriye dönük testler, altın set ve AI kalite kapısı “Tahmin kalitesi” bölümündedir. <button type="button" className="m-btn m-btn-plain !min-h-[30px] !px-1.5" onClick={() => onSection('forecast')}>Tahmin kalitesine git</button></Note>
         </div>
-    );
-};
-
-/** Planlama asistanının kayıt tahmini önerileri: isabet, kabul oranı ve eğitim verisi */
-const EstimateMonitor: React.FC<{ workspace: WorkspaceData }> = ({ workspace }) => {
-    const history = useMemo(() => buildHistory(workspace.projects), [workspace.projects]);
-    const st = useMemo(() => estimateStats(workspace, history), [workspace, history]);
-    const pct = (v: number | null) => (v === null ? '—' : `%${Math.round(v * 100)}`);
-    const gun = (v: number | null) => (v === null ? '—' : `${String(v).replace('.', ',')} gün`);
-    const rows: { label: string; a: SourceAccuracy; extra?: string }[] = [
-        { label: 'Geçmiş kayıtlar', a: st.reference, extra: `P80 tuttu: ${pct(st.reference.p80Coverage)}` },
-        { label: 'AI önerisi', a: st.ai },
-        { label: 'Kör tahmin (kullanıcı)', a: st.blind },
-        { label: 'Nihai karar', a: st.final },
-    ];
-    const stamp = new Date().toISOString().slice(0, 10);
-    return (
-        <section aria-labelledby="ad-ai-est" className="m-surface rounded-2xl p-5 flex flex-col gap-3">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0">
-                    <h2 id="ad-ai-est" className="m-0 text-[17px] font-semibold m-text">Kayıt tahmini önerileri</h2>
-                    <p className="m-0 mt-0.5 text-[14px] m-text-3">Planlama asistanında gösterilen öneriler ve kullanıcının kararı; kayıt kapanınca gerçekleşen eforla karşılaştırılır.</p>
-                </div>
-                <button type="button" className="m-btn m-btn-gray" disabled={!st.entries} onClick={() => downloadFile(`oneri-gunlugu-${stamp}.csv`, estimateLogCsv(workspace, history), 'text/csv;charset=utf-8')}>
-                    <Icon name="download" size={18} />Öneri günlüğü (CSV)
-                </button>
-            </div>
-            <div className="grid gap-2.5 grid-cols-2 sm:grid-cols-4">
-                {[
-                    { label: 'Öneri', value: String(st.entries) },
-                    { label: 'Kapanan ve ölçülen', value: String(st.closed) },
-                    { label: 'AI eforu kabul', value: pct(st.aiAccept.effort) },
-                    { label: 'AI önemi kabul', value: pct(st.aiAccept.priority) },
-                ].map(t => (
-                    <div key={t.label} className="rounded-xl m-fill-2 px-3 py-2.5 flex flex-col">
-                        <span className="text-[12.5px] m-text-3">{t.label}</span>
-                        <span className="text-[20px] font-bold m-tabular m-text">{t.value}</span>
-                    </div>
-                ))}
-            </div>
-            <div className="relative overflow-x-auto -mx-1">
-                <table className="w-full min-w-[520px] text-[14px] border-collapse">
-                    <thead>
-                        <tr className="text-left m-text-3 text-[13px]">
-                            <th className="font-semibold py-2 px-1">Kaynak</th>
-                            <th className="font-semibold py-2 px-1 text-right">Ölçülen</th>
-                            <th className="font-semibold py-2 px-1 text-right">Ortalama hata</th>
-                            <th className="font-semibold py-2 px-1 text-right">Aralık gerçeği kapsadı</th>
-                            <th className="font-semibold py-2 px-1 text-right">Not</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {rows.map((r, i) => {
-                            const sep = rowSep(i);
-                            return (
-                                <tr key={r.label} className={sep.className} style={sep.style}>
-                                    <td className="py-2 px-1 m-text">{r.label}</td>
-                                    <td className="py-2 px-1 text-right m-tabular">{r.a.n}</td>
-                                    <td className="py-2 px-1 text-right m-tabular">{gun(r.a.mae)}</td>
-                                    <td className="py-2 px-1 text-right m-tabular">{pct(r.a.coverage)}</td>
-                                    <td className="py-2 px-1 text-right m-text-3">{r.extra || ''}</td>
-                                </tr>
-                            );
-                        })}
-                    </tbody>
-                </table>
-            </div>
-            <p className="m-0 text-[13px] m-text-3">Kör tahmin girilen kayıt payı: {pct(st.blindShare)} · aynı kayıtlarda AI ve kör tahmin: {st.aiVsBlind.n} kayıt{st.aiVsBlind.n ? ` (AI ${gun(st.aiVsBlind.aiMae)}, kör tahmin ${gun(st.aiVsBlind.blindMae)} ortalama hata)` : ''}. Gerçekleşen efor, kayıt verisi testlerinden geçen kapanmış kayıtlardan ölçülür.</p>
-            {st.advice.map(a => <p key={a} className="m-0 text-[14px] m-text-2 flex items-start gap-2"><span className="m-accent" style={{ marginTop: 2 }}><Icon name="info" size={16} /></span>{a}</p>)}
-        </section>
     );
 };
 
@@ -987,6 +877,7 @@ const ModernAdmin: React.FC<ModernAdminProps> = props => {
             {active.key === 'report' && <ReportFlowSettings {...props} />}
             {active.key === 'health' && <HealthMethodSettings {...props} />}
             {active.key === 'ai' && <AiSettings {...props} />}
+            {active.key === 'forecast' && <ForecastQuality {...props} />}
             {active.key === 'profiles' && <ProfileManager {...props} />}
             {active.key === 'audit' && canAudit && <div className="flex flex-col gap-4"><AuditLogPanel workspace={workspace} /></div>}
             {active.key === 'app' && <AppTools {...props} />}

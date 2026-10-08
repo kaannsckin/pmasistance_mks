@@ -28,7 +28,7 @@ export const VIEW_LABELS: Record<View, string> = {
     [View.Expectations]: 'Yönetimden beklentiler',
     [View.WeeklyReport]: 'Haftalık rapor',
     [View.Meetings]: 'Müşteri görüşmeleri',
-    [View.Admin]: 'Yönetici (yetkiler ve profiller)',
+    [View.Admin]: 'Yönetici konsolu (yetkiler, görünüm, rapor akışı, sağlık puanı, yapay zekâ, tahmin kalitesi, profiller)',
     [View.Planning]: 'Planlama asistanı (yeni kayıt tahmini, sürüm planı, plan simülasyonu)',
 };
 

@@ -92,6 +92,9 @@ export const splitWorkspaceDoc = (ws: WorkspaceData): { core: Record<string, unk
         aiPolicy: ws.aiPolicy || {},
         // Kayıt tahmini öneri günlüğü (öğrenme döngüsü; kişi adı içermez)
         estimateLog: ws.estimateLog || [],
+        // Tahmin değerlendirmesi: altın set ve kalite kapısı çalıştırmaları
+        goldenSet: ws.goldenSet || [],
+        evalRuns: ws.evalRuns || [],
     };
     return { core, privateDoc };
 };

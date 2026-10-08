@@ -1,6 +1,6 @@
 
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { View, Task, Resource, TaskStatus, Note, CustomerRequest, Objective, Project, Person, WorkspaceData, RagStatus, ProjectStatus, UserRole, PlanLockStatus, WorkPackage, UiStyle, PermissionKey, EstimateLogEntry, ReleasePlan } from './types';
+import { View, Task, Resource, TaskStatus, Note, CustomerRequest, Objective, Project, Person, WorkspaceData, RagStatus, ProjectStatus, UserRole, PlanLockStatus, WorkPackage, UiStyle, PermissionKey, EstimateLogEntry, ReleasePlan, GoldenItem, EvalRun } from './types';
 import { INITIAL_TASKS, INITIAL_RESOURCES, INITIAL_OBJECTIVES } from './constants';
 import {
   WORKSPACE_STORAGE_KEY,
@@ -68,6 +68,7 @@ import ModernProjectHeader from './components/modern/ModernProjectHeader';
 import ModernPlanning from './components/modern/ModernPlanning';
 import { appendEstimateLog } from './utils/planning/estimateLog';
 import { CommitResult } from './utils/planning/releasePlan';
+import { appendEvalRun } from './utils/planning/evaluation';
 import ModernPortfolio from './components/modern/ModernPortfolio';
 import ModernBoard from './components/modern/ModernBoard';
 import ModernProjectOverview from './components/modern/ModernProjectOverview';
@@ -837,6 +838,20 @@ const App: React.FC = () => {
       ? appendAudit({ ...ws, aiPolicy: updateAiPolicy(ws.aiPolicy, patch) }, 'config.update', `Yapay zekâ: ${label}`)
       : ws));
   }, [updateWorkspace]);
+  // ---- Yönetici: tahmin kalitesi (altın set ve AI değerlendirme koşuları) ----
+  const handleSetGolden = useCallback((items: GoldenItem[], label: string) => {
+    updateWorkspace(ws => (can(identityOf(ws), 'screen.admin')
+      ? appendAudit({ ...ws, goldenSet: items }, 'config.update', `Altın set: ${label}`)
+      : ws));
+  }, [updateWorkspace]);
+  const handleAddEvalRun = useCallback((run: EvalRun) => {
+    updateWorkspace(ws => {
+      if (!can(identityOf(ws), 'screen.admin')) return ws;
+      const verdict = run.passed === null ? 'karar yok' : run.passed ? 'geçti' : 'kaldı';
+      return appendAudit({ ...ws, evalRuns: appendEvalRun(ws.evalRuns, run) }, 'config.update',
+        `Tahmin değerlendirmesi (${run.promptVersion}, ${run.n} kayıt): ${verdict}`);
+    });
+  }, [updateWorkspace]);
   const handleUpdateReportFlow = useCallback((patch: Partial<ReportFlow> & { dueWeekday?: number }, label: string) => {
     updateWorkspace(ws => {
       if (!can(identityOf(ws), 'screen.admin')) return ws;
@@ -1079,6 +1094,8 @@ const App: React.FC = () => {
           onSaveHealthConfig={handleSaveHealthConfig}
           onUpdateReportFlow={handleUpdateReportFlow}
           onUpdateAiPolicy={handleUpdateAiPolicy}
+          onSetGolden={handleSetGolden}
+          onAddEvalRun={handleAddEvalRun}
           canAudit={canAudit}
           onSaveBackup={canBackup ? handleSaveProject : undefined}
           onLoadBackup={canBackup ? handleLoadProject : undefined}

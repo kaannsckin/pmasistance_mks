@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { WeeklyReport } from '../../types';
 import { createReport, newItem } from '../weeklyReport';
-import { DEFAULT_SCORING, aiPolicyOf, updateAiPolicy } from './policy';
+import { DEFAULT_GATE, DEFAULT_SCORING, aiPolicyOf, updateAiPolicy } from './policy';
 import { assessmentInput, assessmentUsable, finalizeAssessment, needsAssessment, parseAssessment, reportContentHash, ruleTextScore } from './reportAssessment';
 
 const NOW = new Date(2026, 9, 7, 10);
@@ -98,7 +98,7 @@ describe('halüsinasyon güvenceleri', () => {
 
 describe('AI politikası', () => {
     it('varsayılanlar ve sadeleştirme', () => {
-        expect(aiPolicyOf(undefined)).toEqual({ enabled: true, chat: true, embedded: true, proposals: true, blindEstimate: true, scoring: DEFAULT_SCORING });
+        expect(aiPolicyOf(undefined)).toEqual({ enabled: true, chat: true, embedded: true, proposals: true, blindEstimate: true, estimateGate: DEFAULT_GATE, scoring: DEFAULT_SCORING });
         expect(aiPolicyOf({ aiPolicy: { scoring: { runs: 4, minEvidence: 9, maxSpread: 0, maxRuleGap: 3, lowConfidence: 'flag' } } }).scoring)
             .toEqual({ runs: 3, minEvidence: 3, maxSpread: 1, maxRuleGap: 3, lowConfidence: 'flag' });
         let p = updateAiPolicy(undefined, { chat: false });
@@ -109,6 +109,10 @@ describe('AI politikası', () => {
         // Kör tahmin varsayılanda açık; yalnız kapatılınca saklanır
         expect(updateAiPolicy(undefined, { blindEstimate: false })).toEqual({ blindEstimate: false });
         expect(updateAiPolicy({ blindEstimate: false }, { blindEstimate: true })).toBeUndefined();
+        // Kalite kapısı: eşikler sınırlanır, varsayılana dönünce atılır
+        const g = updateAiPolicy(undefined, { estimateGate: { enforce: true, minCoverage: 2 } });
+        expect(g).toEqual({ estimateGate: { ...DEFAULT_GATE, enforce: true, minCoverage: 1 } });
+        expect(updateAiPolicy(g, { estimateGate: { enforce: false, minCoverage: DEFAULT_GATE.minCoverage } })).toBeUndefined();
     });
 });
 

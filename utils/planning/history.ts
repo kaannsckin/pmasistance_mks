@@ -36,6 +36,7 @@ export interface HistoryRecord {
     projectId: string;
     projectName: string;
     name: string;
+    notes: string;
     jiraId?: string;
     issueType?: IssueType;
     unit: string;
@@ -55,6 +56,8 @@ export interface HistoryRecord {
     /** Kalibrasyon oranı (efor ÷ tahmin, kırpılmış); tahmin geçmişten üretildiyse yok */
     ratio: number | null;
     terms: string[];
+    /** Ölçülen sürenin başladığı an (işe başlama, yoksa açılış) */
+    openedAt: string;
     resolvedAt: string;
 }
 
@@ -111,6 +114,7 @@ export const buildHistory = (projects: Pick<Project, 'id' | 'name' | 'tasks' | '
             projectId: r.projectId,
             projectName: r.projectName,
             name: t.name,
+            notes: t.notes || '',
             jiraId: t.jiraId || undefined,
             issueType: t.issueType,
             unit: t.unit || '',
@@ -126,6 +130,7 @@ export const buildHistory = (projects: Pick<Project, 'id' | 'name' | 'tasks' | '
             estimateDays: r.estimateDays,
             ratio,
             terms: terms(`${t.name} ${t.notes || ''}`),
+            openedAt: r.cycleDays !== null ? t.startedAt! : t.createdAt || t.startedAt!,
             resolvedAt: t.resolvedAt!,
         };
     });
