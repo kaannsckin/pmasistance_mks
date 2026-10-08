@@ -192,6 +192,31 @@ export interface ReleasePlan {
   baseline?: ReleaseBaseline;
 }
 
+/**
+ * Altın set: PY/PMO'nun doğruladığı kapanmış kayıtlar. AI tahmin önerisinin
+ * kalite kapısı bu kayıtlarda ölçülür (her kayıt kendisi geçmişten çıkarılarak).
+ */
+export interface GoldenItem {
+  taskId: string;
+  projectId: string;
+  priority: Task['priority']; // doğru kabul edilen önem
+  issueType?: IssueType; // doğru kabul edilen tür
+  addedAt: string;
+}
+
+/** Altın set değerlendirmesi (bir istem sürümü + model için) */
+export interface EvalRun {
+  id: string;
+  at: string;
+  promptVersion: string;
+  model?: string;
+  n: number;
+  reference: { mae: number | null; coverage: number | null; priorityAccuracy: number | null };
+  ai: { n: number; mae: number | null; coverage: number | null; priorityAccuracy: number | null; typeAccuracy: number | null; lowConfidence: number | null; unknownEvidence: number | null } | null;
+  passed: boolean | null; // null: yetersiz örnek ya da AI çalışmadı
+  reasons: string[];
+}
+
 /** Planlama asistanının kayıt açılırken verdiği tahmin (öğrenme döngüsü için saklanır) */
 export interface TaskForecast {
   at: string; // ISO
@@ -613,6 +638,8 @@ export interface WorkspaceData {
   viewConfig?: ViewConfig; // Admin'in rol bazlı görünüm, filtre ve sıralama ayarları
   aiPolicy?: AiPolicy; // Admin'in yapay zekâ politikası
   estimateLog?: EstimateLogEntry[]; // Kayıt tahmini öneri günlüğü (en yeni sonda)
+  goldenSet?: GoldenItem[]; // Tahmin değerlendirmesi için doğrulanmış kapanmış kayıtlar
+  evalRuns?: EvalRun[]; // Altın set değerlendirmeleri (en yeni sonda)
   healthConfig?: HealthConfig; // Admin'in sağlık puanı yöntemi ayarları
   profiles?: UserProfile[]; // Admin'in tanımladığı profiller (kişi ↔ rol)
   auditLog?: AuditEntry[]; // Kritik aksiyonların günlüğü (en yeni başta)
@@ -793,7 +820,16 @@ export interface AiPolicy {
   embedded?: boolean; // ekran içi AI (taslak, öneri, özet)
   proposals?: boolean; // asistanın değişiklik önerileri
   blindEstimate?: boolean; // kör tahmin: öneriler, kullanıcı kendi tahminini girdikten sonra görünür (varsayılan açık)
+  estimateGate?: EstimateGatePolicy; // AI tahmin önerisinin kalite kapısı
   scoring?: AiScoringPolicy;
+}
+
+/** Kalite kapısı: altın sette AI önerisi bu eşikleri geçmezse (zorunluysa) öneri gösterilmez */
+export interface EstimateGatePolicy {
+  enforce: boolean;
+  maxMaeRatio: number; // AI ortalama hatası ≤ geçmiş kayıt tahmininin hatası × oran
+  minPriorityAccuracy: number; // önem doğruluğu alt sınırı (0–1)
+  minCoverage: number; // gerçek eforun AI aralığında kalma oranı alt sınırı (0–1)
 }
 
 export interface AiScoringPolicy {

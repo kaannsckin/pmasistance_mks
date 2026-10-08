@@ -23,6 +23,7 @@ interface Props {
     visibleProjectIds: ReadonlySet<string>;
     canEdit: boolean;
     blindEstimate: boolean;
+    aiBlocked?: boolean;
     onSavePlan: (plan: ReleasePlan) => void;
     onDeletePlan: (id: string) => void;
     onCommit: (result: CommitResult) => void;
@@ -32,7 +33,7 @@ interface Props {
 const fmtDay = (iso?: string) => (iso ? new Date(`${iso}T00:00:00`).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric' }) : '—');
 const pct = (v: number) => `%${Math.round(v * 100)}`;
 
-const ReleasePlanner: React.FC<Props> = ({ project, history, people, leaves, visibleProjectIds, canEdit, blindEstimate, onSavePlan, onDeletePlan, onCommit, onOpenGoals }) => {
+const ReleasePlanner: React.FC<Props> = ({ project, history, people, leaves, visibleProjectIds, canEdit, blindEstimate, aiBlocked, onSavePlan, onDeletePlan, onCommit, onOpenGoals }) => {
     const [openId, setOpenId] = useState<string | null>(null);
     const [justCommitted, setJustCommitted] = useState<string | null>(null);
     const plans = [...(project.releasePlans || [])].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
@@ -50,6 +51,7 @@ const ReleasePlanner: React.FC<Props> = ({ project, history, people, leaves, vis
                 visibleProjectIds={visibleProjectIds}
                 canEdit={canEdit}
                 blindEstimate={blindEstimate}
+                aiBlocked={aiBlocked}
                 onSave={onSavePlan}
                 onCommit={c => { onCommit(c); setJustCommitted(c.plan.id); }}
                 onClose={() => setOpenId(null)}

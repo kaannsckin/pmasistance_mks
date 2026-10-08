@@ -1,6 +1,7 @@
 import React, { useDeferredValue, useMemo, useState } from 'react';
 import { EstimateLogEntry, IssueType, Leave, Person, Project, Task, TaskStatus } from '../../../types';
 import { EMBED_SYSTEM } from '../../../utils/ai/embedded';
+import { GATE_BLOCK_MESSAGE } from '../../../utils/ai/estimateEval';
 import { AI_FLAG_LABELS, AiEstimate, ESTIMATE_PROMPT_VERSION, estimateSuggestionPrompt, finalizeEstimateSuggestion, parseEstimateSuggestion } from '../../../utils/ai/estimateSuggestion';
 import { useAiRun } from '../../assistant/AiButton';
 import { useAssistantOptional } from '../../assistant/AssistantContext';
@@ -36,6 +37,8 @@ interface Props {
     canEdit: boolean;
     /** Kör tahmin: öneriler kullanıcı kendi tahminini girdikten sonra görünür */
     blindEstimate: boolean;
+    /** Kalite kapısı: AI tahmin önerisi kapalı */
+    aiBlocked?: boolean;
     onAddTask: (task: Task, log: EstimateLogEntry) => void;
     onOpenList: () => void;
 }
@@ -56,7 +59,7 @@ const dm = (d: Date) => d.toLocaleDateString('tr-TR', { day: 'numeric', month: '
 const CONF_TONE: Record<ReferenceEstimate['confidence'], string> = { high: 'm-tone-ok', medium: 'm-tone-warn', low: 'm-tone-bad' };
 const probTone = (p: number) => (p >= FIT_TARGET ? 'var(--m-ok)' : p >= 0.5 ? 'var(--m-warn)' : 'var(--m-bad)');
 
-const NewRecordPlanner: React.FC<Props> = ({ project, history, people, leaves, visibleProjectIds, canEdit, blindEstimate, onAddTask, onOpenList }) => {
+const NewRecordPlanner: React.FC<Props> = ({ project, history, people, leaves, visibleProjectIds, canEdit, blindEstimate, aiBlocked = false, onAddTask, onOpenList }) => {
     const [name, setName] = useState('');
     const [notes, setNotes] = useState('');
     const [issueType, setIssueType] = useState<IssueType | ''>('');
@@ -86,10 +89,11 @@ const NewRecordPlanner: React.FC<Props> = ({ project, history, people, leaves, v
     const est = useMemo<ReferenceEstimate>(() => estimateFromHistory(deferred, history, { visibleProjectIds }), [deferred, history, visibleProjectIds]);
 
     const draftKey = JSON.stringify([name.trim(), notes.trim(), issueType, unit.trim()]);
-    const aiEst = aiRun?.result ?? null;
+    const aiOn = ai.available && !aiBlocked;
+    const aiEst = aiOn ? aiRun?.result ?? null : null;
     const aiStale = !!aiRun && aiRun.key !== draftKey;
     // Kör tahmin: gösterilecek bir öneri varsa, kullanıcı kendi tahminini verene kadar gizli
-    const hasSuggestion = est.method !== 'none' || ai.available;
+    const hasSuggestion = est.method !== 'none' || aiOn;
     const hidden = blindEstimate && !revealed && hasSuggestion;
 
     // Kayda yazılacak tahmin: kullanıcı seçmediyse kendi tahmini (varsa), yoksa geçmiş kayıtlardan öneri
@@ -354,7 +358,10 @@ const NewRecordPlanner: React.FC<Props> = ({ project, history, people, leaves, v
                         </>
                     )}
 
-                    {!hidden && ai.available && (
+                    {!hidden && ai.available && aiBlocked && (
+                        <p className="m-0 text-[14px] m-text-2 flex items-start gap-1.5"><Icon name="lock" size={16} className="mt-0.5 shrink-0" />{GATE_BLOCK_MESSAGE}</p>
+                    )}
+                    {!hidden && aiOn && (
                         <div className="rounded-xl p-3.5 flex flex-col gap-2.5" style={{ background: 'var(--m-accent-tint)' }} aria-live="polite">
                             <div className="flex flex-wrap items-center justify-between gap-2">
                                 <span className="inline-flex items-center gap-2 text-[15px] font-semibold m-text"><Icon name="sparkles" size={18} />AI önerisi</span>

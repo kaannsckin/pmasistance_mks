@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { EffortRange, IssueType, Leave, Person, Project, ReleaseItemChoice, ReleaseMilestone, ReleasePlan, ReleasePlanItem, Task, TaskStatus } from '../../../types';
 import { EMBED_SYSTEM } from '../../../utils/ai/embedded';
+import { GATE_BLOCK_MESSAGE } from '../../../utils/ai/estimateEval';
 import { AI_FLAG_LABELS, ESTIMATE_PROMPT_VERSION, estimateSuggestionPrompt, finalizeEstimateSuggestion, parseEstimateSuggestion } from '../../../utils/ai/estimateSuggestion';
 import { milestonePrompt, parseMilestones } from '../../../utils/ai/milestoneSuggestion';
 import { PlanningHistory } from '../../../utils/planning/history';
@@ -36,6 +37,8 @@ interface Props {
     visibleProjectIds: ReadonlySet<string>;
     canEdit: boolean;
     blindEstimate: boolean;
+    /** Kalite kapısı: AI tahmin önerisi kapalı (kilometre taşı önerisi etkilenmez) */
+    aiBlocked?: boolean;
     onSave: (plan: ReleasePlan) => void;
     onCommit: (result: CommitResult) => void;
     onClose: () => void;
@@ -55,7 +58,7 @@ const DECISION_META: Record<ItemDecision, { label: string; tone: string }> = {
 const probInk = (p: number) => (p >= 0.8 ? 'm-ink-ok' : p >= 0.5 ? 'm-ink-warn' : 'm-ink-bad');
 const range = (e: EffortRange) => `${num(e.best)} · ${num(e.likely)} · ${num(e.worst)} gün`;
 
-const ReleaseWizard: React.FC<Props> = ({ project, initial, history, people, leaves, visibleProjectIds, canEdit, blindEstimate, onSave, onCommit, onClose }) => {
+const ReleaseWizard: React.FC<Props> = ({ project, initial, history, people, leaves, visibleProjectIds, canEdit, blindEstimate, aiBlocked = false, onSave, onCommit, onClose }) => {
     const [plan, setPlan] = useState<ReleasePlan>(initial);
     const latest = useRef(plan);
     latest.current = plan;
@@ -138,7 +141,7 @@ const ReleaseWizard: React.FC<Props> = ({ project, initial, history, people, lea
 
             {step === 1 && <StepDefine plan={plan} project={project} canEdit={canEdit} update={update} />}
             {step === 2 && <StepItems plan={plan} project={project} canEdit={canEdit} blindEstimate={blindEstimate} update={update} />}
-            {step === 3 && <StepSuggestions plan={plan} project={project} history={history} visibleProjectIds={visibleProjectIds} canEdit={canEdit} update={update} />}
+            {step === 3 && <StepSuggestions plan={plan} project={project} history={history} visibleProjectIds={visibleProjectIds} canEdit={canEdit} aiBlocked={aiBlocked} update={update} />}
             {step === 4 && <StepSimulation plan={plan} project={project} history={history} ctx={ctx} visibleProjectIds={visibleProjectIds} sim={sim} canEdit={canEdit} update={update} />}
             {step === 5 && <StepMilestones plan={plan} project={project} sim={sim} canEdit={canEdit} update={update} />}
             {step === 6 && <StepCommit plan={plan} project={project} history={history} ctx={ctx} sim={sim} canEdit={canEdit} onCommit={onCommit} />}
@@ -319,8 +322,9 @@ const StepItems: React.FC<{ plan: ReleasePlan; project: Project; canEdit: boolea
 
 // ------------------------------------------------------------------ 3. öneriler
 
-const StepSuggestions: React.FC<{ plan: ReleasePlan; project: Project; history: PlanningHistory; visibleProjectIds: ReadonlySet<string>; canEdit: boolean; update: Update }> = ({ plan, project, history, visibleProjectIds, canEdit, update }) => {
+const StepSuggestions: React.FC<{ plan: ReleasePlan; project: Project; history: PlanningHistory; visibleProjectIds: ReadonlySet<string>; canEdit: boolean; aiBlocked: boolean; update: Update }> = ({ plan, project, history, visibleProjectIds, canEdit, aiBlocked, update }) => {
     const ai = useAiRun();
+    const aiOn = ai.available && !aiBlocked;
     const model = useAssistantOptional()?.status?.model;
     const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
     const cancel = useRef(false);
@@ -373,7 +377,7 @@ const StepSuggestions: React.FC<{ plan: ReleasePlan; project: Project; history: 
                         {named.length} kayıt · {counts.accepted || 0} öneri kabul · {counts.edited || 0} düzeltildi · {counts.rejected || 0} kapsam dışı{counts.pending ? ` · ${counts.pending} tahminsiz` : ''} · toplam efor {num(effortSum)} gün
                     </p>
                 </div>
-                {ai.available && canEdit && (
+                {aiOn && canEdit && (
                     <div className="flex flex-wrap items-center gap-2">
                         {progress ? (
                             <>
@@ -390,10 +394,11 @@ const StepSuggestions: React.FC<{ plan: ReleasePlan; project: Project; history: 
                 )}
             </div>
             {ai.error && <p role="alert" className="m-0 text-[14px] m-ink-bad">{ai.error}</p>}
+            {ai.available && aiBlocked && <p className="m-0 text-[14px] m-text-2 flex items-start gap-1.5"><Icon name="lock" size={16} className="mt-0.5 shrink-0" />{GATE_BLOCK_MESSAGE}</p>}
             <p className="m-0 text-[13px] m-text-3">Varsayılan: güveni düşük olmayan AI önerisi, yoksa geçmiş kayıtlar, yoksa kendi tahmininiz. Her satırda değiştirebilir, elle düzeltebilir ya da kaydı kapsam dışı bırakabilirsiniz; kararlar öneri günlüğüne yazılır.</p>
 
             <div className="flex flex-col gap-3">
-                {named.map(i => <SuggestionRow key={i.id} item={i} canEdit={canEdit} aiAvailable={ai.available && !progress} aiLoading={ai.loading} onAsk={() => askOne(i)} update={update} />)}
+                {named.map(i => <SuggestionRow key={i.id} item={i} canEdit={canEdit} aiAvailable={aiOn && !progress} aiLoading={ai.loading} onAsk={() => askOne(i)} update={update} />)}
             </div>
         </section>
     );

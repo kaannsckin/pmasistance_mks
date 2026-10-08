@@ -142,7 +142,7 @@ const attrSimilarity = (d: DraftKeys, r: HistoryRecord, unit: string, labels: st
 };
 
 /** Taslağa göre geçmiş kayıtların benzerlik puanları (yüksekten düşüğe) */
-export const rankSimilar = (draft: RecordDraft, history: PlanningHistory, visibleProjectIds?: ReadonlySet<string>): ReferenceMatch[] => {
+export const rankSimilar = (draft: RecordDraft, history: PlanningHistory, visibleProjectIds?: ReadonlySet<string>, filter?: (r: HistoryRecord) => boolean): ReferenceMatch[] => {
     const idx = textIndex(history);
     const q = vectorOf(terms(`${draft.name} ${draft.notes || ''}`), idx.idf, Math.log(1 + Math.max(1, history.records.length)));
     const qn = norm(q);
@@ -150,17 +150,18 @@ export const rankSimilar = (draft: RecordDraft, history: PlanningHistory, visibl
         type: draft.issueType, unit: fold(draft.unit), priority: draft.priority, projectId: draft.projectId,
         labels: (draft.labels || []).map(fold).filter(Boolean), workPackageId: draft.workPackageId,
     };
-    return history.records
-        .map((r, i) => {
-            let dot = 0;
-            if (qn > 0 && idx.norms[i] > 0) q.forEach((x, t) => { const y = idx.vectors[i].get(t); if (y) dot += x * y; });
-            const text = qn > 0 && idx.norms[i] > 0 ? dot / (qn * idx.norms[i]) : 0;
-            const attr = attrSimilarity(keys, r, idx.units[i], idx.labels[i]);
-            const score = qn > 0 ? (attr === null ? text : 0.55 * text + 0.45 * attr) : attr ?? 0;
-            return { record: r, score, text, visible: !visibleProjectIds || visibleProjectIds.has(r.projectId) };
-        })
-        // eşit puanda en yeni kapanan önce
-        .sort((a, b) => b.score - a.score || (a.record.resolvedAt < b.record.resolvedAt ? 1 : a.record.resolvedAt > b.record.resolvedAt ? -1 : 0));
+    const out: ReferenceMatch[] = [];
+    history.records.forEach((r, i) => {
+        if (filter && !filter(r)) return;
+        let dot = 0;
+        if (qn > 0 && idx.norms[i] > 0) q.forEach((x, t) => { const y = idx.vectors[i].get(t); if (y) dot += x * y; });
+        const text = qn > 0 && idx.norms[i] > 0 ? dot / (qn * idx.norms[i]) : 0;
+        const attr = attrSimilarity(keys, r, idx.units[i], idx.labels[i]);
+        const score = qn > 0 ? (attr === null ? text : 0.55 * text + 0.45 * attr) : attr ?? 0;
+        out.push({ record: r, score, text, visible: !visibleProjectIds || visibleProjectIds.has(r.projectId) });
+    });
+    // eşit puanda en yeni kapanan önce
+    return out.sort((a, b) => b.score - a.score || (a.record.resolvedAt < b.record.resolvedAt ? 1 : a.record.resolvedAt > b.record.resolvedAt ? -1 : 0));
 };
 
 // ---------------------------------------------------------------- tahmin
@@ -174,8 +175,12 @@ const mix = <K extends string>(items: { key: K | undefined; weight: number }[]):
 };
 const share = <K extends string>(items: { key: K | undefined; weight: number }[]): { value: K; share: number } | null => mix(items)[0] || null;
 
-export const estimateFromHistory = (draft: RecordDraft, history: PlanningHistory, opts: { visibleProjectIds?: ReadonlySet<string> } = {}): ReferenceEstimate => {
-    const ranked = rankSimilar(draft, history, opts.visibleProjectIds);
+/**
+ * opts.filter: geçmişin bir alt kümesiyle tahmin (geriye dönük testte "o güne
+ * kadar kapanmışlar", altın sette "kaydın kendisi hariç").
+ */
+export const estimateFromHistory = (draft: RecordDraft, history: PlanningHistory, opts: { visibleProjectIds?: ReadonlySet<string>; filter?: (r: HistoryRecord) => boolean } = {}): ReferenceEstimate => {
+    const ranked = rankSimilar(draft, history, opts.visibleProjectIds, opts.filter);
     const hasText = terms(`${draft.name} ${draft.notes || ''}`).length > 0;
     let method: ReferenceMethod = 'none';
     let pool: ReferenceMatch[] = [];
@@ -214,7 +219,7 @@ export const estimateFromHistory = (draft: RecordDraft, history: PlanningHistory
         return {
             method, methodLabel: METHOD_LABELS.none, n: 0, effectiveN: 0, matches: [], context: [], priorityMix: [], typeMix: [], duration: null, effort: null,
             effortSamples: [], effortWeights: [], priority: null, issueType: null, calibration: cal, calibrated,
-            confidence: 'low', reasons: [`Eğitime uygun kapanmış kayıt sayısı ${history.records.length}; en az ${MIN_REFS} gerekir`],
+            confidence: 'low', reasons: [`Eğitime uygun kapanmış kayıt sayısı ${ranked.length}; en az ${MIN_REFS} gerekir`],
         };
     }
 
