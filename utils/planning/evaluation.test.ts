@@ -122,6 +122,12 @@ describe('altın set ve kalite kapısı', () => {
         const fail = scoreGoldRun(cases, bad, DEFAULT_GATE, meta);
         expect(fail.passed).toBe(false);
         expect(fail.reasons).toHaveLength(3);
+        // Okunamayan önem yanlış sayılır; geçmiş kayıt ölçüsü yanıtlanan kayıtlarda
+        const noPriority = new Map(cases.map(c => [c.record.id, { ...good.get(c.record.id)!, priority: undefined }]));
+        const np = scoreGoldRun(cases, noPriority, DEFAULT_GATE, meta);
+        expect(np).toMatchObject({ passed: false, ai: { priorityAccuracy: 0 } });
+        const half = new Map([...good].slice(0, 10));
+        expect(scoreGoldRun(cases, half, DEFAULT_GATE, meta).reference.mae).toBe(scoreGoldRun(cases.filter(c => half.has(c.record.id)), null, DEFAULT_GATE, meta).reference.mae);
         const few = new Map([...good].slice(0, MIN_GATE_CASES - 1));
         expect(scoreGoldRun(cases, few, DEFAULT_GATE, meta).passed).toBeNull();
         expect(scoreGoldRun(cases, null, DEFAULT_GATE, meta)).toMatchObject({ ai: null, passed: null });
@@ -134,6 +140,9 @@ describe('altın set ve kalite kapısı', () => {
         expect(gateStatus([run(true), run(false)], 'kayit-tahmin-1', 'm1').status).toBe('failed');
         expect(gateStatus([run(true)], 'kayit-tahmin-1', 'm2').status).toBe('stale');
         expect(gateStatus([run(null)], 'kayit-tahmin-1').status).toBe('insufficient');
+        // Karar veremeyen yeni koşu (AI çoğu kayıtta hata verdi) geçmeyen kapıyı kaldırmaz
+        expect(gateStatus([run(false), run(null)], 'kayit-tahmin-1', 'm1').status).toBe('failed');
+        expect(estimateGate({ evalRuns: [run(false), run(null)], aiPolicy: { estimateGate: { ...DEFAULT_GATE, enforce: true } } }, 'm1').blocked).toBe(true);
         expect(gateStatus([run(true)], 'kayit-tahmin-2').status).toBe('none');
         expect(estimateGate({ evalRuns: [run(false)] }, 'm1').blocked).toBe(false); // zorunlu değil
         expect(estimateGate({ evalRuns: [run(false)], aiPolicy: { estimateGate: { ...DEFAULT_GATE, enforce: true } } }, 'm1').blocked).toBe(true);

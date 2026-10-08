@@ -197,6 +197,15 @@ describe('benzer kayıtlardan tahmin', () => {
         expect(estimateFromHistory({ name: 'x' }, buildHistory([])).method).toBe('none');
     });
 
+    it('nitelikler eşleşse de metin benzemiyorsa güven yüksek olmaz', () => {
+        // Aynı birim ve projede 20 kayıt; yalnız "ekran" sözcüğü ortak
+        const tasks = Array.from({ length: 20 }, (_, i) => closed(`e${i}`, 3 + (i % 5), { name: `Kullanıcı profil ekranı düzeni ${i}`, unit: 'Yazılım' }));
+        const h = buildHistory([createProject('P', { id: 'p1', tasks })]);
+        const est = estimateFromHistory({ name: 'Fatura ödemesi banka entegrasyonu ekranı', unit: 'Yazılım', projectId: h.records[0].projectId }, h);
+        expect(est.confidence).not.toBe('high');
+        expect(est.reasons).toContain('Metin eşleşmesi zayıf');
+    });
+
     it('görünmeyen projelerin kayıtları kanıtta gizli işaretlenir', () => {
         const h = history();
         const est = estimateFromHistory({ name: 'Oturum açma hatası', issueType: 'bug' }, h, { visibleProjectIds: new Set(['başka']) });

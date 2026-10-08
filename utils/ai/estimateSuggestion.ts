@@ -68,7 +68,21 @@ const pickAlias = <T,>(raw: unknown, table: [RegExp, T][]): T | undefined => {
     const f = foldTr(String(raw ?? '')).trim();
     return f ? table.find(([re]) => re.test(f))?.[1] : undefined;
 };
-const toNum = (v: unknown): number => Number(String(v ?? '').replace(',', '.'));
+/** Sayı; boş ya da eksik alan NaN (0 sayılıp aralığı kaydırmasın) */
+const toNum = (v: unknown): number => (v === undefined || v === null || String(v).trim() === '' ? NaN : Number(String(v).replace(',', '.')));
+
+/** Dayanak kimlikleri: "R1", "R1, R3", "R1 ve R2", 3 → R3 */
+const evidenceIdsOf = (raw: unknown): string[] => {
+    const items = Array.isArray(raw) ? raw : raw === undefined || raw === null || raw === '' ? [] : [raw];
+    const out: string[] = [];
+    items.forEach(x => {
+        const t = String(x ?? '');
+        const tagged = [...t.matchAll(/R\s*(\d{1,3})/gi)].map(m => `R${Number(m[1])}`);
+        const ids = tagged.length ? tagged : /^\s*\d{1,3}\s*$/.test(t) ? [`R${Number(t)}`] : [];
+        ids.forEach(id => { if (!out.includes(id)) out.push(id); });
+    });
+    return out;
+};
 
 /** Bağlamdaki kayıt etiketi → geçmiş kayıt kimliği */
 export const contextIds = (ref: ReferenceEstimate): Map<string, string> => new Map(ref.context.map((m, i) => [`R${i + 1}`, m.record.id]));
@@ -112,15 +126,19 @@ export const estimateSuggestionPrompt = (draft: RecordDraft, ref: ReferenceEstim
 export const parseEstimateSuggestion = (text: string): ParsedAiEstimate => {
     const v = (extractJson(text) || {}) as Record<string, unknown>;
     const e = (v.efor || v.effort || {}) as Record<string, unknown>;
-    const nums = [e.iyimser ?? e.best, e.olasi ?? e.olası ?? e.likely ?? e.ortalama, e.kotumser ?? e.kötümser ?? e.worst].map(toNum);
-    if (nums.some(n => !Number.isFinite(n) || n < 0) || !(nums[1] > 0)) throw new Error('Model geçerli bir efor aralığı vermedi; tekrar deneyin.');
+    const likelyRaw = toNum(e.olasi ?? e.olası ?? e.likely ?? e.ortalama);
+    if (!Number.isFinite(likelyRaw) || !(likelyRaw > 0)) throw new Error('Model geçerli bir efor aralığı vermedi; tekrar deneyin.');
+    // Eksik uç olası değere eşit sayılır; negatif ya da sayı olmayan uç geçersizdir
+    const edge = (x: unknown) => { const n = toNum(x); return Number.isFinite(n) ? n : x === undefined || x === null || String(x).trim() === '' ? likelyRaw : NaN; };
+    const nums = [edge(e.iyimser ?? e.best ?? e.min), likelyRaw, edge(e.kotumser ?? e.kötümser ?? e.worst ?? e.max)];
+    if (nums.some(n => !Number.isFinite(n) || n < 0)) throw new Error('Model geçerli bir efor aralığı vermedi; tekrar deneyin.');
     const [best, likely, worst] = [...nums].sort((a, b) => a - b).map(half);
     const list = (x: unknown): string[] => (Array.isArray(x) ? x : x ? [x] : []).map(i => clip(i, 160)).filter(Boolean);
     return {
         issueType: pickAlias(v.tur ?? v.tür ?? v.type, TYPE_ALIASES),
         priority: pickAlias(v.onem ?? v.önem ?? v.priority, PRIORITY_ALIASES),
         effort: { best, likely, worst },
-        evidenceIds: list(v.dayanak ?? v.evidence).map(x => x.toUpperCase().replace(/[^R0-9]/g, '')).filter(x => /^R\d+$/.test(x)),
+        evidenceIds: evidenceIdsOf(v.dayanak ?? v.evidence),
         priorityRationale: clip(v.onem_gerekce ?? v.önem_gerekçe ?? '', 300),
         effortRationale: clip(v.efor_gerekce ?? v.efor_gerekçe ?? '', 300),
         questions: list(v.eksik_bilgi ?? v.questions).slice(0, 3),

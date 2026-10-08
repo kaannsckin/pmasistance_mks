@@ -112,3 +112,24 @@ describe('öneri günlüğü ve isabet', () => {
         expect(csv).toContain('evet');
     });
 });
+
+describe('AI yanıtının çözümlenmesi: eksik alanlar ve dayanak yazımları', () => {
+    it('eksik uç olası değere eşit sayılır; aralık kaymaz', () => {
+        expect(parseEstimateSuggestion('{"efor":{"olasi":3}}').effort).toEqual({ best: 3, likely: 3, worst: 3 });
+        expect(parseEstimateSuggestion('{"efor":{"iyimser":2,"olasi":3}}').effort).toEqual({ best: 2, likely: 3, worst: 3 });
+        expect(parseEstimateSuggestion('{"efor":{"min":1,"olasi":3,"max":6}}').effort).toEqual({ best: 1, likely: 3, worst: 6 });
+        expect(() => parseEstimateSuggestion('{"efor":{"iyimser":1,"kotumser":4}}')).toThrow(/efor/);
+        expect(() => parseEstimateSuggestion('{"efor":{"iyimser":"az","olasi":3}}')).toThrow(/efor/);
+    });
+
+    it('dayanak: virgüllü, sayı ya da "ve" ile yazılmış kimlikler', () => {
+        expect(parseEstimateSuggestion('{"efor":{"olasi":2},"dayanak":"R1, R3"}').evidenceIds).toEqual(['R1', 'R3']);
+        expect(parseEstimateSuggestion('{"efor":{"olasi":2},"dayanak":[1,3]}').evidenceIds).toEqual(['R1', 'R3']);
+        expect(parseEstimateSuggestion('{"efor":{"olasi":2},"dayanak":["R1 ve R2","r2"]}').evidenceIds).toEqual(['R1', 'R2']);
+    });
+
+    it('JSON önünde ve arkasında metin olsa da nesne okunur', () => {
+        expect(parseEstimateSuggestion('İşte önerim:\n{"efor":{"iyimser":1,"olasi":2,"kotumser":4},"dayanak":["R1"]}\nUmarım faydalı olur.')).toMatchObject({ effort: { likely: 2 }, evidenceIds: ['R1'] });
+    });
+});
+

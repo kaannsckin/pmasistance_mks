@@ -14,6 +14,9 @@ describe('extractJson', () => {
         expect(extractJson('<think>önce düşüneyim {bozuk</think>{"ok": true,}')).toEqual({ ok: true });
         expect(() => extractJson('JSON yok')).toThrow(/JSON/);
         expect(extractJsonArray('{"oneriler": [1, 2]}')).toEqual([1, 2]);
+        // Nesnenin önünde ya da arkasında metin varsa içindeki ilk dizi değil, nesnenin kendisi alınır
+        expect(extractJson('İşte önerim:\n{"dayanak": ["R1"], "efor": {"olasi": 2}}\nUmarım faydalı olur.')).toEqual({ dayanak: ['R1'], efor: { olasi: 2 } });
+        expect(extractJsonArray('Öneriler: {"oneriler": [{"a": [1]}]} bitti')).toEqual([{ a: [1] }]);
     });
 });
 

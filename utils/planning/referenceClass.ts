@@ -18,6 +18,8 @@ import { effectiveN, weightedQuantile } from './random';
 export const MIN_REFS = 5;
 const TOP_K = 20;
 const MIN_SIMILARITY = 0.3;
+/** En benzer kaydın metin benzerliği bunun altındaysa eşleşme zayıftır (güven yüksek olamaz) */
+const WEAK_TEXT = 0.2;
 const EVIDENCE = 6;
 /** AI bağlamına giren en çok kayıt (yalnız kullanıcının görebildiği projelerden) */
 export const AI_CONTEXT = 12;
@@ -229,14 +231,15 @@ export const estimateFromHistory = (draft: RecordDraft, history: PlanningHistory
     const e10 = weightedQuantile(eff, 0.1), e50 = weightedQuantile(eff, 0.5), e90 = weightedQuantile(eff, 0.9);
     const effN = method === 'similar' ? effectiveN(weights) : pool.length;
     const spread = p50 > 0 ? p90 / p50 : Infinity;
-    const top = pool[0]?.score ?? 0;
+    // Metin benzerliği ayrı ölçülür: birim ve proje eşleşince birleşik puan metin hiç benzemese de 0,45'i geçer
+    const topText = pool.reduce((m, x) => Math.max(m, x.text), 0);
 
     const reasons: string[] = [];
     if (method !== 'similar') reasons.push(method === 'group' ? `Yeterince benzer kayıt yok; ${groupLabel.toLocaleLowerCase('tr-TR')} kullanıldı` : 'Yeterince benzer kayıt yok; tüm geçmişin dağılımı kullanıldı');
     if (method === 'similar' && effN < 8) reasons.push(`Benzer kayıt az (etkin ${round1(effN)})`);
-    if (method === 'similar' && hasText && top < 0.45) reasons.push('Metin eşleşmesi zayıf');
+    if (method === 'similar' && hasText && topText < WEAK_TEXT) reasons.push('Metin eşleşmesi zayıf');
     if (spread > 3) reasons.push(`Süreler dağınık: P90, P50'nin ${round1(spread)} katı`);
-    const confidence: Confidence = method === 'similar' && effN >= 8 && spread <= 3 && (!hasText || top >= 0.45)
+    const confidence: Confidence = method === 'similar' && effN >= 8 && spread <= 3 && (!hasText || topText >= WEAK_TEXT)
         ? 'high'
         : method !== 'all' && effN >= MIN_REFS && spread <= 5 ? 'medium' : 'low';
 
