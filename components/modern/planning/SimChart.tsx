@@ -1,5 +1,5 @@
 import React from 'react';
-import { SimResult } from '../../../utils/planning/monteCarlo';
+import { Summary } from '../../../utils/planning/monteCarlo';
 import { quantileSorted } from '../../../utils/planning/random';
 import { dateAtOffset } from '../../../utils/planning/simulationInput';
 
@@ -19,8 +19,7 @@ export interface ChartMarker {
 
 const fmt = (d: Date) => d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' });
 
-const SimChart: React.FC<{ result: SimResult; start: string; markers: ChartMarker[] }> = ({ result, start, markers }) => {
-    const { sorted, release } = result;
+const SimChart: React.FC<{ sorted: Float64Array; summary: Summary; start: string; markers: ChartMarker[] }> = ({ sorted, summary: release, start, markers }) => {
     if (!sorted.length) return null;
     // Görüntü aralığı: en erken → %99'luk dilim; ötesindeki birkaç uç tekrar son sütunda toplanır
     const first = sorted[0];

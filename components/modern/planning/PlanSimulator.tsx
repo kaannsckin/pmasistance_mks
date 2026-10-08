@@ -207,7 +207,7 @@ const PlanSimulator: React.FC<Props> = ({ project, history, people, leaves, visi
                                 </p>
                             )}
                         </div>
-                        <SimChart result={r} start={b.start} markers={markers} />
+                        <SimChart sorted={r.sorted} summary={r.release} start={b.start} markers={markers} />
                     </section>
 
                     <section className="m-surface rounded-2xl p-5 flex flex-col gap-2" aria-labelledby="ps-crit">
