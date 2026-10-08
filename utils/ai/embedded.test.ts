@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { TaskStatus } from '../../types';
 import { createProject } from '../workspace';
+import { buildHistory } from '../planning/history';
+import { estimateFromHistory } from '../planning/referenceClass';
 import { cleanText, parsePertEstimate, parsePestelSuggestions, parseRiskSuggestions, parseSwotSuggestions, pertEstimatePrompt, projectContext } from './embedded';
 import { extractJson, extractJsonArray } from './json';
 
@@ -52,7 +54,24 @@ describe('gömülü özellik yanıt doğrulayıcıları', () => {
         const now = new Date('2026-07-15T00:00:00Z');
         expect(projectContext(p, now)).not.toContain('GİZLİ NOT');
         expect(projectContext(p, now, { includeNotes: true })).toContain('GİZLİ NOT');
-        expect(pertEstimatePrompt({ name: 'Yeni göç' }, p.tasks)).toContain('Veri göçü: iyimser 2, ortalama 4, kötümser 7');
+        expect(pertEstimatePrompt({ name: 'Yeni göç' }, p.tasks)).toContain('Veri göçü: tahmin 2/4/7 gün');
+        // Kapanmış ve ölçülmüş görevin gerçekleşen süresi de verilir
+        const measured = { ...p.tasks[0], startedAt: '2026-06-01T09:00:00', resolvedAt: '2026-06-05T17:00:00' };
+        expect(pertEstimatePrompt({ name: 'Yeni göç' }, [measured])).toContain('gerçekleşen kapanma 5 iş günü');
         expect(cleanText('```\nMetin\n```')).toBe('Metin');
+    });
+
+    it('benzer kapanmış kayıtlar varsa bağlam gerçek eforlardan kurulur', () => {
+        const tasks = Array.from({ length: 6 }, (_, i) => ({
+            id: `h${i}`, name: `Veri göçü betiği ${i}`, availability: true, priority: 'High' as const, version: 1, predecessor: null, unit: 'Yazılım', resourceName: '',
+            time: { best: 1, avg: 2, worst: 3 }, jiraId: '', notes: '', status: TaskStatus.Done,
+            startedAt: '2026-05-04T09:00:00', createdAt: '2026-05-04T09:00:00', resolvedAt: `2026-05-0${5 + (i % 3)}T17:00:00`,
+        }));
+        const h = buildHistory([createProject('G', { tasks })]);
+        const ref = estimateFromHistory({ name: 'Veri göçü betiği yeni' }, h);
+        const prompt = pertEstimatePrompt({ name: 'Veri göçü betiği yeni' }, [], ref);
+        expect(prompt).toContain('Benzer kapanmış kayıtlar (gerçekleşen)');
+        expect(prompt).toMatch(/gerçek efor \d/);
+        expect(prompt).not.toContain('Aynı projedeki görevler');
     });
 });

@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { Project, Task, WorkspaceData } from '../../types';
+import { EstimateLogEntry, Project, Task, WorkspaceData } from '../../types';
+import { aiPolicyOf } from '../../utils/ai/policy';
 import { buildHistory, calibrator, PlanningHistory } from '../../utils/planning/history';
 import NewRecordPlanner from './planning/NewRecordPlanner';
 import PlanSimulator from './planning/PlanSimulator';
@@ -16,7 +17,7 @@ interface Props {
     workspace: WorkspaceData;
     visibleProjectIds: ReadonlySet<string>;
     canEdit: boolean;
-    onAddTask: (task: Task) => void;
+    onAddTask: (task: Task, log: EstimateLogEntry) => void;
     onViewTask: (task: Task) => void;
     onOpenList: () => void;
 }
@@ -48,7 +49,7 @@ const ModernPlanning: React.FC<Props> = ({ project, workspace, visibleProjectIds
                 </div>
             </div>
             {mode === 'record' ? (
-                <NewRecordPlanner key={project.id} project={project} history={history} people={people} leaves={leaves} visibleProjectIds={visibleProjectIds} canEdit={canEdit} onAddTask={onAddTask} onOpenList={onOpenList} />
+                <NewRecordPlanner key={project.id} project={project} history={history} people={people} leaves={leaves} visibleProjectIds={visibleProjectIds} canEdit={canEdit} blindEstimate={aiPolicyOf(workspace).blindEstimate} onAddTask={onAddTask} onOpenList={onOpenList} />
             ) : (
                 <PlanSimulator key={project.id} project={project} history={history} people={people} leaves={leaves} visibleProjectIds={visibleProjectIds} onViewTask={onViewTask} />
             )}

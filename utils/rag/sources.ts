@@ -1,5 +1,6 @@
-import { TaskStatus, View } from '../../types';
+import { Task, TaskStatus, View } from '../../types';
 import { ToolContext, personName } from '../ai/scope';
+import { ISSUE_TYPE_LABELS, pertDays, taskDurations } from '../planning/lifecycle';
 import { PESTEL_KIND_LABELS, PESTEL_LABELS } from '../pestel';
 import { RISK_STATUS_LABELS } from '../risks';
 import { SWOT_LABELS } from '../swot';
@@ -45,6 +46,21 @@ const TASK_STATUS_TR: Record<TaskStatus, string> = {
     [TaskStatus.Backlog]: 'Backlog', [TaskStatus.ToDo]: 'Yapılacak', [TaskStatus.InProgress]: 'Devam ediyor', [TaskStatus.Done]: 'Tamamlandı',
 };
 
+/** Tür, tahmin ve (kapandıysa) ölçülen kapanma süresi — "benzer işler kaç günde kapandı" soruları için */
+const taskHistoryLine = (t: Task): string => {
+    const d = taskDurations(t);
+    const measured = d.cycleDays ?? d.leadDays;
+    const est = pertDays(t);
+    const parts = [
+        t.issueType && `tür: ${ISSUE_TYPE_LABELS[t.issueType]}`,
+        est !== null && `tahmin: ${String(est).replace('.', ',')} gün`,
+        t.resolvedAt && `kapandı: ${t.resolvedAt.slice(0, 10)}`,
+        measured !== null && `gerçekleşen kapanma: ${measured} iş günü (${d.cycleDays !== null ? 'işe başlamadan kapanışa' : 'açılıştan kapanışa'})`,
+        d.reopened > 0 && `${d.reopened} kez yeniden açıldı`,
+    ].filter(Boolean);
+    return parts.length ? `Kayıt geçmişi: ${parts.join(', ')}` : '';
+};
+
 const lines = (...xs: unknown[]): string => xs.filter((x): x is string => typeof x === 'string' && x.trim() !== '').join('\n');
 
 export const workspaceDocs = (ctx: ToolContext): RagDoc[] => {
@@ -66,6 +82,7 @@ export const workspaceDocs = (ctx: ToolContext): RagDoc[] => {
                 text: lines(
                     `Görev: ${t.name} — durum: ${TASK_STATUS_TR[t.status] || t.status}, öncelik: ${t.priority}${t.resourceName ? `, atanan: ${t.resourceName}` : ''}${t.dueDate ? `, bitiş: ${t.dueDate.slice(0, 10)}` : ''}`,
                     t.notes?.trim() && `Açıklama: ${t.notes.trim()}`,
+                    taskHistoryLine(t),
                     t.subtasks?.length && `Alt görevler: ${t.subtasks.map(s => `${s.text}${s.completed ? ' (tamam)' : ''}`).join('; ')}`,
                     t.comments?.length && `Yorumlar: ${t.comments.map(c => `${c.author}: ${c.text}`).join(' | ')}`,
                 ),
