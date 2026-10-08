@@ -29,6 +29,7 @@ import { DataHealthPanel } from './sheets/DataHealthSheet';
 import { BAND_META, Card, Field, rowSep } from './ui';
 import { Note, Switch, SwitchRow } from './admin/controls';
 import ForecastQuality from './admin/ForecastQuality';
+import { GuideButton, GuideTour, useGuide } from './GuideTour';
 
 /**
  * Yönetici konsolu — yalnız yetki ve uygulama yönetimi (proje yönetimi yok):
@@ -850,6 +851,8 @@ const ModernAdmin: React.FC<ModernAdminProps> = props => {
     const active = sections.find(s => s.key === section) || sections[0];
     const customizedPerms = customizedRoles(workspace.rolePermissions).length;
     const customizedViews = Object.keys(workspace.viewConfig || {}).length;
+    // Tahmin kalitesi rehberi: bölüm ilk açıldığında bir kez; sonra "?" ile
+    const guide = useGuide('forecast', active.key === 'forecast');
 
     return (
         <div className="flex flex-col gap-6">
@@ -862,8 +865,10 @@ const ModernAdmin: React.FC<ModernAdminProps> = props => {
                 <div className="flex flex-wrap items-center gap-2">
                     {customizedPerms > 0 && <span className="inline-flex items-center h-7 px-3 rounded-full text-[13px] font-semibold m-tone-warn">{customizedPerms} rolde özel yetki</span>}
                     {customizedViews > 0 && <span className="inline-flex items-center h-7 px-3 rounded-full text-[13px] font-semibold m-tone-warn">{customizedViews} rolde özel görünüm</span>}
+                    {active.key === 'forecast' && <GuideButton label="Tahmin kalitesi nasıl kullanılır?" onClick={() => guide.show()} />}
                 </div>
             </header>
+            {guide.open && active.key === 'forecast' && <GuideTour guide={guide.guide} start={guide.start} onClose={guide.close} />}
             {showSectionNav && (
                 <div className="-mx-1 px-1 overflow-x-auto">
                     <div className="m-segmented" role="group" aria-label="Konsol bölümü">

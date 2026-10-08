@@ -9,7 +9,9 @@ import { aiPolicyOf } from '../../utils/ai/policy';
 import { estimateGate } from '../../utils/ai/estimateEval';
 import { useAssistantOptional } from '../assistant/AssistantContext';
 import { buildHistory, calibrator, PlanningHistory } from '../../utils/planning/history';
+import { GuideButton, GuideTour, useGuide } from './GuideTour';
 import { Icon } from './icons';
+import { startStepFor } from '../../utils/guides';
 import JiraHistoryImport from './planning/JiraHistoryImport';
 import NewRecordPlanner from './planning/NewRecordPlanner';
 import PlanSimulator from './planning/PlanSimulator';
@@ -46,6 +48,8 @@ const num = (v: number) => v.toLocaleString('tr-TR', { maximumFractionDigits: 1 
 const ModernPlanning: React.FC<Props> = ({ project, workspace, visibleProjectIds, canEdit, onAddTask, onViewTask, onOpenList, onSaveReleasePlan, onDeleteReleasePlan, onCommitReleasePlan, onOpenGoals, onImportJira }) => {
     const [mode, setMode] = useState<Mode>('record');
     const [jiraOpen, setJiraOpen] = useState(false);
+    // Rehber: sayfa ilk açıldığında bir kez; sonra "?" ile (açık kipin adımından)
+    const guide = useGuide('planning');
     // Geçmiş yalnız görevler ya da ekip değişince yeniden kurulur (sürüm taslağı kaydı onu bozmasın)
     const histRef = useRef<{ keys: unknown[]; h: PlanningHistory } | null>(null);
     const keys = workspace.projects.flatMap(p => [p.id, p.tasks, p.resources]);
@@ -82,8 +86,10 @@ const ModernPlanning: React.FC<Props> = ({ project, workspace, visibleProjectIds
                         <button type="button" role="tab" className="m-segment" aria-selected={mode === 'release'} onClick={() => setMode('release')}>Sürüm planı</button>
                         <button type="button" role="tab" className="m-segment" aria-selected={mode === 'simulate'} onClick={() => setMode('simulate')}>Plan simülasyonu</button>
                     </div>
+                    <GuideButton onClick={() => guide.show(startStepFor(guide.guide, mode))} />
                 </div>
             </div>
+            {guide.open && <GuideTour guide={guide.guide} start={guide.start} onClose={guide.close} />}
             {jiraOpen && canEdit && onImportJira && (
                 <JiraHistoryImport key={`jira-${project.id}`} project={project} onImport={onImportJira} onOpenList={onOpenList} onClose={() => setJiraOpen(false)} />
             )}
