@@ -125,6 +125,73 @@ export interface EstimateLogEntry {
   };
 }
 
+/**
+ * Sürüm planı (planlama asistanı › sürüm sihirbazı). Taslak olarak saklanır,
+ * kalınan adımdan devam edilir; aktarılınca kayıtlar göreve, kilometre taşları
+ * hedefin anahtar sonuçlarına dönüşür ve plan taban çizgisi olarak donar.
+ */
+export type ReleaseItemChoice = 'reference' | 'ai' | 'own' | 'manual';
+
+export interface ReleasePlanItem {
+  id: string;
+  name: string;
+  notes?: string;
+  issueType?: IssueType;
+  unit?: string;
+  priority?: Task['priority']; // kullanıcının seçtiği (boşsa öneri)
+  resourceName?: string;
+  workPackageId?: string;
+  predecessorId?: string; // aynı plandaki başka satır
+  sourceTaskId?: string; // havuzdan alınan mevcut görev
+  ownEstimateDays?: number;
+  /** Kör tahmin: öneriler açılmadan önce girilen değerler (bir kez donar) */
+  blind?: { effortDays?: number; priority?: Task['priority'] };
+  reference?: EstimateLogEntry['reference'];
+  ai?: NonNullable<EstimateLogEntry['ai']> & { rationale?: string; questionList?: string[] };
+  choice?: ReleaseItemChoice;
+  manual?: EffortRange;
+  excluded?: boolean;
+}
+
+export interface ReleaseMilestone {
+  id: string;
+  name: string;
+  itemIds: string[];
+  targetDate?: string; // YYYY-AA-GG
+  rationale?: string;
+}
+
+export interface ReleaseBaseline {
+  at: string;
+  start: string; // simülasyon başlangıcı (YYYY-AA-GG)
+  p50: string; // teslim tarihleri (test dahil)
+  p80: string;
+  p95: string;
+  targetProbability: number | null;
+  itemCount: number;
+  effortDays: number;
+  milestones: { id: string; name: string; p50: string; p80: string }[];
+  taskIds: string[];
+  objectiveId?: string;
+}
+
+export interface ReleasePlan {
+  id: string;
+  name: string;
+  summary: string;
+  targetDate?: string;
+  testDays: number;
+  workPackageIds: string[];
+  items: ReleasePlanItem[];
+  milestones: ReleaseMilestone[];
+  step: number; // 1–6
+  status: 'draft' | 'committed';
+  revealed?: boolean; // kör tahmin sonrası öneriler açıldı
+  createdAt: string;
+  updatedAt: string;
+  baseline?: ReleaseBaseline;
+}
+
 /** Planlama asistanının kayıt açılırken verdiği tahmin (öğrenme döngüsü için saklanır) */
 export interface TaskForecast {
   at: string; // ISO
@@ -402,6 +469,7 @@ export interface Project {
   customerRequests: CustomerRequest[];
   objectives: Objective[];
   workPackages: WorkPackage[]; // Proje bazlı iş paketleri (İP)
+  releasePlans?: ReleasePlan[]; // Sürüm planlama sihirbazı taslakları ve aktarılan planlar
   settings: ProjectSettings;
   createdAt: string;
   updatedAt: string;
@@ -807,7 +875,8 @@ export type AuditAction =
   | 'ai.apply'
   | 'expectation.create' | 'expectation.respond' | 'expectation.close'
   | 'report.submit' | 'report.approve' | 'report.return' | 'report.publish'
-  | 'meeting.submit' | 'meeting.approve' | 'meeting.reject' | 'meeting.held';
+  | 'meeting.submit' | 'meeting.approve' | 'meeting.reject' | 'meeting.held'
+  | 'release.commit';
 
 export interface AuditEntry {
   id: string;

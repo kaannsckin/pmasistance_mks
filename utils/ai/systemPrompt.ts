@@ -29,12 +29,12 @@ export const VIEW_LABELS: Record<View, string> = {
     [View.WeeklyReport]: 'Haftalık rapor',
     [View.Meetings]: 'Müşteri görüşmeleri',
     [View.Admin]: 'Yönetici (yetkiler ve profiller)',
-    [View.Planning]: 'Planlama asistanı (yeni kayıt tahmini, plan simülasyonu)',
+    [View.Planning]: 'Planlama asistanı (yeni kayıt tahmini, sürüm planı, plan simülasyonu)',
 };
 
 const APP_MAP = `Uygulama haritası ("nasıl yapılır" sorularında ekranları buna göre tarif et):
 - Üst menü: Yönetim (yalnızca Müdür/PYB Sorumlusu: portföy KPI'ları, proje sağlık panosu, EVM, departman karnesi, riskler, baseline, Yönetici Brifingi, "Ne değişti?"), Portföy (proje kartları, durum, RAG, yeni proje), Tahsis (Tahsis Tablosu'nda aylık plan/gerçekleşen girişi ve "Onaya Gönder → Onayla & Kilitle / Reddet" plan akışı; Kişi/Bölüm/Proje Özeti; Doluluk ısı haritası; Uygun Kişi; Kapasite-Talep; Öngörü; Senaryo; Jira Billed Hours içe aktarma), Takvim (Takvimim / Ekip / Proje / İş Paketi), Veri Havuzu (personel, bölüm, rol, ünvan ve aylık maliyet; Excel içe aktarma — yalnızca PYB Destek düzenler).
-- Proje çubuğu (bir proje açıkken): Pano (Kanban, sürümler), Yol Haritası (Gantt, kritik yol), Planlama (yeni kayıt için benzer kapanmış kayıtlardan süre/efor/önem önerisi ve hangi sürüme sığar; Monte Carlo plan simülasyonu: P50/P80/P95 teslim tarihi, hedef olasılığı, senaryolar), Hedefler (OKR), Görevler, Riskler (5×5 matris, PESTEL ve SWOT), Ekip (kaynaklar ve maliyet), İstekler, Günlük, Zekâ, İş Paketleri, Durum Raporu.
+- Proje çubuğu (bir proje açıkken): Pano (Kanban, sürümler), Yol Haritası (Gantt, kritik yol), Planlama (yeni kayıt için benzer kapanmış kayıtlardan süre/efor/önem önerisi ve hangi sürüme sığar; sürüm planlama sihirbazı: kayıtlar, öneriler, simülasyon, kapsam önerisi, kilometre taşları, aktarım ve taban çizgisi; Monte Carlo plan simülasyonu: P50/P80/P95 teslim tarihi, hedef olasılığı, senaryolar), Hedefler (OKR), Görevler, Riskler (5×5 matris, PESTEL ve SWOT), Ekip (kaynaklar ve maliyet), İstekler, Günlük, Zekâ, İş Paketleri, Durum Raporu.
 - Sağ üst: Yapılacaklar zili, bulut senkronizasyonu, kimlik (rol + kişi) seçimi, JSON yedek indir/yükle, ⌘K/Ctrl+K hızlı git, veri sağlığı, denetim günlüğü, ayarlar.
 - Roller: Proje Yöneticisi kendi projelerini; Bölüm Sorumlusu bölüm personelinin tahsisini girer; PYB Destek veri havuzunu yönetir; Müdür ve PYB Sorumlusu izler ve planları onaylar/kilitler, girdi yapmaz.`;
 

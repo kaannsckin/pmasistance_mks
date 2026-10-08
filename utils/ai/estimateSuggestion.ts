@@ -73,8 +73,9 @@ const toNum = (v: unknown): number => Number(String(v ?? '').replace(',', '.'));
 /** Bağlamdaki kayıt etiketi → geçmiş kayıt kimliği */
 export const contextIds = (ref: ReferenceEstimate): Map<string, string> => new Map(ref.context.map((m, i) => [`R${i + 1}`, m.record.id]));
 
-export const estimateSuggestionPrompt = (draft: RecordDraft, ref: ReferenceEstimate): string => {
+export const estimateSuggestionPrompt = (draft: RecordDraft, ref: ReferenceEstimate, release?: { name: string; summary?: string }): string => {
     const L: string[] = [];
+    if (release?.name.trim()) L.push(`Bu kayıt "${clip(release.name, 80)}" sürümünün parçasıdır.${release.summary?.trim() ? ` Sürüm özeti: ${clip(release.summary, 500)}` : ''}`, '');
     L.push('Yeni kayıt:');
     L.push(`- Başlık: ${clip(draft.name, 200)}`);
     if (draft.notes?.trim()) L.push(`- Açıklama: ${clip(draft.notes, 800)}`);

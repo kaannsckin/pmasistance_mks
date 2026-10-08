@@ -58,6 +58,26 @@ export interface SimInput {
     iterations: number;
     seed: number;
     targetOffset?: number;
+    /** Ayrıca izlenecek kayıt grupları (sürüm, kilometre taşı): her tekrarda grubun son bitişi */
+    groups?: SimGroup[];
+}
+
+export interface SimGroup {
+    id: string;
+    tasks: number[]; // görev indeksleri
+    /** Hedef bitiş ofseti (iş günü, test hariç) */
+    target?: number;
+}
+
+export interface GroupStat {
+    id: string;
+    /** Grubun son kaydının bitiş günü dağılımı (test hariç) */
+    finish: Summary;
+    sorted: Float64Array;
+    targetProbability: number | null;
+    deterministic: number;
+    /** Grup içi kritik yol oranı (group.tasks sırasıyla) */
+    criticality: number[];
 }
 
 export interface TaskStat {
@@ -90,6 +110,7 @@ export interface SimResult {
     tasks: TaskStat[];
     /** Sıralı teslim ofsetleri (her tekrar) */
     sorted: Float64Array;
+    groups: GroupStat[];
 }
 
 /** Ufuk sonrası tükenmeyen kapasite için alt sınır */
@@ -239,8 +260,27 @@ export const runMonteCarlo = (input: SimInput): SimResult => {
     const dueHits = new Float64Array(n);
     let targetHits = 0;
 
+    const G = input.groups || [];
+    const gFin = G.map(() => new Float64Array(iters));
+    const gCrit = G.map(g => new Float64Array(g.tasks.length));
+    const gHits = G.map(() => 0);
+    const gPos = G.map(g => new Map(g.tasks.map((t, k) => [t, k])));
+    const groupFinish = (finish: Float64Array, g: SimGroup): { day: number; last: number } => {
+        let best = -1, last = -1;
+        for (const i of g.tasks) if (finish[i] > best) { best = finish[i]; last = i; }
+        return { day: best > 0 ? Math.ceil(best - 1e-9) : 0, last };
+    };
+
     for (let it = 0; it < iters; it++) {
         const mk = runOnce(input, lanes, st, draw);
+        G.forEach((g, gi) => {
+            const { day, last } = groupFinish(st.finish, g);
+            gFin[gi][it] = day;
+            if (g.target !== undefined && day <= g.target) gHits[gi]++;
+            // Grubun kritik zinciri: grubun en son biten kaydından geriye (gruptaki kayıtlar sayılır)
+            let j = last, guard = 0;
+            while (j >= 0 && guard++ <= n) { const k = gPos[gi].get(j); if (k !== undefined) gCrit[gi][k]++; j = st.driver[j]; }
+        });
         // Teslim günü: işin bittiği iş günü (tavan) + test
         const release = mk > 0 ? Math.ceil(mk - 1e-9) + test : 0;
         devEnds[it] = Math.ceil(mk - 1e-9);
@@ -297,6 +337,17 @@ export const runMonteCarlo = (input: SimInput): SimResult => {
         deterministic,
         tasks,
         sorted: sortedRel,
+        groups: G.map((g, gi) => {
+            const sorted = Float64Array.from(gFin[gi]).sort();
+            return {
+                id: g.id,
+                finish: summarize(sorted),
+                sorted,
+                targetProbability: g.target !== undefined ? gHits[gi] / iters : null,
+                deterministic: groupFinish(detSt.finish, g).day,
+                criticality: Array.from(gCrit[gi], c => c / iters),
+            };
+        }),
     };
 };
 

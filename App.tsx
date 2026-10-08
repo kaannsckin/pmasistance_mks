@@ -1,6 +1,6 @@
 
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { View, Task, Resource, TaskStatus, Note, CustomerRequest, Objective, Project, Person, WorkspaceData, RagStatus, ProjectStatus, UserRole, PlanLockStatus, WorkPackage, UiStyle, PermissionKey, EstimateLogEntry } from './types';
+import { View, Task, Resource, TaskStatus, Note, CustomerRequest, Objective, Project, Person, WorkspaceData, RagStatus, ProjectStatus, UserRole, PlanLockStatus, WorkPackage, UiStyle, PermissionKey, EstimateLogEntry, ReleasePlan } from './types';
 import { INITIAL_TASKS, INITIAL_RESOURCES, INITIAL_OBJECTIVES } from './constants';
 import {
   WORKSPACE_STORAGE_KEY,
@@ -67,6 +67,7 @@ import ModernSidebar from './components/modern/ModernSidebar';
 import ModernProjectHeader from './components/modern/ModernProjectHeader';
 import ModernPlanning from './components/modern/ModernPlanning';
 import { appendEstimateLog } from './utils/planning/estimateLog';
+import { CommitResult } from './utils/planning/releasePlan';
 import ModernPortfolio from './components/modern/ModernPortfolio';
 import ModernBoard from './components/modern/ModernBoard';
 import ModernProjectOverview from './components/modern/ModernProjectOverview';
@@ -988,6 +989,29 @@ const App: React.FC = () => {
   // Görev formu (klasik + modern ortak): kaydet; havuzdan atanan kişi proje
   // kaynağı değilse otomatik eklenir; müşteri isteğinden açıldıysa istek
   // "göreve dönüştü" olarak işaretlenir
+  // ---- Sürüm planlama sihirbazı: taslak kaydı, silme, aktarım ----
+  const handleSaveReleasePlan = useCallback((plan: ReleasePlan) => {
+    updateActiveProject(p => {
+      const list = p.releasePlans || [];
+      const exists = list.some(x => x.id === plan.id);
+      // Aktarılmış plan taslak kaydıyla geri değişmez
+      if (exists && list.find(x => x.id === plan.id)!.status === 'committed') return p;
+      return { ...p, releasePlans: exists ? list.map(x => (x.id === plan.id ? plan : x)) : [...list, plan] };
+    });
+  }, [updateActiveProject]);
+  const handleDeleteReleasePlan = useCallback((id: string) => {
+    updateActiveProject(p => ({ ...p, releasePlans: (p.releasePlans || []).filter(x => x.id !== id || x.status === 'committed') }));
+  }, [updateActiveProject]);
+  const handleCommitReleasePlan = useCallback((c: CommitResult) => {
+    updateActiveProject(() => c.project);
+    updateWorkspace(ws => appendAudit(
+      { ...ws, estimateLog: c.log.reduce<EstimateLogEntry[] | undefined>((log, e) => appendEstimateLog(log, e), ws.estimateLog) },
+      'release.commit',
+      `Sürüm planı aktarıldı: ${c.plan.name || 'Adsız sürüm'} (${c.created} yeni, ${c.updated} güncellenen görev${c.plan.baseline ? `, P80 ${c.plan.baseline.p80}` : ''})`,
+      c.project.id,
+    ));
+  }, [updateActiveProject, updateWorkspace]);
+
   const saveTaskFromForm = (t: Task) => {
     const requestId = convertingRequestId;
     updateActiveProject(p => {
@@ -1341,6 +1365,10 @@ const App: React.FC = () => {
           }}
           onViewTask={viewTask}
           onOpenList={() => setCurrentView(View.Tasks)}
+          onSaveReleasePlan={handleSaveReleasePlan}
+          onDeleteReleasePlan={handleDeleteReleasePlan}
+          onCommitReleasePlan={handleCommitReleasePlan}
+          onOpenGoals={() => setCurrentView(View.Goals)}
         />
       );
     }
