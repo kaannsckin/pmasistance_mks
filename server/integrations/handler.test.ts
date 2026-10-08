@@ -96,6 +96,24 @@ describe('Jira worklog', () => {
         ]);
     });
 
+    it('Jira Cloud: yeni arama ucu ve sayfa jetonuyla tüm sayfalar', async () => {
+        const cloudEnv = { ...BASE_ENV, JIRA_BASE_URL: 'https://kurum.atlassian.net', JIRA_EMAIL: 'pa@kurum.gov.tr', JIRA_API_TOKEN: 'tok' };
+        const calls: string[] = [];
+        const fetchImpl = (async (url: string, init?: RequestInit) => {
+            calls.push(url);
+            expect((init?.headers as Record<string, string>).authorization).toBe(`Basic ${Buffer.from('pa@kurum.gov.tr:tok').toString('base64')}`);
+            const log = (key: string, day: string) => ({ key, fields: { summary: key, worklog: { total: 1, worklogs: [{ started: `2026-10-${day}T09:00:00.000+0300`, timeSpentSeconds: 3600, author: { displayName: 'Ali' } }] } } });
+            if (url.includes('nextPageToken=t2')) return jsonRes(200, { issues: [log('MKS-2', '07')], isLast: true });
+            return jsonRes(200, { issues: [log('MKS-1', '06')], nextPageToken: 't2', isLast: false });
+        }) as unknown as typeof fetch;
+        const res = await handleIntegrationRequest(post('jira-worklogs', { projectKey: 'MKS', from: '2026-10-05', to: '2026-10-11' }), cloudEnv, { route: 'jira-worklogs', fetchImpl });
+        const { entries } = await res.json();
+        expect(calls).toHaveLength(2);
+        expect(calls.every(c => c.startsWith('https://kurum.atlassian.net/rest/api/2/search/jql?'))).toBe(true);
+        expect(calls[1]).toContain('nextPageToken=t2');
+        expect(entries.map((e: { issueKey: string }) => e.issueKey)).toEqual(['MKS-1', 'MKS-2']);
+    });
+
     it('Jira yetki hatası anlaşılır mesajla döner', async () => {
         const fetchImpl = (async () => jsonRes(401, {})) as unknown as typeof fetch;
         const res = await handleIntegrationRequest(post('jira-worklogs', { projectKey: 'MKS', from: '2026-10-05', to: '2026-10-11' }), env, { route: 'jira-worklogs', fetchImpl });
