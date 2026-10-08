@@ -1,4 +1,4 @@
-import { IssueType, Task } from '../../types';
+import { Confidence, IssueType, Task } from '../../types';
 import { terms } from '../rag/text';
 import { Calibration, calibrator, HistoryRecord, PlanningHistory } from './history';
 import { effectiveN, weightedQuantile } from './random';
@@ -19,6 +19,8 @@ export const MIN_REFS = 5;
 const TOP_K = 20;
 const MIN_SIMILARITY = 0.3;
 const EVIDENCE = 6;
+/** AI bağlamına giren en çok kayıt (yalnız kullanıcının görebildiği projelerden) */
+export const AI_CONTEXT = 12;
 
 export interface RecordDraft {
     name: string;
@@ -42,7 +44,7 @@ export interface ReferenceMatch {
 }
 
 export type ReferenceMethod = 'similar' | 'group' | 'all' | 'none';
-export type Confidence = 'high' | 'medium' | 'low';
+export type { Confidence };
 
 export interface ReferenceEstimate {
     method: ReferenceMethod;
@@ -51,6 +53,11 @@ export interface ReferenceEstimate {
     effectiveN: number;
     /** Kanıt: en benzer kayıtlar */
     matches: ReferenceMatch[];
+    /** AI bağlamı: görünür projelerdeki en benzer kayıtlar (en çok AI_CONTEXT) */
+    context: ReferenceMatch[];
+    /** Önem ve tür dağılımı (ağırlıklı pay, büyükten küçüğe) */
+    priorityMix: { value: Task['priority']; share: number }[];
+    typeMix: { value: IssueType; share: number }[];
     /** Kapanma süresi (iş günü) */
     duration: { p50: number; p80: number; p90: number } | null;
     /** Efor önerisi (gün) */
@@ -158,14 +165,14 @@ export const rankSimilar = (draft: RecordDraft, history: PlanningHistory, visibl
 
 // ---------------------------------------------------------------- tahmin
 
-const share = <K extends string>(items: { key: K | undefined; weight: number }[]): { value: K; share: number } | null => {
+const mix = <K extends string>(items: { key: K | undefined; weight: number }[]): { value: K; share: number }[] => {
     const m = new Map<K, number>();
     let total = 0;
     items.forEach(i => { if (!i.key) return; m.set(i.key, (m.get(i.key) || 0) + i.weight); total += i.weight; });
-    if (!total) return null;
-    const [value, w] = [...m.entries()].sort((a, b) => b[1] - a[1])[0];
-    return { value, share: Math.round((w / total) * 100) / 100 };
+    if (!total) return [];
+    return [...m.entries()].sort((a, b) => b[1] - a[1]).map(([value, w]) => ({ value, share: Math.round((w / total) * 100) / 100 }));
 };
+const share = <K extends string>(items: { key: K | undefined; weight: number }[]): { value: K; share: number } | null => mix(items)[0] || null;
 
 export const estimateFromHistory = (draft: RecordDraft, history: PlanningHistory, opts: { visibleProjectIds?: ReadonlySet<string> } = {}): ReferenceEstimate => {
     const ranked = rankSimilar(draft, history, opts.visibleProjectIds);
@@ -205,7 +212,7 @@ export const estimateFromHistory = (draft: RecordDraft, history: PlanningHistory
 
     if (method === 'none') {
         return {
-            method, methodLabel: METHOD_LABELS.none, n: 0, effectiveN: 0, matches: [], duration: null, effort: null,
+            method, methodLabel: METHOD_LABELS.none, n: 0, effectiveN: 0, matches: [], context: [], priorityMix: [], typeMix: [], duration: null, effort: null,
             effortSamples: [], effortWeights: [], priority: null, issueType: null, calibration: cal, calibrated,
             confidence: 'low', reasons: [`Eğitime uygun kapanmış kayıt sayısı ${history.records.length}; en az ${MIN_REFS} gerekir`],
         };
@@ -238,6 +245,9 @@ export const estimateFromHistory = (draft: RecordDraft, history: PlanningHistory
         n: pool.length,
         effectiveN: round1(effN),
         matches: pool.slice(0, EVIDENCE),
+        context: pool.filter(m => m.visible).slice(0, AI_CONTEXT),
+        priorityMix: mix(pool.map((m, i) => ({ key: m.record.priority, weight: weights[i] }))),
+        typeMix: mix(pool.map((m, i) => ({ key: m.record.issueType, weight: weights[i] }))),
         duration: { p50: round1(p50), p80: round1(p80), p90: round1(p90) },
         effort: { best, likely, worst },
         effortSamples: pool.map(m => m.record.effortDays),

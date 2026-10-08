@@ -33,6 +33,15 @@ describe('bilgi tabanı kaynakları', () => {
         expect(docs.some(d => d.id === 'gorev:other:o')).toBe(true);
     });
 
+    it('kapanmış görevde tür, tahmin ve ölçülen kapanma süresi dizinlenir', () => {
+        const ws = buildWs('py', 'pm');
+        ws.projects[0].tasks.push({ ...ws.projects[0].tasks[0], id: 'k', name: 'Rapor hatası', status: TaskStatus.Done, issueType: 'bug', startedAt: '2026-06-01T09:00:00', resolvedAt: '2026-06-03T17:00:00' });
+        const doc = workspaceDocs(buildToolContext(ws)).find(d => d.id === 'gorev:mine:k')!;
+        expect(doc.text).toContain('tür: Hata');
+        expect(doc.text).toContain('gerçekleşen kapanma: 3 iş günü (işe başlamadan kapanışa)');
+        expect(workspaceDocs(buildToolContext(ws)).find(d => d.id === 'gorev:mine:t')!.text).not.toContain('gerçekleşen');
+    });
+
     it('kılavuz başlıklara bölünür; doküman kayıtları dönüştürülür', () => {
         const g = guideDocs();
         expect(g.length).toBeGreaterThan(15);

@@ -2,6 +2,8 @@ import { PestelCategory, PestelItem, Project, RiskLevel, SwotItem, SwotQuadrant,
 import { PESTEL_LABELS, PESTEL_ORDER } from '../pestel';
 import { riskScore } from '../risks';
 import { SWOT_LABELS, SWOT_ORDER } from '../swot';
+import { taskDurations } from '../planning/lifecycle';
+import { ReferenceEstimate } from '../planning/referenceClass';
 import { stripReasoning } from './client';
 import { extractJson, extractJsonArray } from './json';
 
@@ -24,6 +26,8 @@ const clip = (s: string | undefined, n: number): string => {
     const t = (s || '').replace(/\s+/g, ' ').trim();
     return t.length > n ? `${t.slice(0, n - 1)}…` : t;
 };
+
+const fmt1 = (v: number) => String(Math.round(v * 10) / 10).replace('.', ',');
 
 const norm = (s: string): string => s.toLocaleLowerCase('tr-TR').replace(/\s+/g, ' ').trim();
 
@@ -191,16 +195,29 @@ export interface PertEstimate {
     rationale: string;
 }
 
-export const pertEstimatePrompt = (task: { name: string; notes?: string }, projectTasks: Task[]): string => {
+export const pertEstimatePrompt = (task: { name: string; notes?: string }, projectTasks: Task[], ref?: ReferenceEstimate): string => {
+    const head = `Yeni görev: ${task.name}${task.notes ? `\nAçıklama: ${clip(task.notes, 600)}` : ''}\n\n`;
+    const ask = `Görev: Bu yeni görev için PERT efor tahmini yap (kişi-gün, tam sayı): iyimser ≤ ortalama ≤ kötümser. Benzer kayıtların GERÇEKLEŞEN değerlerini esas al, kısa gerekçe yaz.\n` +
+        `${JSON_RULE} Biçim: {"iyimser": 0, "ortalama": 0, "kotumser": 0, "gerekce": "..."}`;
+    // Geçmişte kapanmış benzer kayıtlar varsa gerçek eforlarıyla (tahminleriyle değil) bağlam kurulur
+    if (ref && ref.method !== 'none' && ref.context.length && ref.effort) {
+        const refs = ref.context.map(m => `- ${clip(m.record.name, 100)}: gerçek efor ${fmt1(m.record.effortDays)} gün, kapanma ${fmt1(m.record.days)} iş günü${m.record.estimateDays ? `, ilk tahmin ${fmt1(m.record.estimateDays)} gün` : ''}`);
+        return head + `Benzer kapanmış kayıtlar (gerçekleşen):\n${refs.join('\n')}\n` +
+            `Bu kayıtlarda gerçek efor P10 ${fmt1(ref.effort.best)}, P50 ${fmt1(ref.effort.likely)}, P90 ${fmt1(ref.effort.worst)} gün.\n\n` + ask;
+    }
+    // Yedek: aynı projedeki görevler; kapananların ölçülen süresi, diğerlerinin yalnız tahmini (gerçekleşen değil)
     const refs = projectTasks
         .filter(t => t.name !== task.name && t.time && (t.time.avg > 0 || t.time.best > 0))
         .sort((a, b) => (a.status === TaskStatus.Done ? 0 : 1) - (b.status === TaskStatus.Done ? 0 : 1))
         .slice(0, 25)
-        .map(t => `- ${t.name}${t.notes ? ` (${clip(t.notes, 80)})` : ''}: iyimser ${t.time.best}, ortalama ${t.time.avg}, kötümser ${t.time.worst} gün [${TASK_STATUS_TR[t.status]}]`);
-    return `Yeni görev: ${task.name}${task.notes ? `\nAçıklama: ${clip(task.notes, 600)}` : ''}\n\n` +
-        (refs.length ? `Aynı projedeki görevlerin tahminleri (referans):\n${refs.join('\n')}\n\n` : 'Projede referans görev yok; genel deneyime göre tahmin et.\n\n') +
-        `Görev: Bu yeni görev için PERT süre tahmini yap (iş günü, tam sayı): iyimser ≤ ortalama ≤ kötümser. Benzer referans görevleri kullan ve kısa gerekçe yaz.\n` +
-        `${JSON_RULE} Biçim: {"iyimser": 0, "ortalama": 0, "kotumser": 0, "gerekce": "..."}`;
+        .map(t => {
+            const d = taskDurations(t);
+            const measured = d.cycleDays ?? d.leadDays;
+            return `- ${t.name}${t.notes ? ` (${clip(t.notes, 80)})` : ''}: tahmin ${t.time.best}/${t.time.avg}/${t.time.worst} gün${measured !== null ? `, gerçekleşen kapanma ${measured} iş günü` : ''} [${TASK_STATUS_TR[t.status]}]`;
+        });
+    return head +
+        (refs.length ? `Aynı projedeki görevler (tahminler; kapananlarda ölçülen süre de var):\n${refs.join('\n')}\n\n` : 'Projede referans görev yok; genel deneyime göre tahmin et.\n\n') +
+        ask;
 };
 
 export const parsePertEstimate = (text: string): PertEstimate => {

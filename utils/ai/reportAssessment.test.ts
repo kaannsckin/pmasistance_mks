@@ -98,7 +98,7 @@ describe('halüsinasyon güvenceleri', () => {
 
 describe('AI politikası', () => {
     it('varsayılanlar ve sadeleştirme', () => {
-        expect(aiPolicyOf(undefined)).toEqual({ enabled: true, chat: true, embedded: true, proposals: true, scoring: DEFAULT_SCORING });
+        expect(aiPolicyOf(undefined)).toEqual({ enabled: true, chat: true, embedded: true, proposals: true, blindEstimate: true, scoring: DEFAULT_SCORING });
         expect(aiPolicyOf({ aiPolicy: { scoring: { runs: 4, minEvidence: 9, maxSpread: 0, maxRuleGap: 3, lowConfidence: 'flag' } } }).scoring)
             .toEqual({ runs: 3, minEvidence: 3, maxSpread: 1, maxRuleGap: 3, lowConfidence: 'flag' });
         let p = updateAiPolicy(undefined, { chat: false });
@@ -106,6 +106,9 @@ describe('AI politikası', () => {
         p = updateAiPolicy(p, { scoring: { runs: 5 } });
         expect(p).toEqual({ chat: false, scoring: { ...DEFAULT_SCORING, runs: 5 } });
         expect(updateAiPolicy(p, { chat: true, scoring: { runs: 3 } })).toBeUndefined();
+        // Kör tahmin varsayılanda açık; yalnız kapatılınca saklanır
+        expect(updateAiPolicy(undefined, { blindEstimate: false })).toEqual({ blindEstimate: false });
+        expect(updateAiPolicy({ blindEstimate: false }, { blindEstimate: true })).toBeUndefined();
     });
 });
 

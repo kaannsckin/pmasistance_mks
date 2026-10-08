@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Objective, Person, Resource, Task, TaskStatus, WorkPackage } from '../../types';
+import { Objective, Person, Project, Resource, Task, TaskStatus, WorkPackage } from '../../types';
 import { EMBED_SYSTEM, parsePertEstimate, pertEstimatePrompt } from '../../utils/ai/embedded';
+import { buildHistory } from '../../utils/planning/history';
 import { ISSUE_TYPE_LABELS } from '../../utils/planning/lifecycle';
+import { estimateFromHistory } from '../../utils/planning/referenceClass';
 import { calculatePertFuzzyPert } from '../../utils/timeline';
 import { useAiRun } from '../assistant/AiButton';
 import { Icon } from './icons';
@@ -21,6 +23,8 @@ interface TaskFormSheetProps {
     workPackages: WorkPackage[];
     objectives: Objective[];
     sprintNames?: Record<number, string>;
+    /** AI süre tahmini için geçmiş: tüm projeler (kapanmış kayıtların gerçek eforları) ve görünür projeler */
+    history?: { projects: Project[]; projectId: string; visibleProjectIds: ReadonlySet<string> };
     onClose: () => void;
     onSave: (task: Task) => void;
 }
@@ -50,7 +54,7 @@ const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title
     </fieldset>
 );
 
-const TaskFormSheet: React.FC<TaskFormSheetProps> = ({ task, tasks, resources, people, workPackages, objectives, sprintNames, onClose, onSave }) => {
+const TaskFormSheet: React.FC<TaskFormSheetProps> = ({ task, tasks, resources, people, workPackages, objectives, sprintNames, history, onClose, onSave }) => {
     // Müşteri isteğinden açılan taslak listede yoktur → "yeni görev" sayılır
     const isNew = !task || !tasks.some(t => t.id === task.id);
     const [d, setD] = useState<Draft>(() => (task ? fromTask(task) : emptyDraft(resources)));
@@ -89,10 +93,20 @@ const TaskFormSheet: React.FC<TaskFormSheetProps> = ({ task, tasks, resources, p
     const nameError = touched && !d.name.trim() ? 'Görev adı gerekli.' : '';
 
     const estimate = async () => {
-        const est = await ai.run(EMBED_SYSTEM, pertEstimatePrompt({ name: d.name, notes: d.notes }, tasks), parsePertEstimate);
+        // Benzer kapanmış kayıtların GERÇEK eforları bağlama verilir (yoksa projedeki tahminler)
+        const ref = history ? estimateFromHistory(
+            { name: d.name, notes: d.notes, issueType: d.issueType, unit: d.unit, priority: d.priority, projectId: history.projectId, workPackageId: d.workPackageId },
+            buildHistory(history.projects),
+            { visibleProjectIds: history.visibleProjectIds },
+        ) : undefined;
+        const est = await ai.run(EMBED_SYSTEM, pertEstimatePrompt({ name: d.name, notes: d.notes }, tasks, ref), parsePertEstimate);
         if (est) {
             set({ time: { best: est.best, avg: est.avg, worst: est.worst }, estimateSource: 'ai' });
-            setAiNote(est.rationale || 'AI tahmini uygulandı; değerleri değiştirebilirsiniz.');
+            const outside = ref?.effort && (est.avg < ref.effort.best * 0.67 || est.avg > ref.effort.worst * 1.5);
+            setAiNote([
+                est.rationale || 'AI tahmini uygulandı; değerleri değiştirebilirsiniz.',
+                outside ? `Dikkat: benzer kapanmış kayıtlarda gerçek efor ${ref!.effort!.best}–${ref!.effort!.worst} gün; bu tahmin o aralığın çok dışında.` : '',
+            ].filter(Boolean).join(' '));
         }
     };
 

@@ -1,6 +1,6 @@
 
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { View, Task, Resource, TaskStatus, Note, CustomerRequest, Objective, Project, Person, WorkspaceData, RagStatus, ProjectStatus, UserRole, PlanLockStatus, WorkPackage, UiStyle, PermissionKey } from './types';
+import { View, Task, Resource, TaskStatus, Note, CustomerRequest, Objective, Project, Person, WorkspaceData, RagStatus, ProjectStatus, UserRole, PlanLockStatus, WorkPackage, UiStyle, PermissionKey, EstimateLogEntry } from './types';
 import { INITIAL_TASKS, INITIAL_RESOURCES, INITIAL_OBJECTIVES } from './constants';
 import {
   WORKSPACE_STORAGE_KEY,
@@ -66,6 +66,7 @@ import { AiReportAssessment, ExpectationStatus, ExpectationUrgency, HealthConfig
 import ModernSidebar from './components/modern/ModernSidebar';
 import ModernProjectHeader from './components/modern/ModernProjectHeader';
 import ModernPlanning from './components/modern/ModernPlanning';
+import { appendEstimateLog } from './utils/planning/estimateLog';
 import ModernPortfolio from './components/modern/ModernPortfolio';
 import ModernBoard from './components/modern/ModernBoard';
 import ModernProjectOverview from './components/modern/ModernProjectOverview';
@@ -1333,7 +1334,11 @@ const App: React.FC = () => {
           workspace={workspace}
           visibleProjectIds={visibleProjectIdSet}
           canEdit={canEditProjectContent(workspace, identity, activeProject.id)}
-          onAddTask={(t: Task) => updateActiveProject(p => ({ ...p, tasks: [...p.tasks, t] }))}
+          onAddTask={(t: Task, log: EstimateLogEntry) => {
+            updateActiveProject(p => ({ ...p, tasks: [...p.tasks, t] }));
+            // Öneri günlüğü: gösterilen öneriler, kör tahmin ve nihai karar (öğrenme döngüsü)
+            updateWorkspace(ws => ({ ...ws, estimateLog: appendEstimateLog(ws.estimateLog, log) }));
+          }}
           onViewTask={viewTask}
           onOpenList={() => setCurrentView(View.Tasks)}
         />
@@ -1769,6 +1774,7 @@ const App: React.FC = () => {
           workPackages={activeProject.workPackages}
           objectives={activeProject.objectives}
           sprintNames={activeProject.settings.sprintNames || {}}
+          history={{ projects: workspace.projects, projectId: activeProject.id, visibleProjectIds: visibleProjectIdSet }}
           onClose={closeTaskForm}
           onSave={saveTaskFromForm}
         />

@@ -1,7 +1,7 @@
 import { Leave, Person, Project, TaskStatus } from '../../types';
 import { effectiveCapacity } from '../availability';
 import { buildSprintWindows } from '../taskToAllocation';
-import { calibrator, PlanningHistory } from './history';
+import { calibrator, GROUNDED, PlanningHistory } from './history';
 import { pertDays } from './lifecycle';
 import { distMean, EffortDist } from './monteCarlo';
 import { betaPert, mulberry32, pick, Rng, seedFrom } from './random';
@@ -88,7 +88,7 @@ export const sprintFit = (
             if (pert === null) return null;
             const { best, avg, worst } = t.time;
             const mode = avg > 0 ? avg : (best + worst) / 2;
-            const c = t.estimateSource === 'reference' ? null : cal({ unit: t.unit, issueType: t.issueType });
+            const c = GROUNDED.has(t.estimateSource || '') ? null : cal({ unit: t.unit, issueType: t.issueType });
             const dist: EffortDist = worst > best ? { kind: 'pert', min: best, mode, max: worst } : c ? { kind: 'fixed', value: mode } : { kind: 'pert', min: mode * DEFAULT_SPREAD.low, mode, max: mode * DEFAULT_SPREAD.high };
             // Süreçteki iş: kabaca yarısı kalmış sayılır
             const share = t.status === TaskStatus.InProgress ? 0.5 : 1;

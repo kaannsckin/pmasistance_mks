@@ -90,6 +90,8 @@ export const splitWorkspaceDoc = (ws: WorkspaceData): { core: Record<string, unk
         viewConfig: ws.viewConfig || {},
         healthConfig: ws.healthConfig || {},
         aiPolicy: ws.aiPolicy || {},
+        // Kayıt tahmini öneri günlüğü (öğrenme döngüsü; kişi adı içermez)
+        estimateLog: ws.estimateLog || [],
     };
     return { core, privateDoc };
 };

@@ -1,7 +1,7 @@
 import { Leave, Person, Project, Task, TaskStatus } from '../../types';
 import { effectiveCapacity } from '../availability';
 import { IsoDay, toIsoDay } from '../calendarRange';
-import { calibrator, PlanningHistory } from './history';
+import { calibrator, GROUNDED, PlanningHistory } from './history';
 import { pertDays } from './lifecycle';
 import { EffortDist, SimInput, SimLane, SimTask } from './monteCarlo';
 import { seedFrom } from './random';
@@ -182,7 +182,7 @@ export const buildSimulation = (
         let dist: EffortDist | null = null;
         let source: EstimateSourceKind = 'range';
         let calibration: number[] | undefined;
-        const c = t.estimateSource === 'reference' ? null : cal({ unit: t.unit, issueType: t.issueType });
+        const c = GROUNDED.has(t.estimateSource || '') ? null : cal({ unit: t.unit, issueType: t.issueType });
         const pert = pertDays(t);
         if (pert !== null) {
             const { best, avg, worst } = t.time;

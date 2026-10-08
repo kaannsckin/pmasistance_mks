@@ -21,6 +21,8 @@ import { quantileSorted } from './random';
  */
 
 export const HOURS_PER_DAY = 8;
+/** Geçmiş gerçekleşenlerden üretilmiş tahmin kaynakları: simülasyonda ikinci kez kalibre edilmez, kalibrasyon oranına girmez */
+export const GROUNDED: ReadonlySet<string> = new Set(['reference', 'ai']);
 /** Kalibrasyon grubu için en az örnek */
 export const MIN_CALIBRATION = 8;
 const RATIO_MIN = 0.25;
@@ -103,7 +105,7 @@ export const buildHistory = (projects: Pick<Project, 'id' | 'name' | 'tasks' | '
         const p = participation.get(`${r.projectId}|${fold(t.resourceName || '')}`) ?? 1;
         const logged = (t.actualHours || 0) > 0;
         const effortDays = Math.max(MIN_EFFORT, logged ? t.actualHours! / HOURS_PER_DAY : (r.days! * p) / conc);
-        const ratio = r.estimateDays && r.estimateDays > 0 && t.estimateSource !== 'reference' ? clip(effortDays / r.estimateDays, RATIO_MIN, RATIO_MAX) : null;
+        const ratio = r.estimateDays && r.estimateDays > 0 && !GROUNDED.has(t.estimateSource || '') ? clip(effortDays / r.estimateDays, RATIO_MIN, RATIO_MAX) : null;
         return {
             id: t.id,
             projectId: r.projectId,

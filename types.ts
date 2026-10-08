@@ -69,12 +69,68 @@ export interface Task {
 
 export type IssueType = 'bug' | 'feature' | 'improvement' | 'task' | 'other';
 
+/** Efor aralığı (kişi-gün): iyimser · olası · kötümser */
+export interface EffortRange {
+  best: number;
+  likely: number;
+  worst: number;
+}
+
+export type Confidence = 'high' | 'medium' | 'low';
+
+/** AI kayıt tahmini güvenceleri: biri tetiklenirse güven düşer */
+export type AiEstimateFlag = 'no_history' | 'no_evidence' | 'unknown_evidence' | 'outside_history' | 'priority_conflict';
+
+/**
+ * Öneri günlüğü kaydı: yeni kayıt açılırken gösterilen öneriler (geçmiş
+ * kayıtlardan ve AI'dan), kör tahmin ve kullanıcının nihai kararı. Kayıt
+ * kapanınca gerçekleşen süre `taskId` ile eşlenir; böylece hangi kaynağın
+ * ne kadar isabetli olduğu ve önerilerin kabul oranı ölçülür.
+ */
+export interface EstimateLogEntry {
+  id: string;
+  at: string; // ISO
+  projectId: string;
+  taskId?: string;
+  draft: { name: string; issueType?: IssueType; unit?: string; hasNotes: boolean };
+  /** Kör tahmin: kullanıcının öneriyi görmeden girdiği */
+  blind?: { effortDays?: number; priority?: Task['priority'] };
+  reference?: {
+    method: 'similar' | 'group' | 'all';
+    n: number;
+    confidence: Confidence;
+    p50Days: number;
+    p80Days: number;
+    effort: EffortRange;
+    priority?: Task['priority'];
+    issueType?: IssueType;
+  };
+  ai?: {
+    promptVersion: string;
+    model?: string;
+    issueType?: IssueType;
+    priority?: Task['priority'];
+    effort: EffortRange;
+    confidence: Confidence;
+    flags: AiEstimateFlag[];
+    evidence: string[]; // dayanak gösterilen geçmiş kayıt kimlikleri
+    questions: number; // sorduğu eksik bilgi sayısı
+  };
+  final: {
+    source: 'reference' | 'ai' | 'user' | 'calibrated' | 'none';
+    priority: Task['priority'];
+    issueType?: IssueType;
+    effort?: EffortRange;
+    version: number;
+  };
+}
+
 /** Planlama asistanının kayıt açılırken verdiği tahmin (öğrenme döngüsü için saklanır) */
 export interface TaskForecast {
   at: string; // ISO
   method: 'similar' | 'group' | 'all';
   n: number; // dayanılan kapanmış kayıt sayısı
-  confidence: 'high' | 'medium' | 'low';
+  confidence: Confidence;
   p50Days: number; // kapanma süresi (iş günü)
   p80Days: number;
   effortDays?: number; // önerilen olası efor (gün)
@@ -488,6 +544,7 @@ export interface WorkspaceData {
   rolePermissionsRev?: number; // yetki kataloğu sürümü (yeni yetkilerin geçişi için)
   viewConfig?: ViewConfig; // Admin'in rol bazlı görünüm, filtre ve sıralama ayarları
   aiPolicy?: AiPolicy; // Admin'in yapay zekâ politikası
+  estimateLog?: EstimateLogEntry[]; // Kayıt tahmini öneri günlüğü (en yeni sonda)
   healthConfig?: HealthConfig; // Admin'in sağlık puanı yöntemi ayarları
   profiles?: UserProfile[]; // Admin'in tanımladığı profiller (kişi ↔ rol)
   auditLog?: AuditEntry[]; // Kritik aksiyonların günlüğü (en yeni başta)
@@ -667,6 +724,7 @@ export interface AiPolicy {
   chat?: boolean; // asistan sohbeti
   embedded?: boolean; // ekran içi AI (taslak, öneri, özet)
   proposals?: boolean; // asistanın değişiklik önerileri
+  blindEstimate?: boolean; // kör tahmin: öneriler, kullanıcı kendi tahminini girdikten sonra görünür (varsayılan açık)
   scoring?: AiScoringPolicy;
 }
 

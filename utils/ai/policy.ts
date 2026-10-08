@@ -13,6 +13,7 @@ export interface ResolvedAiPolicy {
     chat: boolean;
     embedded: boolean;
     proposals: boolean;
+    blindEstimate: boolean;
     scoring: AiScoringPolicy;
 }
 
@@ -29,6 +30,7 @@ export const aiPolicyOf = (ws: Partial<Pick<WorkspaceData, 'aiPolicy'>> | undefi
         chat: p.chat !== false,
         embedded: p.embedded !== false,
         proposals: p.proposals !== false,
+        blindEstimate: p.blindEstimate !== false,
         scoring: {
             runs: [1, 3, 5].includes(Number(s.runs)) ? Number(s.runs) : DEFAULT_SCORING.runs,
             minEvidence: clampInt(s.minEvidence, 0, 3, DEFAULT_SCORING.minEvidence),
@@ -47,6 +49,7 @@ export const updateAiPolicy = (cur: AiPolicy | undefined, patch: Partial<Omit<Ai
     if (!r.chat) out.chat = false;
     if (!r.embedded) out.embedded = false;
     if (!r.proposals) out.proposals = false;
+    if (!r.blindEstimate) out.blindEstimate = false;
     const diff = (Object.keys(DEFAULT_SCORING) as (keyof AiScoringPolicy)[]).some(k => r.scoring[k] !== DEFAULT_SCORING[k]);
     if (diff) out.scoring = r.scoring;
     return Object.keys(out).length ? out : undefined;
