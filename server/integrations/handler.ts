@@ -95,6 +95,34 @@ const commentText = (c: unknown): string | undefined => {
     return out.join(' ').trim() || undefined;
 };
 
+/** Jira Cloud (atlassian.net) mı; Cloud eski arama ucunu kaldırdı, yeni uç sayfa jetonuyla ilerler */
+export const isJiraCloud = (base: string): boolean => {
+    try { return /\.atlassian\.net$/i.test(new URL(base).hostname); } catch { return false; }
+};
+
+/**
+ * Tek arama sayfası. Server/DC: `/rest/api/2/search` (startAt, toplam);
+ * Cloud: `/rest/api/2/search/jql` (nextPageToken, toplam yok). İmleç iki
+ * biçimi de taşır; sonraki sayfa yoksa `next` null.
+ */
+export const searchJiraPage = async <T,>(
+    get: (path: string) => Promise<unknown>,
+    cloud: boolean,
+    params: string,
+    cursor?: string | null,
+): Promise<{ issues: T[]; total: number | null; next: string | null }> => {
+    if (cloud) {
+        const page = await get(`/rest/api/2/search/jql?${params}${cursor ? `&nextPageToken=${encodeURIComponent(cursor)}` : ''}`) as { issues?: T[]; nextPageToken?: string; isLast?: boolean };
+        const issues = page.issues || [];
+        return { issues, total: null, next: issues.length && !page.isLast && page.nextPageToken ? page.nextPageToken : null };
+    }
+    const startAt = Math.max(0, Number(cursor) || 0);
+    const page = await get(`/rest/api/2/search?${params}&startAt=${startAt}`) as { issues?: T[]; total?: number };
+    const issues = page.issues || [];
+    const total = typeof page.total === 'number' ? page.total : null;
+    return { issues, total, next: issues.length && startAt + issues.length < (total ?? 0) ? String(startAt + issues.length) : null };
+};
+
 /** Projedeki, tarih aralığındaki worklog kayıtları (Jira Server/DC ve Cloud REST v2) */
 export const fetchJiraWorklogs = async (env: Env, projectKey: string, from: string, to: string, fetchImpl?: typeof fetch): Promise<JiraWorklog[]> => {
     const base = clean(env.JIRA_BASE_URL)!.replace(/\/+$/, '');
@@ -106,12 +134,15 @@ export const fetchJiraWorklogs = async (env: Env, projectKey: string, from: stri
         if (!res.ok) throw Object.assign(new Error(`Jira yanıtı başarısız (HTTP ${res.status}).`), { status: 502 });
         return res.json();
     };
-    const jql = encodeURIComponent(buildWorklogJql(projectKey, from, to));
+    const params = `jql=${encodeURIComponent(buildWorklogJql(projectKey, from, to))}&fields=summary,worklog&maxResults=100`;
+    const cloud = isJiraCloud(base);
     const issues: JiraIssueRaw[] = [];
-    for (let startAt = 0; startAt < 500; startAt += 100) {
-        const page = await get(`/rest/api/2/search?jql=${jql}&fields=summary,worklog&maxResults=100&startAt=${startAt}`) as { issues?: JiraIssueRaw[]; total?: number };
-        issues.push(...(page.issues || []));
-        if (!page.issues?.length || issues.length >= (page.total || 0)) break;
+    let cursor: string | null = null;
+    for (let page = 0; page < 5; page++) { // en çok 500 kayıt
+        const r: { issues: JiraIssueRaw[]; next: string | null } = await searchJiraPage<JiraIssueRaw>(get, cloud, params, cursor);
+        issues.push(...r.issues);
+        if (!r.next) break;
+        cursor = r.next;
     }
     const out: JiraWorklog[] = [];
     for (const issue of issues) {
@@ -296,23 +327,10 @@ export const fetchJiraIssuesPage = async (
         return str(list.find(x => /^story ?points?( estimate)?$|^story point estimate$/i.test(str(x.name).trim()))?.id) || null;
     }, null);
 
-    const cloud = /\.atlassian\.net$/i.test(new URL(base).hostname);
+    const cloud = isJiraCloud(base);
     const size = Math.max(10, Math.min(JIRA_PAGE_MAX, Math.round(q.pageSize || JIRA_PAGE_MAX)));
     const params = `jql=${encodeURIComponent(buildIssueJql(q.projectKey, q.scope, q.since))}&fields=${ISSUE_FIELDS}${pointsField ? `,${pointsField}` : ''}&expand=changelog&maxResults=${size}`;
-    let raws: JiraFullIssueRaw[];
-    let total: number | null = null;
-    let next: string | null = null;
-    if (cloud) {
-        const page = await get(`/rest/api/2/search/jql?${params}${q.cursor ? `&nextPageToken=${encodeURIComponent(q.cursor)}` : ''}`) as { issues?: JiraFullIssueRaw[]; nextPageToken?: string; isLast?: boolean };
-        raws = page.issues || [];
-        next = !page.isLast && page.nextPageToken ? page.nextPageToken : null;
-    } else {
-        const startAt = Math.max(0, Number(q.cursor) || 0);
-        const page = await get(`/rest/api/2/search?${params}&startAt=${startAt}`) as { issues?: JiraFullIssueRaw[]; total?: number };
-        raws = page.issues || [];
-        total = typeof page.total === 'number' ? page.total : null;
-        next = raws.length && startAt + raws.length < (total ?? 0) ? String(startAt + raws.length) : null;
-    }
+    const { issues: raws, total, next } = await searchJiraPage<JiraFullIssueRaw>(get, cloud, params, q.cursor);
     // Aramada değişiklik geçmişi kısaltılmışsa kaydın kendisinden tamamlanır
     let refetched = 0;
     for (const r of raws) {
