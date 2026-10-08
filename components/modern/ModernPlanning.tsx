@@ -3,6 +3,8 @@ import { EstimateLogEntry, Project, ReleasePlan, Task, WorkspaceData } from '../
 import { CommitResult } from '../../utils/planning/releasePlan';
 import { JiraIssueRecord } from '../../utils/integrations';
 import { JiraImportOptions } from '../../utils/planning/jiraImport';
+import { modelEstimateEnabled } from '../../utils/planning/ml/runModel';
+import { useEstimateModel } from './planning/useEstimateModel';
 import { aiPolicyOf } from '../../utils/ai/policy';
 import { estimateGate } from '../../utils/ai/estimateEval';
 import { useAssistantOptional } from '../assistant/AssistantContext';
@@ -56,6 +58,10 @@ const ModernPlanning: React.FC<Props> = ({ project, workspace, visibleProjectIds
     const leaves = useMemo(() => workspace.leaves || [], [workspace.leaves]);
     // Kalite kapısı zorunluysa ve altın sette kalındıysa AI tahmin önerisi kapanır
     const aiBlocked = estimateGate(workspace, useAssistantOptional()?.status?.model).blocked;
+    // Klasik ML modeli: politika ve son sınama izin veriyorsa arka planda eğitilir
+    const modelGate = modelEstimateEnabled(workspace, history.records.length);
+    const { model } = useEstimateModel(history, modelGate.withEstimate || modelGate.withoutEstimate);
+    const ml = useMemo(() => (model ? { model, gate: modelGate } : null), [model, modelGate.withEstimate, modelGate.withoutEstimate]); // eslint-disable-line react-hooks/exhaustive-deps
 
     return (
         <div className="flex flex-col gap-4">
@@ -82,9 +88,9 @@ const ModernPlanning: React.FC<Props> = ({ project, workspace, visibleProjectIds
                 <JiraHistoryImport key={`jira-${project.id}`} project={project} onImport={onImportJira} onOpenList={onOpenList} onClose={() => setJiraOpen(false)} />
             )}
             {mode === 'record' ? (
-                <NewRecordPlanner key={project.id} project={project} history={history} people={people} leaves={leaves} visibleProjectIds={visibleProjectIds} canEdit={canEdit} blindEstimate={aiPolicyOf(workspace).blindEstimate} aiBlocked={aiBlocked} onAddTask={onAddTask} onOpenList={onOpenList} />
+                <NewRecordPlanner key={project.id} project={project} history={history} people={people} leaves={leaves} visibleProjectIds={visibleProjectIds} canEdit={canEdit} blindEstimate={aiPolicyOf(workspace).blindEstimate} aiBlocked={aiBlocked} ml={ml} onAddTask={onAddTask} onOpenList={onOpenList} />
             ) : mode === 'release' ? (
-                <ReleasePlanner key={project.id} project={project} history={history} people={people} leaves={leaves} visibleProjectIds={visibleProjectIds} canEdit={canEdit} blindEstimate={aiPolicyOf(workspace).blindEstimate} aiBlocked={aiBlocked}
+                <ReleasePlanner key={project.id} project={project} history={history} people={people} leaves={leaves} visibleProjectIds={visibleProjectIds} canEdit={canEdit} blindEstimate={aiPolicyOf(workspace).blindEstimate} aiBlocked={aiBlocked} ml={ml}
                     onSavePlan={onSaveReleasePlan} onDeletePlan={onDeleteReleasePlan} onCommit={onCommitReleasePlan} onOpenGoals={onOpenGoals} />
             ) : (
                 <PlanSimulator key={project.id} project={project} history={history} people={people} leaves={leaves} visibleProjectIds={visibleProjectIds} onViewTask={onViewTask} />

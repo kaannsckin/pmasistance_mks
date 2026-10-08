@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Leave, Person, Project, ReleasePlan, TaskStatus } from '../../../types';
 import { toIsoDay } from '../../../utils/calendarRange';
+import { PlanningModel } from '../../../utils/planning/ml/runModel';
 import { PlanningHistory } from '../../../utils/planning/history';
 import { BASELINE_ITERATIONS, baselineGroups, CommitResult, createReleasePlan, groupOf, includedItems, RELEASE_GROUP, RELEASE_STEPS } from '../../../utils/planning/releasePlan';
 import { runSimulationAsync } from '../../../utils/planning/runSimulation';
@@ -24,6 +25,7 @@ interface Props {
     canEdit: boolean;
     blindEstimate: boolean;
     aiBlocked?: boolean;
+    ml?: PlanningModel | null;
     onSavePlan: (plan: ReleasePlan) => void;
     onDeletePlan: (id: string) => void;
     onCommit: (result: CommitResult) => void;
@@ -33,7 +35,7 @@ interface Props {
 const fmtDay = (iso?: string) => (iso ? new Date(`${iso}T00:00:00`).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric' }) : '—');
 const pct = (v: number) => `%${Math.round(v * 100)}`;
 
-const ReleasePlanner: React.FC<Props> = ({ project, history, people, leaves, visibleProjectIds, canEdit, blindEstimate, aiBlocked, onSavePlan, onDeletePlan, onCommit, onOpenGoals }) => {
+const ReleasePlanner: React.FC<Props> = ({ project, history, people, leaves, visibleProjectIds, canEdit, blindEstimate, aiBlocked, ml, onSavePlan, onDeletePlan, onCommit, onOpenGoals }) => {
     const [openId, setOpenId] = useState<string | null>(null);
     const [justCommitted, setJustCommitted] = useState<string | null>(null);
     const plans = [...(project.releasePlans || [])].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
@@ -52,6 +54,7 @@ const ReleasePlanner: React.FC<Props> = ({ project, history, people, leaves, vis
                 canEdit={canEdit}
                 blindEstimate={blindEstimate}
                 aiBlocked={aiBlocked}
+                ml={ml}
                 onSave={onSavePlan}
                 onCommit={c => { onCommit(c); setJustCommitted(c.plan.id); }}
                 onClose={() => setOpenId(null)}

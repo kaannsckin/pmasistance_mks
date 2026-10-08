@@ -22,7 +22,7 @@ import { quantileSorted } from './random';
 
 export const HOURS_PER_DAY = 8;
 /** Geçmiş gerçekleşenlerden üretilmiş tahmin kaynakları: simülasyonda ikinci kez kalibre edilmez, kalibrasyon oranına girmez */
-export const GROUNDED: ReadonlySet<string> = new Set(['reference', 'ai']);
+export const GROUNDED: ReadonlySet<string> = new Set(['reference', 'ai', 'model']);
 /** Kalibrasyon grubu için en az örnek */
 export const MIN_CALIBRATION = 8;
 const RATIO_MIN = 0.25;

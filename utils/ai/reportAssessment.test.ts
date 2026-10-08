@@ -98,7 +98,7 @@ describe('halüsinasyon güvenceleri', () => {
 
 describe('AI politikası', () => {
     it('varsayılanlar ve sadeleştirme', () => {
-        expect(aiPolicyOf(undefined)).toEqual({ enabled: true, chat: true, embedded: true, proposals: true, blindEstimate: true, estimateGate: DEFAULT_GATE, scoring: DEFAULT_SCORING });
+        expect(aiPolicyOf(undefined)).toEqual({ enabled: true, chat: true, embedded: true, proposals: true, blindEstimate: true, estimateGate: DEFAULT_GATE, modelEstimate: 'auto', scoring: DEFAULT_SCORING });
         expect(aiPolicyOf({ aiPolicy: { scoring: { runs: 4, minEvidence: 9, maxSpread: 0, maxRuleGap: 3, lowConfidence: 'flag' } } }).scoring)
             .toEqual({ runs: 3, minEvidence: 3, maxSpread: 1, maxRuleGap: 3, lowConfidence: 'flag' });
         let p = updateAiPolicy(undefined, { chat: false });
@@ -113,6 +113,9 @@ describe('AI politikası', () => {
         const g = updateAiPolicy(undefined, { estimateGate: { enforce: true, minCoverage: 2 } });
         expect(g).toEqual({ estimateGate: { ...DEFAULT_GATE, enforce: true, minCoverage: 1 } });
         expect(updateAiPolicy(g, { estimateGate: { enforce: false, minCoverage: DEFAULT_GATE.minCoverage } })).toBeUndefined();
+        // Model önerisi varsayılanda otomatik
+        expect(updateAiPolicy(undefined, { modelEstimate: 'off' })).toEqual({ modelEstimate: 'off' });
+        expect(updateAiPolicy({ modelEstimate: 'off' }, { modelEstimate: 'auto' })).toBeUndefined();
     });
 });
 

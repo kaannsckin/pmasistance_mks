@@ -125,7 +125,7 @@ export const withReference = (item: ReleasePlanItem, history: PlanningHistory, p
 
 /** Seçilen kaynak; seçilmediyse: güveni düşük olmayan AI → geçmiş kayıtlar → kendi tahmin */
 export const choiceOf = (item: ReleasePlanItem): ReleaseItemChoice | null => {
-    const ok = (c?: ReleaseItemChoice) => !!c && (c === 'reference' ? !!item.reference : c === 'ai' ? !!item.ai : c === 'own' ? !!item.ownEstimateDays : !!item.manual);
+    const ok = (c?: ReleaseItemChoice) => !!c && (c === 'reference' ? !!item.reference : c === 'ai' ? !!item.ai : c === 'model' ? !!item.model : c === 'own' ? !!item.ownEstimateDays : !!item.manual);
     if (ok(item.choice)) return item.choice!;
     if (item.ai && item.ai.confidence !== 'low') return 'ai';
     if (item.reference) return 'reference';
@@ -138,16 +138,17 @@ export const effortOf = (item: ReleasePlanItem): EffortRange | null => {
     const c = choiceOf(item);
     if (c === 'reference') return item.reference!.effort;
     if (c === 'ai') return item.ai!.effort;
+    if (c === 'model') return item.model!.effort;
     if (c === 'manual') { const [best, likely, worst] = [item.manual!.best, item.manual!.likely, item.manual!.worst].sort((a, b) => a - b); return { best, likely, worst }; }
     if (c === 'own') return { best: item.ownEstimateDays!, likely: item.ownEstimateDays!, worst: item.ownEstimateDays! };
     return null;
 };
 
 export const priorityOf = (item: ReleasePlanItem): Task['priority'] =>
-    item.priority || (choiceOf(item) === 'ai' && item.ai?.priority) || item.reference?.priority || item.ai?.priority || 'Medium';
+    item.priority || (choiceOf(item) === 'ai' && item.ai?.priority) || (choiceOf(item) === 'model' && item.model?.priority) || item.reference?.priority || item.ai?.priority || 'Medium';
 
 export const typeOf = (item: ReleasePlanItem): IssueType | undefined =>
-    item.issueType || (choiceOf(item) === 'ai' ? item.ai?.issueType : undefined) || item.reference?.issueType || item.ai?.issueType;
+    item.issueType || (choiceOf(item) === 'ai' ? item.ai?.issueType : choiceOf(item) === 'model' ? item.model?.issueType : undefined) || item.reference?.issueType || item.ai?.issueType;
 
 export type ItemDecision = 'accepted' | 'edited' | 'rejected' | 'pending';
 export const decisionOf = (item: ReleasePlanItem): ItemDecision => {
@@ -157,8 +158,8 @@ export const decisionOf = (item: ReleasePlanItem): ItemDecision => {
     return c === 'manual' || c === 'own' ? 'edited' : 'accepted';
 };
 
-const SOURCE: Record<ReleaseItemChoice, EstimateLogEntry['final']['source']> = { reference: 'reference', ai: 'ai', own: 'user', manual: 'user' };
-const TASK_SOURCE: Record<ReleaseItemChoice, Task['estimateSource']> = { reference: 'reference', ai: 'ai', own: 'user', manual: 'user' };
+const SOURCE: Record<ReleaseItemChoice, EstimateLogEntry['final']['source']> = { reference: 'reference', ai: 'ai', model: 'model', own: 'user', manual: 'user' };
+const TASK_SOURCE: Record<ReleaseItemChoice, Task['estimateSource']> = { reference: 'reference', ai: 'ai', model: 'model', own: 'user', manual: 'user' };
 
 export const includedItems = (plan: ReleasePlan) => plan.items.filter(i => !i.excluded && i.name.trim());
 
@@ -403,6 +404,7 @@ export const commitReleasePlan = (
             draft: { name: i.name.trim(), issueType: i.issueType, unit: i.unit || undefined, hasNotes: !!i.notes?.trim() },
             blind: i.blind && (i.blind.effortDays || i.blind.priority) ? i.blind : undefined,
             reference: i.reference,
+            model: i.model,
             ai: i.ai ? { promptVersion: i.ai.promptVersion, model: i.ai.model ?? opts.model, issueType: i.ai.issueType, priority: i.ai.priority, effort: i.ai.effort, confidence: i.ai.confidence, flags: i.ai.flags, evidence: i.ai.evidence, questions: i.ai.questions } : undefined,
             final: { source: taken && c ? SOURCE[c] : 'none', priority: priorityOf(i), issueType: typeOf(i), effort: taken ? e! : undefined, version: taken ? (tasks.find(t => t.id === taskIdOf.get(i.id))?.version ?? 0) : 0 },
         };

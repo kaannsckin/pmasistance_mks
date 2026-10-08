@@ -2,6 +2,8 @@ import React, { useDeferredValue, useMemo, useState } from 'react';
 import { EstimateLogEntry, IssueType, Leave, Person, Project, Task, TaskStatus } from '../../../types';
 import { EMBED_SYSTEM } from '../../../utils/ai/embedded';
 import { GATE_BLOCK_MESSAGE } from '../../../utils/ai/estimateEval';
+import { logModel } from '../../../utils/planning/ml/estimateModel';
+import { modelFor, PlanningModel } from '../../../utils/planning/ml/runModel';
 import { AI_FLAG_LABELS, AiEstimate, ESTIMATE_PROMPT_VERSION, estimateSuggestionPrompt, finalizeEstimateSuggestion, parseEstimateSuggestion } from '../../../utils/ai/estimateSuggestion';
 import { useAiRun } from '../../assistant/AiButton';
 import { useAssistantOptional } from '../../assistant/AssistantContext';
@@ -39,12 +41,14 @@ interface Props {
     blindEstimate: boolean;
     /** Kalite kapısı: AI tahmin önerisi kapalı */
     aiBlocked?: boolean;
+    /** Klasik ML modeli (sınamayı geçtiyse) */
+    ml?: PlanningModel | null;
     onAddTask: (task: Task, log: EstimateLogEntry) => void;
     onOpenList: () => void;
 }
 
-type Choice = 'suggested' | 'own' | 'calibrated' | 'ai';
-const SOURCE_OF: Record<Choice, EstimateLogEntry['final']['source']> = { suggested: 'reference', own: 'user', calibrated: 'calibrated', ai: 'ai' };
+type Choice = 'suggested' | 'own' | 'calibrated' | 'ai' | 'model';
+const SOURCE_OF: Record<Choice, EstimateLogEntry['final']['source']> = { suggested: 'reference', own: 'user', calibrated: 'calibrated', ai: 'ai', model: 'model' };
 
 interface AiRun {
     result: AiEstimate;
@@ -59,7 +63,7 @@ const dm = (d: Date) => d.toLocaleDateString('tr-TR', { day: 'numeric', month: '
 const CONF_TONE: Record<ReferenceEstimate['confidence'], string> = { high: 'm-tone-ok', medium: 'm-tone-warn', low: 'm-tone-bad' };
 const probTone = (p: number) => (p >= FIT_TARGET ? 'var(--m-ok)' : p >= 0.5 ? 'var(--m-warn)' : 'var(--m-bad)');
 
-const NewRecordPlanner: React.FC<Props> = ({ project, history, people, leaves, visibleProjectIds, canEdit, blindEstimate, aiBlocked = false, onAddTask, onOpenList }) => {
+const NewRecordPlanner: React.FC<Props> = ({ project, history, people, leaves, visibleProjectIds, canEdit, blindEstimate, aiBlocked = false, ml = null, onAddTask, onOpenList }) => {
     const [name, setName] = useState('');
     const [notes, setNotes] = useState('');
     const [issueType, setIssueType] = useState<IssueType | ''>('');
@@ -87,28 +91,32 @@ const NewRecordPlanner: React.FC<Props> = ({ project, history, people, leaves, v
     }), [name, notes, issueType, unit, priority, workPackageId, project.id, ownDays]);
     const deferred = useDeferredValue(draft);
     const est = useMemo<ReferenceEstimate>(() => estimateFromHistory(deferred, history, { visibleProjectIds }), [deferred, history, visibleProjectIds]);
+    const modelEst = useMemo(() => modelFor(ml, deferred), [ml, deferred]);
 
     const draftKey = JSON.stringify([name.trim(), notes.trim(), issueType, unit.trim()]);
     const aiOn = ai.available && !aiBlocked;
     const aiEst = aiOn ? aiRun?.result ?? null : null;
     const aiStale = !!aiRun && aiRun.key !== draftKey;
     // Kör tahmin: gösterilecek bir öneri varsa, kullanıcı kendi tahminini verene kadar gizli
-    const hasSuggestion = est.method !== 'none' || aiOn;
+    const hasSuggestion = est.method !== 'none' || aiOn || !!modelEst;
     const hidden = blindEstimate && !revealed && hasSuggestion;
 
     // Kayda yazılacak tahmin: kullanıcı seçmediyse kendi tahmini (varsa), yoksa geçmiş kayıtlardan öneri
     const effChoice: Choice | null = hidden ? (ownDays ? 'own' : null)
         : choice === 'ai' && aiEst ? 'ai'
+        : choice === 'model' && modelEst ? 'model'
         : choice === 'calibrated' && est.calibrated ? 'calibrated'
         : choice === 'suggested' && est.effort ? 'suggested'
         : choice === 'own' && ownDays ? 'own'
         : ownDays ? 'own' : est.effort ? 'suggested' : null;
     const time = effChoice === 'suggested' ? { best: est.effort!.best, avg: est.effort!.likely, worst: est.effort!.worst }
         : effChoice === 'ai' ? { best: aiEst!.effort.best, avg: aiEst!.effort.likely, worst: aiEst!.effort.worst }
+        : effChoice === 'model' ? { best: modelEst!.effort.best, avg: modelEst!.effort.likely, worst: modelEst!.effort.worst }
         : effChoice === 'calibrated' ? { best: est.calibrated!.low, avg: est.calibrated!.likely, worst: est.calibrated!.high }
         : effChoice === 'own' ? { best: ownDays!, avg: ownDays!, worst: ownDays! } : null;
     const effort: { dist: EffortDist; calibration?: number[] } | null = effChoice === 'suggested' ? { dist: { kind: 'samples', values: est.effortSamples } }
         : effChoice === 'ai' ? { dist: { kind: 'pert', min: aiEst!.effort.best, mode: aiEst!.effort.likely, max: aiEst!.effort.worst } }
+        : effChoice === 'model' ? { dist: { kind: 'pert', min: modelEst!.effort.best, mode: modelEst!.effort.likely, max: modelEst!.effort.worst } }
         : effChoice === 'calibrated' ? { dist: { kind: 'pert', min: est.calibrated!.low, mode: est.calibrated!.likely, max: est.calibrated!.high } }
         : effChoice === 'own' ? (est.calibration && !hidden ? { dist: { kind: 'fixed', value: ownDays! }, calibration: est.calibration.ratios } : { dist: { kind: 'pert', min: ownDays! * DEFAULT_SPREAD.low, mode: ownDays!, max: ownDays! * DEFAULT_SPREAD.high } })
         : null;
@@ -123,8 +131,9 @@ const NewRecordPlanner: React.FC<Props> = ({ project, history, people, leaves, v
     const targetVersion = version ?? fit?.recommended ?? 0;
 
     const suggestedPriority = est.priority && est.priority.share >= 0.5 ? est.priority : null;
-    const finalPriority: Task['priority'] = priority || (hidden ? 'Medium' : (effChoice === 'ai' && aiEst?.priority) || suggestedPriority?.value || 'Medium');
-    const finalType: IssueType | undefined = issueType || (hidden ? undefined : (effChoice === 'ai' ? aiEst?.issueType : undefined) || est.issueType?.value);
+    const modelLog = modelEst ? logModel(modelEst) : undefined;
+    const finalPriority: Task['priority'] = priority || (hidden ? 'Medium' : (effChoice === 'ai' && aiEst?.priority) || (effChoice === 'model' && modelLog?.priority) || suggestedPriority?.value || 'Medium');
+    const finalType: IssueType | undefined = issueType || (hidden ? undefined : (effChoice === 'ai' ? aiEst?.issueType : effChoice === 'model' ? modelLog?.issueType : undefined) || est.issueType?.value);
 
     const reveal = () => {
         if (blindEstimate) setBlind(ownDays || priority ? { effortDays: ownDays, priority: priority || undefined } : null);
@@ -166,7 +175,7 @@ const NewRecordPlanner: React.FC<Props> = ({ project, history, people, leaves, v
             issueType: finalType,
             workPackageId: workPackageId || undefined,
             // Geçmişe dayanan tahminler (benzer kayıtlar, düzeltilmiş, AI) simülasyonda yeniden kalibre edilmez
-            estimateSource: effChoice === 'own' ? 'user' : effChoice === 'ai' ? 'ai' : effChoice ? 'reference' : undefined,
+            estimateSource: effChoice === 'own' ? 'user' : effChoice === 'ai' ? 'ai' : effChoice === 'model' ? 'model' : effChoice ? 'reference' : undefined,
             forecast: est.duration && est.method !== 'none' ? {
                 at: now, method: est.method, n: est.n, confidence: est.confidence, p50Days: est.duration.p50, p80Days: est.duration.p80,
                 effortDays: est.effort?.likely, accepted: effChoice === 'suggested' || effChoice === 'calibrated',
@@ -187,6 +196,7 @@ const NewRecordPlanner: React.FC<Props> = ({ project, history, people, leaves, v
                 promptVersion: ESTIMATE_PROMPT_VERSION, model, issueType: aiEst.issueType, priority: aiEst.priority, effort: aiEst.effort,
                 confidence: aiEst.confidence, flags: aiEst.flags, evidence: aiEst.evidence, questions: aiEst.questions.length,
             } : undefined,
+            model: hidden ? undefined : modelLog,
             final: {
                 source: effChoice ? SOURCE_OF[effChoice] : 'none',
                 priority: finalPriority,
@@ -358,6 +368,40 @@ const NewRecordPlanner: React.FC<Props> = ({ project, history, people, leaves, v
                         </>
                     )}
 
+                    {!hidden && modelEst && (
+                        <div className="rounded-xl m-fill-2 p-3.5 flex flex-col gap-2" aria-labelledby="nr-model">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                <span id="nr-model" className="inline-flex items-center gap-2 text-[15px] font-semibold m-text"><Icon name="activity" size={18} />Model tahmini</span>
+                                <span className="text-[12.5px] m-text-3">{ml!.model.n} kayıtla eğitildi{ownDays ? ' · kendi tahmininizi de kullanır' : ''}</span>
+                            </div>
+                            <div className="flex flex-wrap gap-x-5 gap-y-1 text-[15px]">
+                                <span className="m-text-2">Efor: <b className="m-text m-tabular">{num(modelEst.effort.best)} · {num(modelEst.effort.likely)} · {num(modelEst.effort.worst)} gün</b></span>
+                                <span className="m-text-2">Kapanma: <b className="m-text m-tabular">{num(modelEst.days.p50)}–{num(modelEst.days.p80)} iş günü</b></span>
+                            </div>
+                            {modelLog?.priority && !priority && (
+                                <div className="flex flex-wrap items-center justify-between gap-2 text-[15px]">
+                                    <span className="m-text-2">Önem: <b className={PRIORITY_META[modelLog.priority].ink}>{PRIORITY_META[modelLog.priority].label}</b> · olasılık {pct(modelEst.priority!.p)}</span>
+                                    <button type="button" className="m-btn m-btn-plain !min-h-[34px]" onClick={() => setPriority(modelLog.priority!)}>Uygula</button>
+                                </div>
+                            )}
+                            {modelLog?.issueType && !issueType && (
+                                <div className="flex flex-wrap items-center justify-between gap-2 text-[15px]">
+                                    <span className="m-text-2">Tür: <b className="m-text">{ISSUE_TYPE_LABELS[modelLog.issueType]}</b> · olasılık {pct(modelEst.issueType!.p)}</span>
+                                    <button type="button" className="m-btn m-btn-plain !min-h-[34px]" onClick={() => setIssueType(modelLog.issueType!)}>Uygula</button>
+                                </div>
+                            )}
+                            {modelEst.factors.length > 0 && (
+                                <div className="flex flex-wrap items-center gap-1.5 text-[13px]" aria-label="Efora etki eden özellikler">
+                                    <span className="m-text-3">Etkenler:</span>
+                                    {modelEst.factors.map(f => (
+                                        <span key={f.label} className={`inline-flex items-center h-6 px-2 rounded-full m-surface ${f.effect > 0 ? 'm-ink-warn' : 'm-ink-ok'}`}>
+                                            {f.label} {f.effect > 0 ? '+' : '−'}%{Math.round(Math.abs(f.effect) * 100)}
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
                     {!hidden && ai.available && aiBlocked && (
                         <p className="m-0 text-[14px] m-text-2 flex items-start gap-1.5"><Icon name="lock" size={16} className="mt-0.5 shrink-0" />{GATE_BLOCK_MESSAGE}</p>
                     )}
@@ -417,7 +461,7 @@ const NewRecordPlanner: React.FC<Props> = ({ project, history, people, leaves, v
                         </div>
                     )}
 
-                    {!hidden && (est.effort || ownDays || aiEst) && (
+                    {!hidden && (est.effort || ownDays || aiEst || modelEst) && (
                         <fieldset className="m-0 p-0 border-0 flex flex-col gap-2">
                             <legend className="p-0 mb-1 text-[13px] font-semibold m-text-2">Kayda yazılacak tahmin</legend>
                             {est.effort && (
@@ -430,6 +474,12 @@ const NewRecordPlanner: React.FC<Props> = ({ project, history, people, leaves, v
                                 <label className="flex items-start gap-2.5 text-[15px] cursor-pointer">
                                     <input type="radio" name="nr-choice" className="mt-1" checked={effChoice === 'ai'} onChange={() => setChoice('ai')} />
                                     <span className="m-text">AI önerisi: {num(aiEst.effort.best)} · {num(aiEst.effort.likely)} · {num(aiEst.effort.worst)} gün{aiEst.confidence === 'low' ? <span className="ml-1.5 text-[13px] m-ink-warn">(düşük güven)</span> : null}</span>
+                                </label>
+                            )}
+                            {modelEst && (
+                                <label className="flex items-start gap-2.5 text-[15px] cursor-pointer">
+                                    <input type="radio" name="nr-choice" className="mt-1" checked={effChoice === 'model'} onChange={() => setChoice('model')} />
+                                    <span className="m-text">Model tahmini: {num(modelEst.effort.best)} · {num(modelEst.effort.likely)} · {num(modelEst.effort.worst)} gün</span>
                                 </label>
                             )}
                             {ownDays && (
