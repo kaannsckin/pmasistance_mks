@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ConflictError } from '../mcp/source';
 import { callAs, runChecks } from './check';
 import {
-    cloudConfigFromEnv, cloudEnvProblem, cloudTarget, createPilotWorkspace, ensureMemberships, ensurePilotUsers, fileAuthStorage, listMembers,
+    cloudConfigFromEnv, cloudEnvProblem, cloudTarget, derivedPilotPassword, createPilotWorkspace, ensureMemberships, ensurePilotUsers, fileAuthStorage, listMembers,
     parseViewers, PilotCloudConfig, pilotEmail, replacePilotWorkspace, serviceSource,
 } from './cloud';
 import { fakeCloudClients, fakeCloudServer, registerUser } from './fakeCloud';
@@ -25,8 +25,8 @@ describe('pilot bulut ayarları', () => {
     const jwt = (role: string) => `eyJhbGciOiJIUzI1NiJ9.${Buffer.from(JSON.stringify({ role, ref: 'x' })).toString('base64url')}.imzaimzaimzaimzaimza`;
     const valid = { PILOT_SUPABASE_URL: 'https://x.supabase.co/', PILOT_SUPABASE_ANON_KEY: jwt('anon'), PILOT_SUPABASE_SERVICE_ROLE_KEY: jwt('service_role'), PILOT_PASSWORD: 'uzun-pilot-parolasi-42' };
 
-    it('dört ortam değişkeni gerekir; eksikler adıyla bildirilir', () => {
-        expect(cloudConfigFromEnv({ PILOT_SUPABASE_URL: 'https://x.supabase.co/' }).missing).toEqual(['PILOT_SUPABASE_ANON_KEY', 'PILOT_SUPABASE_SERVICE_ROLE_KEY', 'PILOT_PASSWORD']);
+    it('üç ortam değişkeni gerekir; eksikler adıyla bildirilir', () => {
+        expect(cloudConfigFromEnv({ PILOT_SUPABASE_URL: 'https://x.supabase.co/' }).missing).toEqual(['PILOT_SUPABASE_ANON_KEY', 'PILOT_SUPABASE_SERVICE_ROLE_KEY']);
         expect(cloudConfigFromEnv(valid).config).toEqual({ url: 'https://x.supabase.co', anonKey: valid.PILOT_SUPABASE_ANON_KEY, serviceKey: valid.PILOT_SUPABASE_SERVICE_ROLE_KEY, password: valid.PILOT_PASSWORD });
         // Yeni biçim anahtarlar da geçerlidir
         expect(cloudConfigFromEnv({ ...valid, PILOT_SUPABASE_ANON_KEY: 'sb_publishable_abcdefghijklmnopqrstuvwx', PILOT_SUPABASE_SERVICE_ROLE_KEY: 'sb_secret_abcdefghijklmnopqrstuvwxyz' }).config).not.toBeNull();
@@ -34,14 +34,31 @@ describe('pilot bulut ayarları', () => {
 
     it('yer tutucu ya da yer değiştirmiş anahtarlar adıyla reddedilir; değerler mesaja girmez', () => {
         // Pilotta yaşanan durum: talimattaki yer tutucular olduğu gibi yapıştırılmış
-        const env = { ...valid, PILOT_SUPABASE_ANON_KEY: '<anon public anahtarı>', PILOT_SUPABASE_SERVICE_ROLE_KEY: '<service_role anahtarı>', PILOT_PASSWORD: '<yeni uydurduğunuz uzun bir parola>' };
+        const env = { ...valid, PILOT_SUPABASE_ANON_KEY: '<anon public anahtarı>', PILOT_SUPABASE_SERVICE_ROLE_KEY: '<service_role anahtarı>' };
         const r = cloudConfigFromEnv(env);
         expect(r.config).toBeNull();
-        expect(r.invalid.map(x => x.split(' ')[0])).toEqual(['PILOT_SUPABASE_ANON_KEY', 'PILOT_SUPABASE_SERVICE_ROLE_KEY', 'PILOT_PASSWORD']);
+        expect(r.invalid.map(x => x.split(' ')[0])).toEqual(['PILOT_SUPABASE_ANON_KEY', 'PILOT_SUPABASE_SERVICE_ROLE_KEY']);
         expect(cloudEnvProblem(env)).not.toContain('anahtarı>');
         const swapped = cloudConfigFromEnv({ ...valid, PILOT_SUPABASE_ANON_KEY: valid.PILOT_SUPABASE_SERVICE_ROLE_KEY, PILOT_SUPABASE_SERVICE_ROLE_KEY: valid.PILOT_SUPABASE_ANON_KEY });
         expect(swapped.invalid).toHaveLength(2);
         expect(cloudEnvProblem({ ...valid, PILOT_SUPABASE_URL: 'yzwm.supabase.co' })).toMatch(/^geçersiz: PILOT_SUPABASE_URL/);
+    });
+
+    it('parola isteğe bağlı: yoksa, kısaysa ya da yer tutucuysa sunucu anahtarından türetilir', () => {
+        const derived = derivedPilotPassword(valid.PILOT_SUPABASE_SERVICE_ROLE_KEY);
+        expect(derived).toMatch(/^Pp1-[A-Za-z0-9_-]{32}$/);
+        expect(derivedPilotPassword(valid.PILOT_SUPABASE_SERVICE_ROLE_KEY)).toBe(derived);
+        expect(derivedPilotPassword(valid.PILOT_SUPABASE_ANON_KEY)).not.toBe(derived);
+        const { PILOT_PASSWORD: _p, ...noPassword } = valid;
+        void _p;
+        expect(cloudConfigFromEnv(noPassword)).toMatchObject({ config: { password: derived }, notes: [] });
+        for (const weak of ['abc123', '<yeni uydurduğunuz uzun bir parola>']) {
+            const r = cloudConfigFromEnv({ ...valid, PILOT_PASSWORD: weak });
+            expect(r.config!.password).toBe(derived);
+            expect(r.notes[0]).toMatch(/^PILOT_PASSWORD kullanılmadı/);
+            expect(r.notes[0]).not.toContain(weak);
+        }
+        expect(cloudConfigFromEnv(valid).config!.password).toBe(valid.PILOT_PASSWORD);
     });
 
     it('izleyiciler: varsayılan rol pyb_destek, geçersiz rol ya da e-posta reddedilir', () => {

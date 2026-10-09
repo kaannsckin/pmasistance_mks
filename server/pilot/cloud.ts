@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, createHmac } from 'node:crypto';
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -21,11 +21,15 @@ import { fullName, Persona, PERSONAS, personById } from './world.js';
  *    kendi hesaplarıyla "Bağlan" der; e-postaları depoya yazılmaz.
  *
  * Gizli bilgiler yalnız ortam değişkenlerindedir: PILOT_SUPABASE_URL,
- * PILOT_SUPABASE_ANON_KEY, PILOT_SUPABASE_SERVICE_ROLE_KEY, PILOT_PASSWORD.
- * Depoda (pilot-data/bulut.json) yalnız çalışma alanı kimliği durur.
+ * PILOT_SUPABASE_ANON_KEY, PILOT_SUPABASE_SERVICE_ROLE_KEY (zorunlu) ve
+ * PILOT_PASSWORD (isteğe bağlı). Depoda (pilot-data/bulut.json) yalnız
+ * çalışma alanı kimliği durur.
  */
 
-export const PILOT_ENV_KEYS = ['PILOT_SUPABASE_URL', 'PILOT_SUPABASE_ANON_KEY', 'PILOT_SUPABASE_SERVICE_ROLE_KEY', 'PILOT_PASSWORD'] as const;
+/** Zorunlu ortam değişkenleri */
+export const PILOT_ENV_KEYS = ['PILOT_SUPABASE_URL', 'PILOT_SUPABASE_ANON_KEY', 'PILOT_SUPABASE_SERVICE_ROLE_KEY'] as const;
+/** Pilot hesaplarının parolası verilecekse en az bu uzunlukta olmalı; yoksa sunucu anahtarından türetilir */
+export const MIN_PILOT_PASSWORD = 12;
 
 export interface PilotCloudConfig {
     url: string;
@@ -48,11 +52,22 @@ const keyKind = (key: string): 'anon' | 'service' | 'unknown' => {
 };
 
 /**
+ * Pilot hesaplarının parolası, PILOT_PASSWORD verilmediyse: sunucu anahtarından
+ * türetilir (HMAC). Uzun ve tahmin edilemez; yalnız sunucu anahtarını bilen
+ * hesaplayabilir — o da zaten her şeye erişebilir. Anahtar yenilenince parola
+ * da değişir; `pilot uyeler` hesapları yeni parolaya eşitler. Ön ek, parola
+ * kuralı açık projelerde (büyük/küçük harf, rakam, sembol) de geçerli olsun diye.
+ */
+export const derivedPilotPassword = (serviceKey: string): string =>
+    `Pp1-${createHmac('sha256', serviceKey).update('planasistan-pilot-hesaplari').digest('base64url').slice(0, 32)}`;
+
+/**
  * Ortamdaki bulut ayarları. Eksik ve biçimce geçersiz değişkenler adıyla
  * bildirilir (değerler hiçbir mesajda yer almaz): kopyalanmamış yer tutucu,
  * boşluk / Türkçe karakter (HTTP başlığına giremez), yer değiştirmiş anahtarlar.
+ * Kısa ya da yer tutucu PILOT_PASSWORD kullanılmaz (notes): parola türetilir.
  */
-export const cloudConfigFromEnv = (env: Record<string, string | undefined>): { config: PilotCloudConfig | null; missing: string[]; invalid: string[] } => {
+export const cloudConfigFromEnv = (env: Record<string, string | undefined>): { config: PilotCloudConfig | null; missing: string[]; invalid: string[]; notes: string[] } => {
     const v = (k: string) => env[k]?.trim() || '';
     const missing = PILOT_ENV_KEYS.filter(k => !v(k));
     const invalid: string[] = [];
@@ -71,10 +86,15 @@ export const cloudConfigFromEnv = (env: Record<string, string | undefined>): { c
     };
     keyRule('PILOT_SUPABASE_ANON_KEY', 'anon');
     keyRule('PILOT_SUPABASE_SERVICE_ROLE_KEY', 'service');
-    const password = v('PILOT_PASSWORD');
-    if (password && (placeholder(password) || password.length < 12)) invalid.push('PILOT_PASSWORD (yer tutucu metin kalmış ya da 12 karakterden kısa)');
-    if (missing.length || invalid.length) return { config: null, missing, invalid };
-    return { config: { url: url.replace(/\/$/, ''), anonKey: v('PILOT_SUPABASE_ANON_KEY'), serviceKey: v('PILOT_SUPABASE_SERVICE_ROLE_KEY'), password }, missing: [], invalid: [] };
+    if (missing.length || invalid.length) return { config: null, missing, invalid, notes: [] };
+    const serviceKey = v('PILOT_SUPABASE_SERVICE_ROLE_KEY');
+    const given = v('PILOT_PASSWORD');
+    const usable = !!given && !placeholder(given) && given.length >= MIN_PILOT_PASSWORD;
+    const notes = given && !usable ? [`PILOT_PASSWORD kullanılmadı (${placeholder(given) ? 'yer tutucu metin' : `${MIN_PILOT_PASSWORD} karakterden kısa`}); pilot hesaplarının parolası sunucu anahtarından türetildi.`] : [];
+    return {
+        config: { url: url.replace(/\/$/, ''), anonKey: v('PILOT_SUPABASE_ANON_KEY'), serviceKey, password: usable ? given : derivedPilotPassword(serviceKey) },
+        missing: [], invalid: [], notes,
+    };
 };
 
 /** Kullanıcıya gösterilecek ortam sorunu (yalnız değişken adları) */
