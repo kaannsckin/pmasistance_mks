@@ -650,6 +650,7 @@ export interface WorkspaceData {
   viewConfig?: ViewConfig; // Admin'in rol bazlı görünüm, filtre ve sıralama ayarları
   aiPolicy?: AiPolicy; // Admin'in yapay zekâ politikası
   estimateLog?: EstimateLogEntry[]; // Kayıt tahmini öneri günlüğü (en yeni sonda)
+  reportAiLog?: ReportAiLogEntry[]; // Haftalık rapor AI öneri günlüğü (en yeni sonda; metin yok)
   goldenSet?: GoldenItem[]; // Tahmin değerlendirmesi için doğrulanmış kapanmış kayıtlar
   evalRuns?: EvalRun[]; // Altın set değerlendirmeleri (en yeni sonda)
   modelEvals?: ModelEvalRun[]; // Klasik ML modelinin zaman ayrımlı sınamaları (en yeni sonda)
@@ -740,6 +741,8 @@ export interface ReportItem {
   text: string;
   meeting?: MeetingDetails;
   source?: 'ai' | 'note' | 'worklog' | 'meeting' | 'task' | 'manual';
+  /** AI'dan geldiyse uygulandığı andaki özgün hâli (kabul/düzenleme ölçüsü ve düzeltme örnekleri için) */
+  aiOriginal?: { text: string; category: ReportCategory };
 }
 
 export interface Abbreviation {
@@ -782,8 +785,8 @@ export interface WeeklyReport {
   stage: ReportStage;
   returnNote?: string; // iade gerekçesi (bir önceki aşamaya)
   worklog?: WorklogEntry[];
-  /** AI'nın ilk önerisi — onaylı son hâliyle birlikte ince ayar veri setine girer */
-  aiDraft?: { generatedAt: string; input: string; output: string };
+  /** AI'nın son önerisi — onaylı son hâliyle birlikte ince ayar veri setine girer */
+  aiDraft?: ReportAiDraft;
   /** PY'nin bu hafta projenin genel sağlığına verdiği puan (1–10); sağlık modelinin girdisi */
   pmScore?: number;
   pmScoreNote?: string; // tek cümlelik gerekçe
@@ -796,6 +799,62 @@ export interface WeeklyReport {
   createdAt: string;
   updatedAt: string;
   history: ReportEvent[];
+}
+
+/**
+ * Rapora uygulanan AI önerisinin kaydı. Son girdi ve çıktı saklanır;
+ * itemIds birden fazla uygulamada birikir (kabul oranı ölçümü için).
+ */
+export interface ReportAiDraft {
+  generatedAt: string;
+  input: string;
+  output: string;
+  promptVersion?: string;
+  variant?: ReportPromptVariant;
+  model?: string;
+  mode?: 'append' | 'replace';
+  proposed?: { thisWeek: number; nextWeek: number };
+  itemIds?: string[];
+}
+
+/**
+ * İstem katmanları (değerlendirmede karşılaştırılır). base: varsayılan kılavuz
+ * ve sabit örnek · card: + proje kartı · examples: + dinamik örnekler ·
+ * rules: + kurum/bölüm kılavuzu ve öğrenilmiş kurallar · full: hepsi (üretim) ·
+ * ft: örneksiz (ince ayarlı model için)
+ */
+export type ReportPromptVariant = 'base' | 'card' | 'examples' | 'rules' | 'full' | 'ft';
+
+/**
+ * Rapor AI öneri günlüğü kaydı (metin yok, yalnız sayılar). Öneri
+ * uygulandığında, vazgeçildiğinde ya da hata verdiğinde; rapor taslaktan
+ * gönderildiğinde de AI maddelerinin ne kadarının aynen kaldığı yazılır.
+ */
+export interface ReportAiLogEntry {
+  at: string;
+  reportId: string;
+  projectId?: string;
+  departmentCode: string;
+  promptVersion: string;
+  variant?: ReportPromptVariant;
+  model?: string;
+  outcome: 'applied_append' | 'applied_replace' | 'discarded' | 'error' | 'submitted';
+  nThis: number;
+  nNext: number;
+  lintErrors: number;
+  lintWarnings: number;
+  /** Girdide dayanağı bulunmayan rakam/tarih/ad sayısı (önizlemede) */
+  ungrounded?: number;
+  /** Otomatik düzeltme turu yapıldı */
+  repaired?: boolean;
+  // Gönderimde: AI maddelerinin akıbeti
+  aiItems?: number;
+  kept?: number;
+  edited?: number;
+  deleted?: number;
+  humanAdded?: number;
+  /** Gönderimdeki format sorunları (kod → sayı) */
+  lintCodes?: Record<string, number>;
 }
 
 /** done: yapıldı · partial: kısmen · slipped: ertelendi · dropped: iptal / kapsam dışı (orana girmez) */

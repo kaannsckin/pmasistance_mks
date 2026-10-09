@@ -11,6 +11,12 @@ import { extractJson } from './json';
  * tuning) veri seti olarak dışa aktarılabilir.
  */
 
+/**
+ * İstem sürümü: istem ya da girdi biçimi her değiştiğinde artırılır. Öneri
+ * günlüğü, rapordaki AI kaydı ve değerlendirme koşuları bu sürümle eşlenir.
+ */
+export const REPORT_PROMPT_VERSION = 'rapor-taslak-1';
+
 export const REPORT_SYSTEM = `Sen TÜBİTAK BİLGEM'de proje yöneticisinin (PY) haftalık raporunu hazırlayan yazım asistanısın. Raporu müdürler okur.
 Yalnızca sana verilen verilere dayan; tarih, rakam, kişi ya da kurum UYDURMA. Bilgi eksikse maddeyi yazma, "eksikBilgi" listesine soru olarak ekle.
 

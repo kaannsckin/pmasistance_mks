@@ -22,6 +22,7 @@ import { portfolioHealth } from './utils/executive';
 import { addSnapshot, buildSnapshot, ensureMonthlySnapshot } from './utils/snapshots';
 import { cleanHealthConfig, ensureWeeklyHealthSnapshot, pmoRatingFor, setPmoRating } from './utils/healthModel';
 import { aiPolicyOf, updateAiPolicy } from './utils/ai/policy';
+import { appendReportAiLog, submitLogEntry } from './utils/ai/reportAiStats';
 import { stampLifecycle } from './utils/planning/lifecycle';
 import { AllocationSuggestion, ApplyMode, applyAllocationSuggestions } from './utils/taskToAllocation';
 import { applyBilledHoursActuals, planBilledHoursPoolAdditions, suggestBilledHoursActuals, BilledApplyMode, BilledHoursOptions, BilledHoursRecord } from './utils/billedHours';
@@ -64,7 +65,7 @@ import { analyzeDataHealth, applyHealthFix, HealthFix } from './utils/dataHealth
 import { appendAudit, AUDIT_ACTION_LABELS } from './utils/audit';
 import { riskScore } from './utils/risks';
 import { upsertLeave } from './utils/availability';
-import { AiReportAssessment, ExpectationStatus, ExpectationUrgency, HealthConfig, MeetingStatus, PestelItem, ReportFlow, ReportSettings, Risk, RoleViewConfig, SwotItem, WeeklyReport } from './types';
+import { AiReportAssessment, ReportAiLogEntry, ExpectationStatus, ExpectationUrgency, HealthConfig, MeetingStatus, PestelItem, ReportFlow, ReportSettings, Risk, RoleViewConfig, SwotItem, WeeklyReport } from './types';
 import ModernSidebar from './components/modern/ModernSidebar';
 import ModernProjectHeader from './components/modern/ModernProjectHeader';
 import ModernPlanning from './components/modern/ModernPlanning';
@@ -111,7 +112,7 @@ import DataHealthSheet from './components/modern/sheets/DataHealthSheet';
 import AuditLogSheet from './components/modern/sheets/AuditLogSheet';
 import StatusReportSheet from './components/modern/sheets/StatusReportSheet';
 import {
-  actorOf, isReportSteward, markWeekEmailed, publishWeek, reportDictionary, reportFlowOf, reportSettingsOf, returnReportIn, saveReport, setReportAiAssessment, STAGE_LABELS, unpublishWeek, weekLabel,
+  actorOf, canEditReport, isReportSteward, markWeekEmailed, publishWeek, reportDictionary, reportFlowOf, reportSettingsOf, returnReportIn, saveReport, setReportAiAssessment, STAGE_LABELS, unpublishWeek, weekLabel,
 } from './utils/weeklyReport';
 import {
   canEditMeeting, canPlanMeeting, canReviewMeeting, createMeeting, isOwnMeeting, markHeld, MeetingDraft, reviewMeeting, setMeetingStatus, updateMeeting,
@@ -791,9 +792,13 @@ const App: React.FC = () => {
   const handleSaveReport = useCallback((draft: WeeklyReport, advance = false): boolean => {
     const ws = workspaceRef.current;
     if (!ws) return false;
-    const res = saveReport(ws, identityOf(ws), draft, actorOf(ws), { advance, dictionary: reportDictionary(reportSettingsOf(ws)) });
+    const dictionary = reportDictionary(reportSettingsOf(ws));
+    const res = saveReport(ws, identityOf(ws), draft, actorOf(ws), { advance, dictionary });
     if (!res) return false;
     let next: WorkspaceData = { ...ws, weeklyReports: res.reports };
+    // Taslaktan gönderimde AI maddelerinin akıbeti öneri günlüğüne (yalnız sayılar)
+    const submitted = advance && res.from === 'draft' ? submitLogEntry(res.report, dictionary) : null;
+    if (submitted) next = { ...next, reportAiLog: appendReportAiLog(next.reportAiLog, submitted) };
     if (advance) {
       next = res.from === 'draft'
         ? appendAudit(next, 'report.submit', `${reportLabel(ws, res.report)} raporu gönderildi → ${STAGE_LABELS[res.report.stage]}`, res.report.projectId)
@@ -802,6 +807,16 @@ const App: React.FC = () => {
     commitWorkspace(next);
     return true;
   }, [commitWorkspace]);
+
+  // Rapor AI öneri günlüğü: raporu yazabilen (ya da yeni raporu açabilecek proje sahibi) yazar; metin yok
+  const handleLogReportAi = useCallback((entry: ReportAiLogEntry) => {
+    updateWorkspace(ws => {
+      const who = identityOf(ws);
+      const r = (ws.weeklyReports || []).find(x => x.id === entry.reportId);
+      const allowed = r ? canEditReport(ws, who, r) : !!entry.projectId && ws.projects.some(p => p.id === entry.projectId && ownsProject(p, who));
+      return allowed ? { ...ws, reportAiLog: appendReportAiLog(ws.reportAiLog, entry) } : ws;
+    });
+  }, [updateWorkspace]);
 
   const handleReturnReport = useCallback((reportId: string, note: string): boolean => {
     const ws = workspaceRef.current;
@@ -1272,6 +1287,7 @@ const App: React.FC = () => {
           onOpenMeetings={() => setCurrentView(View.Meetings)}
           onRatePmo={handleRatePmo}
           onSetAiAssessment={handleSetAiAssessment}
+          onLogReportAi={handleLogReportAi}
         />
       ) : (
         <ModernMeetings

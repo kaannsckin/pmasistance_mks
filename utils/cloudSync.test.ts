@@ -77,6 +77,16 @@ describe('mergeWorkspaceDoc', () => {
         expect(merged.healthHistory).toEqual(ws.healthHistory);
     });
 
+    it('haftalık rapor AI günlüğü paylaşılır', () => {
+        const ws: WorkspaceData = {
+            ...buildWs(),
+            reportAiLog: [{ at: '2026-10-07T00:00:00Z', reportId: 'wr1', departmentCode: 'U310', promptVersion: 'rapor-taslak-1', outcome: 'discarded', nThis: 2, nNext: 1, lintErrors: 0, lintWarnings: 1 }],
+        };
+        const { core, privateDoc } = splitWorkspaceDoc(ws);
+        const merged = mergeWorkspaceDoc(createEmptyWorkspace(), core as Partial<WorkspaceData>, privateDoc);
+        expect(merged.reportAiLog).toEqual(ws.reportAiLog);
+    });
+
     it('admin yetkileri ve profiller paylaşılır', () => {
         const ws: WorkspaceData = { ...buildWs(), rolePermissions: { py: ['project.create', 'health.rate'] }, rolePermissionsRev: PERMISSIONS_REV, profiles: [{ id: 'p1', role: 'mudur', personId: 'k1' }], viewConfig: { mudur: { minRiskScore: 15 } }, healthConfig: { bandGood: 80 } };
         const { core, privateDoc } = splitWorkspaceDoc(ws);

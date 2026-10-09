@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AiReportAssessment, ReportSettings, WeeklyReport, WorkspaceData } from '../../types';
+import { AiReportAssessment, ReportAiLogEntry, ReportSettings, WeeklyReport, WorkspaceData } from '../../types';
 import { fetchIntegrationHealth, IntegrationHealth } from '../../utils/integrations';
 import { can } from '../../utils/permissions';
 import { Identity, managedDepartmentCode, ownsProject } from '../../utils/rbac';
@@ -13,6 +13,7 @@ import { Icon } from './icons';
 import { rowSep } from './ui';
 import ConsolidatedReport from './weekly/ConsolidatedReport';
 import { ReminderPanel, ReportSettingsPanel } from './weekly/Panels';
+import { ReportAiQualityCard } from './weekly/ReportAiPanels';
 import ReportEditor from './weekly/ReportEditor';
 import { EmptyState, Notice, NoticeState, Pill, STAGE_TONE, StagePill } from './weekly/shared';
 
@@ -41,9 +42,17 @@ export interface ModernWeeklyReportProps {
     onRatePmo: (projectId: string, year: number, week: number, score: number | null, note?: string) => boolean;
     /** AI metin puanı (PYB destek): onaylı raporun değerlendirmesini kaydet */
     onSetAiAssessment: (reportId: string, assessment: AiReportAssessment) => void;
+    /** Rapor AI öneri günlüğü */
+    onLogReportAi: (entry: ReportAiLogEntry) => void;
 }
 
 type Tab = 'mine' | 'inbox' | 'status' | 'report' | 'settings';
+type SettingsTab = 'general' | 'ai_quality';
+
+const SETTINGS_TABS: { key: SettingsTab; label: string }[] = [
+    { key: 'general', label: 'Genel' },
+    { key: 'ai_quality', label: 'AI kalitesi' },
+];
 
 interface Row {
     key: string;
@@ -77,7 +86,7 @@ const ReportRows: React.FC<{ rows: Row[]; dictionary: ReturnType<typeof reportDi
 );
 
 const ModernWeeklyReport: React.FC<ModernWeeklyReportProps> = ({
-    workspace, identity, onSaveReport, onAdvanceReport, onReturnReport, onPublishWeek, onUnpublishWeek, onMarkEmailed, onUpdateSettings, onSetJiraKey, onOpenMeetings, onRatePmo, onSetAiAssessment,
+    workspace, identity, onSaveReport, onAdvanceReport, onReturnReport, onPublishWeek, onUnpublishWeek, onMarkEmailed, onUpdateSettings, onSetJiraKey, onOpenMeetings, onRatePmo, onSetAiAssessment, onLogReportAi,
 }) => {
     const role = identity.role;
     // Ekran kipi: rapor denetçisi (yetki), bölüm sorumlusu ve PY kimlik kuralı; diğerleri yayınlanan raporu okur
@@ -91,6 +100,7 @@ const ModernWeeklyReport: React.FC<ModernWeeklyReportProps> = ({
         return exec && latest ? { year: latest.year, week: latest.week } : isoWeekOf(new Date());
     });
     const [tab, setTab] = useState<Tab>(exec ? 'report' : steward || bs ? 'inbox' : 'mine');
+    const [settingsTab, setSettingsTab] = useState<SettingsTab>('general');
     const [open, setOpen] = useState<WeeklyReport | null>(null);
     const [notice, setNotice] = useState<NoticeState>(null);
     const [health, setHealth] = useState<IntegrationHealth | null>(null);
@@ -196,6 +206,7 @@ const ModernWeeklyReport: React.FC<ModernWeeklyReportProps> = ({
                 }}
                 onSetJiraKey={onSetJiraKey}
                 onOpenMeetings={onOpenMeetings}
+                onLogAi={onLogReportAi}
             />
         );
     }
@@ -353,7 +364,19 @@ const ModernWeeklyReport: React.FC<ModernWeeklyReportProps> = ({
             )}
 
             {steward && tab === 'settings' && (
-                <ReportSettingsPanel settings={settings} reports={workspace.weeklyReports || []} health={health} onChange={onUpdateSettings} />
+                <div className="flex flex-col gap-5">
+                    <div className="m-segmented self-start" role="group" aria-label="Ayar bölümü">
+                        {SETTINGS_TABS.map(t => (
+                            <button key={t.key} type="button" className="m-segment" aria-pressed={settingsTab === t.key} onClick={() => setSettingsTab(t.key)}>{t.label}</button>
+                        ))}
+                    </div>
+                    {settingsTab === 'general' && <ReportSettingsPanel settings={settings} reports={workspace.weeklyReports || []} health={health} onChange={onUpdateSettings} />}
+                    {settingsTab === 'ai_quality' && (
+                        <div className="flex flex-col gap-5">
+                            <ReportAiQualityCard workspace={workspace} />
+                        </div>
+                    )}
+                </div>
             )}
         </div>
     );

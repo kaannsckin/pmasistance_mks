@@ -17,7 +17,8 @@ export const useAiRun = (kind: 'embedded' | 'scoring' = 'embedded') => {
 
   useEffect(() => () => ctrl.current?.abort(), []);
 
-  const run = useCallback(async <T,>(system: string, prompt: string, parse: (text: string) => T): Promise<T | null> => {
+  /** Hata olursa null döner ve hata gösterilir; onError iptal dışındaki hatalarda çağrılır (günlük için) */
+  const run = useCallback(async <T,>(system: string, prompt: string, parse: (text: string) => T, opts?: { onError?: (message: string) => void }): Promise<T | null> => {
     if (!a) return null;
     ctrl.current?.abort();
     const c = new AbortController();
@@ -28,14 +29,16 @@ export const useAiRun = (kind: 'embedded' | 'scoring' = 'embedded') => {
       return parse(await a.complete(system, prompt, c.signal));
     } catch (e) {
       if (c.signal.aborted || (e instanceof AiError && e.code === 'aborted')) return null;
-      setError((e as Error)?.message || 'AI isteği başarısız.');
+      const message = (e as Error)?.message || 'AI isteği başarısız.';
+      setError(message);
+      opts?.onError?.(message);
       return null;
     } finally {
       if (ctrl.current === c) setLoading(false);
     }
   }, [a]);
 
-  return { available: !!a?.enabled && (kind === 'scoring' || !!a?.embeddedEnabled), run, loading, error, setError };
+  return { available: !!a?.enabled && (kind === 'scoring' || !!a?.embeddedEnabled), run, loading, error, setError, model: a?.status?.model };
 };
 
 interface AiButtonProps {

@@ -1,7 +1,8 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { Abbreviation, CustomerMeeting, MeetingDetails, ReportCategory, ReportItem, WeeklyReport, WorklogEntry, WorkspaceData } from '../../../types';
+import { Abbreviation, CustomerMeeting, MeetingDetails, ReportAiLogEntry, ReportCategory, ReportItem, WeeklyReport, WorklogEntry, WorkspaceData } from '../../../types';
+import { suggestionLogEntry } from '../../../utils/ai/reportAiStats';
 import { ROLE_LABELS } from '../../../utils/allocations';
-import { buildReportInput, buildReportPrompt, parseReportSuggestion, REPORT_SYSTEM, ReportSuggestion } from '../../../utils/ai/weeklyReportPrompt';
+import { buildReportInput, buildReportPrompt, parseReportSuggestion, REPORT_PROMPT_VERSION, REPORT_SYSTEM, ReportSuggestion } from '../../../utils/ai/weeklyReportPrompt';
 import { meetingsHeldInWeek, meetingsPlannedInWeek, meetingToDetails, visibleMeetings } from '../../../utils/customerMeetings';
 import { fetchJiraWorklogs, IntegrationHealth } from '../../../utils/integrations';
 import { Identity } from '../../../utils/rbac';
@@ -179,9 +180,11 @@ export interface ReportEditorProps {
     onReturn: (note: string) => boolean;
     onSetJiraKey: (projectId: string, key: string) => void;
     onOpenMeetings: () => void;
+    /** AI önerisi günlüğü (uygulandı / vazgeçildi / hata; metin yazılmaz) */
+    onLogAi?: (entry: ReportAiLogEntry) => void;
 }
 
-const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report, isNew, dictionary, health, onBack, onSave, onAdvance, onReturn, onSetJiraKey, onOpenMeetings }) => {
+const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report, isNew, dictionary, health, onBack, onSave, onAdvance, onReturn, onSetJiraKey, onOpenMeetings, onLogAi }) => {
     const [draft, setDraft] = useState<WeeklyReport>(report);
     const [dirty, setDirty] = useState(false);
     const [notice, setNotice] = useState<NoticeState>(null);
@@ -192,7 +195,7 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
     const [abbrInputs, setAbbrInputs] = useState<Record<string, string>>({});
     const [jiraKey, setJiraKey] = useState('');
     const [busy, setBusy] = useState<'file' | 'jira' | null>(null);
-    const [suggestion, setSuggestion] = useState<{ s: ReportSuggestion; raw: string; input: string } | null>(null);
+    const [suggestion, setSuggestion] = useState<{ s: ReportSuggestion; raw: string; input: string; promptVersion: string; model?: string } | null>(null);
     const [missingQs, setMissingQs] = useState<string[]>([]);
     const fileRef = useRef<HTMLInputElement>(null);
     const ai = useAiRun();
@@ -325,23 +328,41 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
     };
 
     // ---- AI
+    const logAi = (outcome: Exclude<ReportAiLogEntry['outcome'], 'submitted'>, sug?: { s: ReportSuggestion; promptVersion: string; model?: string }, promptVersion = REPORT_PROMPT_VERSION, model = ai.model) =>
+        onLogAi?.(suggestionLogEntry({ report: draft, promptVersion: sug?.promptVersion || promptVersion, variant: 'full', model: sug ? sug.model : model, outcome, suggestion: sug?.s, dictionary }));
     const suggest = async () => {
         if (!project) return;
         setMissingQs([]);
         const input = buildReportInput({ project, year, week, worklog: draft.worklog, heldMeetings: held, plannedMeetings: planned, previous: prevReport, dictionary });
-        const res = await ai.run(REPORT_SYSTEM, buildReportPrompt(input, styleExamples), t => ({ s: parseReportSuggestion(t), raw: t }));
-        if (res) setSuggestion({ ...res, input });
+        const promptVersion = REPORT_PROMPT_VERSION;
+        const model = ai.model;
+        const res = await ai.run(REPORT_SYSTEM, buildReportPrompt(input, styleExamples), t => ({ s: parseReportSuggestion(t), raw: t }), { onError: () => logAi('error', undefined, promptVersion, model) });
+        if (res) setSuggestion({ ...res, input, promptVersion, model });
+    };
+    const discardSuggestion = () => {
+        if (suggestion) logAi('discarded', suggestion);
+        setSuggestion(null);
     };
     const applySuggestion = (mode: 'append' | 'replace') => {
         if (!suggestion) return;
-        const { s, raw, input } = suggestion;
+        const { s, raw, input, promptVersion, model } = suggestion;
+        // Özgün hâl maddede saklanır: gönderimde aynen kalan / düzenlenen / silinen ölçülür
+        const tag = (i: ReportItem): ReportItem => ({ ...i, aiOriginal: { text: itemDisplay(i), category: i.category } });
+        const thisWeek = s.thisWeek.map(tag), nextWeek = s.nextWeek.map(tag);
+        const newIds = [...thisWeek, ...nextWeek].map(i => i.id);
         update(d => ({
             ...d,
-            thisWeek: mode === 'replace' ? s.thisWeek : [...d.thisWeek, ...s.thisWeek],
-            nextWeek: mode === 'replace' ? s.nextWeek : [...d.nextWeek, ...s.nextWeek],
+            thisWeek: mode === 'replace' ? thisWeek : [...d.thisWeek, ...thisWeek],
+            nextWeek: mode === 'replace' ? nextWeek : [...d.nextWeek, ...nextWeek],
             abbreviations: mergeAbbr(d.abbreviations, s.abbreviations),
-            aiDraft: { generatedAt: new Date().toISOString(), input, output: raw },
+            aiDraft: {
+                generatedAt: new Date().toISOString(), input, output: raw, promptVersion, variant: 'full', ...(model ? { model } : {}), mode,
+                proposed: { thisWeek: s.thisWeek.length, nextWeek: s.nextWeek.length },
+                // Sonuna eklemede önceki AI maddeleri de ölçülmeye devam eder; yerine koymada yalnız son öneri
+                itemIds: mode === 'replace' ? newIds : [...(d.aiDraft?.itemIds || []), ...newIds],
+            },
         }));
+        logAi(mode === 'replace' ? 'applied_replace' : 'applied_append', suggestion);
         setMissingQs(s.missing);
         setSuggestion(null);
     };
@@ -751,10 +772,10 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
                 <Sheet
                     wide
                     title="AI taslak önerisi"
-                    onClose={() => setSuggestion(null)}
+                    onClose={discardSuggestion}
                     footer={<>
                         <span className="flex-1 text-[13px] m-text-3">Uygulayınca maddeleri düzenleyebilirsiniz.</span>
-                        <button type="button" className="m-btn m-btn-plain" onClick={() => setSuggestion(null)}>Vazgeç</button>
+                        <button type="button" className="m-btn m-btn-plain" onClick={discardSuggestion}>Vazgeç</button>
                         {(draft.thisWeek.length > 0 || draft.nextWeek.length > 0) && <button type="button" className="m-btn m-btn-gray" onClick={() => applySuggestion('replace')}>Mevcutların yerine koy</button>}
                         <button type="button" className="m-btn m-btn-primary" onClick={() => applySuggestion('append')}>{draft.thisWeek.length || draft.nextWeek.length ? 'Sonuna ekle' : 'Taslağa uygula'}</button>
                     </>}
