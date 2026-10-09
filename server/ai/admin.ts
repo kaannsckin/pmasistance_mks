@@ -4,7 +4,8 @@ import { buildEmbedRequest, parseEmbedResponse, readEmbeddingConfig } from './em
 import { upstreamErrorMessage } from './errors.js';
 import { buildUpstreamRequest, extractUpstreamError, parseUpstreamEvents } from './providers.js';
 import { createRateLimiter } from './rateLimit.js';
-import { EDITABLE_KEYS, EditableKey, effectiveEnv, loadSettings, resolveSettingsStore, saveSettings, SECRET_KEYS, secretHint } from './settingsStore.js';
+import { GEMINI_BASE_URL, geminiKeyAlias, listGeminiModels, pickGeminiChatModel } from './gemini.js';
+import { EDITABLE_KEYS, EditableKey, effectiveEnv, loadSettings, prepareEnv, resolveSettingsStore, saveSettings, SECRET_KEYS, secretHint } from './settingsStore.js';
 import { parseSSE } from './sse.js';
 import { describeNetworkError, upstreamFetch } from './tls.js';
 
@@ -71,7 +72,8 @@ const forPanel = (msg: string) => msg
 const testChat = async (env: Env, fetchImpl?: typeof fetch) => {
     const { chat } = check(env);
     if (!chat.config) return { ok: false, error: chat.problem || 'Yapılandırma eksik.' };
-    const config = { ...chat.config, maxOutputTokens: Math.min(chat.config.maxOutputTokens, 512) };
+    // Düşünen modeller (ör. Gemini Flash) kısa yanıttan önce akıl yürütme token'ı harcar
+    const config = { ...chat.config, maxOutputTokens: Math.min(chat.config.maxOutputTokens, 1024) };
     const up = buildUpstreamRequest(config, { system: 'Kısa yanıt ver.', messages: [{ role: 'user', content: 'Bağlantı testi: yalnızca "tamam" yaz.' }] });
     const abort = new AbortController();
     const timer = setTimeout(() => abort.abort(), Math.min(config.timeoutMs, TEST_TIMEOUT_MS));
@@ -154,25 +156,56 @@ export const handleAiAdmin = async (request: Request, env: Env, opts: AdminOptio
             panel: masked(stored),
             env: masked(envValues(env)),
             effective: {
-                configured: !!chat.config, provider: chat.provider, model: chat.model, baseUrl: chat.config?.baseUrl, problem: chat.problem,
+                configured: !!chat.config, provider: chat.provider, model: chat.model, baseUrl: chat.config?.baseUrl,
+                problem: eff.problem && !chat.config ? eff.problem : chat.problem,
                 embeddingModel: emb.config?.model, embeddingProblem: emb.problem,
+                // Gemini'de anahtardan otomatik seçilenler
+                auto: eff.auto,
             },
         }, cors);
     }
 
     if (action === 'test') {
-        // Taslak verildiyse kaydetmeden onunla; yoksa etkin ayarla
+        // Taslak verildiyse kaydetmeden onunla; yoksa etkin ayarla. Gemini'de model verilmediyse otomatik seçilir.
         const draft = body.values ? applyDraft(stored, body.values) : stored;
-        const merged = { ...env, ...draft };
-        const [chat, embed] = await Promise.all([testChat(merged, opts.fetchImpl), testEmbed(merged, opts.fetchImpl)]);
-        return json(200, { chat, embed }, cors);
+        const prepared = await prepareEnv({ ...env, ...draft }, opts.fetchImpl);
+        if (prepared.problem && !clean(prepared.env.AI_MODEL)) return json(200, { chat: { ok: false, error: prepared.problem }, embed: null, auto: prepared.auto }, cors);
+        const [chat, embed] = await Promise.all([testChat(prepared.env, opts.fetchImpl), testEmbed(prepared.env, opts.fetchImpl)]);
+        return json(200, { chat, embed, auto: prepared.auto }, cors);
+    }
+
+    if (action === 'models') {
+        // Model önerileri (formdaki sağlayıcı ve anahtarla): Gemini model listesi ya da OpenAI uyumlu /models
+        const e = geminiKeyAlias({ ...env, ...(body.values ? applyDraft(stored, body.values) : stored) });
+        const provider = (clean(e.AI_PROVIDER) || 'openai').toLowerCase();
+        const key = clean(e.AI_API_KEY);
+        if (!key) return json(200, { models: [], error: 'API anahtarı gerekli.' }, cors);
+        try {
+            if (provider === 'gemini') {
+                const list = await listGeminiModels(key, clean(e.AI_BASE_URL) || GEMINI_BASE_URL, e, opts.fetchImpl);
+                const chat = list.filter(m => m.methods.includes('generateContent')).map(m => m.id);
+                return json(200, { models: chat, recommended: pickGeminiChatModel(list) }, cors);
+            }
+            if (provider === 'openai') {
+                const base = (clean(e.AI_BASE_URL) || 'https://api.openai.com/v1').replace(/\/+$/, '');
+                const res = await (opts.fetchImpl || upstreamFetch(base, e))(`${base}/models`, { headers: { authorization: `Bearer ${key}` } });
+                if (!res.ok) return json(200, { models: [], error: forPanel(upstreamErrorMessage(res.status, extractUpstreamError(await res.text().catch(() => '')))) }, cors);
+                const j = await res.json().catch(() => ({})) as { data?: { id?: string }[] };
+                return json(200, { models: (j.data || []).map(m => m.id || '').filter(Boolean).sort() }, cors);
+            }
+            return json(200, { models: [] }, cors);
+        } catch (err) {
+            return json(200, { models: [], error: (err as Error).message }, cors);
+        }
     }
 
     if (action === 'save' || action === 'clear') {
         if (!store) return json(503, { error: storeProblem, code: 'config' }, cors);
         const next = action === 'clear' ? {} : applyDraft(stored, body.values);
         if (action === 'save') {
-            const { chat, emb } = check({ ...env, ...next });
+            const prepared = await prepareEnv({ ...env, ...next }, opts.fetchImpl);
+            if (prepared.problem && !clean(prepared.env.AI_MODEL)) return json(400, { error: `Kaydedilmedi: ${prepared.problem}`, code: 'bad_request' }, cors);
+            const { chat, emb } = check(prepared.env);
             if (!chat.config) return json(400, { error: `Kaydedilmedi: ${chat.problem}`, code: 'bad_request' }, cors);
             if (emb.problem) return json(400, { error: `Kaydedilmedi: ${emb.problem}`, code: 'bad_request' }, cors);
         }

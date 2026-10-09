@@ -101,6 +101,7 @@ export const readAiConfig = (env: Env, opts: { isDev?: boolean } = {}): ConfigRe
     const apiKey = clean(env.AI_API_KEY);
     if (!apiKey) return { ...base, problem: 'AI_API_KEY tanımlı değil.' };
     if (!model) return { ...base, problem: 'AI_MODEL tanımlı değil.' };
+    if (model.toLowerCase() === 'auto') return { ...base, problem: 'Otomatik model seçimi (AI_MODEL=auto) yalnız Gemini sağlayıcısında var; model adını yazın.' };
 
     const baseUrl = (clean(env.AI_BASE_URL) || DEFAULT_BASE_URLS[provider])?.replace(/\/+$/, '');
     if (!baseUrl) return { ...base, problem: `${provider} sağlayıcısı için AI_BASE_URL tanımlanmalı.` };

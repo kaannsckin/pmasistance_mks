@@ -1,4 +1,5 @@
 import { Env } from './config.js';
+import { GeminiAuto, geminiKeyAlias, withGeminiDefaults } from './gemini.js';
 
 /**
  * Yönetici panelinden girilen AI bağlantı ayarları — YALNIZ SUNUCUDA.
@@ -165,20 +166,34 @@ export const saveSettings = async (store: SettingsStore, values: Partial<Record<
 };
 
 /**
- * İstekte kullanılacak ortam: panel ayarları ortam değişkenlerinin üzerine yazılır.
- * Depo yoksa ya da okunamazsa ortam değişkenleri olduğu gibi kullanılır.
+ * Ortamı istekte kullanılacak hâle getirir: GEMINI_API_KEY tek başınaysa
+ * sağlayıcı gemini olur; gemini'de eksik model / embedding modeli anahtarın
+ * model listesinden seçilir (bkz. gemini.ts).
  */
-export const effectiveEnv = async (env: Env, opts: { isDev?: boolean; fetchImpl?: typeof fetch } = {}): Promise<{ env: Env; source: 'panel' | 'env'; problem?: string }> => {
+export const prepareEnv = async (env: Env, fetchImpl?: typeof fetch): Promise<{ env: Env; auto: GeminiAuto; problem?: string }> =>
+    withGeminiDefaults(geminiKeyAlias(env), fetchImpl);
+
+/**
+ * İstekte kullanılacak ortam: panel ayarları ortam değişkenlerinin üzerine
+ * yazılır, sonra eksikler tamamlanır (prepareEnv). Depo yoksa ya da okunamazsa
+ * ortam değişkenleri kullanılır.
+ */
+export const effectiveEnv = async (env: Env, opts: { isDev?: boolean; fetchImpl?: typeof fetch } = {}): Promise<{ env: Env; source: 'panel' | 'env'; auto: GeminiAuto; problem?: string }> => {
     const { store } = resolveSettingsStore(env, opts);
-    if (!store) return { env, source: 'env' };
-    try {
-        const { values } = await loadSettings(store);
-        if (!Object.keys(values).length) return { env, source: 'env' };
-        return { env: { ...env, ...values }, source: 'panel' };
-    } catch (e) {
-        console.error('[ai] panel ayarları okunamadı; ortam değişkenleri kullanılıyor:', (e as Error).message);
-        return { env, source: 'env', problem: 'Panel ayarları okunamadı; ortam değişkenleri kullanılıyor.' };
+    let merged = env;
+    let source: 'panel' | 'env' = 'env';
+    let problem: string | undefined;
+    if (store) {
+        try {
+            const { values } = await loadSettings(store);
+            if (Object.keys(values).length) { merged = { ...env, ...values }; source = 'panel'; }
+        } catch (e) {
+            console.error('[ai] panel ayarları okunamadı; ortam değişkenleri kullanılıyor:', (e as Error).message);
+            problem = 'Panel ayarları okunamadı; ortam değişkenleri kullanılıyor.';
+        }
     }
+    const prepared = await prepareEnv(merged, opts.fetchImpl);
+    return { env: prepared.env, source, auto: prepared.auto, problem: problem || prepared.problem };
 };
 
 /** Gizli değerin kullanıcıya gösterilen izi: yalnız son 4 karakter */

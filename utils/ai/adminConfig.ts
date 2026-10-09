@@ -21,11 +21,15 @@ export interface AiAdminState {
     panel: AiSettingValues;
     /** Ortam değişkenlerindeki değerler (anahtarlar yalnız son 4 haneyle) */
     env: AiSettingValues;
-    effective: { configured: boolean; provider?: string; model?: string; baseUrl?: string; problem?: string; embeddingModel?: string; embeddingProblem?: string };
+    effective: {
+        configured: boolean; provider?: string; model?: string; baseUrl?: string; problem?: string; embeddingModel?: string; embeddingProblem?: string;
+        /** Gemini'de anahtarın model listesinden otomatik seçilenler */
+        auto?: { model?: string; embeddingModel?: string };
+    };
 }
 
 export interface AiTestPart { ok: boolean; latencyMs?: number; error?: string; status?: number; reply?: string; model?: string; dimensions?: number }
-export interface AiTestResult { chat: AiTestPart; embed: AiTestPart | null }
+export interface AiTestResult { chat: AiTestPart; embed: AiTestPart | null; auto?: { model?: string; embeddingModel?: string } }
 
 export class AiAdminError extends Error {
     constructor(message: string, readonly status: number, readonly code?: string) { super(message); }
@@ -37,7 +41,7 @@ export const saveAdminToken = (t: string | null): void => {
     try { if (t) sessionStorage.setItem(TOKEN_KEY, t); else sessionStorage.removeItem(TOKEN_KEY); } catch { /* depolama yok */ }
 };
 
-const call = async <T>(action: 'get' | 'save' | 'clear' | 'test', token: string, values?: AiSettingValues): Promise<T> => {
+const call = async <T>(action: 'get' | 'save' | 'clear' | 'test' | 'models', token: string, values?: AiSettingValues): Promise<T> => {
     let res: Response;
     try {
         res = await fetch('/api/ai/admin', {
@@ -57,6 +61,23 @@ export const getAiAdmin = (token: string) => call<AiAdminState>('get', token);
 export const saveAiAdmin = (token: string, values: AiSettingValues) => call<{ ok: true }>('save', token, values);
 export const clearAiAdmin = (token: string) => call<{ ok: true }>('clear', token);
 export const testAiAdmin = (token: string, values?: AiSettingValues) => call<AiTestResult>('test', token, values);
+/** Formdaki sağlayıcı ve anahtarla erişilebilen modeller (Gemini ve OpenAI uyumlu) */
+export const modelsAiAdmin = (token: string, values?: AiSettingValues) => call<{ models: string[]; recommended?: string; error?: string }>('models', token, values);
+
+export const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
+/** Google AI Studio'da anahtar alma sayfası */
+export const GEMINI_KEY_URL = 'https://aistudio.google.com/apikey';
+
+/**
+ * Gemini hızlı kurulumu: yalnız anahtar. Adres açıkça Gemini'ye, model ve
+ * embedding "auto" (anahtarın model listesinden en güncel kararlı olan)
+ * yazılır; böylece ortamda başka sağlayıcının ayarı olsa da karışmaz.
+ */
+export const geminiQuickValues = (apiKey: string): AiSettingValues => ({
+    AI_PROVIDER: 'gemini', AI_BASE_URL: GEMINI_BASE_URL, AI_MODEL: 'auto', AI_API_KEY: apiKey.trim(),
+    AI_TEMPERATURE: '', AI_MAX_OUTPUT_TOKENS: '', AI_REASONING_EFFORT: '', AI_EXTRA_BODY: '',
+    AI_EMBEDDING_PROVIDER: 'gemini', AI_EMBEDDING_BASE_URL: GEMINI_BASE_URL, AI_EMBEDDING_MODEL: 'auto', AI_EMBEDDING_API_KEY: apiKey.trim(),
+});
 
 /**
  * Formdan sunucuya gidecek taslak: gizli alan boş bırakıldıysa gönderilmez
@@ -75,7 +96,7 @@ export const draftValues = (form: AiSettingValues, removeSecrets: Partial<Record
 };
 
 export const PROVIDER_LABELS: Record<string, string> = {
-    openai: 'OpenAI uyumlu (OpenAI, vLLM, Ollama, kurum ağ geçidi)', azure: 'Azure OpenAI', anthropic: 'Anthropic', gemini: 'Google Gemini',
+    openai: 'OpenAI uyumlu (OpenAI, vLLM, Ollama, kurum ağ geçidi)', azure: 'Azure OpenAI', anthropic: 'Anthropic', gemini: 'Google Gemini (Google AI Studio anahtarı)',
 };
 export const DEFAULT_BASE_URLS: Record<string, string> = {
     openai: 'https://api.openai.com/v1', anthropic: 'https://api.anthropic.com', gemini: 'https://generativelanguage.googleapis.com/v1beta', azure: '',

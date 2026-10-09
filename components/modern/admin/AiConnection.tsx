@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
     AI_SECRET_KEYS, AiAdminError, AiAdminState, AiSettingKey, AiSettingValues, AiTestPart, AiTestResult, clearAiAdmin, DEFAULT_BASE_URLS, draftValues,
-    getAiAdmin, loadAdminToken, PROVIDER_LABELS, saveAdminToken, saveAiAdmin, testAiAdmin,
+    GEMINI_KEY_URL, geminiQuickValues, getAiAdmin, loadAdminToken, modelsAiAdmin, PROVIDER_LABELS, saveAdminToken, saveAiAdmin, testAiAdmin,
 } from '../../../utils/ai/adminConfig';
 import { Icon } from '../icons';
 import { Field } from '../ui';
@@ -52,6 +52,9 @@ const AiConnection: React.FC<Props> = ({ onChanged }) => {
     const [busy, setBusy] = useState<'test' | 'save' | 'clear' | null>(null);
     const [test, setTest] = useState<AiTestResult | null>(null);
     const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+    const [quickKey, setQuickKey] = useState('');
+    const [quick, setQuick] = useState<{ running: boolean; ok?: boolean; text?: string }>({ running: false });
+    const [models, setModels] = useState<{ list: string[]; recommended?: string; loading: boolean; error?: string }>({ list: [], loading: false });
 
     const fetchState = useCallback(async (t: string) => {
         setLoad({ kind: 'loading' });
@@ -78,6 +81,42 @@ const AiConnection: React.FC<Props> = ({ onChanged }) => {
         if (await fetchState(t)) { saveAdminToken(t); setToken(t); setTokenInput(''); }
     };
     const set = (k: AiSettingKey, v: string) => { setForm(f => ({ ...f, [k]: v })); setTest(null); setMessage(null); };
+
+    /** Gemini hızlı kurulumu: yalnız anahtar → test → (depo varsa) kayıt */
+    const quickSetup = async () => {
+        if (load.kind !== 'ready' || !quickKey.trim()) return;
+        const values = geminiQuickValues(quickKey);
+        setQuick({ running: true });
+        setTest(null);
+        setMessage(null);
+        try {
+            const t = await testAiAdmin(token, values);
+            setTest(t);
+            if (!t.chat.ok) { setQuick({ running: false, ok: false, text: 'Gemini bağlantısı kurulamadı; aşağıdaki nedeni giderip yeniden deneyin.' }); return; }
+            const what = `sohbet ${t.chat.model}${t.embed?.ok ? `, anlamsal arama ${t.embed.model}` : ''}`;
+            if (!load.state.store.available) {
+                setQuick({ running: false, ok: true, text: `Anahtar çalışıyor (${what}). Panelden kaydetmek için sunucuda kalıcı depo gerekli; ya da sunucuya yalnız GEMINI_API_KEY ortam değişkenini ekleyin.` });
+                return;
+            }
+            await saveAiAdmin(token, values);
+            onChanged(`AI bağlantısı: Google Gemini hızlı kurulumu (${what})`);
+            setQuickKey('');
+            await fetchState(token);
+            setQuick({ running: false, ok: true, text: `Gemini hazır: ${what}. Asistan kullanıma hazır.` });
+        } catch (e) {
+            setQuick({ running: false, ok: false, text: (e as Error).message });
+        }
+    };
+
+    const loadModels = async () => {
+        setModels(m => ({ ...m, loading: true, error: undefined }));
+        try {
+            const r = await modelsAiAdmin(token, draftValues(form, remove));
+            setModels({ list: r.models, recommended: r.recommended, loading: false, error: r.error || (r.models.length ? undefined : 'Liste boş döndü.') });
+        } catch (e) {
+            setModels(m => ({ ...m, loading: false, error: (e as Error).message }));
+        }
+    };
 
     const run = async (kind: 'test' | 'save' | 'clear') => {
         if (load.kind !== 'ready') return;
@@ -109,6 +148,7 @@ const AiConnection: React.FC<Props> = ({ onChanged }) => {
             <div className="flex flex-col gap-2 text-[14px]">
                 <p className={`m-0 ${load.kind === 'error' ? 'm-ink-bad' : 'm-text-2'}`}>{load.error}</p>
                 {load.kind === 'disabled' && <p className="m-0 m-text-3">Sunucuya AI_ADMIN_TOKEN (yönetici anahtarı) ve kalıcı depo (SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY ile AI_CONFIG_SECRET) eklenince bağlantı buradan ayarlanır ve test edilir. Ayrıntı: docs/AI_KURULUM.md.</p>}
+                {load.kind === 'disabled' && <p className="m-0 m-text-2">En kısa yol (test): Google AI Studio'dan (<a className="m-accent" href={GEMINI_KEY_URL} target="_blank" rel="noopener noreferrer">aistudio.google.com/apikey</a>) aldığınız anahtarı sunucuya yalnız <code>GEMINI_API_KEY</code> ortam değişkeni olarak ekleyin; sağlayıcı, model ve anlamsal arama otomatik seçilir. Yayında erişim koruması (AI_ACCESS_TOKEN ya da Supabase) yine gerekir.</p>}
                 <button type="button" className="m-btn m-btn-plain self-start !px-0" onClick={() => fetchState(token)}><Icon name="refresh" size={16} />Yeniden dene</button>
             </div>
         );
@@ -156,6 +196,25 @@ const AiConnection: React.FC<Props> = ({ onChanged }) => {
             {s.effective.problem && <p className="m-0 text-[13px] m-ink-warn">{s.effective.problem}</p>}
             {!s.store.available && <p className="m-0 text-[13px] m-ink-warn">Kaydetme kapalı: {s.store.problem} Test yine çalışır.</p>}
 
+            <details open={!s.effective.configured} className="rounded-xl p-3.5" style={{ background: 'var(--m-accent-tint)' }}>
+                <summary className="cursor-pointer text-[15px] font-semibold m-text min-h-[30px] flex items-center gap-2"><Icon name="sparkles" size={18} />Hızlı kurulum: Google Gemini API (yalnız anahtar)</summary>
+                <div className="flex flex-col gap-2.5 mt-2">
+                    <ol className="m-0 pl-5 list-decimal text-[14px] m-text-2 flex flex-col gap-0.5">
+                        <li>Google hesabınızla Google AI Studio'yu açın: <a className="m-accent" href={GEMINI_KEY_URL} target="_blank" rel="noopener noreferrer">aistudio.google.com/apikey</a></li>
+                        <li>"Create API key" ile bir anahtar oluşturup kopyalayın.</li>
+                        <li>Anahtarı buraya yapıştırıp "Gemini ile kur" deyin: model ve anlamsal arama anahtarın erişebildiği en güncel kararlı modellerden seçilir, bağlantı test edilip kaydedilir.</li>
+                    </ol>
+                    <div className="flex flex-wrap items-end gap-2">
+                        <Field label="Gemini API anahtarı" htmlFor="ai-gemini-key">
+                            <input id="ai-gemini-key" type="password" autoComplete="off" className="m-input !w-[300px] max-w-full" placeholder="AIza…" value={quickKey} onChange={e => setQuickKey(e.target.value)} />
+                        </Field>
+                        <button type="button" className="m-btn m-btn-primary" disabled={!quickKey.trim() || quick.running || !!busy} onClick={quickSetup}><Icon name="sparkles" size={18} />{quick.running ? 'Kuruluyor…' : 'Gemini ile kur'}</button>
+                    </div>
+                    {quick.text && <p role={quick.ok ? 'status' : 'alert'} className={`m-0 text-[14px] ${quick.ok ? 'm-ink-ok' : 'm-ink-bad'}`}>{quick.text}</p>}
+                    <p className="m-0 text-[12.5px] m-text-3">Ücretsiz katman denemek içindir: dakikalık istek sınırı düşüktür (asistan bir soruda birkaç istek atar) ve Google'ın koşullarına göre ücretsiz katmanda gönderilen içerik Google ürünlerini geliştirmek için kullanılabilir. Kurum verisiyle kalıcı kullanımda faturalı katmanı ve KVKK değerlendirmesini tercih edin.</p>
+                </div>
+            </details>
+
             <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(260px, 100%), 1fr))' }}>
                 <Field label="Sağlayıcı" htmlFor="ai-provider" hint={envHint('AI_PROVIDER', 'openai')}>
                     <select id="ai-provider" className="m-input" value={form.AI_PROVIDER || ''} onChange={e => set('AI_PROVIDER', e.target.value)}>
@@ -166,8 +225,16 @@ const AiConnection: React.FC<Props> = ({ onChanged }) => {
                 <Field label="Adres (base URL)" htmlFor="ai-base" hint={envHint('AI_BASE_URL', DEFAULT_BASE_URLS[provider] || undefined)}>
                     <input id="ai-base" className="m-input" inputMode="url" placeholder={s.env.AI_BASE_URL || DEFAULT_BASE_URLS[provider] || 'https://KAYNAK.openai.azure.com/openai/v1'} value={form.AI_BASE_URL || ''} onChange={e => set('AI_BASE_URL', e.target.value)} />
                 </Field>
-                <Field label="Model" htmlFor="ai-model" hint={envHint('AI_MODEL')}>
-                    <input id="ai-model" className="m-input" placeholder={s.env.AI_MODEL || 'Model adı'} value={form.AI_MODEL || ''} onChange={e => set('AI_MODEL', e.target.value)} />
+                <Field label="Model" htmlFor="ai-model" hint={provider === 'gemini' ? `Boş ya da "auto": anahtarın erişebildiği en güncel kararlı Flash modeli${s.effective.auto?.model ? ` (şu an ${s.effective.auto.model})` : ''}` : envHint('AI_MODEL')}>
+                    <div className="flex flex-col gap-1.5">
+                        <div className="flex gap-1.5">
+                            <input id="ai-model" className="m-input flex-1 min-w-0" list="ai-model-list" placeholder={provider === 'gemini' ? 'auto' : s.env.AI_MODEL || 'Model adı'} value={form.AI_MODEL || ''} onChange={e => set('AI_MODEL', e.target.value)} />
+                            {(provider === 'gemini' || provider === 'openai') && <button type="button" className="m-btn m-btn-plain !px-2 shrink-0" disabled={models.loading} onClick={loadModels}>{models.loading ? '…' : 'Listele'}</button>}
+                        </div>
+                        <datalist id="ai-model-list">{models.list.map(m => <option key={m} value={m}>{m === models.recommended ? 'önerilen' : undefined}</option>)}</datalist>
+                        {models.list.length > 0 && <span className="text-[12.5px] m-text-3">{models.list.length} model bulundu{models.recommended ? ` · önerilen ${models.recommended}` : ''}; alana yazarken listeden seçin.</span>}
+                        {models.error && <span className="text-[12.5px] m-ink-bad">{models.error}</span>}
+                    </div>
                 </Field>
                 {secretField('AI_API_KEY', 'ai-key', 'API anahtarı')}
             </div>
@@ -190,7 +257,7 @@ const AiConnection: React.FC<Props> = ({ onChanged }) => {
                     <Field label="Ek istek alanları (JSON)" htmlFor="ai-extra" hint='Ağ geçidine özgü, ör. {"chat_template_kwargs":{"enable_thinking":false}}'>
                         <input id="ai-extra" className="m-input font-mono text-[13px]" placeholder={s.env.AI_EXTRA_BODY || '{}'} value={form.AI_EXTRA_BODY || ''} onChange={e => set('AI_EXTRA_BODY', e.target.value)} />
                     </Field>
-                    <Field label="Embedding modeli" htmlFor="ai-emb-model" hint={envHint('AI_EMBEDDING_MODEL', 'yok: anahtar kelime araması')}>
+                    <Field label="Embedding modeli" htmlFor="ai-emb-model" hint={provider === 'gemini' ? `Boş ya da "auto": Gemini embedding modeli${s.effective.auto?.embeddingModel ? ` (şu an ${s.effective.auto.embeddingModel})` : ''}; "none" kapatır` : envHint('AI_EMBEDDING_MODEL', 'yok: anahtar kelime araması')}>
                         <input id="ai-emb-model" className="m-input" placeholder={s.env.AI_EMBEDDING_MODEL || 'ör. text-embedding-3-small'} value={form.AI_EMBEDDING_MODEL || ''} onChange={e => set('AI_EMBEDDING_MODEL', e.target.value)} />
                     </Field>
                     <Field label="Embedding sağlayıcısı" htmlFor="ai-emb-provider" hint="Boşsa sohbetle aynı sağlayıcı">
@@ -215,8 +282,8 @@ const AiConnection: React.FC<Props> = ({ onChanged }) => {
 
             {test && (
                 <div className="flex flex-col gap-1" aria-live="polite">
-                    <TestLine label="Sohbet" part={test.chat} ok={`yanıt ${sec(test.chat.latencyMs)} içinde geldi · ${test.chat.model}${test.chat.reply ? ` · "${test.chat.reply}"` : ''}`} />
-                    {test.embed && <TestLine label="Anlamsal arama" part={test.embed} ok={`${test.embed.dimensions} boyutlu vektör, ${sec(test.embed.latencyMs)} · ${test.embed.model}`} />}
+                    <TestLine label="Sohbet" part={test.chat} ok={`yanıt ${sec(test.chat.latencyMs)} içinde geldi · ${test.chat.model}${test.auto?.model ? ' (otomatik seçildi)' : ''}${test.chat.reply ? ` · "${test.chat.reply}"` : ''}`} />
+                    {test.embed && <TestLine label="Anlamsal arama" part={test.embed} ok={`${test.embed.dimensions} boyutlu vektör, ${sec(test.embed.latencyMs)} · ${test.embed.model}${test.auto?.embeddingModel ? ' (otomatik seçildi)' : ''}`} />}
                 </div>
             )}
             {message && <p role={message.ok ? 'status' : 'alert'} className={`m-0 text-[14px] ${message.ok ? 'm-ink-ok' : 'm-ink-bad'}`}>{message.text}</p>}

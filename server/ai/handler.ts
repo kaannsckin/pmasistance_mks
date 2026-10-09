@@ -225,7 +225,8 @@ export const handleAiRequest = async (request: Request, rawEnv: Env, opts: Handl
             configSource: eff.source,
             ...(cfg.provider ? { provider: cfg.provider } : {}),
             ...(cfg.model ? { model: cfg.model } : {}),
-            ...(cfg.problem ? { problem: cfg.problem } : {}),
+            // Gemini model listesi alınamadıysa asıl neden odur ("AI_MODEL tanımlı değil" değil)
+            ...(cfg.problem ? { problem: eff.problem && !cfg.config ? eff.problem : cfg.problem } : {}),
         };
         const emb = readEmbeddingConfig(env);
         if (emb.config) status.embeddingModel = emb.config.model;

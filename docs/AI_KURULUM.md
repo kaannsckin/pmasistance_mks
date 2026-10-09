@@ -118,6 +118,16 @@ Yönetici konsolu › Yapay zekâ › **AI bağlantısı** kartında sağlayıc�
 - **Panelden değişmeyenler:** Erişim koruması (`AI_AUTH_MODE`, `AI_ACCESS_TOKEN`), hız sınırları, izinli kökenler, zaman aşımı ve sertifikalar yalnız ortam değişkenidir.
 - **Geri dönüş:** "Ortam değişkenlerine dön" panel ayarlarını siler. Ayar değişikliği denetim günlüğüne (anahtar olmadan) yazılır. Sunucusuz örnekler ayarları 30 sn önbellekte tutar; değişiklik en geç bu sürede tüm örneklere yayılır.
 
+### Hızlı başlangıç: Google Gemini API (yalnız anahtar, test için)
+
+Google AI Studio'nun "Get started" adımlarıyla alınan anahtar tek başına yeterlidir:
+
+1. Google hesabıyla [Google AI Studio](https://aistudio.google.com/apikey)'yu açın, **Create API key** ile anahtar oluşturup kopyalayın.
+2. **Panelden:** Yönetici konsolu › Yapay zekâ › AI bağlantısı › **Hızlı kurulum: Google Gemini API** kutusuna yapıştırıp **Gemini ile kur** deyin. Bağlantı test edilir ve kaydedilir.
+   **Ya da ortam değişkeniyle:** yalnız `GEMINI_API_KEY=<anahtar>` tanımlayın (Google SDK'larının kullandığı ad). Başka AI anahtarı yoksa sağlayıcı `gemini` olur. Yayında erişim koruması (`AI_ACCESS_TOKEN` ya da Supabase) yine gerekir.
+3. **Model seçimi otomatik:** Model verilmemişse (ya da `auto` ise) sunucu anahtarla Gemini'nin model listesini (`GET https://generativelanguage.googleapis.com/v1beta/models`, `x-goog-api-key` başlığı) alır. Sohbet için en yüksek sürümlü kararlı **Flash** modelini seçer (önizleme, lite, görüntü ve ses modelleri hariç). Anlamsal arama için Gemini embedding modelini 768 boyutla seçer. Liste 1 saat önbellekte tutulur; Google yeni model yayımladığında ya da eskisini kaldırdığında seçim kendiliğinden güncellenir. Belirli bir modeli sabitlemek için `AI_MODEL` yazın ya da paneldeki **Listele** ile seçin. Anlamsal aramayı kapatmak için `AI_EMBEDDING_MODEL=none` verin.
+4. **Sınırlar:** Ücretsiz katman denemek içindir. Dakikalık istek sınırı düşüktür; asistan araç kullanan bir soruda 2–4 istek atar, sınır aşılırsa "kota/hız sınırı" uyarısı çıkar. Google'ın koşullarına göre ücretsiz katmanda gönderilen içerik Google ürünlerini geliştirmek için kullanılabilir. Kurum verisiyle kalıcı kullanımda faturalı katmanı ve KVKK değerlendirmesini tercih edin. Gemini API her ülkede sunulmaz; bölge desteklenmiyorsa hata mesajı bunu söyler.
+
 ## 2. Sağlayıcı örnekleri
 
 ```bash
@@ -134,9 +144,9 @@ AI_MODEL=<dağıtım-adı>
 AI_PROVIDER=anthropic
 AI_MODEL=<model-adı>
 
-# Google Gemini
-AI_PROVIDER=gemini
-AI_MODEL=<model-adı>
+# Google Gemini (Google AI Studio anahtarıyla; model ve embedding otomatik — aşağıya bakın)
+GEMINI_API_KEY=<AIza…>
+# ya da açıkça: AI_PROVIDER=gemini, AI_API_KEY=<anahtar>, AI_MODEL=<model-adı | auto>
 
 # TÜBİTAK BİLGEM AI API (OpenAI-uyumlu)
 AI_PROVIDER=openai
