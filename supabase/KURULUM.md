@@ -20,17 +20,24 @@ fazlasıyla yeterli).
 2. Bu klasördeki [`schema.sql`](./schema.sql) dosyasının **tamamını** yapıştırıp
    **Run** deyin. "Success" görmelisiniz.
 
-Bu şema üç tablo kurar ve **Row Level Security** politikalarını açar:
+Bu şema dört tablo kurar ve **Row Level Security** politikalarını açar:
 
 | Tablo | İçerik | Kim erişir |
 |---|---|---|
-| `workspaces` | Projeler, veri havuzu, tahsisler, kilitler, snapshot'lar | Tüm üyeler |
+| `workspaces` | Veri havuzu, tahsisler, kilitler, snapshot'lar, proje sırası | Tüm üyeler |
+| `workspace_projects` | Her proje ayrı satır (görevler, kayıt geçmişi, sürüm planları) | Tüm üyeler |
 | `workspace_private` | **Notlar ve müşteri istekleri** | Yalnızca PY, Bölüm Sorumlusu, PYB Destek — **Müdür ve PYB Sorumlusu sunucu düzeyinde okuyamaz** |
 | `workspace_members` | Üyelik + rol | Üyeler görür; PYB Destek/Müdür yönetir |
 
 > Not: "Yönetici notları göremez" kuralı artık yalnızca arayüz gizlemesi
 > değil — veritabanı politikası. Yönetici rolündeki bir kullanıcı API ile
 > uğraşsa bile `workspace_private` verisini çekemez.
+
+> **Önceki kurulumu yükseltme:** `schema.sql` tekrar çalıştırılabilir. Daha önce
+> kurduysanız aynı dosyayı yeniden çalıştırın; yeni `workspace_projects` tablosu
+> eklenir, mevcut veri korunur. Uygulama ilk gönderimde projeleri bu tabloya
+> taşır. Taşımadan sonra uygulamanın eski sürümleri projeleri göremez; tüm
+> kullanıcıların güncel sürümü (sayfayı yenileyerek) kullandığından emin olun.
 
 ## 3. E-posta doğrulamasını kolaylaştırın (opsiyonel ama önerilir)
 
@@ -72,7 +79,7 @@ Bilgisayarınızda (Node 18+ kuruluysa) tek komutla tüm kurulumu test edin:
 node supabase/dogrula.mjs https://PROJENIZ.supabase.co ANON_ANAHTARINIZ
 ```
 
-Betik; bağlantıyı, anahtarı, üç tablonun kurulu olup olmadığını ve auth
+Betik; bağlantıyı, anahtarı, dört tablonun kurulu olup olmadığını ve auth
 ayarlarını kontrol edip Türkçe rapor verir. `--e2e` bayrağıyla çalıştırırsanız
 geçici bir test kullanıcısıyla uçtan uca senaryo da doğrulanır (çalışma alanı
 oluşturma, üyelik tetikleyicisi ve **Müdür rolünün notları okuyamadığının RLS
@@ -81,15 +88,20 @@ kanıtı**); test verisi otomatik temizlenir.
 ## 6. Günlük kullanım
 
 - **Otomatik senkron** açıkken her değişiklik birkaç saniye içinde buluta gider.
+  Yalnız değişen proje gönderilir; binlerce kayıtlık geçmişi olan bir proje
+  her seferinde yeniden gitmez.
 - Uygulama **çevrimdışı da çalışır** (yerel-öncelikli); bağlantı gelince
-  "Şimdi Gönder / Buluttan Çek" ile eşitlersiniz.
-- Çakışma olursa (iki kişi aynı anda yazdıysa) uygulama sizi uyarır ve
-  buluttaki güncel veriyi çekmenizi ister — kimsenin verisi sessizce ezilmez.
+  "Şimdi Gönder / Buluttan Çek" ile eşitlersiniz. Yerel veri tarayıcının
+  IndexedDB deposunda tutulur (localStorage'ın ~5 MB sınırı yoktur).
+- Çakışma olursa (iki kişi aynı projeye ya da ortak veriye aynı anda yazdıysa)
+  uygulama sizi uyarır ve buluttaki güncel veriyi çekmenizi ister — kimsenin
+  verisi sessizce ezilmez. Farklı projelerde çalışan kişiler çakışmaz.
 
-## Bilinen sınırlar (v1)
+## Bilinen sınırlar (v2)
 
-- Senkronizasyon belge bazlıdır: aynı anda iki kişinin yazması çakışma
-  uyarısı üretir (alan bazlı birleştirme normalize şema fazında gelecek).
+- Senkronizasyon proje bazlıdır: aynı projeye ya da ortak veriye (havuz,
+  tahsis…) aynı anda iki kişinin yazması çakışma uyarısı üretir; alan bazlı
+  birleştirme yoktur.
 - Rollerin **yazma** kısıtları istemcide uygulanır; sunucu tarafında kesin
   olan kısıtlar: üyelik zorunluluğu, `workspace_private` görünürlüğü ve üye
   yönetimi yetkisi.

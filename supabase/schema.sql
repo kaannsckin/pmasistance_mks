@@ -1,16 +1,23 @@
 -- ===========================================================================
--- PlanAsistan — Supabase şeması (v1: belge senkronizasyonu + RLS)
+-- PlanAsistan — Supabase şeması (v2: proje satırları + RLS)
 -- Supabase Dashboard → SQL Editor'de bu dosyanın tamamını çalıştırın.
+-- Dosya tekrar çalıştırılabilir; v1 kurulumunu yükseltmek için de aynısını
+-- çalıştırın (mevcut veri korunur, uygulama ilk gönderimde taşır).
 --
 -- Model:
---   workspaces         : paylaşılan çekirdek veri (projeler*, havuz, tahsis,
---                        kilitler, snapshot'lar) — tek JSONB belge + sürüm no
+--   workspaces         : paylaşılan çekirdek veri (havuz, tahsis, kilitler,
+--                        snapshot'lar, proje sırası) — tek JSONB belge + sürüm no
+--   workspace_projects : her proje ayrı satır, kendi sürüm numarasıyla
+--                        (yalnız değişen proje yazılır; farklı projelerde
+--                        çalışan kişiler çakışmaz)
 --   workspace_private  : PM'e özel veri (notlar, müşteri istekleri) — yönetici
 --                        rolleri (mudur, pyb_sorumlu) RLS ile HİÇ OKUYAMAZ
 --   workspace_members  : üyelik + rol (RBAC'ın sunucu tarafı kaynağı)
 --
---   * çekirdek belgedeki projelerde notes/customerRequests alanları boştur;
---     bunlar workspace_private içinde taşınır (istemci birleştirir).
+--   * proje satırlarında notes/customerRequests alanları boştur; bunlar
+--     workspace_private içinde taşınır (istemci birleştirir).
+--   * v1'de projeler workspaces.core içindeydi; uygulama bunu okur ve ilk
+--     gönderimde satırlara taşır.
 -- ===========================================================================
 
 create table if not exists public.workspaces (
@@ -27,6 +34,15 @@ create table if not exists public.workspace_private (
     data jsonb not null default '{}'::jsonb,
     version bigint not null default 0,
     updated_at timestamptz not null default now()
+);
+
+create table if not exists public.workspace_projects (
+    workspace_id uuid not null references public.workspaces(id) on delete cascade,
+    project_id text not null,
+    data jsonb not null,
+    version bigint not null default 1,
+    updated_at timestamptz not null default now(),
+    primary key (workspace_id, project_id)
 );
 
 create table if not exists public.workspace_members (
@@ -82,6 +98,7 @@ create trigger on_workspace_created
 alter table public.workspaces enable row level security;
 alter table public.workspace_private enable row level security;
 alter table public.workspace_members enable row level security;
+alter table public.workspace_projects enable row level security;
 
 -- workspaces: üyeler okur; tüm üyeler yazar (onay/kilit yazımı yönetici
 -- rollerinden de gelir; alan bazlı yazma kısıtı normalize şema fazında)
@@ -100,6 +117,23 @@ create policy "workspaces_update_members" on public.workspaces
 drop policy if exists "workspaces_delete_owner" on public.workspaces;
 create policy "workspaces_delete_owner" on public.workspaces
     for delete using (created_by = auth.uid());
+
+-- workspace_projects: çekirdek belgeyle aynı kural (üyeler okur ve yazar)
+drop policy if exists "projects_select_members" on public.workspace_projects;
+create policy "projects_select_members" on public.workspace_projects
+    for select using (public.member_role(workspace_id) is not null);
+
+drop policy if exists "projects_insert_members" on public.workspace_projects;
+create policy "projects_insert_members" on public.workspace_projects
+    for insert with check (public.member_role(workspace_id) is not null);
+
+drop policy if exists "projects_update_members" on public.workspace_projects;
+create policy "projects_update_members" on public.workspace_projects
+    for update using (public.member_role(workspace_id) is not null);
+
+drop policy if exists "projects_delete_members" on public.workspace_projects;
+create policy "projects_delete_members" on public.workspace_projects
+    for delete using (public.member_role(workspace_id) is not null);
 
 -- workspace_private: YÖNETİCİ ROLLERİ (mudur, pyb_sorumlu) OKUYAMAZ/YAZAMAZ.
 -- "Üst yönetim, notlar gibi PM ekranlarını görmemeli" kuralının sunucu tarafı.
@@ -149,4 +183,8 @@ create trigger workspaces_touch before update on public.workspaces
 
 drop trigger if exists private_touch on public.workspace_private;
 create trigger private_touch before update on public.workspace_private
+    for each row execute function public.touch_updated_at();
+
+drop trigger if exists projects_touch on public.workspace_projects;
+create trigger projects_touch before update on public.workspace_projects
     for each row execute function public.touch_updated_at();

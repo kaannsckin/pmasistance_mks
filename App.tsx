@@ -8,6 +8,7 @@ import {
   createEmptyWorkspace,
   createProject,
   parseImportedJson,
+  normalizeWorkspace,
   resolveWorkspaceFromStorage,
   serializeWorkspace,
 } from './utils/workspace';
@@ -26,6 +27,7 @@ import { AllocationSuggestion, ApplyMode, applyAllocationSuggestions } from './u
 import { applyBilledHoursActuals, planBilledHoursPoolAdditions, suggestBilledHoursActuals, BilledApplyMode, BilledHoursOptions, BilledHoursRecord } from './utils/billedHours';
 import { buildTodoItems, TodoItem } from './utils/todoItems';
 import { loadCloudConfig, scheduleAutoPush } from './utils/cloudSync';
+import { joinStored, openIndexedDbStore, requestPersistentStorage, WorkspacePersister } from './utils/workspaceStore';
 import CloudSyncModal from './components/CloudSyncModal';
 import Header from './components/Header';
 import TaskGallery from './components/TaskGallery';
@@ -171,22 +173,52 @@ const App: React.FC = () => {
 
   const [isInitialized, setIsInitialized] = useState(false);
 
-  // ---- Açılış: v2 workspace → v1 migration → örnek proje sırasıyla çözülür ----
+  // ---- Açılış: IndexedDB → (taşıma) localStorage v2 → v1 migration → örnek proje ----
+  // Kalıcı depo IndexedDB (parçalı, kota sorunu yok); yoksa localStorage
+  const persister = useRef<WorkspacePersister | null>(null);
   useEffect(() => {
-    const { workspace: resolved } = resolveWorkspaceFromStorage(
-      localStorage.getItem(WORKSPACE_STORAGE_KEY),
-      localStorage.getItem(LEGACY_STORAGE_KEY)
-    );
-    if (resolved) {
-      // Ayın ilk açılışında otomatik baseline (plan kayması trendi için) ve
-      // haftalık sağlık fotoğrafı (sağlık modelinin eğitim verisi)
-      const withBaseline = ensureMonthlySnapshot(resolved) || resolved;
-      setWorkspace(ensureWeeklyHealthSnapshot(withBaseline) || withBaseline);
-    } else {
-      const sample = createSampleProject();
-      setWorkspace({ ...createEmptyWorkspace(), projects: [sample], activeProjectId: sample.id });
-    }
-    setIsInitialized(true);
+    let cancelled = false;
+    (async () => {
+      const kv = await openIndexedDbStore();
+      let stored: ReturnType<typeof joinStored> = null;
+      if (kv) {
+        try { stored = joinStored(await kv.readAll()); } catch (e) { console.error('Tarayıcı deposu okunamadı', e); }
+      }
+      if (cancelled) return;
+      // IndexedDB'de veri varsa o esastır; yarıda kalmış taşımadan kalan localStorage kopyası silinir
+      if (stored) { try { localStorage.removeItem(WORKSPACE_STORAGE_KEY); localStorage.removeItem(LEGACY_STORAGE_KEY); } catch { /* yok */ } }
+      const fromLocal = stored ? null : resolveWorkspaceFromStorage(
+        localStorage.getItem(WORKSPACE_STORAGE_KEY),
+        localStorage.getItem(LEGACY_STORAGE_KEY)
+      ).workspace;
+      const resolved = stored ? normalizeWorkspace(stored.workspace) : fromLocal;
+      let initial: WorkspaceData;
+      if (resolved) {
+        // Ayın ilk açılışında otomatik baseline (plan kayması trendi için) ve
+        // haftalık sağlık fotoğrafı (sağlık modelinin eğitim verisi)
+        const withBaseline = ensureMonthlySnapshot(resolved) || resolved;
+        initial = ensureWeeklyHealthSnapshot(withBaseline) || withBaseline;
+      } else {
+        const sample = createSampleProject();
+        initial = { ...createEmptyWorkspace(), projects: [sample], activeProjectId: sample.id };
+      }
+      if (kv) {
+        // localStorage'daki veri ilk başarılı yazımdan sonra silinir (kotayı boşaltır, eski kopya kalmaz)
+        let migrate = !stored;
+        // Taban: depodaki hâlin normalize edilmiş biçimi (proje nesneleri aynı kalır; açılışta yeniden yazılmaz)
+        persister.current = new WorkspacePersister(kv, stored ? resolved : null, ok => {
+          setStorageFull(!ok);
+          if (ok) {
+            setStorageWarnClosed(false);
+            if (migrate) { migrate = false; try { localStorage.removeItem(WORKSPACE_STORAGE_KEY); localStorage.removeItem(LEGACY_STORAGE_KEY); } catch { /* yok */ } }
+          }
+        }, stored?.orphans);
+        requestPersistentStorage();
+      }
+      setWorkspace(initial);
+      setIsInitialized(true);
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   const settings = workspace?.settings;
@@ -288,14 +320,19 @@ const App: React.FC = () => {
     const toPersist = workspace.settings.isLocalPersistenceEnabled !== false
       ? workspace
       : { ...workspace, projects: [], activeProjectId: null };
-    // Kota aşılırsa (ör. büyük Jira geçmişi) uygulama çökmesin; kullanıcı uyarılır
-    try {
-      localStorage.setItem(WORKSPACE_STORAGE_KEY, serializeWorkspace(toPersist, false));
-      setStorageFull(false);
-      setStorageWarnClosed(false);
-    } catch (e) {
-      console.error('Çalışma alanı tarayıcıya kaydedilemedi', e);
-      setStorageFull(true);
+    if (persister.current) {
+      // Yalnız değişen projeler ve meta yazılır; hata (kota) sonucu geri bildirimle gelir
+      persister.current.save(toPersist);
+    } else {
+      // IndexedDB yok: localStorage. Kota aşılırsa uygulama çökmesin; kullanıcı uyarılır
+      try {
+        localStorage.setItem(WORKSPACE_STORAGE_KEY, serializeWorkspace(toPersist, false));
+        setStorageFull(false);
+        setStorageWarnClosed(false);
+      } catch (e) {
+        console.error('Çalışma alanı tarayıcıya kaydedilemedi', e);
+        setStorageFull(true);
+      }
     }
     // Bulut bağlıysa değişiklikleri gecikmeli gönder (yerel-öncelikli senkron)
     scheduleAutoPush(workspace);
@@ -694,7 +731,8 @@ const App: React.FC = () => {
     reader.readAsText(file);
   }, [updateWorkspace]);
 
-  const handleResetData = useCallback(() => {
+  const handleResetData = useCallback(async () => {
+    try { await persister.current?.clear(); } catch (e) { console.error('Tarayıcı deposu temizlenemedi', e); }
     localStorage.removeItem(WORKSPACE_STORAGE_KEY);
     localStorage.removeItem(LEGACY_STORAGE_KEY);
     window.location.reload();

@@ -94,7 +94,7 @@ const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ workspace, onReplaceWor
     if (!id) return;
     const cfg = loadCloudConfig();
     if (!cfg) { note('err', 'Önce bağlantı ayarlarını kaydedin.'); return; }
-    saveCloudConfig({ ...cfg, workspaceId: id, coreVersion: 0, privateVersion: 0, autoSync });
+    saveCloudConfig({ ...cfg, workspaceId: id, coreVersion: 0, privateVersion: 0, projectVersions: {}, projectHashes: {}, coreHash: undefined, privateHash: undefined, autoSync });
     setBusy(true);
     const result = await pullWorkspace();
     setBusy(false);
