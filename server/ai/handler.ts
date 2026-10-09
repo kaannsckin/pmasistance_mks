@@ -6,6 +6,9 @@ import { buildUpstreamRequest, extractUpstreamError, parseUpstreamEvents, Upstre
 import { createRateLimiter, RateLimiter } from './rateLimit.js';
 import { parseSSE } from './sse.js';
 import { describeNetworkError, networkErrorCode, upstreamFetch } from './tls.js';
+import { handleAiAdmin } from './admin.js';
+import { upstreamErrorMessage } from './errors.js';
+import { effectiveEnv } from './settingsStore.js';
 
 /**
  * AI proxy — çatıdan bağımsız (Web Request → Response). Vercel fonksiyonu
@@ -24,7 +27,7 @@ export interface HandlerOptions {
     isDev?: boolean;
     fetchImpl?: typeof fetch;
     rateLimiter?: RateLimiter;
-    route?: 'health' | 'chat' | 'embed';
+    route?: 'health' | 'chat' | 'embed' | 'admin';
 }
 
 const limiters = new Map<number, RateLimiter>();
@@ -188,18 +191,6 @@ export const validateChatBody = (raw: unknown): { body?: ChatRequestBody; error?
     };
 };
 
-const upstreamErrorMessage = (status: number, detail: string): string => {
-    const suffix = detail ? ` (${detail})` : '';
-    if (status === 401 || status === 403) return `AI sağlayıcısı anahtarı reddetti; sunucudaki AI_API_KEY'i kontrol edin${suffix}.`;
-    if (status === 404) return `Model ya da uç nokta bulunamadı; AI_MODEL / AI_BASE_URL'i kontrol edin${suffix}.`;
-    if (status === 429) return `AI sağlayıcısı kota/hız sınırına ulaştı; biraz sonra tekrar deneyin${suffix}.`;
-    if (status >= 500) return `AI sağlayıcısında geçici bir hata oluştu${suffix}.`;
-    if (/tool|function/i.test(detail)) {
-        return `AI sağlayıcısı araç çağrısını (tool calling) reddetti; model ya da sunucu desteklemiyor olabilir (vLLM'de --enable-auto-tool-choice ve --tool-call-parser gerekir)${suffix}.`;
-    }
-    return `AI sağlayıcısı isteği reddetti${suffix}.`;
-};
-
 const hostOf = (url: string): string => {
     try {
         return new URL(url).host;
@@ -208,26 +199,34 @@ const hostOf = (url: string): string => {
     }
 };
 
-export const handleAiRequest = async (request: Request, env: Env, opts: HandlerOptions = {}): Promise<Response> => {
+export const handleAiRequest = async (request: Request, rawEnv: Env, opts: HandlerOptions = {}): Promise<Response> => {
     const fetchImpl = opts.fetchImpl || fetch;
     const path = new URL(request.url).pathname.replace(/\/+$/, '');
-    const route = opts.route || (path.endsWith('/health') ? 'health' : path.endsWith('/chat') ? 'chat' : path.endsWith('/embed') ? 'embed' : undefined);
+    const route = opts.route || (path.endsWith('/health') ? 'health' : path.endsWith('/chat') ? 'chat' : path.endsWith('/embed') ? 'embed' : path.endsWith('/admin') ? 'admin' : undefined);
     if (!route) return errorResponse(404, 'not_found', 'Bilinmeyen AI uç noktası.');
 
+    // Yönetici panelinden girilen bağlantı ayarları ortam değişkenlerinin üzerine yazılır
+    const eff = await effectiveEnv(rawEnv, { isDev: opts.isDev, fetchImpl: opts.fetchImpl });
+    const env = eff.env;
     const cfg = readAiConfig(env, { isDev: opts.isDev });
     const cors = corsFor(request, cfg.config?.allowedOrigins || []);
     if (cors === null) return errorResponse(403, 'origin', 'Bu kökenden AI erişimine izin verilmiyor.');
 
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
 
+    // Yönetim ucu yapılandırma eksikken de çalışır (ilk kurulum panelden yapılabilsin)
+    if (route === 'admin') return handleAiAdmin(request, rawEnv, { isDev: opts.isDev, fetchImpl: opts.fetchImpl }, cors);
+
     if (route === 'health') {
         if (request.method !== 'GET') return errorResponse(405, 'bad_request', 'Yalnızca GET.', cors);
         const status: AiStatus = {
             configured: !!cfg.config,
             authMode: cfg.authMode,
+            configSource: eff.source,
             ...(cfg.provider ? { provider: cfg.provider } : {}),
             ...(cfg.model ? { model: cfg.model } : {}),
-            ...(cfg.problem ? { problem: cfg.problem } : {}),
+            // Gemini model listesi alınamadıysa asıl neden odur ("AI_MODEL tanımlı değil" değil)
+            ...(cfg.problem ? { problem: eff.problem && !cfg.config ? eff.problem : cfg.problem } : {}),
         };
         const emb = readEmbeddingConfig(env);
         if (emb.config) status.embeddingModel = emb.config.model;

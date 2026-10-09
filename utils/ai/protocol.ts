@@ -67,6 +67,8 @@ export interface AiStatus {
     model?: string;
     /** Yapılandırma eksikse kullanıcıya gösterilecek Türkçe açıklama */
     problem?: string;
+    /** Bağlantı ayarları yönetici panelinden mi, ortam değişkenlerinden mi */
+    configSource?: 'panel' | 'env';
     /** Anlamsal arama (RAG) için embedding modeli — yoksa yalnızca anahtar kelime araması */
     embeddingModel?: string;
     /** AI_EMBEDDING_MODEL verilmiş ama yapılandırma eksikse açıklama */

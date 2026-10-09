@@ -101,7 +101,32 @@ Asistan, serbest metin içeriğinde `bilgi_ara` aracıyla arama yapar ve yanıt�
 | `AI_EMBEDDING_DIMENSIONS` | — | Destekleyen modellerde vektör boyutu (ör. 512) |
 | `AI_EMBED_RATE_LIMIT_PER_MIN` | — | Embedding isteği sınırı (varsayılan 120/dk; ilk dizinleme 32'şer parçalık partilerle yapılır) |
 
+| `AI_ADMIN_TOKEN` | panel için ✔ | Yönetici panelinden bağlantı ayarı ve test için yönetici anahtarı (aşağıya bakın) |
+| `AI_CONFIG_SECRET` | panel için ✔ | Panelde girilen API anahtarlarını şifreleyen anahtar (en az 32 karakter rastgele) |
+| `SUPABASE_SERVICE_ROLE_KEY` | panel için* | Panel ayarlarının deposu: Supabase `app_settings` tablosu (`SUPABASE_URL` ile). **Yalnız sunucuda** tanımlanır |
+| `AI_SETTINGS_FILE` | panel için* | Supabase yerine kendi Node sunucunuzda ayar dosyası yolu |
+
 \* **Yayında erişim koruması zorunludur.** Ne `AI_ACCESS_TOKEN` ne de Supabase tanımlıysa proxy istekleri reddeder (aksi halde kurumsal anahtarın kotası internete açılırdı). Yalnızca kurum içi kapalı ağda `AI_AUTH_MODE=none` bilinçli olarak seçilebilir. Yerel geliştirmede (`npm run dev`) koruma gerekmez.
+
+### Yönetici panelinden yapılandırma ve bağlantı testi
+
+Yönetici konsolu › Yapay zekâ › **AI bağlantısı** kartında sağlayıcı, adres, model, API anahtarı, üretim ayarları ve embedding ayarları girilir; **Bağlantıyı test et** formdaki değerlerle (kaydetmeden) sağlayıcıya kısa bir istek atar, embedding modeli varsa onu da dener ve yanıt süresini ya da hatanın nedenini gösterir (anahtar reddi, model bulunamadı, adrese ulaşılamadı…).
+
+- **Anahtar tarayıcıya girmez:** Panelde girilen değerler sunucuda saklanır ve okunurken ortam değişkenlerinin üzerine yazılır; boş alan ortam değişkenini kullanır. API anahtarları `AI_CONFIG_SECRET`'tan türetilen anahtarla AES-GCM ile şifrelenir; sunucu anahtarı tarayıcıya hiç döndürmez (yalnız son 4 hane gösterilir). Anahtar çalışma alanı verisine, yedeğe ya da bulut eşitlemeye girmez.
+- **Yetki:** Uç (`/api/ai/admin`) yalnız `AI_ADMIN_TOKEN` ile çalışır; yönetici anahtarı panelde bir kez girilir ve yalnız o sekmenin oturumunda tutulur. Tanımlı değilse yayında panelden yapılandırma kapalıdır (yerel geliştirmede açıktır). Deneme sayısı IP başına sınırlıdır.
+- **Depo:** Vercel'de `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` ile Supabase `app_settings` tablosu (`supabase/schema.sql`; RLS açık ve politika yok, yalnız sunucu erişir). Kendi Node sunucunuzda `AI_SETTINGS_FILE`. Yerel geliştirmede `.planasistan/ai-settings.json` (depoya girmez).
+- **Panelden değişmeyenler:** Erişim koruması (`AI_AUTH_MODE`, `AI_ACCESS_TOKEN`), hız sınırları, izinli kökenler, zaman aşımı ve sertifikalar yalnız ortam değişkenidir.
+- **Geri dönüş:** "Ortam değişkenlerine dön" panel ayarlarını siler. Ayar değişikliği denetim günlüğüne (anahtar olmadan) yazılır. Sunucusuz örnekler ayarları 30 sn önbellekte tutar; değişiklik en geç bu sürede tüm örneklere yayılır.
+
+### Hızlı başlangıç: Google Gemini API (yalnız anahtar, test için)
+
+Google AI Studio'nun "Get started" adımlarıyla alınan anahtar tek başına yeterlidir:
+
+1. Google hesabıyla [Google AI Studio](https://aistudio.google.com/apikey)'yu açın, **Create API key** ile anahtar oluşturup kopyalayın.
+2. **Panelden:** Yönetici konsolu › Yapay zekâ › AI bağlantısı › **Hızlı kurulum: Google Gemini API** kutusuna yapıştırıp **Gemini ile kur** deyin. Bağlantı test edilir ve kaydedilir.
+   **Ya da ortam değişkeniyle:** yalnız `GEMINI_API_KEY=<anahtar>` tanımlayın (Google SDK'larının kullandığı ad). Başka AI anahtarı yoksa sağlayıcı `gemini` olur. Yayında erişim koruması (`AI_ACCESS_TOKEN` ya da Supabase) yine gerekir.
+3. **Model seçimi otomatik:** Model verilmemişse (ya da `auto` ise) sunucu anahtarla Gemini'nin model listesini (`GET https://generativelanguage.googleapis.com/v1beta/models`, `x-goog-api-key` başlığı) alır. Sohbet için en yüksek sürümlü kararlı **Flash** modelini seçer (önizleme, lite, görüntü ve ses modelleri hariç). Anlamsal arama için Gemini embedding modelini 768 boyutla seçer. Liste 1 saat önbellekte tutulur; Google yeni model yayımladığında ya da eskisini kaldırdığında seçim kendiliğinden güncellenir. Belirli bir modeli sabitlemek için `AI_MODEL` yazın ya da paneldeki **Listele** ile seçin. Anlamsal aramayı kapatmak için `AI_EMBEDDING_MODEL=none` verin.
+4. **Sınırlar:** Ücretsiz katman denemek içindir. Dakikalık istek sınırı düşüktür; asistan araç kullanan bir soruda 2–4 istek atar, sınır aşılırsa "kota/hız sınırı" uyarısı çıkar. Google'ın koşullarına göre ücretsiz katmanda gönderilen içerik Google ürünlerini geliştirmek için kullanılabilir. Kurum verisiyle kalıcı kullanımda faturalı katmanı ve KVKK değerlendirmesini tercih edin. Gemini API her ülkede sunulmaz; bölge desteklenmiyorsa hata mesajı bunu söyler.
 
 ## 2. Sağlayıcı örnekleri
 
@@ -119,9 +144,9 @@ AI_MODEL=<dağıtım-adı>
 AI_PROVIDER=anthropic
 AI_MODEL=<model-adı>
 
-# Google Gemini
-AI_PROVIDER=gemini
-AI_MODEL=<model-adı>
+# Google Gemini (Google AI Studio anahtarıyla; model ve embedding otomatik — aşağıya bakın)
+GEMINI_API_KEY=<AIza…>
+# ya da açıkça: AI_PROVIDER=gemini, AI_API_KEY=<anahtar>, AI_MODEL=<model-adı | auto>
 
 # TÜBİTAK BİLGEM AI API (OpenAI-uyumlu)
 AI_PROVIDER=openai
@@ -193,7 +218,7 @@ AI_MODEL=...
 
 ## 7. Güvenlik notları
 
-- Anahtar yalnızca proxy'nin ortam değişkenindedir; `/health` yalnızca sağlayıcı ve model adını gösterir.
+- Anahtar yalnızca sunucudadır: proxy'nin ortam değişkeninde ya da yönetici panelinden girildiyse sunucu deposunda şifreli; `/health` yalnızca sağlayıcı ve model adını gösterir.
 - Mesaj içerikleri loglanmaz; sağlayıcı hata mesajları kısaltılıp anahtar içermeden iletilir.
 - Model yanıtları HTML olarak yorumlanmaz (`components/Markdown.tsx`), bu yüzden modelin ürettiği betik çalışamaz.
 - İstek boyutu, mesaj sayısı ve sistem talimatı sınırlıdır (`utils/ai/protocol.ts` → `AI_LIMITS`).

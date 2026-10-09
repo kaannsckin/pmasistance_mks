@@ -39,7 +39,9 @@ const clean = (v: string | undefined): string | undefined => {
 
 export const readEmbeddingConfig = (env: Env): { config?: EmbeddingConfig; problem?: string } => {
     const model = clean(env.AI_EMBEDDING_MODEL)?.replace(/^models\//, '');
-    if (!model) return {};
+    // "none" / "off": bilinçli olarak kapalı (Gemini'de otomatik seçimi de durdurur)
+    if (!model || /^(none|off)$/i.test(model)) return {};
+    if (/^auto$/i.test(model)) return { problem: 'Otomatik embedding modeli (auto) yalnız Gemini anahtarıyla seçilir.' };
     const chatProvider = (clean(env.AI_PROVIDER) || 'openai').toLowerCase() as AiProvider;
     const explicit = clean(env.AI_EMBEDDING_PROVIDER)?.toLowerCase();
     const provider = (explicit || (chatProvider === 'anthropic' ? undefined : chatProvider)) as EmbeddingProvider | undefined;

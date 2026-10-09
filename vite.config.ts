@@ -10,7 +10,8 @@ import { handleIntegrationRequest, IntegrationRoute } from './server/integration
  * tarayıcı paketine hiçbir AI değişkeni gömülmez (yayında: api/ai/*).
  */
 const aiProxyPlugin = (mode: string): Plugin => {
-  const getEnv = () => ({ ...loadEnv(mode, '.', ''), ...process.env });
+  // Yönetici panelinden girilen AI ayarları yerelde bu dosyada (şifreli anahtarlarla) tutulur
+  const getEnv = () => ({ AI_SETTINGS_FILE: '.planasistan/ai-settings.json', ...loadEnv(mode, '.', ''), ...process.env });
   const middleware = createAiMiddleware(getEnv, { isDev: true });
   // Kurum entegrasyonları (Jira, Teams, e-posta) — yayında api/integrations/*
   const integrations = createAiMiddleware(getEnv, {
