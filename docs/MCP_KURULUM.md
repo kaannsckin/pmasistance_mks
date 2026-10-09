@@ -156,6 +156,8 @@ Değişiklik varsayılanda **kapalıdır**. `PLANASISTAN_MCP_WRITE=1` ile ve Sup
 | `veri_sagligi`, `son_degisiklikler` | Yetkisi olan rollerde veri kalitesi ve denetim günlüğü |
 | `jira_aktar`, `jira_worklog` | Jira bağlıysa: Jira kayıt geçmişini projeye aktarma (PY, onaylı) ve worklog özeti |
 | `oner_*`, `oneriyi_uygula` | Onaylı değişiklik (yukarıya bakın) |
+| `haftalik_rapor`, `haftalik_rapor_taslagi` | Haftalık proje raporu: aşama, maddeler, iade notu, geçen haftanın planı; PY için "Taslak öner"in AI paketi (kurum kılavuzu + haftanın notları, worklog'u, kapanan işleri) — Claude modelin yerine taslağı yazar |
+| `oner_haftalik_rapor`, `oner_rapor_karari`, `oner_hafta_yayinla` | Rapor akışı (onaylı): PY kaydeder/gönderir (biçim denetimi, dayanaksız rakam uyarısı); bölüm sorumlusu ve PYB destek onaylar ya da iade eder; PYB destek haftayı yayınlar. Müdür yalnız yayınlanmış haftayı okur |
 
 ## Güvenlik ve veri
 
