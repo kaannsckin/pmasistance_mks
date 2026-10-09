@@ -1,13 +1,52 @@
 # PlanAsistan pilotu — sahte veri + yapay zekâ kullanıcıları
 
-Uygulamayı, gerçek veri olmadan, her gün "kullanılıyormuş gibi" sınamak için iki rutin:
+Uygulamayı, gerçek veri olmadan, "kullanılıyormuş gibi" sınamak için iki rutin. Pilot 15 Ekim–26 Kasım 2026 arasında çalışır ve **yönetim demosu bu ortamın kendisidir**: sunumda gösterilen çalışma alanı, beş ajanın altı hafta boyunca üzerinde çalıştığı alandır. Ajanın uygulamaya yazmadığı iş demoda yoktur; bu yüzden ajanların her kararı (rapor, risk, istek, not, RAG, tahsis) MCP araçlarıyla uygulamaya yazılır.
 
 | Rutin | Ne yapar | Talimat |
 |---|---|---|
 | **1. Jira ajanı** (Salı + Perşembe 07:45) | Son koşudan bu yana geçen günleri üretir. **Sahte Jira**: yeni kayıt, işe başlama, worklog, kapanış, yeniden açılma; gerçek Jira REST API'siyle aynı biçimde. Ayrıca Confluence tarzı toplantı/karar notları, arka plandaki birim (haftalık rapor akışı, ay başı gerçekleşen adam-ay, KALKAN'ın PY'si), ara sıra müşteri isteği ve yönetimden beklenti. Yapay zekâ günün akışına uygun notlar ekler. | [`RUTIN_1_VERI.md`](./RUTIN_1_VERI.md) |
 | **2. Rol ajanları** (Salı + Perşembe 08:45) | Otomatik kontroller; sonra 5 rol ajanı uygulamayı MCP üzerinden kendi rolleriyle **koşu başına bir kez, üç aşamada** kullanır: önce PY'ler, sonra bölüm sorumlusu ve PYB destek, en son müdür. PY'ler koşuya Jira'dan aktarımla başlar (`jira_aktar`), Perşembe haftalık raporu yazar. Koordinatör ön puan önerir, kullanıcı puanı ajanlara geri döner; karar "demoya hazır mı?" sorusuna verilir. | [`RUTIN_2_KULLANICILAR.md`](./RUTIN_2_KULLANICILAR.md) |
 
-Senaryo takvimi: [`SENARYOLAR.md`](./SENARYOLAR.md) (yalnız Jira ajanı ve koordinatör okur). Kod dalı `claude/nice-cerf-r9wv1r` (main + PR #49 + pilot v2).
+Senaryo takvimi, ara kapılar (K0–K4) ve demo günü protokolü: [`SENARYOLAR.md`](./SENARYOLAR.md) (yalnız Jira ajanı ve koordinatör okur). Kod dalı `claude/nice-cerf-r9wv1r` (main + PR #49 + pilot v3).
+
+## Sistem tasarımı
+
+```mermaid
+flowchart LR
+    subgraph R1["1. rutin · Jira ajanı (Sal+Per 07:45)"]
+        SIM["Simülasyon<br/>server/pilot/sim.ts<br/>(tohum 2026, senaryolar)"]
+    end
+    subgraph DAL["claude/pilot-veri dalı · pilot-data/"]
+        JIRA["Sahte Jira<br/>jira/*.json"]
+        OLAY["olaylar/ · confluence/"]
+        DURUM["durum.json<br/>(senaryolar dahil)"]
+        CIKTI["gunluk/ · raporlar/ · puanlar.json<br/>kapilar.md · demo-testi/ · donmus/"]
+    end
+    subgraph BULUT["Supabase · çalışma alanı (RLS)"]
+        WS["Projeler, tahsis, raporlar,<br/>riskler, notlar, istekler"]
+    end
+    subgraph R2["2. rutin · koordinatör + 5 rol ajanı (Sonnet, Sal+Per 08:45)"]
+        A["A: Elif, Burak (PY)"] --> B["B: Selin (BS), Mert (PYB)"] --> C["C: Ahmet (müdür)"]
+    end
+    MCP["MCP sunucusu<br/>server/mcp (persona hesabıyla)"]
+    APP["Uygulama (tarayıcı)<br/>demo ekranı"]
+    TEST["demo-testi<br/>Chromium · 4 persona · 2 arayüz"]
+
+    SIM --> JIRA & OLAY & DURUM
+    SIM -- "arka plan birimi<br/>(KALKAN, ay kapanışı)" --> WS
+    A & B & C -- "araclar / arac --onayla" --> MCP
+    MCP -- "jira_aktar, jira_worklog" --> JIRA
+    MCP -- "oner_* → oneriyi_uygula" --> WS
+    A & B & C -. okur .-> OLAY
+    WS --> APP
+    WS --> TEST
+    MCP -- "beklenen rakamlar" --> TEST
+    R2 --> CIKTI
+```
+
+- **Tek doğru kaynak** uygulamanın Supabase çalışma alanıdır; sahte Jira ve simülasyon durumu dalda durur. Ajanlar uygulamaya yalnız MCP'den, kendi hesaplarıyla, öneri → onay akışıyla yazar; rolleri üyelikten gelir ve RLS gerçekteki gibi uygulanır.
+- **Haftalık rapor akışı** uygulamanın kendi akışıdır: PY `haftalik_rapor_taslagi` (uygulamanın AI paketi) → `oner_haftalik_rapor` (AI taslağı ve gönderilen hâl birlikte saklanır) → Selin `oner_rapor_karari` (Perşembe) → Mert biçim onayı ve `oner_hafta_yayinla` (Salı) → müdür yayınlananı görür.
+- **Demo güvencesi:** `demo-testi` ekranları gerçek tarayıcıda gezer ve sağlık puanını MCP ile karşılaştırır; her kapıda `dondur` ile geri dönülebilir kopya alınır, `geri-yukle` aynı çalışma alanını yerinde eski hâline getirir.
 
 Uygulamanın çalışma alanı **Supabase'de** durur (aşağıda "Bulut modu"); sahte Jira, simülasyon durumu, olaylar, raporlar ve bulgular **`claude/pilot-veri`** dalında (`pilot-data/`, kod dalına karışmaz).
 
@@ -92,7 +131,15 @@ npm run -s pilot -- arac elif proje_detayi
 npm run -s pilot -- arac burak gorev_ara '{"proje":"NHR-2403","geciken":true}'
 npm run -s pilot -- arac elif oner_risk_ekle '{"baslik":"…","olasilik":3,"etki":4}'            # öneri (uygulanmaz)
 npm run -s pilot -- arac elif oner_risk_ekle '{"baslik":"…","olasilik":3,"etki":4}' --onayla   # öneri + uygula
+npm run -s pilot -- arac burak oner_risk_guncelle '{"proje":"NHR-2403","risk":"…","durum":"closed","gerekce":"…"}' --onayla
+npm run -s pilot -- arac burak oner_istek_karari '{"proje":"PSL-2402","istek":"Çevrimdışı mod","karar":"kabul","gerekce":"…","efor_gun":15}' --onayla
+npm run -s pilot -- arac burak oner_not_ekle '{"proje":"NHR-2403","metin":"#karar …"}' --onayla
 npm run -s pilot -- kontrol --cikti pilot-data/gunluk/$(date +%F)/kontrol.md
+
+npm run -s pilot -- senaryo liste                          # kayıtlı senaryolar (ekleme komutları: SENARYOLAR.md)
+npm run -s pilot -- demo-testi [--ekran]                   # demo yolu tarayıcı testi → pilot-data/demo-testi/<gün>/
+npm run -s pilot -- dondur --ad K1-2026-10-22              # geri dönülebilir kopya → pilot-data/donmus/<ad>/
+npm run -s pilot -- geri-yukle --ad K1-2026-10-22          # kopyayı geri yükler (bulutta yerinde)
 ```
 
 `arac` komutu MCP sunucusunu (Claude'un bağlandığı sunucunun aynısı) persona kimliğiyle çalıştırır. Bulut modunda persona kendi Supabase hesabıyla bağlanır ve onaylanan değişiklik buluta yazılır; dosya modunda veri `pilot-data/workspace.json`'dur (uygulamada **JSON yedek yükle** ile açılır).
@@ -108,15 +155,20 @@ npm run -s pilot -- kontrol --cikti pilot-data/gunluk/$(date +%F)/kontrol.md
 | `olaylar/GG.md` | Günün akışı — kullanıcılar bunu okur |
 | `confluence/*.md` | Toplantı/karar notları |
 | `gunluk/GG/` | 2. rutinin kontrol sonucu, ajan çıktıları ve koşunun mesajları (`sohbet.md`; sonraki aşama ya da koşu yanıtlar) |
-| `haftalik/<YYYY-Hnn>/<KOD>.md` | PY haftalık raporları: aşama, gönderilen hâl ve ilk taslak (rapor araçları MCP'ye gelene kadar) |
 | `ajanda/<persona>.md` | Ajanın verdiği sözler, haftanın hedefleri, bekleyen işler (sonraki koşuda karşısına gelir) |
 | `puanlar.json` | Koordinatör ön puanları ve kullanıcı puanları (ajanlar son 5'ini görür) |
 | `raporlar/GG.md`, `raporlar/OZET.md` | Günlük rapor ve gün gün özet tablosu |
 | `bulgular.json` | Açık/kapanan bulgular (tekrar edenler izlenir) |
+| `gomulu.json` | Veride bilerek bırakılmış sorunlardan (G1–G7) hangisini kim, ne zaman buldu |
+| `kapilar.md` | Ara kapıların (K0–K4) sonucu ve K4 demo kararı |
+| `demo-testi/GG/` | Demo yolu testi sonucu (`sonuc.md`, `sonuc.json`, kalan adımların ekranı) |
+| `donmus/<ad>/` | `dondur` kopyası: çalışma alanı, simülasyon durumu, sahte Jira |
+| `arsiv/` | Yeniden kurulumda ya da geri yüklemede kenara alınan olay ve Confluence dosyaları |
 
 ## Karar ölçütleri
 
 `raporlar/OZET.md` her koşuda güncellenir ve iki karar taşır:
 
-- **Demo kararı** (asıl soru): DH1–DH6 ölçütleri — kontroller, açık bulgular, veri tutarlılığı, PY puan ortalaması (son 4 koşuda ≥ 80), senaryolar ve müdürün demo yoklaması. Ayrıntı: `RUTIN_2_KULLANICILAR.md` › 6.
+- **Demo kararı** (asıl soru): DH1–DH7 ölçütleri — kontroller, açık bulgular, veri tutarlılığı, PY puan ortalaması (son 4 koşuda ≥ 80), senaryolar, müdürün demo yoklaması ve demo yolu testi. Ayrıntı: `RUTIN_2_KULLANICILAR.md` › 8.
+- **Ara kapılar:** K0 Kurulum (15 Ekim), K1 Akış (22 Ekim), K2 Senaryo (5 Kasım), K3 Dondurma (19 Kasım), K4 Karar (24 Kasım; canlı / dondurulmuş / ertele). Ölçütler: `SENARYOLAR.md`.
 - **Kod birleştirme:** art arda 3 koşuda otomatik kontrollerin tamamı geçtiyse ve açık "yüksek" önemde bulgu yoksa PR main'e alınabilir.
