@@ -49,7 +49,7 @@ export const readMcpConfig = (env: McpEnv, deps: McpConfigDeps = {}): PlanAsista
 
     let source: WorkspaceSource | null = null;
     if (file) {
-        source = fileSource(file);
+        source = fileSource(file, undefined, { writable: truthy(env.PLANASISTAN_FILE_WRITE) });
     } else if (url) {
         const missing = [
             !anonKey && 'PLANASISTAN_SUPABASE_ANON_KEY',

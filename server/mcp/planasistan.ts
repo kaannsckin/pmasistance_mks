@@ -252,7 +252,9 @@ export const createPlanAsistanMcp = (o: PlanAsistanMcpOptions): McpServerOptions
         return text({
             uygulandi: true,
             ozet: result.summary,
-            not: 'Değişiklik buluta yazıldı. Uygulamada görmek için Bulut penceresinden "Buluttan Çek" yapılır.',
+            not: o.source!.kind === 'supabase'
+                ? 'Değişiklik buluta yazıldı. Uygulamada görmek için Bulut penceresinden "Buluttan Çek" yapılır.'
+                : 'Değişiklik JSON dosyasına yazıldı. Uygulamada görmek için dosya "JSON yedek yükle" ile içe aktarılır.',
         });
     };
 

@@ -120,10 +120,14 @@ describe('Supabase kaynağı', () => {
 });
 
 describe('JSON yedeği kaynağı', () => {
-    const files = (content: string, mtime = 1) => ({
-        readFile: async () => content,
-        mtime: async () => mtime,
-    });
+    const files = (content: string) => {
+        const f = { content, writes: 0 };
+        return Object.assign(f, {
+            readFile: async () => f.content,
+            mtime: async () => f.writes,
+            writeFile: async (_p: string, c: string) => { f.content = c; f.writes++; },
+        });
+    };
 
     it('çalışma alanı yedeğini okur, salt-okunurdur', async () => {
         const json = JSON.stringify({ ...sampleWorkspace('py', 'p1'), exportDate: '2026-07-01T10:00:00Z' });
@@ -139,7 +143,23 @@ describe('JSON yedeği kaynağı', () => {
     it('geçersiz dosya ve eski tek proje yedeği anlaşılır hata verir', async () => {
         await expect(fileSource('/x.json', files('{bozuk')).load()).rejects.toThrow('geçerli bir JSON değil');
         await expect(fileSource('/x.json', files(JSON.stringify({ tasks: [] }))).load()).rejects.toThrow('eski tek proje yedeği');
-        await expect(fileSource('/yok.json', { readFile: async () => '', mtime: async () => { throw new Error('ENOENT'); } }).load()).rejects.toThrow('bulunamadı');
+        await expect(fileSource('/yok.json', { readFile: async () => '', mtime: async () => { throw new Error('ENOENT'); }, writeFile: async () => undefined }).load()).rejects.toThrow('bulunamadı');
+    });
+
+    it('yazılabilir kipte değişikliği yazar, kimliği korur; arada değişen dosyada çakışma verir', async () => {
+        const f = files(JSON.stringify(sampleWorkspace('mudur', 'p2')));
+        const src = fileSource('/pilot.json', f, { writable: true });
+        expect(src.readOnlyReason()).toBeNull();
+        const { ws } = await src.load();
+        const after: WorkspaceData = { ...ws, currentRole: 'py', currentPersonId: 'p1', projects: ws.projects.map(p => (p.id === 'altay' ? { ...p, rag: 'red' as const } : p)) };
+        await src.save(ws, after);
+        const saved = JSON.parse(f.content) as WorkspaceData;
+        expect(saved.projects.find(p => p.id === 'altay')!.rag).toBe('red');
+        expect(saved).toMatchObject({ currentRole: 'mudur', currentPersonId: 'p2' });
+        // Yeniden okunur; eski okumayla kaydetmek çakışmadır
+        const { ws: fresh } = await src.load();
+        expect(fresh.projects.find(p => p.id === 'altay')!.rag).toBe('red');
+        await expect(src.save(ws, after)).rejects.toBeInstanceOf(ConflictError);
     });
 });
 

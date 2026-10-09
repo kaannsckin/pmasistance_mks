@@ -123,6 +123,7 @@ Supabase için `-e` ile aynı değişkenleri verin. `claude mcp list` bağlantı
 | `PLANASISTAN_PERSON` | Kişi adı soyadı (veri havuzundan). **Proje Yöneticisi ve Bölüm Sorumlusu rollerinde zorunlu** (kapsamı belirler) |
 | `PLANASISTAN_PROJECT` | Proje belirtilmeyen sorularda kullanılacak proje (ad ya da kod). Verilmezse ve tek proje görünüyorsa o proje |
 | `PLANASISTAN_MCP_WRITE` | `1`: değişiklik araçlarını açar (yalnız Supabase, yalnız Proje Yöneticisi / Bölüm Sorumlusu kimliği) |
+| `PLANASISTAN_FILE_WRITE` | `1`: **yalnız test/pilot için** JSON yedeğini yazılabilir yapar; değişiklik dosyaya yazılır (dosya okunduktan sonra değiştiyse çakışma verilir). Uygulama değişikliği ancak dosya yeniden içe aktarılınca görür. Bkz. [`pilot/README.md`](../pilot/README.md) |
 
 ## Kimlik ve yetki
 

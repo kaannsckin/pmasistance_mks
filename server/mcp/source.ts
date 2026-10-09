@@ -1,8 +1,8 @@
-import { readFile, stat } from 'node:fs/promises';
+import { readFile, rename, stat, writeFile } from 'node:fs/promises';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Project, UserRole, WorkspaceData } from '../../types.js';
 import { contentHash, mergeWorkspaceDoc, PrivateDoc, splitWorkspaceDoc } from '../../utils/cloudSync.js';
-import { createEmptyWorkspace, parseImportedJson } from '../../utils/workspace.js';
+import { createEmptyWorkspace, parseImportedJson, serializeWorkspace } from '../../utils/workspace.js';
 
 /**
  * MCP sunucusunun veri kaynakları. Uygulama yerel-öncelikli olduğu için veri
@@ -12,7 +12,8 @@ import { createEmptyWorkspace, parseImportedJson } from '../../utils/workspace.j
  *    oturum açılır; RLS aynen geçerlidir (yönetici rolleri notları okuyamaz).
  *    Değişiklikler iyimser sürüm kontrolüyle yazılır — tarayıcıdaki
  *    senkronizasyonla aynı kural: kimsenin verisi sessizce ezilmez.
- *  - JSON yedeği (uygulamadan "JSON yedek indir"): yalnız okunur.
+ *  - JSON yedeği (uygulamadan "JSON yedek indir"): yalnız okunur (test ve
+ *    pilot ortamında isteğe bağlı yazılabilir).
  */
 
 export interface LoadedWorkspace {
@@ -49,18 +50,33 @@ export class ConflictError extends SourceError {}
 export interface FileDeps {
     readFile: (path: string) => Promise<string>;
     mtime: (path: string) => Promise<number>;
+    /** Dosyayı bütün olarak değiştirir (geçici dosya + yeniden adlandırma) */
+    writeFile: (path: string, content: string) => Promise<void>;
 }
 
 const nodeFs: FileDeps = {
     readFile: p => readFile(p, 'utf8'),
     mtime: async p => (await stat(p)).mtimeMs,
+    writeFile: async (p, content) => {
+        const tmp = `${p}.${process.pid}.${Date.now().toString(36)}.tmp`;
+        await writeFile(tmp, content, 'utf8');
+        await rename(tmp, p);
+    },
 };
 
-export const fileSource = (path: string, deps: FileDeps = nodeFs): WorkspaceSource => {
+/**
+ * JSON yedeği. Varsayılan salt-okunur; `writable` yalnız test ve pilot
+ * ortamları içindir (PLANASISTAN_FILE_WRITE=1): değişiklik dosyaya yazılır,
+ * dosya okunduktan sonra başkası değiştirdiyse çakışma verilir. Tarayıcıdaki
+ * uygulama bu değişiklikleri ancak dosya yeniden içe aktarılınca görür.
+ */
+export const fileSource = (path: string, deps: FileDeps = nodeFs, o: { writable?: boolean } = {}): WorkspaceSource => {
     let cache: { mtime: number; loaded: LoadedWorkspace } | null = null;
+    // Kaydedilecek çalışma alanı → okunduğu andaki dosya içeriğinin özeti
+    const hashes = new WeakMap<WorkspaceData, string>();
     return {
         kind: 'file',
-        readOnlyReason: () => 'Veri kaynağı bir JSON yedeği; yedek dosyası yalnız okunur. Değişiklik için Supabase bağlantısı gerekir.',
+        readOnlyReason: () => (o.writable ? null : 'Veri kaynağı bir JSON yedeği; yedek dosyası yalnız okunur. Değişiklik için Supabase bağlantısı gerekir.'),
         load: async () => {
             let mtime: number;
             try {
@@ -69,7 +85,8 @@ export const fileSource = (path: string, deps: FileDeps = nodeFs): WorkspaceSour
                 throw new SourceError(`Yedek dosyası bulunamadı: ${path}`);
             }
             if (cache && cache.mtime === mtime) return cache.loaded;
-            const parsed = parseImportedJson(await deps.readFile(path));
+            const raw = await deps.readFile(path);
+            const parsed = parseImportedJson(raw);
             if (parsed.kind !== 'workspace') {
                 throw new SourceError(parsed.kind === 'invalid'
                     ? `Yedek okunamadı (${path}): ${parsed.error}`
@@ -78,14 +95,25 @@ export const fileSource = (path: string, deps: FileDeps = nodeFs): WorkspaceSour
             const loaded: LoadedWorkspace = {
                 ws: parsed.workspace,
                 privateVisible: true,
-                label: `JSON yedeği (${path})`,
+                label: `JSON yedeği (${path})${o.writable ? ' · yazılabilir' : ''}`,
                 dataAt: parsed.workspace.exportDate,
             };
+            hashes.set(parsed.workspace, contentHash(raw));
             cache = { mtime, loaded };
             return loaded;
         },
-        save: async () => {
-            throw new SourceError('JSON yedeği yalnız okunur.');
+        save: async (before, after) => {
+            if (!o.writable) throw new SourceError('JSON yedeği yalnız okunur.');
+            const expected = hashes.get(before);
+            if (!expected) throw new SourceError('Kaydedilecek veri bu oturumda dosyadan okunmamış.');
+            if (contentHash(await deps.readFile(path)) !== expected) {
+                cache = null;
+                throw new ConflictError('Dosya okunduktan sonra başkası tarafından değiştirilmiş.');
+            }
+            // Dosyadaki kimlik ve açık proje (yedeği alan tarayıcınınki) korunur
+            const out: WorkspaceData = { ...after, currentRole: before.currentRole, currentPersonId: before.currentPersonId, activeProjectId: before.activeProjectId };
+            await deps.writeFile(path, serializeWorkspace(out, false));
+            cache = null;
         },
     };
 };
