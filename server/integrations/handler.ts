@@ -13,13 +13,14 @@ import { describeNetworkError, extraCaFor, upstreamFetch } from '../ai/tls.js';
  *   JIRA_BASE_URL + (JIRA_TOKEN | JIRA_EMAIL + JIRA_API_TOKEN)
  *   JIRA_ALLOWED_PROJECTS                   (isteğe bağlı: erişilebilecek proje anahtarları, virgülle)
  *   JIRA_STORY_POINTS_FIELD                 (isteğe bağlı: story point alanı, ör. customfield_10002; yoksa adından bulunur)
+ *   JIRA_ALLOW_CREATE                       (isteğe bağlı, "1": planlamadaki kayıtlar Jira'da açılabilir; yoksa yalnız okuma)
  *   TEAMS_WEBHOOK_URL                       (Teams kanalı / Power Automate iş akışı)
  *   SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM, SMTP_SECURE
  *   NOTIFY_ALLOWED_DOMAINS                  (alıcı alan adları; yoksa SMTP_FROM'un alanı)
  *   REPORT_REMINDER_TO, APP_URL, CRON_SECRET (haftalık hatırlatma)
  */
 
-export type IntegrationRoute = 'health' | 'jira-worklogs' | 'jira-issues' | 'notify' | 'cron-reminder';
+export type IntegrationRoute = 'health' | 'jira-worklogs' | 'jira-issues' | 'jira-create' | 'notify' | 'cron-reminder';
 
 export interface Mailer {
     sendMail: (m: { from: string; to?: string; bcc?: string; subject: string; text: string; html?: string }) => Promise<unknown>;
@@ -41,13 +42,18 @@ const json = (status: number, body: unknown): Response =>
 
 export interface IntegrationStatus {
     jira: boolean;
+    /** Jira'da kayıt açma açık mı (JIRA_ALLOW_CREATE) */
+    jiraCreate: boolean;
     teams: boolean;
     email: boolean;
     reminder: boolean;
 }
 
+const jiraConfigured = (env: Env) => !!clean(env.JIRA_BASE_URL) && (!!clean(env.JIRA_TOKEN) || (!!clean(env.JIRA_EMAIL) && !!clean(env.JIRA_API_TOKEN)));
+
 export const integrationStatus = (env: Env): IntegrationStatus => ({
-    jira: !!clean(env.JIRA_BASE_URL) && (!!clean(env.JIRA_TOKEN) || (!!clean(env.JIRA_EMAIL) && !!clean(env.JIRA_API_TOKEN))),
+    jira: jiraConfigured(env),
+    jiraCreate: jiraConfigured(env) && /^(1|true|evet|yes)$/i.test(clean(env.JIRA_ALLOW_CREATE) || ''),
     teams: !!clean(env.TEAMS_WEBHOOK_URL),
     email: !!clean(env.SMTP_HOST) && !!clean(env.SMTP_FROM),
     reminder: !!clean(env.CRON_SECRET) && (!!clean(env.TEAMS_WEBHOOK_URL) || (!!clean(env.SMTP_HOST) && !!clean(env.REPORT_REMINDER_TO))),
@@ -345,6 +351,128 @@ export const fetchJiraIssuesPage = async (
     return { issues: raws.map(r => normalizeIssue(r, categories, pointsField)), total, next };
 };
 
+// ---------------------------------------------------------------- Jira'da kayıt açma
+
+/** Planlamadan gelen kayıt (uygulama alanları; Jira adlarıyla sunucuda eşlenir) */
+export interface JiraCreateInput {
+    ref: string;
+    summary: string;
+    description?: string;
+    issueType?: string; // bug | feature | improvement | task | other
+    priority?: string; // Blocker | High | Medium | Low
+    component?: string; // birim
+    estimateHours?: number;
+}
+export interface JiraCreateResult {
+    ref: string;
+    key?: string;
+    error?: string;
+    /** Jira ekranında olmadığı için çıkarılan alanlar */
+    dropped?: string[];
+}
+export const JIRA_CREATE_MAX = 50;
+
+const foldName = (v: string) => v.toLocaleLowerCase('tr-TR').replace(/ı/g, 'i').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').trim();
+type Named = { id: string; name: string; subtask?: boolean };
+const firstMatch = (list: Named[], patterns: RegExp[]) => {
+    for (const re of patterns) { const hit = list.find(x => re.test(foldName(x.name))); if (hit) return hit; }
+    return undefined;
+};
+const TYPE_PATTERNS: Record<string, RegExp[]> = {
+    bug: [/^(bug|hata)$/, /bug|defect|hata|ariza/],
+    feature: [/^(story|hikaye|new feature|yeni ozellik)$/, /story|hikaye|feature|ozellik/],
+    improvement: [/^(improvement|iyilestirme)$/, /improvement|enhancement|iyilestir|gelistirme/],
+    task: [/^(task|gorev)$/, /task|gorev/],
+};
+/** Uygulamadaki tür → projedeki Jira türü; yoksa "Görev", o da yoksa alt görev olmayan ilk tür */
+export const pickIssueType = (types: Named[], wanted?: string): Named | undefined => {
+    const usable = types.filter(t => !t.subtask);
+    return (wanted && TYPE_PATTERNS[wanted] ? firstMatch(usable, TYPE_PATTERNS[wanted]) : undefined) || firstMatch(usable, TYPE_PATTERNS.task) || usable[0];
+};
+const PRIORITY_PATTERNS: Record<string, RegExp[]> = {
+    Blocker: [/blocker|engelleyici/, /highest|en yuksek/, /critical|kritik/],
+    High: [/^(high|yuksek)$/, /major/, /high(?!est)|yuksek/],
+    Medium: [/^(medium|orta|normal)$/, /medium|orta|normal/],
+    Low: [/^(low|dusuk)$/, /minor/, /low(?!est)|dusuk/],
+};
+/** Uygulamadaki önem → Jira önceliği; eşleşmezse gönderilmez (Jira varsayılanı) */
+export const pickPriority = (list: Named[], wanted?: string): Named | undefined => (wanted && PRIORITY_PATTERNS[wanted] ? firstMatch(list, PRIORITY_PATTERNS[wanted]) : undefined);
+
+const OPTIONAL_FIELDS = ['description', 'priority', 'components', 'timetracking'];
+
+/** Kayıtları sırayla açar; ekranda olmayan isteğe bağlı alan hatasında o alan çıkarılıp bir kez yeniden denenir */
+export const createJiraIssues = async (env: Env, projectKey: string, inputs: JiraCreateInput[], fetchImpl?: typeof fetch): Promise<JiraCreateResult[]> => {
+    const base = clean(env.JIRA_BASE_URL)!.replace(/\/+$/, '');
+    const f = fetchImpl || upstreamFetch(base, env);
+    const headers = { authorization: jiraAuth(env), accept: 'application/json', 'content-type': 'application/json' };
+    const get = async (path: string) => {
+        const res = await f(`${base}${path}`, { headers });
+        if (res.status === 401 || res.status === 403) throw Object.assign(new Error('Jira erişimi reddedildi (yetki ya da jeton hatalı).'), { status: 502 });
+        if (res.status === 404) throw Object.assign(new Error(`${projectKey.toUpperCase()} projesi Jira'da bulunamadı.`), { status: 404 });
+        if (!res.ok) throw Object.assign(new Error(`Jira yanıtı başarısız (HTTP ${res.status}).`), { status: 502 });
+        return res.json();
+    };
+    const project = await get(`/rest/api/2/project/${encodeURIComponent(projectKey.toUpperCase())}`) as { issueTypes?: { id?: unknown; name?: unknown; subtask?: unknown }[]; components?: { id?: unknown; name?: unknown }[] };
+    const types: Named[] = (project.issueTypes || []).map(t => ({ id: str(t.id), name: str(t.name), subtask: t.subtask === true })).filter(t => t.id);
+    const components: Named[] = (project.components || []).map(c => ({ id: str(c.id), name: str(c.name) })).filter(c => c.id);
+    let priorities: Named[] = [];
+    try { priorities = ((await get('/rest/api/2/priority')) as { id?: unknown; name?: unknown }[]).map(p => ({ id: str(p.id), name: str(p.name) })); } catch { /* öncelik gönderilmez */ }
+    if (!types.length) throw Object.assign(new Error('Jira projesinde kayıt türü bulunamadı.'), { status: 502 });
+
+    const out: JiraCreateResult[] = [];
+    // Yarıda kalan istekte açılmış kayıtlar kaybolmasın (yeniden göndermede çift kayıt olur): kalanlar hatayla döner
+    const failRest = (from: number, error: string) => inputs.slice(from).forEach(i => out.push({ ref: i.ref, error }));
+    for (let n = 0; n < inputs.length; n++) {
+        const input = inputs[n];
+        const type = pickIssueType(types, input.issueType)!;
+        const priority = pickPriority(priorities, input.priority);
+        const component = input.component ? components.find(c => foldName(c.name) === foldName(input.component!)) : undefined;
+        const minutes = input.estimateHours && input.estimateHours > 0 ? Math.max(1, Math.round(input.estimateHours * 60)) : 0;
+        const fields: Record<string, unknown> = {
+            project: { key: projectKey.toUpperCase() },
+            summary: input.summary,
+            issuetype: { id: type.id },
+            ...(input.description ? { description: input.description } : {}),
+            ...(priority ? { priority: { id: priority.id } } : {}),
+            ...(component ? { components: [{ id: component.id }] } : {}),
+            ...(minutes ? { timetracking: { originalEstimate: `${minutes}m` } } : {}),
+        };
+        const dropped: string[] = [];
+        let result: JiraCreateResult = { ref: input.ref };
+        let fatal: string | null = null;
+        for (let attempt = 0; attempt < 2; attempt++) {
+            let res: Response;
+            try {
+                res = await f(`${base}/rest/api/2/issue`, { method: 'POST', headers, body: JSON.stringify({ fields }) });
+            } catch (e) {
+                // Kayıt açılmış olabilir: kullanıcı Jira'da denetlemeli
+                result = { ref: input.ref, error: `Jira'ya ulaşılamadı; kaydın açılıp açılmadığını Jira'da denetleyin (${describeNetworkError(e)}).` };
+                fatal = "Önceki kayıtta bağlantı koptu; gönderilmedi.";
+                break;
+            }
+            if (res.status === 401 || res.status === 403) {
+                fatal = "Jira'da kayıt açma yetkisi yok (jetonun projede \"Create Issues\" izni olmalı).";
+                result = { ref: input.ref, error: fatal };
+                break;
+            }
+            const body = await res.json().catch(() => ({})) as { key?: unknown; errors?: Record<string, unknown>; errorMessages?: unknown[] };
+            if (res.ok && str(body.key)) { result = { ref: input.ref, key: str(body.key), ...(dropped.length ? { dropped } : {}) }; break; }
+            const errors = body.errors || {};
+            const optional = Object.keys(errors).filter(k => OPTIONAL_FIELDS.includes(k) && k in fields);
+            if (attempt === 0 && optional.length && optional.length === Object.keys(errors).length) {
+                optional.forEach(k => { delete fields[k]; dropped.push(k); });
+                continue;
+            }
+            const msg = [...Object.entries(errors).map(([k, v]) => `${k}: ${str(v)}`), ...(Array.isArray(body.errorMessages) ? body.errorMessages.map(str) : [])].filter(Boolean).join('; ');
+            result = { ref: input.ref, error: msg || `Jira kaydı açmadı (HTTP ${res.status}).` };
+            break;
+        }
+        out.push(result);
+        if (fatal) { failRest(n + 1, fatal); break; }
+    }
+    return out;
+};
+
 // ---------------------------------------------------------------- Teams ve e-posta
 
 const EMAIL_RE = /^[^\s@<>(),;:"]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
@@ -436,7 +564,7 @@ export const reminderMessage = (appUrl: string | undefined, now: Date): { subjec
 // ---------------------------------------------------------------- istek işleyici
 
 const limiter = createRateLimiter(20);
-// Geçmiş aktarımı sayfa sayfa ilerler; ayrı ve daha geniş sınır
+// Geçmiş aktarımı ve Jira'ya gönderme küçük parçalarla ilerler; ayrı ve daha geniş sınır
 const jiraPageLimiter = createRateLimiter(60);
 
 export const handleIntegrationRequest = async (request: Request, env: Env, opts: IntegrationOptions): Promise<Response> => {
@@ -473,7 +601,7 @@ export const handleIntegrationRequest = async (request: Request, env: Env, opts:
         supabaseAnonKey: clean(env.SUPABASE_ANON_KEY),
     }, opts.fetchImpl || fetch);
     if (who.ok === false) return json(who.status, { error: who.message, code: 'auth' });
-    const wait = (opts.route === 'jira-issues' ? jiraPageLimiter : limiter).hit(who.subject);
+    const wait = (opts.route === 'jira-issues' || opts.route === 'jira-create' ? jiraPageLimiter : limiter).hit(who.subject);
     if (wait > 0) {
         const res = json(429, { error: 'Çok fazla istek; biraz sonra tekrar deneyin.', code: 'rate_limited' });
         res.headers.set('retry-after', String(wait));
@@ -512,6 +640,32 @@ export const handleIntegrationRequest = async (request: Request, env: Env, opts:
         if (!jiraProjectAllowed(env, key)) return json(403, { error: `${key.toUpperCase()} projesi bu sunucuda Jira erişimine açık değil.`, code: 'forbidden' });
         try {
             return json(200, await fetchJiraIssuesPage(env, { projectKey: key, scope, since, cursor, pageSize: Number(body.pageSize) || undefined }, opts.fetchImpl));
+        } catch (e) {
+            const err = e as Error & { status?: number };
+            return json(err.status || 502, { error: err.status ? err.message : `Jira'ya ulaşılamadı: ${describeNetworkError(e)}`, code: 'upstream' });
+        }
+    }
+
+    if (opts.route === 'jira-create') {
+        if (!status.jira) return json(501, { error: "Jira bağlantısı yapılandırılmadı (kurum içi izin ve sunucu ayarı gerekir).", code: 'config' });
+        if (!status.jiraCreate) return json(403, { error: "Jira'da kayıt açma bu sunucuda kapalı (JIRA_ALLOW_CREATE).", code: 'forbidden' });
+        const key = String(body.projectKey || '');
+        if (!KEY_RE.test(key)) return json(400, { error: 'Geçersiz proje anahtarı.', code: 'bad_request' });
+        if (!jiraProjectAllowed(env, key)) return json(403, { error: `${key.toUpperCase()} projesi bu sunucuda Jira erişimine açık değil.`, code: 'forbidden' });
+        const raw = Array.isArray(body.issues) ? body.issues as Record<string, unknown>[] : [];
+        if (!raw.length || raw.length > JIRA_CREATE_MAX) return json(400, { error: `Bir istekte 1–${JIRA_CREATE_MAX} kayıt gönderilebilir.`, code: 'bad_request' });
+        const inputs: JiraCreateInput[] = raw.map(r => ({
+            ref: String(r.ref || '').slice(0, 100),
+            summary: String(r.summary || '').replace(/\s+/g, ' ').trim().slice(0, 255),
+            description: typeof r.description === 'string' ? r.description.slice(0, 30000) : undefined,
+            issueType: typeof r.issueType === 'string' ? r.issueType : undefined,
+            priority: typeof r.priority === 'string' ? r.priority : undefined,
+            component: typeof r.component === 'string' ? r.component.slice(0, 255) : undefined,
+            estimateHours: typeof r.estimateHours === 'number' && Number.isFinite(r.estimateHours) && r.estimateHours > 0 ? Math.min(r.estimateHours, 10000) : undefined,
+        }));
+        if (inputs.some(i => !i.ref || !i.summary)) return json(400, { error: 'Her kaydın kimliği ve başlığı olmalı.', code: 'bad_request' });
+        try {
+            return json(200, { results: await createJiraIssues(env, key, inputs, opts.fetchImpl) });
         } catch (e) {
             const err = e as Error & { status?: number };
             return json(err.status || 502, { error: err.status ? err.message : `Jira'ya ulaşılamadı: ${describeNetworkError(e)}`, code: 'upstream' });

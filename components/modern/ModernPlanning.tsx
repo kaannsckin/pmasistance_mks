@@ -12,6 +12,7 @@ import { buildHistory, calibrator, PlanningHistory } from '../../utils/planning/
 import { GuideButton, GuideTour, useGuide } from './GuideTour';
 import { Icon } from './icons';
 import { startStepFor } from '../../utils/guides';
+import JiraExport from './planning/JiraExport';
 import JiraHistoryImport from './planning/JiraHistoryImport';
 import NewRecordPlanner from './planning/NewRecordPlanner';
 import PlanSimulator from './planning/PlanSimulator';
@@ -39,15 +40,20 @@ interface Props {
     onOpenGoals: () => void;
     /** Jira'dan kayıt geçmişi aktarımı (yalnız düzenleyebilen) */
     onImportJira?: (key: string, issues: JiraIssueRecord[], opts: JiraImportOptions, label: string) => void;
+    /** Jira'da açılan kayıtların anahtarlarını görevlere yazar (yalnız düzenleyebilen) */
+    onLinkJira?: (key: string, links: Record<string, string>) => void;
 }
 
 type Mode = 'record' | 'release' | 'simulate';
 
 const num = (v: number) => v.toLocaleString('tr-TR', { maximumFractionDigits: 1 });
 
-const ModernPlanning: React.FC<Props> = ({ project, workspace, visibleProjectIds, canEdit, onAddTask, onViewTask, onOpenList, onSaveReleasePlan, onDeleteReleasePlan, onCommitReleasePlan, onOpenGoals, onImportJira }) => {
+const ModernPlanning: React.FC<Props> = ({ project, workspace, visibleProjectIds, canEdit, onAddTask, onViewTask, onOpenList, onSaveReleasePlan, onDeleteReleasePlan, onCommitReleasePlan, onOpenGoals, onImportJira, onLinkJira }) => {
     const [mode, setMode] = useState<Mode>('record');
     const [jiraOpen, setJiraOpen] = useState(false);
+    // Jira'ya gönder paneli; açıkken önceden seçili görevler
+    const [exportOpen, setExportOpen] = useState<{ preselect: string[] } | null>(null);
+    const sendToJira = canEdit && onLinkJira ? (ids: string[]) => { setJiraOpen(false); setExportOpen({ preselect: ids }); } : undefined;
     // Rehber: sayfa ilk açıldığında bir kez; sonra "?" ile (açık kipin adımından)
     const guide = useGuide('planning');
     // Geçmiş yalnız görevler ya da ekip değişince yeniden kurulur (sürüm taslağı kaydı onu bozmasın)
@@ -79,7 +85,10 @@ const ModernPlanning: React.FC<Props> = ({ project, workspace, visibleProjectIds
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                     {canEdit && onImportJira && (
-                        <button type="button" className="m-btn m-btn-gray" aria-expanded={jiraOpen} onClick={() => setJiraOpen(v => !v)}><Icon name="download" size={18} />Jira'dan geçmiş</button>
+                        <button type="button" className="m-btn m-btn-gray" aria-expanded={jiraOpen} onClick={() => { setExportOpen(null); setJiraOpen(v => !v); }}><Icon name="download" size={18} />Jira'dan geçmiş</button>
+                    )}
+                    {sendToJira && (
+                        <button type="button" className="m-btn m-btn-gray" aria-expanded={!!exportOpen} onClick={() => (exportOpen ? setExportOpen(null) : sendToJira([]))}><Icon name="send" size={18} />Jira'ya gönder</button>
                     )}
                     <div className="m-segmented" role="tablist" aria-label="Planlama kipi">
                         <button type="button" role="tab" className="m-segment" aria-selected={mode === 'record'} onClick={() => setMode('record')}>Yeni kayıt</button>
@@ -93,11 +102,14 @@ const ModernPlanning: React.FC<Props> = ({ project, workspace, visibleProjectIds
             {jiraOpen && canEdit && onImportJira && (
                 <JiraHistoryImport key={`jira-${project.id}`} project={project} onImport={onImportJira} onOpenList={onOpenList} onClose={() => setJiraOpen(false)} />
             )}
+            {exportOpen && canEdit && onLinkJira && (
+                <JiraExport key={`jira-out-${project.id}`} project={project} preselect={exportOpen.preselect} onLinked={onLinkJira} onClose={() => setExportOpen(null)} />
+            )}
             {mode === 'record' ? (
-                <NewRecordPlanner key={project.id} project={project} history={history} people={people} leaves={leaves} visibleProjectIds={visibleProjectIds} canEdit={canEdit} blindEstimate={aiPolicyOf(workspace).blindEstimate} aiBlocked={aiBlocked} ml={ml} onAddTask={onAddTask} onOpenList={onOpenList} />
+                <NewRecordPlanner key={project.id} project={project} history={history} people={people} leaves={leaves} visibleProjectIds={visibleProjectIds} canEdit={canEdit} blindEstimate={aiPolicyOf(workspace).blindEstimate} aiBlocked={aiBlocked} ml={ml} onAddTask={onAddTask} onOpenList={onOpenList} onSendToJira={sendToJira} />
             ) : mode === 'release' ? (
                 <ReleasePlanner key={project.id} project={project} history={history} people={people} leaves={leaves} visibleProjectIds={visibleProjectIds} canEdit={canEdit} blindEstimate={aiPolicyOf(workspace).blindEstimate} aiBlocked={aiBlocked} ml={ml}
-                    onSavePlan={onSaveReleasePlan} onDeletePlan={onDeleteReleasePlan} onCommit={onCommitReleasePlan} onOpenGoals={onOpenGoals} />
+                    onSavePlan={onSaveReleasePlan} onDeletePlan={onDeleteReleasePlan} onCommit={onCommitReleasePlan} onOpenGoals={onOpenGoals} onSendToJira={sendToJira} />
             ) : (
                 <PlanSimulator key={project.id} project={project} history={history} people={people} leaves={leaves} visibleProjectIds={visibleProjectIds} onViewTask={onViewTask} />
             )}

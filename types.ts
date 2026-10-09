@@ -956,7 +956,7 @@ export type AuditAction =
   | 'expectation.create' | 'expectation.respond' | 'expectation.close'
   | 'report.submit' | 'report.approve' | 'report.return' | 'report.publish'
   | 'meeting.submit' | 'meeting.approve' | 'meeting.reject' | 'meeting.held'
-  | 'release.commit';
+  | 'release.commit' | 'data.export';
 
 export interface AuditEntry {
   id: string;

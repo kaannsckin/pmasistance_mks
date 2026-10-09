@@ -9,7 +9,7 @@ export type GuideId = 'planning' | 'forecast';
 
 export interface GuideStep {
     id: string;
-    icon: 'rocket' | 'download' | 'plus' | 'sparkles' | 'activity' | 'flag' | 'timeline' | 'refresh' | 'target' | 'gauge' | 'shield' | 'list';
+    icon: 'rocket' | 'download' | 'plus' | 'sparkles' | 'activity' | 'flag' | 'timeline' | 'refresh' | 'target' | 'gauge' | 'shield' | 'list' | 'send';
     title: string;
     summary: string;
     /** Nasıl kullanılır (sıralı) */
@@ -29,7 +29,7 @@ export interface Guide {
 
 const PLANNING: Guide = {
     id: 'planning',
-    version: 1,
+    version: 2,
     title: 'Planlama asistanı rehberi',
     steps: [
         {
@@ -113,6 +113,18 @@ const PLANNING: Guide = {
                 'Senaryo deneyin: kayıt çıkarın, ek kişi ekleyin ya da birim içinde serbest dağıtımı açın.',
             ],
             scenario: { title: 'Örnek senaryo', text: 'Yönetim 15 Aralık\'ta teslim istiyor. Simülasyon P50 için 10 Aralık, P80 için 22 Aralık der; 15 Aralık %62 olasılıkla tutar. Yazılım birimine bir kişi eklediğinizde P80 12 Aralık\'a çekilir ve toplantıya "ek kişiyle %88" bilgisiyle gidersiniz.' },
+        },
+        {
+            id: 'jira-out', icon: 'send', title: "Jira'ya gönder",
+            summary: 'Planlamada açtığınız kayıtlar Jira\'da da açılabilir. Jira anahtarı göreve yazılır; sonraki "Jira\'dan geçmiş" aktarımı aynı kaydı günceller, çift kayıt oluşmaz.',
+            how: [
+                '"Jira\'ya gönder" düğmesine basın ya da yeni kayıt eklendikten sonra "Jira\'da aç" deyin; aktarılmış sürüm planında da aynı düğme vardır.',
+                'Jira anahtarı olmayan açık kayıtlar listelenir; göndermek istediklerinizi seçin.',
+                '"Jira\'da aç" ve ardından "Onayla ve gönder": tür, önem, birim (Jira\'da aynı adlı bileşen varsa) ve tahmin (ilk tahmin) gider; sorumlu gitmez.',
+                'Açılamayan kayıtlar nedeniyle listelenir ve seçili kalır; düzeltip yeniden gönderebilirsiniz.',
+            ],
+            scenario: { title: 'Örnek senaryo', text: 'Sürüm 2.0 planı aktarıldı, 14 görev açıldı. Planın sayfasında "Jira\'da aç (14 kayıt)" denir; Jira\'da MKS-341…MKS-354 açılır. Ekip atamaları Jira\'da yapar, kayıtlar kapandıkça "Jira\'dan geçmiş" ile durum geçmişi geri gelir.' },
+            tip: 'Jira\'da kayıt açma sunucuda ayrıca açılmalıdır (JIRA_ALLOW_CREATE); açık değilse panel bunu söyler.',
         },
         {
             id: 'loop', icon: 'refresh', title: 'Öğrenme döngüsü',

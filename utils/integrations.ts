@@ -12,6 +12,8 @@ const BASE = '/api/integrations';
 
 export interface IntegrationHealth {
     jira: boolean;
+    /** Jira'da kayıt açma sunucuda açık mı (JIRA_ALLOW_CREATE) */
+    jiraCreate: boolean;
     teams: boolean;
     email: boolean;
     reminder: boolean;
@@ -19,14 +21,14 @@ export interface IntegrationHealth {
     unreachable?: boolean;
 }
 
-const OFFLINE: IntegrationHealth = { jira: false, teams: false, email: false, reminder: false, authMode: 'none', unreachable: true };
+const OFFLINE: IntegrationHealth = { jira: false, jiraCreate: false, teams: false, email: false, reminder: false, authMode: 'none', unreachable: true };
 
 export const fetchIntegrationHealth = async (signal?: AbortSignal): Promise<IntegrationHealth> => {
     try {
         const res = await fetch(`${BASE}/health`, { signal, cache: 'no-store' });
         if (!res.ok) return OFFLINE;
         const j = await res.json() as Partial<IntegrationHealth>;
-        return { jira: !!j.jira, teams: !!j.teams, email: !!j.email, reminder: !!j.reminder, authMode: j.authMode || 'none' };
+        return { jira: !!j.jira, jiraCreate: !!j.jiraCreate, teams: !!j.teams, email: !!j.email, reminder: !!j.reminder, authMode: j.authMode || 'none' };
     } catch (e) {
         if ((e as Error)?.name === 'AbortError') throw e;
         return OFFLINE;
@@ -117,6 +119,52 @@ export const fetchJiraIssuesPage = async (
             throw new Error(j.error || `İstek başarısız (${res.status}).`);
         }
         return { issues: j.issues || [], total: typeof j.total === 'number' ? j.total : null, next: j.next || null };
+    }
+};
+
+/** Jira'da açılacak kayıt (uygulama alanları; Jira adlarıyla sunucuda eşlenir) */
+export interface JiraCreateInput {
+    ref: string;
+    summary: string;
+    description?: string;
+    issueType?: string;
+    priority?: string;
+    component?: string;
+    estimateHours?: number;
+}
+export interface JiraCreateResult {
+    ref: string;
+    key?: string;
+    error?: string;
+    dropped?: string[];
+}
+
+/** Kayıtları Jira'da açar (en çok 50); her kayıt için anahtar ya da hata döner. Hız sınırında bekleyip yeniden dener. */
+export const createJiraIssues = async (projectKey: string, issues: JiraCreateInput[], authMode: AiAuthMode, signal?: AbortSignal): Promise<JiraCreateResult[]> => {
+    for (let attempt = 0; ; attempt++) {
+        let res: Response;
+        try {
+            res = await fetch(`${BASE}/jira-create`, {
+                method: 'POST',
+                headers: { 'content-type': 'application/json', ...(await authHeaders(authMode)) },
+                body: JSON.stringify({ projectKey, issues }),
+                signal,
+            });
+        } catch (e) {
+            if ((e as Error)?.name === 'AbortError') throw e;
+            throw new Error('Sunucuya ulaşılamadı.');
+        }
+        // 429 kayıt açılmadan döner: beklemek güvenli
+        if (res.status === 429 && attempt < 3) {
+            await sleep(Math.min(60, Number(res.headers.get('retry-after')) || 5) * 1000, signal);
+            continue;
+        }
+        const j = await res.json().catch(() => ({})) as { results?: JiraCreateResult[]; error?: string };
+        if (!res.ok) {
+            if (res.status === 401) throw new Error(authMode === 'token' ? 'Erişim kodu gerekli: AI asistan panelinden erişim kodunu girin.' : 'Oturum açmanız gerekiyor.');
+            throw new Error(j.error || `İstek başarısız (${res.status}).`);
+        }
+        return j.results || [];
     }
 };
 

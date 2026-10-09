@@ -31,12 +31,14 @@ interface Props {
     onDeletePlan: (projectId: string, id: string) => void;
     onCommit: (result: CommitResult) => void;
     onOpenGoals: () => void;
+    /** Aktarılan planın görevlerini Jira'da açma (Jira'ya gönder paneli) */
+    onSendToJira?: (taskIds: string[]) => void;
 }
 
 const fmtDay = (iso?: string) => (iso ? new Date(`${iso}T00:00:00`).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric' }) : '—');
 const pct = (v: number) => `%${Math.round(v * 100)}`;
 
-const ReleasePlanner: React.FC<Props> = ({ project, history, people, leaves, visibleProjectIds, canEdit, blindEstimate, aiBlocked, ml, onSavePlan, onDeletePlan, onCommit, onOpenGoals }) => {
+const ReleasePlanner: React.FC<Props> = ({ project, history, people, leaves, visibleProjectIds, canEdit, blindEstimate, aiBlocked, ml, onSavePlan, onDeletePlan, onCommit, onOpenGoals, onSendToJira }) => {
     const [openId, setOpenId] = useState<string | null>(null);
     const [justCommitted, setJustCommitted] = useState<string | null>(null);
     const projectId = project.id;
@@ -64,7 +66,7 @@ const ReleasePlanner: React.FC<Props> = ({ project, history, people, leaves, vis
             />
         );
     }
-    if (open) return <BaselineView plan={open} project={project} history={history} people={people} leaves={leaves} fresh={justCommitted === open.id} onBack={() => setOpenId(null)} onOpenGoals={onOpenGoals} />;
+    if (open) return <BaselineView plan={open} project={project} history={history} people={people} leaves={leaves} fresh={justCommitted === open.id} onBack={() => setOpenId(null)} onOpenGoals={onOpenGoals} onSendToJira={canEdit ? onSendToJira : undefined} />;
 
     const create = () => {
         const p = createReleasePlan(project);
@@ -107,11 +109,12 @@ const ReleasePlanner: React.FC<Props> = ({ project, history, people, leaves, vis
 };
 
 /** Aktarılmış plan: taban çizgisi ve güncel tahmin */
-const BaselineView: React.FC<{ plan: ReleasePlan; project: Project; history: PlanningHistory; people: Person[]; leaves: Leave[]; fresh: boolean; onBack: () => void; onOpenGoals: () => void }> = ({ plan, project, history, people, leaves, fresh, onBack, onOpenGoals }) => {
+const BaselineView: React.FC<{ plan: ReleasePlan; project: Project; history: PlanningHistory; people: Person[]; leaves: Leave[]; fresh: boolean; onBack: () => void; onOpenGoals: () => void; onSendToJira?: (taskIds: string[]) => void }> = ({ plan, project, history, people, leaves, fresh, onBack, onOpenGoals, onSendToJira }) => {
     const b = plan.baseline;
     const [current, setCurrent] = useState<{ state: 'idle' | 'running' } | { state: 'done'; p50?: string; p80?: string; doneAll: boolean } >({ state: 'idle' });
     const tasks = project.tasks.filter(t => b?.taskIds.includes(t.id));
     const done = tasks.filter(t => t.status === TaskStatus.Done).length;
+    const unlinked = tasks.filter(t => !t.jiraId?.trim() && t.status !== TaskStatus.Done).map(t => t.id);
 
     const forecast = async () => {
         if (!b) return;
@@ -134,7 +137,12 @@ const BaselineView: React.FC<{ plan: ReleasePlan; project: Project; history: Pla
             {fresh && (
                 <p role="status" className="m-0 rounded-xl px-3.5 py-2.5 m-tone-ok text-[15px] font-semibold flex items-center gap-2"><Icon name="check" size={18} strokeWidth={2.4} />Plan aktarıldı: görevler listede, kilometre taşları Hedefler ekranında.</p>
             )}
-            <h2 id="rp-base" className="m-0 text-[20px] font-bold m-text">{plan.name || 'Adsız sürüm'}</h2>
+            <div className="flex flex-wrap items-start justify-between gap-2">
+                <h2 id="rp-base" className="m-0 text-[20px] font-bold m-text">{plan.name || 'Adsız sürüm'}</h2>
+                {onSendToJira && unlinked.length > 0 && (
+                    <button type="button" className="m-btn m-btn-gray" onClick={() => onSendToJira(unlinked)}><Icon name="send" size={18} />Jira'da aç ({unlinked.length} kayıt)</button>
+                )}
+            </div>
             {plan.summary && <p className="m-0 text-[15px] m-text-2 whitespace-pre-line">{plan.summary}</p>}
             {b && (
                 <>
