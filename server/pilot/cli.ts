@@ -1,9 +1,9 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { appendFile, mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Note, Project, WorkspaceData } from '../../types.js';
 import { matchByText } from '../../utils/ai/scope.js';
@@ -46,6 +46,10 @@ Veri (1. rutin — Jira ajanı):
       teklif-kazanildi --proje YLD --tarih GG --baslangic GG --ihtiyac "U320:2:1.0,U340:1:0.5"
   senaryo liste | senaryo sil --id <id>                         Senaryoları listeler / henüz başlamamış olanı siler
   ozet                                                          Veri özeti
+  dondur [--ad AD] [--zorla]                                    Demo ortamının anlık kopyası: çalışma alanı, simülasyon durumu,
+                                                                 sahte Jira → pilot-data/donmus/<AD>/ (varsayılan AD: bugün)
+  geri-yukle --ad AD                                            Kopyayı geri yükler (bulutta yerinde); sonraki günlerin olay ve
+                                                                 Confluence dosyaları arşive taşınır
 
 Kullanıcılar (2. rutin):
   personalar                                                    Pilot kullanıcıları (JSON)
@@ -522,6 +526,50 @@ const main = async () => {
             if (out) await writeAtomic(resolve(out), md);
             print(md);
             if (results.some(r => r.durum === 'KALDI')) process.exitCode = 2;
+            return;
+        }
+        case 'dondur': {
+            const ad = str(flags, 'ad') || todayTr();
+            if (!/^[\w.-]+$/.test(ad)) fail(`Geçersiz ad: ${ad} (harf, rakam, nokta, tire).`);
+            const dir = join(p.dir, 'donmus', ad);
+            if (existsSync(dir) && !flags.zorla) fail(`${dir} zaten var; üzerine yazmak için --zorla.`);
+            const store = openStore(p);
+            const { ws, state } = await readAll(p, store);
+            await rm(dir, { recursive: true, force: true });
+            await writeAtomic(join(dir, 'workspace.json'), serializeWorkspace(ws, false));
+            await writeAtomic(join(dir, 'durum.json'), JSON.stringify(state));
+            for (const [key, resp] of Object.entries(jiraExports(state))) await writeAtomic(join(dir, 'jira', `${key}.json`), JSON.stringify(resp));
+            const bilgi = { ad, zaman: new Date().toISOString(), son_gun: state.sonGun, ...(store.kind === 'supabase' ? { calisma_alani: store.link.workspaceId } : {}) };
+            await writeAtomic(join(dir, 'bilgi.json'), `${JSON.stringify(bilgi, null, 2)}\n`);
+            print({ donduruldu: dir, ...bilgi, ...summary(ws, state) });
+            return;
+        }
+        case 'geri-yukle': {
+            const ad = str(flags, 'ad') || fail('--ad gerekli (pilot-data/donmus/ altındaki kopyanın adı).');
+            const dir = join(p.dir, 'donmus', ad);
+            if (!existsSync(join(dir, 'workspace.json'))) fail(`Kopya yok: ${dir}`);
+            const ws = await readWorkspaceFile(join(dir, 'workspace.json'));
+            const state = JSON.parse(await readFile(join(dir, 'durum.json'), 'utf8')) as SimState;
+            if (state.surum !== SIM_VERSION) fail(`Kopyanın simülasyon sürümü ${state.surum}, kodunki ${SIM_VERSION}: geri yüklenemez.`);
+            const store = openStore(p);
+            if (store.kind === 'supabase') {
+                if (!await replacePilotWorkspace(store.clients.service(), store.link.workspaceId, ws)) fail(`Bulutta çalışma alanı ${store.link.workspaceId} yok.`);
+            } else await writeAtomic(p.ws, serializeWorkspace(ws, false));
+            await saveState(p, state);
+            await rm(p.jira, { recursive: true, force: true });
+            await saveJira(p, state);
+            // Kopyadan sonraki günlerin dosyaları yeni akışla çelişir: silinmez, arşive taşınır
+            const later = (d: string) => (existsSync(d) ? readdirSync(d).filter(f => f.slice(0, 10) > (state.sonGun ?? '')) : []);
+            const moved: string[] = [];
+            const target = join(p.dir, 'arsiv', `${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}-geri-yukle`);
+            for (const d of [p.events, p.confluence]) {
+                for (const f of later(d)) {
+                    await mkdir(join(target, basename(d)), { recursive: true });
+                    await rename(join(d, f), join(target, basename(d), f));
+                    moved.push(f);
+                }
+            }
+            print({ geri_yuklendi: ad, son_gun: state.sonGun, ...(store.kind === 'supabase' ? { calisma_alani: store.link.workspaceId, not: 'Tarayıcıda "Buluttan Çek".' } : {}), ...(moved.length ? { arsive_tasinan: moved.length, arsiv: target } : {}), ...summary(ws, state) });
             return;
         }
         case 'demo-testi': {
