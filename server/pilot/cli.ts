@@ -1,7 +1,8 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { createServer } from 'node:http';
-import { appendFile, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Note, Project, WorkspaceData } from '../../types.js';
@@ -52,6 +53,9 @@ Kullanıcılar (2. rutin):
   arac <persona> <arac> ['{"json":"arg"}'] [--onayla]           MCP aracını persona kimliğiyle çağırır;
                                                                  --onayla: oner_* önerisini hemen uygular
   kontrol [--cikti dosya.md]                                    Otomatik kapsam/gizlilik/tutarlılık kontrolleri
+  demo-testi [--cikti dizin] [--ekran] [--arayuz klasik,modern]  Demo yolunu gerçek tarayıcıda gezer (Chromium);
+                                                                 beklenen rakamlar MCP'den. Varsayılan çıktı:
+                                                                 pilot-data/demo-testi/<bugün>/ (sonuc.md, kalan adımların ekranı)
 
 Ortak: --dizin pilot-data (ya da PILOT_DIZIN). GG = YYYY-AA-GG.
 Bulut: PILOT_SUPABASE_URL, PILOT_SUPABASE_ANON_KEY, PILOT_SUPABASE_SERVICE_ROLE_KEY; isteğe bağlı PILOT_PASSWORD
@@ -518,6 +522,30 @@ const main = async () => {
             if (out) await writeAtomic(resolve(out), md);
             print(md);
             if (results.some(r => r.durum === 'KALDI')) process.exitCode = 2;
+            return;
+        }
+        case 'demo-testi': {
+            const store = openStore(p);
+            const { ws } = await readAll(p, store);
+            const here = dirname(fileURLToPath(import.meta.url));
+            const script = [join(here, '..', 'scripts', 'demo-yolu.mjs'), resolve('scripts', 'demo-yolu.mjs')].find(existsSync)
+                || fail('scripts/demo-yolu.mjs bulunamadı (depo kökünden çalıştırın).');
+            // Ekrandaki rakamlar ajanların MCP'de gördüğüyle aynı olmalı
+            const [ozet] = await callAs(findPersona('ahmet'), targetOf(p, store), 'portfoy_ozeti', {});
+            if (ozet.isError) fail(`portfoy_ozeti: ${ozet.text}`);
+            const o = ozet.json as { saglik_skoru: number; projeler: { proje: string; skor: number }[] };
+            // Çalışma alanı kopyası depoya girmez: geçici dizinde kalır, koşudan sonra silinir
+            const tmp = await mkdtemp(join(tmpdir(), 'pilot-demo-'));
+            try {
+                await writeFile(join(tmp, 'workspace.json'), serializeWorkspace(ws, false), 'utf8');
+                await writeFile(join(tmp, 'beklenen.json'), JSON.stringify({ saglik_skoru: o.saglik_skoru, projeler: o.projeler.map(x => ({ proje: x.proje, skor: x.skor })) }), 'utf8');
+                const out = resolve(str(flags, 'cikti') || join(p.dir, 'demo-testi', todayTr()));
+                const r = spawnSync(process.execPath, [...process.execArgv, script, '--veri', join(tmp, 'workspace.json'), '--beklenen', join(tmp, 'beklenen.json'), '--cikti', out,
+                    ...(flags.ekran ? ['--ekran'] : []), ...(str(flags, 'arayuz') ? ['--arayuz', str(flags, 'arayuz')!] : [])], { stdio: 'inherit' });
+                process.exitCode = r.status ?? 1;
+            } finally {
+                await rm(tmp, { recursive: true, force: true });
+            }
             return;
         }
         default:
