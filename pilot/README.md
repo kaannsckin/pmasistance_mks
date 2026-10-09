@@ -4,8 +4,10 @@ Uygulamayı, gerçek veri olmadan, her gün "kullanılıyormuş gibi" sınamak i
 
 | Rutin | Ne yapar | Talimat |
 |---|---|---|
-| **1. Jira ajanı** (07:45) | Kurgusal birimin bir gününü üretir. **Sahte Jira**: yeni kayıt, işe başlama, worklog, kapanış, yeniden açılma; gerçek Jira REST API'siyle aynı biçimde. Ayrıca Confluence tarzı toplantı/karar notları, arka plandaki birim (haftalık rapor akışı, ay başı gerçekleşen adam-ay, KALKAN'ın PY'si), ara sıra müşteri isteği ve yönetimden beklenti. Yapay zekâ günün akışına uygun notlar ekler. | [`RUTIN_1_VERI.md`](./RUTIN_1_VERI.md) |
-| **2. Rol ajanları** (08:45) | Otomatik kontroller; sonra 5 rol ajanı uygulamayı MCP üzerinden kendi rolleriyle **günde bir kez** kullanır. PY'ler güne Jira'dan aktarımla başlar (`jira_aktar`). Ajanlar dünkü mesajları yanıtlar, yenilerini bırakır (ertesi gün okunur). Günün raporu ve bulgular PR'a yorum olarak düşer. | [`RUTIN_2_KULLANICILAR.md`](./RUTIN_2_KULLANICILAR.md) |
+| **1. Jira ajanı** (Salı + Perşembe 07:45) | Son koşudan bu yana geçen günleri üretir. **Sahte Jira**: yeni kayıt, işe başlama, worklog, kapanış, yeniden açılma; gerçek Jira REST API'siyle aynı biçimde. Ayrıca Confluence tarzı toplantı/karar notları, arka plandaki birim (haftalık rapor akışı, ay başı gerçekleşen adam-ay, KALKAN'ın PY'si), ara sıra müşteri isteği ve yönetimden beklenti. Yapay zekâ günün akışına uygun notlar ekler. | [`RUTIN_1_VERI.md`](./RUTIN_1_VERI.md) |
+| **2. Rol ajanları** (Salı + Perşembe 08:45) | Otomatik kontroller; sonra 5 rol ajanı uygulamayı MCP üzerinden kendi rolleriyle **koşu başına bir kez, üç aşamada** kullanır: önce PY'ler, sonra bölüm sorumlusu ve PYB destek, en son müdür. PY'ler koşuya Jira'dan aktarımla başlar (`jira_aktar`), Perşembe haftalık raporu yazar. Koordinatör ön puan önerir, kullanıcı puanı ajanlara geri döner; karar "demoya hazır mı?" sorusuna verilir. | [`RUTIN_2_KULLANICILAR.md`](./RUTIN_2_KULLANICILAR.md) |
+
+Senaryo takvimi: [`SENARYOLAR.md`](./SENARYOLAR.md) (yalnız Jira ajanı ve koordinatör okur). Kod dalı `claude/nice-cerf-r9wv1r` (main + PR #49 + pilot v2).
 
 Uygulamanın çalışma alanı **Supabase'de** durur (aşağıda "Bulut modu"); sahte Jira, simülasyon durumu, olaylar, raporlar ve bulgular **`claude/pilot-veri`** dalında (`pilot-data/`, kod dalına karışmaz).
 
@@ -105,10 +107,16 @@ npm run -s pilot -- kontrol --cikti pilot-data/gunluk/$(date +%F)/kontrol.md
 | `durum.json` | Simülasyonun iç durumu (kayıtların gerçek eforu, saat toplamları) |
 | `olaylar/GG.md` | Günün akışı — kullanıcılar bunu okur |
 | `confluence/*.md` | Toplantı/karar notları |
-| `gunluk/GG/` | 2. rutinin kontrol sonucu, ajan çıktıları ve günün mesajları (`sohbet.md`; ertesi gün yanıtlanır) |
+| `gunluk/GG/` | 2. rutinin kontrol sonucu, ajan çıktıları ve koşunun mesajları (`sohbet.md`; sonraki aşama ya da koşu yanıtlar) |
+| `haftalik/<YYYY-Hnn>/<KOD>.md` | PY haftalık raporları: aşama, gönderilen hâl ve ilk taslak (rapor araçları MCP'ye gelene kadar) |
+| `ajanda/<persona>.md` | Ajanın verdiği sözler, haftanın hedefleri, bekleyen işler (sonraki koşuda karşısına gelir) |
+| `puanlar.json` | Koordinatör ön puanları ve kullanıcı puanları (ajanlar son 5'ini görür) |
 | `raporlar/GG.md`, `raporlar/OZET.md` | Günlük rapor ve gün gün özet tablosu |
 | `bulgular.json` | Açık/kapanan bulgular (tekrar edenler izlenir) |
 
-## Main'e alma ölçütü
+## Karar ölçütleri
 
-`raporlar/OZET.md` her gün güncellenir. Öneri: **art arda 3 iş günü** otomatik kontrollerin tamamı geçtiyse ve açık "yüksek" önemde bulgu yoksa PR main'e alınabilir.
+`raporlar/OZET.md` her koşuda güncellenir ve iki karar taşır:
+
+- **Demo kararı** (asıl soru): DH1–DH6 ölçütleri — kontroller, açık bulgular, veri tutarlılığı, PY puan ortalaması (son 4 koşuda ≥ 80), senaryolar ve müdürün demo yoklaması. Ayrıntı: `RUTIN_2_KULLANICILAR.md` › 6.
+- **Kod birleştirme:** art arda 3 koşuda otomatik kontrollerin tamamı geçtiyse ve açık "yüksek" önemde bulgu yoksa PR main'e alınabilir.
