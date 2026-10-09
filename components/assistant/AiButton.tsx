@@ -17,7 +17,8 @@ export const useAiRun = (kind: 'embedded' | 'scoring' = 'embedded') => {
 
   useEffect(() => () => ctrl.current?.abort(), []);
 
-  const run = useCallback(async <T,>(system: string, prompt: string, parse: (text: string) => T): Promise<T | null> => {
+  /** Hata olursa null döner ve hata gösterilir; onError iptal dışındaki hatalarda çağrılır (günlük için) */
+  const run = useCallback(async <T,>(system: string, prompt: string, parse: (text: string) => T, opts?: { onError?: (message: string) => void }): Promise<T | null> => {
     if (!a) return null;
     ctrl.current?.abort();
     const c = new AbortController();
@@ -28,14 +29,72 @@ export const useAiRun = (kind: 'embedded' | 'scoring' = 'embedded') => {
       return parse(await a.complete(system, prompt, c.signal));
     } catch (e) {
       if (c.signal.aborted || (e instanceof AiError && e.code === 'aborted')) return null;
-      setError((e as Error)?.message || 'AI isteği başarısız.');
+      const message = (e as Error)?.message || 'AI isteği başarısız.';
+      setError(message);
+      opts?.onError?.(message);
       return null;
     } finally {
       if (ctrl.current === c) setLoading(false);
     }
   }, [a]);
 
-  return { available: !!a?.enabled && (kind === 'scoring' || !!a?.embeddedEnabled), run, loading, error, setError };
+  return { available: !!a?.enabled && (kind === 'scoring' || !!a?.embeddedEnabled), run, loading, error, setError, model: a?.status?.model };
+};
+
+export interface AiBatchJob {
+  system: string;
+  prompt: string;
+}
+
+export interface AiBatchResult<T> {
+  results: (T | null)[]; // iş sırasıyla; yanıtı alınamayan ya da çözümlenemeyen null
+  errors: string[];
+  aborted: boolean;
+}
+
+/**
+ * Toplu AI koşusu (altın set değerlendirmesi gibi): useAiRun ile aynı yol
+ * (ad maskeleme ve AI politikası), en fazla `concurrency` paralel çağrı,
+ * iptal edilebilir, ilerleme bildirir. Tek işteki hata koşuyu durdurmaz.
+ */
+export const useAiBatch = () => {
+  const a = useAssistantOptional();
+  const ctrl = useRef<AbortController | null>(null);
+  const [progress, setProgress] = useState<{ done: number; failed: number; total: number } | null>(null);
+
+  useEffect(() => () => ctrl.current?.abort(), []);
+
+  const runAll = useCallback(async <T,>(jobs: AiBatchJob[], parse: (text: string, index: number) => T, concurrency = 2): Promise<AiBatchResult<T>> => {
+    const results: (T | null)[] = jobs.map(() => null);
+    const errors: string[] = [];
+    if (!a) return { results, errors: ['AI asistanı kullanılamıyor.'], aborted: false };
+    ctrl.current?.abort();
+    const c = new AbortController();
+    ctrl.current = c;
+    let next = 0, done = 0, failed = 0;
+    setProgress({ done, failed, total: jobs.length });
+    const worker = async () => {
+      while (!c.signal.aborted && next < jobs.length) {
+        const i = next++;
+        try {
+          results[i] = parse(await a.complete(jobs[i].system, jobs[i].prompt, c.signal), i);
+        } catch (e) {
+          if (c.signal.aborted || (e instanceof AiError && e.code === 'aborted')) break;
+          failed++;
+          errors.push((e as Error)?.message || 'AI isteği başarısız.');
+        }
+        done++;
+        setProgress({ done, failed, total: jobs.length });
+      }
+    };
+    await Promise.all(Array.from({ length: Math.max(1, Math.min(concurrency, jobs.length)) }, worker));
+    if (ctrl.current === c) setProgress(null);
+    return { results, errors, aborted: c.signal.aborted };
+  }, [a]);
+
+  const cancel = useCallback(() => ctrl.current?.abort(), []);
+
+  return { available: !!a?.enabled && !!a?.embeddedEnabled, runAll, cancel, progress, running: progress !== null, model: a?.status?.model };
 };
 
 interface AiButtonProps {

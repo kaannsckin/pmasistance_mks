@@ -507,9 +507,24 @@ export interface Project {
   objectives: Objective[];
   workPackages: WorkPackage[]; // Proje bazlı iş paketleri (İP)
   releasePlans?: ReleasePlan[]; // Sürüm planlama sihirbazı taslakları ve aktarılan planlar
+  aiProfile?: ProjectAiProfile; // Proje kartı: haftalık rapor AI'sına bağlam (PY düzenler; proje satırıyla paylaşılır)
   settings: ProjectSettings;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * Proje kartı: projeye hâkim olmayan okurun anlaması için AI'ya verilen kısa
+ * tanım, müşteriler, ürün, terimler ve rapor ipuçları. Proje sahibi PY yazar.
+ */
+export interface ProjectAiProfile {
+  summary?: string;
+  customers?: string;
+  product?: string;
+  glossary?: { term: string; explanation: string }[];
+  stakeholders?: string;
+  reportHints?: string;
+  updatedAt?: string;
 }
 
 /** Arayüz tercihi: klasik (mevcut) ya da modern (sade, iOS tarzı) */
@@ -650,6 +665,9 @@ export interface WorkspaceData {
   viewConfig?: ViewConfig; // Admin'in rol bazlı görünüm, filtre ve sıralama ayarları
   aiPolicy?: AiPolicy; // Admin'in yapay zekâ politikası
   estimateLog?: EstimateLogEntry[]; // Kayıt tahmini öneri günlüğü (en yeni sonda)
+  reportAiLog?: ReportAiLogEntry[]; // Haftalık rapor AI öneri günlüğü (en yeni sonda; metin yok)
+  reportGoldenSet?: ReportGoldenItem[]; // Rapor taslağı değerlendirmesi için seçilmiş onaylı raporlar
+  reportEvalRuns?: ReportEvalRun[]; // Rapor altın seti değerlendirmeleri (en yeni sonda, en çok 50)
   goldenSet?: GoldenItem[]; // Tahmin değerlendirmesi için doğrulanmış kapanmış kayıtlar
   evalRuns?: EvalRun[]; // Altın set değerlendirmeleri (en yeni sonda)
   modelEvals?: ModelEvalRun[]; // Klasik ML modelinin zaman ayrımlı sınamaları (en yeni sonda)
@@ -740,6 +758,8 @@ export interface ReportItem {
   text: string;
   meeting?: MeetingDetails;
   source?: 'ai' | 'note' | 'worklog' | 'meeting' | 'task' | 'manual';
+  /** AI'dan geldiyse uygulandığı andaki özgün hâli (kabul/düzenleme ölçüsü ve düzeltme örnekleri için) */
+  aiOriginal?: { text: string; category: ReportCategory };
 }
 
 export interface Abbreviation {
@@ -782,8 +802,8 @@ export interface WeeklyReport {
   stage: ReportStage;
   returnNote?: string; // iade gerekçesi (bir önceki aşamaya)
   worklog?: WorklogEntry[];
-  /** AI'nın ilk önerisi — onaylı son hâliyle birlikte ince ayar veri setine girer */
-  aiDraft?: { generatedAt: string; input: string; output: string };
+  /** AI'nın son önerisi — onaylı son hâliyle birlikte ince ayar veri setine girer */
+  aiDraft?: ReportAiDraft;
   /** PY'nin bu hafta projenin genel sağlığına verdiği puan (1–10); sağlık modelinin girdisi */
   pmScore?: number;
   pmScoreNote?: string; // tek cümlelik gerekçe
@@ -791,11 +811,69 @@ export interface WeeklyReport {
   planReview?: PlanReviewItem[];
   /** AI'nın rapor metnine verdiği puan (PYB destek haftayı yayınlarken hesaplanır) */
   aiAssessment?: AiReportAssessment;
+  /** PYB desteğin "örnek rapor" işareti: AI üslup örneklerinde öncelik alır */
+  exemplar?: boolean;
   authorPersonId?: string;
   authorName?: string;
   createdAt: string;
   updatedAt: string;
   history: ReportEvent[];
+}
+
+/**
+ * Rapora uygulanan AI önerisinin kaydı. Son girdi ve çıktı saklanır;
+ * itemIds birden fazla uygulamada birikir (kabul oranı ölçümü için).
+ */
+export interface ReportAiDraft {
+  generatedAt: string;
+  input: string;
+  output: string;
+  promptVersion?: string;
+  variant?: ReportPromptVariant;
+  model?: string;
+  mode?: 'append' | 'replace';
+  proposed?: { thisWeek: number; nextWeek: number };
+  itemIds?: string[];
+}
+
+/**
+ * İstem katmanları (değerlendirmede karşılaştırılır). base: varsayılan kılavuz
+ * ve sabit örnek · card: + proje kartı · examples: + dinamik örnekler ·
+ * rules: + kurum/bölüm kılavuzu ve öğrenilmiş kurallar · full: hepsi (üretim) ·
+ * ft: örneksiz (ince ayarlı model için)
+ */
+export type ReportPromptVariant = 'base' | 'card' | 'examples' | 'rules' | 'full' | 'ft';
+
+/**
+ * Rapor AI öneri günlüğü kaydı (metin yok, yalnız sayılar). Öneri
+ * uygulandığında, vazgeçildiğinde ya da hata verdiğinde; rapor taslaktan
+ * gönderildiğinde de AI maddelerinin ne kadarının aynen kaldığı yazılır.
+ */
+export interface ReportAiLogEntry {
+  at: string;
+  reportId: string;
+  projectId?: string;
+  departmentCode: string;
+  promptVersion: string;
+  variant?: ReportPromptVariant;
+  model?: string;
+  outcome: 'applied_append' | 'applied_replace' | 'discarded' | 'error' | 'submitted';
+  nThis: number;
+  nNext: number;
+  lintErrors: number;
+  lintWarnings: number;
+  /** Girdide dayanağı bulunmayan rakam/tarih/ad sayısı (önizlemede) */
+  ungrounded?: number;
+  /** Otomatik düzeltme turu yapıldı */
+  repaired?: boolean;
+  // Gönderimde: AI maddelerinin akıbeti
+  aiItems?: number;
+  kept?: number;
+  edited?: number;
+  deleted?: number;
+  humanAdded?: number;
+  /** Gönderimdeki format sorunları (kod → sayı) */
+  lintCodes?: Record<string, number>;
 }
 
 /** done: yapıldı · partial: kısmen · slipped: ertelendi · dropped: iptal / kapsam dışı (orana girmez) */
@@ -837,6 +915,51 @@ export interface AiPolicy {
   modelEstimate?: ModelEstimatePolicy; // planlamada klasik ML modeli önerisi (varsayılan: otomatik)
   scoring?: AiScoringPolicy;
   maskNames?: boolean; // AI'ya giden metinlerde kişi/proje/kurum adları takma adla (varsayılan açık)
+  reportGate?: ReportGatePolicy; // haftalık rapor taslağının kalite kapısı (PYB destek ayarlar)
+  reportAutoRepair?: boolean; // rapor taslağında format/dayanak sorunu varsa tek turluk otomatik düzeltme (varsayılan kapalı)
+}
+
+/** Rapor taslağı kalite kapısı: altın sette üretim istemi (full) bu eşikleri geçmeli; zorunluysa düzenleyicide uyarı */
+export interface ReportGatePolicy {
+  enforce: boolean;
+  maxLintErrorsPerReport: number; // rapor başına ortalama format hatası üst sınırı
+  maxUngroundedRate: number; // girdide dayanağı olmayan rakam/tarih/ad oranı üst sınırı (0–1)
+  minRecall: number; // onaylı son hâlin maddelerini kapsama alt sınırı (0–1)
+}
+
+/** Rapor altın seti: PYB desteğin seçtiği onaylı rapor (girdisi ve onaylı son hâliyle değerlendirilir) */
+export interface ReportGoldenItem {
+  reportId: string;
+  addedAt: string;
+  addedByName?: string;
+  note?: string;
+}
+
+/** Rapor taslağı ölçüleri (altın sette, rapor başına ortalama ya da toplam oran) */
+export interface ReportEvalMetrics {
+  lintErrorsPerReport: number | null;
+  lintWarningsPerReport: number | null;
+  ungroundedRate: number | null; // dayanaksız / denetlenen rakam·tarih·ad
+  recall: number | null; // eşleşen / onaylı madde
+  precision: number | null; // eşleşen / AI maddesi
+  categoryAccuracy: number | null; // eşleşen "bu hafta" maddelerinde tür aynı
+  unknownAbbrPerReport: number | null;
+  missingPerReport: number | null; // eksik bilgi sorusu (bilgi amaçlı)
+}
+
+/** Altın set değerlendirmesi (bir istem varyantı + yapılandırma sürümü + model için) */
+export interface ReportEvalRun {
+  id: string;
+  at: string;
+  promptVersion: string; // yapılandırma sürümü (istem + kılavuz + kurallar)
+  variant: ReportPromptVariant;
+  model?: string;
+  n: number; // yanıt alınan rapor
+  failed: number; // yanıtı alınamayan / çözümlenemeyen
+  skipped?: number; // girdisi bulunamadığı için koşulmayan
+  metrics: ReportEvalMetrics;
+  passed: boolean | null; // null: yetersiz örnek
+  reasons: string[];
 }
 
 /** Kalite kapısı: altın sette AI önerisi bu eşikleri geçmezse (zorunluysa) öneri gösterilmez */
@@ -902,6 +1025,43 @@ export interface ReportSettings {
   dueWeekday: number;
   /** Onay akışı ve kurallar (admin ayarlar); yoksa varsayılan akış */
   flow?: ReportFlow;
+  /** AI rapor kılavuzu (PYB destek düzenler); yoksa koddaki varsayılan */
+  guide?: ReportGuide;
+  /** Bölüme özgü EK kurallar (bölüm kodu → metin) */
+  departmentGuides?: Record<string, ReportGuideVersion>;
+  /** Geri bildirimden öğrenilen kurallar (PYB destek onaylamadan isteme girmez) */
+  learnedRules?: LearnedRule[];
+}
+
+/**
+ * Öğrenilmiş kural: tekrarlanan format hatalarından, AI taslağına yapılan
+ * düzeltmelerden ya da iade notlarından çıkarılır; PYB destek etkinleştirir.
+ */
+export interface LearnedRule {
+  id: string;
+  text: string;
+  scope: 'institution' | 'department' | 'project';
+  scopeId?: string; // bölüm kodu ya da proje kimliği
+  source: 'return' | 'lint' | 'edit' | 'manual';
+  status: 'proposed' | 'active' | 'retired';
+  evidenceCount: number;
+  examples?: string[]; // en çok 2, kısa
+  createdAt: string;
+  updatedAt?: string;
+  approvedByName?: string;
+}
+
+/** Sürümlü kılavuz metni (kaydedildikçe sürüm +1) */
+export interface ReportGuideVersion {
+  text: string;
+  version: number;
+  updatedAt: string;
+  updatedByName?: string;
+}
+
+/** Kurum kılavuzu: kurum adı + kılavuz gövdesi (boş metin = varsayılan kılavuz) */
+export interface ReportGuide extends ReportGuideVersion {
+  institutionName?: string;
 }
 
 /** Haftalık rapor akışı: hangi onay adımları var, gönderimde neler zorunlu */
@@ -957,7 +1117,8 @@ export type AuditAction =
   | 'expectation.create' | 'expectation.respond' | 'expectation.close'
   | 'report.submit' | 'report.approve' | 'report.return' | 'report.publish'
   | 'meeting.submit' | 'meeting.approve' | 'meeting.reject' | 'meeting.held'
-  | 'release.commit' | 'data.export';
+  | 'release.commit' | 'data.export'
+  | 'report.ai';
 
 export interface AuditEntry {
   id: string;

@@ -24,6 +24,21 @@ describe('sayfa rehberleri', () => {
         expect(startStepFor(GUIDES.forecast, 'release')).toBe(0);
     });
 
+    it('haftalık rapor: rol başına rehber; "i" açık sekmenin ya da düzenleyicinin adımından başlar', () => {
+        const ids = ['weeklyPy', 'weeklyBs', 'weeklySteward', 'weeklyExec'] as const;
+        ids.forEach(id => expect(GUIDES[id].id).toBe(id));
+        expect(GUIDES.weeklyPy.steps[startStepFor(GUIDES.weeklyPy, 'editor')].id).toBe('write');
+        expect(GUIDES.weeklyPy.steps[startStepFor(GUIDES.weeklyPy, 'mine')].id).toBe('welcome');
+        expect(GUIDES.weeklyBs.steps[startStepFor(GUIDES.weeklyBs, 'editor')].id).toBe('review');
+        expect(GUIDES.weeklyBs.steps[startStepFor(GUIDES.weeklyBs, 'status')].id).toBe('status');
+        const st = GUIDES.weeklySteward;
+        expect(st.steps[startStepFor(st, 'settings_general')].id).toBe('general');
+        expect(st.steps[startStepFor(st, 'settings_ai_guide')].id).toBe('guide');
+        expect(st.steps[startStepFor(st, 'settings_ai_quality')].id).toBe('quality');
+        expect(st.steps[startStepFor(st, 'report')].id).toBe('publish');
+        expect(startStepFor(GUIDES.weeklyExec, 'report')).toBe(0);
+    });
+
     describe('görüldü bilgisi', () => {
         const original = (globalThis as { localStorage?: Storage }).localStorage;
         afterEach(() => { (globalThis as { localStorage?: Storage }).localStorage = original; });
