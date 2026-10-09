@@ -10,8 +10,11 @@ import { parseReportSuggestion, reportConfigVersion } from '../../../utils/ai/we
 import { DEFAULT_INSTITUTION, DEFAULT_REPORT_GUIDE, DEPARTMENT_GUIDE_LIMIT, GUIDE_LIMIT, INSTITUTION_LIMIT, reportSystemFor } from '../../../utils/ai/reportGuide';
 import { weekLabel } from '../../../utils/weeklyReport';
 import { useAiBatch, useAiRun } from '../../assistant/AiButton';
+import { useAssistantOptional } from '../../assistant/AssistantContext';
 import { buildRulePrompt, parseRuleSuggestions, RULE_TEXT_LIMIT, RuleAction, ruleEvidence, RULES_SYSTEM } from '../../../utils/ai/reportRules';
 import { RULES_PER_SCOPE } from '../../../utils/ai/reportGuide';
+import { buildReportFineTuneDataset, reportFineTuneReadiness } from '../../../utils/ai/reportFineTune';
+import { VERDICT_LABELS } from '../../../utils/ai/fineTune';
 import { SwitchRow } from '../admin/controls';
 import { Icon } from '../icons';
 import { Card, Field, rowSep, Sheet } from '../ui';
@@ -465,6 +468,52 @@ export const LearnedRulesCard: React.FC<LearnedRulesCardProps> = ({ workspace, o
                     )))}</div>
                 </details>
             )}
+        </Card>
+    );
+};
+
+// ---------------------------------------------------------------- ince ayar kararı
+
+const VERDICT_TONE = { not_ready: 'm-tone-warn', not_needed: 'm-tone-ok', consider: 'm-tone-accent', recommended: 'm-tone-bad' } as const;
+const CHECK_ICON = { ok: ['check', 'm-ink-ok'], warn: ['alert', 'm-ink-warn'], fail: ['x', 'm-ink-bad'], info: ['info', 'm-text-3'] } as const;
+
+/** F8: ölçüye dayalı ince ayar kararı ve veri kümesi (eğitim, doğrulama, veri kartı) */
+export const ReportFineTuneCard: React.FC<{ workspace: WorkspaceData; dictionary: Abbreviation[] }> = ({ workspace, dictionary }) => {
+    const model = useAssistantOptional()?.status?.model;
+    const r = useMemo(() => reportFineTuneReadiness(workspace, model, dictionary), [workspace, model, dictionary]);
+    const [maskEntities, setMaskEntities] = useState(true);
+    const [made, setMade] = useState<{ train: number; validation: number; person: number; entity: number } | null>(null);
+    const prepare = () => {
+        const d = buildReportFineTuneDataset(workspace, { maskEntities, dictionary });
+        const stamp = new Date().toISOString().slice(0, 10);
+        if (d.train) downloadFile(`rapor-ince-ayar-egitim-${stamp}.jsonl`, `${d.train}\n`, 'application/jsonl');
+        if (d.validation) downloadFile(`rapor-ince-ayar-dogrulama-${stamp}.jsonl`, `${d.validation}\n`, 'application/jsonl');
+        downloadFile(`rapor-ince-ayar-veri-karti-${stamp}.json`, JSON.stringify(d.card, null, 2), 'application/json');
+        setMade({ train: d.stats.train, validation: d.stats.validation, person: d.stats.personRedactions, entity: d.stats.entityMasks });
+    };
+    return (
+        <Card title="AI ince ayarı" subtitle="Rapor taslağı modeli kurum diline ince ayarlanmalı mı? Karar altın setteki ölçüye dayanır; istem katmanları yetiyorsa ince ayarın maliyeti ve veri riski gereksizdir." labelledBy="wr-ft">
+            <div className={`rounded-xl px-3 py-2.5 flex flex-col gap-1 ${VERDICT_TONE[r.verdict]}`}>
+                <span className="text-[15px] font-semibold">{VERDICT_LABELS[r.verdict]}</span>
+                <span className="text-[14px]">{r.headline}</span>
+            </div>
+            <ul className="m-0 p-0 list-none flex flex-col">
+                {r.checks.map((c, i) => { const sep = rowSep(i); const [icon, tone] = CHECK_ICON[c.status]; return (
+                    <li key={c.label} className={`flex items-start gap-2.5 py-2 ${sep.className}`} style={sep.style}>
+                        <span className={tone} style={{ marginTop: 2 }}><Icon name={icon} size={16} /></span>
+                        <span className="flex-1 min-w-0 flex flex-col"><span className="text-[14.5px] m-text">{c.label}</span><span className="text-[13px] m-text-3">{c.detail}</span></span>
+                    </li>
+                ); })}
+            </ul>
+            {r.next.length > 0 && <ul className="m-0 pl-5 text-[14px] m-text-2 flex flex-col gap-1">{r.next.map(x => <li key={x}>{x}</li>)}</ul>}
+            <div className="flex flex-col -my-1">
+                <SwitchRow index={0} label="Proje ve kurum adlarını takma adla maskele" hint="Kişi adları her zaman [kişi] olarak maskelenir." on={maskEntities} onChange={setMaskEntities} />
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+                <button type="button" className="m-btn m-btn-gray" onClick={prepare}><Icon name="download" size={17} />Veri kümesini hazırla</button>
+                {made && <span className="text-[13px] m-text-3">{made.train} eğitim, {made.validation} doğrulama örneği; {made.person} kişi adı, {made.entity} proje/kurum adı maskelendi.</span>}
+            </div>
+            <p className="m-0 text-[12.5px] m-text-3">Veri kurum dışına otomatik gönderilmez; dosyalar bu tarayıcıya iner. Ayrıntı: docs/INCE_AYAR_KARARI.md › Haftalık rapor taslağı.</p>
         </Card>
     );
 };

@@ -13,7 +13,7 @@ import { Icon } from './icons';
 import { rowSep } from './ui';
 import ConsolidatedReport from './weekly/ConsolidatedReport';
 import { ReminderPanel, ReportSettingsPanel } from './weekly/Panels';
-import { LearnedRulesCard, ReportAiQualityCard, ReportEvalCard, ReportGuideCard } from './weekly/ReportAiPanels';
+import { LearnedRulesCard, ReportAiQualityCard, ReportEvalCard, ReportFineTuneCard, ReportGuideCard } from './weekly/ReportAiPanels';
 import { RuleAction } from '../../utils/ai/reportRules';
 import ReportEditor from './weekly/ReportEditor';
 import { EmptyState, Notice, NoticeState, Pill, STAGE_TONE, StagePill } from './weekly/shared';
@@ -391,7 +391,7 @@ const ModernWeeklyReport: React.FC<ModernWeeklyReportProps> = ({
                             <button key={t.key} type="button" className="m-segment" aria-pressed={settingsTab === t.key} onClick={() => setSettingsTab(t.key)}>{t.label}</button>
                         ))}
                     </div>
-                    {settingsTab === 'general' && <ReportSettingsPanel settings={settings} reports={workspace.weeklyReports || []} health={health} onChange={onUpdateSettings} />}
+                    {settingsTab === 'general' && <ReportSettingsPanel settings={settings} health={health} onChange={onUpdateSettings} />}
                     {settingsTab === 'ai_guide' && (
                         <div className="flex flex-col gap-5">
                             <ReportGuideCard workspace={workspace} onSaveGuide={onSaveReportGuide} onResetGuide={onResetReportGuide} onSaveDepartmentGuide={onSaveDepartmentGuide} />
@@ -402,6 +402,7 @@ const ModernWeeklyReport: React.FC<ModernWeeklyReportProps> = ({
                         <div className="flex flex-col gap-5">
                             <ReportAiQualityCard workspace={workspace} />
                             <ReportEvalCard workspace={workspace} dictionary={dictionary} onAddGolden={onAddReportGolden} onRemoveGolden={onRemoveReportGolden} onAddRun={onAddReportEvalRun} onUpdateGate={onUpdateReportGate} />
+                            <ReportFineTuneCard workspace={workspace} dictionary={dictionary} />
                         </div>
                     )}
                 </div>

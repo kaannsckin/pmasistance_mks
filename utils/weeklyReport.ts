@@ -748,27 +748,3 @@ export const teamsChatLink = (emails: string[], message: string, topic?: string)
     if (topic && emails.length > 1) q.push(`topicName=${encodeURIComponent(topic)}`);
     return `https://teams.microsoft.com/l/chat/0/0?${q.join('&')}`;
 };
-
-// ---------------------------------------------------------------- ince ayar veri seti
-
-/**
- * AI önerisi + onaylanmış son hâl çiftleri (JSONL, sohbet biçimi). Modelin
- * kurum diline ince ayarı (fine-tuning) için eğitim verisi olarak kullanılır.
- */
-export const fineTuneLines = (reports: WeeklyReport[], system: string): string[] =>
-    reports
-        .filter(r => r.stage === 'approved' && r.aiDraft?.input)
-        .map(r => JSON.stringify({
-            messages: [
-                { role: 'system', content: system },
-                { role: 'user', content: r.aiDraft!.input },
-                {
-                    role: 'assistant',
-                    content: JSON.stringify({
-                        buHafta: r.thisWeek.map(i => ({ tur: i.category, metin: itemDisplay(i) })),
-                        gelecekHafta: r.nextWeek.map(i => itemDisplay(i)),
-                        kisaltmalar: r.abbreviations.map(a => ({ kisaltma: a.abbr, acilim: a.expansion })),
-                    }),
-                },
-            ],
-        }));
