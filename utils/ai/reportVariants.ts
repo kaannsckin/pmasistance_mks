@@ -1,7 +1,8 @@
 import { ReportPromptVariant, WeeklyReport, WorkspaceData } from '../../types';
 import { stripProfileSection, withProfileSection } from './projectProfile';
 import { REPORT_PROMPT_VERSION, reportPromptVersion, reportSystemFor } from './reportGuide';
-import { buildReportPrompt, pickStyleReports } from './weeklyReportPrompt';
+import { correctionPairs, selectStyleExamples } from './reportExamples';
+import { buildReportPrompt } from './weeklyReportPrompt';
 
 /**
  * İstem katmanları ve varyantlar. Üretimde (rapor düzenleyici) "full"
@@ -40,7 +41,7 @@ export const REPORT_VARIANTS = Object.keys(VARIANT_LAYERS) as ReportPromptVarian
 /** Üretimdeki varyant (kalite kapısı bununla değerlendirilir) */
 export const PRODUCTION_VARIANT: ReportPromptVariant = 'full';
 
-type VariantWs = Pick<WorkspaceData, 'projects'> & Partial<Pick<WorkspaceData, 'weeklyReports' | 'reportSettings'>>;
+type VariantWs = Pick<WorkspaceData, 'projects'> & Partial<Pick<WorkspaceData, 'weeklyReports' | 'reportSettings' | 'reportGoldenSet'>>;
 
 /**
  * Bir rapor için sistem istemi ve kullanıcı istemi. Örnekler yalnız raporun
@@ -58,10 +59,11 @@ export const buildVariantRequest = (o: {
     // Kart katmanı: kartsız varyantta girdiden çıkarılır; kartlı varyantta eski girdide yoksa projenin bugünkü kartı eklenir
     const profile = o.ws.projects.find(p => p.id === o.report.projectId)?.aiProfile;
     const input = L.card ? withProfileSection(o.input, profile) : stripProfileSection(o.input);
-    const examples = L.examples ? pickStyleReports(o.ws, o.report) : [];
+    const examples = L.examples ? selectStyleExamples({ ws: o.ws, report: o.report, input }).map(e => e.text) : [];
+    const corrections = L.examples ? correctionPairs({ ws: o.ws, report: o.report }) : [];
     return {
         system: reportSystemFor(settings, o.report.departmentCode, { rules: L.rules }),
-        prompt: buildReportPrompt(input, examples, { fixedExample: L.fixedExample }),
+        prompt: buildReportPrompt(input, [], { fixedExample: L.fixedExample, examples, corrections }),
         promptVersion: L.rules ? reportPromptVersion(settings, o.report.departmentCode) : REPORT_PROMPT_VERSION,
     };
 };

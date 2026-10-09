@@ -55,6 +55,8 @@ export interface ModernWeeklyReportProps {
     onSaveReportGuide: (patch: { institutionName?: string; text: string }) => boolean;
     onResetReportGuide: () => boolean;
     onSaveDepartmentGuide: (code: string, text: string) => boolean;
+    /** PYB destek: onaylı raporu AI üslup örneği olarak işaretle */
+    onSetReportExemplar: (reportId: string, on: boolean) => boolean;
 }
 
 type Tab = 'mine' | 'inbox' | 'status' | 'report' | 'settings';
@@ -100,7 +102,7 @@ const ReportRows: React.FC<{ rows: Row[]; dictionary: ReturnType<typeof reportDi
 const ModernWeeklyReport: React.FC<ModernWeeklyReportProps> = ({
     workspace, identity, onSaveReport, onAdvanceReport, onReturnReport, onPublishWeek, onUnpublishWeek, onMarkEmailed, onUpdateSettings, onSetJiraKey, onOpenMeetings, onRatePmo, onSetAiAssessment, onLogReportAi,
     onAddReportGolden, onRemoveReportGolden, onAddReportEvalRun, onUpdateReportGate, onSaveProjectProfile,
-    onSaveReportGuide, onResetReportGuide, onSaveDepartmentGuide,
+    onSaveReportGuide, onResetReportGuide, onSaveDepartmentGuide, onSetReportExemplar,
 }) => {
     const role = identity.role;
     // Ekran kipi: rapor denetçisi (yetki), bölüm sorumlusu ve PY kimlik kuralı; diğerleri yayınlanan raporu okur
@@ -222,6 +224,7 @@ const ModernWeeklyReport: React.FC<ModernWeeklyReportProps> = ({
                 onOpenMeetings={onOpenMeetings}
                 onLogAi={onLogReportAi}
                 onSaveProjectProfile={onSaveProjectProfile}
+                onSetExemplar={steward ? onSetReportExemplar : undefined}
             />
         );
     }

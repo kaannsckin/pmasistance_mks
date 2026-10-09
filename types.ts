@@ -811,6 +811,8 @@ export interface WeeklyReport {
   planReview?: PlanReviewItem[];
   /** AI'nın rapor metnine verdiği puan (PYB destek haftayı yayınlarken hesaplanır) */
   aiAssessment?: AiReportAssessment;
+  /** PYB desteğin "örnek rapor" işareti: AI üslup örneklerinde öncelik alır */
+  exemplar?: boolean;
   authorPersonId?: string;
   authorName?: string;
   createdAt: string;

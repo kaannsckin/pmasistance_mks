@@ -27,6 +27,7 @@ import { addReportGolden, appendReportEvalRun, removeReportGolden } from './util
 import { VARIANT_META } from './utils/ai/reportVariants';
 import { setProjectProfile } from './utils/ai/projectProfile';
 import { resetReportGuide, saveDepartmentGuide, saveReportGuide } from './utils/ai/reportGuide';
+import { setReportExemplar } from './utils/ai/reportExamples';
 import { stampLifecycle } from './utils/planning/lifecycle';
 import { AllocationSuggestion, ApplyMode, applyAllocationSuggestions } from './utils/taskToAllocation';
 import { applyBilledHoursActuals, planBilledHoursPoolAdditions, suggestBilledHoursActuals, BilledApplyMode, BilledHoursOptions, BilledHoursRecord } from './utils/billedHours';
@@ -871,6 +872,17 @@ const App: React.FC = () => {
     commitReportSettings(ws => saveDepartmentGuide(reportSettingsOf(ws), identityOf(ws), code, text, actorOf(ws).name),
       `Rapor kılavuzu bölüm eki (${code}) ${text.trim() ? 'güncellendi' : 'kaldırıldı'}`), [commitReportSettings]);
 
+  // "Örnek rapor" işareti: sistem alanı (yayın kilidinden bağımsız), yalnız PYB destek
+  const handleSetReportExemplar = useCallback((reportId: string, on: boolean): boolean => {
+    const ws = workspaceRef.current;
+    if (!ws) return false;
+    const reports = setReportExemplar(ws, identityOf(ws), reportId, on);
+    const r = (ws.weeklyReports || []).find(x => x.id === reportId);
+    if (!reports || !r) return false;
+    commitWorkspace(appendAudit({ ...ws, weeklyReports: reports }, 'report.ai', `${reportLabel(ws, r)} raporu AI üslup örneği ${on ? 'olarak işaretlendi' : 'olmaktan çıkarıldı'}`, r.projectId));
+    return true;
+  }, [commitWorkspace]);
+
   // Proje kartı: yalnız proje sahibi PY (proje içeriği; denetim günlüğüne yazılmaz)
   const handleSaveProjectProfile = useCallback((projectId: string, profile: ProjectAiProfile | undefined): boolean => {
     const ws = workspaceRef.current;
@@ -1363,6 +1375,7 @@ const App: React.FC = () => {
           onSaveReportGuide={handleSaveReportGuide}
           onResetReportGuide={handleResetReportGuide}
           onSaveDepartmentGuide={handleSaveDepartmentGuide}
+          onSetReportExemplar={handleSetReportExemplar}
         />
       ) : (
         <ModernMeetings

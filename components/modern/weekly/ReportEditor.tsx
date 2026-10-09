@@ -188,6 +188,8 @@ export interface ReportEditorProps {
     onLogAi?: (entry: ReportAiLogEntry) => void;
     /** Proje kartı (yalnız proje sahibi PY) */
     onSaveProjectProfile?: (projectId: string, profile: ProjectAiProfile | undefined) => boolean;
+    /** PYB destek: onaylı raporu AI üslup örneği olarak işaretle */
+    onSetExemplar?: (reportId: string, on: boolean) => boolean;
 }
 
 // ---------------------------------------------------------------- proje kartı
@@ -246,7 +248,7 @@ const ProjectCardSheet: React.FC<{ profile?: ProjectAiProfile; canEdit: boolean;
     );
 };
 
-const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report, isNew, dictionary, health, onBack, onSave, onAdvance, onReturn, onSetJiraKey, onOpenMeetings, onLogAi, onSaveProjectProfile }) => {
+const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report, isNew, dictionary, health, onBack, onSave, onAdvance, onReturn, onSetJiraKey, onOpenMeetings, onLogAi, onSaveProjectProfile, onSetExemplar }) => {
     const [draft, setDraft] = useState<WeeklyReport>(report);
     const [dirty, setDirty] = useState(false);
     const [notice, setNotice] = useState<NoticeState>(null);
@@ -467,6 +469,13 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
                     </div>
                     <div className="flex items-center gap-2">
                         {dirty && <span className="text-[13px] m-text-3">Kaydedilmedi</span>}
+                        {onSetExemplar && report.kind === 'project' && report.stage === 'approved' && !isNew && (
+                            <button type="button" className="m-btn m-btn-plain !min-h-[44px]" aria-pressed={!!report.exemplar}
+                                title="Örnek raporlar, AI taslağında üslup örneği seçilirken öncelik alır."
+                                onClick={() => { if (!onSetExemplar(report.id, !report.exemplar)) setNotice({ kind: 'error', text: 'İşaret değiştirilemedi.' }); }}>
+                                <Icon name={report.exemplar ? 'check' : 'book'} size={16} />{report.exemplar ? 'Örnek rapor' : 'Örnek olarak işaretle'}
+                            </button>
+                        )}
                         {isNew && !dirty ? null : <StagePill stage={report.stage} returned={!!report.returnNote} />}
                     </div>
                 </div>

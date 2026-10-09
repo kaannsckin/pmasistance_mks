@@ -17,7 +17,7 @@ import { CATEGORY_META, isReportSteward, locative, THIS_WEEK_CATEGORIES } from '
  * İstem sürümü: istem ya da girdi biçimi her değiştiğinde artırılır. Öneri
  * günlüğü, rapordaki AI kaydı ve değerlendirme koşuları bu sürümle eşlenir.
  */
-export const REPORT_PROMPT_VERSION = 'rapor-taslak-2';
+export const REPORT_PROMPT_VERSION = 'rapor-taslak-3';
 
 export const DEFAULT_INSTITUTION = 'TÜBİTAK BİLGEM';
 export const GUIDE_LIMIT = 6000;

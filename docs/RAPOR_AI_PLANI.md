@@ -14,7 +14,7 @@ Taban çizgisi (9 Ekim 2026): `npx vitest run` → 88 dosya, 714 test; `npx tsc 
 | F2 | Altın set, çevrimdışı değerlendirme, kalite kapısı | Tamam | F2 commit |
 | F3 | Proje kartı ve zengin girdi | Tamam | F3 commit |
 | F4 | Düzenlenebilir, sürümlü kılavuz | Tamam | F4 commit |
-| F5 | Dinamik örnek ve düzeltme örnekleri | Bekliyor | |
+| F5 | Dinamik örnek ve düzeltme örnekleri | Tamam | F5 commit |
 | F6 | Çıktı denetimi ve tek turluk düzeltme | Bekliyor | |
 | F7 | Geri bildirimden öğrenilen kurallar | Bekliyor | |
 | F8 | İnce ayar veri kümesi ve karar kartı | Bekliyor | |

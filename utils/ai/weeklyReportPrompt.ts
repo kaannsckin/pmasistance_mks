@@ -1,4 +1,4 @@
-import { Abbreviation, CustomerMeeting, PlanReviewItem, Project, ReportCategory, ReportItem, TaskStatus, WeeklyReport, WorklogEntry, WorkspaceData } from '../../types';
+import { Abbreviation, CustomerMeeting, PlanReviewItem, Project, ReportCategory, ReportItem, TaskStatus, WeeklyReport, WorklogEntry } from '../../types';
 import { meetingToDetails } from '../customerMeetings';
 import { itemDisplay, meetingSentence, newItem, PLAN_REVIEW_LABELS, THIS_WEEK_CATEGORIES, weekLabel, weekStart } from '../weeklyReport';
 import { summarizeWorklog } from '../worklog';
@@ -120,35 +120,30 @@ export const buildReportInput = (i: ReportPromptInput): string => {
     return [...header, ...S.flatMap(sectionLines)].join('\n');
 };
 
-/** Tam istem: örnek + (varsa) kurumda onaylanmış stil örnekleri + bu haftanın girdisi. fixedExample = false: örneksiz (ince ayarlı model) */
-export const buildReportPrompt = (input: string, styleExamples: WeeklyReport[] = [], o: { fixedExample?: boolean } = {}): string => {
+export const EXAMPLES_HEADER = 'Kurumda onaylanmış önceki rapor maddelerinden örnekler (üslup için):';
+export const CORRECTIONS_HEADER = "AI'nın ilk yazdığı → kurumda onaylanan hâl (aynı hataları yapma):";
+
+/**
+ * Tam istem: sabit örnek + (varsa) kurumda onaylanmış üslup örnekleri ve
+ * düzeltme çiftleri + bu haftanın girdisi. styleExamples (rapor listesi) eski
+ * çağrı biçimidir; examples verilirse onlar kullanılır. fixedExample = false:
+ * sabit örnek yok (ince ayarlı model).
+ */
+export const buildReportPrompt = (
+    input: string,
+    styleExamples: WeeklyReport[] = [],
+    o: { fixedExample?: boolean; examples?: string[]; corrections?: { ai: string; approved: string }[] } = {},
+): string => {
     const S: string[] = o.fixedExample === false ? [] : [`ÖRNEK GİRDİ:\n${REPORT_EXAMPLE.input}\nÖRNEK ÇIKTI:\n${REPORT_EXAMPLE.output}`];
-    const lines = styleExamples.flatMap(r => r.thisWeek.map(itemDisplay)).filter(Boolean).slice(0, 8);
-    if (lines.length) S.push(`Kurumda onaylanmış önceki rapor maddelerinden örnekler (üslup için):\n${lines.map(l => `- ${clip(l, 300)}`).join('\n')}`);
+    const lines = o.examples ?? styleExamples.flatMap(r => r.thisWeek.map(itemDisplay)).filter(Boolean).slice(0, 8);
+    if (lines.length) S.push(`${EXAMPLES_HEADER}\n${lines.map(l => `- ${clip(l, 300)}`).join('\n')}`);
+    if (o.corrections?.length) S.push(`${CORRECTIONS_HEADER}\n${o.corrections.map(c => `- AI: ${c.ai}\n  Onaylanan: ${c.approved}`).join('\n')}`);
     S.push(`ŞİMDİKİ GİRDİ:\n${input}\n\nYukarıdaki kılavuza göre bu haftanın raporunu JSON olarak yaz.`);
     return S.join('\n\n');
 };
 
 /** Hafta sırası karşılaştırması: a, b'den önce mi */
 export const weekBefore = (a: { year: number; week: number }, b: { year: number; week: number }) => a.year < b.year || (a.year === b.year && a.week < b.week);
-
-/**
- * Üslup örneği olacak raporlar (aynı PY'nin son 3 onaylı raporu). Zaman
- * ayrımı: yalnız yazılan haftadan ÖNCEKİ haftalar; rapor kendisi asla.
- */
-export const pickStyleReports = (
-    ws: Pick<WorkspaceData, 'projects'> & Partial<Pick<WorkspaceData, 'weeklyReports'>>,
-    report: Pick<WeeklyReport, 'id' | 'year' | 'week' | 'projectId'>,
-    limit = 3,
-): WeeklyReport[] => {
-    const pm = ws.projects.find(p => p.id === report.projectId)?.pmPersonId;
-    if (!pm) return [];
-    return (ws.weeklyReports || [])
-        .filter(r => r.stage === 'approved' && r.kind === 'project' && r.id !== report.id && weekBefore(r, report)
-            && ws.projects.some(p => p.id === r.projectId && p.pmPersonId === pm))
-        .sort((a, b) => b.year - a.year || b.week - a.week)
-        .slice(0, limit);
-};
 
 /** Raporun JSON sözleşmesindeki hâli (değerlendirmede ve ince ayarda hedef yanıt) */
 export const reportAnswer = (r: Pick<WeeklyReport, 'thisWeek' | 'nextWeek' | 'abbreviations'>) => ({
