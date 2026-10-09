@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { UserRole, WorkspaceData } from '../../types';
 import { createMockJira, PILOT_JIRA_ENV, toRawIssue } from '../pilot/mockJira';
 import type { JiraIssueRecord } from '../../utils/integrations';
-import { APPLY_TOOL, createPlanAsistanMcp, JIRA_IMPORT_TOOL, JIRA_WORKLOG_TOOL, PlanAsistanMcpOptions, STATUS_TOOL } from './planasistan';
+import { APPLY_TOOL, createPlanAsistanMcp, JIRA_IMPORT_TOOL, JIRA_WORKLOG_TOOL, memoryProposalStore, PlanAsistanMcpOptions, STATUS_TOOL } from './planasistan';
 import { memorySource, sampleWorkspace } from './testUtils';
 
 const NOW = new Date('2026-07-15T09:00:00Z');
@@ -157,6 +157,27 @@ describe('PlanAsistan MCP — değişiklikler', () => {
         const tekrar = await call(APPLY_TOOL, { oneri_id: oneri.json.oneri_id });
         expect(tekrar.isError).toBe(true);
         expect(tekrar.json.hata).toContain('bulunamadı');
+    });
+
+    it('öneri deposu dışarıdan verilirse ayrı sunucu örneğinde de uygulanır (her çağrısı ayrı süreç olan istemciler)', async () => {
+        const store = memoryProposalStore();
+        const ws = sampleWorkspace();
+        const mem = memorySource(ws);
+        const make = () => createPlanAsistanMcp({ source: mem.source, role: 'py', person: 'Ayşe Kaya', allowWrite: true, proposals: store, now: () => NOW });
+        const first = JSON.parse((await make().callTool('oner_rag_guncelle', { proje: 'ALTAY', rag: 'red' })).content[0].text);
+        const res = await make().callTool(APPLY_TOOL, { oneri_id: first.oneri_id });
+        expect(res.isError).toBeUndefined();
+        expect(mem.saved[0].after.projects.find(p => p.id === 'altay')!.rag).toBe('red');
+    });
+
+    it('bilinmeyen parametre ve geçersiz seçenek açık hata verir', async () => {
+        const { call } = server(sampleWorkspace(), { role: 'pyb_destek' });
+        const unknown = await call('gorev_ara', { gecikme: true });
+        expect(unknown.isError).toBe(true);
+        expect(unknown.json.hata).toContain('geciken');
+        const wrong = await call('tahsis_ozeti', { alan: 'gerceklesen' });
+        expect(wrong.json.hata).toContain('plan, actual');
+        expect((await call('olmayan_arac')).json.hata).toContain('Bilinmeyen araç');
     });
 
     it('başkasının projesine öneri hazırlanamaz', async () => {

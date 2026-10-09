@@ -15,6 +15,7 @@ import { Retriever } from '../../utils/rag/retriever.js';
 import { guideDocs, workspaceDocs } from '../../utils/rag/sources.js';
 import { canEditProjectContent, identityNeedsPerson } from '../../utils/rbac.js';
 import { APP_VERSION } from '../../utils/workspace.js';
+import { validateArgs } from './args.js';
 import { McpServerOptions, McpTool, McpToolResult } from './protocol.js';
 import { ConflictError, LoadedWorkspace, SourceError, WorkspaceSource } from './source.js';
 
@@ -59,6 +60,8 @@ export interface PlanAsistanMcpOptions {
      * verilirse istekler ona gider (pilotta sahte Jira).
      */
     jira?: { env: Env; fetchImpl?: typeof fetch };
+    /** Bekleyen öneriler; verilmezse bellekte (her çağrının ayrı süreç olduğu ortamlarda dosya deposu verilir) */
+    proposals?: ProposalStore;
     now?: () => Date;
     log?: (message: string) => void;
 }
@@ -133,9 +136,41 @@ const JIRA_WORKLOG_SPEC: McpTool = {
     annotations: { readOnlyHint: true, openWorldHint: true },
 };
 
-type Pending =
+export type PendingProposal =
     | { kind: 'action'; action: AiAction; title: string; at: number }
     | { kind: 'jira'; projectId: string; key: string; issues: JiraIssueRecord[]; opts: JiraImportOptions; label: string; title: string; at: number };
+type Pending = PendingProposal;
+
+/** Uygulanmamış önerilerin deposu */
+export interface ProposalStore {
+    get: (id: string) => PendingProposal | undefined;
+    set: (id: string, p: PendingProposal) => void;
+    delete: (id: string) => void;
+    /** Süresi dolanları (30 dk) ve fazlasını (50) atar */
+    prune: (now: number) => void;
+}
+
+export const pruneProposals = (entries: [string, PendingProposal][], now: number): [string, PendingProposal][] =>
+    entries.filter(([, p]) => now - p.at <= PROPOSAL_TTL_MS).slice(-MAX_PROPOSALS);
+
+export const memoryProposalStore = (): ProposalStore => {
+    let m = new Map<string, PendingProposal>();
+    return {
+        get: id => m.get(id),
+        set: (id, p) => { m.set(id, p); },
+        delete: id => { m.delete(id); },
+        prune: t => { m = new Map(pruneProposals([...m.entries()], t)); },
+    };
+};
+
+/** Çağrılabilen her aracın parametre şeması (argüman denetimi için) */
+const SCHEMAS = new Map<string, ToolSpec['parameters']>([
+    ...AI_TOOLS.map(t => [t.spec.name, t.spec.parameters] as [string, ToolSpec['parameters']]),
+    [JIRA_IMPORT_TOOL, JIRA_IMPORT_SPEC.inputSchema],
+    [JIRA_WORKLOG_TOOL, JIRA_WORKLOG_SPEC.inputSchema],
+    [APPLY_TOOL, APPLY_SPEC.inputSchema],
+    [STATUS_TOOL, STATUS_SPEC.inputSchema],
+]);
 
 const isoDay = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const pct = (v: number) => `%${Math.round(v * 100)}`;
@@ -198,7 +233,8 @@ const keywordRag = (ctx: ToolContext): NonNullable<ToolContext['rag']> => {
 export const createPlanAsistanMcp = (o: PlanAsistanMcpOptions): McpServerOptions => {
     const now = o.now || (() => new Date());
     const log = o.log || (() => undefined);
-    const proposals = new Map<string, Pending>();
+    const proposals = o.proposals || memoryProposalStore();
+    const prune = () => proposals.prune(Date.now());
     const remember = (p: Pending): string => {
         prune();
         const id = `oneri-${randomUUID().slice(0, 8)}`;
@@ -246,12 +282,6 @@ export const createPlanAsistanMcp = (o: PlanAsistanMcpOptions): McpServerOptions
             : undefined;
         if (writeBlock) ctx.canWrite = false;
         return { loaded, ws, ctx, person, roleSource, writeBlock };
-    };
-
-    const prune = () => {
-        const t = Date.now();
-        for (const [id, p] of proposals) if (t - p.at > PROPOSAL_TTL_MS) proposals.delete(id);
-        while (proposals.size > MAX_PROPOSALS) proposals.delete(proposals.keys().next().value as string);
     };
 
     const status = async (): Promise<McpToolResult> => {
@@ -427,7 +457,12 @@ export const createPlanAsistanMcp = (o: PlanAsistanMcpOptions): McpServerOptions
             }
             return [STATUS_SPEC, ...specs.map(toMcpTool), ...jira, ...(canApply ? [APPLY_SPEC] : [])];
         },
-        callTool: async (name, args) => {
+        callTool: async (name, rawArgs) => {
+            const schema = SCHEMAS.get(name);
+            if (!schema) return fail(`Bilinmeyen araç: ${name}`);
+            const checked = validateArgs(name, schema, rawArgs);
+            if ('error' in checked) return fail(checked.error);
+            const args = checked.args;
             if (name === STATUS_TOOL) return status();
             if (name === APPLY_TOOL) return apply(args);
             let s: Session;

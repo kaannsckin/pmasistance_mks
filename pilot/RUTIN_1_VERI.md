@@ -27,11 +27,13 @@ Kurallar: Yalnız `claude/pilot-veri` dalına yaz ve gönder (bu dala gönderme 
 4. **Zenginleştir (yapay zekâ):** Üretilen her günün `pilot-data/olaylar/GG.md` dosyasını oku. Her **iş günü** için, Jira akışıyla tutarlı:
    - Aktif projelerin 1–2'sine Confluence tarzı bir not ekle: toplantı tutanağı, teknik karar kaydı, müşteri görüşmesi ya da risk değerlendirmesi. Katılımcılar projenin ekibinden olsun; günün kayıt anahtarlarına (ör. NHR-58) ve sayılarına atıf yap; bir karar ve sorumlu-tarihli bir aksiyon yaz. Türkçe, kurumsal, 5–12 satır.
      ```bash
-     npm run -s pilot -- not --proje NHR --baslik "Hata triyaj toplantısı" --etiket triyaj,karar --metin "Katılımcılar: …
+     npm run -s pilot -- not --proje NHR --tarih 2026-10-07 --baslik "Hata triyaj toplantısı" --etiket triyaj,karar --metin "Katılımcılar: …
      - NHR-58 ikinci kez yeniden açıldı; kök neden şema doğrulamada.
      - Karar: …
      - Aksiyon: Ozan Kılıç, 15 Ekim'e kadar …"
      ```
+     `--tarih` notun anlattığı gündür (varsayılan simülasyonun son günü); not o günün dosyasına ve haftasına girer.
+     Olaylar dosyasındaki "Jira kayıtlarına X sa" Jira'daki worklog'dur; "Jira dışı genel gider" (toplantı, proje yönetimi) Jira'da yoktur, notta saat verirken bu ayrıma uy.
    - Haftada bir–iki kez, durumla tutarlı bir **senaryo olayı** ekle: müşteri isteği (`pilot istek`), kapsam değişikliği, kilit kişinin izni, kritik hata. Olayın etkisini notta anlat. Aşırıya kaçma: amaç kullanıcıların tepki vereceği gerçekçi gelişmeler.
    - Hafta sonu/tatil günlerinde not ekleme. Jira dışa aktarımlarını elle düzenleme (yalnız simülasyon yazar).
 5. **Doğrula:** `npm run -s pilot -- ozet` çıktısında sayılar akla yatkın mı (her aktif projenin Jira'sında açık kayıt var, kapanan artıyor)? `npm run -s pilot -- kontrol` çalıştır; KALDI varsa özette belirt (veriyi elle düzeltme).

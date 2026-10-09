@@ -3,12 +3,14 @@ import { copyFile, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { TaskStatus, WorkspaceData } from '../../types.js';
+import type { JsonSchema } from '../../utils/ai/protocol.js';
 import { parseImportedJson } from '../../utils/workspace.js';
 import { createPlanAsistanMcp, APPLY_TOOL, STATUS_TOOL } from '../mcp/planasistan.js';
 import { createMcpHandler } from '../mcp/protocol.js';
 import { fileSource } from '../mcp/source.js';
 import { fetchJiraIssuesPage, fetchJiraWorklogs } from '../integrations/handler.js';
 import { mockJiraFromDir, PILOT_JIRA_ENV, SearchResponse } from './mockJira.js';
+import { fileProposalStore, proposalPath } from './proposals.js';
 import { fullName, Persona, PERSONAS, personById } from './world.js';
 
 /**
@@ -39,6 +41,8 @@ export const personaOptions = (persona: Persona, path: string, writable: boolean
     project: persona.project,
     allowWrite: writable,
     jira: pilotJira(jiraDir),
+    // Öneri bir çağrıda, onay başka bir çağrıda (ayrı süreç) yapılabilsin
+    proposals: fileProposalStore(proposalPath(path, persona.id)),
     ...(now ? { now: () => now } : {}),
 });
 
@@ -75,9 +79,9 @@ export const callAs = async (persona: Persona, path: string, name: string, args:
     return [first, await call(APPLY_TOOL, { oneri_id: first.json.oneri_id })];
 };
 
-export const listToolsAs = async (persona: Persona, path: string, writable = true): Promise<{ name: string; title?: string; description: string; readOnly: boolean }[]> => {
-    const res = await handlerFor(persona, path, writable)({ jsonrpc: '2.0', id: nextId++, method: 'tools/list' }) as { result: { tools: { name: string; title?: string; description: string; annotations?: { readOnlyHint?: boolean } }[] } };
-    return res.result.tools.map(t => ({ name: t.name, title: t.title, description: t.description, readOnly: t.annotations?.readOnlyHint !== false }));
+export const listToolsAs = async (persona: Persona, path: string, writable = true): Promise<{ name: string; title?: string; description: string; readOnly: boolean; inputSchema: JsonSchema }[]> => {
+    const res = await handlerFor(persona, path, writable)({ jsonrpc: '2.0', id: nextId++, method: 'tools/list' }) as { result: { tools: { name: string; title?: string; description: string; inputSchema: JsonSchema; annotations?: { readOnlyHint?: boolean } }[] } };
+    return res.result.tools.map(t => ({ name: t.name, title: t.title, description: t.description, readOnly: t.annotations?.readOnlyHint !== false, inputSchema: t.inputSchema }));
 };
 
 const persona = (id: string): Persona => PERSONAS.find(p => p.id === id)!;
@@ -187,6 +191,10 @@ export const runChecks = async (path: string, o: { bundle?: string; now?: Date }
         if (!Number.isFinite(toolPlan) || Math.abs(toolPlan - direct) > 0.011) planGaps.push(`${prj.name}: araç ${toolPlan}, veri ${direct}`);
     }
     add(`tahsis plan toplamları (${year})`, planGaps.length === 0, planGaps.join('; ') || 'tüm projelerde tutarlı');
+    const capacity = (await callAs(mert, path, 'kapasite_talep', { yil: year, sadece_acik: false }))[0];
+    add('kapasite_talep: talep rollerle eşleşiyor (rolsüz tahsis yok)', !capacity.isError && !capacity.json.uyari, String(capacity.json.uyari || capacity.json.hata || `${(capacity.json.satirlar as unknown[] | undefined)?.length ?? 0} rol satırı`).slice(0, 180));
+    const unknownArg = (await callAs(mert, path, 'gorev_ara', { gecikme: true }))[0];
+    add('bilinmeyen parametre sessizce yok sayılmaz', unknownArg.isError && /geciken/.test(unknownArg.text), String(unknownArg.json.hata || unknownArg.text).slice(0, 160));
 
     // 5. Sahte Jira ↔ uygulamanın Jira istemcisi (gerçek Jira'yla aynı uçlar ve biçim)
     const jiraDir = join(dirname(path), 'jira');

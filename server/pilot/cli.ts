@@ -7,6 +7,7 @@ import type { Note, Project, WorkspaceData } from '../../types.js';
 import { matchByText } from '../../utils/ai/scope.js';
 import { isoWeekOf } from '../../utils/weeklyReport.js';
 import { parseImportedJson, serializeWorkspace } from '../../utils/workspace.js';
+import { describeParams } from '../mcp/args.js';
 import { callAs, checksMarkdown, listToolsAs, runChecks } from './check.js';
 import { mockJiraFromDir } from './mockJira.js';
 import { addDays, at, createState, createWorld, dateOf, DayEvents, eventsMarkdown, jiraExports, runUntil, SIM_VERSION, SimState } from './sim.js';
@@ -24,8 +25,8 @@ Veri (1. rutin — Jira ajanı):
   baslat [--tarih GG] [--gecmis 120] [--tohum 2026] [--zorla]   Kurgusal birimi kurar, geçmişi dünü dahil doldurur
   gun [--tarih GG]                                              Sahte Jira'yı ve birimi bu güne kadar ilerletir (varsayılan: dün)
   jira-sunucu [--port 8787]                                     Sahte Jira'yı HTTP'de açar (tarayıcıdaki uygulama için)
-  not --proje ATL --baslik "…" --metin "…" [--etiket a,b]       Confluence tarzı toplantı/karar notu ekler
-  istek --proje ATL --baslik "…" --aciklama "…" [--musteri "…"] Müşteri isteği ekler
+  not --proje ATL --baslik "…" --metin "…" [--etiket a,b] [--tarih GG]   Confluence tarzı toplantı/karar notu ekler
+  istek --proje ATL --baslik "…" --aciklama "…" [--musteri "…"] [--tarih GG]  Müşteri isteği ekler
   ozet                                                          Veri özeti
 
 Kullanıcılar (2. rutin):
@@ -104,6 +105,16 @@ const writeDay = async (p: ReturnType<typeof paths>, e: DayEvents) => {
     for (const c of e.confluence) await writeAtomic(join(p.confluence, c.dosya), c.icerik);
 };
 
+/** Notun/isteğin günü: --tarih (simülasyonun son gününü geçemez) ya da son gün */
+const noteDay = (flags: Flags, state: SimState): string => {
+    const last = state.sonGun || todayTr();
+    const wanted = str(flags, 'tarih');
+    if (!wanted) return last;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(wanted)) return fail(`--tarih YYYY-AA-GG olmalı: ${wanted}`);
+    if (wanted > last) return fail(`--tarih (${wanted}) simülasyonun son gününden (${last}) sonra olamaz.`);
+    return wanted;
+};
+
 const findProject = (ws: WorkspaceData, ref: string | undefined): Project => {
     if (!ref) return fail('--proje gerekli (Jira anahtarı, kod ya da ad).');
     const w = PROJECTS.find(x => x.jiraKey.toLowerCase() === ref.toLowerCase());
@@ -174,7 +185,7 @@ const main = async () => {
             const project = findProject(ws, str(flags, 'proje'));
             const baslik = str(flags, 'baslik') || fail('--baslik gerekli');
             const metin = str(flags, 'metin') || fail('--metin gerekli');
-            const day = state.sonGun || todayTr();
+            const day = noteDay(flags, state);
             const { year, week } = isoWeekOf(dateOf(day));
             const key = PROJECTS.find(x => x.id === project.id)?.jiraKey || project.code || 'PRJ';
             const content = `**${baslik} — ${project.name}**\n_Kaynak: Confluence › ${key} › ${day}_\n${metin}`;
@@ -191,7 +202,7 @@ const main = async () => {
         case 'istek': {
             const { ws, state } = await loadAll(p);
             const project = findProject(ws, str(flags, 'proje'));
-            const day = state.sonGun || todayTr();
+            const day = noteDay(flags, state);
             state.sayac++;
             const req = {
                 id: `istek-ek-${String(state.sayac).padStart(5, '0')}`, title: str(flags, 'baslik') || fail('--baslik gerekli'), description: str(flags, 'aciklama') || '',
@@ -235,7 +246,8 @@ const main = async () => {
         case 'araclar': {
             const persona = findPersona(pos[1]);
             const tools = await listToolsAs(persona, p.ws, true);
-            print(tools.map(t => `${t.readOnly ? '  ' : '✎ '}${t.name} — ${t.title || ''}: ${t.description.slice(0, 140)}`).join('\n'));
+            // Parametreler şemadan: ajan ad tahmin etmesin (bilinmeyen parametre zaten reddedilir)
+            print(tools.map(t => `${t.readOnly ? '  ' : '✎ '}${t.name} — ${t.title || ''}: ${t.description.slice(0, 160)}\n      parametreler: ${describeParams(t.inputSchema)}`).join('\n'));
             return;
         }
         case 'arac': {
