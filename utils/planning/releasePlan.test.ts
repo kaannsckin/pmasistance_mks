@@ -37,6 +37,24 @@ describe('kayıt girişi', () => {
         expect(items[1].ownEstimateDays).toBeUndefined();
     });
 
+    it('sütun adları tam eşleşir; aynı alana düşen ikinci sütun ve tek bilinen ad başlık sayılmaz', () => {
+        const a = parsePastedItems('Özet\tKayıt Türü\tÖncelik\tTahmin (gün)\tGüncellendi\nGiriş\tHata\tYüksek\t2\t2026-10-01');
+        expect(a).toHaveLength(1);
+        expect(a[0]).toMatchObject({ name: 'Giriş', issueType: 'bug', priority: 'High', ownEstimateDays: 2 });
+        // İlk kaydın adı "Ad…" ile başlıyor: başlık satırı sanılmaz
+        const b = parsePastedItems('Adres doğrulama\tAçıklama yok\tBug\tHigh\tYazılım\t3\nKayıt formu\t\tStory\tLow\tYazılım\t2');
+        expect(b.map(i => [i.name, i.issueType, i.ownEstimateDays])).toEqual([['Adres doğrulama', 'bug', 3], ['Kayıt formu', 'feature', 2]]);
+        const c = parsePastedItems('Başlık\tTahmin\tSüre\nRapor\t4\t9');
+        expect(c[0].ownEstimateDays).toBe(4);
+    });
+
+    it('Excel tırnaklı hücreler ve tahmin biçimleri', () => {
+        const items = parsePastedItems('Başlık\tAçıklama\tTahmin\n"Rapor ""v2"""\t"satır bir\nsatır iki"\t3\nAralık\t\t2-3\nSaat\t\t16 saat\nKarışık\t\t2d 4h');
+        expect(items.map(i => i.name)).toEqual(['Rapor "v2"', 'Aralık', 'Saat', 'Karışık']);
+        expect(items[0]).toMatchObject({ notes: 'satır bir\nsatır iki', ownEstimateDays: 3 });
+        expect(items.map(i => i.ownEstimateDays)).toEqual([3, undefined, 2, undefined]);
+    });
+
     it('başlıksız "başlık | açıklama" ve düz satırlar', () => {
         expect(parsePastedItems('A | açıklama A\nB | açıklama B').map(i => [i.name, i.notes])).toEqual([['A', 'açıklama A'], ['B', 'açıklama B']]);
         expect(parsePastedItems('Tek satır\n\n İkinci ').map(i => i.name)).toEqual(['Tek satır', 'İkinci']);
@@ -132,6 +150,27 @@ describe('sürüm simülasyonu', () => {
         expect(s!.removed).not.toContain(items[0].id);
         expect(s!.probability).toBeGreaterThanOrEqual(0.8);
     });
+
+    it('kapsam önerisi kritik yola girmeyen kaydı çıkarmaz, gereksiz çıkarmayı geri alır', async () => {
+        const proj = project();
+        const items = [
+            newItem({ name: 'B', ownEstimateDays: 4, priority: 'Blocker', resourceName: 'Ayşe' }),
+            newItem({ name: 'L', ownEstimateDays: 2, priority: 'Low', resourceName: 'Ayşe' }),
+            newItem({ name: 'M', ownEstimateDays: 6, priority: 'Medium', resourceName: 'Ayşe' }),
+            newItem({ name: 'Boşta', ownEstimateDays: 1, priority: 'Low', resourceName: 'Ali' }), // Ali'nin şeridinde, hiç kritik değil
+        ];
+        const p = { ...plan(items), targetDate: '2026-10-20', testDays: 0 };
+        const sim = buildReleaseSimulation(proj, p, buildHistory([]), {}, { now: NOW, iterations: 300, seed: 1 });
+        const r = runMonteCarlo(sim.built.input);
+        expect(groupOf(r, RELEASE_GROUP)!.targetProbability!).toBeLessThan(0.8);
+        const tried: string[][] = [];
+        const s = await suggestDescope(p, { result: r, built: sim.built }, async ex => {
+            tried.push(ex);
+            return ex.includes(items[2].id) ? (ex.includes(items[1].id) ? 0.95 : 0.9) : 0.6;
+        });
+        expect(tried.some(ex => ex.includes(items[3].id))).toBe(false);
+        expect(s).toEqual({ removed: [items[2].id], probability: 0.9 });
+    });
 });
 
 describe('kilometre taşları', () => {
@@ -149,7 +188,20 @@ describe('kilometre taşları', () => {
         expect(ms).toEqual([{ id: 'm1', name: 'A', itemIds: [p.items[0].id, p.items[1].id] }]);
     });
 
-    it('AI önerisi K etiketleriyle; bilinmeyen etiket atılır, eksikler son taşa', () => {
+    it('taşlardan sonra eklenen kayıt: aynı iş paketinin taşına, yoksa "Diğer kayıtlar"; simülasyon grubuna girer', () => {
+        const p0 = plan();
+        const ms0 = autoMilestones(p0, project()); // Kimlik, Raporlama
+        const p = { ...p0, milestones: [...ms0, { id: 'bos', name: 'Yeni taş', itemIds: [] }], items: [...p0.items, newItem({ name: 'Şifre', ownEstimateDays: 2, workPackageId: 'wp1' }), newItem({ name: 'Serbest', ownEstimateDays: 1 })] };
+        const ms = sanitizeMilestones(p.milestones, p, { keepEmpty: true });
+        expect(ms.map(m => [m.name, m.itemIds.map(id => p.items.find(i => i.id === id)!.name)])).toEqual([
+            ['Kimlik', ['Giriş', 'Şifre']], ['Raporlama', ['Rapor', 'Bildirim']], ['Yeni taş', []], ['Diğer kayıtlar', ['Serbest']],
+        ]);
+        const sim = buildReleaseSimulation(project(), p, buildHistory([]), {}, { now: NOW, iterations: 100 });
+        const kimlik = sim.built.input.groups!.find(g => g.id === ms0[0].id)!;
+        expect(kimlik.tasks).toHaveLength(2);
+    });
+
+    it('AI önerisi K etiketleriyle; bilinmeyen etiket atılır, eksikler iş paketinin taşına', () => {
         const p = plan();
         const prompt = milestonePrompt(p, new Map([['wp1', 'Kimlik']]));
         expect(prompt).toContain('[K1] Giriş');

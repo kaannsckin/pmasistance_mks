@@ -30,6 +30,8 @@ interface Outcome {
     built: BuiltSimulation;
     result: SimResult;
     throughput: ThroughputResult | null;
+    /** Bu sonucun hesaplandığı hedef tarih (girdi değişip yeni sonuç gelene kadar eskisi gösterilir) */
+    target?: string;
 }
 
 const fmt = (start: string, offset: number) => dateAtOffset(start, offset).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -59,6 +61,8 @@ const PlanSimulator: React.FC<Props> = ({ project, history, people, leaves, visi
     const versions = useMemo<number[]>(() => [...new Set<number>(project.tasks.filter(t => t.status !== TaskStatus.Done && t.includeInSprints !== false && t.version > 0).map(t => t.version))].sort((a, b) => a - b), [project.tasks]);
     const units = useMemo<string[]>(() => [...new Set<string>(project.resources.map(r => (r.unit || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'tr')), [project.resources]);
     const taskById = useMemo<Map<string, Task>>(() => new Map(project.tasks.map(t => [t.id, t])), [project.tasks]);
+    // Seçimde görünen birim (ilk kişinin birimi boşsa ya da artık yoksa listedeki ilk birim)
+    const extraUnitEff = units.includes(extraUnit) ? extraUnit : units[0] || '';
 
     useEffect(() => {
         const id = ++runId.current;
@@ -70,7 +74,7 @@ const PlanSimulator: React.FC<Props> = ({ project, history, people, leaves, visi
                 const now = new Date();
                 const built = buildSimulation(project, history, { people, leaves }, {
                     now, scope, excluded, pooling, testDays, iterations, target: target || undefined, visibleProjectIds,
-                    extraPeople: extraCount > 0 ? [{ unit: extraUnit, count: extraCount }] : [],
+                    extraPeople: extraCount > 0 ? [{ unit: extraUnitEff, count: extraCount }] : [],
                 });
                 const weekly = weeklyThroughput(history.report, project.id, now);
                 const throughput = weekly ? simulateThroughput(weekly, built.scopeCount, { iterations: built.input.iterations, seed: built.input.seed, testDays: built.input.testDays, targetOffset: built.input.targetOffset }) : null;
@@ -80,7 +84,7 @@ const PlanSimulator: React.FC<Props> = ({ project, history, people, leaves, visi
                 }
                 runSimulationAsync(built.input, abort.signal).then(result => {
                     if (id !== runId.current) return;
-                    setOutcome({ built, result, throughput });
+                    setOutcome({ built, result, throughput, target: target || undefined });
                     setRunning(false);
                 }, e => {
                     if (id !== runId.current || abort.signal.aborted) return;
@@ -93,7 +97,7 @@ const PlanSimulator: React.FC<Props> = ({ project, history, people, leaves, visi
             }
         }, 250);
         return () => { clearTimeout(timer); abort.abort(); };
-    }, [project, history, people, leaves, visibleProjectIds, scope, excluded, pooling, testDays, iterations, target, extraUnit, extraCount]);
+    }, [project, history, people, leaves, visibleProjectIds, scope, excluded, pooling, testDays, iterations, target, extraUnitEff, extraCount]);
 
     const exclude = (id: string) => setExcluded(xs => (xs.includes(id) ? xs : [...xs, id]));
     const r = outcome?.result;
@@ -146,7 +150,7 @@ const PlanSimulator: React.FC<Props> = ({ project, history, people, leaves, visi
                     {units.length > 0 && (
                         <div className="flex flex-wrap items-end gap-2">
                             <Field label="Ek kişi" htmlFor="ps-extra-unit">
-                                <select id="ps-extra-unit" className="m-input" value={extraUnit} onChange={e => setExtraUnit(e.target.value)}>
+                                <select id="ps-extra-unit" className="m-input" value={extraUnitEff} onChange={e => setExtraUnit(e.target.value)}>
                                     {units.map(u => <option key={u} value={u}>{u}</option>)}
                                 </select>
                             </Field>
@@ -194,8 +198,8 @@ const PlanSimulator: React.FC<Props> = ({ project, history, people, leaves, visi
                             ))}
                         </div>
                         <div className="flex flex-col gap-1.5 text-[15px]">
-                            {r.targetProbability !== null && (
-                                <p className="m-0 m-text">Hedef tarihe ({new Date(`${target}T00:00:00`).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' })}) yetişme olasılığı: <b className={probInk(r.targetProbability)}>{pct(r.targetProbability)}</b></p>
+                            {r.targetProbability !== null && outcome?.target && (
+                                <p className="m-0 m-text">Hedef tarihe ({new Date(`${outcome.target}T00:00:00`).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' })}) yetişme olasılığı: <b className={probInk(r.targetProbability)}>{pct(r.targetProbability)}</b></p>
                             )}
                             <p className="m-0 m-text-2">
                                 Tek nokta plan (herkes tahmin ettiği sürede bitirirse) {fmt(b.start, r.deterministic)} diyor; bunun tutma olasılığı <b className={probInk(detProb)}>{pct(detProb)}</b>.

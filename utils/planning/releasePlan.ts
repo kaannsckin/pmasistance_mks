@@ -69,49 +69,88 @@ export const itemFromTask = (t: Task): ReleasePlanItem => {
 
 // ---------------------------------------------------------------- yapıştırma
 
-const HEADER_KEYS: [RegExp, keyof ParsedRow][] = [
-    [/^(baslik|ozet|summary|title|ad|kayit)/, 'name'],
-    [/^(aciklama|description|detay)/, 'notes'],
-    [/^(tur|issue ?type|type|tip)/, 'type'],
-    [/^(onem|oncelik|priority)/, 'priority'],
-    [/^(birim|unit|component|bilesen)/, 'unit'],
-    [/^(tahmin|estimate|efor|gun|sure)/, 'estimate'],
-];
 interface ParsedRow { name?: string; notes?: string; type?: string; priority?: string; unit?: string; estimate?: string }
+/** Bilinen sütun adları (katlanmış, parantez içi atılmış; tam eşleşme) */
+const HEADER_ALIASES: Record<keyof ParsedRow, string[]> = {
+    name: ['baslik', 'ozet', 'summary', 'title', 'ad', 'adi', 'kayit', 'kayit adi', 'gorev', 'gorev adi', 'is', 'name'],
+    notes: ['aciklama', 'description', 'detay', 'detaylar', 'not', 'notlar', 'notes'],
+    type: ['tur', 'turu', 'kayit turu', 'is turu', 'issue type', 'issuetype', 'type', 'tip'],
+    priority: ['onem', 'oncelik', 'priority', 'onem derecesi'],
+    unit: ['birim', 'unit', 'component', 'components', 'bilesen', 'bilesenler'],
+    estimate: ['tahmin', 'estimate', 'efor', 'gun', 'sure', 'original estimate', 'tahmini efor', 'tahmini sure'],
+};
+const headerField = (cell: string): keyof ParsedRow | undefined => {
+    const h = foldTr(cell).replace(/\(.*?\)/g, ' ').replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+    return (Object.keys(HEADER_ALIASES) as (keyof ParsedRow)[]).find(k => HEADER_ALIASES[k].includes(h));
+};
 const DEFAULT_COLUMNS: (keyof ParsedRow)[] = ['name', 'notes', 'type', 'priority', 'unit', 'estimate'];
+
+/** Excel / CSV satırları: tırnaklı hücrede ayraç, satır sonu ve "" kaçışı korunur */
+const parseDelimited = (text: string, sep: string): string[][] => {
+    const rows: string[][] = [];
+    let row: string[] = [], cell = '', quoted = false;
+    for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        if (quoted) {
+            if (ch !== '"') cell += ch;
+            else if (text[i + 1] === '"') { cell += '"'; i++; }
+            else quoted = false;
+        } else if (ch === '"' && !cell.trim()) { quoted = true; cell = ''; }
+        else if (ch === sep) { row.push(cell); cell = ''; }
+        else if (ch === '\n') { row.push(cell); rows.push(row); row = []; cell = ''; }
+        else cell += ch;
+    }
+    row.push(cell);
+    rows.push(row);
+    return rows.map(r => r.map(c => c.trim())).filter(r => r.some(Boolean));
+};
+
+/**
+ * Tahmin hücresi → gün: "2,5", "3 gün", "16 saat" (÷ 8). Aralık ya da birden çok
+ * sayı ("2-3", "2d 4h") tek değere indirilemez; boş bırakılır, elle girilir.
+ */
+export const parseEstimateCell = (cell?: string): number | undefined => {
+    const raw = foldTr(cell || '');
+    const nums = raw.match(/\d+(?:[.,]\d+)?/g) || [];
+    if (nums.length !== 1) return undefined;
+    const v = Number(nums[0].replace(',', '.'));
+    const days = /saat|hour|\d\s*h\b/.test(raw) ? v / 8 : v;
+    return days > 0 ? Math.round(days * 100) / 100 : undefined;
+};
 
 /**
  * Yapıştırılan metinden satırlar: Excel'den (sekme ayraçlı), "başlık | açıklama"
- * ya da ";" ayraçlı; ilk satır başlıksa sütunlar başlık adlarıyla eşlenir
- * (Başlık/Summary, Açıklama, Tür/Issue Type, Önem/Priority, Birim, Tahmin).
+ * ya da ";" ayraçlı; ilk satırda en az iki bilinen sütun adı varsa sütunlar
+ * adlarla eşlenir (Başlık/Summary, Açıklama, Tür/Kayıt Türü/Issue Type,
+ * Önem/Öncelik/Priority, Birim, Tahmin); aynı alana iki sütun düşerse ilki.
  * Ayraç yoksa her satır bir kaydın başlığıdır.
  */
 export const parsePastedItems = (text: string, defaults: { unit?: string } = {}): ReleasePlanItem[] => {
-    const lines = text.replace(/\r\n?/g, '\n').split('\n').map(l => l.trimEnd()).filter(l => l.trim());
+    const norm = text.replace(/\r\n?/g, '\n');
+    const lines = norm.split('\n').filter(l => l.trim());
     if (!lines.length) return [];
-    const sep = lines.some(l => l.includes('\t')) ? '\t' : lines.some(l => l.includes(' | ')) ? ' | ' : lines.some(l => l.includes(';')) ? ';' : null;
-    const split = (l: string) => (sep ? l.split(sep).map(c => c.trim()) : [l.trim()]);
+    const sep = norm.includes('\t') ? '\t' : lines.some(l => l.includes(' | ')) ? ' | ' : lines.some(l => l.includes(';')) ? ';' : null;
+    let rows: string[][] = sep === '\t' || sep === ';' ? parseDelimited(norm, sep) : lines.map(l => (sep ? l.split(sep) : [l]).map(c => c.trim()));
     let columns = DEFAULT_COLUMNS;
-    let rows = lines;
-    const head = split(lines[0]).map(c => foldTr(c));
-    const mapped = head.map(h => HEADER_KEYS.find(([re]) => re.test(h))?.[1]);
-    if (sep && mapped.includes('name')) {
-        columns = mapped.map(m => m as keyof ParsedRow);
-        rows = lines.slice(1);
+    if (sep) {
+        const seen = new Set<keyof ParsedRow>();
+        const mapped = rows[0].map(c => { const f = headerField(c); if (!f || seen.has(f)) return undefined; seen.add(f); return f; });
+        if (seen.has('name') && seen.size >= 2) {
+            columns = mapped as (keyof ParsedRow)[];
+            rows = rows.slice(1);
+        }
     }
-    return rows.map(l => {
-        const cells = split(l);
+    return rows.map(cells => {
         const r: ParsedRow = {};
         cells.forEach((c, i) => { const k = columns[i]; if (k && c) r[k] = c; });
         if (!r.name) return null;
-        const est = Number(String(r.estimate || '').replace(',', '.').replace(/[^\d.]/g, ''));
         return newItem({
-            name: r.name.slice(0, 200),
+            name: r.name.replace(/\s+/g, ' ').slice(0, 200),
             notes: r.notes,
             issueType: r.type ? mapJiraIssueType(r.type) : undefined,
             priority: r.priority ? mapJiraPriority(r.priority) : undefined,
             unit: r.unit || defaults.unit,
-            ownEstimateDays: est > 0 ? est : undefined,
+            ownEstimateDays: parseEstimateCell(r.estimate),
         });
     }).filter((x): x is ReleasePlanItem => !!x);
 };
@@ -224,7 +263,7 @@ export const buildReleaseSimulation = (
     const idx = (ids: string[]) => ids.map(id => index.get(`rp:${id}`)).filter((x): x is number => x !== undefined);
     built.input.groups = [
         { id: RELEASE_GROUP, tasks: idx(items.map(i => i.id)), target: plan.targetDate ? offsetOf(built.start, plan.targetDate) - plan.testDays : undefined },
-        ...plan.milestones.map(m => ({ id: m.id, tasks: idx(m.itemIds.filter(id => !skip.has(id))), target: m.targetDate ? offsetOf(built.start, m.targetDate) : undefined })),
+        ...(plan.milestones.length ? sanitizeMilestones(plan.milestones, plan, { keepEmpty: true }) : []).map(m => ({ id: m.id, tasks: idx(m.itemIds.filter(id => !skip.has(id))), target: m.targetDate ? offsetOf(built.start, m.targetDate) : undefined })),
     ];
     return { built, version, missing: items.filter(i => !index.has(`rp:${i.id}`)).map(i => i.id) };
 };
@@ -242,7 +281,10 @@ export const releaseDates = (result: SimResult, start: string, testDays: number)
 /**
  * Kapsam önerisi: hedef tarih %80 olasılıkla tutmuyorsa, önce düşük öncelikli,
  * aynı öncelikte sürümün kritik yolunda olan ve büyük eforlu kayıtlar teker
- * teker çıkarılır; her adımda yeniden simüle edilir. Engelleyiciler çıkarılmaz.
+ * teker çıkarılır; her adımda yeniden simüle edilir. Engelleyiciler ve kritik
+ * yola hiç girmeyen kayıtlar (çıkarılması tarihi değiştirmez) çıkarılmaz.
+ * Hedefe ulaşınca, geri eklendiğinde hedef yine tutan çıkarmalar geri alınır.
+ * `evaluate` sabit tohum ve ana simülasyonla aynı tekrar sayısıyla çalışmalı.
  */
 export const suggestDescope = async (
     plan: ReleasePlan,
@@ -257,16 +299,23 @@ export const suggestDescope = async (
     const group = base.built.input.groups?.find(x => x.id === RELEASE_GROUP);
     group?.tasks.forEach((ti, k) => crit.set(base.built.tasks[ti].id.slice(3), g.criticality[k] || 0));
     const candidates = includedItems(plan)
-        .filter(i => priorityOf(i) !== 'Blocker' && effortOf(i))
+        .filter(i => priorityOf(i) !== 'Blocker' && effortOf(i) && (crit.get(i.id) || 0) > 0)
         .sort((a, b) => PRIORITY_RANK[priorityOf(b)] - PRIORITY_RANK[priorityOf(a)]
             || (crit.get(b.id) || 0) * effortOf(b)!.likely - (crit.get(a.id) || 0) * effortOf(a)!.likely);
-    const removed: string[] = [];
+    let removed: string[] = [];
     const max = Math.min(opts.maxSteps ?? 10, Math.floor(includedItems(plan).length / 2));
     for (const c of candidates.slice(0, max)) {
         removed.push(c.id);
-        const p = await evaluate(removed);
+        let p = await evaluate(removed);
         if (p === null) return null;
-        if (p >= target) return { removed, probability: p };
+        if (p < target) continue;
+        // Gereksiz çıkarmaları geri al (son eklenen hariç, eskiden yeniye)
+        for (const id of removed.slice(0, -1)) {
+            const fewer = removed.filter(x => x !== id);
+            const q = await evaluate(fewer);
+            if (q !== null && q >= target) { removed = fewer; p = q; }
+        }
+        return { removed, probability: p };
     }
     return null;
 };
@@ -293,18 +342,28 @@ export const autoMilestones = (plan: ReleasePlan, project: Pick<Project, 'workPa
     ];
 };
 
-/** Bilinmeyen/çıkarılmış satırları atar, tekrarı önler, boş taşları siler, açıkta kalanları son taşa ekler */
-export const sanitizeMilestones = (ms: ReleaseMilestone[], plan: ReleasePlan): ReleaseMilestone[] => {
-    const valid = new Set(includedItems(plan).map(i => i.id));
+/**
+ * Bilinmeyen/çıkarılmış satırları atar, tekrarı önler, boş taşları siler (`keepEmpty`
+ * değilse). Açıkta kalan satır (taşlar oluştuktan sonra eklenen): aynı iş paketinin
+ * taşına, tek taş varsa ona, yoksa "Diğer kayıtlar" taşına.
+ */
+export const sanitizeMilestones = (ms: ReleaseMilestone[], plan: ReleasePlan, opts: { keepEmpty?: boolean } = {}): ReleaseMilestone[] => {
+    const items = includedItems(plan);
+    const byId = new Map(items.map(i => [i.id, i]));
     const seen = new Set<string>();
     const out = ms
-        .map(m => ({ ...m, itemIds: m.itemIds.filter(id => valid.has(id) && !seen.has(id) && (seen.add(id), true)) }))
-        .filter(m => m.itemIds.length);
-    const rest = includedItems(plan).map(i => i.id).filter(id => !seen.has(id));
-    if (rest.length) {
-        if (out.length) out[out.length - 1] = { ...out[out.length - 1], itemIds: [...out[out.length - 1].itemIds, ...rest] };
-        else out.push({ id: newId('ms'), name: 'Sürüm kapsamı', itemIds: rest });
-    }
+        .map(m => ({ ...m, itemIds: m.itemIds.filter(id => byId.has(id) && !seen.has(id) && (seen.add(id), true)) }))
+        .filter(m => opts.keepEmpty || m.itemIds.length);
+    const add = (k: number, id: string) => { out[k] = { ...out[k], itemIds: [...out[k].itemIds, id] }; };
+    items.filter(i => !seen.has(i.id)).forEach(i => {
+        const wp = i.workPackageId ? out.findIndex(m => m.itemIds.some(id => byId.get(id)!.workPackageId === i.workPackageId)) : -1;
+        if (wp >= 0) return add(wp, i.id);
+        const filled = out.filter(m => m.itemIds.length);
+        if (filled.length === 1) return add(out.indexOf(filled[0]), i.id);
+        let k = out.findIndex(m => m.name === (filled.length ? 'Diğer kayıtlar' : 'Sürüm kapsamı'));
+        if (k < 0) { out.push({ id: newId('ms'), name: filled.length ? 'Diğer kayıtlar' : 'Sürüm kapsamı', itemIds: [] }); k = out.length - 1; }
+        add(k, i.id);
+    });
     return out;
 };
 
