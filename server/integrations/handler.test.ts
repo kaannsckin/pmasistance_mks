@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { buildIssueJql, buildWorklogJql, checkRecipients, handleIntegrationRequest, integrationStatus, JiraIssueRecord, Mailer, plainDescription, reminderMessage, teamsCard } from './handler';
+import { buildIssueJql, buildWorklogJql, checkRecipients, handleIntegrationRequest, integrationStatus, JiraIssueRecord, Mailer, pickIssueType, pickPriority, plainDescription, reminderMessage, teamsCard } from './handler';
 
 const TOKEN = 'erisim-kodu-12345678901234567890';
 const BASE_ENV = { AI_ACCESS_TOKEN: TOKEN };
@@ -16,10 +16,12 @@ const jsonRes = (status: number, body: unknown) => new Response(JSON.stringify(b
 describe('durum ve yardımcılar', () => {
     it('hangi entegrasyonun yapılandırıldığını gizli bilgi vermeden söyler', async () => {
         const env = { JIRA_BASE_URL: 'https://jira.kurum.gov.tr', JIRA_TOKEN: 'x', TEAMS_WEBHOOK_URL: 'https://hook', SMTP_HOST: 'smtp', SMTP_FROM: 'pa@kurum.gov.tr' };
-        expect(integrationStatus(env)).toEqual({ jira: true, teams: true, email: true, reminder: false });
+        expect(integrationStatus(env)).toEqual({ jira: true, jiraCreate: false, teams: true, email: true, reminder: false });
+        expect(integrationStatus({ ...env, JIRA_ALLOW_CREATE: '1' }).jiraCreate).toBe(true);
+        expect(integrationStatus({ JIRA_ALLOW_CREATE: '1' }).jiraCreate).toBe(false); // Jira yoksa açma da yok
         const res = await handleIntegrationRequest(new Request('http://x/api/integrations/health'), env, { route: 'health' });
         const body = await res.json();
-        expect(body).toEqual({ jira: true, teams: true, email: true, reminder: false, authMode: 'none' });
+        expect(body).toEqual({ jira: true, jiraCreate: false, teams: true, email: true, reminder: false, authMode: 'none' });
         expect(JSON.stringify(body)).not.toContain('jira.kurum');
     });
 
@@ -213,6 +215,91 @@ describe('Jira kayıt geçmişi', () => {
         expect((await r({ projectKey: 'MKS', cursor: 'a b' })).status).toBe(400);
         expect((await r({ projectKey: 'MKS' }, BASE_ENV)).status).toBe(501);
         expect(await (await r({ projectKey: 'abc' })).json()).toEqual({ issues: [], total: 0, next: null });
+    });
+});
+
+describe("Jira'da kayıt açma", () => {
+    const env = { ...BASE_ENV, JIRA_BASE_URL: 'https://jira.kurum.gov.tr/', JIRA_TOKEN: 'jt', JIRA_ALLOW_CREATE: '1' };
+    const TYPES = [{ id: '1', name: 'Görev' }, { id: '2', name: 'Hata' }, { id: '3', name: 'Hikaye' }, { id: '4', name: 'Alt Görev', subtask: true }];
+    const PRIORITIES = [{ id: '1', name: 'Highest' }, { id: '2', name: 'High' }, { id: '3', name: 'Medium' }, { id: '4', name: 'Low' }, { id: '5', name: 'Lowest' }];
+
+    it('tür ve öncelik Jira adlarıyla eşlenir', () => {
+        expect(pickIssueType(TYPES, 'bug')?.id).toBe('2');
+        expect(pickIssueType(TYPES, 'feature')?.id).toBe('3');
+        expect(pickIssueType(TYPES, 'improvement')?.id).toBe('1'); // yoksa Görev
+        expect(pickIssueType([{ id: '9', name: 'Epic' }, { id: '4', name: 'Sub-task', subtask: true }], 'task')?.id).toBe('9');
+        expect(pickPriority(PRIORITIES, 'Blocker')?.name).toBe('Highest');
+        expect(pickPriority(PRIORITIES, 'High')?.name).toBe('High');
+        expect(pickPriority(PRIORITIES, 'Low')?.name).toBe('Low');
+        expect(pickPriority([{ id: '7', name: 'Engelleyici' }, { id: '8', name: 'Yüksek' }, { id: '9', name: 'Düşük' }], 'Blocker')?.id).toBe('7');
+        expect(pickPriority([{ id: '8', name: 'P2' }], 'High')).toBeUndefined();
+    });
+
+    it('kapalıysa, anahtar ya da izin listesi uymuyorsa reddedilir', async () => {
+        const r = (body: unknown, e: Record<string, string> = env) => handleIntegrationRequest(post('jira-create', body), e, { route: 'jira-create' });
+        const one = [{ ref: 't1', summary: 'Kayıt' }];
+        expect((await r({ projectKey: 'MKS', issues: one }, { ...env, JIRA_ALLOW_CREATE: '' })).status).toBe(403);
+        expect((await r({ projectKey: 'M K', issues: one })).status).toBe(400);
+        expect((await r({ projectKey: 'MKS', issues: [] })).status).toBe(400);
+        expect((await r({ projectKey: 'MKS', issues: [{ ref: 't1', summary: '  ' }] })).status).toBe(400);
+        expect((await r({ projectKey: 'ABC', issues: one }, { ...env, JIRA_ALLOWED_PROJECTS: 'MKS' })).status).toBe(403);
+    });
+
+    it('kayıtları açar; ekranda olmayan alanı çıkarıp yeniden dener, zorunlu alan hatasını bildirir', async () => {
+        const posts: Record<string, unknown>[] = [];
+        let n = 0;
+        const fetchImpl = vi.fn(async (url: string, init?: RequestInit) => {
+            if (url.endsWith('/rest/api/2/project/MKS')) return jsonRes(200, { issueTypes: TYPES, components: [{ id: '50', name: 'Yazılım' }] });
+            if (url.endsWith('/rest/api/2/priority')) return jsonRes(200, PRIORITIES);
+            if (url.endsWith('/rest/api/2/issue') && init?.method === 'POST') {
+                const fields = JSON.parse(String(init.body)).fields;
+                posts.push(fields);
+                n++;
+                if (n === 1) return jsonRes(400, { errorMessages: [], errors: { timetracking: "Field 'timetracking' cannot be set." } });
+                if (fields.summary === 'Zorunlu alan') return jsonRes(400, { errorMessages: [], errors: { customfield_10010: 'Sprint is required.' } });
+                return jsonRes(201, { id: String(100 + n), key: `MKS-${100 + n}` });
+            }
+            return jsonRes(404, {});
+        }) as unknown as typeof fetch;
+        const res = await handleIntegrationRequest(post('jira-create', { projectKey: 'mks', issues: [
+            { ref: 't1', summary: 'Giriş\nhatası', description: 'Oturum düşüyor', issueType: 'bug', priority: 'Blocker', component: 'yazılım', estimateHours: 12 },
+            { ref: 't2', summary: 'Rapor ekranı', issueType: 'feature', priority: 'Medium' },
+            { ref: 't3', summary: 'Zorunlu alan' },
+        ] }), env, { route: 'jira-create', fetchImpl });
+        expect(res.status).toBe(200);
+        expect((await res.json()).results).toEqual([
+            { ref: 't1', key: 'MKS-102', dropped: ['timetracking'] },
+            { ref: 't2', key: 'MKS-103' },
+            { ref: 't3', error: 'customfield_10010: Sprint is required.' },
+        ]);
+        expect(posts[0]).toEqual({
+            project: { key: 'MKS' }, summary: 'Giriş hatası', issuetype: { id: '2' }, description: 'Oturum düşüyor', priority: { id: '1' }, components: [{ id: '50' }], timetracking: { originalEstimate: '720m' },
+        });
+        expect(posts[1].timetracking).toBeUndefined();
+        expect(posts[2]).toMatchObject({ issuetype: { id: '3' }, priority: { id: '3' } });
+        expect(posts[2].components).toBeUndefined();
+    });
+
+    it('yetki yarıda kesilirse açılan kayıtlar döner, kalanlar gönderilmez', async () => {
+        let n = 0;
+        const fetchImpl = vi.fn(async (url: string, init?: RequestInit) => {
+            if (url.includes('/project/')) return jsonRes(200, { issueTypes: TYPES });
+            if (url.endsWith('/priority')) return jsonRes(200, PRIORITIES);
+            if (init?.method === 'POST') return ++n === 1 ? jsonRes(201, { key: 'MKS-1' }) : jsonRes(403, {});
+            return jsonRes(404, {});
+        }) as unknown as typeof fetch;
+        const res = await handleIntegrationRequest(post('jira-create', { projectKey: 'MKS', issues: [{ ref: 'a', summary: 'A' }, { ref: 'b', summary: 'B' }, { ref: 'c', summary: 'C' }] }), env, { route: 'jira-create', fetchImpl });
+        const { results } = await res.json();
+        expect(results[0]).toEqual({ ref: 'a', key: 'MKS-1' });
+        expect(results.slice(1).map((r: { ref: string; error?: string }) => [r.ref, /yetkisi yok/.test(r.error || '')])).toEqual([['b', true], ['c', true]]);
+        expect(n).toBe(2); // üçüncü kayıt hiç denenmez
+    });
+
+    it('proje bulunamazsa anlaşılır hata', async () => {
+        const fetchImpl = vi.fn(async () => jsonRes(404, {})) as unknown as typeof fetch;
+        const res = await handleIntegrationRequest(post('jira-create', { projectKey: 'YOK', issues: [{ ref: 'a', summary: 'A' }] }), env, { route: 'jira-create', fetchImpl });
+        expect(res.status).toBe(404);
+        expect((await res.json()).error).toMatch(/YOK projesi Jira'da bulunamadı/);
     });
 });
 

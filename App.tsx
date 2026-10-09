@@ -73,6 +73,7 @@ import { applyCommit, CommitResult } from './utils/planning/releasePlan';
 import { appendEvalRun } from './utils/planning/evaluation';
 import { appendModelEval } from './utils/planning/ml/estimateModel';
 import { JiraImportOptions, mergeJiraIssues } from './utils/planning/jiraImport';
+import { linkJiraKeys } from './utils/planning/jiraExport';
 import { JiraIssueRecord } from './utils/integrations';
 import ModernPortfolio from './components/modern/ModernPortfolio';
 import ModernBoard from './components/modern/ModernBoard';
@@ -974,6 +975,18 @@ const App: React.FC = () => {
     });
   }, [updateWorkspace]);
 
+  // ---- Planlama: Jira'da açılan kayıtların anahtarları görevlere yazılır ----
+  const handleLinkJira = useCallback((projectId: string, key: string, links: Record<string, string>) => {
+    updateWorkspace(ws => {
+      const project = ws.projects.find(p => p.id === projectId);
+      if (!project || !canEditProjectContent(ws, identityOf(ws), projectId)) return ws;
+      const r = linkJiraKeys(project.tasks, links);
+      if (!r.linked) return ws;
+      const next = { ...ws, projects: ws.projects.map(p => (p.id === projectId ? { ...p, tasks: r.tasks, jiraProjectKey: p.jiraProjectKey || key, updatedAt: new Date().toISOString() } : p)) };
+      return appendAudit(next, 'data.export', `"${project.name}" · ${r.linked} kayıt Jira'da açıldı (${key}: ${Object.values(links).slice(0, 5).join(', ')}${r.linked > 5 ? '…' : ''})`, projectId);
+    });
+  }, [updateWorkspace]);
+
   // ---- Müşteri görüşmeleri: planla / onayla / sonuç ----
   const meetingLabel = (m: { title: string; customer: string; date: string }) =>
     `${m.title} (${m.customer}, ${new Date(m.date).toLocaleString('tr-TR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })})`;
@@ -1464,6 +1477,7 @@ const App: React.FC = () => {
           onCommitReleasePlan={handleCommitReleasePlan}
           onOpenGoals={() => setCurrentView(View.Goals)}
           onImportJira={(key, issues, opts, label) => handleImportJiraHistory(activeProject.id, key, issues, opts, label)}
+          onLinkJira={(key, links) => handleLinkJira(activeProject.id, key, links)}
         />
       );
     }

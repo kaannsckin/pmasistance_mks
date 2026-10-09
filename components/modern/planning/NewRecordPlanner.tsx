@@ -45,6 +45,8 @@ interface Props {
     ml?: PlanningModel | null;
     onAddTask: (task: Task, log: EstimateLogEntry) => void;
     onOpenList: () => void;
+    /** Eklenen kaydı Jira'da açma (Jira'ya gönder paneli) */
+    onSendToJira?: (taskIds: string[]) => void;
 }
 
 type Choice = 'suggested' | 'own' | 'calibrated' | 'ai' | 'model';
@@ -63,7 +65,7 @@ const dm = (d: Date) => d.toLocaleDateString('tr-TR', { day: 'numeric', month: '
 const CONF_TONE: Record<ReferenceEstimate['confidence'], string> = { high: 'm-tone-ok', medium: 'm-tone-warn', low: 'm-tone-bad' };
 const probTone = (p: number) => (p >= FIT_TARGET ? 'var(--m-ok)' : p >= 0.5 ? 'var(--m-warn)' : 'var(--m-bad)');
 
-const NewRecordPlanner: React.FC<Props> = ({ project, history, people, leaves, visibleProjectIds, canEdit, blindEstimate, aiBlocked = false, ml = null, onAddTask, onOpenList }) => {
+const NewRecordPlanner: React.FC<Props> = ({ project, history, people, leaves, visibleProjectIds, canEdit, blindEstimate, aiBlocked = false, ml = null, onAddTask, onOpenList, onSendToJira }) => {
     const [name, setName] = useState('');
     const [notes, setNotes] = useState('');
     const [issueType, setIssueType] = useState<IssueType | ''>('');
@@ -223,6 +225,7 @@ const NewRecordPlanner: React.FC<Props> = ({ project, history, people, leaves, v
                 </p>
                 <div className="flex flex-wrap gap-2.5">
                     <button type="button" className="m-btn m-btn-gray" onClick={onOpenList}><Icon name="list" size={18} />Listede gör</button>
+                    {onSendToJira && <button type="button" className="m-btn m-btn-gray" onClick={() => onSendToJira([sent.id])}><Icon name="send" size={18} />Jira'da aç</button>}
                     <button type="button" className="m-btn m-btn-primary" onClick={() => setSent(null)}><Icon name="plus" size={18} strokeWidth={2.2} />Yeni kayıt</button>
                 </div>
             </section>
