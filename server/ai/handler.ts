@@ -31,6 +31,8 @@ export interface HandlerOptions {
     fetchImpl?: typeof fetch;
     rateLimiter?: RateLimiter;
     route?: 'health' | 'chat' | 'embed' | 'admin';
+    /** Sağlayıcı yoğunken yeniden denemeden önce bekleme (ms; testlerde 0) */
+    retryDelayMs?: number;
 }
 
 /**
@@ -201,6 +203,16 @@ export const validateChatBody = (raw: unknown): { body?: ChatRequestBody; error?
     };
 };
 
+/** Sağlayıcının geçici yoğunluk / kesinti yanıtları (yeniden denenir) */
+const OVERLOADED = new Set([500, 502, 503, 504]);
+
+/** İptal edilebilir bekleme */
+const pause = (ms: number, signal: AbortSignal): Promise<void> => new Promise(resolve => {
+    if (ms <= 0 || signal.aborted) { resolve(); return; }
+    const t = setTimeout(resolve, ms);
+    signal.addEventListener('abort', () => { clearTimeout(t); resolve(); }, { once: true });
+});
+
 /** Sağlayıcı anahtarı reddederse kullanıcıya hangi anahtarın denetleneceği söylenir */
 const keyNameOf = (source: 'panel' | 'env' | 'browser'): string | undefined =>
     source === 'browser' ? 'bu tarayıcıdaki Gemini test anahtarını (Yönetici konsolu › Yapay zekâ)' : undefined;
@@ -312,27 +324,49 @@ export const handleAiRequest = async (request: Request, rawEnv: Env, opts: Handl
         request.signal?.removeEventListener('abort', onClientAbort);
     };
 
-    const up = buildUpstreamRequest(config, body);
+    // Sağlayıcı yoğunsa (503 vb.) kısa bir beklemeyle bir kez yeniden denenir. Gemini modeli
+    // otomatik seçildiyse sonra sıradaki modele geçilir; her modelin kapasitesi ve ücretsiz
+    // kotası ayrı olduğundan kota dolunca (429) da doğrudan sıradaki model denenir.
+    const models = eff.auto.model && eff.auto.model === config.model ? [config.model, ...(eff.auto.fallbacks || [])] : [config.model];
+    const first = buildUpstreamRequest(config, body);
+    const send = opts.fetchImpl || upstreamFetch(first.url, env);
+    let active = config;
     let upstream: Response;
-    try {
-        const send = opts.fetchImpl || upstreamFetch(up.url, env);
-        upstream = await send(up.url, { method: 'POST', headers: up.headers, body: up.body, signal: upstreamAbort.signal });
-    } catch (err) {
-        cleanup();
-        if (timedOut) return errorResponse(504, 'timeout', 'AI sağlayıcısı zamanında yanıt vermedi.', cors);
-        console.error(`[ai] sağlayıcıya bağlanılamadı: ${config.provider} ${hostOf(up.url)} ${networkErrorCode(err) || 'bilinmeyen'}`);
-        return errorResponse(502, 'upstream', `AI sağlayıcısına ulaşılamadı: ${describeNetworkError(err)}.`, cors);
+    let firstFail: { status: number; detail: string } | undefined;
+    for (let attempt = 0, mi = 0; ; attempt++) {
+        active = mi === 0 ? config : { ...config, model: models[mi] };
+        const up = mi === 0 ? first : buildUpstreamRequest(active, body);
+        try {
+            upstream = await send(up.url, { method: 'POST', headers: up.headers, body: up.body, signal: upstreamAbort.signal });
+        } catch (err) {
+            cleanup();
+            if (timedOut) return errorResponse(504, 'timeout', 'AI sağlayıcısı zamanında yanıt vermedi.', cors);
+            console.error(`[ai] sağlayıcıya bağlanılamadı: ${active.provider} ${hostOf(up.url)} ${networkErrorCode(err) || 'bilinmeyen'}`);
+            return errorResponse(502, 'upstream', `AI sağlayıcısına ulaşılamadı: ${describeNetworkError(err)}.`, cors);
+        }
+        if ((upstream.ok && upstream.body) || attempt >= 3) break;
+        const overloaded = OVERLOADED.has(upstream.status);
+        const sameAgain = overloaded && attempt === 0;
+        if (!sameAgain && !((overloaded || upstream.status === 429) && mi + 1 < models.length)) break;
+        if (!sameAgain) mi++;
+        const text = await upstream.text().catch(() => '');
+        firstFail ??= { status: upstream.status, detail: extractUpstreamError(text) };
+        console.warn(`[ai] ${active.provider} ${active.model} HTTP ${upstream.status}; ${sameAgain ? 'yeniden deneniyor' : `${models[mi]} ile deneniyor`}`);
+        await pause(sameAgain ? opts.retryDelayMs ?? 800 : Math.min(300, opts.retryDelayMs ?? 300), upstreamAbort.signal);
     }
 
     if (!upstream.ok || !upstream.body) {
-        const detail = extractUpstreamError(await upstream.text().catch(() => ''));
+        let status = upstream.status;
+        let detail = extractUpstreamError(await upstream.text().catch(() => ''));
         cleanup();
-        console.error(`[ai] sağlayıcı hatası: ${config.provider} HTTP ${upstream.status}`);
-        return errorResponse(upstream.status === 429 ? 429 : 502, upstream.status === 429 ? 'rate_limited' : 'upstream', upstreamErrorMessage(upstream.status, detail, keyNameOf(eff.source)), cors);
+        console.error(`[ai] sağlayıcı hatası: ${active.provider} ${active.model} HTTP ${status}`);
+        // Yedek model başka bir nedenle reddettiyse (ör. önceki turun model imzası) asıl neden ilk hatadır
+        if (firstFail && !OVERLOADED.has(status) && status !== 429) ({ status, detail } = firstFail);
+        return errorResponse(status === 429 ? 429 : 502, status === 429 ? 'rate_limited' : 'upstream', upstreamErrorMessage(status, detail, keyNameOf(eff.source)), cors);
     }
 
     const encoder = new TextEncoder();
-    const events = parseUpstreamEvents(config, parseSSE(upstream.body));
+    const events = parseUpstreamEvents(active, parseSSE(upstream.body!));
     const line = (ev: unknown) => encoder.encode(JSON.stringify(ev) + '\n');
 
     const stream = new ReadableStream<Uint8Array>({

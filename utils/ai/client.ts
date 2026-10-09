@@ -1,4 +1,5 @@
 import { getClient } from '../cloudSync';
+import { MASK_NOTE, Masker, mapStrings } from './masking';
 import { AI_LIMITS, AiAuthMode, AiStatus, BROWSER_KEY_HEADER, ChatMessage, ChatRequestBody, ChatStreamEvent, ToolCall } from './protocol';
 
 /**
@@ -90,6 +91,46 @@ export const authHeaders = async (mode: AiAuthMode): Promise<Record<string, stri
     return {};
 };
 
+// ---------------------------------------------------------------- ad maskeleme
+
+let maskerSource: (() => Masker | null) | null = null;
+
+/**
+ * Ad maskeleme (utils/ai/masking.ts): ayarlanınca tüm AI istekleri (sohbet,
+ * ekran içi AI, puanlama, embedding) gönderilmeden önce maskelenir, yanıtlar
+ * geri çevrilir. Kaynak her istekte çağrılır (güncel çalışma alanı ve politika).
+ */
+export const configureMasking = (source: (() => Masker | null) | null): void => {
+    maskerSource = source;
+};
+
+const currentMasker = (): Masker | null => {
+    try {
+        const m = maskerSource?.() || null;
+        return m && m.size ? m : null;
+    } catch {
+        return null;
+    }
+};
+
+/** Sağlayıcıya gidecek gövde: metinler ve araç argümanları maskelenir, modele takma ad notu eklenir */
+export const maskChatBody = (body: ChatRequestBody, m: Masker): ChatRequestBody => {
+    // Takma ad kısa bir addan uzun olabilir: sunucu sınırları aşılmasın
+    const fit = (t: string, max: number) => { const s = m.mask(t); return s.length > max ? s.slice(0, max) : s; };
+    const system = body.system ? `${fit(body.system, AI_LIMITS.maxSystemChars - MASK_NOTE.length - 2)}\n\n${MASK_NOTE}` : MASK_NOTE;
+    return {
+        ...body,
+        system,
+        messages: body.messages.map(msg => {
+            const content = fit(msg.content, AI_LIMITS.maxCharsPerMessage);
+            if (msg.role === 'assistant' && msg.toolCalls) {
+                return { ...msg, content, toolCalls: msg.toolCalls.map(c => ({ ...c, arguments: mapStrings(c.arguments, m.mask) })) };
+            }
+            return { ...msg, content };
+        }),
+    };
+};
+
 /** "token" modunda kod girilmiş mi / "supabase" modunda oturum var mı */
 export const hasCredentials = async (mode: AiAuthMode): Promise<boolean> =>
     mode === 'none' || !!(await authHeaders(mode)).authorization;
@@ -159,7 +200,8 @@ export const trimHistory = (
     messages: ChatMessage[],
     systemChars = 0,
     maxMessages = AI_LIMITS.maxMessages,
-    maxChars = AI_LIMITS.maxTotalChars
+    // %5 pay: ad maskelemede takma adlar ve modele eklenen not metni biraz uzatabilir
+    maxChars = Math.floor(AI_LIMITS.maxTotalChars * 0.95)
 ): ChatMessage[] => {
     const usable = messages
         .filter(m => m.role !== 'user' || m.content.trim())
@@ -209,6 +251,7 @@ export interface StreamChatOptions {
     signal?: AbortSignal;
     /** Kayıtlı tarayıcı anahtarı yerine (bağlantı testi) */
     browserKey?: BrowserKeyChoice;
+    /** text: sağlayıcıdan gelen parça (maskeli olabilir) · full: gösterilecek metin (adlar geri çevrilmiş) */
     onDelta?: (text: string, full: string) => void;
 }
 
@@ -219,12 +262,14 @@ export interface StreamChatResult {
 }
 
 export const streamChat = async (body: ChatRequestBody, opts: StreamChatOptions): Promise<StreamChatResult> => {
+    const masker = currentMasker();
+    const show = (t: string) => (masker ? masker.unmask(t) : t);
     let res: Response;
     try {
         res = await fetch(`${PROXY_BASE}/chat`, {
             method: 'POST',
             headers: { 'content-type': 'application/json', ...(await authHeaders(opts.authMode)), ...browserKeyHeaders(opts.browserKey) },
-            body: JSON.stringify(body),
+            body: JSON.stringify(masker ? maskChatBody(body, masker) : body),
             signal: opts.signal,
         });
     } catch (e) {
@@ -234,7 +279,7 @@ export const streamChat = async (body: ChatRequestBody, opts: StreamChatOptions)
 
     if (!res.ok || !res.body) {
         const err = await res.json().catch(() => null) as { error?: string; code?: AiErrorCode } | null;
-        throw new AiError(err?.error || `AI isteği başarısız (HTTP ${res.status}).`, err?.code || 'upstream', res.status);
+        throw new AiError(show(err?.error || `AI isteği başarısız (HTTP ${res.status}).`), err?.code || 'upstream', res.status);
     }
 
     let full = '';
@@ -244,13 +289,15 @@ export const streamChat = async (body: ChatRequestBody, opts: StreamChatOptions)
         for await (const ev of readNdjson(res.body)) {
             if (ev.type === 'delta') {
                 full += ev.text;
-                opts.onDelta?.(ev.text, stripReasoning(full));
+                const shown = stripReasoning(full);
+                opts.onDelta?.(ev.text, masker ? masker.unmaskPartial(shown) : shown);
             } else if (ev.type === 'tool_call') {
-                toolCalls.push(ev.call);
+                // Model takma adla çağırır; araç gerçek adla çalışır
+                toolCalls.push(masker ? { ...ev.call, arguments: mapStrings(ev.call.arguments, masker.unmask) } : ev.call);
             } else if (ev.type === 'done') {
                 stopReason = ev.stopReason;
             } else if (ev.type === 'error') {
-                throw new AiError(ev.message, 'upstream');
+                throw new AiError(show(ev.message), 'upstream');
             }
         }
     } catch (e) {
@@ -258,7 +305,7 @@ export const streamChat = async (body: ChatRequestBody, opts: StreamChatOptions)
         if ((e as Error)?.name === 'AbortError' || opts.signal?.aborted) throw new AiError('İptal edildi.', 'aborted');
         throw new AiError('AI yanıt akışı kesildi.', 'network');
     }
-    return { text: stripReasoning(full), toolCalls, stopReason };
+    return { text: show(stripReasoning(full)), toolCalls, stopReason };
 };
 
 const sleep = (ms: number, signal?: AbortSignal) =>
@@ -280,13 +327,15 @@ export const embedTexts = async (
     authMode: AiAuthMode,
     signal?: AbortSignal
 ): Promise<number[][]> => {
+    // Belge ve sorgu aynı takma adlarla gömülür (eşleşme korunur)
+    const masker = currentMasker();
     for (let attempt = 0; ; attempt++) {
         let res: Response;
         try {
             res = await fetch(`${PROXY_BASE}/embed`, {
                 method: 'POST',
                 headers: { 'content-type': 'application/json', ...(await authHeaders(authMode)), ...browserKeyHeaders(undefined) },
-                body: JSON.stringify({ texts, kind }),
+                body: JSON.stringify({ texts: masker ? texts.map(masker.mask) : texts, kind }),
                 signal,
             });
         } catch (e) {

@@ -48,6 +48,21 @@ const pushText = (out: MdInline[], v: string) => {
     else out.push({ t: 'text', v });
 };
 
+/** Ters bölüyle kaçırılmış mı (öncesinde tek sayıda ters bölü) */
+const escapedAt = (src: string, at: number): boolean => {
+    let n = 0;
+    for (let j = at - 1; j >= 0 && src[j] === '\\'; j--) n++;
+    return n % 2 === 1;
+};
+
+/** Kapanış işaretinin kaçırılmamış ilk konumu (ör. *Personel\** italikte kaçırılmış yıldız içeride kalır) */
+const closeAt = (src: string, mark: string, from: number): number => {
+    for (let j = src.indexOf(mark, from); j !== -1; j = src.indexOf(mark, j + 1)) {
+        if (!escapedAt(src, j)) return j;
+    }
+    return -1;
+};
+
 export const parseInline = (src: string, depth = 0): MdInline[] => {
     const out: MdInline[] = [];
     if (depth > 6) {
@@ -78,7 +93,7 @@ export const parseInline = (src: string, depth = 0): MdInline[] => {
         }
         if (src.startsWith('**', i) || src.startsWith('__', i)) {
             const mark = src.slice(i, i + 2);
-            const end = src.indexOf(mark, i + 2);
+            const end = closeAt(src, mark, i + 2);
             if (end > i + 2) {
                 out.push({ t: 'strong', c: parseInline(src.slice(i + 2, end), depth + 1) });
                 i = end + 2;
@@ -86,7 +101,7 @@ export const parseInline = (src: string, depth = 0): MdInline[] => {
             }
         }
         if (src.startsWith('~~', i)) {
-            const end = src.indexOf('~~', i + 2);
+            const end = closeAt(src, '~~', i + 2);
             if (end > i + 2) {
                 out.push({ t: 'del', c: parseInline(src.slice(i + 2, end), depth + 1) });
                 i = end + 2;
@@ -94,7 +109,7 @@ export const parseInline = (src: string, depth = 0): MdInline[] => {
             }
         }
         if (ch === '*' && src[i + 1] && src[i + 1] !== ' ' && src[i + 1] !== '*') {
-            const end = src.indexOf('*', i + 1);
+            const end = closeAt(src, '*', i + 1);
             if (end > i + 1 && src[end - 1] !== ' ') {
                 out.push({ t: 'em', c: parseInline(src.slice(i + 1, end), depth + 1) });
                 i = end + 1;
