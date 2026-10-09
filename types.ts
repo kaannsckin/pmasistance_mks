@@ -651,6 +651,8 @@ export interface WorkspaceData {
   aiPolicy?: AiPolicy; // Admin'in yapay zekâ politikası
   estimateLog?: EstimateLogEntry[]; // Kayıt tahmini öneri günlüğü (en yeni sonda)
   reportAiLog?: ReportAiLogEntry[]; // Haftalık rapor AI öneri günlüğü (en yeni sonda; metin yok)
+  reportGoldenSet?: ReportGoldenItem[]; // Rapor taslağı değerlendirmesi için seçilmiş onaylı raporlar
+  reportEvalRuns?: ReportEvalRun[]; // Rapor altın seti değerlendirmeleri (en yeni sonda, en çok 50)
   goldenSet?: GoldenItem[]; // Tahmin değerlendirmesi için doğrulanmış kapanmış kayıtlar
   evalRuns?: EvalRun[]; // Altın set değerlendirmeleri (en yeni sonda)
   modelEvals?: ModelEvalRun[]; // Klasik ML modelinin zaman ayrımlı sınamaları (en yeni sonda)
@@ -896,6 +898,50 @@ export interface AiPolicy {
   modelEstimate?: ModelEstimatePolicy; // planlamada klasik ML modeli önerisi (varsayılan: otomatik)
   scoring?: AiScoringPolicy;
   maskNames?: boolean; // AI'ya giden metinlerde kişi/proje/kurum adları takma adla (varsayılan açık)
+  reportGate?: ReportGatePolicy; // haftalık rapor taslağının kalite kapısı (PYB destek ayarlar)
+}
+
+/** Rapor taslağı kalite kapısı: altın sette üretim istemi (full) bu eşikleri geçmeli; zorunluysa düzenleyicide uyarı */
+export interface ReportGatePolicy {
+  enforce: boolean;
+  maxLintErrorsPerReport: number; // rapor başına ortalama format hatası üst sınırı
+  maxUngroundedRate: number; // girdide dayanağı olmayan rakam/tarih/ad oranı üst sınırı (0–1)
+  minRecall: number; // onaylı son hâlin maddelerini kapsama alt sınırı (0–1)
+}
+
+/** Rapor altın seti: PYB desteğin seçtiği onaylı rapor (girdisi ve onaylı son hâliyle değerlendirilir) */
+export interface ReportGoldenItem {
+  reportId: string;
+  addedAt: string;
+  addedByName?: string;
+  note?: string;
+}
+
+/** Rapor taslağı ölçüleri (altın sette, rapor başına ortalama ya da toplam oran) */
+export interface ReportEvalMetrics {
+  lintErrorsPerReport: number | null;
+  lintWarningsPerReport: number | null;
+  ungroundedRate: number | null; // dayanaksız / denetlenen rakam·tarih·ad
+  recall: number | null; // eşleşen / onaylı madde
+  precision: number | null; // eşleşen / AI maddesi
+  categoryAccuracy: number | null; // eşleşen "bu hafta" maddelerinde tür aynı
+  unknownAbbrPerReport: number | null;
+  missingPerReport: number | null; // eksik bilgi sorusu (bilgi amaçlı)
+}
+
+/** Altın set değerlendirmesi (bir istem varyantı + yapılandırma sürümü + model için) */
+export interface ReportEvalRun {
+  id: string;
+  at: string;
+  promptVersion: string; // yapılandırma sürümü (istem + kılavuz + kurallar)
+  variant: ReportPromptVariant;
+  model?: string;
+  n: number; // yanıt alınan rapor
+  failed: number; // yanıtı alınamayan / çözümlenemeyen
+  skipped?: number; // girdisi bulunamadığı için koşulmayan
+  metrics: ReportEvalMetrics;
+  passed: boolean | null; // null: yetersiz örnek
+  reasons: string[];
 }
 
 /** Kalite kapısı: altın sette AI önerisi bu eşikleri geçmezse (zorunluysa) öneri gösterilmez */
@@ -1016,7 +1062,8 @@ export type AuditAction =
   | 'expectation.create' | 'expectation.respond' | 'expectation.close'
   | 'report.submit' | 'report.approve' | 'report.return' | 'report.publish'
   | 'meeting.submit' | 'meeting.approve' | 'meeting.reject' | 'meeting.held'
-  | 'release.commit' | 'data.export';
+  | 'release.commit' | 'data.export'
+  | 'report.ai';
 
 export interface AuditEntry {
   id: string;

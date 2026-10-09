@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AiReportAssessment, ReportAiLogEntry, ReportSettings, WeeklyReport, WorkspaceData } from '../../types';
+import { AiReportAssessment, ReportAiLogEntry, ReportEvalRun, ReportGatePolicy, ReportSettings, WeeklyReport, WorkspaceData } from '../../types';
 import { fetchIntegrationHealth, IntegrationHealth } from '../../utils/integrations';
 import { can } from '../../utils/permissions';
 import { Identity, managedDepartmentCode, ownsProject } from '../../utils/rbac';
@@ -13,7 +13,7 @@ import { Icon } from './icons';
 import { rowSep } from './ui';
 import ConsolidatedReport from './weekly/ConsolidatedReport';
 import { ReminderPanel, ReportSettingsPanel } from './weekly/Panels';
-import { ReportAiQualityCard } from './weekly/ReportAiPanels';
+import { ReportAiQualityCard, ReportEvalCard } from './weekly/ReportAiPanels';
 import ReportEditor from './weekly/ReportEditor';
 import { EmptyState, Notice, NoticeState, Pill, STAGE_TONE, StagePill } from './weekly/shared';
 
@@ -44,6 +44,11 @@ export interface ModernWeeklyReportProps {
     onSetAiAssessment: (reportId: string, assessment: AiReportAssessment) => void;
     /** Rapor AI öneri günlüğü */
     onLogReportAi: (entry: ReportAiLogEntry) => void;
+    /** Rapor AI değerlendirmesi (PYB destek): altın set, koşular, kalite kapısı */
+    onAddReportGolden: (reportId: string) => boolean;
+    onRemoveReportGolden: (reportId: string) => void;
+    onAddReportEvalRun: (run: ReportEvalRun) => void;
+    onUpdateReportGate: (patch: Partial<ReportGatePolicy>, label: string) => void;
 }
 
 type Tab = 'mine' | 'inbox' | 'status' | 'report' | 'settings';
@@ -87,6 +92,7 @@ const ReportRows: React.FC<{ rows: Row[]; dictionary: ReturnType<typeof reportDi
 
 const ModernWeeklyReport: React.FC<ModernWeeklyReportProps> = ({
     workspace, identity, onSaveReport, onAdvanceReport, onReturnReport, onPublishWeek, onUnpublishWeek, onMarkEmailed, onUpdateSettings, onSetJiraKey, onOpenMeetings, onRatePmo, onSetAiAssessment, onLogReportAi,
+    onAddReportGolden, onRemoveReportGolden, onAddReportEvalRun, onUpdateReportGate,
 }) => {
     const role = identity.role;
     // Ekran kipi: rapor denetçisi (yetki), bölüm sorumlusu ve PY kimlik kuralı; diğerleri yayınlanan raporu okur
@@ -374,6 +380,7 @@ const ModernWeeklyReport: React.FC<ModernWeeklyReportProps> = ({
                     {settingsTab === 'ai_quality' && (
                         <div className="flex flex-col gap-5">
                             <ReportAiQualityCard workspace={workspace} />
+                            <ReportEvalCard workspace={workspace} dictionary={dictionary} onAddGolden={onAddReportGolden} onRemoveGolden={onRemoveReportGolden} onAddRun={onAddReportEvalRun} onUpdateGate={onUpdateReportGate} />
                         </div>
                     )}
                 </div>

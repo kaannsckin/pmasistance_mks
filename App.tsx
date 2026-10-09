@@ -23,6 +23,8 @@ import { addSnapshot, buildSnapshot, ensureMonthlySnapshot } from './utils/snaps
 import { cleanHealthConfig, ensureWeeklyHealthSnapshot, pmoRatingFor, setPmoRating } from './utils/healthModel';
 import { aiPolicyOf, updateAiPolicy } from './utils/ai/policy';
 import { appendReportAiLog, submitLogEntry } from './utils/ai/reportAiStats';
+import { addReportGolden, appendReportEvalRun, removeReportGolden } from './utils/ai/reportEval';
+import { VARIANT_META } from './utils/ai/reportVariants';
 import { stampLifecycle } from './utils/planning/lifecycle';
 import { AllocationSuggestion, ApplyMode, applyAllocationSuggestions } from './utils/taskToAllocation';
 import { applyBilledHoursActuals, planBilledHoursPoolAdditions, suggestBilledHoursActuals, BilledApplyMode, BilledHoursOptions, BilledHoursRecord } from './utils/billedHours';
@@ -65,7 +67,7 @@ import { analyzeDataHealth, applyHealthFix, HealthFix } from './utils/dataHealth
 import { appendAudit, AUDIT_ACTION_LABELS } from './utils/audit';
 import { riskScore } from './utils/risks';
 import { upsertLeave } from './utils/availability';
-import { AiReportAssessment, ReportAiLogEntry, ExpectationStatus, ExpectationUrgency, HealthConfig, MeetingStatus, PestelItem, ReportFlow, ReportSettings, Risk, RoleViewConfig, SwotItem, WeeklyReport } from './types';
+import { AiReportAssessment, ReportAiLogEntry, ReportEvalRun, ReportGatePolicy, ExpectationStatus, ExpectationUrgency, HealthConfig, MeetingStatus, PestelItem, ReportFlow, ReportSettings, Risk, RoleViewConfig, SwotItem, WeeklyReport } from './types';
 import ModernSidebar from './components/modern/ModernSidebar';
 import ModernProjectHeader from './components/modern/ModernProjectHeader';
 import ModernPlanning from './components/modern/ModernPlanning';
@@ -818,6 +820,38 @@ const App: React.FC = () => {
     });
   }, [updateWorkspace]);
 
+  // ---- Rapor AI (PYB destek): altın set, değerlendirme koşuları ve kalite kapısı ----
+  const handleAddReportGolden = useCallback((reportId: string): boolean => {
+    const ws = workspaceRef.current;
+    if (!ws) return false;
+    const items = addReportGolden(ws, identityOf(ws), reportId, actorOf(ws).name, reportDictionary(reportSettingsOf(ws)));
+    const r = (ws.weeklyReports || []).find(x => x.id === reportId);
+    if (!items || !r) return false;
+    commitWorkspace(appendAudit({ ...ws, reportGoldenSet: items }, 'report.ai', `Rapor altın setine eklendi: ${reportLabel(ws, r)}`, r.projectId));
+    return true;
+  }, [commitWorkspace]);
+  const handleRemoveReportGolden = useCallback((reportId: string) => {
+    updateWorkspace(ws => {
+      const items = removeReportGolden(ws, identityOf(ws), reportId);
+      if (!items) return ws;
+      const r = (ws.weeklyReports || []).find(x => x.id === reportId);
+      return appendAudit({ ...ws, reportGoldenSet: items }, 'report.ai', `Rapor altın setinden çıkarıldı${r ? `: ${reportLabel(ws, r)}` : ''}`, r?.projectId);
+    });
+  }, [updateWorkspace]);
+  const handleAddReportEvalRun = useCallback((run: ReportEvalRun) => {
+    updateWorkspace(ws => {
+      if (!isReportSteward(identityOf(ws))) return ws;
+      const verdict = run.passed === null ? 'karar yok' : run.passed ? 'geçti' : 'kaldı';
+      return appendAudit({ ...ws, reportEvalRuns: appendReportEvalRun(ws.reportEvalRuns, run) }, 'report.ai',
+        `Rapor AI değerlendirmesi (${VARIANT_META[run.variant].label}, ${run.promptVersion}, ${run.n} rapor): ${verdict}`);
+    });
+  }, [updateWorkspace]);
+  const handleUpdateReportGate = useCallback((patch: Partial<ReportGatePolicy>, label: string) => {
+    updateWorkspace(ws => (isReportSteward(identityOf(ws))
+      ? appendAudit({ ...ws, aiPolicy: updateAiPolicy(ws.aiPolicy, { reportGate: patch }) }, 'report.ai', `Rapor AI: ${label}`)
+      : ws));
+  }, [updateWorkspace]);
+
   const handleReturnReport = useCallback((reportId: string, note: string): boolean => {
     const ws = workspaceRef.current;
     if (!ws) return false;
@@ -1288,6 +1322,10 @@ const App: React.FC = () => {
           onRatePmo={handleRatePmo}
           onSetAiAssessment={handleSetAiAssessment}
           onLogReportAi={handleLogReportAi}
+          onAddReportGolden={handleAddReportGolden}
+          onRemoveReportGolden={handleRemoveReportGolden}
+          onAddReportEvalRun={handleAddReportEvalRun}
+          onUpdateReportGate={handleUpdateReportGate}
         />
       ) : (
         <ModernMeetings

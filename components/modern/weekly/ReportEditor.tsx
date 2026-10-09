@@ -2,7 +2,9 @@ import React, { useMemo, useRef, useState } from 'react';
 import { Abbreviation, CustomerMeeting, MeetingDetails, ReportAiLogEntry, ReportCategory, ReportItem, WeeklyReport, WorklogEntry, WorkspaceData } from '../../../types';
 import { suggestionLogEntry } from '../../../utils/ai/reportAiStats';
 import { ROLE_LABELS } from '../../../utils/allocations';
-import { buildReportInput, buildReportPrompt, parseReportSuggestion, REPORT_PROMPT_VERSION, REPORT_SYSTEM, ReportSuggestion } from '../../../utils/ai/weeklyReportPrompt';
+import { reportGateWarning } from '../../../utils/ai/reportEval';
+import { buildVariantRequest, PRODUCTION_VARIANT } from '../../../utils/ai/reportVariants';
+import { buildReportInput, parseReportSuggestion, REPORT_PROMPT_VERSION, ReportSuggestion } from '../../../utils/ai/weeklyReportPrompt';
 import { meetingsHeldInWeek, meetingsPlannedInWeek, meetingToDetails, visibleMeetings } from '../../../utils/customerMeetings';
 import { fetchJiraWorklogs, IntegrationHealth } from '../../../utils/integrations';
 import { Identity } from '../../../utils/rbac';
@@ -247,10 +249,7 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
     const notes = useMemo(() => (project?.notes || []).filter(n => n.year === year && n.weekNumber === week), [project, year, week]);
     const worklog = useMemo(() => summarizeWorklog(draft.worklog || []), [draft.worklog]);
     const worklogHours = Math.round((draft.worklog || []).reduce((s, e) => s + e.hours, 0) * 10) / 10;
-    const styleExamples = useMemo(() => (workspace.weeklyReports || [])
-        .filter(r => r.stage === 'approved' && r.kind === 'project' && r.id !== draft.id && workspace.projects.some(p => p.id === r.projectId && p.pmPersonId && p.pmPersonId === project?.pmPersonId))
-        .sort((a, b) => b.year - a.year || b.week - a.week)
-        .slice(0, 3), [workspace.weeklyReports, workspace.projects, draft.id, project?.pmPersonId]);
+    const gateWarning = useMemo(() => reportGateWarning(workspace, ai.model), [workspace, ai.model]);
 
     // Kısaltmalar
     const knownAbbr = useMemo(() => new Set([...dictionary, ...draft.abbreviations].map(a => a.abbr.toLocaleUpperCase('tr-TR'))), [dictionary, draft.abbreviations]);
@@ -336,7 +335,8 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
         const input = buildReportInput({ project, year, week, worklog: draft.worklog, heldMeetings: held, plannedMeetings: planned, previous: prevReport, dictionary });
         const promptVersion = REPORT_PROMPT_VERSION;
         const model = ai.model;
-        const res = await ai.run(REPORT_SYSTEM, buildReportPrompt(input, styleExamples), t => ({ s: parseReportSuggestion(t), raw: t }), { onError: () => logAi('error', undefined, promptVersion, model) });
+        const req = buildVariantRequest({ variant: PRODUCTION_VARIANT, ws: workspace, report: draft, input });
+        const res = await ai.run(req.system, req.prompt, t => ({ s: parseReportSuggestion(t), raw: t }), { onError: () => logAi('error', undefined, promptVersion, model) });
         if (res) setSuggestion({ ...res, input, promptVersion, model });
     };
     const discardSuggestion = () => {
@@ -656,6 +656,7 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
                                     <button type="button" className="m-btn m-btn-primary" disabled={ai.loading} onClick={suggest}>
                                         <Icon name="sparkles" size={18} />{ai.loading ? 'Öneri hazırlanıyor…' : 'Taslak öner'}
                                     </button>
+                                    {gateWarning && <div role="status" className="rounded-xl m-tone-warn px-3 py-2 text-[13px]">{gateWarning}</div>}
                                     {ai.error && <div role="alert" className="rounded-xl m-tone-bad px-3 py-2 text-[14px]">{ai.error}</div>}
                                 </>
                             ) : (

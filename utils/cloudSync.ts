@@ -111,6 +111,9 @@ export const splitWorkspaceDoc = (ws: WorkspaceData): { core: Record<string, unk
         modelEvals: ws.modelEvals || [],
         // Haftalık rapor AI öneri günlüğü (yalnız sayılar; rapor metni yok)
         reportAiLog: ws.reportAiLog || [],
+        // Rapor taslağı değerlendirmesi: altın set ve koşular
+        reportGoldenSet: ws.reportGoldenSet || [],
+        reportEvalRuns: ws.reportEvalRuns || [],
     };
     return { core, privateDoc, projects };
 };
