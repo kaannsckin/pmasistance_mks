@@ -43,27 +43,43 @@ const newer = (a: string, b: string) => {
     return false;
 };
 
-/**
- * Sohbet modeli: en yüksek sürümlü kararlı "gemini-X.Y-flash" (önizleme, lite,
- * görüntü / ses / canlı türevleri hariç); yoksa gemini-flash-latest; yoksa
- * önizleme olmayan herhangi bir Flash; yoksa listedeki ilk Gemini modeli.
- */
-export const pickGeminiChatModel = (models: GeminiModel[]): string | undefined => {
-    const chat = models.filter(m => m.methods.includes('generateContent') && m.id.startsWith('gemini'));
-    let best: { id: string; v: string; suffix: boolean } | undefined;
-    for (const m of chat) {
-        const hit = /^gemini-(\d+(?:\.\d+)?)-flash(-\d{3})?$/.exec(m.id);
+/** Kararlı "gemini-X.Y-<tür>" modelleri, sürüm başına bir tane (son ekli -001 yerine eksizi), yeniden eskiye */
+const stableByVersion = (ids: string[], kind: string): string[] => {
+    const re = new RegExp(`^gemini-(\\d+(?:\\.\\d+)?)-${kind}(-\\d{3})?$`);
+    const best = new Map<string, { id: string; suffix: boolean }>();
+    for (const id of ids) {
+        const hit = re.exec(id);
         if (!hit) continue;
-        const cand = { id: m.id, v: hit[1], suffix: !!hit[2] };
-        if (!best || newer(cand.v, best.v) || (cand.v === best.v && best.suffix && !cand.suffix)) best = cand;
+        const cur = best.get(hit[1]);
+        if (!cur || (cur.suffix && !hit[2])) best.set(hit[1], { id, suffix: !!hit[2] });
     }
-    if (best) return best.id;
-    const NOT_GENERAL = /(preview|exp|lite|image|tts|audio|live|thinking|vision|robotics|computer|native)/;
-    return chat.find(m => m.id === 'gemini-flash-latest')?.id
-        || chat.find(m => /flash/.test(m.id) && !NOT_GENERAL.test(m.id))?.id
-        || chat.find(m => !NOT_GENERAL.test(m.id))?.id
-        || chat[0]?.id;
+    return [...best.entries()].sort((a, b) => (newer(a[0], b[0]) ? -1 : newer(b[0], a[0]) ? 1 : 0)).map(([, v]) => v.id);
 };
+
+/**
+ * Sohbet modelleri tercih sırasıyla. İlki otomatik seçilen: en yüksek sürümlü
+ * kararlı "gemini-X.Y-flash" (önizleme, lite, görüntü / ses / canlı türevleri
+ * hariç); yoksa gemini-flash-latest; yoksa önizleme olmayan herhangi bir Flash;
+ * yoksa genel amaçlı bir Gemini modeli. Sonrakiler model yoğunken ya da kotası
+ * dolduğunda denenen yedeklerdir (her modelin kapasitesi ve ücretsiz kotası
+ * ayrıdır): daha eski kararlı Flash'lar, sonra kararlı Flash-Lite'lar.
+ */
+export const rankGeminiChatModels = (models: GeminiModel[]): string[] => {
+    const chat = models.filter(m => m.methods.includes('generateContent') && m.id.startsWith('gemini')).map(m => m.id);
+    const NOT_GENERAL = /(preview|exp|lite|image|tts|audio|live|thinking|vision|robotics|computer|native)/;
+    const flash = stableByVersion(chat, 'flash');
+    const lite = stableByVersion(chat, 'flash-lite');
+    const general = [
+        chat.find(id => id === 'gemini-flash-latest'),
+        chat.find(id => /flash/.test(id) && !NOT_GENERAL.test(id)),
+        chat.find(id => !NOT_GENERAL.test(id)),
+    ];
+    // gemini-flash-latest çoğunlukla en yeni Flash'ı gösterir; yedek olarak sürümlü modellerden sonra gelir
+    const ordered = flash.length ? [...flash, ...lite, ...general, chat[0]] : [...general, ...lite, chat[0]];
+    return [...new Set(ordered.filter((id): id is string => !!id))];
+};
+
+export const pickGeminiChatModel = (models: GeminiModel[]): string | undefined => rankGeminiChatModels(models)[0];
 
 /** Embedding modeli: en yüksek numaralı kararlı gemini-embedding-NNN; yoksa diğer gemini-embedding, text-embedding */
 export const pickGeminiEmbeddingModel = (models: GeminiModel[]): string | undefined => {
@@ -116,6 +132,8 @@ export const clearGeminiCache = (): void => cache.clear();
 
 export interface GeminiAuto {
     model?: string;
+    /** Otomatik seçilen model yoğunken / kotası dolunca sırayla denenen yedekler */
+    fallbacks?: string[];
     embeddingModel?: string;
 }
 
@@ -155,7 +173,9 @@ export const withGeminiDefaults = async (env: Env, fetchImpl?: typeof fetch): Pr
     const auto: GeminiAuto = {};
     const next: Env = { ...env };
     if (needModel) {
-        auto.model = pickGeminiChatModel(hit.models);
+        const ranked = rankGeminiChatModels(hit.models);
+        auto.model = ranked[0];
+        if (ranked.length > 1) auto.fallbacks = ranked.slice(1, 3);
         if (auto.model) next.AI_MODEL = auto.model; else delete next.AI_MODEL;
     }
     if (needEmb) {

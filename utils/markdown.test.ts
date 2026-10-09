@@ -2,6 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { isSafeHref, parseInline, parseMarkdown } from './markdown';
 
 describe('parseInline', () => {
+    it('kaçırılmış yıldız vurguyu kapatmaz (model tablolarda *Diğer 31 Personel\\** yazar)', () => {
+        expect(parseInline('*Diğer 31 Personel\\**')).toEqual([{ t: 'em', c: [{ t: 'text', v: 'Diğer 31 Personel*' }] }]);
+        expect(parseInline('**a\\***')).toEqual([{ t: 'strong', c: [{ t: 'text', v: 'a*' }] }]);
+        expect(parseInline('3 \\* 4 = 12')).toEqual([{ t: 'text', v: '3 * 4 = 12' }]);
+        expect(parseInline('a\\\\*b*')).toEqual([{ t: 'text', v: 'a\\' }, { t: 'em', c: [{ t: 'text', v: 'b' }] }]);
+    });
     it('kalın, italik, kod, üstü çizili', () => {
         expect(parseInline('a **b** *c* `d` ~~e~~')).toEqual([
             { t: 'text', v: 'a ' },

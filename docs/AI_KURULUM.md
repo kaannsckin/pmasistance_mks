@@ -137,6 +137,8 @@ Yayındaki sunucuda kurum modeli tanımlıyken ya da panel kapalıyken (AI_ADMIN
 - Adres sabittir (`generativelanguage.googleapis.com`): başlıkla başka bir adrese istek gönderilemez, sunucudaki kurum anahtarı kullanılmaz ve hiçbir yanıtta dönmez. Kurum modeline özgü üretim ayarları (sıcaklık, en çok çıktı, akıl yürütme, ek alanlar) Gemini'ye taşınmaz.
 - Erişim koruması (erişim kodu / Supabase), hız sınırı ve izinli kökenler aynen geçerlidir; anahtarlı istekler ayrıca istemci IP'si başına dakikada 180 ile sınırlıdır.
 - Yalnız bu tarayıcı etkilenir: diğer kullanıcılar ve cihazlar sunucu ayarıyla çalışır. Durum kartında kaynak "Bu tarayıcıdaki Gemini test anahtarı" görünür; anahtar geçersizleşirse asistan nedenini ve nereden değiştirileceğini söyler. **Kaldır** ile silinir.
+- Gönderilen veri sunucu ayarındakiyle aynıdır: asistan sorunuza göre proje, görev ve kişi bilgilerini (kişi adları dahil; sicil numaraları maskelenir) Gemini'ye gönderir. Ücretsiz katmanda bu içerik Google ürünlerini geliştirmek için kullanılabilir.
+- Model yoğunsa (Gemini "high demand", HTTP 503) proxy isteği kısa bir beklemeyle bir kez yeniden dener; olmazsa anahtarın erişebildiği bir sonraki kararlı Flash modeline, sonra Flash-Lite'a geçer (kota dolduğunda, HTTP 429, beklemeden geçer). Bu, model otomatik seçildiğinde (`AI_MODEL` boş ya da `auto`) geçerlidir; model elle verildiyse yalnız bir kez yeniden denenir.
 - Paylaşılan bilgisayarda kullanmayın. Kurum bu kipi istemiyorsa sunucuya `AI_ALLOW_BROWSER_KEY=0` ekleyin; o zaman kayıtlı anahtarlı istekler sessizce kurum modeline düşmez, "kapalı" uyarısı verir.
 
 ## 2. Sağlayıcı örnekleri
