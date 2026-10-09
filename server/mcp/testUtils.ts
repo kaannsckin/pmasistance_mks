@@ -120,6 +120,7 @@ export const fakeSupabase = (db: FakeDb, user = { id: 'u1' }, password = 'dogru-
     let signIns = 0;
     const client = {
         auth: {
+            getSession: async () => ({ data: { session: null } }),
             signInWithPassword: async (c: { email: string; password: string }) => {
                 signIns++;
                 return c.password === password

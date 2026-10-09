@@ -109,6 +109,19 @@ describe('pilot simülasyonu', () => {
         expect(events.find(e => e.gun === '2026-07-11')!.isGunu).toBe(false);
     });
 
+    it('pilot 1. gün bulgularının düzeltmeleri: tahsis rolü, yönetici kapasitesi, tekrarsız istek, worklog ayrımı, tarih', () => {
+        const { ws, events } = simulate();
+        expect(ws.allocations.every(a => !!a.role)).toBe(true);
+        expect(ws.allocations.find(a => a.personId === 'p13' && a.projectId === 'prj-atlas')!.role).toBe('Proje Yöneticisi');
+        expect(ws.people.find(p => p.id === 'p01')!.availableAA).toBe(0.3);
+        expect(ws.people.find(p => p.id === 'p21')!.roles).toEqual(['Birim Yöneticisi']);
+        ws.projects.forEach(p => expect(new Set(p.customerRequests.map(r => r.title)).size).toBe(p.customerRequests.length));
+        expect(ws.projects.every(p => p.createdAt <= '2026-06-01T23:59:59Z')).toBe(true);
+        const day = events.find(e => e.gun === '2026-07-08')!;
+        expect(day.projeler.ATL.genelSaat).toBeGreaterThan(0);
+        expect(eventsMarkdown(day)).toContain('Jira dışı genel gider');
+    });
+
     it('uygulamanın veri sağlığı motoru üretilen veride çalışır', () => {
         const { ws } = simulate();
         expect(() => analyzeDataHealth(ws)).not.toThrow();

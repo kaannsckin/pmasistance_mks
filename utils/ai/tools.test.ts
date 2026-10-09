@@ -291,3 +291,21 @@ describe('değişiklik öneri araçları', () => {
         expect(ctx.proposals).toHaveLength(1);
     });
 });
+
+describe('pilot bulgularından gelen iyileştirmeler', () => {
+    it('gorev_ara metni Jira anahtarında da arar', async () => {
+        const ws = buildWs('pyb_destek', null);
+        ws.projects[0].tasks[0].jiraId = 'ALT-77';
+        const r = await run('gorev_ara', { metin: 'alt-77' }, ws);
+        expect(r.json.eslesen).toBe(1);
+        expect(r.json.gorevler[0].jira).toBe('ALT-77');
+    });
+
+    it('kapasite_talep rolsüz tahsis satırlarında uyarır', async () => {
+        const r = await run('kapasite_talep', { yil: 2026 }, buildWs('pyb_destek', null));
+        expect(r.json.uyari).toContain('rolü girilmemiş');
+        const ws = buildWs('pyb_destek', null);
+        ws.allocations = ws.allocations.map(a => ({ ...a, role: 'Yazılım Geliştirme Mühendisi' }));
+        expect((await run('kapasite_talep', { yil: 2026 }, ws)).json.uyari).toBeUndefined();
+    });
+});
