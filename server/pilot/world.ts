@@ -145,17 +145,19 @@ export const PERSONAS: Persona[] = [
         id: 'elif', personId: 'p13', role: 'py', unvan: 'Proje Yöneticisi — ATLAS', project: 'ATL-2401',
         karakter: 'Düzenli, verilere dayanır; sprint ilerlemesini, gecikmeleri ve riskleri her sabah kontrol eder. Belirsiz bir sayı görünce kaynağını sorar.',
         gunluk: [
+            'Güne Jira\'dan güncelleyerek başla: jira_aktar ile önizlemeyi gör, mantıklıysa --onayla ile aktar',
             'ATLAS durumunu, geciken ve yaklaşan görevleri incele; gerekiyorsa görev durumunu güncelle',
-            'Dünkü Jira akışına ve toplantı notlarına göre yeni risk gerekip gerekmediğine karar ver',
+            'Dünkü Jira akışına, toplantı notlarına ve ekipten gelen risk sinyallerine göre risk ekleyip eklemeyeceğine karar ver',
             'Ekibinin bu ay ve gelecek ay doluluğuna bak; aşırı yüklü kişi varsa Selin\'e (bölüm sorumlusu) yaz',
-            'Cuma günleri haftalık durum raporu taslağını hazırlat ve RAG durumunu değerlendir',
+            'Haftanın durumuna göre RAG\'ı güncelle (Cuma mutlaka); durum raporu taslağını hazırlat',
         ],
     },
     {
         id: 'burak', personId: 'p14', role: 'py', unvan: 'Proje Yöneticisi — PUSULA ve NEHİR', project: undefined,
         karakter: 'İki projeyi birden yürüttüğü için yoğun; hızlı karar verir, bazen kayıtları geç günceller. NEHİR\'deki hata yükünden endişeli.',
         gunluk: [
-            'PUSULA ve NEHİR\'i karşılaştır; hangisi daha riskli, neden',
+            'İki projeyi de Jira\'dan güncelle (jira_aktar); yoğun günlerde birini atlayabilirsin',
+            'PUSULA ve NEHİR\'i karşılaştır; hangisi daha riskli, neden; RAG\'ları güncelle',
             'NEHİR\'deki hata oranını ve yeniden açılan kayıtları incele; gerekirse risk ekle',
             'Kapasite yetmiyorsa uygun kişi ara ve Selin\'den ya da Ahmet Bey\'den destek iste',
             'Müşteri isteklerini gözden geçir',
@@ -176,7 +178,7 @@ export const PERSONAS: Persona[] = [
         karakter: 'Titiz; veri kalitesi, tutarsız rakamlar ve eksik kayıtlar onun işi. Bulduğu her tutarsızlığı kayda geçirir.',
         gunluk: [
             'Portföy genelinde veri tutarlılığını kontrol et (tahsis toplamları, eksik PY, kapanmış ama tarihsiz kayıtlar)',
-            'Maliyet raporu ile tahsis özetinin birbirini tuttuğunu doğrula',
+            'Maliyet raporu ile tahsis özetinin birbirini tuttuğunu doğrula; Jira worklog saatlerini (jira_worklog) gerçekleşen adam-ayla karşılaştır',
             'Haftalık raporların durumuna ve son değişikliklere bak',
             'Bulduğun tutarsızlıkları ilgili kişiye yaz',
         ],

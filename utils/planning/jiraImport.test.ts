@@ -95,6 +95,18 @@ describe('birleştirme', () => {
         expect(reopened.statusLog!.at(-1)).toEqual({ at: '2026-09-10T08:00:00.000Z', from: TaskStatus.Done, to: TaskStatus.InProgress });
     });
 
+    it('Jira termini (duedate) yalnız uygulamada termin yoksa yazılır', () => {
+        expect(issueToTask(issue('MKS-30', { due: '2026-09-20' }), OPTS).dueDate).toBe('2026-09-20');
+        expect(issueToTask(issue('MKS-31'), OPTS).dueDate).toBeUndefined();
+        const r = mergeJiraIssues(
+            [local('a', { jiraId: 'MKS-30' }), local('b', { jiraId: 'MKS-31', dueDate: '2026-12-01' })],
+            [issue('MKS-30', { due: '2026-09-20' }), issue('MKS-31', { due: '2026-09-21' })],
+            OPTS,
+        );
+        expect(r.tasks.find(t => t.id === 'a')!.dueDate).toBe('2026-09-20');
+        expect(r.tasks.find(t => t.id === 'b')!.dueDate).toBe('2026-12-01');
+    });
+
     it('Jira kapanış tarihi vermezse yerel kapanış tarihi korunur', () => {
         const done = local('t1', { jiraId: 'MKS-1', status: TaskStatus.Done, resolvedAt: '2026-09-04T14:00:00.000Z' });
         const r = mergeJiraIssues([done], [issue('MKS-1', { resolved: null, transitions: [] })], OPTS).tasks[0];

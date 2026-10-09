@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -6,16 +6,17 @@ import { TaskStatus } from '../../types';
 import { analyzeDataHealth } from '../../utils/dataHealth';
 import { serializeWorkspace } from '../../utils/workspace';
 import { runChecks } from './check';
-import { addDays, createState, createWorld, DayEvents, eventsMarkdown, runUntil, SimState } from './sim';
+import { addDays, createState, createWorld, DayEvents, eventsMarkdown, jiraExports, personaOwned, runUntil, SimState } from './sim';
 import { PERSONAS, PROJECTS } from './world';
 
 const START = '2026-06-01';
 const END = '2026-07-15';
 
+/** Kurulum gibi: tüm projelerin Jira geçmişi aktarılmış */
 const simulate = (tohum = 2026, end = END) => {
     const state = createState(tohum, START);
     const events: DayEvents[] = [];
-    const ws = runUntil(state, createWorld(tohum, START), end, e => events.push(e));
+    const ws = runUntil(state, createWorld(tohum, START), end, e => events.push(e), { importAll: true });
     return { state, ws, events };
 };
 
@@ -30,9 +31,9 @@ describe('pilot simülasyonu', () => {
     it('günler parça parça ilerletilince (durum JSON\'a yazılıp okunarak) aynı sonuç çıkar', () => {
         const once = simulate();
         const state = createState(2026, START);
-        let ws = runUntil(state, createWorld(2026, START), '2026-06-20');
+        let ws = runUntil(state, createWorld(2026, START), '2026-06-20', undefined, { importAll: true });
         const restored = JSON.parse(JSON.stringify(state)) as SimState;
-        ws = runUntil(restored, JSON.parse(serializeWorkspace(ws, false)), END);
+        ws = runUntil(restored, JSON.parse(serializeWorkspace(ws, false)), END, undefined, { importAll: true });
         // Alan sırası farklı olabilir (JSON'da tanımsız alanlar düşer); içerik aynı olmalı
         const plain = (x: typeof ws) => ({ ...JSON.parse(serializeWorkspace(x, false)), exportDate: undefined });
         expect(plain(ws)).toEqual(plain(once.ws));
@@ -59,6 +60,29 @@ describe('pilot simülasyonu', () => {
         }
         // Teklif aşamasındaki projede Jira akışı yok
         expect(ws.projects.find(p => p.id === 'prj-yildiz')!.tasks).toHaveLength(0);
+    });
+
+    it('günlük ilerlemede Jira yalnız arka plandaki PY\'nin projesine aktarılır; persona PY\'ler kendisi aktarır', () => {
+        const state = createState(2026, START);
+        const ws0 = runUntil(state, createWorld(2026, START), '2026-07-01', undefined, { importAll: true });
+        const events: DayEvents[] = [];
+        const ws1 = runUntil(state, ws0, END, e => events.push(e));
+        const count = (w: typeof ws0, id: string) => w.projects.find(p => p.id === id)!.tasks.length;
+        expect(personaOwned('prj-atlas')).toBe(true);
+        expect(personaOwned('prj-kalkan')).toBe(false);
+        // ATLAS'ın Jira'sı büyüdü ama uygulamadaki görevleri değişmedi (Elif aktarmadı); KALKAN arka planda güncel
+        expect(state.jira.ATL.issues.length).toBeGreaterThan(count(ws1, 'prj-atlas'));
+        expect(count(ws1, 'prj-atlas')).toBe(count(ws0, 'prj-atlas'));
+        expect(count(ws1, 'prj-kalkan')).toBe(state.jira.KLK.issues.length);
+        // Persona projelerinde risk eklenmez, olaylarda sinyal olarak görünür; RAG'i de PY günceller
+        expect(ws1.projects.find(p => p.id === 'prj-nehir')!.risks!.length).toBe(ws0.projects.find(p => p.id === 'prj-nehir')!.risks!.length);
+        expect(events.some(e => e.projeler.NHR?.riskler.some(r => r.includes('sinyal')))).toBe(true);
+        expect(events.every(e => !e.projeler.ATL?.rag)).toBe(true);
+        // Jira dışa aktarımı: tüm kayıtlar, termin ve worklog dahil
+        const atl = jiraExports(state).ATL;
+        expect(atl.total).toBe(state.jira.ATL.issues.length);
+        expect(atl.issues.filter(i => i.fields.duedate).length).toBeGreaterThan(atl.total * 0.9);
+        expect(atl.issues.some(i => (i.fields.worklog?.total || 0) > 0)).toBe(true);
     });
 
     it('ay başında worklog saatleri gerçekleşen adam-aya çevrilir (izin düşülür)', () => {
@@ -94,11 +118,15 @@ describe('pilot simülasyonu', () => {
         const dir = await mkdtemp(join(tmpdir(), 'pilot-test-'));
         try {
             const path = join(dir, 'workspace.json');
-            await writeFile(path, serializeWorkspace(simulate(2026, addDays(END, 0)).ws, false));
+            const sim = simulate(2026, addDays(END, 0));
+            await writeFile(path, serializeWorkspace(sim.ws, false));
+            await mkdir(join(dir, 'jira'));
+            for (const [key, resp] of Object.entries(jiraExports(sim.state))) await writeFile(join(dir, 'jira', `${key}.json`), JSON.stringify(resp));
             const results = await runChecks(path, { now: new Date('2026-07-16T07:00:00Z') });
             const failed = results.filter(r => r.durum === 'KALDI');
             expect(failed).toEqual([]);
-            expect(results.filter(r => r.durum === 'GEÇTİ').length).toBeGreaterThanOrEqual(20);
+            expect(results.filter(r => r.durum === 'GEÇTİ').length).toBeGreaterThanOrEqual(26);
+            expect(results.map(r => r.ad)).toEqual(expect.arrayContaining(['elif: jira_aktar → onay → görevler Jira ile aynı', 'burak: başkasının projesine Jira aktarımı reddedilir']));
             expect(results.map(r => r.ad)).toEqual(expect.arrayContaining(PERSONAS.map(p => `${p.id}: bağlantı ve kimlik`)));
         } finally {
             await rm(dir, { recursive: true, force: true });

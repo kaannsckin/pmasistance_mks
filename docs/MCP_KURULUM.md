@@ -123,6 +123,7 @@ Supabase için `-e` ile aynı değişkenleri verin. `claude mcp list` bağlantı
 | `PLANASISTAN_PERSON` | Kişi adı soyadı (veri havuzundan). **Proje Yöneticisi ve Bölüm Sorumlusu rollerinde zorunlu** (kapsamı belirler) |
 | `PLANASISTAN_PROJECT` | Proje belirtilmeyen sorularda kullanılacak proje (ad ya da kod). Verilmezse ve tek proje görünüyorsa o proje |
 | `PLANASISTAN_MCP_WRITE` | `1`: değişiklik araçlarını açar (yalnız Supabase, yalnız Proje Yöneticisi / Bölüm Sorumlusu kimliği) |
+| `JIRA_BASE_URL` + `JIRA_TOKEN` (ya da `JIRA_EMAIL` + `JIRA_API_TOKEN`), `JIRA_ALLOWED_PROJECTS`, `JIRA_STORY_POINTS_FIELD` | Uygulama sunucusuyla aynı Jira ayarları. Verilirse `jira_aktar` (PY: Jira kayıt geçmişini projeye aktarır; önizleme önerisi → onay, Planlama › "Jira'dan geçmiş" ile aynı birleştirme) ve `jira_worklog` (worklog özeti) araçları açılır. Kurum sertifikası gerekiyorsa `AI_CA_CERTS` |
 | `PLANASISTAN_FILE_WRITE` | `1`: **yalnız test/pilot için** JSON yedeğini yazılabilir yapar; değişiklik dosyaya yazılır (dosya okunduktan sonra değiştiyse çakışma verilir). Uygulama değişikliği ancak dosya yeniden içe aktarılınca görür. Bkz. [`pilot/README.md`](../pilot/README.md) |
 
 ## Kimlik ve yetki
@@ -153,6 +154,7 @@ Değişiklik varsayılanda **kapalıdır**. `PLANASISTAN_MCP_WRITE=1` ile ve Sup
 | `notlari_ara`, `musteri_istekleri` | Haftalık notlar ve müşteri istekleri (yönetici rollerine sunulmaz) |
 | `bilgi_ara` | Notlar, görev/risk açıklamaları, istekler, PESTEL/SWOT, hedefler ve kullanım kılavuzunda anahtar kelime araması |
 | `veri_sagligi`, `son_degisiklikler` | Yetkisi olan rollerde veri kalitesi ve denetim günlüğü |
+| `jira_aktar`, `jira_worklog` | Jira bağlıysa: Jira kayıt geçmişini projeye aktarma (PY, onaylı) ve worklog özeti |
 | `oner_*`, `oneriyi_uygula` | Onaylı değişiklik (yukarıya bakın) |
 
 ## Güvenlik ve veri

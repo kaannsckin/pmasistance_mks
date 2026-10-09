@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { UserRole, WorkspaceData } from '../../types';
-import { APPLY_TOOL, createPlanAsistanMcp, PlanAsistanMcpOptions, STATUS_TOOL } from './planasistan';
+import { createMockJira, PILOT_JIRA_ENV, toRawIssue } from '../pilot/mockJira';
+import type { JiraIssueRecord } from '../../utils/integrations';
+import { APPLY_TOOL, createPlanAsistanMcp, JIRA_IMPORT_TOOL, JIRA_WORKLOG_TOOL, PlanAsistanMcpOptions, STATUS_TOOL } from './planasistan';
 import { memorySource, sampleWorkspace } from './testUtils';
 
 const NOW = new Date('2026-07-15T09:00:00Z');
@@ -180,5 +182,68 @@ describe('PlanAsistan MCP — değişiklikler', () => {
         await call(APPLY_TOOL, { oneri_id: oneri.json.oneri_id });
         const row = mem.saved[0].after.allocations.find(a => a.personId === 'p1' && a.projectId === 'altay')!;
         expect(row.plan[9]).toBe(0.75);
+    });
+});
+
+describe('PlanAsistan MCP — Jira', () => {
+    const rec = (key: string, extra: Partial<JiraIssueRecord> = {}): JiraIssueRecord => ({
+        key, summary: `Kayıt ${key}`, description: '', issueType: 'Hata', status: 'Tamamlandı', statusCategory: 'done', priority: 'High',
+        created: '2026-07-01T06:00:00.000Z', resolved: '2026-07-03T13:00:00.000Z', components: ['U310'], labels: [], fixVersions: [],
+        originalEstimateSeconds: 28800, timeSpentSeconds: 36000, storyPoints: null, assignee: 'Ayşe Kaya', blockedBy: [],
+        transitions: [{ at: '2026-07-01T07:00:00.000Z', from: 'Yapılacak', to: 'Tamamlandı', fromCategory: 'new', toCategory: 'done' }], due: '2026-07-10', ...extra,
+    });
+    const jira = createMockJira(async () => [
+        toRawIssue(rec('ALT-1'), { id: 1, project: { key: 'ALT', name: 'ALTAY' }, worklogs: [{ day: '2026-07-14', hours: 3, author: 'Ayşe Kaya' }, { day: '2026-07-15', hours: 2, author: 'Mehmet Demir' }] }),
+        toRawIssue(rec('ALT-2', { status: 'Devam Ediyor', statusCategory: 'indeterminate', resolved: null, due: '2026-07-20' }), { id: 2, project: { key: 'ALT', name: 'ALTAY' }, worklogs: [{ day: '2026-07-15', hours: 4, author: 'Ayşe Kaya' }] }),
+    ]);
+    const withJira = () => {
+        const ws = sampleWorkspace();
+        ws.projects[0].jiraProjectKey = 'ALT';
+        return ws;
+    };
+    const jiraServer = (role: 'py' | 'mudur' = 'py', person?: string, allowWrite = true) =>
+        server(withJira(), { role, person, allowWrite, jira: { env: PILOT_JIRA_ENV, fetchImpl: jira } });
+
+    it('Jira bağlı değilse Jira araçları sunulmaz', async () => {
+        const names = await server(withJira(), { role: 'py', person: 'Ayşe Kaya', allowWrite: true }).toolNames();
+        expect(names).not.toContain(JIRA_IMPORT_TOOL);
+        expect(names).not.toContain(JIRA_WORKLOG_TOOL);
+    });
+
+    it('PY: önizleme önerisi → onay → görevler Jira\'dan, denetim kaydıyla', async () => {
+        const { call, mem, toolNames } = jiraServer('py', 'Ayşe Kaya');
+        expect(await toolNames()).toEqual(expect.arrayContaining([JIRA_IMPORT_TOOL, JIRA_WORKLOG_TOOL]));
+        const prev = await call(JIRA_IMPORT_TOOL, { proje: 'ALTAY', donem_ay: 0 });
+        expect(prev.isError).toBeUndefined();
+        expect(prev.json.ayrintilar).toMatchObject({ jira: 'ALT', alinan: 2, kapanmis: 1, acik: 1, yeni: 2, guncellenecek: 0 });
+        expect(mem.saved).toHaveLength(0);
+        const done = await call(APPLY_TOOL, { oneri_id: prev.json.oneri_id });
+        expect(done.json.uygulandi).toBe(true);
+        const altay = mem.saved[0].after.projects.find(p => p.id === 'altay')!;
+        expect(altay.tasks.filter(t => t.jiraId).map(t => [t.jiraId, t.status, t.dueDate])).toEqual([['ALT-1', 'Done', '2026-07-10'], ['ALT-2', 'InProgress', '2026-07-20']]);
+        expect(mem.saved[0].after.auditLog?.[0]).toMatchObject({ action: 'data.import', projectId: 'altay' });
+        // Tekrar: değişiklik yoksa öneri üretilmez
+        const again = await call(JIRA_IMPORT_TOOL, { proje: 'ALTAY', donem_ay: 0 });
+        expect(again.json.oneri_id).toBeUndefined();
+        expect(again.json.durum).toContain('güncel');
+    });
+
+    it('yetki: başkasının projesi, müdür ve Jira anahtarı olmayan proje', async () => {
+        const other = await jiraServer('py', 'Mehmet Demir').call(JIRA_IMPORT_TOOL, { proje: 'ALTAY' });
+        expect(other.isError).toBe(true);
+        const mudur = jiraServer('mudur');
+        expect(await mudur.toolNames()).not.toContain(JIRA_IMPORT_TOOL);
+        expect((await mudur.call(JIRA_IMPORT_TOOL, { proje: 'ALTAY' })).isError).toBe(true);
+        const noKey = await jiraServer('py', 'Mehmet Demir').call(JIRA_IMPORT_TOOL, { proje: 'Gizli Proje' });
+        expect(noKey.json.hata).toContain('Jira proje anahtarı');
+    });
+
+    it('worklog özeti: kişi, kayıt ve gün bazında', async () => {
+        const { call } = jiraServer('mudur');
+        const res = await call(JIRA_WORKLOG_TOOL, { proje: 'ALTAY', baslangic: '2026-07-14', bitis: '2026-07-15' });
+        expect(res.isError).toBeUndefined();
+        expect(res.json).toMatchObject({ jira: 'ALT', toplam_saat: 9, kayit_sayisi: 3 });
+        expect(res.json.kisi).toEqual([{ ad: 'Ayşe Kaya', saat: 7 }, { ad: 'Mehmet Demir', saat: 2 }]);
+        expect((await call(JIRA_WORKLOG_TOOL, { proje: 'ALTAY', baslangic: '2026-07-20', bitis: '2026-07-01' })).isError).toBe(true);
     });
 });

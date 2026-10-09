@@ -77,6 +77,8 @@ export interface JiraIssueRecord {
     assignee: string;
     blockedBy: string[];
     transitions: { at: string; from: string; to: string; fromCategory: JiraIssueRecord['statusCategory']; toCategory: JiraIssueRecord['statusCategory'] }[];
+    /** Jira'daki termin (duedate, YYYY-AA-GG); eski sunucu sürümleri göndermeyebilir */
+    due?: string | null;
 }
 
 export interface JiraIssuePage {

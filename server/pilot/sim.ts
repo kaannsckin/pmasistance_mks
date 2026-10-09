@@ -8,6 +8,7 @@ import { mulberry32, normal, Rng } from '../../utils/planning/random.js';
 import { addWorkdays, isWorkday, workdaysInMonth } from '../../utils/planning/workdays.js';
 import { isoWeekOf } from '../../utils/weeklyReport.js';
 import { createEmptyWorkspace, createProject, defaultProjectSettings } from '../../utils/workspace.js';
+import { SearchResponse, searchExport, toRawIssue } from './mockJira.js';
 import { ACTIONS, DECISIONS, issueText, MEETINGS, pick, REQUESTS, RISKS, SimIssueType } from './text.js';
 import { DEPARTMENTS, fullName, PEOPLE, PERSONAS, personById, PROJECTS, ROLE_NAMES, TITLES, WorldProject } from './world.js';
 
@@ -27,7 +28,7 @@ import { DEPARTMENTS, fullName, PEOPLE, PERSONAS, personById, PROJECTS, ROLE_NAM
  * tarihinden türetilir). Saatler İstanbul saatine göre UTC ISO yazılır.
  */
 
-export const SIM_VERSION = 1;
+export const SIM_VERSION = 2;
 
 export interface SimIssue {
     rec: JiraIssueRecord;
@@ -38,6 +39,8 @@ export interface SimIssue {
     assigneeId?: string;
     /** Havuz dışı (harici danışman) — kimse üstlenmez; sahipsiz kayıt örneği */
     external?: boolean;
+    /** Kayda yazılan worklog'lar: [gün, saat, kişi id] — Jira dışa aktarımına girer */
+    logs: [string, number, string][];
 }
 
 export interface SimState {
@@ -300,30 +303,54 @@ const sprintNo = (project: Project, day: string): number => {
 
 const emptyDay = (name: string): ProjectDay => ({ ad: name, yeni: [], baslayan: [], kapanan: [], yenidenAcilan: [], saat: 0, notlar: [], riskler: [], istekler: [] });
 
-/** Gün sonunda yeni görevlere uygulamanın planlama alanları (termin, iş paketi, sürüm) */
+/**
+ * Kaydın planı (kayıt anahtarından tohumlu, her çağrıda aynı): planlandığı
+ * sürüm ve termin — sürüm sonu; tahmin daha uzunsa tahmine göre. Termin
+ * Jira'ya (duedate) yazılır; sürüm ve iş paketi uygulama tarafının planıdır.
+ */
+const planOf = (project: Project, key: string, createdDay: string, estimateHours: number | null) => {
+    const rng = mulberry32(hashStr(key));
+    const sprint = sprintNo(project, createdDay) + (rng() < 0.3 ? 1 : 0);
+    const sprintEnd = dateOf(project.settings.projectStartDate.slice(0, 10));
+    sprintEnd.setDate(sprintEnd.getDate() + sprint * 7 * (project.settings.sprintDuration || 3) - 3);
+    const estDays = estimateHours ? Math.max(1, Math.round(estimateHours / 8)) : 0;
+    const byEstimate = addWorkdays(dateOf(createdDay), estDays > 0 ? Math.ceil(estDays * 2) + 5 : 12);
+    return { sprint, due: dayOf(byEstimate > sprintEnd ? byEstimate : sprintEnd), rng };
+};
+
+/** Arka plandaki (persona olmayan) PY'nin aktarımı sonrası yeni görevlere uygulama planı: iş paketi, sürüm */
 const decorateNewTask = (t: Task, project: Project, issue: SimIssue): Task => {
-    const rng = mulberry32(hashStr(issue.rec.key));
-    const created = issue.rec.created ? dateOf(dayOf(new Date(issue.rec.created))) : new Date();
-    const estDays = t.time.avg || 0;
+    const createdDay = issue.rec.created ? dayOf(new Date(issue.rec.created)) : project.settings.projectStartDate.slice(0, 10);
+    const { sprint, rng } = planOf(project, issue.rec.key, createdDay, issue.rec.originalEstimateSeconds ? issue.rec.originalEstimateSeconds / 3600 : null);
+    rng(); // termin seçimiyle aynı diziden devam
     const ip = wpIds(project.id);
     const type = issue.rec.issueType as SimIssueType;
     const workPackageId = type === 'Hata' ? ip.test : type === 'Görev' ? (rng() < 0.5 ? ip.analiz : ip.kurulum) : ip.gelistirme;
-    // Termin: planlandığı sürümün (sprint) sonu; tahmin daha uzunsa tahmine göre
-    const sprint = sprintNo(project, dayOf(created)) + (rng() < 0.3 ? 1 : 0);
-    const sprintEnd = dateOf(project.settings.projectStartDate.slice(0, 10));
-    sprintEnd.setDate(sprintEnd.getDate() + sprint * 7 * (project.settings.sprintDuration || 3) - 3);
-    const byEstimate = addWorkdays(created, estDays > 0 ? Math.ceil(estDays * 2) + 5 : 12);
-    const due = byEstimate > sprintEnd ? byEstimate : sprintEnd;
     return {
         ...t,
-        dueDate: dayOf(due),
         workPackageId,
         version: sprint,
         ...(type === 'Hata' && rng() < 0.4 ? { keyResultId: `${project.id}-ks1` } : {}),
     };
 };
 
-export const stepDay = (state: SimState, input: WorkspaceData, day: string): { ws: WorkspaceData; events: DayEvents } => {
+/** Projesini pilot kullanıcısı (persona) yöneten PY: Jira aktarımını, RAG'i ve riskleri kendisi yapar */
+export const personaOwned = (projectId: string): boolean => {
+    const w = PROJECTS.find(x => x.id === projectId);
+    return !!w && PERSONAS.some(p => p.personId === w.pm);
+};
+
+export interface StepOptions {
+    /**
+     * Tüm projelerde Jira kayıtlarını çalışma alanına aktar (kurulumda: PY'ler
+     * uygulamaya başlarken geçmişi bir kez aktarmış sayılır). Kapalıyken
+     * yalnız arka plandaki PY'lerin projeleri aktarılır; persona PY'leri
+     * aktarımı 2. rutinde MCP'nin jira_aktar aracıyla kendileri yapar.
+     */
+    importAll?: boolean;
+}
+
+export const stepDay = (state: SimState, input: WorkspaceData, day: string, opts: StepOptions = {}): { ws: WorkspaceData; events: DayEvents } => {
     const rng = mulberry32(hashStr(`${state.tohum}:${day}`));
     const work = isWorkday(dateOf(day));
     const weekday = dateOf(day).getDay(); // 1 Pazartesi … 5 Cuma
@@ -382,6 +409,7 @@ export const stepDay = (state: SimState, input: WorkspaceData, day: string): { w
                 const key = `${w.jiraKey}-${++jira.no}`;
                 const labels = rng() < 0.3 ? [pick(rng, ['müşteri', 'performans', 'güvenlik', 'arayüz'])] : [];
                 const noEstimate = rng() < 0.08;
+                const plan = planOf(project, key, day, noEstimate ? null : estimate);
                 const rec: JiraIssueRecord = {
                     key, summary, description, issueType: type, status: 'Yapılacak', statusCategory: 'new', priority, created, resolved: null,
                     components: [assigneeId ? personById(assigneeId).dept : personById(w.pm).dept], labels,
@@ -391,8 +419,9 @@ export const stepDay = (state: SimState, input: WorkspaceData, day: string): { w
                     assignee: assigneeId ? fullName(personById(assigneeId)) : 'Harici Danışman',
                     blockedBy: blocker ? [blocker] : [],
                     transitions: [],
+                    due: plan.due,
                 };
-                jira.issues.push({ rec, need, spent: 0, projectId: w.id, assigneeId, ...(external ? { external: true } : {}) });
+                jira.issues.push({ rec, need, spent: 0, projectId: w.id, assigneeId, logs: [], ...(external ? { external: true } : {}) });
                 pd.yeni.push({ key, ozet: summary, tur: type, oncelik: priority });
             }
 
@@ -415,6 +444,7 @@ export const stepDay = (state: SimState, input: WorkspaceData, day: string): { w
                 if (hours <= 0) return;
                 const name = fullName(personById(pid));
                 const log = (h: number, summary: string, x?: SimIssue) => {
+                    if (x) x.logs.push([day, h, pid]);
                     state.worklog.push({ date: day, author: name, ...(x ? { issueKey: x.rec.key } : {}), summary, hours: h, source: 'jira', projectId: w.id });
                     const month = (state.saat[ym(day)] ||= {});
                     const person = (month[pid] ||= {});
@@ -488,12 +518,14 @@ export const stepDay = (state: SimState, input: WorkspaceData, day: string): { w
         }
         pd.saat = r1(pd.saat);
 
-        // 5. Uygulamanın Jira aktarımıyla çalışma alanına (yeni görevlere termin/İP/sürüm)
+        // 5. Uygulamanın Jira aktarımıyla çalışma alanına (arka plandaki PY'ler; persona PY'ler kendisi aktarır)
         const before = new Set(project.tasks.map(t => t.id));
-        const merged = mergeJiraIssues(project.tasks, jira.issues.map(x => x.rec), { importedAt: at(day, 7, 30), defaultUnit: personById(w.pm).dept });
-        const byKey = new Map(jira.issues.map(x => [x.rec.key, x]));
-        project.tasks = merged.tasks.map(t => (before.has(t.id) ? t : decorateNewTask(t, project, byKey.get(t.jiraId)!)));
-        if (merged.added || merged.updated) project.updatedAt = at(day, 18);
+        if (opts.importAll || !personaOwned(w.id)) {
+            const merged = mergeJiraIssues(project.tasks, jira.issues.map(x => x.rec), { importedAt: at(day, 7, 30), defaultUnit: personById(w.pm).dept });
+            const byKey = new Map(jira.issues.map(x => [x.rec.key, x]));
+            project.tasks = merged.tasks.map(t => (before.has(t.id) || !byKey.has(t.jiraId) ? t : decorateNewTask(t, project, byKey.get(t.jiraId)!)));
+            if (merged.added || merged.updated) project.updatedAt = at(day, 18);
+        }
 
         if (!work) return;
         const pm = personById(w.pm);
@@ -524,19 +556,24 @@ export const stepDay = (state: SimState, input: WorkspaceData, day: string): { w
             events.confluence.push({ dosya: `${day}-${w.jiraKey}-${state.sayac}.md`, icerik: lines.join('\n') });
         }
 
-        // 7. Risk, müşteri isteği
+        // 7. Risk (persona PY'nin projesinde yalnız sinyal: riski PY değerlendirip kendisi ekler), müşteri isteği
+        const own = personaOwned(w.id);
         if (rng() < (w.overrun > 1.4 ? 0.07 : 0.04)) {
             const t = pick(rng, RISKS);
-            const risk: Risk = {
-                id: next(`risk-${w.jiraKey}`), title: t.title, mitigation: t.mitigation, status: 'open',
-                probability: (2 + Math.floor(rng() * 4)) as RiskLevel, impact: (2 + Math.floor(rng() * 4)) as RiskLevel,
-                ownerPersonId: w.pm, owner: fullName(pm), createdAt: at(day, 15),
-            };
-            project.risks = [...(project.risks || []), risk];
-            pd.riskler.push(`yeni: ${risk.title} (${risk.probability}×${risk.impact})`);
+            if (own) {
+                pd.riskler.push(`ekipten sinyal: "${t.title}" (PY değerlendirmeli)`);
+            } else {
+                const risk: Risk = {
+                    id: next(`risk-${w.jiraKey}`), title: t.title, mitigation: t.mitigation, status: 'open',
+                    probability: (2 + Math.floor(rng() * 4)) as RiskLevel, impact: (2 + Math.floor(rng() * 4)) as RiskLevel,
+                    ownerPersonId: w.pm, owner: fullName(pm), createdAt: at(day, 15),
+                };
+                project.risks = [...(project.risks || []), risk];
+                pd.riskler.push(`yeni: ${risk.title} (${risk.probability}×${risk.impact})`);
+            }
         }
         const openRisks = (project.risks || []).filter(r => r.status !== 'closed');
-        if (openRisks.length > 2 && rng() < 0.03) {
+        if (!own && openRisks.length > 2 && rng() < 0.03) {
             const r = pick(rng, openRisks);
             project.risks = (project.risks || []).map(x => (x.id === r.id ? { ...x, status: 'closed' as const } : x));
             pd.riskler.push(`kapandı: ${r.title}`);
@@ -556,7 +593,8 @@ export const stepDay = (state: SimState, input: WorkspaceData, day: string): { w
             const overdue = openTasks.filter(t => t.dueDate && t.dueDate < day).length;
             const ratio = openTasks.length ? overdue / openTasks.length : 0;
             const highRisks = (project.risks || []).filter(r => r.status !== 'closed' && r.probability * r.impact >= 15).length;
-            if (!(busy && rng() < 0.3)) {
+            // RAG'i persona PY'ler kendisi günceller (2. rutin)
+            if (!own && !(busy && rng() < 0.3)) {
                 const rag = ratio > 0.45 || highRisks >= 3 ? 'red' : ratio > 0.2 || highRisks >= 1 ? 'amber' : 'green';
                 project.rag = rag;
                 project.ragNote = `Geciken açık kayıt oranı %${Math.round(ratio * 100)}; açık yüksek risk ${highRisks}.`;
@@ -651,16 +689,31 @@ export const stepDay = (state: SimState, input: WorkspaceData, day: string): { w
 const isDoneIn = (issues: SimIssue[], key: string) => issues.find(x => x.rec.key === key)?.rec.statusCategory === 'done';
 
 /** Simülasyonu `bitis` gününe kadar (dahil) ilerletir */
-export const runUntil = (state: SimState, ws: WorkspaceData, bitis: string, onDay?: (e: DayEvents) => void): WorkspaceData => {
+export const runUntil = (state: SimState, ws: WorkspaceData, bitis: string, onDay?: (e: DayEvents) => void, opts: StepOptions = {}): WorkspaceData => {
     let day = state.sonGun ? addDays(state.sonGun, 1) : state.baslangic;
     let out = ws;
     while (day <= bitis) {
-        const r = stepDay(state, out, day);
+        const r = stepDay(state, out, day, opts);
         out = r.ws;
         onDay?.(r.events);
         day = addDays(day, 1);
     }
     return { ...out, exportDate: at(bitis, 19) };
+};
+
+/** Sahte Jira'nın dışa aktarımları: proje anahtarı → Jira arama yanıtı biçimi (kayıtlar, changelog, worklog) */
+export const jiraExports = (state: SimState): Record<string, SearchResponse> => {
+    const out: Record<string, SearchResponse> = {};
+    PROJECTS.forEach((w, pi) => {
+        const jira = state.jira[w.jiraKey];
+        if (!jira) return;
+        out[w.jiraKey] = searchExport(jira.issues.map(x => toRawIssue(x.rec, {
+            id: 10_000 * (pi + 1) + (Number(x.rec.key.split('-').pop()) || 0),
+            project: { key: w.jiraKey, name: w.name },
+            worklogs: x.logs.map(([day, hours, pid]) => ({ day, hours, author: fullName(personById(pid)) })),
+        })));
+    });
+    return out;
 };
 
 /** Günün olaylarını okunur Markdown'a çevirir (2. rutindeki kullanıcılar bunu okur) */

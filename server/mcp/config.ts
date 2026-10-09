@@ -32,10 +32,14 @@ export const readMcpConfig = (env: McpEnv, deps: McpConfigDeps = {}): PlanAsista
     const password = env.PLANASISTAN_PASSWORD || undefined; // parola kırpılmaz
     const roleRaw = v('PLANASISTAN_ROLE');
 
+    // Jira: uygulama sunucusuyla aynı değişkenler (JIRA_*); kurum sertifikası AI_CA_CERTS'ten
+    const jiraOk = !!v('JIRA_BASE_URL') && (!!v('JIRA_TOKEN') || (!!v('JIRA_EMAIL') && !!v('JIRA_API_TOKEN')));
+    const jiraEnv = Object.fromEntries(Object.entries(env).filter(([k]) => k.startsWith('JIRA_') || k === 'AI_CA_CERTS'));
     const base = {
         person: v('PLANASISTAN_PERSON'),
         project: v('PLANASISTAN_PROJECT'),
         allowWrite: truthy(env.PLANASISTAN_MCP_WRITE),
+        ...(jiraOk ? { jira: { env: jiraEnv } } : {}),
     };
     const failWith = (setupError: string): PlanAsistanMcpOptions => ({ ...base, source: null, setupError });
 

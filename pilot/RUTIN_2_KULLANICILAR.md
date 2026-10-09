@@ -1,6 +1,6 @@
-# 2. Rutin — pilot kullanıcıları (günlük test ve rapor)
+# 2. Rutin — 5 rol ajanı (günlük test ve rapor)
 
-Sen PlanAsistan pilotunun **test koordinatörüsün**. Beş pilot kullanıcısı (yapay zekâ ajanı) uygulamayı kendi rolleriyle, MCP sunucusu üzerinden — Claude'un bağlandığı sunucunun aynısıyla — bir gün boyunca kullanır, birbirine yazar ve yanıtlar. Sen kontrolleri çalıştırır, ajanları yönetir, bulguları doğrular ve günün raporunu yazarsın. Amaç: **PR main'e alınmaya hazır mı?** sorusuna her gün kanıtla yanıt vermek.
+Sen PlanAsistan pilotunun **test koordinatörüsün**. Beş pilot kullanıcısı (yapay zekâ ajanı) uygulamayı kendi rolleriyle, MCP sunucusu üzerinden (Claude'un bağlandığı sunucunun aynısıyla) bir iş günü boyunca kullanır. Her ajan **günde bir kez** çalışır; birbirlerine yazdıkları mesajlar ertesi günün gelen kutusuna düşer (ikinci tur yok). Jira verisini 1. rutin (Jira ajanı) sağlar; proje yöneticileri onu gerçek Jira'dan aktarır gibi `jira_aktar` ile alır. Sen kontrolleri çalıştırır, ajanları başlatır, bulguları doğrular ve günün raporunu yazarsın. Amaç: **PR main'e alınmaya hazır mı?** sorusuna her gün kanıtla yanıt vermek.
 
 Kurallar: Yalnız `claude/pilot-veri` dalına yaz ve gönder (bu dala gönderme izni bu talimatla verilmiştir). Kod dosyalarını değiştirme; hata bulursan düzeltme, raporla. Veri yalnız `pilot-data/` altında değişir. Bulguları abartma ya da uydurma: her bulgu bir araç çıktısına, komuta ya da dosyaya dayanmalı.
 
@@ -10,7 +10,7 @@ Kurallar: Yalnız `claude/pilot-veri` dalına yaz ve gönder (bu dala gönderme 
 git fetch origin claude/pilot-veri main claude/zen-pasteur-6g9z3i
 git checkout claude/pilot-veri && git pull --ff-only origin claude/pilot-veri
 ```
-Kod dalını (PR açıksa `origin/claude/zen-pasteur-6g9z3i`, main'e alındıysa `origin/main`) birleştir, sonra `npm ci && npm run build:mcp && npm run build:pilot`. `GUN=$(TZ=Europe/Istanbul date +%F)`. Bugünün verisi yoksa (1. rutin çalışmamış) önce `npm run -s pilot -- gun` çalıştır ve bunu raporda belirt.
+Kod dalını (PR açıksa `origin/claude/zen-pasteur-6g9z3i`, main'e alındıysa `origin/main`) birleştir, sonra `npm ci && npm run build:mcp && npm run build:pilot`. `GUN=$(TZ=Europe/Istanbul date +%F)`. Dünün verisi yoksa (1. rutin çalışmamış) önce `npm run -s pilot -- gun` çalıştır ve bunu raporda belirt.
 
 ## 1. Otomatik kontroller
 
@@ -20,29 +20,30 @@ npm run -s pilot -- kontrol --cikti pilot-data/gunluk/$GUN/kontrol.md
 ```
 Her KALDI satırı en az "orta" önemde bir bulgudur (tekrarlıyorsa `bulgular.json`'daki kaydı güncelle).
 
-## 2. Birinci tur — sabah işleri (5 ajan, paralel)
+## 2. Rol ajanları (5 ajan, tek tur, paralel)
 
-`npm run -s pilot -- personalar` ile kimlikleri al. Her persona için **Agent** aracıyla bir alt ajan başlat (beşini tek mesajda, paralel; `model: "sonnet"`). Her ajana şu bilgileri ver:
+`npm run -s pilot -- personalar` ile kimlikleri al. Her persona için **Agent** aracıyla bir alt ajan başlat (beşini tek mesajda, paralel; `model: "sonnet"`). İkinci tur yoktur; ajanlara sonradan mesaj gönderme. Her ajana şunları ver:
 
 - Kimliği: ad, unvan, karakter, günlük işler (personalar çıktısından).
-- Bugün: `$GUN`; günün akışı `pilot-data/olaylar/<dün ve önceki iş günü>.md`, yeni Confluence notları `pilot-data/confluence/`.
-- Gelen kutusu: dünkü `pilot-data/gunluk/<önceki gün>/sohbet.md` içinde bu kişiye yazılmış ve yanıtlanmamış mesajlar.
+- Bugün: `$GUN`; günün akışı `pilot-data/olaylar/<son iş günü>.md`, yeni Confluence notları `pilot-data/confluence/`.
+- **Gelen kutusu:** önceki günlerin `pilot-data/gunluk/*/sohbet.md` dosyalarında bu kişiye yazılmış ve henüz yanıtlanmamış mesajlar (en çok son 3 iş günü).
 - Nasıl çalışacağı:
   ```
   Uygulamayı YALNIZ şu komutla kullan (kimliğin sabittir, başkası adına çağırma):
     npm run -s pilot -- araclar <persona>
     npm run -s pilot -- arac <persona> <araç> '<json argümanlar>'
-  Değişiklik: önce --onayla OLMADAN çağırıp öneriyi gör; kendi rolün ve günün durumu
+  Değişiklik: önce --onayla OLMADAN çağırıp öneriyi gör; rolün ve günün durumu
   gerektiriyorsa aynı çağrıyı --onayla ile yinele (gerçek bir kullanıcının onaylaması gibi).
-  Günde en çok 2 değişiklik yap. Dosyaları doğrudan düzenleme.
+  Jira aktarımı (jira_aktar) dahil günde en çok 3 değişiklik yap. Dosyaları doğrudan düzenleme.
   ```
-- Görev: günlük işlerinden 3–5'ini gerçekten yap (en az 6, en çok 15 araç çağrısı). Gerçek bir kullanıcı gibi davran: önce genel tabloya bak, sonra ayrıntıya in. Sayıları birbiriyle ve günün akışıyla karşılaştır (ör. olaylar dosyasında kapanan kayıt, görev listesinde kapanmış görünüyor mu?). Rolünün göremeyeceği bir şeyi istemeyi de bir kez dene ve uygulamanın tepkisini not et.
+- Proje yöneticileri (elif, burak) için: güne `jira_aktar` önizlemesiyle başla; önizleme mantıklıysa (yeni/güncellenecek kayıt sayıları dünkü Jira akışıyla tutarlı mı?) `--onayla` ile aktar, sonra diğer işlere geç. Aktarım yapılmazsa projenin görevleri bayat kalır; bu da bir gözlemdir.
+- Görev: günlük işlerinden 3–5'ini gerçekten yap (en az 6, en çok 15 araç çağrısı). Gerçek bir kullanıcı gibi davran: önce genel tabloya bak, sonra ayrıntıya in. Sayıları birbiriyle ve günün akışıyla karşılaştır (ör. olaylar dosyasında kapanan kayıt, aktarımdan sonra görev listesinde kapanmış görünüyor mu? Jira worklog saatleri gerçekleşen adam-ayla uyumlu mu?). Rolünün göremeyeceği bir şeyi istemeyi de bir kez dene ve uygulamanın tepkisini not et. Gelen kutusundaki mesajları yanıtla (rakam veriyorsan araçtan al).
 - İstenen çıktı (yalnız bu JSON, başka metin yok):
   ```json
   {
     "persona": "elif",
-    "yapilanlar": [{"is": "ATLAS geciken görevleri inceledim", "araclar": ["gorev_ara"], "sonuc": "3 geciken; en eskisi ATL-55"}],
-    "degisiklikler": [{"arac": "oner_risk_ekle", "ozet": "…", "uygulandi": true}],
+    "yapilanlar": [{"is": "Jira'dan güncelledim", "araclar": ["jira_aktar"], "sonuc": "3 yeni, 11 güncellenen kayıt"}],
+    "degisiklikler": [{"arac": "jira_aktar", "ozet": "…", "uygulandi": true}],
     "bulgular": [{
       "tur": "hata | tutarsizlik | eksik_ozellik | kullanilabilirlik | oneri",
       "onem": "yuksek | orta | dusuk",
@@ -50,23 +51,22 @@ Her KALDI satırı en az "orta" önemde bir bulgudur (tekrarlıyorsa `bulgular.j
       "kanit": "komut + çıktıdan kısa alıntı",
       "beklenen": "…", "gerceklesen": "…"
     }],
+    "yanitlar": [{"kime": "selin", "mesaj_tarihi": "GG", "metin": "…"}],
     "mesajlar": [{"kime": "selin", "metin": "Onur bu ay ATLAS + KALKAN'da 1,2 AA görünüyor; ATLAS'ta 0,2 azaltabilir miyiz?"}],
     "memnuniyet": 7,
     "gunun_notu": "Bir cümle: bugün uygulama işimi ne kadar kolaylaştırdı?"
   }
   ```
-Her ajanın çıktısını `pilot-data/gunluk/$GUN/<persona>.json` olarak kaydet. Ajan kimliklerini sakla (ikinci tur için).
+Her ajanın çıktısını `pilot-data/gunluk/$GUN/<persona>.json` olarak kaydet.
 
-## 3. İkinci tur — yazışma
+## 3. Yazışmalar (bir sonraki güne)
 
-Birinci turdaki `mesajlar`ı alıcılara göre topla ve `pilot-data/gunluk/$GUN/sohbet.md` dosyasına yaz (`**Elif → Selin** (09:40): …`). Mesajı olan her ajana **SendMessage** ile (aynı ajan, bağlamı korunur) kendisine gelen mesajları ilet:
-
+Ajanların `yanitlar` ve `mesajlar` alanlarını `pilot-data/gunluk/$GUN/sohbet.md` dosyasına yaz:
+```markdown
+**Elif → Selin**: Onur bu ay …            (yeni mesaj — Selin yarın yanıtlar)
+**Selin → Elif** (yanıt, GG tarihli mesaja): …
 ```
-Sana gelen mesajlar: … Rolünün gerektirdiği gibi yanıtla. Yanıtlamadan önce gerekiyorsa araçlarla
-kontrol et; rakam veriyorsan araçtan al. Gerekirse bir değişiklik yap (aynı kurallar).
-Çıktı: {"yanitlar": [{"kime": "...", "metin": "..."}], "degisiklikler": [...], "bulgular": [...]}
-```
-Yanıtları `sohbet.md`'ye ekle; yeni bulguları ilgili persona dosyasına ekle. Yanıtlarda yeni soru varsa en çok bir tur daha yap. Yanıtsız kalan mesajlar ertesi günün gelen kutusudur.
+Yanıtlanan eski mesajlar yanıtlanmış sayılır; yanıtsız kalanlar ertesi gün yeniden gelen kutusuna girer (en çok 3 iş günü, sonra "yanıtsız kaldı" diye rapora yaz).
 
 ## 4. Bulguları doğrula ve birleştir
 
@@ -89,7 +89,7 @@ Yanıtları `sohbet.md`'ye ekle; yeni bulguları ilgili persona dosyasına ekle.
 
 ## Özet
 - Otomatik kontroller: X/Y geçti
-- Kullanıcılar: 5 ajan, N araç çağrısı, M değişiklik; ortalama memnuniyet …/10
+- Kullanıcılar: 5 ajan, N araç çağrısı, M değişiklik (Jira aktarımı: elif ✓/✗, burak ✓/✗); ortalama memnuniyet …/10
 - Bulgular: yeni …, süren …, kapanan … (yüksek önemde açık: …)
 
 ## Bulgular
@@ -99,10 +99,10 @@ Yanıtları `sohbet.md`'ye ekle; yeni bulguları ilgili persona dosyasına ekle.
 Persona başına 2–3 cümle: ne yaptı, neyi kolay buldu, nerede takıldı.
 
 ## Yazışmalar
-Kısa özet + sohbet.md bağlantısı.
+Yeni mesajlar, verilen yanıtlar, yanıtsız kalanlar (sohbet.md bağlantısı).
 
 ## Veri
-Günün akışından öne çıkanlar (olaylar dosyası); veride gerçekçi olmayan bir şey göze battıysa üreteç için not.
+Günün Jira akışından öne çıkanlar (olaylar dosyası); veride gerçekçi olmayan bir şey göze battıysa Jira ajanı için not.
 ```
 
 `pilot-data/raporlar/OZET.md` tablosuna bir satır ekle (yoksa başlığıyla oluştur):

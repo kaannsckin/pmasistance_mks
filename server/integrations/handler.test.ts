@@ -138,7 +138,7 @@ describe('Jira kayıt geçmişi', () => {
         fields: {
             summary: `Oturum hatası ${key}`, description: 'Giriş {code}x{code} ekranında [kılavuz|https://wiki] hata\n\n\n\nadım', issuetype: { name: 'Hata' }, status: { id: '6', name: 'Kapandı', statusCategory: { key: 'done' } },
             priority: { name: 'Yüksek' }, created: '2026-09-01T09:00:00.000+0300', resolutiondate: '2026-09-04T17:00:00.000+0300', components: [{ name: 'Yazılım' }], labels: ['giris'],
-            fixVersions: [{ name: '2.1' }], timeoriginalestimate: 57600, timespent: 72000, assignee: { displayName: 'Ayşe Yılmaz' }, customfield_10002: 3,
+            fixVersions: [{ name: '2.1' }], timeoriginalestimate: 57600, timespent: 72000, assignee: { displayName: 'Ayşe Yılmaz' }, customfield_10002: 3, duedate: '2026-09-10',
             issuelinks: [{ type: { name: 'Blocks', inward: 'is blocked by', outward: 'blocks' }, inwardIssue: { key: 'MKS-1' } }, { type: { name: 'Blocks', inward: 'is blocked by', outward: 'blocks' }, outwardIssue: { key: 'MKS-9' } }],
             ...extra,
         },
@@ -171,6 +171,7 @@ describe('Jira kayıt geçmişi', () => {
         const search = calls.find(c => c.includes('/search?'))!;
         expect(decodeURIComponent(search)).toContain('statusCategory != Done OR resolved >= "2025-10-01"');
         expect(search).toContain('expand=changelog');
+        expect(search).toContain('duedate');
         expect(search).toContain(',customfield_10002&');
         expect(search).toContain('startAt=0');
         expect(body).toMatchObject({ total: 3, next: '2' });
@@ -182,6 +183,7 @@ describe('Jira kayıt geçmişi', () => {
                 { at: '2026-09-02T06:30:00.000Z', from: 'Yapılacak', to: 'Devam Ediyor', fromCategory: 'new', toCategory: 'indeterminate' },
                 { at: '2026-09-03T07:00:00.000Z', from: 'Devam Ediyor', to: 'Kapandı', fromCategory: 'indeterminate', toCategory: 'done' },
             ],
+            due: '2026-09-10',
         });
         // Durum kategorisi kaydın kendisinde yoksa durum listesinden; kısaltılmış geçmiş kayıttan tamamlanır
         expect(body.issues[1]).toMatchObject({ statusCategory: 'indeterminate', resolved: null, assignee: '', storyPoints: null, transitions: [{ to: 'Test', toCategory: 'indeterminate' }] });

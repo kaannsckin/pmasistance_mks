@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import { createServer } from 'node:http';
 import { appendFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -7,7 +8,8 @@ import { matchByText } from '../../utils/ai/scope.js';
 import { isoWeekOf } from '../../utils/weeklyReport.js';
 import { parseImportedJson, serializeWorkspace } from '../../utils/workspace.js';
 import { callAs, checksMarkdown, listToolsAs, runChecks } from './check.js';
-import { addDays, at, createState, createWorld, dateOf, DayEvents, eventsMarkdown, runUntil, SIM_VERSION, SimState } from './sim.js';
+import { mockJiraFromDir } from './mockJira.js';
+import { addDays, at, createState, createWorld, dateOf, DayEvents, eventsMarkdown, jiraExports, runUntil, SIM_VERSION, SimState } from './sim.js';
 import { fullName, PERSONAS, personById, PROJECTS } from './world.js';
 
 /**
@@ -18,9 +20,10 @@ import { fullName, PERSONAS, personById, PROJECTS } from './world.js';
 
 const USAGE = `PlanAsistan pilot
 
-Veri (1. rutin):
+Veri (1. rutin — Jira ajanı):
   baslat [--tarih GG] [--gecmis 120] [--tohum 2026] [--zorla]   Kurgusal birimi kurar, geçmişi dünü dahil doldurur
-  gun [--tarih GG]                                              Simülasyonu bu güne kadar ilerletir (varsayılan: dün)
+  gun [--tarih GG]                                              Sahte Jira'yı ve birimi bu güne kadar ilerletir (varsayılan: dün)
+  jira-sunucu [--port 8787]                                     Sahte Jira'yı HTTP'de açar (tarayıcıdaki uygulama için)
   not --proje ATL --baslik "…" --metin "…" [--etiket a,b]       Confluence tarzı toplantı/karar notu ekler
   istek --proje ATL --baslik "…" --aciklama "…" [--musteri "…"] Müşteri isteği ekler
   ozet                                                          Veri özeti
@@ -67,6 +70,7 @@ const paths = (dir: string) => ({
     state: join(dir, 'durum.json'),
     events: join(dir, 'olaylar'),
     confluence: join(dir, 'confluence'),
+    jira: join(dir, 'jira'),
 });
 
 const writeAtomic = async (file: string, content: string) => {
@@ -81,13 +85,18 @@ const loadAll = async (p: ReturnType<typeof paths>): Promise<{ ws: WorkspaceData
     const parsed = parseImportedJson(await readFile(p.ws, 'utf8'));
     if (parsed.kind !== 'workspace') fail(`${p.ws} okunamadı.`);
     const state = JSON.parse(await readFile(p.state, 'utf8')) as SimState;
-    if (state.surum !== SIM_VERSION) fail(`durum.json sürümü ${state.surum}, beklenen ${SIM_VERSION}.`);
+    if (state.surum !== SIM_VERSION) fail(`durum.json sürümü ${state.surum}, beklenen ${SIM_VERSION}: simülasyon değişti. Pilotu baştan kurun: baslat --zorla`);
     return { ws: (parsed as { workspace: WorkspaceData }).workspace, state };
 };
 
 const saveAll = async (p: ReturnType<typeof paths>, ws: WorkspaceData, state: SimState) => {
     await writeAtomic(p.ws, serializeWorkspace(ws, false));
     await writeAtomic(p.state, JSON.stringify(state));
+};
+
+/** Sahte Jira'nın dışa aktarımları (Jira REST arama yanıtı biçimi) */
+const saveJira = async (p: ReturnType<typeof paths>, state: SimState) => {
+    for (const [key, resp] of Object.entries(jiraExports(state))) await writeAtomic(join(p.jira, `${key}.json`), JSON.stringify(resp));
 };
 
 const writeDay = async (p: ReturnType<typeof paths>, e: DayEvents) => {
@@ -140,8 +149,10 @@ const main = async () => {
             const baslangic = `${from.getFullYear()}-${String(from.getMonth() + 1).padStart(2, '0')}-01`;
             const state = createState(tohum, baslangic);
             const last: DayEvents[] = [];
-            const ws = runUntil(state, createWorld(tohum, baslangic), addDays(bugun, -1), e => { last.push(e); if (last.length > 7) last.shift(); });
+            // Kurulumda tüm PY'ler Jira geçmişini bir kez aktarmış sayılır; sonrasını persona PY'ler kendisi aktarır
+            const ws = runUntil(state, createWorld(tohum, baslangic), addDays(bugun, -1), e => { last.push(e); if (last.length > 7) last.shift(); }, { importAll: true });
             await saveAll(p, ws, state);
+            await saveJira(p, state);
             for (const e of last) await writeDay(p, e);
             print({ kuruldu: p.dir, ...summary(ws, state) });
             return;
@@ -153,6 +164,7 @@ const main = async () => {
             const days: DayEvents[] = [];
             const next = runUntil(state, ws, bitis, e => days.push(e));
             await saveAll(p, next, state);
+            await saveJira(p, state);
             for (const e of days) await writeDay(p, e);
             print({ ilerletildi: days.map(d => d.gun), dosyalar: days.map(d => join('olaylar', `${d.gun}.md`)), ...summary(next, state) });
             return;
@@ -190,6 +202,25 @@ const main = async () => {
             await mkdir(p.events, { recursive: true });
             await appendFile(join(p.events, `${day}.md`), `\n- (ek) ${project.name} müşteri isteği: ${req.title}\n`);
             print({ eklendi: req.id, proje: project.name });
+            return;
+        }
+        case 'jira-sunucu': {
+            const port = Number(str(flags, 'port') || 8787);
+            const jira = mockJiraFromDir(p.jira);
+            const server = createServer(async (req, res) => {
+                try {
+                    const headers = new Headers();
+                    Object.entries(req.headers).forEach(([k, v]) => { if (typeof v === 'string') headers.set(k, v); });
+                    const r = await jira(`http://127.0.0.1:${port}${req.url || '/'}`, { method: req.method, headers });
+                    res.statusCode = r.status;
+                    r.headers.forEach((v, k) => res.setHeader(k, v));
+                    res.end(Buffer.from(await r.arrayBuffer()));
+                } catch (e) {
+                    res.statusCode = 500;
+                    res.end(JSON.stringify({ errorMessages: [(e as Error).message] }));
+                }
+            });
+            server.listen(port, '127.0.0.1', () => print(`Pilot Jira'sı çalışıyor: http://127.0.0.1:${port} (veri: ${p.jira})\nUygulamayı bu Jira'ya bağlamak için .env.local:\n  JIRA_BASE_URL=http://127.0.0.1:${port}\n  JIRA_TOKEN=pilot\nDurdurmak için Ctrl+C.`));
             return;
         }
         case 'ozet': {

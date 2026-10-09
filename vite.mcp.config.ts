@@ -9,7 +9,8 @@ import { defineConfig } from 'vite';
  */
 export default defineConfig({
     resolve: {
-        alias: { '@': path.resolve(__dirname, '.') },
+        // undici'nin kullanılmayan SQLite önbelleği deneysel özellik uyarısı basmasın
+        alias: { '@': path.resolve(__dirname, '.'), 'node:sqlite': path.resolve(__dirname, 'server/mcp/sqliteStub.ts') },
     },
     ssr: {
         noExternal: true,
@@ -23,7 +24,7 @@ export default defineConfig({
         minify: false,
         sourcemap: false,
         rollupOptions: {
-            output: { entryFileNames: 'planasistan-mcp.mjs', format: 'es' },
+            output: { inlineDynamicImports: true, entryFileNames: 'planasistan-mcp.mjs', format: 'es' },
         },
     },
 });

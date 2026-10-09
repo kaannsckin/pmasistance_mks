@@ -1,12 +1,14 @@
 import { spawn } from 'node:child_process';
 import { copyFile, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { TaskStatus, WorkspaceData } from '../../types.js';
 import { parseImportedJson } from '../../utils/workspace.js';
 import { createPlanAsistanMcp, APPLY_TOOL, STATUS_TOOL } from '../mcp/planasistan.js';
 import { createMcpHandler } from '../mcp/protocol.js';
 import { fileSource } from '../mcp/source.js';
+import { fetchJiraIssuesPage, fetchJiraWorklogs } from '../integrations/handler.js';
+import { mockJiraFromDir, PILOT_JIRA_ENV, SearchResponse } from './mockJira.js';
 import { fullName, Persona, PERSONAS, personById } from './world.js';
 
 /**
@@ -21,12 +23,22 @@ export interface CheckResult { ad: string; durum: CheckStatus; ayrinti: string }
 
 export interface CallResult { isError: boolean; text: string; json: Record<string, unknown> }
 
-export const personaOptions = (persona: Persona, path: string, writable: boolean, now?: Date) => ({
+// Aynı Jira klasörü için tek sahte Jira (dosya önbelleği paylaşılır)
+const jiras = new Map<string, typeof fetch>();
+export const pilotJira = (jiraDir: string) => {
+    let f = jiras.get(jiraDir);
+    if (!f) { f = mockJiraFromDir(jiraDir); jiras.set(jiraDir, f); }
+    return { env: PILOT_JIRA_ENV, fetchImpl: f };
+};
+
+/** Persona için MCP sunucusu ayarları: veri dosyası, kimlik, (pilot için) yazma ve sahte Jira */
+export const personaOptions = (persona: Persona, path: string, writable: boolean, now?: Date, jiraDir = join(dirname(path), 'jira')) => ({
     source: fileSource(path, undefined, { writable }),
     role: persona.role,
     person: fullName(personById(persona.personId)),
     project: persona.project,
     allowWrite: writable,
+    jira: pilotJira(jiraDir),
     ...(now ? { now: () => now } : {}),
 });
 
@@ -35,11 +47,11 @@ let clock: Date | undefined;
 
 // Aynı persona + dosya için tek sunucu örneği (dosya değişince kaynak yeniden okur)
 const handlers = new Map<string, ReturnType<typeof createMcpHandler>>();
-const handlerFor = (persona: Persona, path: string, writable: boolean) => {
-    const key = `${persona.id}|${path}|${writable}|${clock?.getTime() ?? ''}`;
+const handlerFor = (persona: Persona, path: string, writable: boolean, jiraDir?: string) => {
+    const key = `${persona.id}|${path}|${writable}|${clock?.getTime() ?? ''}|${jiraDir || ''}`;
     let h = handlers.get(key);
     if (!h) {
-        h = createMcpHandler(createPlanAsistanMcp(personaOptions(persona, path, writable, clock)));
+        h = createMcpHandler(createPlanAsistanMcp(personaOptions(persona, path, writable, clock, jiraDir)));
         handlers.set(key, h);
     }
     return h;
@@ -48,8 +60,8 @@ const handlerFor = (persona: Persona, path: string, writable: boolean) => {
 let nextId = 1;
 
 /** Bir MCP aracını persona kimliğiyle, JSON-RPC katmanı üzerinden çağırır; confirm: öneriyse hemen uygular */
-export const callAs = async (persona: Persona, path: string, name: string, args: Record<string, unknown> = {}, o: { writable?: boolean; confirm?: boolean } = {}): Promise<CallResult[]> => {
-    const handle = handlerFor(persona, path, !!o.writable);
+export const callAs = async (persona: Persona, path: string, name: string, args: Record<string, unknown> = {}, o: { writable?: boolean; confirm?: boolean; jiraDir?: string } = {}): Promise<CallResult[]> => {
+    const handle = handlerFor(persona, path, !!o.writable, o.jiraDir);
     const call = async (tool: string, a: Record<string, unknown>): Promise<CallResult> => {
         const res = await handle({ jsonrpc: '2.0', id: nextId++, method: 'tools/call', params: { name: tool, arguments: a } }) as { result?: { content: { text: string }[]; isError?: boolean }; error?: { message: string } };
         if (res.error) return { isError: true, text: JSON.stringify({ protokol_hatasi: res.error.message }), json: { protokol_hatasi: res.error.message } };
@@ -119,6 +131,7 @@ export const runChecks = async (path: string, o: { bundle?: string; now?: Date }
         const refused: string[] = [];
         for (const t of read) {
             const args = t.name === 'bilgi_ara' ? { sorgu: 'test planı' } : t.name === 'gorev_ara' ? { metin: 'hata' } : {};
+            if (t.name === 'jira_aktar') continue; // yazma akışı aşağıda ayrıca denenir
             const r = (await callAs(p, path, t.name, args))[0];
             scan(p.id, t.name, r.text);
             if (r.text.includes('beklenmeyen bir hata') || r.json.protokol_hatasi) crashed.push(t.name);
@@ -148,7 +161,7 @@ export const runChecks = async (path: string, o: { bundle?: string; now?: Date }
     add('ahmet: not ve istek araçları yok', !mTools.includes('notlari_ara') && !mTools.includes('musteri_istekleri'), mTools.filter(n => ['notlari_ara', 'musteri_istekleri'].includes(n)).join(', ') || 'sunulmadı');
     const mNote = (await callAs(ahmet, path, 'bilgi_ara', { sorgu: 'toplantı karar', kaynak: 'not' }))[0];
     add('ahmet: notlarda arama engellenir', mNote.isError, mNote.isError ? String(mNote.json.hata) : 'not içeriği döndü!');
-    add('ahmet: değişiklik araçları yok', !mTools.some(n => n.startsWith('oner_') || n === APPLY_TOOL), 'müdür veri girmez');
+    add('ahmet: değişiklik araçları yok', !mTools.some(n => n.startsWith('oner_') || n === APPLY_TOOL || n === 'jira_aktar'), 'müdür veri girmez');
 
     // 4. Sayı tutarlılığı: araç sonuçları ↔ veriden doğrudan hesap
     const mert = persona('mert');
@@ -175,13 +188,59 @@ export const runChecks = async (path: string, o: { bundle?: string; now?: Date }
     }
     add(`tahsis plan toplamları (${year})`, planGaps.length === 0, planGaps.join('; ') || 'tüm projelerde tutarlı');
 
-    // 5. Değişiklik akışı (geçici kopya üzerinde — pilot verisi değişmez)
+    // 5. Sahte Jira ↔ uygulamanın Jira istemcisi (gerçek Jira'yla aynı uçlar ve biçim)
+    const jiraDir = join(dirname(path), 'jira');
+    const jira = pilotJira(jiraDir);
+    const exportsByKey: Record<string, SearchResponse> = {};
+    for (const prj of ws.projects.filter(x => x.jiraProjectKey)) {
+        try { exportsByKey[prj.jiraProjectKey!] = JSON.parse(await readFile(join(jiraDir, `${prj.jiraProjectKey}.json`), 'utf8')); } catch { /* dışa aktarım yok */ }
+    }
+    const keys = Object.keys(exportsByKey);
+    if (!keys.length) add('Jira dışa aktarımları', false, `${jiraDir} içinde proje dışa aktarımı yok (1. rutin çalışmamış)`);
+    else {
+        const gaps: string[] = [];
+        for (const key of keys) {
+            const got: unknown[] = [];
+            let cursor: string | undefined;
+            for (let page = 0; page < 60; page++) {
+                const r = await fetchJiraIssuesPage(jira.env, { projectKey: key, scope: 'all', cursor, pageSize: 50 }, jira.fetchImpl);
+                got.push(...r.issues);
+                if (!r.next) break;
+                cursor = r.next;
+            }
+            if (got.length !== exportsByKey[key].total) gaps.push(`${key}: istemci ${got.length}, dışa aktarım ${exportsByKey[key].total}`);
+        }
+        add('Jira: uygulamanın istemcisi sahte Jira\'yı sayfa sayfa eksiksiz okur', gaps.length === 0, gaps.join('; ') || keys.map(k => `${k} ${exportsByKey[k].total}`).join(', '));
+        const key = keys[0];
+        const to = todayIso(now);
+        const fromD = new Date(now); fromD.setDate(fromD.getDate() - 13);
+        const from = todayIso(fromD);
+        const logs = await fetchJiraWorklogs(jira.env, key, from, to, jira.fetchImpl);
+        const direct = Math.round(exportsByKey[key].issues.flatMap(i => i.fields.worklog?.worklogs || []).filter(w => w.started.slice(0, 10) >= from && w.started.slice(0, 10) <= to).reduce((a, w) => a + w.timeSpentSeconds / 3600, 0) * 10) / 10;
+        const viaClient = Math.round(logs.reduce((a, w) => a + w.hours, 0) * 10) / 10;
+        add(`Jira: ${key} worklog toplamı (${from} – ${to})`, Math.abs(direct - viaClient) < 0.11, `istemci ${viaClient} sa, dışa aktarım ${direct} sa, ${logs.length} kayıt`);
+    }
+
+    // 6. Değişiklik akışı (geçici kopya üzerinde — pilot verisi değişmez)
     const dir = await mkdtemp(join(tmpdir(), 'pilot-kontrol-'));
     const copy = join(dir, 'workspace.json');
     try {
         await copyFile(path, copy);
         const elif = persona('elif');
         const atlas = ws.projects.find(x => x.pmPersonId === elif.personId)!;
+        const atlasKey = atlas.jiraProjectKey!;
+        if (exportsByKey[atlasKey]) {
+            const [jp, ja] = await callAs(elif, copy, 'jira_aktar', { proje: atlas.code, donem_ay: 0 }, { writable: true, confirm: true, jiraDir });
+            const after = parseImportedJson(await readFile(copy, 'utf8'));
+            const tasks = after.kind === 'workspace' ? after.workspace.projects.find(x => x.id === atlas.id)!.tasks.filter(t => t.jiraId).length : -1;
+            const upToDate = !jp.isError && !jp.json.oneri_id && /güncel/.test(String(jp.json.durum));
+            const ok = upToDate ? tasks >= exportsByKey[atlasKey].total : !jp.isError && !!ja && !ja.isError && tasks === exportsByKey[atlasKey].total;
+            add('elif: jira_aktar → onay → görevler Jira ile aynı', ok, upToDate
+                ? `zaten güncel (${tasks} görev)`
+                : `${(jp.json.ayrintilar as { yeni?: number; guncellenecek?: number } | undefined)?.yeni ?? '?'} yeni, ${(jp.json.ayrintilar as { guncellenecek?: number } | undefined)?.guncellenecek ?? '?'} güncellenen; projede ${tasks} Jira görevi / dışa aktarımda ${exportsByKey[atlasKey].total}${ja?.isError ? ` · ${ja.text.slice(0, 120)}` : ''}`);
+            const foreignJira = (await callAs(persona('burak'), copy, 'jira_aktar', { proje: atlas.code }, { writable: true, jiraDir }))[0];
+            add('burak: başkasının projesine Jira aktarımı reddedilir', foreignJira.isError, String(foreignJira.json.hata || foreignJira.text).slice(0, 160));
+        }
         const [prop, applied] = await callAs(elif, copy, 'oner_risk_ekle', { proje: atlas.code, baslik: 'Pilot kontrol riski', olasilik: 2, etki: 2 }, { writable: true, confirm: true });
         const after = parseImportedJson(await readFile(copy, 'utf8'));
         const ok = !prop.isError && applied && !applied.isError && after.kind === 'workspace'
