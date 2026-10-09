@@ -2,7 +2,7 @@
  * Tarayıcı ↔ AI proxy sözleşmesi (istemci ve sunucu ortak kullanır).
  *
  * Kurumun API anahtarı yalnızca sunucudadır (istisna: yöneticinin yalnız kendi
- * tarayıcısında kullandığı Gemini test anahtarı, BROWSER_KEY_HEADER); tarayıcı /api/ai/* uçlarıyla konuşur ve
+ * tarayıcısında kullandığı AI bağlantısı, BROWSER_KEY_HEADER); tarayıcı /api/ai/* uçlarıyla konuşur ve
  * hangi sağlayıcının (OpenAI-uyumlu, Azure, Anthropic, Gemini) kullanıldığını
  * bilmek zorunda değildir.
  *
@@ -58,11 +58,19 @@ export type ChatStreamEvent =
     | { type: 'error'; message: string };
 
 /**
- * Yönetici konsolunda "Bu tarayıcıda kullan" ile girilen Gemini test anahtarının
- * başlığı. Anahtar yalnız o tarayıcıda saklanır; sunucu o isteği Gemini'ye
- * (sabit Google adresine) yönlendirir — bkz. server/ai/browserKey.ts.
+ * Yönetici konsolunda "Bu tarayıcıda kullan" ile girilen AI bağlantısının
+ * başlıkları. Bağlantı yalnız o tarayıcıda (24 saat) saklanır; sunucu o isteği
+ * bu sağlayıcıya (sabit adrese; Azure'da *.openai.azure.com) yönlendirir —
+ * bkz. server/ai/browserKey.ts.
  */
-export const BROWSER_KEY_HEADER = 'x-gemini-api-key';
+export const BROWSER_KEY_HEADER = 'x-ai-api-key';
+export const BROWSER_PROVIDER_HEADER = 'x-ai-provider';
+export const BROWSER_MODEL_HEADER = 'x-ai-model';
+export const BROWSER_BASE_URL_HEADER = 'x-ai-base-url';
+/** Eski sürümün yalnız Gemini anahtarı başlığı (önbellekteki eski istemciler için) */
+export const LEGACY_BROWSER_KEY_HEADER = 'x-gemini-api-key';
+/** Tarayıcıda saklanan AI bağlantısı ve erişim kodunun geçerlilik süresi */
+export const BROWSER_SETTINGS_TTL_MS = 24 * 60 * 60 * 1000;
 
 /** Proxy'nin istekleri nasıl yetkilendirdiği */
 export type AiAuthMode = 'none' | 'token' | 'supabase';
@@ -75,9 +83,9 @@ export interface AiStatus {
     model?: string;
     /** Yapılandırma eksikse kullanıcıya gösterilecek Türkçe açıklama */
     problem?: string;
-    /** Bağlantı ayarları yönetici panelinden mi, ortam değişkenlerinden mi, bu tarayıcıdaki Gemini test anahtarından mı */
+    /** Bağlantı ayarları yönetici panelinden mi, ortam değişkenlerinden mi, bu tarayıcıdaki AI bağlantısından mı */
     configSource?: 'panel' | 'env' | 'browser';
-    /** Sunucu tarayıcıdaki Gemini test anahtarını kabul ediyor mu (AI_ALLOW_BROWSER_KEY) */
+    /** Sunucu tarayıcıdaki AI bağlantısını kabul ediyor mu (AI_ALLOW_BROWSER_KEY) */
     browserKeyAllowed?: boolean;
     /** Anlamsal arama (RAG) için embedding modeli — yoksa yalnızca anahtar kelime araması */
     embeddingModel?: string;

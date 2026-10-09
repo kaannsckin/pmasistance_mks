@@ -589,7 +589,7 @@ const AiSettings: React.FC<Pick<ModernAdminProps, 'workspace' | 'onUpdateAiPolic
                                 <dt className="m-text-3">Sağlayıcı</dt><dd className="m-0 m-text">{status.provider || '—'}</dd>
                                 <dt className="m-text-3">Model</dt><dd className="m-0 m-text break-all">{status.model || '—'}</dd>
                                 <dt className="m-text-3">Anlamsal arama</dt><dd className="m-0 m-text break-all">{status.embeddingModel || 'Kapalı (anahtar kelime araması)'}</dd>
-                                <dt className="m-text-3">Kaynak</dt><dd className="m-0 m-text">{status.configSource === 'browser' ? 'Bu tarayıcıdaki Gemini test anahtarı' : status.configSource === 'panel' ? 'Yönetici paneli' : 'Ortam değişkenleri'}</dd>
+                                <dt className="m-text-3">Kaynak</dt><dd className="m-0 m-text">{status.configSource === 'browser' ? 'Bu tarayıcıdaki AI bağlantısı (24 saat)' : status.configSource === 'panel' ? 'Yönetici paneli' : 'Ortam değişkenleri'}</dd>
                                 <dt className="m-text-3">Erişim koruması</dt><dd className="m-0 m-text">{status.authMode === 'token' ? 'Erişim kodu' : status.authMode === 'supabase' ? 'Supabase üyeliği' : 'Yok (yalnız kurum içi ağ)'}</dd>
                             </dl>
                             {status.problem && <p className="m-0 text-[13px] m-ink-warn">{status.problem}</p>}
