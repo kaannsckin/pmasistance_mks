@@ -1,7 +1,8 @@
 /**
  * Tarayıcı ↔ AI proxy sözleşmesi (istemci ve sunucu ortak kullanır).
  *
- * API anahtarı yalnızca sunucudadır; tarayıcı /api/ai/* uçlarıyla konuşur ve
+ * Kurumun API anahtarı yalnızca sunucudadır (istisna: yöneticinin yalnız kendi
+ * tarayıcısında kullandığı Gemini test anahtarı, BROWSER_KEY_HEADER); tarayıcı /api/ai/* uçlarıyla konuşur ve
  * hangi sağlayıcının (OpenAI-uyumlu, Azure, Anthropic, Gemini) kullanıldığını
  * bilmek zorunda değildir.
  *
@@ -56,6 +57,13 @@ export type ChatStreamEvent =
     | { type: 'done'; stopReason?: string }
     | { type: 'error'; message: string };
 
+/**
+ * Yönetici konsolunda "Bu tarayıcıda kullan" ile girilen Gemini test anahtarının
+ * başlığı. Anahtar yalnız o tarayıcıda saklanır; sunucu o isteği Gemini'ye
+ * (sabit Google adresine) yönlendirir — bkz. server/ai/browserKey.ts.
+ */
+export const BROWSER_KEY_HEADER = 'x-gemini-api-key';
+
 /** Proxy'nin istekleri nasıl yetkilendirdiği */
 export type AiAuthMode = 'none' | 'token' | 'supabase';
 
@@ -67,8 +75,10 @@ export interface AiStatus {
     model?: string;
     /** Yapılandırma eksikse kullanıcıya gösterilecek Türkçe açıklama */
     problem?: string;
-    /** Bağlantı ayarları yönetici panelinden mi, ortam değişkenlerinden mi */
-    configSource?: 'panel' | 'env';
+    /** Bağlantı ayarları yönetici panelinden mi, ortam değişkenlerinden mi, bu tarayıcıdaki Gemini test anahtarından mı */
+    configSource?: 'panel' | 'env' | 'browser';
+    /** Sunucu tarayıcıdaki Gemini test anahtarını kabul ediyor mu (AI_ALLOW_BROWSER_KEY) */
+    browserKeyAllowed?: boolean;
     /** Anlamsal arama (RAG) için embedding modeli — yoksa yalnızca anahtar kelime araması */
     embeddingModel?: string;
     /** AI_EMBEDDING_MODEL verilmiş ama yapılandırma eksikse açıklama */

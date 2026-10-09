@@ -3,20 +3,26 @@ import {
     AI_SECRET_KEYS, AiAdminError, AiAdminState, AiSettingKey, AiSettingValues, AiTestPart, AiTestResult, clearAiAdmin, DEFAULT_BASE_URLS, draftValues,
     GEMINI_KEY_URL, geminiQuickValues, getAiAdmin, loadAdminToken, modelsAiAdmin, PROVIDER_LABELS, saveAdminToken, saveAiAdmin, testAiAdmin,
 } from '../../../utils/ai/adminConfig';
+import { AiStatus } from '../../../utils/ai/protocol';
 import { Icon } from '../icons';
 import { Field } from '../ui';
+import BrowserGeminiKey from './BrowserGeminiKey';
 
 /**
  * AI bağlantısı (yönetici): sağlayıcı, adres, model ve API anahtarı panelden
  * girilir, kaydetmeden test edilir. Ayarlar sunucuda şifreli tutulur ve ortam
  * değişkenlerinin üzerine yazılır; boş alan ortam değişkenini kullanır. API
  * anahtarı sunucudan geri gelmez, yalnız son 4 hanesi gösterilir. Yönetici
- * anahtarı (AI_ADMIN_TOKEN) bu sekmenin oturumunda tutulur.
+ * anahtarı (AI_ADMIN_TOKEN) bu sekmenin oturumunda tutulur. Sunucu tarafı
+ * kurulum yoksa (ya da yalnız denemek için) Gemini anahtarı yalnız bu tarayıcıda
+ * kullanılabilir (BrowserGeminiKey).
  */
 
 interface Props {
     /** Kayıt / ortam değişkenlerine dönüş sonrası (denetim günlüğü, asistan durumunu yenileme) */
     onChanged: (label: string) => void;
+    /** Proxy'nin bu tarayıcı için bildirdiği durum (tarayıcı test anahtarı kartı için) */
+    status?: (AiStatus & { unreachable?: boolean }) | null;
 }
 
 type Load =
@@ -43,7 +49,7 @@ const TestLine: React.FC<{ label: string; part: AiTestPart; ok: string }> = ({ l
     </p>
 );
 
-const AiConnection: React.FC<Props> = ({ onChanged }) => {
+const AiConnection: React.FC<Props> = ({ onChanged, status }) => {
     const [token, setToken] = useState(loadAdminToken);
     const [tokenInput, setTokenInput] = useState('');
     const [load, setLoad] = useState<Load>({ kind: 'loading' });
@@ -145,26 +151,36 @@ const AiConnection: React.FC<Props> = ({ onChanged }) => {
     if (load.kind === 'loading') return <p className="m-0 text-[14px] m-text-3" role="status">Denetleniyor…</p>;
     if (load.kind === 'disabled' || load.kind === 'error') {
         return (
-            <div className="flex flex-col gap-2 text-[14px]">
-                <p className={`m-0 ${load.kind === 'error' ? 'm-ink-bad' : 'm-text-2'}`}>{load.error}</p>
-                {load.kind === 'disabled' && <p className="m-0 m-text-3">Sunucuya AI_ADMIN_TOKEN (yönetici anahtarı) ve kalıcı depo (SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY ile AI_CONFIG_SECRET) eklenince bağlantı buradan ayarlanır ve test edilir. Ayrıntı: docs/AI_KURULUM.md.</p>}
-                {load.kind === 'disabled' && <p className="m-0 m-text-2">En kısa yol (test): Google AI Studio'dan (<a className="m-accent" href={GEMINI_KEY_URL} target="_blank" rel="noopener noreferrer">aistudio.google.com/apikey</a>) aldığınız anahtarı sunucuya yalnız <code>GEMINI_API_KEY</code> ortam değişkeni olarak ekleyin; sağlayıcı, model ve anlamsal arama otomatik seçilir. Yayında erişim koruması (AI_ACCESS_TOKEN ya da Supabase) yine gerekir.</p>}
-                <button type="button" className="m-btn m-btn-plain self-start !px-0" onClick={() => fetchState(token)}><Icon name="refresh" size={16} />Yeniden dene</button>
+            <div className="flex flex-col gap-3 text-[14px]">
+                {/* Sunucu tarafı kurulum yok: en kısa yol yalnız bu tarayıcıda anahtar */}
+                <BrowserGeminiKey status={status} onChanged={onChanged} open />
+                <details open={load.kind === 'error'}>
+                    <summary className="cursor-pointer text-[14px] font-semibold m-accent min-h-[34px] flex items-center">Bağlantıyı herkes için sunucuda ayarlamak</summary>
+                    <div className="flex flex-col gap-2 mt-1">
+                        <p className={`m-0 ${load.kind === 'error' ? 'm-ink-bad' : 'm-text-2'}`}>{load.error}</p>
+                        {load.kind === 'disabled' && <p className="m-0 m-text-3">Sunucuya AI_ADMIN_TOKEN (yönetici anahtarı) ve kalıcı depo (SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY ile AI_CONFIG_SECRET) eklenince bağlantı buradan ayarlanır ve test edilir. Ayrıntı: docs/AI_KURULUM.md.</p>}
+                        {load.kind === 'disabled' && <p className="m-0 m-text-3">Ya da Google AI Studio'dan (<a className="m-accent" href={GEMINI_KEY_URL} target="_blank" rel="noopener noreferrer">aistudio.google.com/apikey</a>) aldığınız anahtarı sunucuya yalnız <code>GEMINI_API_KEY</code> ortam değişkeni olarak ekleyin; sağlayıcı, model ve anlamsal arama otomatik seçilir. Yayında erişim koruması (AI_ACCESS_TOKEN ya da Supabase) yine gerekir.</p>}
+                        <button type="button" className="m-btn m-btn-plain self-start !px-0" onClick={() => fetchState(token)}><Icon name="refresh" size={16} />Yeniden dene</button>
+                    </div>
+                </details>
             </div>
         );
     }
     if (load.kind === 'locked') {
         return (
-            <form className="flex flex-col gap-2.5" onSubmit={unlock}>
-                <p className="m-0 text-[14px] m-text-2">Bağlantı ayarlarını görmek ve değiştirmek için sunucudaki yönetici anahtarını (AI_ADMIN_TOKEN) girin. Anahtar yalnız bu sekmede, oturum boyunca tutulur.</p>
-                <div className="flex flex-wrap items-end gap-2">
-                    <Field label="Yönetici anahtarı" htmlFor="ai-admin-token">
-                        <input id="ai-admin-token" type="password" autoComplete="off" className="m-input !w-[260px]" value={tokenInput} onChange={e => setTokenInput(e.target.value)} />
-                    </Field>
-                    <button type="submit" className="m-btn m-btn-primary" disabled={!tokenInput.trim()}><Icon name="key" size={18} />Aç</button>
-                </div>
-                {load.error && <p role="alert" className="m-0 text-[14px] m-ink-bad">{load.error}</p>}
-            </form>
+            <div className="flex flex-col gap-3">
+                <form className="flex flex-col gap-2.5" onSubmit={unlock}>
+                    <p className="m-0 text-[14px] m-text-2">Bağlantı ayarlarını görmek ve değiştirmek için sunucudaki yönetici anahtarını (AI_ADMIN_TOKEN) girin. Anahtar yalnız bu sekmede, oturum boyunca tutulur.</p>
+                    <div className="flex flex-wrap items-end gap-2">
+                        <Field label="Yönetici anahtarı" htmlFor="ai-admin-token">
+                            <input id="ai-admin-token" type="password" autoComplete="off" className="m-input !w-[260px]" value={tokenInput} onChange={e => setTokenInput(e.target.value)} />
+                        </Field>
+                        <button type="submit" className="m-btn m-btn-primary" disabled={!tokenInput.trim()}><Icon name="key" size={18} />Aç</button>
+                    </div>
+                    {load.error && <p role="alert" className="m-0 text-[14px] m-ink-bad">{load.error}</p>}
+                </form>
+                <BrowserGeminiKey status={status} onChanged={onChanged} />
+            </div>
         );
     }
 
@@ -214,6 +230,8 @@ const AiConnection: React.FC<Props> = ({ onChanged }) => {
                     <p className="m-0 text-[12.5px] m-text-3">Ücretsiz katman denemek içindir: dakikalık istek sınırı düşüktür (asistan bir soruda birkaç istek atar) ve Google'ın koşullarına göre ücretsiz katmanda gönderilen içerik Google ürünlerini geliştirmek için kullanılabilir. Kurum verisiyle kalıcı kullanımda faturalı katmanı ve KVKK değerlendirmesini tercih edin.</p>
                 </div>
             </details>
+
+            <BrowserGeminiKey status={status} onChanged={onChanged} open={!s.store.available && !s.effective.configured} />
 
             <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(260px, 100%), 1fr))' }}>
                 <Field label="Sağlayıcı" htmlFor="ai-provider" hint={envHint('AI_PROVIDER', 'openai')}>

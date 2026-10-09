@@ -1,7 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { collect, streamOf } from '../../server/ai/testUtils';
-import { readNdjson, trimHistory } from './client';
-import { ChatMessage } from './protocol';
+import { fetchAiStatus, isBrowserKeyFormat, loadBrowserKey, readNdjson, saveBrowserKey, streamChat, trimHistory } from './client';
+import { BROWSER_KEY_HEADER, ChatMessage } from './protocol';
 
 describe('readNdjson', () => {
     it('satır ortasında bölünen ve sonu satırsız biten akışı ayrıştırır', async () => {
@@ -48,5 +48,47 @@ describe('stripReasoning (<think> çıktısı)', () => {
         expect(stripReasoning('önce düşünürüm...</think>Sonuç: 3 proje')).toBe('Sonuç: 3 proje');
         expect(stripReasoning('<think>hâlâ düşünüyor')).toBe('');
         expect(stripReasoning('Giriş <think>ara düşünce</think> devam')).toBe('Giriş  devam');
+    });
+});
+
+describe('tarayıcıdaki Gemini test anahtarı', () => {
+    afterEach(() => vi.unstubAllGlobals());
+    const memoryStorage = () => {
+        const m = new Map<string, string>();
+        return { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => void m.set(k, v), removeItem: (k: string) => void m.delete(k) };
+    };
+    const KEY = 'AIzaSyTarayiciTestAnahtari_0123456789';
+
+    it('kayıtlı anahtar durum ve sohbet isteklerine başlık olarak eklenir; deneme anahtarı kayıtlıyı ezer, null anahtarsız gönderir', async () => {
+        vi.stubGlobal('localStorage', memoryStorage());
+        const seen: Record<string, string>[] = [];
+        vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+            seen.push(Object.fromEntries(new Headers(init?.headers).entries()));
+            return url.endsWith('/health')
+                ? new Response(JSON.stringify({ configured: true, authMode: 'none' }), { status: 200 })
+                : new Response(streamOf('{"type":"delta","text":"tamam"}\n{"type":"done"}\n'), { status: 200 });
+        }));
+        await fetchAiStatus();
+        expect(seen[0][BROWSER_KEY_HEADER]).toBeUndefined();
+        saveBrowserKey(KEY);
+        expect(loadBrowserKey()).toBe(KEY);
+        await fetchAiStatus();
+        expect(seen[1][BROWSER_KEY_HEADER]).toBe(KEY);
+        await fetchAiStatus(undefined, 'AIzaSyBaskaAnahtar_000000000000000');
+        expect(seen[2][BROWSER_KEY_HEADER]).toBe('AIzaSyBaskaAnahtar_000000000000000');
+        await fetchAiStatus(undefined, null);
+        expect(seen[3][BROWSER_KEY_HEADER]).toBeUndefined();
+        const r = await streamChat({ messages: [{ role: 'user', content: 'x' }] }, { authMode: 'none' });
+        expect(r.text).toBe('tamam');
+        expect(seen[4][BROWSER_KEY_HEADER]).toBe(KEY);
+        saveBrowserKey(null);
+        expect(loadBrowserKey()).toBeNull();
+    });
+
+    it('biçim denetimi sunucudakiyle aynı', () => {
+        expect(isBrowserKeyFormat(KEY)).toBe(true);
+        expect(isBrowserKeyFormat('kisa')).toBe(false);
+        expect(isBrowserKeyFormat(`${KEY} x`)).toBe(false);
+        expect(isBrowserKeyFormat(`${KEY}\n`)).toBe(false);
     });
 });

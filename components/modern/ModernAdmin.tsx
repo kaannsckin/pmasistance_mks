@@ -561,14 +561,14 @@ const AiSettings: React.FC<Pick<ModernAdminProps, 'workspace' | 'onUpdateAiPolic
     return (
         <div className="flex flex-col gap-4">
             <Note>
-                Buradan AI bağlantısını (sağlayıcı, adres, model, API anahtarı) ayarlar ve test edersiniz; kurum genelinde AI kullanımını, özellikleri ve rapor puanlamasının güvencelerini yönetirsiniz. API anahtarı sunucuda şifreli tutulur, tarayıcıya ve çalışma alanı verisine girmez. Hangi rolün AI kullanacağı Yetkiler bölümündeki “Yapay zekâ özelliklerini kullanır” satırındadır.
+                Buradan AI bağlantısını (sağlayıcı, adres, model, API anahtarı) ayarlar ve test edersiniz; kurum genelinde AI kullanımını, özellikleri ve rapor puanlamasının güvencelerini yönetirsiniz. API anahtarı sunucuda şifreli tutulur, tarayıcıya ve çalışma alanı verisine girmez; sunucuda kurulum yoksa kendi Gemini anahtarınızla yalnız bu tarayıcıda deneyebilirsiniz. Hangi rolün AI kullanacağı Yetkiler bölümündeki “Yapay zekâ özelliklerini kullanır” satırındadır.
             </Note>
             <section aria-labelledby="ad-ai-conn" className="m-surface rounded-2xl p-5 flex flex-col gap-3">
                 <div>
                     <h2 id="ad-ai-conn" className="m-0 text-[17px] font-semibold m-text">AI bağlantısı</h2>
                     <p className="m-0 mt-0.5 text-[14px] m-text-3">Panelde girilen değerler sunucudaki ortam değişkenlerinin üzerine yazılır; boş alan ortam değişkenini kullanır.</p>
                 </div>
-                <AiConnection onChanged={connectionChanged} />
+                <AiConnection onChanged={connectionChanged} status={status} />
             </section>
             <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(360px, 100%), 1fr))' }}>
                 <Card title="Kurum geneli" subtitle="Kapalı özellik hiçbir kullanıcıda görünmez">
@@ -588,7 +588,7 @@ const AiSettings: React.FC<Pick<ModernAdminProps, 'workspace' | 'onUpdateAiPolic
                                 <dt className="m-text-3">Sağlayıcı</dt><dd className="m-0 m-text">{status.provider || '—'}</dd>
                                 <dt className="m-text-3">Model</dt><dd className="m-0 m-text break-all">{status.model || '—'}</dd>
                                 <dt className="m-text-3">Anlamsal arama</dt><dd className="m-0 m-text break-all">{status.embeddingModel || 'Kapalı (anahtar kelime araması)'}</dd>
-                                <dt className="m-text-3">Kaynak</dt><dd className="m-0 m-text">{status.configSource === 'panel' ? 'Yönetici paneli' : 'Ortam değişkenleri'}</dd>
+                                <dt className="m-text-3">Kaynak</dt><dd className="m-0 m-text">{status.configSource === 'browser' ? 'Bu tarayıcıdaki Gemini test anahtarı' : status.configSource === 'panel' ? 'Yönetici paneli' : 'Ortam değişkenleri'}</dd>
                                 <dt className="m-text-3">Erişim koruması</dt><dd className="m-0 m-text">{status.authMode === 'token' ? 'Erişim kodu' : status.authMode === 'supabase' ? 'Supabase üyeliği' : 'Yok (yalnız kurum içi ağ)'}</dd>
                             </dl>
                             {status.problem && <p className="m-0 text-[13px] m-ink-warn">{status.problem}</p>}
