@@ -1,11 +1,10 @@
-import React, { useMemo, useState } from 'react';
-import { Abbreviation, ReportSettings, WeeklyReport } from '../../../types';
-import { REPORT_SYSTEM } from '../../../utils/ai/weeklyReportPrompt';
+import React, { useState } from 'react';
+import { Abbreviation, ReportSettings } from '../../../types';
 import { describeNotify, IntegrationHealth, sendNotification } from '../../../utils/integrations';
-import { DEFAULT_ABBREVIATIONS, fineTuneLines, mailtoLink, reminderText, teamsChatLink, WEEKDAYS } from '../../../utils/weeklyReport';
+import { DEFAULT_ABBREVIATIONS, mailtoLink, reminderText, teamsChatLink, WEEKDAYS } from '../../../utils/weeklyReport';
 import { Icon } from '../icons';
 import { Card, Field, rowSep } from '../ui';
-import { downloadFile, Notice, NoticeState, Pill } from './shared';
+import { Notice, NoticeState, Pill } from './shared';
 
 // ---------------------------------------------------------------- hatırlatma
 
@@ -111,18 +110,15 @@ const STATUS_ROWS: { key: keyof Omit<IntegrationHealth, 'authMode' | 'unreachabl
 
 export const ReportSettingsPanel: React.FC<{
     settings: ReportSettings;
-    reports: WeeklyReport[];
     health: IntegrationHealth | null;
     onChange: (s: ReportSettings) => void;
-}> = ({ settings, reports, health, onChange }) => {
+}> = ({ settings, health, onChange }) => {
     const [emails, setEmails] = useState(settings.directorEmails.join(', '));
     const [abbr, setAbbr] = useState('');
     const [exp, setExp] = useState('');
     const [saved, setSaved] = useState(false);
     const parsed = emails.split(/[,;\s]+/).map(e => e.trim()).filter(Boolean);
     const bad = parsed.filter(e => !EMAIL_RE.test(e));
-    const fineTune = useMemo(() => fineTuneLines(reports, REPORT_SYSTEM), [reports]);
-    const approvedCount = reports.filter(r => r.stage === 'approved').length;
 
     const saveEmails = () => {
         if (bad.length) return;
@@ -195,16 +191,6 @@ export const ReportSettingsPanel: React.FC<{
                 </ul>
             </Card>
 
-            <Card title="AI ince ayarı" subtitle="AI önerisi ile onaylanan son hâl çiftleri, modeli kurum diline uyarlamak için eğitim verisidir." labelledBy="wr-ft">
-                <p className="m-0 text-[14px] m-text-2">
-                    Öneriler şimdiden kurum rapor kılavuzu, örnek rapor ve onaylanmış önceki raporlardan seçilen örneklerle yönlendirilir. {approvedCount} onaylı raporun {fineTune.length} tanesi AI taslağıyla başladı ve veri setine girer.
-                </p>
-                <div>
-                    <button type="button" className="m-btn m-btn-gray" disabled={!fineTune.length} onClick={() => downloadFile(`rapor-ince-ayar-${new Date().toISOString().slice(0, 10)}.jsonl`, `${fineTune.join('\n')}\n`, 'application/jsonl')}>
-                        <Icon name="download" size={17} />Veri setini indir (JSONL)
-                    </button>
-                </div>
-            </Card>
         </div>
     );
 };

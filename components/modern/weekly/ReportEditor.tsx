@@ -1,10 +1,17 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { Abbreviation, CustomerMeeting, MeetingDetails, ReportCategory, ReportItem, WeeklyReport, WorklogEntry, WorkspaceData } from '../../../types';
+import { Abbreviation, CustomerMeeting, MeetingDetails, ProjectAiProfile, ReportAiLogEntry, ReportCategory, ReportItem, WeeklyReport, WorklogEntry, WorkspaceData } from '../../../types';
+import { cleanProjectProfile, PROFILE_LIMITS } from '../../../utils/ai/projectProfile';
+import { suggestionLogEntry } from '../../../utils/ai/reportAiStats';
 import { ROLE_LABELS } from '../../../utils/allocations';
-import { buildReportInput, buildReportPrompt, parseReportSuggestion, REPORT_SYSTEM, ReportSuggestion } from '../../../utils/ai/weeklyReportPrompt';
+import { GroundingIssue, reportGateWarning } from '../../../utils/ai/reportEval';
+import { aiPolicyOf } from '../../../utils/ai/policy';
+import { buildRepairPrompt, checkSuggestion, checkSummary, needsRepair, pickBetter, SuggestionCheck } from '../../../utils/ai/reportRepair';
+import { buildDepartmentRequest, buildVariantRequest, PRODUCTION_VARIANT } from '../../../utils/ai/reportVariants';
+import { buildDepartmentInput, buildReportInput, parseReportSuggestion, ReportSuggestion } from '../../../utils/ai/weeklyReportPrompt';
+import { reportPromptVersion } from '../../../utils/ai/reportGuide';
 import { meetingsHeldInWeek, meetingsPlannedInWeek, meetingToDetails, visibleMeetings } from '../../../utils/customerMeetings';
 import { fetchJiraWorklogs, IntegrationHealth } from '../../../utils/integrations';
-import { Identity } from '../../../utils/rbac';
+import { Identity, ownsProject } from '../../../utils/rbac';
 import { relativeTime } from '../../../utils/recentChanges';
 import {
     canEditReport, CATEGORY_META, findAbbreviations, findReport, glossaryFor, itemDisplay, lintCounts, LintIssue, lintReport, locative, meetingSentence,
@@ -146,6 +153,44 @@ const ReadOnlyList: React.FC<{ items: ReportItem[]; withCategory?: boolean }> = 
         </ul>
     ) : <p className="m-0 text-[15px] m-text-3">Madde yok.</p>;
 
+const GROUNDING_LABEL: Record<GroundingIssue['kind'], string> = { number: 'rakam', date: 'tarih', name: 'ad' };
+
+/** Metindeki dayanaksız değerleri vurgular */
+const Highlighted: React.FC<{ text: string; values: string[] }> = ({ text, values }) => {
+    const vs = Array.from(new Set<string>(values)).filter(Boolean).sort((a, b) => b.length - a.length);
+    if (!vs.length) return <>{text}</>;
+    const re = new RegExp(`(${vs.map(v => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`, 'gu');
+    return <>{text.split(re).map((part, i) => (vs.includes(part) ? <mark key={i} className="m-tone-warn rounded px-0.5">{part}</mark> : part))}</>;
+};
+
+/** Öneri önizlemesi: maddeler, madde düzeyinde format sorunları ve dayanaksız bilgi */
+const SuggestionList: React.FC<{ items: ReportItem[]; check: SuggestionCheck; withCategory?: boolean }> = ({ items, check, withCategory }) =>
+    items.length ? (
+        <ul className="m-0 pl-5 flex flex-col gap-2">
+            {items.map(i => {
+                const lint = check.lint.filter(x => x.itemId === i.id);
+                const ground = check.grounding.filter(g => g.itemId === i.id);
+                return (
+                    <li key={i.id} className="text-[15px] leading-relaxed m-text">
+                        {withCategory && <span className="text-[13px] font-semibold m-text-3">{CATEGORY_META[i.category].label}: </span>}
+                        <Highlighted text={itemDisplay(i)} values={ground.map(g => g.value)} />
+                        {(lint.length > 0 || ground.length > 0) && (
+                            <div className="mt-1 flex flex-col gap-0.5">
+                                <IssueList issues={lint} />
+                                {ground.length > 0 && (
+                                    <span className="flex items-start gap-1.5 text-[13px] m-ink-warn">
+                                        <Icon name="alert" size={14} style={{ marginTop: 2 }} />
+                                        <span>Girdide dayanağı yok: {ground.map(g => `“${g.value}” (${GROUNDING_LABEL[g.kind]})`).join(', ')}. Notlarınızda yoksa düzeltin ya da çıkarın.</span>
+                                    </span>
+                                )}
+                            </div>
+                        )}
+                    </li>
+                );
+            })}
+        </ul>
+    ) : <p className="m-0 text-[15px] m-text-3">Madde yok.</p>;
+
 // ---------------------------------------------------------------- kaynaklar
 
 const SourceRow: React.FC<{ title: string; sub?: string; action: string; onAdd: () => void; added?: boolean }> = ({ title, sub, action, onAdd, added }) => (
@@ -179,9 +224,73 @@ export interface ReportEditorProps {
     onReturn: (note: string) => boolean;
     onSetJiraKey: (projectId: string, key: string) => void;
     onOpenMeetings: () => void;
+    /** AI önerisi günlüğü (uygulandı / vazgeçildi / hata; metin yazılmaz) */
+    onLogAi?: (entry: ReportAiLogEntry) => void;
+    /** Proje kartı (yalnız proje sahibi PY) */
+    onSaveProjectProfile?: (projectId: string, profile: ProjectAiProfile | undefined) => boolean;
+    /** PYB destek: onaylı raporu AI üslup örneği olarak işaretle */
+    onSetExemplar?: (reportId: string, on: boolean) => boolean;
+    /** "i": rehberi düzenleyici adımından aç */
+    onHelp?: () => void;
 }
 
-const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report, isNew, dictionary, health, onBack, onSave, onAdvance, onReturn, onSetJiraKey, onOpenMeetings }) => {
+// ---------------------------------------------------------------- proje kartı
+
+const emptyProfile = (): ProjectAiProfile => ({ summary: '', customers: '', product: '', stakeholders: '', reportHints: '', glossary: [] });
+
+const ProjectCardSheet: React.FC<{ profile?: ProjectAiProfile; canEdit: boolean; onClose: () => void; onSave: (p: ProjectAiProfile | undefined) => boolean }> = ({ profile, canEdit, onClose, onSave }) => {
+    const [d, setD] = useState<ProjectAiProfile>(() => ({ ...emptyProfile(), ...(profile || {}), glossary: [...(profile?.glossary || [])] }));
+    const [error, setError] = useState<string | null>(null);
+    const set = (patch: Partial<ProjectAiProfile>) => setD(x => ({ ...x, ...patch }));
+    const terms = d.glossary || [];
+    const setTerm = (i: number, patch: Partial<{ term: string; explanation: string }>) => set({ glossary: terms.map((t, k) => (k === i ? { ...t, ...patch } : t)) });
+    const text = (key: 'customers' | 'product' | 'stakeholders' | 'reportHints', label: string, placeholder: string) => (
+        <Field label={label} htmlFor={`pc-${key}`}>
+            <input id={`pc-${key}`} className="m-input" maxLength={PROFILE_LIMITS.text} disabled={!canEdit} value={d[key] || ''} placeholder={placeholder} onChange={e => set({ [key]: e.target.value })} />
+        </Field>
+    );
+    const save = () => { if (onSave(cleanProjectProfile(d))) onClose(); else setError('Kaydedilemedi: proje kartını yalnız projenin yöneticisi düzenleyebilir.'); };
+    return (
+        <Sheet
+            wide
+            title="Proje kartı"
+            subtitle="AI taslağı, konuya yabancı okurun anlaması için bu bilgileri kısa açıklama olarak kullanır; kartta olmayan teknik ayrıntıyı uydurmaz."
+            onClose={onClose}
+            footer={<>
+                <span className="flex-1 text-[12.5px] m-text-3">Kart proje kaydıyla birlikte paylaşılır (haftalık notlar gibi özel değildir).</span>
+                <button type="button" className="m-btn m-btn-plain" onClick={onClose}>{canEdit ? 'Vazgeç' : 'Kapat'}</button>
+                {canEdit && <button type="button" className="m-btn m-btn-primary" onClick={save}>Kaydet</button>}
+            </>}
+        >
+            {!canEdit && <p className="m-0 text-[14px] m-text-3">Kartı projenin yöneticisi düzenler.</p>}
+            <Field label="Proje ne yapıyor?" htmlFor="pc-summary" hint={`En çok ${PROFILE_LIMITS.summary} karakter. Ör. "Belediyeler için kurum içi e-posta ve takvim ürünü; 2026'da 3 belediyede pilot."`}>
+                <textarea id="pc-summary" className="m-input py-2.5" rows={3} maxLength={PROFILE_LIMITS.summary} disabled={!canEdit} value={d.summary || ''} onChange={e => set({ summary: e.target.value })} />
+            </Field>
+            <div className="grid gap-3 sm:grid-cols-2">
+                {text('customers', 'Müşteriler', 'Ör. Gebze Belediyesi, Kocaeli Valiliği')}
+                {text('product', 'Ürün / çıktı', 'Ör. Safir Posta 3.2')}
+                {text('stakeholders', 'Paydaşlar', 'Ör. İG, Ürün Yönetimi, Mesajlaşma birimi')}
+                {text('reportHints', 'Rapor ipuçları', 'Ör. Hakediş tutarlarını KDV hariç yazın')}
+            </div>
+            <div className="flex flex-col gap-2">
+                <h3 className="m-0 text-[15px] font-semibold m-text">Terimler <span className="m-text-3 font-normal m-tabular">{terms.length}/{PROFILE_LIMITS.terms}</span></h3>
+                {terms.map((t, i) => (
+                    <div key={i} className="flex flex-wrap items-center gap-2">
+                        <input aria-label={`Terim ${i + 1}`} className="m-input !w-40" maxLength={PROFILE_LIMITS.term} disabled={!canEdit} value={t.term} placeholder="Terim" onChange={e => setTerm(i, { term: e.target.value })} />
+                        <input aria-label={`Terim ${i + 1} açıklaması`} className="m-input flex-1 min-w-[200px]" maxLength={PROFILE_LIMITS.explanation} disabled={!canEdit} value={t.explanation} placeholder="Kısa açıklama" onChange={e => setTerm(i, { explanation: e.target.value })} />
+                        {canEdit && <button type="button" className="m-icon-btn" aria-label={`Terim ${i + 1} sil`} onClick={() => set({ glossary: terms.filter((_, k) => k !== i) })}><Icon name="trash" size={16} /></button>}
+                    </div>
+                ))}
+                {canEdit && terms.length < PROFILE_LIMITS.terms && (
+                    <button type="button" className="m-btn m-btn-plain self-start" onClick={() => set({ glossary: [...terms, { term: '', explanation: '' }] })}><Icon name="plus" size={16} />Terim ekle</button>
+                )}
+            </div>
+            {error && <p role="alert" className="m-0 text-[14px] m-ink-bad">{error}</p>}
+        </Sheet>
+    );
+};
+
+const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report, isNew, dictionary, health, onBack, onSave, onAdvance, onReturn, onSetJiraKey, onOpenMeetings, onLogAi, onSaveProjectProfile, onSetExemplar, onHelp }) => {
     const [draft, setDraft] = useState<WeeklyReport>(report);
     const [dirty, setDirty] = useState(false);
     const [notice, setNotice] = useState<NoticeState>(null);
@@ -192,8 +301,10 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
     const [abbrInputs, setAbbrInputs] = useState<Record<string, string>>({});
     const [jiraKey, setJiraKey] = useState('');
     const [busy, setBusy] = useState<'file' | 'jira' | null>(null);
-    const [suggestion, setSuggestion] = useState<{ s: ReportSuggestion; raw: string; input: string } | null>(null);
+    const [suggestion, setSuggestion] = useState<{ s: ReportSuggestion; raw: string; input: string; promptVersion: string; model?: string; check: SuggestionCheck; repaired: boolean; repairNote?: string } | null>(null);
+    const [repairing, setRepairing] = useState(false);
     const [missingQs, setMissingQs] = useState<string[]>([]);
+    const [cardOpen, setCardOpen] = useState(false);
     const fileRef = useRef<HTMLInputElement>(null);
     const ai = useAiRun();
 
@@ -244,10 +355,7 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
     const notes = useMemo(() => (project?.notes || []).filter(n => n.year === year && n.weekNumber === week), [project, year, week]);
     const worklog = useMemo(() => summarizeWorklog(draft.worklog || []), [draft.worklog]);
     const worklogHours = Math.round((draft.worklog || []).reduce((s, e) => s + e.hours, 0) * 10) / 10;
-    const styleExamples = useMemo(() => (workspace.weeklyReports || [])
-        .filter(r => r.stage === 'approved' && r.kind === 'project' && r.id !== draft.id && workspace.projects.some(p => p.id === r.projectId && p.pmPersonId && p.pmPersonId === project?.pmPersonId))
-        .sort((a, b) => b.year - a.year || b.week - a.week)
-        .slice(0, 3), [workspace.weeklyReports, workspace.projects, draft.id, project?.pmPersonId]);
+    const gateWarning = useMemo(() => reportGateWarning(workspace, ai.model), [workspace, ai.model]);
 
     // Kısaltmalar
     const knownAbbr = useMemo(() => new Set([...dictionary, ...draft.abbreviations].map(a => a.abbr.toLocaleUpperCase('tr-TR'))), [dictionary, draft.abbreviations]);
@@ -325,23 +433,71 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
     };
 
     // ---- AI
+    const logAi = (outcome: Exclude<ReportAiLogEntry['outcome'], 'submitted'>, sug?: NonNullable<typeof suggestion>, promptVersion = reportPromptVersion(workspace.reportSettings, draft.departmentCode, draft.projectId), model = ai.model) =>
+        onLogAi?.(suggestionLogEntry({
+            report: draft, promptVersion: sug?.promptVersion || promptVersion, variant: 'full', model: sug ? sug.model : model, outcome, suggestion: sug?.s, dictionary,
+            ...(sug ? { ungrounded: sug.check.ungrounded, repaired: sug.repaired } : {}),
+        }));
+    // Bölüm eklemesi: bölüm projelerinin bu haftaki gönderilmiş/onaylı raporları
+    const deptProjectReports = useMemo(() => (draft.kind !== 'department' ? [] : (workspace.weeklyReports || [])
+        .filter(r => r.kind === 'project' && r.year === year && r.week === week && r.departmentCode === draft.departmentCode && r.stage !== 'draft')
+        .map(r => { const p = workspace.projects.find(x => x.id === r.projectId); return { name: p?.name || 'Silinmiş proje', code: p?.code, report: r }; })
+        .sort((a, b) => a.name.localeCompare(b.name, 'tr'))), [workspace.weeklyReports, workspace.projects, draft.kind, draft.departmentCode, year, week]);
     const suggest = async () => {
-        if (!project) return;
+        if (draft.kind === 'project' && !project) return;
         setMissingQs([]);
-        const input = buildReportInput({ project, year, week, worklog: draft.worklog, heldMeetings: held, plannedMeetings: planned, previous: prevReport, dictionary });
-        const res = await ai.run(REPORT_SYSTEM, buildReportPrompt(input, styleExamples), t => ({ s: parseReportSuggestion(t), raw: t }));
-        if (res) setSuggestion({ ...res, input });
+        const input = project
+            ? buildReportInput({ project, year, week, worklog: draft.worklog, heldMeetings: held, plannedMeetings: planned, previous: prevReport, planReview: draft.planReview, dictionary })
+            : buildDepartmentInput({ departmentName: deptName, departmentCode: draft.departmentCode, year, week, projectReports: deptProjectReports, heldMeetings: held, plannedMeetings: planned, dictionary });
+        const req = project ? buildVariantRequest({ variant: PRODUCTION_VARIANT, ws: workspace, report: draft, input }) : buildDepartmentRequest({ ws: workspace, report: draft, input });
+        const { promptVersion } = req;
+        const model = ai.model;
+        const parse = (t: string) => ({ s: parseReportSuggestion(t), raw: t });
+        const res = await ai.run(req.system, req.prompt, parse, { onError: () => logAi('error', undefined, promptVersion, model) });
+        if (!res) return;
+        // Çıktı denetimi; admin açtıysa ve sorun varsa tek turluk düzeltme (daha kötüyse ilk sonuç)
+        const check = checkSuggestion(res.s, input, dictionary);
+        let chosen = { s: res.s, raw: res.raw, check, repaired: false };
+        let repairNote: string | undefined;
+        if (aiPolicyOf(workspace).reportAutoRepair && needsRepair(check)) {
+            setRepairing(true);
+            const fix = await ai.run(req.system, buildRepairPrompt(res.s, check, input), parse);
+            setRepairing(false);
+            if (fix) {
+                const best = pickBetter({ s: res.s, check }, { s: fix.s, check: checkSuggestion(fix.s, input, dictionary) });
+                chosen = { s: best.s, raw: best.repaired ? fix.raw : res.raw, check: best.check, repaired: best.repaired };
+                repairNote = best.repaired ? 'Denetimde bulunan sorunlar için otomatik düzeltme uygulandı.' : 'Otomatik düzeltme denendi; ilk öneri daha iyi olduğu için korundu.';
+            } else {
+                ai.setError(null);
+                repairNote = 'Otomatik düzeltme yapılamadı; ilk öneri gösteriliyor.';
+            }
+        }
+        setSuggestion({ ...chosen, input, promptVersion, model, repairNote });
+    };
+    const discardSuggestion = () => {
+        if (suggestion) logAi('discarded', suggestion);
+        setSuggestion(null);
     };
     const applySuggestion = (mode: 'append' | 'replace') => {
         if (!suggestion) return;
-        const { s, raw, input } = suggestion;
+        const { s, raw, input, promptVersion, model } = suggestion;
+        // Özgün hâl maddede saklanır: gönderimde aynen kalan / düzenlenen / silinen ölçülür
+        const tag = (i: ReportItem): ReportItem => ({ ...i, aiOriginal: { text: itemDisplay(i), category: i.category } });
+        const thisWeek = s.thisWeek.map(tag), nextWeek = s.nextWeek.map(tag);
+        const newIds = [...thisWeek, ...nextWeek].map(i => i.id);
         update(d => ({
             ...d,
-            thisWeek: mode === 'replace' ? s.thisWeek : [...d.thisWeek, ...s.thisWeek],
-            nextWeek: mode === 'replace' ? s.nextWeek : [...d.nextWeek, ...s.nextWeek],
+            thisWeek: mode === 'replace' ? thisWeek : [...d.thisWeek, ...thisWeek],
+            nextWeek: mode === 'replace' ? nextWeek : [...d.nextWeek, ...nextWeek],
             abbreviations: mergeAbbr(d.abbreviations, s.abbreviations),
-            aiDraft: { generatedAt: new Date().toISOString(), input, output: raw },
+            aiDraft: {
+                generatedAt: new Date().toISOString(), input, output: raw, promptVersion, variant: 'full', ...(model ? { model } : {}), mode,
+                proposed: { thisWeek: s.thisWeek.length, nextWeek: s.nextWeek.length },
+                // Sonuna eklemede önceki AI maddeleri de ölçülmeye devam eder; yerine koymada yalnız son öneri
+                itemIds: mode === 'replace' ? newIds : [...(d.aiDraft?.itemIds || []), ...newIds],
+            },
         }));
+        logAi(mode === 'replace' ? 'applied_replace' : 'applied_append', suggestion);
         setMissingQs(s.missing);
         setSuggestion(null);
     };
@@ -384,7 +540,17 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
                         </p>
                     </div>
                     <div className="flex items-center gap-2">
+                        {onHelp && (
+                            <button type="button" className="m-icon-btn" aria-label="Rapor nasıl yazılır?" title="Rapor nasıl yazılır?" onClick={onHelp}><Icon name="info" size={22} /></button>
+                        )}
                         {dirty && <span className="text-[13px] m-text-3">Kaydedilmedi</span>}
+                        {onSetExemplar && report.kind === 'project' && report.stage === 'approved' && !isNew && (
+                            <button type="button" className="m-btn m-btn-plain !min-h-[44px]" aria-pressed={!!report.exemplar}
+                                title="Örnek raporlar, AI taslağında üslup örneği seçilirken öncelik alır."
+                                onClick={() => { if (!onSetExemplar(report.id, !report.exemplar)) setNotice({ kind: 'error', text: 'İşaret değiştirilemedi.' }); }}>
+                                <Icon name={report.exemplar ? 'check' : 'book'} size={16} />{report.exemplar ? 'Örnek rapor' : 'Örnek olarak işaretle'}
+                            </button>
+                        )}
                         {isNew && !dirty ? null : <StagePill stage={report.stage} returned={!!report.returnNote} />}
                     </div>
                 </div>
@@ -623,7 +789,7 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
                         )}
                     </section>
 
-                    {editable && draft.kind === 'project' && project && (
+                    {editable && (draft.kind === 'department' || project) && (
                         <section aria-label="AI önerisi" className="m-surface rounded-2xl p-5 flex flex-col gap-3">
                             <div className="flex items-center justify-between gap-2">
                                 <h2 className="m-0 text-[17px] font-semibold m-text flex items-center gap-2"><Icon name="sparkles" size={18} />AI önerisi</h2>
@@ -631,14 +797,25 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
                             </div>
                             {ai.available ? (
                                 <>
-                                    <p className="m-0 text-[13px] m-text-3">Haftalık notlar ({notes.length}), worklog ({worklog.length} konu), görüşmeler ({held.length}) ve geçen haftanın planından kılavuza uygun taslak çıkarır. Taslağı mutlaka gözden geçirin.</p>
-                                    <button type="button" className="m-btn m-btn-primary" disabled={ai.loading} onClick={suggest}>
-                                        <Icon name="sparkles" size={18} />{ai.loading ? 'Öneri hazırlanıyor…' : 'Taslak öner'}
+                                    {project ? (
+                                        <p className="m-0 text-[13px] m-text-3">Haftalık notlar ({notes.length}), worklog ({worklog.length} konu), görüşmeler ({held.length}), bu hafta kapanan işler, proje kartı ve geçen haftanın planından kılavuza uygun taslak çıkarır. Taslağı mutlaka gözden geçirin.</p>
+                                    ) : (
+                                        <p className="m-0 text-[13px] m-text-3">Bölüm projelerinin bu haftaki gönderilmiş raporlarından ({deptProjectReports.length}) ve bölüm görüşmelerinden ({held.length}) projelere bağlı olmayan bölüm gelişmeleri için taslak çıkarır. Taslağı mutlaka gözden geçirin.</p>
+                                    )}
+                                    <button type="button" className="m-btn m-btn-primary" disabled={ai.loading || repairing} onClick={suggest}>
+                                        <Icon name="sparkles" size={18} />{repairing ? 'Öneri düzeltiliyor…' : ai.loading ? 'Öneri hazırlanıyor…' : 'Taslak öner'}
                                     </button>
+                                    {gateWarning && <div role="status" className="rounded-xl m-tone-warn px-3 py-2 text-[13px]">{gateWarning}</div>}
                                     {ai.error && <div role="alert" className="rounded-xl m-tone-bad px-3 py-2 text-[14px]">{ai.error}</div>}
                                 </>
                             ) : (
                                 <p className="m-0 text-[14px] m-text-3">AI kapalı ya da sunucuda yapılandırılmamış. Maddeleri aşağıdaki kaynaklardan ekleyebilirsiniz.</p>
+                            )}
+                            {project && (
+                                <div className="flex flex-wrap items-center gap-2">
+                                    {!cleanProjectProfile(project.aiProfile) && <span className="flex-1 min-w-[180px] text-[13px] m-ink-warn">Proje kartını doldurursanız öneriler konuya yabancı okur için daha anlaşılır olur.</span>}
+                                    <button type="button" className="m-btn m-btn-plain !min-h-[44px]" onClick={() => setCardOpen(true)}><Icon name="book" size={17} />Proje kartı</button>
+                                </div>
                             )}
                             {missingQs.length > 0 && (
                                 <div className="rounded-xl m-tone-warn px-3 py-2.5 flex flex-col gap-1">
@@ -751,21 +928,25 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
                 <Sheet
                     wide
                     title="AI taslak önerisi"
-                    onClose={() => setSuggestion(null)}
+                    onClose={discardSuggestion}
                     footer={<>
                         <span className="flex-1 text-[13px] m-text-3">Uygulayınca maddeleri düzenleyebilirsiniz.</span>
-                        <button type="button" className="m-btn m-btn-plain" onClick={() => setSuggestion(null)}>Vazgeç</button>
+                        <button type="button" className="m-btn m-btn-plain" onClick={discardSuggestion}>Vazgeç</button>
                         {(draft.thisWeek.length > 0 || draft.nextWeek.length > 0) && <button type="button" className="m-btn m-btn-gray" onClick={() => applySuggestion('replace')}>Mevcutların yerine koy</button>}
                         <button type="button" className="m-btn m-btn-primary" onClick={() => applySuggestion('append')}>{draft.thisWeek.length || draft.nextWeek.length ? 'Sonuna ekle' : 'Taslağa uygula'}</button>
                     </>}
                 >
+                    <div role="status" className={`rounded-xl px-3 py-2.5 flex items-start gap-2 text-[14px] ${suggestion.check.errors ? 'm-tone-bad' : suggestion.check.ungrounded || suggestion.check.warnings ? 'm-tone-warn' : 'm-tone-ok'}`}>
+                        <Icon name={suggestion.check.errors || suggestion.check.ungrounded ? 'alert' : 'check'} size={16} style={{ marginTop: 2 }} />
+                        <span><b>{checkSummary(suggestion.check)}.</b>{suggestion.repairNote ? ` ${suggestion.repairNote}` : ''}{suggestion.check.ungrounded ? ' Vurgulanan bilgiler girdide (notlar, worklog, görüşmeler) geçmiyor.' : ''}</span>
+                    </div>
                     <div className="flex flex-col gap-1.5">
                         <h3 className="m-0 text-[15px] font-semibold m-text">Bu hafta</h3>
-                        <ReadOnlyList items={suggestion.s.thisWeek} withCategory />
+                        <SuggestionList items={suggestion.s.thisWeek} check={suggestion.check} withCategory />
                     </div>
                     <div className="flex flex-col gap-1.5">
                         <h3 className="m-0 text-[15px] font-semibold m-text">Gelecek hafta</h3>
-                        <ReadOnlyList items={suggestion.s.nextWeek} />
+                        <SuggestionList items={suggestion.s.nextWeek} check={suggestion.check} />
                     </div>
                     {suggestion.s.abbreviations.length > 0 && <p className="m-0 text-[14px] m-text-2">Kısaltmalar: {suggestion.s.abbreviations.map(a => `${a.abbr} (${a.expansion})`).join(', ')}</p>}
                     {suggestion.s.missing.length > 0 && (
@@ -775,6 +956,15 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
                         </div>
                     )}
                 </Sheet>
+            )}
+
+            {cardOpen && project && (
+                <ProjectCardSheet
+                    profile={project.aiProfile}
+                    canEdit={!!onSaveProjectProfile && ownsProject(project, identity)}
+                    onClose={() => setCardOpen(false)}
+                    onSave={p => !!onSaveProjectProfile?.(project.id, p)}
+                />
             )}
 
             {returning && (

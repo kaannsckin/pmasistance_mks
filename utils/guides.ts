@@ -5,19 +5,22 @@
  * sürümü artarsa (içerik önemli ölçüde değişirse) yeniden gösterilir.
  */
 
-export type GuideId = 'planning' | 'forecast';
+import { WEEKLY_BS, WEEKLY_EXEC, WEEKLY_PY, WEEKLY_STEWARD } from './weeklyGuides';
+
+export type GuideId = 'planning' | 'forecast' | 'weeklyPy' | 'weeklyBs' | 'weeklySteward' | 'weeklyExec';
 
 export interface GuideStep {
     id: string;
-    icon: 'rocket' | 'download' | 'plus' | 'sparkles' | 'activity' | 'flag' | 'timeline' | 'refresh' | 'target' | 'gauge' | 'shield' | 'list' | 'send';
+    icon: 'rocket' | 'download' | 'plus' | 'sparkles' | 'activity' | 'flag' | 'timeline' | 'refresh' | 'target' | 'gauge' | 'shield' | 'list' | 'send'
+        | 'report' | 'pencil' | 'book' | 'check' | 'users' | 'eye' | 'calendar' | 'mail';
     title: string;
     summary: string;
     /** Nasıl kullanılır (sıralı) */
     how: string[];
     scenario: { title: string; text: string };
     tip?: string;
-    /** Planlama kipi: "?" bu kipteyken basılırsa rehber bu adımdan açılır */
-    mode?: 'record' | 'release' | 'simulate';
+    /** Ekran kipi (planlama kipi, haftalık rapor sekmesi ya da düzenleyici): "?" / "i" bu kipteyken basılırsa rehber bu adımdan açılır */
+    mode?: string;
 }
 
 export interface Guide {
@@ -234,7 +237,10 @@ const FORECAST: Guide = {
     ],
 };
 
-export const GUIDES: Record<GuideId, Guide> = { planning: PLANNING, forecast: FORECAST };
+export const GUIDES: Record<GuideId, Guide> = {
+    planning: PLANNING, forecast: FORECAST,
+    weeklyPy: WEEKLY_PY, weeklyBs: WEEKLY_BS, weeklySteward: WEEKLY_STEWARD, weeklyExec: WEEKLY_EXEC,
+};
 
 const KEY = 'PLANASISTAN_GUIDES_V1';
 

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AiReportAssessment, ReportSettings, WeeklyReport, WorkspaceData } from '../../types';
+import { AiReportAssessment, ProjectAiProfile, ReportAiLogEntry, ReportEvalRun, ReportGatePolicy, ReportSettings, WeeklyReport, WorkspaceData } from '../../types';
 import { fetchIntegrationHealth, IntegrationHealth } from '../../utils/integrations';
 import { can } from '../../utils/permissions';
 import { Identity, managedDepartmentCode, ownsProject } from '../../utils/rbac';
@@ -9,10 +9,14 @@ import {
     nextStage, projectDepartment, reportDictionary, reportFlowOf, reportSettingsOf, STAGE_LABELS, visibleReports, weekLabel, weekProgress,
 } from '../../utils/weeklyReport';
 import { WeekPicker } from './DateRangePicker';
+import { GuideButton, GuideTour, useGuide } from './GuideTour';
+import { startStepFor } from '../../utils/guides';
 import { Icon } from './icons';
 import { rowSep } from './ui';
 import ConsolidatedReport from './weekly/ConsolidatedReport';
 import { ReminderPanel, ReportSettingsPanel } from './weekly/Panels';
+import { LearnedRulesCard, ReportAiQualityCard, ReportEvalCard, ReportFineTuneCard, ReportGuideCard } from './weekly/ReportAiPanels';
+import { RuleAction } from '../../utils/ai/reportRules';
 import ReportEditor from './weekly/ReportEditor';
 import { EmptyState, Notice, NoticeState, Pill, STAGE_TONE, StagePill } from './weekly/shared';
 
@@ -41,9 +45,33 @@ export interface ModernWeeklyReportProps {
     onRatePmo: (projectId: string, year: number, week: number, score: number | null, note?: string) => boolean;
     /** AI metin puanı (PYB destek): onaylı raporun değerlendirmesini kaydet */
     onSetAiAssessment: (reportId: string, assessment: AiReportAssessment) => void;
+    /** Rapor AI öneri günlüğü */
+    onLogReportAi: (entry: ReportAiLogEntry) => void;
+    /** Rapor AI değerlendirmesi (PYB destek): altın set, koşular, kalite kapısı */
+    onAddReportGolden: (reportId: string) => boolean;
+    onRemoveReportGolden: (reportId: string) => void;
+    onAddReportEvalRun: (run: ReportEvalRun) => void;
+    onUpdateReportGate: (patch: Partial<ReportGatePolicy>, label: string) => void;
+    /** Proje kartı (proje sahibi PY) */
+    onSaveProjectProfile: (projectId: string, profile: ProjectAiProfile | undefined) => boolean;
+    /** Rapor kılavuzu ve bölüm ekleri (PYB destek) */
+    onSaveReportGuide: (patch: { institutionName?: string; text: string }) => boolean;
+    onResetReportGuide: () => boolean;
+    onSaveDepartmentGuide: (code: string, text: string) => boolean;
+    /** PYB destek: onaylı raporu AI üslup örneği olarak işaretle */
+    onSetReportExemplar: (reportId: string, on: boolean) => boolean;
+    /** PYB destek: öğrenilmiş kurallar */
+    onReportRuleAction: (a: RuleAction) => boolean;
 }
 
 type Tab = 'mine' | 'inbox' | 'status' | 'report' | 'settings';
+type SettingsTab = 'general' | 'ai_guide' | 'ai_quality';
+
+const SETTINGS_TABS: { key: SettingsTab; label: string }[] = [
+    { key: 'general', label: 'Genel' },
+    { key: 'ai_guide', label: 'AI kılavuzu ve kurallar' },
+    { key: 'ai_quality', label: 'AI kalitesi' },
+];
 
 interface Row {
     key: string;
@@ -77,7 +105,9 @@ const ReportRows: React.FC<{ rows: Row[]; dictionary: ReturnType<typeof reportDi
 );
 
 const ModernWeeklyReport: React.FC<ModernWeeklyReportProps> = ({
-    workspace, identity, onSaveReport, onAdvanceReport, onReturnReport, onPublishWeek, onUnpublishWeek, onMarkEmailed, onUpdateSettings, onSetJiraKey, onOpenMeetings, onRatePmo, onSetAiAssessment,
+    workspace, identity, onSaveReport, onAdvanceReport, onReturnReport, onPublishWeek, onUnpublishWeek, onMarkEmailed, onUpdateSettings, onSetJiraKey, onOpenMeetings, onRatePmo, onSetAiAssessment, onLogReportAi,
+    onAddReportGolden, onRemoveReportGolden, onAddReportEvalRun, onUpdateReportGate, onSaveProjectProfile,
+    onSaveReportGuide, onResetReportGuide, onSaveDepartmentGuide, onSetReportExemplar, onReportRuleAction,
 }) => {
     const role = identity.role;
     // Ekran kipi: rapor denetçisi (yetki), bölüm sorumlusu ve PY kimlik kuralı; diğerleri yayınlanan raporu okur
@@ -91,6 +121,9 @@ const ModernWeeklyReport: React.FC<ModernWeeklyReportProps> = ({
         return exec && latest ? { year: latest.year, week: latest.week } : isoWeekOf(new Date());
     });
     const [tab, setTab] = useState<Tab>(exec ? 'report' : steward || bs ? 'inbox' : 'mine');
+    const [settingsTab, setSettingsTab] = useState<SettingsTab>('general');
+    // Rol başına rehber: ilk girişte bir kez kendiliğinden, sonra "i" ile; açık sekmenin ya da düzenleyicinin adımından başlar
+    const guide = useGuide(exec ? 'weeklyExec' : steward ? 'weeklySteward' : bs ? 'weeklyBs' : 'weeklyPy');
     const [open, setOpen] = useState<WeeklyReport | null>(null);
     const [notice, setNotice] = useState<NoticeState>(null);
     const [health, setHealth] = useState<IntegrationHealth | null>(null);
@@ -165,10 +198,16 @@ const ModernWeeklyReport: React.FC<ModernWeeklyReportProps> = ({
     }, [bs, dept, workspace, reports, year, week, peopleName]);
     const deptAdditions = bs && dept ? findReport(reports, year, week, undefined, 'department', dept) : undefined;
 
+    const guideMode = open ? 'editor' : tab === 'settings' ? `settings_${settingsTab}` : tab;
+    const showGuide = () => guide.show(startStepFor(guide.guide, guideMode));
+    const tour = guide.open ? <GuideTour guide={guide.guide} start={guide.start} onClose={guide.close} /> : null;
+
     // ---- düzenleyici açık
     if (open) {
         const live = (workspace.weeklyReports || []).find(r => r.id === open.id);
         return (
+            <>
+            {tour}
             <ReportEditor
                 key={open.id}
                 workspace={workspace}
@@ -196,7 +235,12 @@ const ModernWeeklyReport: React.FC<ModernWeeklyReportProps> = ({
                 }}
                 onSetJiraKey={onSetJiraKey}
                 onOpenMeetings={onOpenMeetings}
+                onLogAi={onLogReportAi}
+                onSaveProjectProfile={onSaveProjectProfile}
+                onSetExemplar={steward ? onSetReportExemplar : undefined}
+                onHelp={showGuide}
             />
+            </>
         );
     }
 
@@ -211,6 +255,7 @@ const ModernWeeklyReport: React.FC<ModernWeeklyReportProps> = ({
 
     return (
         <div className="flex flex-col gap-6">
+            {tour}
             <header className="flex flex-wrap items-end justify-between gap-4">
                 <div className="max-w-[70ch]">
                     <h1 className="m-0 text-[34px] leading-tight font-bold tracking-[-0.02em] m-text">Haftalık rapor</h1>
@@ -222,6 +267,7 @@ const ModernWeeklyReport: React.FC<ModernWeeklyReportProps> = ({
                     </p>
                 </div>
                 <div className="flex items-center gap-1">
+                    <GuideButton icon="info" label="Haftalık rapor nasıl kullanılır?" onClick={showGuide} />
                     <WeekPicker year={year} week={week} label={weekLabel(year, week)} onChange={(y, w) => { setWk({ year: y, week: w }); setOpen(null); }} />
                     {!isCurrent && <button type="button" className="m-btn m-btn-plain !min-h-[40px]" onClick={() => { setWk(current); setOpen(null); }}>Bu hafta</button>}
                 </div>
@@ -353,7 +399,27 @@ const ModernWeeklyReport: React.FC<ModernWeeklyReportProps> = ({
             )}
 
             {steward && tab === 'settings' && (
-                <ReportSettingsPanel settings={settings} reports={workspace.weeklyReports || []} health={health} onChange={onUpdateSettings} />
+                <div className="flex flex-col gap-5">
+                    <div className="m-segmented self-start" role="group" aria-label="Ayar bölümü">
+                        {SETTINGS_TABS.map(t => (
+                            <button key={t.key} type="button" className="m-segment" aria-pressed={settingsTab === t.key} onClick={() => setSettingsTab(t.key)}>{t.label}</button>
+                        ))}
+                    </div>
+                    {settingsTab === 'general' && <ReportSettingsPanel settings={settings} health={health} onChange={onUpdateSettings} />}
+                    {settingsTab === 'ai_guide' && (
+                        <div className="flex flex-col gap-5">
+                            <ReportGuideCard workspace={workspace} onSaveGuide={onSaveReportGuide} onResetGuide={onResetReportGuide} onSaveDepartmentGuide={onSaveDepartmentGuide} />
+                            <LearnedRulesCard workspace={workspace} onRuleAction={onReportRuleAction} />
+                        </div>
+                    )}
+                    {settingsTab === 'ai_quality' && (
+                        <div className="flex flex-col gap-5">
+                            <ReportAiQualityCard workspace={workspace} />
+                            <ReportEvalCard workspace={workspace} dictionary={dictionary} onAddGolden={onAddReportGolden} onRemoveGolden={onRemoveReportGolden} onAddRun={onAddReportEvalRun} onUpdateGate={onUpdateReportGate} />
+                            <ReportFineTuneCard workspace={workspace} dictionary={dictionary} />
+                        </div>
+                    )}
+                </div>
             )}
         </div>
     );

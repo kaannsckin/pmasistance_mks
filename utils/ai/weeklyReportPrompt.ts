@@ -1,35 +1,20 @@
-import { Abbreviation, CustomerMeeting, Project, ReportCategory, ReportItem, TaskStatus, WeeklyReport, WorklogEntry } from '../../types';
+import { Abbreviation, CustomerMeeting, PlanReviewItem, Project, ReportCategory, ReportItem, TaskStatus, WeeklyReport, WorklogEntry } from '../../types';
 import { meetingToDetails } from '../customerMeetings';
-import { CATEGORY_META, itemDisplay, meetingSentence, newItem, THIS_WEEK_CATEGORIES, weekLabel } from '../weeklyReport';
+import { itemDisplay, meetingSentence, newItem, PLAN_REVIEW_LABELS, THIS_WEEK_CATEGORIES, weekLabel, weekStart } from '../weeklyReport';
 import { summarizeWorklog } from '../worklog';
 import { extractJson } from './json';
+import { PROFILE_HEADER, projectProfileLines } from './projectProfile';
 
 /**
- * Haftalık rapor önerisi — kurum rapor kılavuzu sistem istemine gömülüdür
- * (istem düzeyinde ince ayar). Kurumda onaylanmış önceki raporlardan stil
- * örnekleri eklenir; AI önerisi + onaylı son hâl çiftleri ince ayar (fine-
- * tuning) veri seti olarak dışa aktarılabilir.
+ * Haftalık rapor önerisi — girdi metni, kullanıcı istemi ve yanıt
+ * çözümleyicisi. Sistem istemi ve kurum/bölüm kılavuzu ./reportGuide'da
+ * (PYB destek düzenler, sürüm tutulur); istem katmanları ./reportVariants'ta.
+ * Kurumda onaylanmış önceki raporlardan üslup örnekleri eklenir; AI önerisi +
+ * onaylı son hâl çiftleri ince ayar veri kümesine girer (./reportFineTune).
  */
 
-export const REPORT_SYSTEM = `Sen TÜBİTAK BİLGEM'de proje yöneticisinin (PY) haftalık raporunu hazırlayan yazım asistanısın. Raporu müdürler okur.
-Yalnızca sana verilen verilere dayan; tarih, rakam, kişi ya da kurum UYDURMA. Bilgi eksikse maddeyi yazma, "eksikBilgi" listesine soru olarak ekle.
-
-KURUM RAPOR KILAVUZU
-Biçim:
-- Kısaltmaların açılımı mutlaka yazılacak (kullandığın her kısaltmayı "kisaltmalar" listesine açılımıyla ekle).
-- İfadeler net ve tanımlı olacak. Tarih, rakam ve müşteri/paydaş adları net yazılacak; belirsiz ifade (bazı, birkaç, yakında, ilgili birim, vb.) kullanılmayacak.
-- Sadece takvim/bütçe/risk odaklı önemli gelişmeler yazılacak. Rutin proje yönetim faaliyetleri yazılmayacak.
-- ÖNEMLİ: Konuya PY kadar hâkim olmayan biri anlayabilmeli. Anlaşılması için gerekiyorsa açıklayıcı ayrıntı ver.
-- Toplantılar çok özet yazılacak: zaman, yer, katılımcılar, gündem ve alınan en önemli kararlar. Örnek: "10 Eylül 2026 tarihinde BİLGEM'de Gebze Belediyesi'ne Ürün Yönetimi, Proje Yönetimi ve Mesajlaşma birimlerinin katılımıyla Safir Posta tanıtım demosu yapıldı. Belediyede on-prem 50 kişilik bir pilot kurulum yapılması kararlaştırıldı."
-- Devam eden faaliyetlerde çalışılan konu net yazılacak. "Bu hafta çalışmalara devam edildi" YERİNE "Bu hafta Safir Posta'da multi-domain özelliğinin geliştirilmesine devam edildi."
-- Kısa cümleler; paragraf YOK, her gelişme ayrı madde.
-
-Raporda istenenler: yeni sözleşme çalışmaları; ürün/lisans satışları; kesilen faturalar, hakedişler; tamamlanan aşamalar/kabuller; müşteriye yapılan teslimatlar; İG (İş Geliştirme) ile firmalarla/müşterilerle yapılan toplantılar, sunumlar, tanıtımlar; takvim ve bütçeyi etkileyen önemli gelişmeler; fuar, konferans, etkinlik katılımları; müşteriyi etkileyen önemli geliştirmeler (ör. sahadan gelen önemli bir sorun giderildi, müşterinin istediği özellik tamamlandı).
-Raporda istenmeyenler: uzun cümleler; paragraf yazımı; içeride rutin geliştirme/test/hata düzeltme çalışmaları (müşterinin acil istediği ya da müşteriye önemli fayda sağlayanlar hariç); müşteriyi doğrudan etkilemeyen iç ekip takip faaliyetleri.
-
-Maddeleri şu türlerden biriyle etiketle: ${THIS_WEEK_CATEGORIES.map(c => `${c} (${CATEGORY_META[c].label})`).join(', ')}.
-Yanıtı YALNIZCA şu JSON biçiminde ver (açıklama, markdown ya da kod bloğu ekleme):
-{"buHafta":[{"tur":"delivery","metin":"..."}],"gelecekHafta":["..."],"kisaltmalar":[{"kisaltma":"İG","acilim":"İş Geliştirme"}],"eksikBilgi":["..."]}`;
+// Sistem istemi, kılavuz ve sürümler: ./reportGuide (geriye uyum için buradan da dışa verilir)
+export { REPORT_PROMPT_VERSION, REPORT_SYSTEM, reportConfigVersion } from './reportGuide';
 
 /** Az örnekli (few-shot) gösterim: kılavuza uygun bir girdi → çıktı */
 export const REPORT_EXAMPLE = {
@@ -56,58 +41,149 @@ export interface ReportPromptInput {
     heldMeetings?: CustomerMeeting[];
     plannedMeetings?: CustomerMeeting[];
     previous?: WeeklyReport; // geçen haftanın onaylı raporu (planlar ne oldu?)
+    /** Geçen haftanın planının bu haftaki durumu (PY'nin değerlendirmesi) */
+    planReview?: PlanReviewItem[];
     styleExamples?: WeeklyReport[]; // kurumda onaylanmış raporlar (stil örneği)
     dictionary?: Abbreviation[];
+    /** Proje kartı girdiye eklensin mi (varsayılan evet) */
+    withProfile?: boolean;
 }
 
-/** Rapor taslağı için girdi metni (aynı metin ince ayar veri setinde "user" mesajı olur) */
-export const buildReportInput = (i: ReportPromptInput): string => {
-    const p = i.project;
-    const L: string[] = [`Proje: ${p.name}${p.code ? ` (${p.code})` : ''}`, `Hafta: ${weekLabel(i.year, i.week, true)}`];
-    if (p.ragNote) L.push(`PY haftalık durum notu: ${clip(p.ragNote, 300)}`);
-    const notes = p.notes.filter(n => n.year === i.year && n.weekNumber === i.week);
-    if (notes.length) {
-        L.push('Haftalık notlar:');
-        let budget = 3500;
-        for (const n of notes) {
-            const line = `- ${n.createdAt.slice(5, 10).split('-').reverse().join('.')}: ${clip(n.content, 600)}`;
-            if (line.length > budget) break;
-            budget -= line.length;
-            L.push(line);
-        }
-    } else {
-        L.push('Haftalık notlar: (bu hafta not girilmemiş)');
+/** Girdinin toplam karakter bütçesi (aşılınca önemsiz bölümlerden kırpılır) */
+export const REPORT_INPUT_BUDGET = 6000;
+const CLOSED_TASK_LIMIT = 10;
+
+/** Bölüm önceliği (küçük = önemli): notlar > kapanan işler > görüşmeler > worklog > kart > diğerleri */
+const RANK = { notes: 1, closed: 2, meetings: 3, worklog: 4, card: 5, other: 6 } as const;
+
+interface Section { rank: number; head?: string; lines: string[]; empty?: string }
+
+const sectionLines = (s: Section): string[] => (s.lines.length ? [...(s.head ? [s.head] : []), ...s.lines] : s.empty ? [s.empty] : []);
+
+/** Bütçe: aşılırsa en önemsiz bölümün son satırı atılır; bölüm sırası değişmez */
+const fitSections = (header: string[], S: Section[]): string => {
+    const text = () => [...header, ...S.flatMap(sectionLines)].join('\n');
+    while (text().length > REPORT_INPUT_BUDGET) {
+        const victim = [...S].filter(x => x.lines.length).sort((a, b) => b.rank - a.rank)[0];
+        if (!victim) break;
+        victim.lines.pop();
     }
-    const wl = summarizeWorklog(i.worklog || []);
-    if (wl.length) {
-        L.push('Worklog (konu bazında, saat):');
-        wl.slice(0, 15).forEach(w => L.push(`- ${w.issueKey ? `${w.issueKey} ` : ''}${clip(w.summary, 90)}: ${w.hours} sa${w.comments.length ? ` — ${clip(w.comments.join(' / '), 160)}` : ''}`));
-    }
-    if (i.heldMeetings?.length) {
-        L.push('Bu hafta yapılan müşteri görüşmeleri (kayıtlı):');
-        i.heldMeetings.forEach(m => L.push(`- ${meetingSentence(meetingToDetails(m))}`));
-    }
-    if (i.plannedMeetings?.length) {
-        L.push('Gelecek hafta planlanan görüşmeler:');
-        i.plannedMeetings.forEach(m => L.push(`- ${m.date.slice(0, 10)} ${m.customer}: ${m.title}`));
-    }
-    const due = p.tasks.filter(t => t.dueDate && t.status !== TaskStatus.Done).sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || '')).slice(0, 8);
-    if (due.length) L.push(`Terminli açık işler: ${due.map(t => `${t.name} (${t.dueDate!.slice(0, 10)})`).join('; ')}`);
-    const risks = (p.risks || []).filter(r => r.status !== 'closed' && r.probability * r.impact >= 15);
-    if (risks.length) L.push(`Yüksek riskler: ${risks.map(r => r.title).join('; ')}`);
-    if (i.previous?.nextWeek.length) L.push(`Geçen hafta planlananlar: ${i.previous.nextWeek.map(itemDisplay).join(' | ')}`);
-    if (i.dictionary?.length) L.push(`Kurum kısaltma sözlüğü: ${i.dictionary.map(a => `${a.abbr}=${a.expansion}`).join('; ')}`);
-    return L.join('\n');
+    return text();
 };
 
-/** Tam istem: örnek + (varsa) kurumda onaylanmış stil örnekleri + bu haftanın girdisi */
-export const buildReportPrompt = (input: string, styleExamples: WeeklyReport[] = []): string => {
-    const S: string[] = [`ÖRNEK GİRDİ:\n${REPORT_EXAMPLE.input}\nÖRNEK ÇIKTI:\n${REPORT_EXAMPLE.output}`];
-    const lines = styleExamples.flatMap(r => r.thisWeek.map(itemDisplay)).filter(Boolean).slice(0, 8);
-    if (lines.length) S.push(`Kurumda onaylanmış önceki rapor maddelerinden örnekler (üslup için):\n${lines.map(l => `- ${clip(l, 300)}`).join('\n')}`);
+/**
+ * Rapor taslağı için girdi metni (aynı metin ince ayar veri setinde "user"
+ * mesajı olur). Toplam bütçe aşılırsa en önemsiz bölümün son satırından
+ * başlanarak kırpılır; bölüm sırası değişmez.
+ */
+export const buildReportInput = (i: ReportPromptInput): string => {
+    const p = i.project;
+    const header = [`Proje: ${p.name}${p.code ? ` (${p.code})` : ''}`, `Hafta: ${weekLabel(i.year, i.week, true)}`];
+    const S: Section[] = [];
+    if (i.withProfile !== false) S.push({ rank: RANK.card, head: PROFILE_HEADER, lines: projectProfileLines(p.aiProfile) });
+    if (p.ragNote) S.push({ rank: RANK.other, lines: [`PY haftalık durum notu: ${clip(p.ragNote, 300)}`] });
+    const notes = p.notes.filter(n => n.year === i.year && n.weekNumber === i.week);
+    const noteLines: string[] = [];
+    let budget = 3500;
+    for (const n of notes) {
+        const line = `- ${n.createdAt.slice(5, 10).split('-').reverse().join('.')}: ${clip(n.content, 600)}`;
+        if (line.length > budget) break;
+        budget -= line.length;
+        noteLines.push(line);
+    }
+    S.push({ rank: RANK.notes, head: 'Haftalık notlar:', lines: noteLines, empty: 'Haftalık notlar: (bu hafta not girilmemiş)' });
+    const wl = summarizeWorklog(i.worklog || []);
+    S.push({ rank: RANK.worklog, head: 'Worklog (konu bazında, saat):', lines: wl.slice(0, 15).map(w => `- ${w.issueKey ? `${w.issueKey} ` : ''}${clip(w.summary, 90)}: ${w.hours} sa${w.comments.length ? ` — ${clip(w.comments.join(' / '), 160)}` : ''}`) });
+    // Bu hafta kapanan işler (kapanış anı haftanın içinde)
+    const from = weekStart(i.year, i.week).getTime();
+    const to = from + 7 * 86_400_000;
+    const closed = p.tasks
+        .filter(t => t.status === TaskStatus.Done && t.resolvedAt && new Date(t.resolvedAt).getTime() >= from && new Date(t.resolvedAt).getTime() < to)
+        .sort((a, b) => (a.resolvedAt || '').localeCompare(b.resolvedAt || ''))
+        .slice(0, CLOSED_TASK_LIMIT);
+    S.push({ rank: RANK.closed, head: 'Bu hafta kapanan işler:', lines: closed.map(t => `- ${t.jiraId ? `${t.jiraId} ` : ''}${clip(t.name, 120)} (${t.resolvedAt!.slice(0, 10)})`) });
+    S.push({ rank: RANK.meetings, head: 'Bu hafta yapılan müşteri görüşmeleri (kayıtlı):', lines: (i.heldMeetings || []).map(m => `- ${meetingSentence(meetingToDetails(m))}`) });
+    S.push({ rank: RANK.meetings, head: 'Gelecek hafta planlanan görüşmeler:', lines: (i.plannedMeetings || []).map(m => `- ${m.date.slice(0, 10)} ${m.customer}: ${m.title}`) });
+    const due = p.tasks.filter(t => t.dueDate && t.status !== TaskStatus.Done).sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || '')).slice(0, 8);
+    if (due.length) S.push({ rank: RANK.other, lines: [`Terminli açık işler: ${due.map(t => `${t.name} (${t.dueDate!.slice(0, 10)})`).join('; ')}`] });
+    const risks = (p.risks || []).filter(r => r.status !== 'closed' && r.probability * r.impact >= 15);
+    if (risks.length) S.push({ rank: RANK.other, lines: [`Yüksek riskler: ${risks.map(r => r.title).join('; ')}`] });
+    const plans = i.previous?.nextWeek || [];
+    if (plans.length) {
+        // PY geçen haftanın planını değerlendirdiyse durumlarıyla, değerlendirmediyse yalnız plan
+        const status = new Map((i.planReview || []).map(r => [r.itemId, r.status]));
+        S.push({
+            rank: RANK.other,
+            lines: [status.size
+                ? `Geçen haftanın planı ve durumu: ${plans.map(x => `${itemDisplay(x)} (${status.has(x.id) ? PLAN_REVIEW_LABELS[status.get(x.id)!] : 'değerlendirilmedi'})`).join(' | ')}`
+                : `Geçen hafta planlananlar: ${plans.map(itemDisplay).join(' | ')}`],
+        });
+    }
+    if (i.dictionary?.length) S.push({ rank: RANK.other, lines: [`Kurum kısaltma sözlüğü: ${i.dictionary.map(a => `${a.abbr}=${a.expansion}`).join('; ')}`] });
+
+    return fitSections(header, S);
+};
+
+/**
+ * Bölüm eklemesi (bölüm sorumlusu) için girdi: bölüm projelerinin bu haftaki
+ * gönderilmiş ya da onaylı raporları ve bölümün (projesiz) görüşmeleri.
+ */
+export const buildDepartmentInput = (i: {
+    departmentName: string;
+    departmentCode: string;
+    year: number;
+    week: number;
+    projectReports: { name: string; code?: string; report: Pick<WeeklyReport, 'thisWeek' | 'nextWeek'> }[];
+    heldMeetings?: CustomerMeeting[];
+    plannedMeetings?: CustomerMeeting[];
+    dictionary?: Abbreviation[];
+}): string => {
+    const header = [`Bölüm: ${i.departmentName}${i.departmentName !== i.departmentCode && i.departmentCode ? ` (${i.departmentCode})` : ''}`, `Hafta: ${weekLabel(i.year, i.week, true)}`];
+    const S: Section[] = [
+        { rank: RANK.meetings, head: 'Bu hafta yapılan bölüm görüşmeleri (kayıtlı):', lines: (i.heldMeetings || []).map(m => `- ${meetingSentence(meetingToDetails(m))}`) },
+        { rank: RANK.meetings, head: 'Gelecek hafta planlanan bölüm görüşmeleri:', lines: (i.plannedMeetings || []).map(m => `- ${m.date.slice(0, 10)} ${m.customer}: ${m.title}`) },
+        {
+            rank: RANK.notes, head: 'Bölüm projelerinin bu haftaki raporları (gönderilmiş ya da onaylı):',
+            lines: i.projectReports.map(p => `- ${p.name}${p.code ? ` (${p.code})` : ''}: ${clip([...p.report.thisWeek.map(itemDisplay), ...p.report.nextWeek.map(x => `Plan: ${itemDisplay(x)}`)].join(' | '), 600)}`),
+            empty: 'Bölüm projelerinin bu haftaki raporları: (henüz gönderilmiş rapor yok)',
+        },
+    ];
+    if (i.dictionary?.length) S.push({ rank: RANK.other, lines: [`Kurum kısaltma sözlüğü: ${i.dictionary.map(a => `${a.abbr}=${a.expansion}`).join('; ')}`] });
+    return fitSections(header, S);
+};
+
+export const EXAMPLES_HEADER = 'Kurumda onaylanmış önceki rapor maddelerinden örnekler (üslup için):';
+export const CORRECTIONS_HEADER = "AI'nın ilk yazdığı → kurumda onaylanan hâl (aynı hataları yapma):";
+
+/**
+ * Tam istem: sabit örnek + (varsa) kurumda onaylanmış üslup örnekleri ve
+ * düzeltme çiftleri + bu haftanın girdisi. styleExamples (rapor listesi) eski
+ * çağrı biçimidir; examples verilirse onlar kullanılır. fixedExample = false:
+ * sabit örnek yok (ince ayarlı model).
+ */
+export const buildReportPrompt = (
+    input: string,
+    styleExamples: WeeklyReport[] = [],
+    o: { fixedExample?: boolean; examples?: string[]; corrections?: { ai: string; approved: string }[] } = {},
+): string => {
+    const S: string[] = o.fixedExample === false ? [] : [`ÖRNEK GİRDİ:\n${REPORT_EXAMPLE.input}\nÖRNEK ÇIKTI:\n${REPORT_EXAMPLE.output}`];
+    const lines = o.examples ?? styleExamples.flatMap(r => r.thisWeek.map(itemDisplay)).filter(Boolean).slice(0, 8);
+    if (lines.length) S.push(`${EXAMPLES_HEADER}\n${lines.map(l => `- ${clip(l, 300)}`).join('\n')}`);
+    if (o.corrections?.length) S.push(`${CORRECTIONS_HEADER}\n${o.corrections.map(c => `- AI: ${c.ai}\n  Onaylanan: ${c.approved}`).join('\n')}`);
     S.push(`ŞİMDİKİ GİRDİ:\n${input}\n\nYukarıdaki kılavuza göre bu haftanın raporunu JSON olarak yaz.`);
     return S.join('\n\n');
 };
+
+/** Hafta sırası karşılaştırması: a, b'den önce mi */
+export const weekBefore = (a: { year: number; week: number }, b: { year: number; week: number }) => a.year < b.year || (a.year === b.year && a.week < b.week);
+
+/** Raporun JSON sözleşmesindeki hâli (değerlendirmede ve ince ayarda hedef yanıt) */
+export const reportAnswer = (r: Pick<WeeklyReport, 'thisWeek' | 'nextWeek' | 'abbreviations'>) => ({
+    buHafta: r.thisWeek.map(i => ({ tur: i.category, metin: itemDisplay(i) })),
+    gelecekHafta: r.nextWeek.map(i => itemDisplay(i)),
+    kisaltmalar: r.abbreviations.map(a => ({ kisaltma: a.abbr, acilim: a.expansion })),
+});
+
 
 export interface ReportSuggestion {
     thisWeek: ReportItem[];

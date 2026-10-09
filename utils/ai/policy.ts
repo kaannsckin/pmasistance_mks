@@ -1,4 +1,4 @@
-import { AiPolicy, AiScoringPolicy, EstimateGatePolicy, ModelEstimatePolicy, WorkspaceData } from '../../types';
+import { AiPolicy, AiScoringPolicy, EstimateGatePolicy, ModelEstimatePolicy, ReportGatePolicy, WorkspaceData } from '../../types';
 
 /**
  * Admin'in yapay zekâ politikası (çalışma alanında, bulutla paylaşılır).
@@ -8,6 +8,7 @@ import { AiPolicy, AiScoringPolicy, EstimateGatePolicy, ModelEstimatePolicy, Wor
 
 export const DEFAULT_SCORING: AiScoringPolicy = { runs: 3, minEvidence: 1, maxSpread: 2, maxRuleGap: 4, lowConfidence: 'exclude' };
 export const DEFAULT_GATE: EstimateGatePolicy = { enforce: false, maxMaeRatio: 1.1, minPriorityAccuracy: 0.6, minCoverage: 0.6 };
+export const DEFAULT_REPORT_GATE: ReportGatePolicy = { enforce: false, maxLintErrorsPerReport: 0.5, maxUngroundedRate: 0.05, minRecall: 0.5 };
 
 export interface ResolvedAiPolicy {
     enabled: boolean;
@@ -21,6 +22,10 @@ export interface ResolvedAiPolicy {
     scoring: AiScoringPolicy;
     /** AI'ya giden metinlerde kişi, proje ve kurum adları takma adla (utils/ai/masking.ts) */
     maskNames: boolean;
+    /** Haftalık rapor taslağının kalite kapısı */
+    reportGate: ReportGatePolicy;
+    /** Rapor taslağında sorun varsa tek turluk otomatik düzeltme (varsayılan kapalı) */
+    reportAutoRepair: boolean;
 }
 
 const clampNum = (v: unknown, lo: number, hi: number, fallback: number): number => {
@@ -50,6 +55,13 @@ export const aiPolicyOf = (ws: Partial<Pick<WorkspaceData, 'aiPolicy'>> | undefi
         },
         modelEstimate: p.modelEstimate === 'on' || p.modelEstimate === 'off' ? p.modelEstimate : 'auto',
         maskNames: p.maskNames !== false,
+        reportAutoRepair: p.reportAutoRepair === true,
+        reportGate: {
+            enforce: p.reportGate?.enforce === true,
+            maxLintErrorsPerReport: clampNum(p.reportGate?.maxLintErrorsPerReport, 0, 5, DEFAULT_REPORT_GATE.maxLintErrorsPerReport),
+            maxUngroundedRate: clampNum(p.reportGate?.maxUngroundedRate, 0, 1, DEFAULT_REPORT_GATE.maxUngroundedRate),
+            minRecall: clampNum(p.reportGate?.minRecall, 0, 1, DEFAULT_REPORT_GATE.minRecall),
+        },
         scoring: {
             runs: [1, 3, 5].includes(Number(s.runs)) ? Number(s.runs) : DEFAULT_SCORING.runs,
             minEvidence: clampInt(s.minEvidence, 0, 3, DEFAULT_SCORING.minEvidence),
@@ -61,11 +73,12 @@ export const aiPolicyOf = (ws: Partial<Pick<WorkspaceData, 'aiPolicy'>> | undefi
 };
 
 /** Politika değişikliği; varsayılana eşit alanlar atılır, hiçbir şey kalmazsa undefined */
-export const updateAiPolicy = (cur: AiPolicy | undefined, patch: Partial<Omit<AiPolicy, 'scoring' | 'estimateGate'>> & { scoring?: Partial<AiScoringPolicy>; estimateGate?: Partial<EstimateGatePolicy> }): AiPolicy | undefined => {
+export const updateAiPolicy = (cur: AiPolicy | undefined, patch: Partial<Omit<AiPolicy, 'scoring' | 'estimateGate' | 'reportGate'>> & { scoring?: Partial<AiScoringPolicy>; estimateGate?: Partial<EstimateGatePolicy>; reportGate?: Partial<ReportGatePolicy> }): AiPolicy | undefined => {
     const r = aiPolicyOf({ aiPolicy: {
         ...(cur || {}), ...patch,
         scoring: { ...DEFAULT_SCORING, ...(cur?.scoring || {}), ...(patch.scoring || {}) } as AiScoringPolicy,
         estimateGate: { ...DEFAULT_GATE, ...(cur?.estimateGate || {}), ...(patch.estimateGate || {}) },
+        reportGate: { ...DEFAULT_REPORT_GATE, ...(cur?.reportGate || {}), ...(patch.reportGate || {}) },
     } });
     const out: AiPolicy = {};
     if (!r.enabled) out.enabled = false;
@@ -75,8 +88,10 @@ export const updateAiPolicy = (cur: AiPolicy | undefined, patch: Partial<Omit<Ai
     if (!r.blindEstimate) out.blindEstimate = false;
     if (r.modelEstimate !== 'auto') out.modelEstimate = r.modelEstimate;
     if (!r.maskNames) out.maskNames = false;
+    if (r.reportAutoRepair) out.reportAutoRepair = true;
     const diff = (Object.keys(DEFAULT_SCORING) as (keyof AiScoringPolicy)[]).some(k => r.scoring[k] !== DEFAULT_SCORING[k]);
     if (diff) out.scoring = r.scoring;
     if ((Object.keys(DEFAULT_GATE) as (keyof EstimateGatePolicy)[]).some(k => r.estimateGate[k] !== DEFAULT_GATE[k])) out.estimateGate = r.estimateGate;
+    if ((Object.keys(DEFAULT_REPORT_GATE) as (keyof ReportGatePolicy)[]).some(k => r.reportGate[k] !== DEFAULT_REPORT_GATE[k])) out.reportGate = r.reportGate;
     return Object.keys(out).length ? out : undefined;
 };
