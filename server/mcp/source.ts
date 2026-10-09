@@ -127,6 +127,11 @@ export interface SupabaseSourceConfig {
     email: string;
     password: string;
     workspaceId?: string;
+    /**
+     * Sunucu (service role) istemcisi: oturum açılmaz, RLS uygulanmaz,
+     * workspaceId zorunlu. Yalnız pilotun veri üreticisi gibi sistem işleri için.
+     */
+    service?: boolean;
     /** Önbellek süresi (ms); her araç çağrısında bulut yeniden okunmasın */
     ttlMs?: number;
 }
@@ -150,13 +155,19 @@ const isAuthError = (e: { message?: string; code?: string } | null): boolean =>
 
 export const supabaseSource = (cfg: SupabaseSourceConfig, client: SupabaseClient): WorkspaceSource => {
     let userId: string | null = null;
-    let target: { id: string; name?: string; role: UserRole } | null = null;
+    let target: { id: string; name?: string; role?: UserRole } | null = null;
     let cache: { at: number; loaded: LoadedWorkspace } | null = null;
     // Kaydedilmek üzere verilen her çalışma alanı, okunduğu bulut sürümüyle eşlenir
     const states = new WeakMap<WorkspaceData, CloudState>();
 
     const signIn = async (): Promise<string> => {
         if (userId) return userId;
+        // Kalıcı oturum deposu verilmişse (ör. her çağrısı ayrı süreç olan pilot) önceki oturum kullanılır
+        const { data: existing } = await client.auth.getSession();
+        if (existing?.session?.user && (!cfg.email || existing.session.user.email === cfg.email.toLowerCase())) {
+            userId = existing.session.user.id;
+            return userId;
+        }
         const { data, error } = await client.auth.signInWithPassword({ email: cfg.email, password: cfg.password });
         if (error?.name === 'AuthRetryableFetchError') throw new SourceError(`Supabase sunucusuna ulaşılamadı (${cfg.url}): adresi ve ağ bağlantısını kontrol edin.`);
         if (error || !data.user) throw new SourceError(`Supabase girişi başarısız (${cfg.email}): ${error?.message || 'kullanıcı yok'}`);
@@ -164,8 +175,13 @@ export const supabaseSource = (cfg: SupabaseSourceConfig, client: SupabaseClient
         return userId;
     };
 
-    const resolveTarget = async (): Promise<{ id: string; name?: string; role: UserRole }> => {
+    const resolveTarget = async (): Promise<{ id: string; name?: string; role?: UserRole }> => {
         if (target) return target;
+        if (cfg.service) {
+            if (!cfg.workspaceId) throw new SourceError('Sunucu istemcisi için çalışma alanı kimliği gerekli.');
+            target = { id: cfg.workspaceId };
+            return target;
+        }
         const uid = await signIn();
         let q = client.from('workspace_members').select('workspace_id, role').eq('user_id', uid);
         if (cfg.workspaceId) q = q.eq('workspace_id', cfg.workspaceId);

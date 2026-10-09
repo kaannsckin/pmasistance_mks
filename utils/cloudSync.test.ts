@@ -77,6 +77,13 @@ describe('mergeWorkspaceDoc', () => {
         expect(merged.healthHistory).toEqual(ws.healthHistory);
     });
 
+    it('izinler (kişi uygunluğu) paylaşılır; buluttan çekince kaybolmaz', () => {
+        const ws = { ...createEmptyWorkspace(), leaves: [{ id: 'l1', personId: 'p1', year: 2026, month: 8, aa: 0.5, reason: 'Yıllık izin' }] };
+        const { core } = splitWorkspaceDoc(ws);
+        expect(core.leaves).toEqual(ws.leaves);
+        expect(mergeWorkspaceDoc(createEmptyWorkspace(), core).leaves).toEqual(ws.leaves);
+    });
+
     it('admin yetkileri ve profiller paylaşılır', () => {
         const ws: WorkspaceData = { ...buildWs(), rolePermissions: { py: ['project.create', 'health.rate'] }, rolePermissionsRev: PERMISSIONS_REV, profiles: [{ id: 'p1', role: 'mudur', personId: 'k1' }], viewConfig: { mudur: { minRiskScore: 15 } }, healthConfig: { bandGood: 80 } };
         const { core, privateDoc } = splitWorkspaceDoc(ws);

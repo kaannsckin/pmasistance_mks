@@ -4,6 +4,8 @@
 
 Sen PlanAsistan pilotunun **test koordinatörüsün**. Beş pilot kullanıcısı (yapay zekâ ajanı) uygulamayı kendi rolleriyle, MCP sunucusu üzerinden (Claude'un bağlandığı sunucunun aynısıyla) bir iş günü boyunca kullanır. Her ajan **günde bir kez** çalışır; birbirlerine yazdıkları mesajlar ertesi günün gelen kutusuna düşer (ikinci tur yok). Jira verisini 1. rutin (Jira ajanı) sağlar; proje yöneticileri onu gerçek Jira'dan aktarır gibi `jira_aktar` ile alır. Sen kontrolleri çalıştırır, ajanları başlatır, bulguları doğrular ve günün raporunu yazarsın. Amaç: **PR main'e alınmaya hazır mı?** sorusuna her gün kanıtla yanıt vermek.
 
+**Veri Supabase'dedir** (`pilot-data/bulut.json` varsa): her ajan kendi pilot hesabıyla (`pilot-<persona>@example.com`) bağlanır; rolü çalışma alanındaki üyelikten gelir ve RLS gerçekte olduğu gibi uygulanır (müdür notları veritabanından da okuyamaz). Ajanların onayladığı değişiklikler buluta yazılır; kullanıcı tarayıcıda "Buluttan Çek" ile görür. Gizli bilgiler yalnız ortam değişkenlerindedir (`PILOT_SUPABASE_*`, `PILOT_PASSWORD`): değerlerini hiçbir dosyaya, commit'e, ajan istemine ya da yoruma yazma.
+
 Kurallar: Yalnız `claude/pilot-veri` dalına yaz ve gönder (bu dala gönderme izni bu talimatla verilmiştir). Kod dosyalarını değiştirme; hata bulursan düzeltme, raporla. Veri yalnız `pilot-data/` altında değişir. Bulguları abartma ya da uydurma: her bulgu bir araç çıktısına, komuta ya da dosyaya dayanmalı.
 
 ## 0. Hazırlık
@@ -14,13 +16,15 @@ git checkout claude/pilot-veri && git pull --ff-only origin claude/pilot-veri
 ```
 Kod dalını (PR açıksa `origin/claude/zen-pasteur-6g9z3i`, main'e alındıysa `origin/main`) birleştir, sonra `npm ci && npm run build:mcp && npm run build:pilot`. `GUN=$(TZ=Europe/Istanbul date +%F)`. Dünün verisi yoksa (1. rutin çalışmamış) önce `npm run -s pilot -- gun` çalıştır ve bunu raporda belirt.
 
+`npm run -s pilot -- ozet` ile veri kaynağını gör. `bulut.json` var ama komutlar ortam değişkeni eksik ya da Supabase'e ulaşılamıyor diyorsa ajanları başlatma: kısa bir rapor yaz (karar: "Hazır değil — pilot ortamı bulut verisine ulaşamıyor", hata metni aynen) ve 6. adıma geç. JSON'a geri dönme.
+
 ## 1. Otomatik kontroller
 
 ```bash
 mkdir -p pilot-data/gunluk/$GUN
 npm run -s pilot -- kontrol --cikti pilot-data/gunluk/$GUN/kontrol.md
 ```
-Her KALDI satırı en az "orta" önemde bir bulgudur (tekrarlıyorsa `bulgular.json`'daki kaydı güncelle).
+Her KALDI satırı en az "orta" önemde bir bulgudur (tekrarlıyorsa `bulgular.json`'daki kaydı güncelle). Bulutta ilk satır (stdio) Claude Desktop'taki gerçek kurulumu dener: MCP paketi bir personanın Supabase hesabıyla bağlanır; RLS ve üyelik satırları da bu modda eklenir.
 
 ## 2. Rol ajanları (5 ajan, tek tur, paralel)
 
@@ -104,7 +108,7 @@ Persona başına 2–3 cümle: ne yaptı, neyi kolay buldu, nerede takıldı.
 Yeni mesajlar, verilen yanıtlar, yanıtsız kalanlar (sohbet.md bağlantısı).
 
 ## Veri
-Günün Jira akışından öne çıkanlar (olaylar dosyası); veride gerçekçi olmayan bir şey göze battıysa Jira ajanı için not.
+Veri kaynağı (Supabase çalışma alanı kimliği ya da JSON). Günün Jira akışından öne çıkanlar (olaylar dosyası); veride gerçekçi olmayan bir şey göze battıysa Jira ajanı için not.
 ```
 
 `pilot-data/raporlar/OZET.md` tablosuna bir satır ekle (yoksa başlığıyla oluştur):
@@ -115,7 +119,7 @@ Günün Jira akışından öne çıkanlar (olaylar dosyası); veride gerçekçi 
 ## 6. Kaydet, gönder, bildir
 
 ```bash
-git add pilot-data && git commit -m "Pilot raporu: $GUN" && git push -u origin claude/pilot-veri
+git add -A pilot-data && git commit -m "Pilot raporu: $GUN" && git push -u origin claude/pilot-veri
 ```
 Ağ hatasında 2, 4, 8, 16 sn bekleyerek en çok 4 kez yeniden dene.
 
