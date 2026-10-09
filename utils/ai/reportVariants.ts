@@ -1,6 +1,7 @@
 import { ReportPromptVariant, WeeklyReport, WorkspaceData } from '../../types';
 import { stripProfileSection, withProfileSection } from './projectProfile';
-import { buildReportPrompt, pickStyleReports, REPORT_SYSTEM } from './weeklyReportPrompt';
+import { REPORT_PROMPT_VERSION, reportPromptVersion, reportSystemFor } from './reportGuide';
+import { buildReportPrompt, pickStyleReports } from './weeklyReportPrompt';
 
 /**
  * İstem katmanları ve varyantlar. Üretimde (rapor düzenleyici) "full"
@@ -51,11 +52,16 @@ export const buildVariantRequest = (o: {
     ws: VariantWs;
     report: Pick<WeeklyReport, 'id' | 'year' | 'week' | 'projectId' | 'departmentCode'>;
     input: string;
-}): { system: string; prompt: string } => {
+}): { system: string; prompt: string; promptVersion: string } => {
     const L = VARIANT_LAYERS[o.variant];
+    const settings = o.ws.reportSettings;
     // Kart katmanı: kartsız varyantta girdiden çıkarılır; kartlı varyantta eski girdide yoksa projenin bugünkü kartı eklenir
     const profile = o.ws.projects.find(p => p.id === o.report.projectId)?.aiProfile;
     const input = L.card ? withProfileSection(o.input, profile) : stripProfileSection(o.input);
     const examples = L.examples ? pickStyleReports(o.ws, o.report) : [];
-    return { system: REPORT_SYSTEM, prompt: buildReportPrompt(input, examples, { fixedExample: L.fixedExample }) };
+    return {
+        system: reportSystemFor(settings, o.report.departmentCode, { rules: L.rules }),
+        prompt: buildReportPrompt(input, examples, { fixedExample: L.fixedExample }),
+        promptVersion: L.rules ? reportPromptVersion(settings, o.report.departmentCode) : REPORT_PROMPT_VERSION,
+    };
 };

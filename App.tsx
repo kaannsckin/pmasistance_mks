@@ -26,6 +26,7 @@ import { appendReportAiLog, submitLogEntry } from './utils/ai/reportAiStats';
 import { addReportGolden, appendReportEvalRun, removeReportGolden } from './utils/ai/reportEval';
 import { VARIANT_META } from './utils/ai/reportVariants';
 import { setProjectProfile } from './utils/ai/projectProfile';
+import { resetReportGuide, saveDepartmentGuide, saveReportGuide } from './utils/ai/reportGuide';
 import { stampLifecycle } from './utils/planning/lifecycle';
 import { AllocationSuggestion, ApplyMode, applyAllocationSuggestions } from './utils/taskToAllocation';
 import { applyBilledHoursActuals, planBilledHoursPoolAdditions, suggestBilledHoursActuals, BilledApplyMode, BilledHoursOptions, BilledHoursRecord } from './utils/billedHours';
@@ -853,6 +854,23 @@ const App: React.FC = () => {
       : ws));
   }, [updateWorkspace]);
 
+  // ---- Rapor kılavuzu ve bölüm ekleri (PYB destek; her kayıt yeni sürüm) ----
+  const commitReportSettings = useCallback((make: (ws: WorkspaceData) => ReportSettings | null, label: string): boolean => {
+    const ws = workspaceRef.current;
+    if (!ws) return false;
+    const next = make(ws);
+    if (!next) return false;
+    commitWorkspace(appendAudit({ ...ws, reportSettings: next }, 'report.ai', label));
+    return true;
+  }, [commitWorkspace]);
+  const handleSaveReportGuide = useCallback((patch: { institutionName?: string; text: string }) =>
+    commitReportSettings(ws => saveReportGuide(reportSettingsOf(ws), identityOf(ws), patch, actorOf(ws).name), 'Rapor kılavuzu güncellendi'), [commitReportSettings]);
+  const handleResetReportGuide = useCallback(() =>
+    commitReportSettings(ws => resetReportGuide(reportSettingsOf(ws), identityOf(ws), actorOf(ws).name), 'Rapor kılavuzu varsayılana döndü'), [commitReportSettings]);
+  const handleSaveDepartmentGuide = useCallback((code: string, text: string) =>
+    commitReportSettings(ws => saveDepartmentGuide(reportSettingsOf(ws), identityOf(ws), code, text, actorOf(ws).name),
+      `Rapor kılavuzu bölüm eki (${code}) ${text.trim() ? 'güncellendi' : 'kaldırıldı'}`), [commitReportSettings]);
+
   // Proje kartı: yalnız proje sahibi PY (proje içeriği; denetim günlüğüne yazılmaz)
   const handleSaveProjectProfile = useCallback((projectId: string, profile: ProjectAiProfile | undefined): boolean => {
     const ws = workspaceRef.current;
@@ -1017,8 +1035,12 @@ const App: React.FC = () => {
   }, [updateWorkspace]);
 
   const handleUpdateReportSettings = useCallback((reportSettings: ReportSettings) => {
-    // Onay akışı admin ayarıdır; rapor denetçisinin ayar paneli onu değiştiremez
-    updateWorkspace(ws => (isReportSteward(identityOf(ws)) ? { ...ws, reportSettings: { ...reportSettings, flow: ws.reportSettings?.flow } } : ws));
+    // Onay akışı admin ayarıdır; rapor denetçisinin ayar paneli onu değiştiremez. Kılavuz ve
+    // kurallar kendi işleyicilerinden (sürüm ve denetim kaydıyla) değişir; burada güncel hâli korunur
+    updateWorkspace(ws => (isReportSteward(identityOf(ws)) ? {
+      ...ws,
+      reportSettings: { ...reportSettings, flow: ws.reportSettings?.flow, guide: ws.reportSettings?.guide, departmentGuides: ws.reportSettings?.departmentGuides },
+    } : ws));
   }, [updateWorkspace]);
 
   const handleSetJiraKey = useCallback((projectId: string, key: string) => {
@@ -1338,6 +1360,9 @@ const App: React.FC = () => {
           onAddReportEvalRun={handleAddReportEvalRun}
           onUpdateReportGate={handleUpdateReportGate}
           onSaveProjectProfile={handleSaveProjectProfile}
+          onSaveReportGuide={handleSaveReportGuide}
+          onResetReportGuide={handleResetReportGuide}
+          onSaveDepartmentGuide={handleSaveDepartmentGuide}
         />
       ) : (
         <ModernMeetings

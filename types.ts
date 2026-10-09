@@ -1022,6 +1022,23 @@ export interface ReportSettings {
   dueWeekday: number;
   /** Onay akışı ve kurallar (admin ayarlar); yoksa varsayılan akış */
   flow?: ReportFlow;
+  /** AI rapor kılavuzu (PYB destek düzenler); yoksa koddaki varsayılan */
+  guide?: ReportGuide;
+  /** Bölüme özgü EK kurallar (bölüm kodu → metin) */
+  departmentGuides?: Record<string, ReportGuideVersion>;
+}
+
+/** Sürümlü kılavuz metni (kaydedildikçe sürüm +1) */
+export interface ReportGuideVersion {
+  text: string;
+  version: number;
+  updatedAt: string;
+  updatedByName?: string;
+}
+
+/** Kurum kılavuzu: kurum adı + kılavuz gövdesi (boş metin = varsayılan kılavuz) */
+export interface ReportGuide extends ReportGuideVersion {
+  institutionName?: string;
 }
 
 /** Haftalık rapor akışı: hangi onay adımları var, gönderimde neler zorunlu */

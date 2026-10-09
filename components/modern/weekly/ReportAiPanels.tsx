@@ -7,11 +7,12 @@ import {
 } from '../../../utils/ai/reportEval';
 import { buildVariantRequest, PRODUCTION_VARIANT, REPORT_VARIANTS, VARIANT_META } from '../../../utils/ai/reportVariants';
 import { parseReportSuggestion, reportConfigVersion } from '../../../utils/ai/weeklyReportPrompt';
+import { DEFAULT_INSTITUTION, DEFAULT_REPORT_GUIDE, DEPARTMENT_GUIDE_LIMIT, GUIDE_LIMIT, INSTITUTION_LIMIT, reportSystemFor } from '../../../utils/ai/reportGuide';
 import { weekLabel } from '../../../utils/weeklyReport';
 import { useAiBatch } from '../../assistant/AiButton';
 import { SwitchRow } from '../admin/controls';
 import { Icon } from '../icons';
-import { Card, rowSep } from '../ui';
+import { Card, Field, rowSep, Sheet } from '../ui';
 import { downloadFile, Pill } from './shared';
 
 /**
@@ -285,5 +286,81 @@ export const ReportEvalCard: React.FC<ReportEvalCardProps> = ({ workspace, dicti
                 </details>
             )}
         </section>
+    );
+};
+
+// ---------------------------------------------------------------- kılavuz
+
+const changed = (v?: { version: number; updatedAt: string; updatedByName?: string }) =>
+    v ? `Sürüm ${v.version} · ${new Date(v.updatedAt).toLocaleString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}${v.updatedByName ? ` · ${v.updatedByName}` : ''}` : 'Varsayılan kılavuz (koddaki)';
+
+export interface ReportGuideCardProps {
+    workspace: WorkspaceData;
+    onSaveGuide: (patch: { institutionName?: string; text: string }) => boolean;
+    onResetGuide: () => boolean;
+    onSaveDepartmentGuide: (code: string, text: string) => boolean;
+}
+
+/** F4: kurum kılavuzu, bölüm ekleri ve tam istem önizlemesi */
+export const ReportGuideCard: React.FC<ReportGuideCardProps> = ({ workspace, onSaveGuide, onResetGuide, onSaveDepartmentGuide }) => {
+    const settings = workspace.reportSettings;
+    const guide = settings?.guide;
+    const [inst, setInst] = useState(guide?.institutionName || '');
+    const [text, setText] = useState(guide?.text?.trim() ? guide.text : DEFAULT_REPORT_GUIDE);
+    const [dept, setDept] = useState(workspace.departments[0]?.code || '');
+    const deptGuide = settings?.departmentGuides?.[dept];
+    const [deptText, setDeptText] = useState(deptGuide?.text || '');
+    const [preview, setPreview] = useState<string | null>(null);
+    const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+    const dirty = text.trim() !== (guide?.text?.trim() || DEFAULT_REPORT_GUIDE) || inst.trim() !== (guide?.institutionName || '');
+    const custom = !!guide?.text?.trim();
+    const pickDept = (code: string) => { setDept(code); setDeptText(settings?.departmentGuides?.[code]?.text || ''); };
+    const say = (ok: boolean, okText: string) => setMsg(ok ? { ok, text: okText } : { ok, text: 'Kaydedilemedi: yetkiniz yok ya da metin sınırı aşıldı.' });
+    const deptName = (code: string) => workspace.departments.find(d => d.code === code)?.name || code;
+
+    return (
+        <Card title="Rapor kılavuzu" subtitle="AI taslağının uyduğu kurum kuralları. Kaydettiğiniz her değişiklik yeni sürümdür; kalite kapısı yeniden değerlendirme ister. Madde türleri ve JSON çıktı biçimi kodda sabittir." labelledBy="wr-guide">
+            <Field label="Kurum adı" htmlFor="wr-inst" hint={`Rol satırında geçer. Boşsa: ${DEFAULT_INSTITUTION}.`}>
+                <input id="wr-inst" className="m-input" maxLength={INSTITUTION_LIMIT} value={inst} placeholder={DEFAULT_INSTITUTION} onChange={e => setInst(e.target.value)} />
+            </Field>
+            <Field label="Kılavuz metni" htmlFor="wr-guide-text" hint={`${text.length.toLocaleString('tr-TR')} / ${GUIDE_LIMIT.toLocaleString('tr-TR')} karakter · ${changed(guide)}`}>
+                <textarea id="wr-guide-text" className="m-input py-2.5 font-mono text-[13px]" rows={14} maxLength={GUIDE_LIMIT} value={text} onChange={e => setText(e.target.value)} />
+            </Field>
+            <div className="flex flex-wrap items-center gap-2">
+                <button type="button" className="m-btn m-btn-primary" disabled={!dirty} onClick={() => say(onSaveGuide({ institutionName: inst, text }), 'Kılavuz kaydedildi (yeni sürüm).')}>Kaydet</button>
+                <button type="button" className="m-btn m-btn-plain" disabled={!custom && text.trim() === DEFAULT_REPORT_GUIDE} onClick={() => { if (window.confirm('Kılavuz varsayılan metne dönsün mü?') && onResetGuide()) { setText(DEFAULT_REPORT_GUIDE); say(true, 'Varsayılan kılavuza dönüldü.'); } }}>Varsayılana dön</button>
+                <button type="button" className="m-btn m-btn-plain" onClick={() => setPreview(dept)}><Icon name="eye" size={17} />Tam istemi önizle</button>
+            </div>
+
+            <div className="flex flex-col gap-2 pt-1">
+                <h3 className="m-0 text-[15px] font-semibold m-text">Bölüme özgü ek kurallar</h3>
+                {workspace.departments.length === 0 ? <p className="m-0 text-[14px] m-text-3">Veri havuzunda bölüm tanımlı değil.</p> : (
+                    <>
+                        <select aria-label="Bölüm" className="m-input !w-auto self-start" value={dept} onChange={e => pickDept(e.target.value)}>
+                            {workspace.departments.map(d => <option key={d.code} value={d.code}>{d.name}{settings?.departmentGuides?.[d.code] ? ' •' : ''}</option>)}
+                        </select>
+                        <Field label={`${deptName(dept)} için ek kurallar`} htmlFor="wr-dept-guide" hint={`Yalnız bu bölümün raporlarında, kurum kılavuzunun ardına eklenir. ${deptText.length} / ${DEPARTMENT_GUIDE_LIMIT} karakter · ${deptGuide ? changed(deptGuide) : 'ek yok'}`}>
+                            <textarea id="wr-dept-guide" className="m-input py-2.5 text-[14px]" rows={4} maxLength={DEPARTMENT_GUIDE_LIMIT} value={deptText} placeholder="Ör. Hakediş tutarları KDV hariç yazılır; müşteri adı kısaltılmaz." onChange={e => setDeptText(e.target.value)} />
+                        </Field>
+                        <div className="flex flex-wrap gap-2">
+                            <button type="button" className="m-btn m-btn-gray" disabled={deptText.trim() === (deptGuide?.text || '')} onClick={() => say(onSaveDepartmentGuide(dept, deptText), deptText.trim() ? 'Bölüm eki kaydedildi.' : 'Bölüm eki kaldırıldı.')}>{deptText.trim() || !deptGuide ? 'Bölüm ekini kaydet' : 'Bölüm ekini kaldır'}</button>
+                        </div>
+                    </>
+                )}
+            </div>
+            {msg && <p role="status" className={`m-0 text-[14px] ${msg.ok ? 'm-ink-ok' : 'm-ink-bad'}`}>{msg.text}</p>}
+
+            {preview !== null && (
+                <Sheet wide title="Tam sistem istemi" subtitle={`${preview ? deptName(preview) : 'Bölümsüz'} raporları için, kayıtlı ayarlarla (salt okunur)`} onClose={() => setPreview(null)}
+                    footer={<><span className="flex-1" /><button type="button" className="m-btn m-btn-plain" onClick={() => setPreview(null)}>Kapat</button></>}>
+                    {workspace.departments.length > 0 && (
+                        <select aria-label="Önizleme bölümü" className="m-input !w-auto self-start" value={preview} onChange={e => setPreview(e.target.value)}>
+                            {workspace.departments.map(d => <option key={d.code} value={d.code}>{d.name}</option>)}
+                        </select>
+                    )}
+                    <pre className="m-0 whitespace-pre-wrap text-[13px] leading-relaxed m-fill-2 rounded-xl p-3 m-text">{reportSystemFor(settings, preview)}</pre>
+                </Sheet>
+            )}
+        </Card>
     );
 };

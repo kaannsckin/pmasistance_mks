@@ -5,7 +5,8 @@ import { suggestionLogEntry } from '../../../utils/ai/reportAiStats';
 import { ROLE_LABELS } from '../../../utils/allocations';
 import { reportGateWarning } from '../../../utils/ai/reportEval';
 import { buildVariantRequest, PRODUCTION_VARIANT } from '../../../utils/ai/reportVariants';
-import { buildReportInput, parseReportSuggestion, REPORT_PROMPT_VERSION, ReportSuggestion } from '../../../utils/ai/weeklyReportPrompt';
+import { buildReportInput, parseReportSuggestion, ReportSuggestion } from '../../../utils/ai/weeklyReportPrompt';
+import { reportPromptVersion } from '../../../utils/ai/reportGuide';
 import { meetingsHeldInWeek, meetingsPlannedInWeek, meetingToDetails, visibleMeetings } from '../../../utils/customerMeetings';
 import { fetchJiraWorklogs, IntegrationHealth } from '../../../utils/integrations';
 import { Identity, ownsProject } from '../../../utils/rbac';
@@ -387,15 +388,15 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
     };
 
     // ---- AI
-    const logAi = (outcome: Exclude<ReportAiLogEntry['outcome'], 'submitted'>, sug?: { s: ReportSuggestion; promptVersion: string; model?: string }, promptVersion = REPORT_PROMPT_VERSION, model = ai.model) =>
+    const logAi = (outcome: Exclude<ReportAiLogEntry['outcome'], 'submitted'>, sug?: { s: ReportSuggestion; promptVersion: string; model?: string }, promptVersion = reportPromptVersion(workspace.reportSettings, draft.departmentCode), model = ai.model) =>
         onLogAi?.(suggestionLogEntry({ report: draft, promptVersion: sug?.promptVersion || promptVersion, variant: 'full', model: sug ? sug.model : model, outcome, suggestion: sug?.s, dictionary }));
     const suggest = async () => {
         if (!project) return;
         setMissingQs([]);
         const input = buildReportInput({ project, year, week, worklog: draft.worklog, heldMeetings: held, plannedMeetings: planned, previous: prevReport, planReview: draft.planReview, dictionary });
-        const promptVersion = REPORT_PROMPT_VERSION;
-        const model = ai.model;
         const req = buildVariantRequest({ variant: PRODUCTION_VARIANT, ws: workspace, report: draft, input });
+        const { promptVersion } = req;
+        const model = ai.model;
         const res = await ai.run(req.system, req.prompt, t => ({ s: parseReportSuggestion(t), raw: t }), { onError: () => logAi('error', undefined, promptVersion, model) });
         if (res) setSuggestion({ ...res, input, promptVersion, model });
     };

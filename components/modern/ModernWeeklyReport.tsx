@@ -13,7 +13,7 @@ import { Icon } from './icons';
 import { rowSep } from './ui';
 import ConsolidatedReport from './weekly/ConsolidatedReport';
 import { ReminderPanel, ReportSettingsPanel } from './weekly/Panels';
-import { ReportAiQualityCard, ReportEvalCard } from './weekly/ReportAiPanels';
+import { ReportAiQualityCard, ReportEvalCard, ReportGuideCard } from './weekly/ReportAiPanels';
 import ReportEditor from './weekly/ReportEditor';
 import { EmptyState, Notice, NoticeState, Pill, STAGE_TONE, StagePill } from './weekly/shared';
 
@@ -51,13 +51,18 @@ export interface ModernWeeklyReportProps {
     onUpdateReportGate: (patch: Partial<ReportGatePolicy>, label: string) => void;
     /** Proje kartı (proje sahibi PY) */
     onSaveProjectProfile: (projectId: string, profile: ProjectAiProfile | undefined) => boolean;
+    /** Rapor kılavuzu ve bölüm ekleri (PYB destek) */
+    onSaveReportGuide: (patch: { institutionName?: string; text: string }) => boolean;
+    onResetReportGuide: () => boolean;
+    onSaveDepartmentGuide: (code: string, text: string) => boolean;
 }
 
 type Tab = 'mine' | 'inbox' | 'status' | 'report' | 'settings';
-type SettingsTab = 'general' | 'ai_quality';
+type SettingsTab = 'general' | 'ai_guide' | 'ai_quality';
 
 const SETTINGS_TABS: { key: SettingsTab; label: string }[] = [
     { key: 'general', label: 'Genel' },
+    { key: 'ai_guide', label: 'AI kılavuzu ve kurallar' },
     { key: 'ai_quality', label: 'AI kalitesi' },
 ];
 
@@ -95,6 +100,7 @@ const ReportRows: React.FC<{ rows: Row[]; dictionary: ReturnType<typeof reportDi
 const ModernWeeklyReport: React.FC<ModernWeeklyReportProps> = ({
     workspace, identity, onSaveReport, onAdvanceReport, onReturnReport, onPublishWeek, onUnpublishWeek, onMarkEmailed, onUpdateSettings, onSetJiraKey, onOpenMeetings, onRatePmo, onSetAiAssessment, onLogReportAi,
     onAddReportGolden, onRemoveReportGolden, onAddReportEvalRun, onUpdateReportGate, onSaveProjectProfile,
+    onSaveReportGuide, onResetReportGuide, onSaveDepartmentGuide,
 }) => {
     const role = identity.role;
     // Ekran kipi: rapor denetçisi (yetki), bölüm sorumlusu ve PY kimlik kuralı; diğerleri yayınlanan raporu okur
@@ -380,6 +386,11 @@ const ModernWeeklyReport: React.FC<ModernWeeklyReportProps> = ({
                         ))}
                     </div>
                     {settingsTab === 'general' && <ReportSettingsPanel settings={settings} reports={workspace.weeklyReports || []} health={health} onChange={onUpdateSettings} />}
+                    {settingsTab === 'ai_guide' && (
+                        <div className="flex flex-col gap-5">
+                            <ReportGuideCard workspace={workspace} onSaveGuide={onSaveReportGuide} onResetGuide={onResetReportGuide} onSaveDepartmentGuide={onSaveDepartmentGuide} />
+                        </div>
+                    )}
                     {settingsTab === 'ai_quality' && (
                         <div className="flex flex-col gap-5">
                             <ReportAiQualityCard workspace={workspace} />

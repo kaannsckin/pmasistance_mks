@@ -1,43 +1,20 @@
-import { Abbreviation, CustomerMeeting, PlanReviewItem, Project, ReportCategory, ReportItem, ReportSettings, TaskStatus, WeeklyReport, WorklogEntry, WorkspaceData } from '../../types';
+import { Abbreviation, CustomerMeeting, PlanReviewItem, Project, ReportCategory, ReportItem, TaskStatus, WeeklyReport, WorklogEntry, WorkspaceData } from '../../types';
 import { meetingToDetails } from '../customerMeetings';
-import { CATEGORY_META, itemDisplay, meetingSentence, newItem, PLAN_REVIEW_LABELS, THIS_WEEK_CATEGORIES, weekLabel, weekStart } from '../weeklyReport';
+import { itemDisplay, meetingSentence, newItem, PLAN_REVIEW_LABELS, THIS_WEEK_CATEGORIES, weekLabel, weekStart } from '../weeklyReport';
 import { summarizeWorklog } from '../worklog';
 import { extractJson } from './json';
 import { PROFILE_HEADER, projectProfileLines } from './projectProfile';
 
 /**
- * Haftalık rapor önerisi — kurum rapor kılavuzu sistem istemine gömülüdür
- * (istem düzeyinde ince ayar). Kurumda onaylanmış önceki raporlardan stil
- * örnekleri eklenir; AI önerisi + onaylı son hâl çiftleri ince ayar (fine-
- * tuning) veri seti olarak dışa aktarılabilir.
+ * Haftalık rapor önerisi — girdi metni, kullanıcı istemi ve yanıt
+ * çözümleyicisi. Sistem istemi ve kurum/bölüm kılavuzu ./reportGuide'da
+ * (PYB destek düzenler, sürüm tutulur); istem katmanları ./reportVariants'ta.
+ * Kurumda onaylanmış önceki raporlardan üslup örnekleri eklenir; AI önerisi +
+ * onaylı son hâl çiftleri ince ayar veri kümesine girer (./reportFineTune).
  */
 
-/**
- * İstem sürümü: istem ya da girdi biçimi her değiştiğinde artırılır. Öneri
- * günlüğü, rapordaki AI kaydı ve değerlendirme koşuları bu sürümle eşlenir.
- */
-export const REPORT_PROMPT_VERSION = 'rapor-taslak-2';
-
-export const REPORT_SYSTEM = `Sen TÜBİTAK BİLGEM'de proje yöneticisinin (PY) haftalık raporunu hazırlayan yazım asistanısın. Raporu müdürler okur.
-Yalnızca sana verilen verilere dayan; tarih, rakam, kişi ya da kurum UYDURMA. Bilgi eksikse maddeyi yazma, "eksikBilgi" listesine soru olarak ekle.
-Proje kartındaki açıklamaları, konuya yabancı okurun anlaması gerektiğinde kısa açıklama olarak kullan; kartta olmayan teknik ayrıntı uydurma.
-
-KURUM RAPOR KILAVUZU
-Biçim:
-- Kısaltmaların açılımı mutlaka yazılacak (kullandığın her kısaltmayı "kisaltmalar" listesine açılımıyla ekle).
-- İfadeler net ve tanımlı olacak. Tarih, rakam ve müşteri/paydaş adları net yazılacak; belirsiz ifade (bazı, birkaç, yakında, ilgili birim, vb.) kullanılmayacak.
-- Sadece takvim/bütçe/risk odaklı önemli gelişmeler yazılacak. Rutin proje yönetim faaliyetleri yazılmayacak.
-- ÖNEMLİ: Konuya PY kadar hâkim olmayan biri anlayabilmeli. Anlaşılması için gerekiyorsa açıklayıcı ayrıntı ver.
-- Toplantılar çok özet yazılacak: zaman, yer, katılımcılar, gündem ve alınan en önemli kararlar. Örnek: "10 Eylül 2026 tarihinde BİLGEM'de Gebze Belediyesi'ne Ürün Yönetimi, Proje Yönetimi ve Mesajlaşma birimlerinin katılımıyla Safir Posta tanıtım demosu yapıldı. Belediyede on-prem 50 kişilik bir pilot kurulum yapılması kararlaştırıldı."
-- Devam eden faaliyetlerde çalışılan konu net yazılacak. "Bu hafta çalışmalara devam edildi" YERİNE "Bu hafta Safir Posta'da multi-domain özelliğinin geliştirilmesine devam edildi."
-- Kısa cümleler; paragraf YOK, her gelişme ayrı madde.
-
-Raporda istenenler: yeni sözleşme çalışmaları; ürün/lisans satışları; kesilen faturalar, hakedişler; tamamlanan aşamalar/kabuller; müşteriye yapılan teslimatlar; İG (İş Geliştirme) ile firmalarla/müşterilerle yapılan toplantılar, sunumlar, tanıtımlar; takvim ve bütçeyi etkileyen önemli gelişmeler; fuar, konferans, etkinlik katılımları; müşteriyi etkileyen önemli geliştirmeler (ör. sahadan gelen önemli bir sorun giderildi, müşterinin istediği özellik tamamlandı).
-Raporda istenmeyenler: uzun cümleler; paragraf yazımı; içeride rutin geliştirme/test/hata düzeltme çalışmaları (müşterinin acil istediği ya da müşteriye önemli fayda sağlayanlar hariç); müşteriyi doğrudan etkilemeyen iç ekip takip faaliyetleri.
-
-Maddeleri şu türlerden biriyle etiketle: ${THIS_WEEK_CATEGORIES.map(c => `${c} (${CATEGORY_META[c].label})`).join(', ')}.
-Yanıtı YALNIZCA şu JSON biçiminde ver (açıklama, markdown ya da kod bloğu ekleme):
-{"buHafta":[{"tur":"delivery","metin":"..."}],"gelecekHafta":["..."],"kisaltmalar":[{"kisaltma":"İG","acilim":"İş Geliştirme"}],"eksikBilgi":["..."]}`;
+// Sistem istemi, kılavuz ve sürümler: ./reportGuide (geriye uyum için buradan da dışa verilir)
+export { REPORT_PROMPT_VERSION, REPORT_SYSTEM, reportConfigVersion } from './reportGuide';
 
 /** Az örnekli (few-shot) gösterim: kılavuza uygun bir girdi → çıktı */
 export const REPORT_EXAMPLE = {
@@ -180,11 +157,6 @@ export const reportAnswer = (r: Pick<WeeklyReport, 'thisWeek' | 'nextWeek' | 'ab
     kisaltmalar: r.abbreviations.map(a => ({ kisaltma: a.abbr, acilim: a.expansion })),
 });
 
-/**
- * Yapılandırma sürümü: istem sürümü + (F4 sonrası) kılavuz, bölüm ekleri ve
- * kurallar. Kalite kapısı bu sürümle eşlenir; ayar değişince kapı bayatlar.
- */
-export const reportConfigVersion = (_settings?: ReportSettings): string => REPORT_PROMPT_VERSION;
 
 export interface ReportSuggestion {
     thisWeek: ReportItem[];
