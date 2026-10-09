@@ -93,7 +93,8 @@ const run = async () => {
     const t1 = await checkTable('workspaces');
     const t2 = await checkTable('workspace_private');
     const t3 = await checkTable('workspace_members');
-    const schemaReady = t1 && t2 && t3;
+    const t4 = await checkTable('workspace_projects');
+    const schemaReady = t1 && t2 && t3 && t4;
     if (!schemaReady) {
         info('Çözüm: Dashboard → SQL Editor → New query → supabase/schema.sql içeriğini yapıştırın → Run');
     }
@@ -157,6 +158,22 @@ const run = async () => {
             ok('pyb_destek rolü private (not) verisini görebiliyor');
         } else {
             fail('private satırı görünmüyor (tetikleyici/politika sorunu)');
+            errorCount++;
+        }
+
+        // Proje satırı: üye yazar, okur; sürüm koşullu güncelleme eski sürümle eşleşmez
+        const prRes = await fetch(`${url}/rest/v1/workspace_projects`, {
+            method: 'POST', headers: { ...authed, Prefer: 'return=representation' },
+            body: JSON.stringify({ workspace_id: wsId, project_id: 'e2e-proje', data: { id: 'e2e-proje', name: 'E2E' }, version: 1 }),
+        });
+        const stale = await fetch(`${url}/rest/v1/workspace_projects?workspace_id=eq.${wsId}&project_id=eq.e2e-proje&version=eq.0`, {
+            method: 'PATCH', headers: { ...authed, Prefer: 'return=representation' }, body: JSON.stringify({ version: 1 }),
+        });
+        const staleRows = await stale.json().catch(() => null);
+        if (prRes.ok && Array.isArray(staleRows) && staleRows.length === 0) {
+            ok('Proje satırı yazıldı; eski sürümle güncelleme reddedildi (çakışma koruması)');
+        } else {
+            fail(`Proje satırı denetimi başarısız (HTTP ${prRes.status}): ${JSON.stringify(staleRows).slice(0, 120)}`);
             errorCount++;
         }
 

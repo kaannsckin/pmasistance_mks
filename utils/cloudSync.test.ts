@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mergeWorkspaceDoc, splitWorkspaceDoc } from './cloudSync';
+import { contentHash, mergeWorkspaceDoc, planPush, splitWorkspaceDoc, syncedHashes } from './cloudSync';
 import { PERMISSIONS_REV } from './permissions';
 import { createEmptyWorkspace, createProject } from './workspace';
 import { Note, WorkspaceData } from '../types';
@@ -27,9 +27,11 @@ const buildWs = (): WorkspaceData => {
 describe('splitWorkspaceDoc', () => {
     it('notları ve istekleri core belgeden çıkarıp private belgeye taşır', () => {
         const ws = buildWs();
-        const { core, privateDoc } = splitWorkspaceDoc(ws);
-        const coreProjects = core.projects as WorkspaceData['projects'];
-        expect(coreProjects.every(p => p.notes.length === 0 && p.customerRequests.length === 0)).toBe(true);
+        const { core, privateDoc, projects } = splitWorkspaceDoc(ws);
+        expect(projects.every(p => p.notes.length === 0 && p.customerRequests.length === 0)).toBe(true);
+        // Projeler core'a girmez (ayrı satırlar); yalnız sıraları
+        expect('projects' in core).toBe(false);
+        expect(core.projectOrder).toEqual(ws.projects.map(p => p.id));
         expect(privateDoc.notes[ws.projects[0].id]).toHaveLength(2);
         expect(privateDoc.customerRequests[ws.projects[0].id]).toHaveLength(1);
         expect(privateDoc.notes[ws.projects[1].id]).toBeUndefined();
@@ -52,9 +54,10 @@ describe('splitWorkspaceDoc', () => {
 describe('mergeWorkspaceDoc', () => {
     it('split → merge gidiş-dönüşü veri kaybetmez, kişisel alanları yerelden korur', () => {
         const ws = buildWs();
-        const { core, privateDoc } = splitWorkspaceDoc(ws);
+        const { core, privateDoc, projects } = splitWorkspaceDoc(ws);
         const local = { ...createEmptyWorkspace(), currentRole: 'mudur' as const, settings: { theme: 'orange' } };
-        const merged = mergeWorkspaceDoc(local as WorkspaceData, core as Partial<WorkspaceData>, privateDoc);
+        const merged = mergeWorkspaceDoc(local as WorkspaceData, core as Partial<WorkspaceData>, privateDoc, [...projects].reverse());
+        expect(merged.projects.map(p => p.id)).toEqual(ws.projects.map(p => p.id)); // sıra core'dan
         expect(merged.projects[0].notes).toHaveLength(2);
         expect(merged.projects[0].customerRequests).toHaveLength(1);
         expect(merged.allocations).toHaveLength(1);
@@ -87,11 +90,53 @@ describe('mergeWorkspaceDoc', () => {
 
     it('private belge yokken (yönetici RLS) notlar boş iner, çekirdek veri tam gelir', () => {
         const ws = buildWs();
-        const { core } = splitWorkspaceDoc(ws);
-        const merged = mergeWorkspaceDoc(createEmptyWorkspace(), core as Partial<WorkspaceData>, undefined);
+        const { core, projects } = splitWorkspaceDoc(ws);
+        const merged = mergeWorkspaceDoc(createEmptyWorkspace(), core as Partial<WorkspaceData>, undefined, projects);
         expect(merged.projects[0].notes).toEqual([]);
         expect(merged.projects[0].customerRequests).toEqual([]);
         expect(merged.people).toHaveLength(1);
         expect(merged.allocations).toHaveLength(1);
+    });
+});
+
+describe('proje satırları ve değişiklik planı', () => {
+    it('ilk gönderimde her şey; sonra yalnız değişen proje, değişmeyen core ve not belgesi gitmez', () => {
+        const ws = buildWs();
+        const first = planPush(ws, {});
+        expect(first.upserts.map(u => [u.id, u.expected])).toEqual(ws.projects.map(p => [p.id, undefined]));
+        expect(first.coreChanged && first.privateChanged).toBe(true);
+        const synced = { projectVersions: Object.fromEntries(ws.projects.map(p => [p.id, 3])), ...syncedHashes(ws) };
+        expect(planPush(ws, synced)).toMatchObject({ upserts: [], deletes: [], coreChanged: false, privateChanged: false });
+        // Bir projenin görevi değişti: yalnız o, beklenen sürümüyle
+        const edited = { ...ws, projects: [{ ...ws.projects[0], name: 'Proje A2' }, ws.projects[1]] };
+        const plan = planPush(edited, synced);
+        expect(plan.upserts.map(u => [u.id, u.expected])).toEqual([[ws.projects[0].id, 3]]);
+        expect(plan.coreChanged).toBe(false);
+        // Yalnız not değişti: proje gitmez, not belgesi gider
+        const noted = { ...ws, projects: [{ ...ws.projects[0], notes: [] }, ws.projects[1]] };
+        expect(planPush(noted, synced)).toMatchObject({ upserts: [], privateChanged: true, coreChanged: false });
+        // Proje silindi: satırı sürümüyle silinir, sıra değiştiği için core gider
+        const removed = { ...ws, projects: [ws.projects[1]] };
+        expect(planPush(removed, synced)).toMatchObject({ deletes: [{ id: ws.projects[0].id, expected: 3 }], coreChanged: true });
+    });
+
+    it('eski biçim (projeler core içinde, satır yok) okunur ve ilk gönderimde satırlara taşınır', () => {
+        const ws = buildWs();
+        const { core, privateDoc, projects } = splitWorkspaceDoc(ws);
+        const legacyCore = { ...core, projectOrder: undefined, projects };
+        const merged = mergeWorkspaceDoc(createEmptyWorkspace(), legacyCore as Partial<WorkspaceData>, privateDoc, []);
+        expect(merged.projects.map(p => p.name)).toEqual(['Proje A', 'Proje B']);
+        expect(merged.projects[0].notes).toHaveLength(2);
+        // Çekimden sonra sürüm bilinmiyor: hepsi eklenir, core da (projesiz) yeniden yazılır
+        const plan = planPush(merged, { projectVersions: {}, projectHashes: {} });
+        expect(plan.upserts).toHaveLength(2);
+        expect(plan.upserts.every(u => u.expected === undefined)).toBe(true);
+        expect(plan.coreChanged).toBe(true);
+    });
+
+    it('içerik özeti kararlı ve değişikliğe duyarlı', () => {
+        expect(contentHash({ a: 1, b: [1, 2] })).toBe(contentHash({ a: 1, b: [1, 2] }));
+        expect(contentHash({ a: 1, b: [1, 2] })).not.toBe(contentHash({ a: 1, b: [2, 1] }));
+        expect(contentHash('x'.repeat(10000))).not.toBe(contentHash('x'.repeat(10001)));
     });
 });
