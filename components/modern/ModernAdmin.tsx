@@ -28,8 +28,10 @@ import { HOLIDAY_TABLE_YEARS } from '../../utils/planning/workdays';
 import { DataHealthPanel } from './sheets/DataHealthSheet';
 import { BAND_META, Card, Field, rowSep } from './ui';
 import { Note, Switch, SwitchRow } from './admin/controls';
+import AiConnection from './admin/AiConnection';
 import ForecastQuality from './admin/ForecastQuality';
 import { GuideButton, GuideTour, useGuide } from './GuideTour';
+import { useAssistantOptional } from '../assistant/AssistantContext';
 
 /**
  * Yönetici konsolu — yalnız yetki ve uygulama yönetimi (proje yönetimi yok):
@@ -59,6 +61,8 @@ export interface ModernAdminProps {
     onSaveHealthConfig: (draft: HealthConfig | undefined, label: string) => boolean;
     onUpdateReportFlow: (patch: Partial<ReportFlow> & { dueWeekday?: number }, label: string) => void;
     onUpdateAiPolicy: (patch: Partial<Omit<AiPolicy, 'scoring' | 'estimateGate'>> & { scoring?: Partial<AiScoringPolicy>; estimateGate?: Partial<EstimateGatePolicy> }, label: string) => void;
+    /** AI bağlantı ayarı panelden değişti (denetim günlüğü) */
+    onAiConnectionChanged: (label: string) => void;
     onSetGolden: (items: GoldenItem[], label: string) => void;
     onAddEvalRun: (run: EvalRun) => void;
     onAddModelEval: (run: ModelEvalRun) => void;
@@ -532,18 +536,22 @@ const SegmentedNumber: React.FC<{ label: string; options: { value: number; label
     </div>
 );
 
-const AiSettings: React.FC<Pick<ModernAdminProps, 'workspace' | 'onUpdateAiPolicy' | 'onUpdateReportFlow' | 'onSection'>> = ({ workspace, onUpdateAiPolicy, onUpdateReportFlow, onSection }) => {
+const AiSettings: React.FC<Pick<ModernAdminProps, 'workspace' | 'onUpdateAiPolicy' | 'onUpdateReportFlow' | 'onSection' | 'onAiConnectionChanged'>> = ({ workspace, onUpdateAiPolicy, onUpdateReportFlow, onSection, onAiConnectionChanged }) => {
     const policy = aiPolicyOf(workspace);
     const sc = policy.scoring;
     const flow = reportFlowOf(workspace);
     const health = healthSettingsOf(workspace);
     const stats = useMemo(() => scoringStats(workspace), [workspace]);
     const [status, setStatus] = useState<(AiStatus & { unreachable?: boolean }) | null>(null);
+    const [statusRev, setStatusRev] = useState(0);
+    const assistant = useAssistantOptional();
     useEffect(() => {
         const c = new AbortController();
         fetchAiStatus(c.signal).then(setStatus).catch(() => setStatus({ configured: false, authMode: 'none', unreachable: true }));
         return () => c.abort();
-    }, []);
+    }, [statusRev]);
+    // Bağlantı panelden değişince: denetim günlüğü, bu kart ve asistan yeni ayarı görsün
+    const connectionChanged = (label: string) => { onAiConnectionChanged(label); setStatusRev(r => r + 1); assistant?.recheck(); };
     const set = (patch: Parameters<ModernAdminProps['onUpdateAiPolicy']>[0], label: string) => onUpdateAiPolicy(patch, label);
     const setScoring = (patch: Partial<AiScoringPolicy>, label: string) => set({ scoring: patch }, label);
     const pctNum = (v: number) => `%${Math.round(v * 100)}`;
@@ -553,8 +561,15 @@ const AiSettings: React.FC<Pick<ModernAdminProps, 'workspace' | 'onUpdateAiPolic
     return (
         <div className="flex flex-col gap-4">
             <Note>
-                Sağlayıcı, model ve API anahtarı güvenlik gereği yalnız sunucu ortam değişkenlerindedir (AI_PROVIDER, AI_MODEL, AI_API_KEY; bkz. docs/AI_KURULUM.md) ve bu panele ya da tarayıcıya girmez. Buradan kurum genelinde AI kullanımını, özellikleri ve rapor puanlamasının güvencelerini yönetirsiniz; hangi rolün AI kullanacağı Yetkiler bölümündeki “Yapay zekâ özelliklerini kullanır” satırındadır.
+                Buradan AI bağlantısını (sağlayıcı, adres, model, API anahtarı) ayarlar ve test edersiniz; kurum genelinde AI kullanımını, özellikleri ve rapor puanlamasının güvencelerini yönetirsiniz. API anahtarı sunucuda şifreli tutulur, tarayıcıya ve çalışma alanı verisine girmez. Hangi rolün AI kullanacağı Yetkiler bölümündeki “Yapay zekâ özelliklerini kullanır” satırındadır.
             </Note>
+            <section aria-labelledby="ad-ai-conn" className="m-surface rounded-2xl p-5 flex flex-col gap-3">
+                <div>
+                    <h2 id="ad-ai-conn" className="m-0 text-[17px] font-semibold m-text">AI bağlantısı</h2>
+                    <p className="m-0 mt-0.5 text-[14px] m-text-3">Panelde girilen değerler sunucudaki ortam değişkenlerinin üzerine yazılır; boş alan ortam değişkenini kullanır.</p>
+                </div>
+                <AiConnection onChanged={connectionChanged} />
+            </section>
             <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(360px, 100%), 1fr))' }}>
                 <Card title="Kurum geneli" subtitle="Kapalı özellik hiçbir kullanıcıda görünmez">
                     <div className="flex flex-col -my-1">
@@ -565,7 +580,7 @@ const AiSettings: React.FC<Pick<ModernAdminProps, 'workspace' | 'onUpdateAiPolic
                         <SwitchRow index={4} label="Kör tahmin (planlama asistanı)" hint="Yeni kayıtta öneriler, kullanıcı kendi tahminini girdikten sonra görünür; öneriler yönlendirmez ve hangi kaynağın daha isabetli olduğu ölçülür" on={policy.blindEstimate} onChange={on => set({ blindEstimate: on }, `kör tahmin ${on ? 'açıldı' : 'kapatıldı'}`)} />
                     </div>
                 </Card>
-                <Card title="Sunucu bağlantısı" subtitle="Ortam değişkenlerinden, salt okunur">
+                <Card title="Sunucu durumu" subtitle="Asistanın gördüğü etkin bağlantı">
                     {!status ? <p className="m-0 text-[14px] m-text-3">Denetleniyor…</p> : (
                         <div className="flex flex-col gap-2.5">
                             <span className={`self-start inline-flex items-center h-7 px-3 rounded-full text-[13px] font-semibold ${status.configured ? 'm-tone-ok' : 'm-tone-warn'}`}>{status.configured ? 'Hazır' : status.unreachable ? 'Sunucuya ulaşılamadı' : 'Yapılandırılmamış'}</span>
@@ -573,6 +588,7 @@ const AiSettings: React.FC<Pick<ModernAdminProps, 'workspace' | 'onUpdateAiPolic
                                 <dt className="m-text-3">Sağlayıcı</dt><dd className="m-0 m-text">{status.provider || '—'}</dd>
                                 <dt className="m-text-3">Model</dt><dd className="m-0 m-text break-all">{status.model || '—'}</dd>
                                 <dt className="m-text-3">Anlamsal arama</dt><dd className="m-0 m-text break-all">{status.embeddingModel || 'Kapalı (anahtar kelime araması)'}</dd>
+                                <dt className="m-text-3">Kaynak</dt><dd className="m-0 m-text">{status.configSource === 'panel' ? 'Yönetici paneli' : 'Ortam değişkenleri'}</dd>
                                 <dt className="m-text-3">Erişim koruması</dt><dd className="m-0 m-text">{status.authMode === 'token' ? 'Erişim kodu' : status.authMode === 'supabase' ? 'Supabase üyeliği' : 'Yok (yalnız kurum içi ağ)'}</dd>
                             </dl>
                             {status.problem && <p className="m-0 text-[13px] m-ink-warn">{status.problem}</p>}

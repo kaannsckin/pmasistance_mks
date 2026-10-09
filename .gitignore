@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Yönetici panelinden girilen AI ayarları (yerel geliştirme; şifreli anahtar içerir)
+.planasistan/

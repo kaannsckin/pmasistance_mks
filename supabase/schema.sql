@@ -45,6 +45,15 @@ create table if not exists public.workspace_projects (
     primary key (workspace_id, project_id)
 );
 
+-- Sunucu ayarları (yönetici panelinden AI bağlantısı). RLS açık, POLİTİKA YOK:
+-- istemciler (anon / oturumlu) hiç erişemez; yalnız sunucu service role ile
+-- okur ve yazar. API anahtarları AI_CONFIG_SECRET ile şifrelenmiş saklanır.
+create table if not exists public.app_settings (
+    id text primary key,
+    data jsonb not null default '{}'::jsonb,
+    updated_at timestamptz not null default now()
+);
+
 create table if not exists public.workspace_members (
     workspace_id uuid not null references public.workspaces(id) on delete cascade,
     user_id uuid not null references auth.users(id) on delete cascade,
@@ -99,6 +108,7 @@ alter table public.workspaces enable row level security;
 alter table public.workspace_private enable row level security;
 alter table public.workspace_members enable row level security;
 alter table public.workspace_projects enable row level security;
+alter table public.app_settings enable row level security;
 
 -- workspaces: üyeler okur; tüm üyeler yazar (onay/kilit yazımı yönetici
 -- rollerinden de gelir; alan bazlı yazma kısıtı normalize şema fazında)
@@ -187,4 +197,8 @@ create trigger private_touch before update on public.workspace_private
 
 drop trigger if exists projects_touch on public.workspace_projects;
 create trigger projects_touch before update on public.workspace_projects
+    for each row execute function public.touch_updated_at();
+
+drop trigger if exists app_settings_touch on public.app_settings;
+create trigger app_settings_touch before update on public.app_settings
     for each row execute function public.touch_updated_at();

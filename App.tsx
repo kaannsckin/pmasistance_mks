@@ -893,6 +893,10 @@ const App: React.FC = () => {
       ? appendAudit({ ...ws, aiPolicy: updateAiPolicy(ws.aiPolicy, patch) }, 'config.update', `Yapay zekâ: ${label}`)
       : ws));
   }, [updateWorkspace]);
+  // ---- Yönetici: AI bağlantısı panelden değişti (ayar sunucuda; burada yalnız denetim kaydı) ----
+  const handleAiConnectionChanged = useCallback((label: string) => {
+    updateWorkspace(ws => (can(identityOf(ws), 'screen.admin') ? appendAudit(ws, 'config.update', label) : ws));
+  }, [updateWorkspace]);
   // ---- Yönetici: tahmin kalitesi (altın set ve AI değerlendirme koşuları) ----
   const handleSetGolden = useCallback((items: GoldenItem[], label: string) => {
     updateWorkspace(ws => (can(identityOf(ws), 'screen.admin')
@@ -1183,6 +1187,7 @@ const App: React.FC = () => {
           onSaveHealthConfig={handleSaveHealthConfig}
           onUpdateReportFlow={handleUpdateReportFlow}
           onUpdateAiPolicy={handleUpdateAiPolicy}
+          onAiConnectionChanged={handleAiConnectionChanged}
           onSetGolden={handleSetGolden}
           onAddEvalRun={handleAddEvalRun}
           onAddModelEval={handleAddModelEval}

@@ -95,6 +95,11 @@ const run = async () => {
     const t3 = await checkTable('workspace_members');
     const t4 = await checkTable('workspace_projects');
     const schemaReady = t1 && t2 && t3 && t4;
+    // app_settings: istemciye kapalı olmalı (RLS açık, politika yok) → anonim okuma boş döner
+    const st = await get('/rest/v1/app_settings?select=id&limit=1');
+    if (st.status === 200 && Array.isArray(st.body) && st.body.length === 0) ok('app_settings tablosu kurulu ve istemcilere kapalı (yönetici panelinden AI ayarı için)');
+    else if (st.status === 200) { fail('app_settings istemciye açık görünüyor: tabloda RLS açık ve politika olmamalı'); errorCount++; }
+    else info('app_settings tablosu yok: yönetici panelinden AI ayarı kullanılmayacaksa gerekmez (schema.sql ile kurulur)');
     if (!schemaReady) {
         info('Çözüm: Dashboard → SQL Editor → New query → supabase/schema.sql içeriğini yapıştırın → Run');
     }
