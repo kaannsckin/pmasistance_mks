@@ -6,8 +6,8 @@ import { Icon } from './icons';
  * Sayfa rehberi: adım adım, kaydırmalı bilgilendirme penceresi. Her adımda
  * ne işe yaradığı, nasıl kullanıldığı ve örnek bir senaryo. Sayfa ilk
  * açıldığında bir kez kendiliğinden açılır; sonra "?" düğmesiyle.
- * Gezinme: İleri / Geri, nokta göstergeleri, ← → tuşları, dokunmatik
- * kaydırma; Esc kapatır.
+ * Gezinme: İleri / Geri, nokta göstergeleri, ← → tuşları (pencere
+ * odaktayken), dokunmatik kaydırma; Esc kapatır.
  */
 
 /** Rehberin açık/kapalı durumu; `auto` doğruysa ve bu tarayıcıda görülmediyse kendiliğinden açılır */
@@ -42,15 +42,21 @@ export const GuideTour: React.FC<{ guide: Guide; start?: number; onClose: () => 
         dialog.current?.focus();
         return () => { before?.focus?.(); };
     }, []);
-    useEffect(() => {
-        const onKey = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') { e.preventDefault(); onClose(); }
-            else if (e.key === 'ArrowRight') { e.preventDefault(); setI(k => Math.min(n - 1, k + 1)); }
-            else if (e.key === 'ArrowLeft') { e.preventDefault(); setI(k => Math.max(0, k - 1)); }
-        };
-        window.addEventListener('keydown', onKey);
-        return () => window.removeEventListener('keydown', onKey);
-    }, [n, onClose]);
+    // Tuşlar yalnız pencerenin içindeyken (komut paleti gibi üstte açılan alanlardaki
+    // yazımı çalmaz); Tab pencerenin içinde döner (aria-modal)
+    const onKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); onClose(); }
+        else if (e.key === 'ArrowRight') { e.preventDefault(); setI(k => Math.min(n - 1, k + 1)); }
+        else if (e.key === 'ArrowLeft') { e.preventDefault(); setI(k => Math.max(0, k - 1)); }
+        else if (e.key === 'Tab' && dialog.current) {
+            const nodes = [...dialog.current.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], input, select, textarea, [tabindex]:not([tabindex="-1"])')].filter(x => !x.closest('[inert]'));
+            if (!nodes.length) return;
+            const first = nodes[0], last = nodes[nodes.length - 1];
+            const active = document.activeElement;
+            if (e.shiftKey && (active === first || active === dialog.current)) { e.preventDefault(); last.focus(); }
+            else if (!e.shiftKey && active === last) { e.preventDefault(); first.focus(); }
+        }
+    };
 
     const onPointerDown = (e: React.PointerEvent) => { touch.current = { x: e.clientX, y: e.clientY }; };
     const onPointerUp = (e: React.PointerEvent) => {
@@ -76,6 +82,7 @@ export const GuideTour: React.FC<{ guide: Guide; start?: number; onClose: () => 
                 className="m-bg w-full sm:max-w-[640px] rounded-t-2xl sm:rounded-2xl m-pop flex flex-col outline-none"
                 style={{ height: 'min(760px, 90vh)' }}
                 onClick={e => e.stopPropagation()}
+                onKeyDown={onKeyDown}
             >
                 <div className="flex items-center justify-between gap-3 px-5 pt-4 pb-2">
                     <div className="min-w-0">

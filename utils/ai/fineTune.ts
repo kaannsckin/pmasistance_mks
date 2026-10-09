@@ -1,7 +1,7 @@
 import { WorkspaceData } from '../../types';
 import { estimateStats } from '../planning/estimateLog';
-import { gateStatus, goldDraft } from '../planning/evaluation';
-import { HistoryRecord, PlanningHistory } from '../planning/history';
+import { gateStatus, goldDraft, goldKey } from '../planning/evaluation';
+import { estimatedAt, HistoryRecord, PlanningHistory } from '../planning/history';
 import { MODEL_VERSION } from '../planning/ml/estimateModel';
 import { estimateFromHistory } from '../planning/referenceClass';
 import { chatExample, estimateTarget } from './estimateEval';
@@ -220,10 +220,12 @@ export const buildFineTuneDataset = async (
     history: PlanningHistory,
     opts: { now?: Date; signal?: AbortSignal; onProgress?: (done: number, total: number) => void; chunk?: number } = {},
 ): Promise<FineTuneDataset> => {
-    const golden = new Set((ws.goldenSet || []).map(g => g.taskId));
+    const golden = new Set((ws.goldenSet || []).map(g => goldKey(g.projectId, g.taskId)));
     const names = personNames(ws);
     const recs = [...history.records].sort((a, b) => (a.resolvedAt < b.resolvedAt ? -1 : 1));
-    const pool = recs.filter(r => !golden.has(r.id));
+    // Altın setteki kayıt (ve başka projeye aktarılmış aynı Jira kaydı) kümeye girmez
+    const goldenJira = new Set(recs.filter(r => golden.has(goldKey(r.projectId, r.id)) && r.jiraId).map(r => r.jiraId!.toUpperCase()));
+    const pool = recs.filter(r => !golden.has(goldKey(r.projectId, r.id)) && !(r.jiraId && goldenJira.has(r.jiraId.toUpperCase())));
     const examples: { r: HistoryRecord; line: string }[] = [];
     let noContext = 0, redactions = 0;
     const chunk = opts.chunk ?? 25;
@@ -232,7 +234,9 @@ export const buildFineTuneDataset = async (
         const r = pool[i];
         const draft = goldDraft(r);
         // Zaman ayrımı: yalnız bu kayıt açılmadan önce kapanmış kayıtlar bağlamdır
-        const ref = estimateFromHistory(draft, history, { filter: x => x.id !== r.id && x.resolvedAt < r.openedAt });
+        // Bağlam: kayıt açıldığında bilinen, yani ondan önce kapanmış kayıtlar
+        const at = estimatedAt(r);
+        const ref = estimateFromHistory(draft, history, { filter: x => x !== r && x.resolvedAt < at });
         if (ref.method === 'none') { noContext++; continue; }
         const p = redactNames(estimateSuggestionPrompt(draft, ref), names);
         const t = redactNames(JSON.stringify(estimateTarget(r, ref, { priority: r.priority, issueType: r.issueType }, ref.confidence)), names);

@@ -80,6 +80,8 @@ describe('birleştirme', () => {
         expect(keep.tasks[0]).toMatchObject({ resourceName: 'Ali', notes: 'Yerel not', priority: 'Low', time: { best: 2, avg: 2, worst: 2 }, availability: true }); // tahmin yoksa Jira'nınki
         const clash = mergeJiraIssues([local('jira-mks-7')], [issue('MKS-7')], OPTS);
         expect(clash.tasks.map(t => t.id)).toEqual(['jira-mks-7', 'jira-mks-7-2']);
+        // Başka projede aynı kimlik varsa (aynı Jira projesi iki projeye) çakışmaz
+        expect(mergeJiraIssues([], [issue('MKS-7')], OPTS, ['jira-mks-7']).tasks[0].id).toBe('jira-mks-7-2');
     });
 
     it('yeniden açılan kayıt: kapanış silinir, geçiş günlüğü Jira’dan', () => {

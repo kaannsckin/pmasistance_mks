@@ -197,5 +197,6 @@ export const resolveWorkspaceFromStorage = (
     return { workspace: null, migratedFromLegacy: false };
 };
 
-export const serializeWorkspace = (ws: WorkspaceData): string =>
-    JSON.stringify({ ...ws, appVersion: APP_VERSION, exportDate: new Date().toISOString() }, null, 2);
+/** `pretty` yalnız dışa aktarılan dosya için; tarayıcı deposunda sıkışık JSON (kota) */
+export const serializeWorkspace = (ws: WorkspaceData, pretty = true): string =>
+    JSON.stringify({ ...ws, appVersion: APP_VERSION, exportDate: new Date().toISOString() }, null, pretty ? 2 : undefined);

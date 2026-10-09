@@ -120,13 +120,17 @@ export interface JiraMergeResult {
     unchanged: number;
 }
 
-/** Jira kayıtlarını görev listesine birleştirir (Jira anahtarıyla; aynı anahtar iki kez gelirse sonuncusu) */
-export const mergeJiraIssues = (tasks: Task[], issues: JiraIssueRecord[], opts: JiraImportOptions): JiraMergeResult => {
+/**
+ * Jira kayıtlarını görev listesine birleştirir (Jira anahtarıyla; aynı anahtar iki kez gelirse sonuncusu).
+ * `takenIds`: çalışma alanındaki diğer projelerin görev kimlikleri; aynı Jira projesi iki projeye
+ * aktarılsa da kimlikler çakışmaz (geçmiş tüm projeleri birlikte kullanır).
+ */
+export const mergeJiraIssues = (tasks: Task[], issues: JiraIssueRecord[], opts: JiraImportOptions, takenIds: Iterable<string> = []): JiraMergeResult => {
     const latest = new Map<string, JiraIssueRecord>();
     issues.forEach(i => latest.set(keyOf(i.key), i));
     const byKey = new Map<string, number>();
     tasks.forEach((t, i) => { const k = keyOf(t.jiraId); if (k && !byKey.has(k)) byKey.set(k, i); });
-    const ids = new Set(tasks.map(t => t.id));
+    const ids = new Set([...tasks.map(t => t.id), ...takenIds]);
     const idOfKey = new Map<string, string>();
     tasks.forEach(t => { const k = keyOf(t.jiraId); if (k && !idOfKey.has(k)) idOfKey.set(k, t.id); });
 

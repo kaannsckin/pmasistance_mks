@@ -164,6 +164,8 @@ const App: React.FC = () => {
   const [newProjectRequest, setNewProjectRequest] = useState(0);
   const [egg, setEgg] = useState<EggEvent | null>(null);
   const [undo, setUndo] = useState<{ message: string; snapshot: WorkspaceData } | null>(null);
+  const [storageFull, setStorageFull] = useState(false);
+  const [storageWarnClosed, setStorageWarnClosed] = useState(false);
   const undoTimer = useRef<number | undefined>(undefined);
   const workspaceRef = useRef<WorkspaceData | null>(null);
 
@@ -286,7 +288,15 @@ const App: React.FC = () => {
     const toPersist = workspace.settings.isLocalPersistenceEnabled !== false
       ? workspace
       : { ...workspace, projects: [], activeProjectId: null };
-    localStorage.setItem(WORKSPACE_STORAGE_KEY, serializeWorkspace(toPersist));
+    // Kota aşılırsa (ör. büyük Jira geçmişi) uygulama çökmesin; kullanıcı uyarılır
+    try {
+      localStorage.setItem(WORKSPACE_STORAGE_KEY, serializeWorkspace(toPersist, false));
+      setStorageFull(false);
+      setStorageWarnClosed(false);
+    } catch (e) {
+      console.error('Çalışma alanı tarayıcıya kaydedilemedi', e);
+      setStorageFull(true);
+    }
     // Bulut bağlıysa değişiklikleri gecikmeli gönder (yerel-öncelikli senkron)
     scheduleAutoPush(workspace);
   }, [workspace, isInitialized]);
@@ -919,7 +929,7 @@ const App: React.FC = () => {
     updateWorkspace(ws => {
       const project = ws.projects.find(p => p.id === projectId);
       if (!project || !canEditProjectContent(ws, identityOf(ws), projectId)) return ws;
-      const r = mergeJiraIssues(project.tasks, issues, opts);
+      const r = mergeJiraIssues(project.tasks, issues, opts, ws.projects.filter(p => p.id !== projectId).flatMap(p => p.tasks.map(t => t.id)));
       if (!r.added && !r.updated) return ws;
       const next = { ...ws, projects: ws.projects.map(p => (p.id === projectId ? { ...p, tasks: r.tasks, jiraProjectKey: key, updatedAt: new Date().toISOString() } : p)) };
       return appendAudit(next, 'data.import', `"${project.name}" · Jira ${key} kayıt geçmişi (${label}): ${r.added} yeni, ${r.updated} güncellenen kayıt`, projectId);
@@ -1972,6 +1982,13 @@ const App: React.FC = () => {
       {egg?.kind === 'hyper' && <HyperdriveOverlay onDone={() => setEgg(null)} />}
       {egg?.kind === 'space' && <SpaceMode onDone={() => setEgg(null)} />}
       {egg?.kind === 'celebrate' && <Celebration message={egg.message} onDone={() => setEgg(null)} />}
+      {storageFull && !storageWarnClosed && (
+        <div role="alert" className="fixed top-3 left-1/2 -translate-x-1/2 z-[260] w-[min(640px,calc(100vw-32px))] flex items-start gap-3 bg-amber-50 dark:bg-amber-950 text-amber-900 dark:text-amber-100 border border-amber-300 dark:border-amber-800 rounded-xl shadow-2xl px-4 py-3">
+          <i className="fa-solid fa-triangle-exclamation mt-0.5" aria-hidden="true"></i>
+          <span className="text-sm flex-1">Tarayıcı depolaması dolu: son değişiklikler bu tarayıcıya kaydedilemedi. Sayfayı kapatmadan önce bulut eşitlemesini kullanın ya da "Yedeği indir" ile yedek alın.</span>
+          <button type="button" onClick={() => setStorageWarnClosed(true)} className="opacity-70 hover:opacity-100" aria-label="Uyarıyı kapat"><i className="fa-solid fa-xmark text-sm"></i></button>
+        </div>
+      )}
       {undo && (
         <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[250] flex items-center gap-3 bg-gray-900 dark:bg-gray-800 text-white rounded-xl shadow-2xl px-4 py-2.5 border border-gray-700">
           <i className="fa-solid fa-trash-can text-gray-400 text-xs"></i>

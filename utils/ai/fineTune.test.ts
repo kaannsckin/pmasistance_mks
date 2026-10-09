@@ -86,7 +86,7 @@ describe('ince ayar veri kümesi', () => {
 
     it('zaman ayrımlı bağlam, altın set dışarıda, doğrulama son kapananlar, kişi adı yok', async () => {
         const h = historyOf(40);
-        const ws = { goldenSet: golden(3), people: [], projects: [createProject('P', { resources: [{ id: 'r', name: 'Ayşe Yılmaz', participation: 100, unit: 'Yazılım', title: '' }] })] };
+        const ws = { goldenSet: h.records.slice(0, 3).map(r => ({ taskId: r.id, projectId: r.projectId, priority: 'High' as const, addedAt: '' })), people: [], projects: [createProject('P', { resources: [{ id: 'r', name: 'Ayşe Yılmaz', participation: 100, unit: 'Yazılım', title: '' }] })] };
         const progress: number[] = [];
         const d = await buildFineTuneDataset(ws, h, { now: new Date('2026-10-08T10:00:00Z'), onProgress: done => progress.push(done), chunk: 10 });
         expect(d.stats.excludedGolden).toBe(3);
@@ -106,5 +106,17 @@ describe('ince ayar veri kümesi', () => {
         // Doğrulama kümesindeki kayıtlar eğitimdekilerden sonra kapanmış
         const dates = (d.card.donem as { egitim: string[]; dogrulama: string[] });
         expect(dates.dogrulama[0] >= dates.egitim[1]).toBe(true);
+    });
+
+    it('bağlam kaydın açıldığı ana göre: beklerken kapanan kayıtlar girmez', async () => {
+        // k5 2025'te açıldı ama aylar sonra başladı; arada kapananlar o gün bilinmiyordu
+        const tasks = Array.from({ length: 12 }, (_, i) => closed(i));
+        tasks[11] = { ...tasks[11], createdAt: tasks[0].createdAt };
+        const h = buildHistory([createProject('P', { tasks })]);
+        const ws = { goldenSet: [], people: [], projects: [] };
+        const d = await buildFineTuneDataset(ws, h, { now: new Date('2026-10-08T10:00:00Z') });
+        const lines = [...d.train.split('\n'), ...d.validation.split('\n')].filter(Boolean).map(l => JSON.parse(l));
+        expect(lines.some(l => l.messages[1].content.includes('Oturum ekranı hatası 11'))).toBe(false); // bağlamı yok → örnek olmaz
+        expect(d.stats.noContext).toBeGreaterThanOrEqual(2);
     });
 });
