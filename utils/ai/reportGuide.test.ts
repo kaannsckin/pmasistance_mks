@@ -97,7 +97,9 @@ describe('kılavuz kaydı ve sürüm', () => {
         expect(reportPromptVersion(d, 'U320')).toBe(reportPromptVersion(s1, 'U320'));
         expect(reportPromptVersion(d, 'U310')).not.toBe(reportPromptVersion(s1, 'U310'));
         expect(reportConfigVersion(d)).not.toBe(reportConfigVersion(s1));
-        expect(reportConfigVersion(s1, ['kural'])).not.toBe(reportConfigVersion(s1));
+        const withRule: ReportSettings = { ...s1, learnedRules: [{ id: 'r', text: 'Kural', scope: 'institution', source: 'manual', status: 'active', evidenceCount: 0, createdAt: '' }] };
+        expect(reportConfigVersion(withRule)).not.toBe(reportConfigVersion(s1));
+        expect(reportPromptVersion(withRule, 'U310')).not.toBe(reportPromptVersion(s1, 'U310'));
     });
 
     it('kategori listesi kodda kalır', () => {

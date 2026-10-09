@@ -13,7 +13,8 @@ import { Icon } from './icons';
 import { rowSep } from './ui';
 import ConsolidatedReport from './weekly/ConsolidatedReport';
 import { ReminderPanel, ReportSettingsPanel } from './weekly/Panels';
-import { ReportAiQualityCard, ReportEvalCard, ReportGuideCard } from './weekly/ReportAiPanels';
+import { LearnedRulesCard, ReportAiQualityCard, ReportEvalCard, ReportGuideCard } from './weekly/ReportAiPanels';
+import { RuleAction } from '../../utils/ai/reportRules';
 import ReportEditor from './weekly/ReportEditor';
 import { EmptyState, Notice, NoticeState, Pill, STAGE_TONE, StagePill } from './weekly/shared';
 
@@ -57,6 +58,8 @@ export interface ModernWeeklyReportProps {
     onSaveDepartmentGuide: (code: string, text: string) => boolean;
     /** PYB destek: onaylı raporu AI üslup örneği olarak işaretle */
     onSetReportExemplar: (reportId: string, on: boolean) => boolean;
+    /** PYB destek: öğrenilmiş kurallar */
+    onReportRuleAction: (a: RuleAction) => boolean;
 }
 
 type Tab = 'mine' | 'inbox' | 'status' | 'report' | 'settings';
@@ -102,7 +105,7 @@ const ReportRows: React.FC<{ rows: Row[]; dictionary: ReturnType<typeof reportDi
 const ModernWeeklyReport: React.FC<ModernWeeklyReportProps> = ({
     workspace, identity, onSaveReport, onAdvanceReport, onReturnReport, onPublishWeek, onUnpublishWeek, onMarkEmailed, onUpdateSettings, onSetJiraKey, onOpenMeetings, onRatePmo, onSetAiAssessment, onLogReportAi,
     onAddReportGolden, onRemoveReportGolden, onAddReportEvalRun, onUpdateReportGate, onSaveProjectProfile,
-    onSaveReportGuide, onResetReportGuide, onSaveDepartmentGuide, onSetReportExemplar,
+    onSaveReportGuide, onResetReportGuide, onSaveDepartmentGuide, onSetReportExemplar, onReportRuleAction,
 }) => {
     const role = identity.role;
     // Ekran kipi: rapor denetçisi (yetki), bölüm sorumlusu ve PY kimlik kuralı; diğerleri yayınlanan raporu okur
@@ -392,6 +395,7 @@ const ModernWeeklyReport: React.FC<ModernWeeklyReportProps> = ({
                     {settingsTab === 'ai_guide' && (
                         <div className="flex flex-col gap-5">
                             <ReportGuideCard workspace={workspace} onSaveGuide={onSaveReportGuide} onResetGuide={onResetReportGuide} onSaveDepartmentGuide={onSaveDepartmentGuide} />
+                            <LearnedRulesCard workspace={workspace} onRuleAction={onReportRuleAction} />
                         </div>
                     )}
                     {settingsTab === 'ai_quality' && (

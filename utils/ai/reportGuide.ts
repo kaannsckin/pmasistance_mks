@@ -1,4 +1,4 @@
-import { ReportGuide, ReportGuideVersion, ReportSettings } from '../../types';
+import { LearnedRule, ReportGuide, ReportGuideVersion, ReportSettings } from '../../types';
 import { PermissionHolder } from '../permissions';
 import { hashText } from '../rag/text';
 import { CATEGORY_META, isReportSteward, locative, THIS_WEEK_CATEGORIES } from '../weeklyReport';
@@ -75,21 +75,45 @@ const customGuide = (s?: ReportSettings): string | null => (s?.guide?.text?.trim
 const customInstitution = (s?: ReportSettings): string | null => (s?.guide?.institutionName?.trim() ? s.guide.institutionName.trim() : null);
 const departmentGuideText = (s: ReportSettings | undefined, code: string): string | null => s?.departmentGuides?.[code]?.text?.trim() || null;
 
+/** Kapsam başına isteme giren en çok etkin kural */
+export const RULES_PER_SCOPE = 10;
+
+const byEvidence = (a: LearnedRule, b: LearnedRule) => b.evidenceCount - a.evidenceCount || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id);
+
+/**
+ * Raporun kapsamındaki etkin kurallar: kurum geneli + raporun bölümü +
+ * raporun projesi; kapsam başına en çok 10 (kanıtı çok olan önce).
+ * Önerilen ve emekli kurallar isteme girmez.
+ */
+export const activeRulesFor = (s: ReportSettings | undefined, departmentCode: string, projectId?: string): string[] => {
+    const active = (s?.learnedRules || []).filter(r => r.status === 'active' && r.text.trim());
+    const pick = (f: (r: LearnedRule) => boolean) => active.filter(f).sort(byEvidence).slice(0, RULES_PER_SCOPE).map(r => r.text.trim());
+    return [
+        ...pick(r => r.scope === 'institution'),
+        ...pick(r => r.scope === 'department' && !!departmentCode && r.scopeId === departmentCode),
+        ...pick(r => r.scope === 'project' && !!projectId && r.scopeId === projectId),
+    ];
+};
+
+/** Yapılandırmadaki bütün etkin kurallar (kalite kapısı sürümü için) */
+const allActiveRules = (s?: ReportSettings): string[] =>
+    (s?.learnedRules || []).filter(r => r.status === 'active' && r.text.trim()).map(r => `${r.scope}:${r.scopeId || ''}:${r.text.trim()}`).sort();
+
 export interface ReportSystemOptions {
     /** Kurum/bölüm kılavuzu ve öğrenilmiş kurallar uygulansın mı (değerlendirmede "kurallar" katmanı) */
     rules?: boolean;
-    /** Raporun kapsamındaki etkin öğrenilmiş kural metinleri (F7) */
-    learnedRules?: string[];
+    /** Raporun projesi (proje kapsamlı kurallar için) */
+    projectId?: string;
 }
 
-/** Bir bölümün raporu için sistem istemi */
+/** Bir bölümün (ve projenin) raporu için sistem istemi */
 export const reportSystemFor = (s: ReportSettings | undefined, departmentCode: string, o: ReportSystemOptions = {}): string => {
     const rules = o.rules !== false;
     return buildReportSystem({
         institutionName: customInstitution(s) || undefined,
         guide: rules ? customGuide(s) || undefined : undefined,
         departmentGuide: rules ? departmentGuideText(s, departmentCode) || undefined : undefined,
-        learnedRules: rules ? o.learnedRules : undefined,
+        learnedRules: rules ? activeRulesFor(s, departmentCode, o.projectId) : undefined,
     });
 };
 
@@ -100,14 +124,17 @@ const tag = (prefix: string, text: string | null) => (text ? `·${prefix}${hashT
  * kılavuzu, bölüm eki ve kuralların içerik özeti. Varsayılan ayarlarda
  * istem sürümünün kendisidir; aynı içeriğe dönülürse sürüm de aynı olur.
  */
-export const reportPromptVersion = (s: ReportSettings | undefined, departmentCode: string, learnedRules: string[] = []): string =>
-    `${REPORT_PROMPT_VERSION}${tag('k', [customInstitution(s), customGuide(s)].filter(Boolean).join('|') || null)}${tag('b', departmentGuideText(s, departmentCode))}${tag('r', learnedRules.length ? learnedRules.join('\n') : null)}`;
+export const reportPromptVersion = (s: ReportSettings | undefined, departmentCode: string, projectId?: string): string => {
+    const rules = activeRulesFor(s, departmentCode, projectId);
+    return `${REPORT_PROMPT_VERSION}${tag('k', [customInstitution(s), customGuide(s)].filter(Boolean).join('|') || null)}${tag('b', departmentGuideText(s, departmentCode))}${tag('r', rules.length ? rules.join('\n') : null)}`;
+};
 
 /**
  * Yapılandırma sürümü (kalite kapısı için): istem sürümü + kurum kılavuzu +
  * bütün bölüm ekleri + bütün etkin kurallar. Herhangi biri değişince kapı bayatlar.
  */
-export const reportConfigVersion = (s: ReportSettings | undefined, allLearnedRules: string[] = []): string => {
+export const reportConfigVersion = (s: ReportSettings | undefined): string => {
+    const allLearnedRules = allActiveRules(s);
     const depts = Object.entries(s?.departmentGuides || {}).filter(([, g]) => g?.text?.trim()).sort(([a], [b]) => a.localeCompare(b)).map(([k, g]) => `${k}:${g.text.trim()}`);
     return `${REPORT_PROMPT_VERSION}${tag('k', [customInstitution(s), customGuide(s)].filter(Boolean).join('|') || null)}${tag('b', depts.length ? depts.join('\n') : null)}${tag('r', allLearnedRules.length ? allLearnedRules.join('\n') : null)}`;
 };

@@ -28,6 +28,7 @@ import { VARIANT_META } from './utils/ai/reportVariants';
 import { setProjectProfile } from './utils/ai/projectProfile';
 import { resetReportGuide, saveDepartmentGuide, saveReportGuide } from './utils/ai/reportGuide';
 import { setReportExemplar } from './utils/ai/reportExamples';
+import { applyRuleAction, RuleAction, ruleActionLabel } from './utils/ai/reportRules';
 import { stampLifecycle } from './utils/planning/lifecycle';
 import { AllocationSuggestion, ApplyMode, applyAllocationSuggestions } from './utils/taskToAllocation';
 import { applyBilledHoursActuals, planBilledHoursPoolAdditions, suggestBilledHoursActuals, BilledApplyMode, BilledHoursOptions, BilledHoursRecord } from './utils/billedHours';
@@ -872,6 +873,9 @@ const App: React.FC = () => {
     commitReportSettings(ws => saveDepartmentGuide(reportSettingsOf(ws), identityOf(ws), code, text, actorOf(ws).name),
       `Rapor kılavuzu bölüm eki (${code}) ${text.trim() ? 'güncellendi' : 'kaldırıldı'}`), [commitReportSettings]);
 
+  const handleReportRuleAction = useCallback((a: RuleAction) =>
+    commitReportSettings(ws => applyRuleAction(reportSettingsOf(ws), ws, identityOf(ws), a, actorOf(ws).name), ruleActionLabel(a, workspaceRef.current?.reportSettings)), [commitReportSettings]);
+
   // "Örnek rapor" işareti: sistem alanı (yayın kilidinden bağımsız), yalnız PYB destek
   const handleSetReportExemplar = useCallback((reportId: string, on: boolean): boolean => {
     const ws = workspaceRef.current;
@@ -1051,7 +1055,7 @@ const App: React.FC = () => {
     // kurallar kendi işleyicilerinden (sürüm ve denetim kaydıyla) değişir; burada güncel hâli korunur
     updateWorkspace(ws => (isReportSteward(identityOf(ws)) ? {
       ...ws,
-      reportSettings: { ...reportSettings, flow: ws.reportSettings?.flow, guide: ws.reportSettings?.guide, departmentGuides: ws.reportSettings?.departmentGuides },
+      reportSettings: { ...reportSettings, flow: ws.reportSettings?.flow, guide: ws.reportSettings?.guide, departmentGuides: ws.reportSettings?.departmentGuides, learnedRules: ws.reportSettings?.learnedRules },
     } : ws));
   }, [updateWorkspace]);
 
@@ -1376,6 +1380,7 @@ const App: React.FC = () => {
           onResetReportGuide={handleResetReportGuide}
           onSaveDepartmentGuide={handleSaveDepartmentGuide}
           onSetReportExemplar={handleSetReportExemplar}
+          onReportRuleAction={handleReportRuleAction}
         />
       ) : (
         <ModernMeetings

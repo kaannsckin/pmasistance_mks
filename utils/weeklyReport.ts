@@ -440,17 +440,20 @@ export interface LintIssue {
     message: string;
 }
 
+/** Türkçe harflerle çalışan sözcük sınırı (\b yalnız ASCII harfleri tanır: "bazı", "birkaç", "çeşitli" kaçardı) */
+const word = (alts: string) => new RegExp(`(?<![\\p{L}\\p{N}])(?:${alts})(?![\\p{L}\\p{N}])`, 'iu');
+
 const VAGUE: [RegExp, string][] = [
-    [/\bbazı\b/iu, '“bazı”'],
-    [/\bbirkaç\b/iu, '“birkaç”'],
-    [/\bçeşitli\b/iu, '“çeşitli”'],
-    [/\bbir takım\b|\bbirtakım\b/iu, '“birtakım”'],
-    [/\byakında\b|\byakın zamanda\b|\bönümüzdeki günlerde\b|\bileriki\b|\ben kısa sürede\b|\bkısa süre(de|\s?içinde)\b/iu, 'belirsiz zaman ifadesi'],
-    [/\bgerekli çalışmalar\b|\bilgili birim(ler)?\b|\bilgili kişi(ler)?\b/iu, 'belirsiz özne/nesne'],
-    [/\bvb\.?(?=\s|$)|\bvs\.?(?=\s|$)/iu, '“vb./vs.”'],
+    [word('bazı'), '“bazı”'],
+    [word('birkaç'), '“birkaç”'],
+    [word('çeşitli'), '“çeşitli”'],
+    [word('bir takım|birtakım'), '“birtakım”'],
+    [word('yakında|yakın zamanda|önümüzdeki günlerde|ileriki|en kısa sürede|kısa süre(?:de|\\s?içinde)'), 'belirsiz zaman ifadesi'],
+    [word('gerekli çalışmalar|ilgili birim(?:ler)?|ilgili kişi(?:ler)?'), 'belirsiz özne/nesne'],
+    [/(?<![\p{L}\p{N}])(?:vb|vs)\.?(?=\s|$)/iu, '“vb./vs.”'],
 ];
 
-const ROUTINE = /\b(bug ?fix|hata düzeltme|hata giderme çalışmaları|birim test|unit test|kod inceleme|code review|refactor\w*|sprint planlama|daily|stand-?up|retrospektif|iç toplantı|rutin|haftalık ekip toplantısı)\b/iu;
+const ROUTINE = word('bug ?fix|hata düzeltme|hata giderme çalışmaları|birim test|unit test|kod inceleme|code review|refactor\\p{L}*|sprint planlama|daily|stand-?up|retrospektif|iç toplantı|rutin|haftalık ekip toplantısı');
 const GENERIC = /(çalışmalar(a|ına)?\s+devam\s+edil|çalışılmaya devam|geliştirmelere devam edildi\.?$)/iu;
 
 const sentences = (t: string) => t.split(/(?<=[.!?])\s+/).map(s => s.trim()).filter(Boolean);

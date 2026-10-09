@@ -62,8 +62,8 @@ export const buildVariantRequest = (o: {
     const examples = L.examples ? selectStyleExamples({ ws: o.ws, report: o.report, input }).map(e => e.text) : [];
     const corrections = L.examples ? correctionPairs({ ws: o.ws, report: o.report }) : [];
     return {
-        system: reportSystemFor(settings, o.report.departmentCode, { rules: L.rules }),
+        system: reportSystemFor(settings, o.report.departmentCode, { rules: L.rules, projectId: o.report.projectId }),
         prompt: buildReportPrompt(input, [], { fixedExample: L.fixedExample, examples, corrections }),
-        promptVersion: L.rules ? reportPromptVersion(settings, o.report.departmentCode) : REPORT_PROMPT_VERSION,
+        promptVersion: L.rules ? reportPromptVersion(settings, o.report.departmentCode, o.report.projectId) : REPORT_PROMPT_VERSION,
     };
 };

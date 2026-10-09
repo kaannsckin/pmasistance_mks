@@ -1029,6 +1029,26 @@ export interface ReportSettings {
   guide?: ReportGuide;
   /** Bölüme özgü EK kurallar (bölüm kodu → metin) */
   departmentGuides?: Record<string, ReportGuideVersion>;
+  /** Geri bildirimden öğrenilen kurallar (PYB destek onaylamadan isteme girmez) */
+  learnedRules?: LearnedRule[];
+}
+
+/**
+ * Öğrenilmiş kural: tekrarlanan format hatalarından, AI taslağına yapılan
+ * düzeltmelerden ya da iade notlarından çıkarılır; PYB destek etkinleştirir.
+ */
+export interface LearnedRule {
+  id: string;
+  text: string;
+  scope: 'institution' | 'department' | 'project';
+  scopeId?: string; // bölüm kodu ya da proje kimliği
+  source: 'return' | 'lint' | 'edit' | 'manual';
+  status: 'proposed' | 'active' | 'retired';
+  evidenceCount: number;
+  examples?: string[]; // en çok 2, kısa
+  createdAt: string;
+  updatedAt?: string;
+  approvedByName?: string;
 }
 
 /** Sürümlü kılavuz metni (kaydedildikçe sürüm +1) */

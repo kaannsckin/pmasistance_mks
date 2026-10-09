@@ -431,7 +431,7 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
     };
 
     // ---- AI
-    const logAi = (outcome: Exclude<ReportAiLogEntry['outcome'], 'submitted'>, sug?: NonNullable<typeof suggestion>, promptVersion = reportPromptVersion(workspace.reportSettings, draft.departmentCode), model = ai.model) =>
+    const logAi = (outcome: Exclude<ReportAiLogEntry['outcome'], 'submitted'>, sug?: NonNullable<typeof suggestion>, promptVersion = reportPromptVersion(workspace.reportSettings, draft.departmentCode, draft.projectId), model = ai.model) =>
         onLogAi?.(suggestionLogEntry({
             report: draft, promptVersion: sug?.promptVersion || promptVersion, variant: 'full', model: sug ? sug.model : model, outcome, suggestion: sug?.s, dictionary,
             ...(sug ? { ungrounded: sug.check.ungrounded, repaired: sug.repaired } : {}),

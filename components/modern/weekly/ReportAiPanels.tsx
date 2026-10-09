@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Abbreviation, ReportEvalMetrics, ReportEvalRun, ReportGatePolicy, ReportPromptVariant, WeeklyReport, WorkspaceData } from '../../../types';
+import { Abbreviation, LearnedRule, ReportEvalMetrics, ReportEvalRun, ReportGatePolicy, ReportPromptVariant, WeeklyReport, WorkspaceData } from '../../../types';
 import { aiPolicyOf } from '../../../utils/ai/policy';
 import { GROUP_BY_LABELS, ReportAiGroupBy, reportAiStats } from '../../../utils/ai/reportAiStats';
 import {
@@ -9,7 +9,9 @@ import { buildVariantRequest, PRODUCTION_VARIANT, REPORT_VARIANTS, VARIANT_META 
 import { parseReportSuggestion, reportConfigVersion } from '../../../utils/ai/weeklyReportPrompt';
 import { DEFAULT_INSTITUTION, DEFAULT_REPORT_GUIDE, DEPARTMENT_GUIDE_LIMIT, GUIDE_LIMIT, INSTITUTION_LIMIT, reportSystemFor } from '../../../utils/ai/reportGuide';
 import { weekLabel } from '../../../utils/weeklyReport';
-import { useAiBatch } from '../../assistant/AiButton';
+import { useAiBatch, useAiRun } from '../../assistant/AiButton';
+import { buildRulePrompt, parseRuleSuggestions, RULE_TEXT_LIMIT, RuleAction, ruleEvidence, RULES_SYSTEM } from '../../../utils/ai/reportRules';
+import { RULES_PER_SCOPE } from '../../../utils/ai/reportGuide';
 import { SwitchRow } from '../admin/controls';
 import { Icon } from '../icons';
 import { Card, Field, rowSep, Sheet } from '../ui';
@@ -358,8 +360,110 @@ export const ReportGuideCard: React.FC<ReportGuideCardProps> = ({ workspace, onS
                             {workspace.departments.map(d => <option key={d.code} value={d.code}>{d.name}</option>)}
                         </select>
                     )}
+                    <p className="m-0 text-[13px] m-text-3">Proje kapsamlı etkin kurallar yalnız o projenin raporunda eklenir; burada kurum ve bölüm kuralları görünür.</p>
                     <pre className="m-0 whitespace-pre-wrap text-[13px] leading-relaxed m-fill-2 rounded-xl p-3 m-text">{reportSystemFor(settings, preview)}</pre>
                 </Sheet>
+            )}
+        </Card>
+    );
+};
+
+// ---------------------------------------------------------------- öğrenilmiş kurallar
+
+const SOURCE_LABELS: Record<LearnedRule['source'], string> = { lint: 'Format sorunları', edit: 'Taslak düzeltmeleri', return: 'İade notları (AI)', manual: 'Elle' };
+
+export interface LearnedRulesCardProps {
+    workspace: WorkspaceData;
+    onRuleAction: (a: RuleAction) => boolean;
+}
+
+/** F7: kural adayları (kural tabanlı ve AI destekli), onay, düzenleme, emekliye ayırma */
+export const LearnedRulesCard: React.FC<LearnedRulesCardProps> = ({ workspace, onRuleAction }) => {
+    const rules = workspace.reportSettings?.learnedRules || [];
+    const ai = useAiRun();
+    const [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
+    const [newText, setNewText] = useState('');
+    const [newScope, setNewScope] = useState<string>('institution');
+    const [msg, setMsg] = useState<string | null>(null);
+    const deptName = (code?: string) => workspace.departments.find(d => d.code === code)?.name || code || '';
+    const projectName = (id?: string) => workspace.projects.find(p => p.id === id)?.name || 'Silinmiş proje';
+    const scopeLabel = (r: Pick<LearnedRule, 'scope' | 'scopeId'>) => (r.scope === 'institution' ? 'Kurum geneli' : r.scope === 'department' ? `Bölüm: ${deptName(r.scopeId)}` : `Proje: ${projectName(r.scopeId)}`);
+    const proposed = rules.filter(r => r.status === 'proposed').sort((a, b) => b.evidenceCount - a.evidenceCount);
+    const active = rules.filter(r => r.status === 'active');
+    const retired = rules.filter(r => r.status === 'retired');
+    const evidence = useMemo(() => ruleEvidence(workspace), [workspace]);
+    const act = (a: RuleAction, ok?: string) => { const r = onRuleAction(a); setMsg(r ? ok || null : 'İşlem yapılamadı.'); return r; };
+    const suggestAi = async () => {
+        setMsg(null);
+        const res = await ai.run(RULES_SYSTEM, buildRulePrompt(evidence), t => parseRuleSuggestions(t));
+        if (res) act({ kind: 'candidates', candidates: res }, res.length ? `AI ${res.length} aday kural önerdi; etkinleştirmeden isteme girmez.` : 'AI yeni kural önermedi.');
+    };
+    const addManual = (e: React.FormEvent) => {
+        e.preventDefault();
+        const [scope, scopeId] = newScope.split(':') as [LearnedRule['scope'], string | undefined];
+        if (act({ kind: 'add', text: newText, scope, scopeId }, 'Kural eklendi ve etkinleştirildi.')) setNewText('');
+    };
+
+    const row = (r: LearnedRule, i: number, actions: React.ReactNode) => {
+        const sep = rowSep(i);
+        return (
+            <div key={r.id} className={`flex flex-col gap-1.5 py-2.5 ${sep.className}`} style={sep.style}>
+                {editing?.id === r.id ? (
+                    <div className="flex flex-wrap gap-2">
+                        <input aria-label="Kural metni" className="m-input flex-1 min-w-[220px]" maxLength={RULE_TEXT_LIMIT} value={editing.text} onChange={e => setEditing({ ...editing, text: e.target.value })} />
+                        <button type="button" className="m-btn m-btn-primary" disabled={!editing.text.trim()} onClick={() => { if (act({ kind: 'edit', id: r.id, text: editing.text }, 'Kural güncellendi.')) setEditing(null); }}>Kaydet</button>
+                        <button type="button" className="m-btn m-btn-plain" onClick={() => setEditing(null)}>Vazgeç</button>
+                    </div>
+                ) : <span className="text-[15px] m-text">{r.text}</span>}
+                <span className="text-[12.5px] m-text-3">{scopeLabel(r)} · {SOURCE_LABELS[r.source]}{r.evidenceCount ? ` · ${r.evidenceCount} kanıt` : ''}{r.approvedByName && r.status === 'active' ? ` · onaylayan: ${r.approvedByName}` : ''}</span>
+                {r.examples?.length ? <ul className="m-0 pl-4 text-[12.5px] m-text-3">{r.examples.map((x, k) => <li key={k}>{x}</li>)}</ul> : null}
+                {editing?.id !== r.id && <div className="flex flex-wrap gap-1.5">{actions}<button type="button" className="m-btn m-btn-plain !min-h-[36px] !px-2" onClick={() => setEditing({ id: r.id, text: r.text })}><Icon name="pencil" size={15} />Düzenle</button></div>}
+            </div>
+        );
+    };
+
+    return (
+        <Card title="Öğrenilmiş kurallar" subtitle={`Tekrarlanan format sorunlarından, AI taslağına yapılan düzeltmelerden ve iade notlarından çıkarılan kurallar. Önerilen kural siz etkinleştirmeden isteme girmez; kapsam başına en çok ${RULES_PER_SCOPE} etkin kural kullanılır. Kural değişince kalite kapısı yeniden değerlendirme ister.`} labelledBy="wr-rules">
+            <div className="flex flex-wrap items-center gap-2">
+                <button type="button" className="m-btn m-btn-gray" onClick={() => act({ kind: 'refresh' }, 'Adaylar güncellendi.')}><Icon name="refresh" size={17} />Adayları güncelle</button>
+                {ai.available && (
+                    <button type="button" className="m-btn m-btn-plain" disabled={ai.loading || (!evidence.returnNotes.length && !evidence.edits.length)} onClick={suggestAi}
+                        title={`${evidence.returnNotes.length} iade notu, ${evidence.edits.length} düzeltme örneği`}>
+                        <Icon name="sparkles" size={17} />{ai.loading ? 'AI inceliyor…' : 'AI ile aday öner'}
+                    </button>
+                )}
+            </div>
+            {ai.error && <p role="alert" className="m-0 text-[14px] m-ink-bad">{ai.error}</p>}
+            {msg && <p role="status" className="m-0 text-[14px] m-text-2">{msg}</p>}
+
+            <h3 className="m-0 text-[15px] font-semibold m-text">Öneriler <span className="m-text-3 font-normal m-tabular">{proposed.length}</span></h3>
+            {proposed.length ? <div className="flex flex-col">{proposed.map((r, i) => row(r, i, <>
+                <button type="button" className="m-btn m-btn-primary !min-h-[36px] !px-3" onClick={() => act({ kind: 'status', id: r.id, status: 'active' }, 'Kural etkinleştirildi.')}>Etkinleştir</button>
+                <button type="button" className="m-btn m-btn-plain !min-h-[36px] !px-2" onClick={() => act({ kind: 'status', id: r.id, status: 'retired' }, 'Öneri reddedildi.')}>Reddet</button>
+            </>))}</div> : <p className="m-0 text-[14px] m-text-3">Öneri yok. "Adayları güncelle" format sorunları ve taslak düzeltmeleri en az 3 raporda tekrarlanınca kural önerir.</p>}
+
+            <h3 className="m-0 text-[15px] font-semibold m-text">Etkin kurallar <span className="m-text-3 font-normal m-tabular">{active.length}</span></h3>
+            {active.length ? <div className="flex flex-col">{active.map((r, i) => row(r, i, (
+                <button type="button" className="m-btn m-btn-plain !min-h-[36px] !px-2" onClick={() => act({ kind: 'status', id: r.id, status: 'retired' }, 'Kural emekliye ayrıldı.')}>Emekliye ayır</button>
+            )))}</div> : <p className="m-0 text-[14px] m-text-3">Etkin kural yok.</p>}
+
+            <form className="flex flex-wrap items-end gap-2" onSubmit={addManual}>
+                <div className="flex-1 min-w-[220px]"><Field label="Elle kural ekle" htmlFor="wr-rule-new"><input id="wr-rule-new" className="m-input" maxLength={RULE_TEXT_LIMIT} value={newText} placeholder="Ör. Hakediş maddesinde fatura numarasını yazma; tutar ve tarihi yaz." onChange={e => setNewText(e.target.value)} /></Field></div>
+                <select aria-label="Kapsam" className="m-input !w-auto" value={newScope} onChange={e => setNewScope(e.target.value)}>
+                    <option value="institution">Kurum geneli</option>
+                    {workspace.departments.map(d => <option key={d.code} value={`department:${d.code}`}>Bölüm: {d.name}</option>)}
+                    {workspace.projects.filter(p => p.status === 'devam').map(p => <option key={p.id} value={`project:${p.id}`}>Proje: {p.name}</option>)}
+                </select>
+                <button type="submit" className="m-btn m-btn-gray" disabled={!newText.trim()}>Ekle</button>
+            </form>
+
+            {retired.length > 0 && (
+                <details>
+                    <summary className="cursor-pointer text-[14px] font-semibold m-accent min-h-[34px] flex items-center">Emekli ve reddedilen kurallar ({retired.length})</summary>
+                    <div className="flex flex-col mt-1">{retired.map((r, i) => row(r, i, (
+                        <button type="button" className="m-btn m-btn-plain !min-h-[36px] !px-2" onClick={() => act({ kind: 'status', id: r.id, status: 'active' }, 'Kural yeniden etkinleştirildi.')}>Yeniden etkinleştir</button>
+                    )))}</div>
+                </details>
             )}
         </Card>
     );

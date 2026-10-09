@@ -92,6 +92,15 @@ describe('onay akışı', () => {
 describe('format denetimi', () => {
     const base = { abbreviations: [], nextWeek: [newItem('plan', '13 Ekim 2026 tarihinde pilot kurulum yapılacak.')] };
 
+    it('Türkçe harfle başlayan/biten belirsiz ve rutin ifadeler yakalanır (sözcük içinde değil)', () => {
+        const codes = (t: string) => lintReport({ ...base, thisWeek: [newItem('ongoing', t)] }).map(i => i.code);
+        expect(codes('Bazı modüllerde iyileştirme yapıldı.')).toContain('vague');
+        expect(codes('Birkaç kurumla görüşüldü.')).toContain('vague');
+        expect(codes('Çeşitli düzeltmeler yapıldı.')).toContain('vague');
+        expect(codes('Ekip iç toplantı yaptı.')).toContain('routine');
+        expect(codes('Bazılarıyla 7 Ekim 2026 tarihinde sözleşme imzalandı.')).not.toContain('vague');
+    });
+
     it('kısaltma: sözlükte, raporda ya da satır içinde açılmamışsa hata', () => {
         expect(findAbbreviations('İG ile AR-GE ve SAP-42 için BİLGEM’de görüşüldü; Api değil')).toEqual(['İG', 'AR-GE', 'BİLGEM']);
         const issues = lintReport({ ...base, thisWeek: [newItem('customer_feature', 'MKS (Mesajlaşma Komuta Sistemi) için KYS entegrasyonu tamamlandı; 3 kurum kullanıyor.')] });
