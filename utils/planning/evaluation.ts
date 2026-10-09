@@ -1,5 +1,5 @@
 import { EffortRange, EstimateGatePolicy, EvalRun, GoldenItem, IssueType, Leave, Person, Project, Task, TaskStatus } from '../../types';
-import { HistoryRecord, MIN_CALIBRATION, PlanningHistory } from './history';
+import { estimatedAt, HistoryRecord, MIN_CALIBRATION, PlanningHistory } from './history';
 import { ISSUE_TYPE_LABELS, pertDays } from './lifecycle';
 import { SimInput, SimResult } from './monteCarlo';
 import { quantileSorted } from './random';
@@ -57,7 +57,8 @@ export const backtestTargets = (history: PlanningHistory, limit = 150): HistoryR
 
 /** Kaydı, yalnız kendisinden önce kapanmış kayıtlarla tahmin eder; yeterli geçmiş yoksa null */
 export const backtestRecord = (rec: HistoryRecord, history: PlanningHistory): RecordBacktestItem | null => {
-    const est = estimateFromHistory(draftOf(rec), history, { filter: r => r.id !== rec.id && r.resolvedAt < rec.openedAt });
+    const at = estimatedAt(rec);
+    const est = estimateFromHistory(draftOf(rec), history, { filter: r => r !== rec && r.resolvedAt < at });
     if (est.method === 'none' || !est.duration || !est.effort) return null;
     return {
         id: rec.id, unit: rec.unit, issueType: rec.issueType, actualDays: rec.days, actualEffort: rec.effortDays,
@@ -143,25 +144,27 @@ export const releaseCases = (projects: Project[], history: PlanningHistory, ctx:
         versions.forEach(v => {
             const tasks = planned.filter(t => t.version === v);
             if (tasks.some(t => t.status !== TaskStatus.Done || !t.resolvedAt)) return;
-            const estimated = tasks.filter(t => pertDays(t) !== null);
-            if (estimated.length < (opts.minTasks ?? 3)) return;
             const starts = tasks.map(t => t.startedAt || t.createdAt).filter(Boolean) as string[];
             if (!starts.length) return;
             const startIso = starts.sort()[0];
-            const endIso = tasks.map(t => t.resolvedAt!).sort().slice(-1)[0];
             const startDate = new Date(startIso);
             const past: PlanningHistory = { report: history.report, records: history.records.filter(r => r.resolvedAt < startIso) };
-            const ids = new Set(estimated.map(t => t.id));
-            const fresh: Task[] = estimated.map(t => ({
+            // Sürümün tüm kayıtları simüle edilir (tahmini olmayan, o güne kadar kapanmış benzer
+            // kayıtlardan); gerçek bitiş yalnız simüle edilen kayıtlar üzerinden ölçülür
+            const ids = new Set(tasks.map(t => t.id));
+            const fresh: Task[] = tasks.map(t => ({
                 ...t, status: TaskStatus.ToDo, startedAt: undefined, resolvedAt: undefined, statusLog: undefined, version: 1,
                 predecessor: t.predecessor && ids.has(t.predecessor) ? t.predecessor : null,
             }));
             const built = buildSimulation({ ...p, tasks: fresh }, past, ctx, { now: startDate, scope: 'open', testDays: 0, iterations: opts.iterations ?? 1000 });
+            const simulated = new Set(built.tasks.map(t => t.id));
+            if (simulated.size < (opts.minTasks ?? 3)) return;
+            const endIso = tasks.filter(t => simulated.has(t.id)).map(t => t.resolvedAt!).sort().slice(-1)[0];
             const simStart = simulationStart(startDate);
             out.push({
                 projectId: p.id, projectName: p.name, version: v, label: opts.sprintName?.(p, v) || `Sürüm ${v}`,
                 start: toIsoDay(simStart), actualEnd: endIso.slice(0, 10), actualOffset: workdaysBetween(simStart, endIso) ?? 0,
-                taskCount: estimated.length, input: built.input,
+                taskCount: simulated.size, input: built.input,
             });
         });
     });
@@ -253,9 +256,15 @@ export const calibrationTrend = (history: PlanningHistory, now: Date = new Date(
 // ---------------------------------------------------------------- 4. altın set ve kalite kapısı
 
 /** Altın sete eklenebilecek kayıtlar: eğitime uygun kapanmış kayıtlar */
+/** Kayıt kimliği yalnız proje içinde tekil; altın set kaydı proje + kimlikle eşlenir */
+export const goldKey = (projectId: string, taskId: string) => `${projectId}|${taskId}`;
+
+/** Altın set değerlendirmesinde AI yanıtlarının anahtarı */
+export const caseKey = (c: Pick<GoldCase, 'record'>) => goldKey(c.record.projectId, c.record.id);
+
 export const goldenCandidates = (history: PlanningHistory, golden: GoldenItem[] = []): HistoryRecord[] => {
-    const taken = new Set(golden.map(g => g.taskId));
-    return history.records.filter(r => !taken.has(r.id)).sort((a, b) => (a.resolvedAt < b.resolvedAt ? 1 : -1));
+    const taken = new Set(golden.map(g => goldKey(g.projectId, g.taskId)));
+    return history.records.filter(r => !taken.has(goldKey(r.projectId, r.id))).sort((a, b) => (a.resolvedAt < b.resolvedAt ? 1 : -1));
 };
 
 export const goldenFromRecord = (r: HistoryRecord, now: Date = new Date()): GoldenItem => ({ taskId: r.id, projectId: r.projectId, priority: r.priority, issueType: r.issueType, addedAt: now.toISOString() });
@@ -272,12 +281,15 @@ export interface GoldCase {
 
 /** Altın setteki kayıtlar (hâlâ eğitime uygun olanlar) ve kendileri hariç tahminleri */
 export const goldCases = (golden: GoldenItem[], history: PlanningHistory, visibleProjectIds?: ReadonlySet<string>): GoldCase[] => {
-    const byId = new Map(history.records.map(r => [r.id, r]));
+    const byKey = new Map(history.records.map(r => [goldKey(r.projectId, r.id), r]));
     return golden.flatMap(item => {
-        const record = byId.get(item.taskId);
+        const record = byKey.get(goldKey(item.projectId, item.taskId));
         if (!record) return [];
+        // Kayıt kendisi (ve başka projeye aktarılmış aynı Jira kaydı) geçmişten çıkarılır
+        const jira = record.jiraId?.toUpperCase();
+        const self = (r: HistoryRecord) => r === record || (!!jira && r.jiraId?.toUpperCase() === jira);
         // Önem ve tür sorulan şeydir: taslağa girmez (yoksa doğruluk yapay olarak yükselir)
-        const ref = estimateFromHistory(goldDraft(record), history, { visibleProjectIds, filter: r => r.id !== record.id });
+        const ref = estimateFromHistory(goldDraft(record), history, { visibleProjectIds, filter: r => !self(r) });
         return [{ item, record, ref }];
     });
 };
@@ -294,8 +306,10 @@ export const MIN_GATE_CASES = 10;
 
 /**
  * Altın set değerlendirmesi. AI yanıtı olmayan kayıtlar (hata, iptal) AI
- * ölçülerine girmez. Kapı: AI ortalama hatası ≤ geçmiş kayıt hatası × oran,
- * önem doğruluğu ve aralık kapsaması alt sınırların üstünde olmalı.
+ * ölçülerine girmez; karşılaştırma adil olsun diye geçmiş kayıt tahmini de
+ * aynı yanıtlanmış kayıtlarda ölçülür. Okunamayan önem ya da tür yanlış
+ * sayılır. Kapı: AI ortalama hatası ≤ geçmiş kayıt hatası × oran, önem
+ * doğruluğu ve aralık kapsaması alt sınırların üstünde olmalı.
  */
 export const scoreGoldRun = (
     cases: GoldCase[],
@@ -303,20 +317,20 @@ export const scoreGoldRun = (
     gate: EstimateGatePolicy,
     meta: { id: string; at: string; promptVersion: string; model?: string },
 ): EvalRun => {
-    const withRef = cases.filter(c => c.ref.effort);
+    const withRef = cases.filter(c => c.ref.effort && (!ai || ai.has(caseKey(c))));
     const reference = {
         mae: mean(withRef.map(c => Math.abs(c.ref.effort!.likely - c.record.effortDays))),
         coverage: rate(withRef.map(c => within(c.record.effortDays, c.ref.effort!))),
-        priorityAccuracy: rate(withRef.filter(c => c.ref.priority).map(c => c.ref.priority!.value === c.item.priority)),
+        priorityAccuracy: rate(withRef.map(c => c.ref.priority?.value === c.item.priority)), // öneri yoksa yanlış (AI ile aynı ölçü)
     };
-    const answered = ai ? cases.filter(c => ai.has(c.record.id)) : [];
-    const A = (c: GoldCase) => ai!.get(c.record.id)!;
+    const answered = ai ? cases.filter(c => ai.has(caseKey(c))) : [];
+    const A = (c: GoldCase) => ai!.get(caseKey(c))!;
     const aiStats = ai ? {
         n: answered.length,
         mae: mean(answered.map(c => Math.abs(A(c).effort.likely - c.record.effortDays))),
         coverage: rate(answered.map(c => within(c.record.effortDays, A(c).effort))),
-        priorityAccuracy: rate(answered.filter(c => A(c).priority).map(c => A(c).priority === c.item.priority)),
-        typeAccuracy: rate(answered.filter(c => A(c).issueType && c.item.issueType).map(c => A(c).issueType === c.item.issueType)),
+        priorityAccuracy: rate(answered.map(c => A(c).priority === c.item.priority)),
+        typeAccuracy: rate(answered.filter(c => c.item.issueType).map(c => A(c).issueType === c.item.issueType)),
         lowConfidence: rate(answered.map(c => A(c).confidence === 'low')),
         unknownEvidence: rate(answered.map(c => A(c).unknownEvidence)),
     } : null;
@@ -354,12 +368,20 @@ export const GATE_LABELS: Record<GateStatus, string> = {
     insufficient: 'Yetersiz örnek',
 };
 
-/** Güncel istem sürümünün (ve modelin) son değerlendirmesine göre kapı durumu */
+/**
+ * Güncel istem sürümünün (ve modelin) son değerlendirmesine göre kapı durumu.
+ * Son koşu karar veremediyse (ör. AI çoğu kayıtta hata verdi) aynı modelle
+ * yapılmış son kararlı koşu geçerlidir: geçmeyen kapı bu yolla kalkmaz.
+ */
 export const gateStatus = (runs: EvalRun[] | undefined, promptVersion: string, model?: string): { status: GateStatus; run?: EvalRun } => {
-    const run = [...(runs || [])].reverse().find(r => r.promptVersion === promptVersion && r.ai);
+    const list = [...(runs || [])].reverse().filter(r => r.promptVersion === promptVersion && r.ai);
+    const run = list[0];
     if (!run) return { status: 'none' };
     if (model && run.model && run.model !== model) return { status: 'stale', run };
-    if (run.passed === null) return { status: 'insufficient', run };
+    if (run.passed === null) {
+        const decisive = list.find(r => r.passed !== null && (r.model || '') === (run.model || ''));
+        return decisive ? { status: decisive.passed ? 'passed' : 'failed', run: decisive } : { status: 'insufficient', run };
+    }
     return { status: run.passed ? 'passed' : 'failed', run };
 };
 

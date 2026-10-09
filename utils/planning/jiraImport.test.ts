@@ -80,6 +80,8 @@ describe('birleştirme', () => {
         expect(keep.tasks[0]).toMatchObject({ resourceName: 'Ali', notes: 'Yerel not', priority: 'Low', time: { best: 2, avg: 2, worst: 2 }, availability: true }); // tahmin yoksa Jira'nınki
         const clash = mergeJiraIssues([local('jira-mks-7')], [issue('MKS-7')], OPTS);
         expect(clash.tasks.map(t => t.id)).toEqual(['jira-mks-7', 'jira-mks-7-2']);
+        // Başka projede aynı kimlik varsa (aynı Jira projesi iki projeye) çakışmaz
+        expect(mergeJiraIssues([], [issue('MKS-7')], OPTS, ['jira-mks-7']).tasks[0].id).toBe('jira-mks-7-2');
     });
 
     it('yeniden açılan kayıt: kapanış silinir, geçiş günlüğü Jira’dan', () => {
@@ -91,6 +93,15 @@ describe('birleştirme', () => {
         expect(reopened.status).toBe(TaskStatus.InProgress);
         expect(reopened.resolvedAt).toBeUndefined();
         expect(reopened.statusLog!.at(-1)).toEqual({ at: '2026-09-10T08:00:00.000Z', from: TaskStatus.Done, to: TaskStatus.InProgress });
+    });
+
+    it('Jira kapanış tarihi vermezse yerel kapanış tarihi korunur', () => {
+        const done = local('t1', { jiraId: 'MKS-1', status: TaskStatus.Done, resolvedAt: '2026-09-04T14:00:00.000Z' });
+        const r = mergeJiraIssues([done], [issue('MKS-1', { resolved: null, transitions: [] })], OPTS).tasks[0];
+        expect(r).toMatchObject({ status: TaskStatus.Done, resolvedAt: '2026-09-04T14:00:00.000Z' });
+        // Yerelde açıkken Jira'da kapanış tarihsiz kapanmışsa uydurulmaz
+        const open = mergeJiraIssues([local('t2', { jiraId: 'MKS-2', resolvedAt: '2026-01-01T00:00:00.000Z' })], [issue('MKS-2', { resolved: null, transitions: [] })], OPTS).tasks[0];
+        expect(open.resolvedAt).toBeUndefined();
     });
 });
 

@@ -205,12 +205,13 @@ const runOnce = (input: SimInput, lanes: Lane[], st: RunState, draw: (t: SimTask
         const predF = t.pred >= 0 ? st.finish[t.pred] : 0;
         let lane = t.lane;
         if (lane === -1 && t.pool !== undefined) {
-            // Birim havuzu: en erken başlayabilecek kişi (eşitlikte en yüksek kapasiteli)
-            let bestStart = Infinity, bestRate = -1;
+            // Birim havuzu: işi en erken bitirecek kişi (izinli ya da kapasitesi
+            // olmayan kişi "boş" görünse de işi geç bitirir); eşitlikte erken başlayan
+            let bestEnd = Infinity, bestStart = Infinity;
             for (const l of input.pools[t.pool]) {
                 const s = Math.max(st.free[l], predF);
-                const r = lanes[l].rate[Math.min(Math.floor(s), lanes[l].H - 1)] ?? lanes[l].base;
-                if (s < bestStart - 1e-9 || (Math.abs(s - bestStart) <= 1e-9 && r > bestRate)) { bestStart = s; bestRate = r; lane = l; }
+                const f = finishOn(lanes[l], s, e);
+                if (f < bestEnd - 1e-9 || (Math.abs(f - bestEnd) <= 1e-9 && s < bestStart)) { bestEnd = f; bestStart = s; lane = l; }
             }
         }
         let start: number, end: number;

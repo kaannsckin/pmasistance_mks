@@ -70,7 +70,12 @@ const ReleaseWizard: React.FC<Props> = ({ project, initial, history, people, lea
     const update = (fn: (p: ReleasePlan) => ReleasePlan) => {
         if (!canEdit) return;
         dirty.current = true;
-        setPlan(p => ({ ...fn(p), updatedAt: new Date().toISOString() }));
+        setPlan(p => {
+            const next = fn(p);
+            // Kayıtlar değişince kilometre taşları da güncel kalır (yeni kayıt uygun taşa, çıkarılan atılır)
+            const ms = next.items !== p.items && next.milestones.length ? sanitizeMilestones(next.milestones, next, { keepEmpty: true }) : next.milestones;
+            return { ...next, milestones: ms, updatedAt: new Date().toISOString() };
+        });
     };
     // Taslak kaydı: gecikmeli; kapanırken bekleyen değişiklik yazılır
     useEffect(() => {
@@ -203,12 +208,32 @@ const StepDefine: React.FC<{ plan: ReleasePlan; project: Project; canEdit: boole
 
 // ------------------------------------------------------------------ 2. kayıtlar
 
+/**
+ * Ondalık sayı girişi: yazılan metin korunur ("2," yazarken virgül silinmez,
+ * "2,5" → 2,5). Değer dışarıdan değişirse (seçim, sıfırlama) metin eşitlenir.
+ * `toValue` kaydedilecek değeri sınırlar (ör. 0 → boş).
+ */
+const DecimalInput: React.FC<Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'> & {
+    value: number | undefined;
+    onValue: (v: number | undefined) => void;
+    toValue?: (n: number | undefined) => number | undefined;
+}> = ({ value, onValue, toValue = n => n, ...rest }) => {
+    const fmt = (v?: number) => (v === undefined ? '' : String(v).replace('.', ','));
+    const parse = (t: string) => { const n = Number(t.trim().replace(',', '.')); return t.trim() && Number.isFinite(n) ? n : undefined; };
+    const [text, setText] = useState(fmt(value));
+    useEffect(() => { if (toValue(parse(text)) !== value) setText(fmt(value)); }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
+    return <input {...rest} inputMode="decimal" value={text} onChange={e => { setText(e.target.value); onValue(toValue(parse(e.target.value))); }} />;
+};
+const positive = (n: number | undefined) => (n !== undefined && n > 0 ? n : undefined);
+const nonNegative = (n: number | undefined) => (n !== undefined && n >= 0 ? n : 0);
+
 const StepItems: React.FC<{ plan: ReleasePlan; project: Project; canEdit: boolean; blindEstimate: boolean; update: Update }> = ({ plan, project, canEdit, blindEstimate, update }) => {
     const [paste, setPaste] = useState<string | null>(null);
     const [pool, setPool] = useState<Set<string> | null>(null);
     const units = useMemo<string[]>(() => [...new Set<string>([...project.resources.map(r => r.unit), ...project.tasks.map(t => t.unit)].map(u => (u || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'tr')), [project]);
     const wps = plan.workPackageIds.length ? project.workPackages.filter(w => plan.workPackageIds.includes(w.id)) : project.workPackages;
-    const taken = new Set(plan.items.map(i => i.sourceTaskId).filter(Boolean));
+    // Bu planda ya da başka bir taslakta alınmış havuz görevi yeniden önerilmez
+    const taken = new Set((project.releasePlans || []).filter(p => p.id !== plan.id && p.status === 'draft').concat(plan).flatMap(p => p.items.map(i => i.sourceTaskId)).filter(Boolean));
     const backlog = project.tasks.filter(t => t.status !== TaskStatus.Done && (t.version || 0) === 0 && t.includeInSprints !== false && !taken.has(t.id));
     const defaultUnit = project.resources[0]?.unit || '';
     const add = (xs: ReleasePlanItem[]) => update(p => ({ ...p, items: [...p.items, ...xs] }));
@@ -290,8 +315,8 @@ const StepItems: React.FC<{ plan: ReleasePlan; project: Project; canEdit: boolea
                                 <input id={`rp-unit-${i.id}`} className="m-input" list="rp-units" disabled={!canEdit} value={i.unit || ''} onChange={e => setItem(update, i.id, { unit: e.target.value || undefined })} />
                             </Field>
                             <Field label="Kendi tahmininiz (gün)" htmlFor={`rp-own-${i.id}`}>
-                                <input id={`rp-own-${i.id}`} className="m-input m-tabular" inputMode="decimal" disabled={!canEdit} value={i.ownEstimateDays ?? ''} placeholder="—"
-                                    onChange={e => { const v = Number(e.target.value.replace(',', '.')); setItem(update, i.id, { ownEstimateDays: Number.isFinite(v) && v > 0 ? v : undefined }); }} />
+                                <DecimalInput id={`rp-own-${i.id}`} className="m-input m-tabular" disabled={!canEdit} value={i.ownEstimateDays} placeholder="—"
+                                    toValue={positive} onValue={v => setItem(update, i.id, { ownEstimateDays: v })} />
                             </Field>
                             <Field label="Sorumlu" htmlFor={`rp-res-${i.id}`}>
                                 <select id={`rp-res-${i.id}`} className="m-input" disabled={!canEdit} value={i.resourceName || ''} onChange={e => {
@@ -427,9 +452,8 @@ const SuggestionRow: React.FC<{ item: ReleasePlanItem; canEdit: boolean; aiAvail
             <span className="flex-1 min-w-0">{label}</span>
         </label>
     );
-    const setManual = (k: keyof EffortRange, v: string) => {
-        const n = Number(v.replace(',', '.'));
-        const m = { ...(i.manual || { best: 1, likely: 2, worst: 3 }), [k]: Number.isFinite(n) && n >= 0 ? n : 0 };
+    const setManual = (k: keyof EffortRange, n: number | undefined) => {
+        const m = { ...(i.manual || { best: 1, likely: 2, worst: 3 }), [k]: nonNegative(n) };
         set({ manual: m, choice: 'manual' });
     };
     return (
@@ -447,8 +471,8 @@ const SuggestionRow: React.FC<{ item: ReleasePlanItem; canEdit: boolean; aiAvail
                 {i.model && radio('model', <>Model: <b className="m-tabular">{range(i.model.effort)}</b> <span className="text-[12px] m-text-3">· kapanma {num(i.model.p50Days)}–{num(i.model.p80Days)} iş günü</span></>)}
                 {radio('manual', <span className="inline-flex flex-wrap items-center gap-1.5">Elle:
                     {(['best', 'likely', 'worst'] as (keyof EffortRange)[]).map(k => (
-                        <input key={k} aria-label={`${i.name} ${k === 'best' ? 'iyimser' : k === 'likely' ? 'olası' : 'kötümser'} efor`} className="m-input m-tabular !min-h-[32px] !w-[64px] !px-2 text-[14px]" inputMode="decimal" disabled={!canEdit || !!i.excluded}
-                            value={i.manual ? String(i.manual[k]).replace('.', ',') : ''} placeholder={k === 'best' ? 'iyi' : k === 'likely' ? 'olası' : 'kötü'} onChange={e => setManual(k, e.target.value)} />
+                        <DecimalInput key={k} aria-label={`${i.name} ${k === 'best' ? 'iyimser' : k === 'likely' ? 'olası' : 'kötümser'} efor`} className="m-input m-tabular !min-h-[32px] !w-[64px] !px-2 text-[14px]" disabled={!canEdit || !!i.excluded}
+                            value={i.manual?.[k]} toValue={nonNegative} placeholder={k === 'best' ? 'iyi' : k === 'likely' ? 'olası' : 'kötü'} onValue={v => setManual(k, v)} />
                     ))} gün</span>)}
             </div>
             {c === 'manual' && i.manual && !(i.manual.best <= i.manual.likely && i.manual.likely <= i.manual.worst) && (
@@ -498,7 +522,8 @@ const StepSimulation: React.FC<{ plan: ReleasePlan; project: Project; history: P
         if (!r || !s) return;
         setDescope({ state: 'running' });
         const res = await suggestDescope(plan, { result: r, built: s.built }, async ex => {
-            const b = buildReleaseSimulation(project, plan, history, ctx, { now: new Date(), iterations: 1000, extraExcluded: ex, visibleProjectIds });
+            // Ana simülasyonla aynı tekrar sayısı ve tohum: fark kapsamdan gelsin, rastlantıdan değil
+            const b = buildReleaseSimulation(project, plan, history, ctx, { now: new Date(), iterations: s.built.input.iterations, seed: s.built.input.seed, extraExcluded: ex, visibleProjectIds });
             const out = await runSimulationAsync(b.built.input).catch(() => null);
             return out ? groupOf(out, RELEASE_GROUP)?.targetProbability ?? null : null;
         });
@@ -579,7 +604,7 @@ const StepMilestones: React.FC<{ plan: ReleasePlan; project: Project; sim: SimSt
     const items = includedItems(plan);
     const names = new Map(items.map(i => [i.id, i.name]));
     const set = (ms: ReleaseMilestone[]) => update(p => ({ ...p, milestones: sanitizeMilestones(ms, p) }));
-    const ms = plan.milestones;
+    const ms = useMemo(() => sanitizeMilestones(plan.milestones, plan, { keepEmpty: true }), [plan]);
     const r = sim.result;
     const s = sim.sim;
     const day = (offset: number) => (s ? fmtDay(toIsoDay(dateAtOffset(s.built.start, Math.max(1, Math.ceil(offset))))) : '—');
@@ -688,6 +713,7 @@ const StepCommit: React.FC<{ plan: ReleasePlan; project: Project; history: Plann
                 <>
                     <ul className="m-0 pl-5 flex flex-col gap-1.5 text-[15px] m-text">
                         <li><b>{preview.created}</b> yeni görev açılır{preview.updated ? `, havuzdaki ${preview.updated} görev güncellenir` : ''}{excluded ? `; ${excluded} kayıt kapsam dışı kalır (kararı günlüğe yazılır)` : ''}.</li>
+                        {preview.skipped.length > 0 && <li className="m-ink-warn">Havuzdan alınan {preview.skipped.length} görev bu arada başka bir sürüme ya da hedefe bağlanmış veya kapanmış; aktarılmaz: {preview.skipped.map(x => `"${x.name}"`).join(', ')}.</li>}
                         <li>Görevler simülasyon takvimine göre {versions.length > 1 ? `sürüm ${versions[0]}–${versions[versions.length - 1]} arasına` : `sürüm ${versions[0] ?? '—'} içine`} yerleşir; termin, kilometre taşının hedef tarihi (yoksa P80'i) olur.</li>
                         {preview.plan.milestones.length > 0 && <li>"{`Sürüm: ${plan.name}`}" hedefi ve {preview.plan.milestones.length} anahtar sonuç (kilometre taşları) Hedefler ekranına eklenir.</li>}
                         <li>Taban çizgisi: P50 {fmtDay(dates.p50)}, P80 {fmtDay(dates.p80)}, P95 {fmtDay(dates.p95)}{dates.targetProbability !== null ? `; hedef olasılığı ${pct(dates.targetProbability)}` : ''}. Sonradan güncel tahminle karşılaştırılır.</li>

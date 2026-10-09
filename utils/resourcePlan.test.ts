@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Resource, Task, TaskStatus } from '../types';
 import {
-    createResource, hasResourceNamed, parsePercent, resourceTaskCounts, rowsToResourcePlan, setMonthlyValue, unitPlans, updateResource,
+    createResource, hasResourceNamed, parsePercent, plannedShare, resourceTaskCounts, rowsToResourcePlan, setMonthlyValue, unitPlans, updateResource,
 } from './resourcePlan';
 
 const res = (id: string, name: string, unit: string, plan: number[] = []): Resource => ({
@@ -79,7 +79,14 @@ describe('kaynak düzenleme', () => {
         const r = createResource(' Zeynep ', 'U310', '', 60, 2);
         expect(r).toMatchObject({ name: 'Zeynep', title: 'Uzman', participation: 60 });
         expect(r.monthlyPlan![2]).toBe(60);
-        expect(r.monthlyPlan![3]).toBe(0);
+        expect(r.monthlyPlan![3]).toBeUndefined(); // girilmeyen ay güncel katılımı izler
+        expect(plannedShare(r, 3)).toBe(0.6);
+        // Eski kayıtlar: yalnız eklendiği ay dolu, diğerleri 0 → plan yok sayılır
+        const legacy = { participation: 80, monthlyPlan: Object.fromEntries(Array.from({ length: 12 }, (_, i) => [i, i === 9 ? 80 : 0])) };
+        expect(plannedShare(legacy, 10)).toBe(0.8);
+        // Gerçek aylık plan: girilen 0 korunur
+        const real = { participation: 100, monthlyPlan: { 9: 100, 10: 50, 11: 0 } };
+        expect([plannedShare(real, 10), plannedShare(real, 11), plannedShare(real, 0)]).toEqual([0.5, 0, 1]);
         expect(hasResourceNamed([r], 'ZEYNEP')).toBe(true);
         expect(resourceTaskCounts('Ayşe', [task('a', 'Ayşe'), task('b', 'Ayşe', TaskStatus.Done)])).toEqual({ open: 1, total: 2 });
     });

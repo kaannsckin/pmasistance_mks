@@ -1,7 +1,7 @@
 import { WorkspaceData } from '../../types';
 import { estimateStats } from '../planning/estimateLog';
-import { gateStatus, goldDraft } from '../planning/evaluation';
-import { HistoryRecord, PlanningHistory } from '../planning/history';
+import { gateStatus, goldDraft, goldKey } from '../planning/evaluation';
+import { estimatedAt, HistoryRecord, PlanningHistory } from '../planning/history';
 import { MODEL_VERSION } from '../planning/ml/estimateModel';
 import { estimateFromHistory } from '../planning/referenceClass';
 import { chatExample, estimateTarget } from './estimateEval';
@@ -114,11 +114,13 @@ export const fineTuneReadiness = (
     let verdict: FineTuneVerdict;
     let headline: string;
     const next: string[] = [];
-    if (!run || gate.status === 'stale' || golden < FT_MIN_GOLDEN) {
+    if (!run || gate.status === 'stale' || gate.status === 'insufficient' || golden < FT_MIN_GOLDEN) {
         verdict = 'not_ready';
         headline = !run || gate.status === 'stale'
             ? 'AI önerisi geçerli modelle altın sette değerlendirilmedi; ince ayarın kazancı ölçülemez.'
-            : `Altın set küçük (${num(golden)} kayıt); karar güvenilir olmaz.`;
+            : gate.status === 'insufficient'
+                ? 'Son AI değerlendirmesi karar verecek kadar yanıt toplamadı (AI çoğu kayıtta yanıt vermedi); ince ayarın kazancı ölçülemez.'
+                : `Altın set küçük (${num(golden)} kayıt); karar güvenilir olmaz.`;
         if (golden < FT_MIN_GOLDEN) next.push(`Altın sete en az ${FT_MIN_GOLDEN} doğrulanmış kayıt ekleyin.`);
         next.push('"Altın set ve kalite kapısı" kartında "AI ile değerlendir"i çalıştırın.');
         if (!ml) next.push('"Makine öğrenmesi modeli" kartında "Eğit ve sına"yı çalıştırın.');
@@ -131,6 +133,12 @@ export const fineTuneReadiness = (
         headline = `Efor ve süre için makine öğrenmesi modeli AI'dan isabetli (geçmişe göre model ×${dec(mlRatio)}, AI ×${dec(aiRatio ?? 0)}). Sayısal tahmini model yapsın; AI soru ve gerekçe için kalsın.`;
         next.push('"Planlamada model önerisi" ayarını otomatik ya da açık bırakın.');
         next.push('AI kalite kapısını zorunlu yapmayı düşünün; AI tahmin önerisi geçmeyince kapanır, model ve geçmiş kayıt önerisi çalışır.');
+    } else if (aiRatio !== null && aiRatio <= 1) {
+        // AI efor tahmininde geride değil; kapı başka bir ölçüt (önem, kapsama) yüzünden geçilemedi
+        verdict = 'consider';
+        headline = `AI efor tahmininde geçmiş kayıt tahmininden geride değil (×${dec(aiRatio)}); kapı başka bir ölçütte geçilemedi: ${run.reasons.filter(r => !/ortalama hatası/.test(r)).join(' ') || 'ayrıntı yok'} Önce istemi bu ölçüte göre iyileştirmek ince ayardan ucuzdur.`;
+        next.push('İstemdeki önem ölçeği ve aralık kuralını (iyimser ≤ olası ≤ kötümser, geniş aralık) gözden geçirip yeni istem sürümüyle yeniden değerlendirin.');
+        next.push('Sorun sürerse ince ayar veri kümesiyle deneme yapılabilir.');
     } else if (records < FT_MIN_RECORDS) {
         verdict = 'not_ready';
         headline = `AI geçmiş kayıt tahmininin gerisinde, ama ince ayar için veri az (${num(records)} kayıt).`;
@@ -154,17 +162,21 @@ export const fineTuneReadiness = (
 
 // ---------------------------------------------------------------- veri kümesi
 
-/** Türkçe büyük-küçük harf çiftlerini (i/İ, ı/I) doğru eşleyen desen */
+// Türkçe harf ve ASCII karşılığı aynı sayılır ("Ayşe" = "Ayse" = "AYŞE", "Ali" = "ALI")
+const FOLD_CLASSES = ['cçCÇ', 'gğGĞ', 'iıİI', 'oöOÖ', 'sşSŞ', 'uüUÜ'];
+const escOutside = (x: string) => x.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+const escInside = (x: string) => x.replace(/[\]\\^-]/g, '\\$&');
+
+/** Ad için düzenli ifade deseni: büyük-küçük harf ve Türkçe/ASCII yazım farkına duyarsız */
 const trPattern = (name: string): string => [...name.trim()].map(c => {
     if (/\s/.test(c)) return '\\s+';
-    if (c === 'i' || c === 'İ') return '[iİ]';
-    if (c === 'ı' || c === 'I') return '[ıI]';
+    const cls = FOLD_CLASSES.find(k => k.includes(c));
+    if (cls) return `[${escInside(cls)}]`;
     const lo = c.toLocaleLowerCase('tr-TR'), up = c.toLocaleUpperCase('tr-TR');
-    const esc = (x: string) => x.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&');
-    return lo === up ? esc(c) : `[${esc(lo)}${esc(up)}]`;
+    return lo === up ? escOutside(c) : `[${escInside(lo)}${escInside(up)}]`;
 }).join('').replace(/(\\s\+)+/g, '\\s+');
 
-/** Metindeki kişi adlarını maskeler (tam ad; Türkçe büyük-küçük harf duyarsız) */
+/** Metindeki kişi adlarını maskeler (tam ad; büyük-küçük harf ve Türkçe/ASCII yazımdan bağımsız) */
 export const redactNames = (text: string, names: string[]): { text: string; hits: number } => {
     let hits = 0;
     let out = text;
@@ -208,10 +220,12 @@ export const buildFineTuneDataset = async (
     history: PlanningHistory,
     opts: { now?: Date; signal?: AbortSignal; onProgress?: (done: number, total: number) => void; chunk?: number } = {},
 ): Promise<FineTuneDataset> => {
-    const golden = new Set((ws.goldenSet || []).map(g => g.taskId));
+    const golden = new Set((ws.goldenSet || []).map(g => goldKey(g.projectId, g.taskId)));
     const names = personNames(ws);
     const recs = [...history.records].sort((a, b) => (a.resolvedAt < b.resolvedAt ? -1 : 1));
-    const pool = recs.filter(r => !golden.has(r.id));
+    // Altın setteki kayıt (ve başka projeye aktarılmış aynı Jira kaydı) kümeye girmez
+    const goldenJira = new Set(recs.filter(r => golden.has(goldKey(r.projectId, r.id)) && r.jiraId).map(r => r.jiraId!.toUpperCase()));
+    const pool = recs.filter(r => !golden.has(goldKey(r.projectId, r.id)) && !(r.jiraId && goldenJira.has(r.jiraId.toUpperCase())));
     const examples: { r: HistoryRecord; line: string }[] = [];
     let noContext = 0, redactions = 0;
     const chunk = opts.chunk ?? 25;
@@ -220,7 +234,9 @@ export const buildFineTuneDataset = async (
         const r = pool[i];
         const draft = goldDraft(r);
         // Zaman ayrımı: yalnız bu kayıt açılmadan önce kapanmış kayıtlar bağlamdır
-        const ref = estimateFromHistory(draft, history, { filter: x => x.id !== r.id && x.resolvedAt < r.openedAt });
+        // Bağlam: kayıt açıldığında bilinen, yani ondan önce kapanmış kayıtlar
+        const at = estimatedAt(r);
+        const ref = estimateFromHistory(draft, history, { filter: x => x !== r && x.resolvedAt < at });
         if (ref.method === 'none') { noContext++; continue; }
         const p = redactNames(estimateSuggestionPrompt(draft, ref), names);
         const t = redactNames(JSON.stringify(estimateTarget(r, ref, { priority: r.priority, issueType: r.issueType }, ref.confidence)), names);

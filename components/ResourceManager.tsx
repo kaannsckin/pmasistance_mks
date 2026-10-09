@@ -268,7 +268,7 @@ const ResourceManager: React.FC<ResourceManagerProps> = ({ resources, setResourc
         participation: newResourceParticipation,
         unit: trimmedUnit,
         title: trimmedTitle,
-        monthlyPlan: Object.fromEntries(Array.from({length: 12}, (_, i) => [i, i === new Date().getMonth() ? newResourceParticipation : 0]))
+        monthlyPlan: { [new Date().getMonth()]: newResourceParticipation }
       };
       setResources([...resources, newResource]);
       setNewResourceName('');

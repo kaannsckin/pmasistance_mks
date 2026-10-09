@@ -9,7 +9,7 @@ import { aiPolicyOf } from '../../../utils/ai/policy';
 import { AiStatus } from '../../../utils/ai/protocol';
 import { estimateLogCsv, estimateStats, SourceAccuracy } from '../../../utils/planning/estimateLog';
 import {
-    backtestRecord, backtestTargets, calibrationTrend, GATE_LABELS, gateStatus, GoldAiAnswer, goldCases, goldenCandidates, goldenFromRecord,
+    backtestRecord, backtestTargets, calibrationTrend, caseKey, GATE_LABELS, gateStatus, GoldAiAnswer, goldCases, goldenCandidates, goldenFromRecord, goldKey,
     RecordBacktestItem, ReleaseBacktestRow, releaseCases, scoreGoldRun, scoreReleaseCase, summarizeRecordBacktest, summarizeReleaseBacktest,
 } from '../../../utils/planning/evaluation';
 import { buildHistory, PlanningHistory } from '../../../utils/planning/history';
@@ -252,7 +252,7 @@ const GoldenGate: React.FC<Props & { history: PlanningHistory }> = ({ workspace,
         fetchAiStatus(c.signal).then(setStatus).catch(() => setStatus({ configured: false, authMode: 'none', unreachable: true }));
         return () => { c.abort(); abort.current?.abort(); };
     }, []);
-    const byId = useMemo(() => new Map(history.records.map(r => [r.id, r])), [history]);
+    const byKey = useMemo(() => new Map(history.records.map(r => [goldKey(r.projectId, r.id), r])), [history]);
     const projectName = useMemo(() => new Map(workspace.projects.map(p => [p.id, p.name])), [workspace.projects]);
     const candidates = useMemo(() => {
         const q = query.trim().toLocaleLowerCase('tr-TR');
@@ -262,7 +262,8 @@ const GoldenGate: React.FC<Props & { history: PlanningHistory }> = ({ workspace,
     const runs = [...(workspace.evalRuns || [])].reverse().slice(0, 8);
     const aiReady = policy.enabled && !!status?.configured;
 
-    const setItem = (taskId: string, patch: Partial<GoldenItem>) => onSetGolden(golden.map(x => (x.taskId === taskId ? { ...x, ...patch } : x)), 'altın set kaydı düzeltildi');
+    const same = (a: GoldenItem, b: GoldenItem) => a.taskId === b.taskId && a.projectId === b.projectId;
+    const setItem = (item: GoldenItem, patch: Partial<GoldenItem>) => onSetGolden(golden.map(x => (same(x, item) ? { ...x, ...patch } : x)), 'altın set kaydı düzeltildi');
     const evaluate = async (withAi: boolean) => {
         setError(null);
         const cases = goldCases(golden, history);
@@ -274,7 +275,7 @@ const GoldenGate: React.FC<Props & { history: PlanningHistory }> = ({ workspace,
         setProgress({ done: 0, total: cases.length });
         for (let i = 0; i < cases.length && !c.signal.aborted; i++) {
             try {
-                answers.set(cases[i].record.id, goldAnswer(await completeDirect(status!, goldPrompt(cases[i]), c.signal), cases[i]));
+                answers.set(caseKey(cases[i]), goldAnswer(await completeDirect(status!, goldPrompt(cases[i]), c.signal), cases[i]));
             } catch (e) {
                 if (c.signal.aborted) break;
                 // Tek kayıttaki hata değerlendirmeyi durdurmaz; yanıtsız kayıt AI ölçüsüne girmez
@@ -329,7 +330,7 @@ const GoldenGate: React.FC<Props & { history: PlanningHistory }> = ({ workspace,
                     <input aria-label="Kapanmış kayıt ara" className="m-input" placeholder="Kayıt adına göre ara" value={query} onChange={e => setQuery(e.target.value)} />
                     <div className="flex flex-col max-h-[280px] overflow-y-auto">
                         {candidates.map(r => (
-                            <div key={r.id} className="flex items-center gap-2.5 min-h-[40px] text-[14px]">
+                            <div key={goldKey(r.projectId, r.id)} className="flex items-center gap-2.5 min-h-[40px] text-[14px]">
                                 <span className="flex-1 min-w-0 truncate m-text">{r.name}</span>
                                 <span className="m-text-3 whitespace-nowrap">{projectName.get(r.projectId)} · {r.issueType ? ISSUE_TYPE_LABELS[r.issueType] : 'türsüz'} · {PRIORITY_META[r.priority].label}</span>
                                 <button type="button" className="m-btn m-btn-plain !min-h-[32px] !px-2" onClick={() => onSetGolden([...golden, goldenFromRecord(r)], 'altın sete kayıt eklendi')}>Ekle</button>
@@ -343,17 +344,17 @@ const GoldenGate: React.FC<Props & { history: PlanningHistory }> = ({ workspace,
                 <details>
                     <summary className="cursor-pointer text-[14px] font-semibold m-accent min-h-[34px] flex items-center">Kayıtları ve doğru değerleri gör</summary>
                     <div className="flex flex-col mt-1">
-                        {golden.map((x, i) => { const r = byId.get(x.taskId); const sep = rowSep(i); return (
-                            <div key={x.taskId} className={`flex flex-wrap items-center gap-2 py-1.5 text-[14px] ${sep.className}`} style={sep.style}>
+                        {golden.map((x, i) => { const r = byKey.get(goldKey(x.projectId, x.taskId)); const sep = rowSep(i); return (
+                            <div key={goldKey(x.projectId, x.taskId)} className={`flex flex-wrap items-center gap-2 py-1.5 text-[14px] ${sep.className}`} style={sep.style}>
                                 <span className="flex-1 min-w-[180px] truncate m-text">{r ? r.name : <span className="m-text-3">Artık eğitime uygun değil</span>}</span>
-                                <select aria-label="Doğru önem" className="m-input !min-h-[34px] !w-auto text-[13px]" value={x.priority} onChange={e => setItem(x.taskId, { priority: e.target.value as Task['priority'] })}>
+                                <select aria-label="Doğru önem" className="m-input !min-h-[34px] !w-auto text-[13px]" value={x.priority} onChange={e => setItem(x, { priority: e.target.value as Task['priority'] })}>
                                     {PRIORITIES.map(p => <option key={p} value={p}>{PRIORITY_META[p].label}</option>)}
                                 </select>
-                                <select aria-label="Doğru tür" className="m-input !min-h-[34px] !w-auto text-[13px]" value={x.issueType || ''} onChange={e => setItem(x.taskId, { issueType: (e.target.value || undefined) as IssueType | undefined })}>
+                                <select aria-label="Doğru tür" className="m-input !min-h-[34px] !w-auto text-[13px]" value={x.issueType || ''} onChange={e => setItem(x, { issueType: (e.target.value || undefined) as IssueType | undefined })}>
                                     <option value="">Tür yok</option>
                                     {(Object.keys(ISSUE_TYPE_LABELS) as IssueType[]).map(t => <option key={t} value={t}>{ISSUE_TYPE_LABELS[t]}</option>)}
                                 </select>
-                                <button type="button" className="m-icon-btn" aria-label="Altın setten çıkar" onClick={() => onSetGolden(golden.filter(y => y.taskId !== x.taskId), 'altın setten kayıt çıkarıldı')}><Icon name="x" size={16} /></button>
+                                <button type="button" className="m-icon-btn" aria-label="Altın setten çıkar" onClick={() => onSetGolden(golden.filter(y => !same(y, x)), 'altın setten kayıt çıkarıldı')}><Icon name="x" size={16} /></button>
                             </div>
                         ); })}
                     </div>

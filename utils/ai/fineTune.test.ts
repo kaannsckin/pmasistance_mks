@@ -53,6 +53,15 @@ describe('ince ayar kararı', () => {
         expect(ml).toMatchObject({ aiRatio: 1.4, mlRatio: 0.8 });
     });
 
+    it('karar veremeyen değerlendirme ya da efor tahmininde geride olmayan AI "önerilir" demez', () => {
+        const big2 = { records: Array.from({ length: FT_GOOD_RECORDS }, (_, i) => ({ ...h.records[i % h.records.length], id: `c${i}` })), report: h.report };
+        expect(fineTuneReadiness({ evalRuns: [{ ...goldRun(null, 0.5), ai: { ...goldRun(null, 0.5).ai!, n: 5 } }], goldenSet: golden(60) }, big2, { model: 'm1' }).verdict).toBe('not_ready');
+        const pr = fineTuneReadiness({ evalRuns: [{ ...goldRun(false, 0.6), reasons: ['Önem doğruluğu %40; alt sınır %60.'] }], goldenSet: golden(60) }, big2, { model: 'm1' });
+        expect(pr.verdict).toBe('consider');
+        expect(pr.headline).toMatch(/geride değil/);
+        expect(pr.headline).toMatch(/Önem doğruluğu/);
+    });
+
     it('AI geride kalıyorsa veri hacmine göre: az → bekle, sınırda → düşün, yeterli → öner', () => {
         const runs = { evalRuns: [goldRun(false, 1.5)], modelEvals: [mlRun(false, 1.1)] };
         expect(fineTuneReadiness({ ...runs, goldenSet: golden(30) }, h, { model: 'm1' }).verdict).toBe('not_ready'); // 40 kayıt
@@ -70,11 +79,14 @@ describe('ince ayar veri kümesi', () => {
         expect([...names].sort((a, b) => a.localeCompare(b, 'tr'))).toEqual(['Ayşe Yılmaz', 'İsmail Kaya']); // tek sözcüklü ad maskelenmez (yanlış eşleşme riski)
         const r = redactNames('Ayşe Yılmaz, AYŞE YILMAZ ve ismail kaya geldi; Ayşe Yılmazlar değil.', names);
         expect(r).toEqual({ text: '[kişi], [kişi] ve [kişi] geldi; Ayşe Yılmazlar değil.', hits: 3 });
+        // ASCII yazım ve büyük harf; kısa çizgili ve özel karakterli adlar desenini bozmaz
+        expect(redactNames('ALI KAYA ve Ayse Yilmaz geldi', ['Ali Kaya', 'Ayşe Yılmaz']).hits).toBe(2);
+        expect(redactNames('Ayşe Yılmaz-Kaya ile Front-end Ekibi (2) toplandı', ['Ayşe Yılmaz-Kaya', 'Front-end Ekibi (2)'])).toEqual({ text: '[kişi] ile [kişi] toplandı', hits: 2 });
     });
 
     it('zaman ayrımlı bağlam, altın set dışarıda, doğrulama son kapananlar, kişi adı yok', async () => {
         const h = historyOf(40);
-        const ws = { goldenSet: golden(3), people: [], projects: [createProject('P', { resources: [{ id: 'r', name: 'Ayşe Yılmaz', participation: 100, unit: 'Yazılım', title: '' }] })] };
+        const ws = { goldenSet: h.records.slice(0, 3).map(r => ({ taskId: r.id, projectId: r.projectId, priority: 'High' as const, addedAt: '' })), people: [], projects: [createProject('P', { resources: [{ id: 'r', name: 'Ayşe Yılmaz', participation: 100, unit: 'Yazılım', title: '' }] })] };
         const progress: number[] = [];
         const d = await buildFineTuneDataset(ws, h, { now: new Date('2026-10-08T10:00:00Z'), onProgress: done => progress.push(done), chunk: 10 });
         expect(d.stats.excludedGolden).toBe(3);
@@ -94,5 +106,17 @@ describe('ince ayar veri kümesi', () => {
         // Doğrulama kümesindeki kayıtlar eğitimdekilerden sonra kapanmış
         const dates = (d.card.donem as { egitim: string[]; dogrulama: string[] });
         expect(dates.dogrulama[0] >= dates.egitim[1]).toBe(true);
+    });
+
+    it('bağlam kaydın açıldığı ana göre: beklerken kapanan kayıtlar girmez', async () => {
+        // k5 2025'te açıldı ama aylar sonra başladı; arada kapananlar o gün bilinmiyordu
+        const tasks = Array.from({ length: 12 }, (_, i) => closed(i));
+        tasks[11] = { ...tasks[11], createdAt: tasks[0].createdAt };
+        const h = buildHistory([createProject('P', { tasks })]);
+        const ws = { goldenSet: [], people: [], projects: [] };
+        const d = await buildFineTuneDataset(ws, h, { now: new Date('2026-10-08T10:00:00Z') });
+        const lines = [...d.train.split('\n'), ...d.validation.split('\n')].filter(Boolean).map(l => JSON.parse(l));
+        expect(lines.some(l => l.messages[1].content.includes('Oturum ekranı hatası 11'))).toBe(false); // bağlamı yok → örnek olmaz
+        expect(d.stats.noContext).toBeGreaterThanOrEqual(2);
     });
 });

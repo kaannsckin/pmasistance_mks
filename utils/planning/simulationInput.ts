@@ -1,8 +1,9 @@
 import { Leave, Person, Project, Task, TaskStatus } from '../../types';
 import { effectiveCapacity } from '../availability';
+import { plannedShare } from '../resourcePlan';
 import { IsoDay, toIsoDay } from '../calendarRange';
 import { calibrator, GROUNDED, PlanningHistory } from './history';
-import { pertDays } from './lifecycle';
+import { estimateRange } from './lifecycle';
 import { EffortDist, SimInput, SimLane, SimTask } from './monteCarlo';
 import { seedFrom } from './random';
 import { estimateFromHistory, MIN_REFS } from './referenceClass';
@@ -148,7 +149,7 @@ export const buildSimulation = (
         }
         const person = people.get(fold(r.name));
         const rate = months.map(({ y, m }) => {
-            const planned = r.monthlyPlan && typeof r.monthlyPlan[m] === 'number' ? r.monthlyPlan[m] / 100 : base;
+            const planned = plannedShare(r, m, base);
             const avail = person ? effectiveCapacity(person, ctx.leaves || [], y, m + 1) / (person.availableAA || 1) : 1;
             return Math.max(0, planned * Math.min(1, avail));
         });
@@ -173,6 +174,12 @@ export const buildSimulation = (
 
     // ---- efor dağılımları
     const cal = calibrator(history);
+    // Kişi başına süren iş sayısı (atanmamış işler farklı kişilerde sayılır)
+    const inProgressOf = new Map<string, number>();
+    project.tasks.forEach(t => {
+        const k = fold(t.resourceName);
+        if (t.status === TaskStatus.InProgress && t.startedAt && k) inProgressOf.set(k, (inProgressOf.get(k) || 0) + 1);
+    });
     const infos: SimTaskInfo[] = [];
     const simTasks: SimTask[] = [];
     const skipped: { id: string; name: string }[] = [];
@@ -183,10 +190,9 @@ export const buildSimulation = (
         let source: EstimateSourceKind = 'range';
         let calibration: number[] | undefined;
         const c = GROUNDED.has(t.estimateSource || '') ? null : cal({ unit: t.unit, issueType: t.issueType });
-        const pert = pertDays(t);
-        if (pert !== null) {
-            const { best, avg, worst } = t.time;
-            const mode = avg > 0 ? avg : (best + worst) / 2;
+        const range = estimateRange(t);
+        if (range !== null) {
+            const { best, likely: mode, worst } = range;
             if (worst > best) {
                 dist = { kind: 'pert', min: Math.max(0, best), mode, max: worst };
             } else if (c) {
@@ -232,9 +238,11 @@ export const buildSimulation = (
         let halfDone: boolean | undefined;
         if (t.status === TaskStatus.InProgress) {
             if (t.startedAt) {
+                // Geçen iş günleri (bugün hariç; bugünün kapasitesi simülasyonda) × katılım,
+                // kişinin aynı anda sürdürdüğü işlere bölünür (Little yasası)
                 const p = participationOf.get(fold(t.resourceName)) ?? 1;
-                const elapsed = (workdaysBetween(t.startedAt, now) ?? 0) * p;
-                doneEffort = Math.max(0, elapsed);
+                const days = Math.max(0, (workdaysBetween(t.startedAt, now) ?? 0) - (isWorkday(now) ? 1 : 0));
+                doneEffort = (days * p) / (inProgressOf.get(fold(t.resourceName)) || 1);
             } else halfDone = true;
         }
 
@@ -282,22 +290,36 @@ export const buildSimulation = (
     const indeg = simTasks.map(s => (s.pred >= 0 ? 1 : 0));
     const ready = simTasks.map((_, i) => i).filter(i => indeg[i] === 0);
     const order: number[] = [];
-    while (ready.length) {
-        ready.sort(cmp);
-        const i = ready.shift()!;
-        order.push(i);
-        succ[i].forEach(j => { if (--indeg[j] === 0) ready.push(j); });
-    }
-    if (order.length < kept.length) {
-        const placed = new Set(order);
-        kept.map((_, i) => i).filter(i => !placed.has(i)).sort(cmp).forEach(i => {
-            if (simTasks[i].pred >= 0 && !placed.has(simTasks[i].pred)) {
-                simTasks[i].pred = -1;
-                warn('cycle', kept[i].id, n => `${n} kayıt öncül döngüsünde; döngü kırılarak hesaplandı`);
-            }
+    const drain = () => {
+        while (ready.length) {
+            ready.sort(cmp);
+            const i = ready.shift()!;
             order.push(i);
-            placed.add(i);
+            succ[i].forEach(j => { if (--indeg[j] === 0) ready.push(j); });
+        }
+    };
+    drain();
+    if (order.length < kept.length) {
+        // Her kaydın tek öncülü var: yerleşmeyenler ya bir döngüde ya da döngüdeki bir kayda
+        // bağlı. Yalnız döngü içindeki bir bağ (döngünün en öncelikli kaydının öncülü) kırılır;
+        // döngüye bağlı kayıtlar öncülünü bekler.
+        const placed = new Set(order);
+        const onCycle = (i: number) => {
+            let j = simTasks[i].pred;
+            for (let k = 0; k <= kept.length && j >= 0; k++, j = simTasks[j].pred) if (j === i) return true;
+            return false;
+        };
+        const members = kept.map((_, i) => i).filter(i => !placed.has(i) && onCycle(i));
+        members.forEach(i => warn('cycle', kept[i].id, n => `${n} kayıt öncül döngüsünde; döngü kırılarak hesaplandı`));
+        members.sort(cmp).forEach(i => {
+            if (!onCycle(i)) return; // bu döngü daha önce kırıldı
+            const p = simTasks[i].pred;
+            succ[p] = succ[p].filter(j => j !== i);
+            simTasks[i].pred = -1;
+            indeg[i] = 0;
+            ready.push(i);
         });
+        drain();
     }
 
     const testDays = Math.max(0, opts.testDays ?? project.settings.globalTestDays ?? 4);

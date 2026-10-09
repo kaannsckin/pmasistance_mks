@@ -65,10 +65,23 @@ export interface TaskDurations {
     estimateDays: number | null; // PERT beklenen süre (b + 4m + w) / 6
 }
 
+/**
+ * Görev tahmininin aralığı. Formda tek değer girilince uçlar boş (0) kalır:
+ * boş uç olası değere eşit sayılır ({0, 5, 0} → 5 · 5 · 5); olası boşsa
+ * uçların ortası alınır; sıra bozuksa sıralanır. Geçmişin kalibrasyon oranı
+ * ile simülasyon aynı tabanı kullansın diye tek yerde.
+ */
+export const estimateRange = (t: Pick<Task, 'time'>): { best: number; likely: number; worst: number } | null => {
+    const { best = 0, avg = 0, worst = 0 } = t.time || {};
+    if (!(avg > 0 || best > 0 || worst > 0)) return null;
+    const likely = avg > 0 ? avg : best > 0 && worst > 0 ? (best + worst) / 2 : Math.max(best, worst);
+    const [b, m, w] = [best > 0 ? best : likely, likely, worst > 0 ? worst : likely].sort((x, y) => x - y);
+    return { best: b, likely: m, worst: w };
+};
+
 export const pertDays = (t: Pick<Task, 'time'>): number | null => {
-    const { best, avg, worst } = t.time || { best: 0, avg: 0, worst: 0 };
-    if (!(avg > 0 || best > 0 || worst > 0) || worst < best) return null;
-    return Math.round(((best + 4 * avg + worst) / 6) * 10) / 10;
+    const r = estimateRange(t);
+    return r ? Math.round(((r.best + 4 * r.likely + r.worst) / 6) * 10) / 10 : null;
 };
 
 export const taskDurations = (t: Task): TaskDurations => {

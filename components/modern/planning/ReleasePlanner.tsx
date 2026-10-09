@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { Leave, Person, Project, ReleasePlan, TaskStatus } from '../../../types';
 import { toIsoDay } from '../../../utils/calendarRange';
 import { PlanningModel } from '../../../utils/planning/ml/runModel';
@@ -26,8 +26,9 @@ interface Props {
     blindEstimate: boolean;
     aiBlocked?: boolean;
     ml?: PlanningModel | null;
-    onSavePlan: (plan: ReleasePlan) => void;
-    onDeletePlan: (id: string) => void;
+    /** Plan kendi projesine yazılır (kayıt, proje değiştirildikten sonra da gelebilir) */
+    onSavePlan: (projectId: string, plan: ReleasePlan) => void;
+    onDeletePlan: (projectId: string, id: string) => void;
     onCommit: (result: CommitResult) => void;
     onOpenGoals: () => void;
 }
@@ -38,6 +39,8 @@ const pct = (v: number) => `%${Math.round(v * 100)}`;
 const ReleasePlanner: React.FC<Props> = ({ project, history, people, leaves, visibleProjectIds, canEdit, blindEstimate, aiBlocked, ml, onSavePlan, onDeletePlan, onCommit, onOpenGoals }) => {
     const [openId, setOpenId] = useState<string | null>(null);
     const [justCommitted, setJustCommitted] = useState<string | null>(null);
+    const projectId = project.id;
+    const savePlan = useCallback((p: ReleasePlan) => onSavePlan(projectId, p), [onSavePlan, projectId]);
     const plans = [...(project.releasePlans || [])].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
     const open = plans.find(p => p.id === openId);
 
@@ -55,7 +58,7 @@ const ReleasePlanner: React.FC<Props> = ({ project, history, people, leaves, vis
                 blindEstimate={blindEstimate}
                 aiBlocked={aiBlocked}
                 ml={ml}
-                onSave={onSavePlan}
+                onSave={savePlan}
                 onCommit={c => { onCommit(c); setJustCommitted(c.plan.id); }}
                 onClose={() => setOpenId(null)}
             />
@@ -65,7 +68,7 @@ const ReleasePlanner: React.FC<Props> = ({ project, history, people, leaves, vis
 
     const create = () => {
         const p = createReleasePlan(project);
-        onSavePlan(p);
+        savePlan(p);
         setOpenId(p.id);
     };
 
@@ -94,7 +97,7 @@ const ReleasePlanner: React.FC<Props> = ({ project, history, people, leaves, vis
                             </span>
                             <span className={`inline-flex items-center h-6 px-2.5 rounded-full text-[12px] font-semibold ${committed ? 'm-tone-ok' : 'm-tone-hold'}`}>{committed ? 'Aktarıldı' : 'Taslak'}</span>
                             <button type="button" className="m-btn m-btn-gray" onClick={() => setOpenId(p.id)}>{committed ? 'Aç' : canEdit ? 'Devam et' : 'Görüntüle'}</button>
-                            {canEdit && !committed && <button type="button" className="m-icon-btn" aria-label={`${p.name || 'Adsız sürüm'} taslağını sil`} onClick={() => { if (window.confirm('Taslak silinsin mi?')) onDeletePlan(p.id); }}><Icon name="trash" size={16} /></button>}
+                            {canEdit && !committed && <button type="button" className="m-icon-btn" aria-label={`${p.name || 'Adsız sürüm'} taslağını sil`} onClick={() => { if (window.confirm('Taslak silinsin mi?')) onDeletePlan(projectId, p.id); }}><Icon name="trash" size={16} /></button>}
                         </div>
                     );
                 })}

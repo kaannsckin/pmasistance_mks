@@ -33,8 +33,8 @@ interface Props {
     onAddTask: (task: Task, log: EstimateLogEntry) => void;
     onViewTask: (task: Task) => void;
     onOpenList: () => void;
-    onSaveReleasePlan: (plan: ReleasePlan) => void;
-    onDeleteReleasePlan: (id: string) => void;
+    onSaveReleasePlan: (projectId: string, plan: ReleasePlan) => void;
+    onDeleteReleasePlan: (projectId: string, id: string) => void;
     onCommitReleasePlan: (result: CommitResult) => void;
     onOpenGoals: () => void;
     /** Jira'dan kayıt geçmişi aktarımı (yalnız düzenleyebilen) */

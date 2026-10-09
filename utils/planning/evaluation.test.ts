@@ -4,7 +4,7 @@ import { estimateGate, goldenJsonl } from '../ai/estimateEval';
 import { DEFAULT_GATE } from '../ai/policy';
 import { createProject } from '../workspace';
 import {
-    appendEvalRun, backtestRecord, backtestTargets, calibrationTrend, gateStatus, goldCases, goldenFromRecord, MIN_GATE_CASES, releaseCases,
+    appendEvalRun, backtestRecord, backtestTargets, calibrationTrend, caseKey, gateStatus, goldCases, goldenCandidates, goldenFromRecord, MIN_GATE_CASES, releaseCases,
     scoreGoldRun, scoreReleaseCase, summarizeRecordBacktest, summarizeReleaseBacktest,
 } from './evaluation';
 import { buildHistory } from './history';
@@ -80,6 +80,25 @@ describe('sürüm simülasyonunun geriye dönük testi', () => {
         expect(s.n).toBe(3);
         expect(s.advice[0]).toMatch(/en az 5/);
     });
+
+    it('tahmini olmayan kayıt benzerlerinden simüle edilir; simüle edilemeyen kayıt bitişi kaydırmaz', () => {
+        const res = [{ id: 'r1', name: 'Ayşe', participation: 100, unit: 'Yazılım', title: '' }];
+        const base = [
+            closed('a', '2026-09-07', 3, { version: 1, includeInSprints: true, resourceName: 'Ayşe' }),
+            closed('b', '2026-09-07', 2, { version: 1, includeInSprints: true, resourceName: 'Ayşe' }),
+            closed('c', '2026-09-08', 4, { version: 1, includeInSprints: true, resourceName: 'Ayşe' }),
+        ];
+        // Tahminsiz, 40 iş günü süren kayıt; o güne kadar kapanmış kayıt yok: simüle edilemez, gerçek bitişe de girmez
+        const lone = closed('z', '2026-09-08', 40, { version: 1, includeInSprints: true, time: { best: 0, avg: 0, worst: 0 } });
+        const p = createProject('G', { resources: res, tasks: [...base, lone] });
+        const c = releaseCases([p], buildHistory([p]), {}, { iterations: 200 })[0];
+        expect(c.taskCount).toBe(3);
+        expect(c.actualOffset).toBeLessThan(10);
+        // Geçmiş varsa tahminsiz kayıt benzerlerinden simülasyona girer
+        const similar = closed('y', '2026-09-08', 3, { version: 1, includeInSprints: true, time: { best: 0, avg: 0, worst: 0 } });
+        const q = createProject('H', { resources: res, tasks: [...weekly(10), ...base, similar] });
+        expect(releaseCases([q], buildHistory([q]), {}, { iterations: 200 })[0].taskCount).toBe(4);
+    });
 });
 
 describe('kalibrasyon izleme', () => {
@@ -112,16 +131,38 @@ describe('altın set ve kalite kapısı', () => {
         expect(JSON.parse(line.messages[2].content)).toMatchObject({ onem: 'High', tur: 'bug' });
     });
 
+    it('aynı Jira kaydı iki projeye aktarılmışsa: altın set proje + kimlikle eşlenir, ikiz bağlama girmez', () => {
+        const tasks = weekly(12).map(t => ({ ...t, jiraId: `MKS-${t.id}` }));
+        const a = createProject('A', { tasks }), b = createProject('B', { tasks: tasks.map(t => ({ ...t, priority: 'Low' as const })) });
+        const h = buildHistory([a, b]);
+        const recB = h.records.find(r => r.projectId === b.id && r.id === 'k11')!;
+        const cases = goldCases([goldenFromRecord(recB)], h);
+        expect(cases).toHaveLength(1);
+        expect(cases[0].record).toBe(recB);
+        expect(cases[0].ref.matches.some(m => m.record.jiraId === 'MKS-k11')).toBe(false);
+        // Eklenen kaydın yalnız kendisi adaylardan düşer
+        const left = goldenCandidates(h, [goldenFromRecord(recB)]);
+        expect(left.filter(r => r.id === 'k11').map(r => r.projectId)).toEqual([a.id]);
+        // AI yanıtları proje + kimlikle anahtarlanır
+        expect(caseKey(cases[0])).toBe(`${b.id}|k11`);
+    });
+
     it('eşiklere göre geçer ya da kalır; az örnekte karar verilmez', () => {
         const { cases } = setup();
         const meta = { id: 'e1', at: '2026-10-08T10:00:00Z', promptVersion: 'kayit-tahmin-1', model: 'm1' };
-        const good = new Map(cases.map(c => [c.record.id, { effort: { best: c.record.effortDays * 0.5, likely: c.record.effortDays, worst: c.record.effortDays * 2 }, priority: 'High' as const, issueType: 'bug' as const, confidence: 'high' as const, unknownEvidence: false }]));
+        const good = new Map(cases.map(c => [caseKey(c), { effort: { best: c.record.effortDays * 0.5, likely: c.record.effortDays, worst: c.record.effortDays * 2 }, priority: 'High' as const, issueType: 'bug' as const, confidence: 'high' as const, unknownEvidence: false }]));
         const pass = scoreGoldRun(cases, good, DEFAULT_GATE, meta);
         expect(pass).toMatchObject({ passed: true, ai: { n: 12, mae: 0, coverage: 1, priorityAccuracy: 1, typeAccuracy: 1 } });
-        const bad = new Map(cases.map(c => [c.record.id, { effort: { best: 20, likely: 30, worst: 40 }, priority: 'Low' as const, confidence: 'low' as const, unknownEvidence: true }]));
+        const bad = new Map(cases.map(c => [caseKey(c), { effort: { best: 20, likely: 30, worst: 40 }, priority: 'Low' as const, confidence: 'low' as const, unknownEvidence: true }]));
         const fail = scoreGoldRun(cases, bad, DEFAULT_GATE, meta);
         expect(fail.passed).toBe(false);
         expect(fail.reasons).toHaveLength(3);
+        // Okunamayan önem yanlış sayılır; geçmiş kayıt ölçüsü yanıtlanan kayıtlarda
+        const noPriority = new Map(cases.map(c => [caseKey(c), { ...good.get(caseKey(c))!, priority: undefined }]));
+        const np = scoreGoldRun(cases, noPriority, DEFAULT_GATE, meta);
+        expect(np).toMatchObject({ passed: false, ai: { priorityAccuracy: 0 } });
+        const half = new Map([...good].slice(0, 10));
+        expect(scoreGoldRun(cases, half, DEFAULT_GATE, meta).reference.mae).toBe(scoreGoldRun(cases.filter(c => half.has(caseKey(c))), null, DEFAULT_GATE, meta).reference.mae);
         const few = new Map([...good].slice(0, MIN_GATE_CASES - 1));
         expect(scoreGoldRun(cases, few, DEFAULT_GATE, meta).passed).toBeNull();
         expect(scoreGoldRun(cases, null, DEFAULT_GATE, meta)).toMatchObject({ ai: null, passed: null });
@@ -134,6 +175,9 @@ describe('altın set ve kalite kapısı', () => {
         expect(gateStatus([run(true), run(false)], 'kayit-tahmin-1', 'm1').status).toBe('failed');
         expect(gateStatus([run(true)], 'kayit-tahmin-1', 'm2').status).toBe('stale');
         expect(gateStatus([run(null)], 'kayit-tahmin-1').status).toBe('insufficient');
+        // Karar veremeyen yeni koşu (AI çoğu kayıtta hata verdi) geçmeyen kapıyı kaldırmaz
+        expect(gateStatus([run(false), run(null)], 'kayit-tahmin-1', 'm1').status).toBe('failed');
+        expect(estimateGate({ evalRuns: [run(false), run(null)], aiPolicy: { estimateGate: { ...DEFAULT_GATE, enforce: true } } }, 'm1').blocked).toBe(true);
         expect(gateStatus([run(true)], 'kayit-tahmin-2').status).toBe('none');
         expect(estimateGate({ evalRuns: [run(false)] }, 'm1').blocked).toBe(false); // zorunlu değil
         expect(estimateGate({ evalRuns: [run(false)], aiPolicy: { estimateGate: { ...DEFAULT_GATE, enforce: true } } }, 'm1').blocked).toBe(true);

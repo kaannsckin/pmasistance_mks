@@ -58,8 +58,13 @@ export interface HistoryRecord {
     terms: string[];
     /** Ölçülen sürenin başladığı an (işe başlama, yoksa açılış) */
     openedAt: string;
+    /** Kaydın açıldığı (oluşturulduğu) an; tahmin bu anda yapılır */
+    createdAt?: string;
     resolvedAt: string;
 }
+
+/** Kaydın tahmin edildiği an: açılış (yoksa ölçümün başladığı an). Zaman ayrımlı testlerde bağlam bundan önce kapananlardır. */
+export const estimatedAt = (r: Pick<HistoryRecord, 'openedAt' | 'createdAt'>): string => (r.createdAt && r.createdAt < r.openedAt ? r.createdAt : r.openedAt);
 
 export interface PlanningHistory {
     report: RecordQualityReport;
@@ -131,6 +136,7 @@ export const buildHistory = (projects: Pick<Project, 'id' | 'name' | 'tasks' | '
             ratio,
             terms: terms(`${t.name} ${t.notes || ''}`),
             openedAt: r.cycleDays !== null ? t.startedAt! : t.createdAt || t.startedAt!,
+            createdAt: t.createdAt || undefined,
             resolvedAt: t.resolvedAt!,
         };
     });

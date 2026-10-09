@@ -67,7 +67,7 @@ import ModernSidebar from './components/modern/ModernSidebar';
 import ModernProjectHeader from './components/modern/ModernProjectHeader';
 import ModernPlanning from './components/modern/ModernPlanning';
 import { appendEstimateLog } from './utils/planning/estimateLog';
-import { CommitResult } from './utils/planning/releasePlan';
+import { applyCommit, CommitResult } from './utils/planning/releasePlan';
 import { appendEvalRun } from './utils/planning/evaluation';
 import { appendModelEval } from './utils/planning/ml/estimateModel';
 import { JiraImportOptions, mergeJiraIssues } from './utils/planning/jiraImport';
@@ -164,6 +164,8 @@ const App: React.FC = () => {
   const [newProjectRequest, setNewProjectRequest] = useState(0);
   const [egg, setEgg] = useState<EggEvent | null>(null);
   const [undo, setUndo] = useState<{ message: string; snapshot: WorkspaceData } | null>(null);
+  const [storageFull, setStorageFull] = useState(false);
+  const [storageWarnClosed, setStorageWarnClosed] = useState(false);
   const undoTimer = useRef<number | undefined>(undefined);
   const workspaceRef = useRef<WorkspaceData | null>(null);
 
@@ -286,7 +288,15 @@ const App: React.FC = () => {
     const toPersist = workspace.settings.isLocalPersistenceEnabled !== false
       ? workspace
       : { ...workspace, projects: [], activeProjectId: null };
-    localStorage.setItem(WORKSPACE_STORAGE_KEY, serializeWorkspace(toPersist));
+    // Kota aşılırsa (ör. büyük Jira geçmişi) uygulama çökmesin; kullanıcı uyarılır
+    try {
+      localStorage.setItem(WORKSPACE_STORAGE_KEY, serializeWorkspace(toPersist, false));
+      setStorageFull(false);
+      setStorageWarnClosed(false);
+    } catch (e) {
+      console.error('Çalışma alanı tarayıcıya kaydedilemedi', e);
+      setStorageFull(true);
+    }
     // Bulut bağlıysa değişiklikleri gecikmeli gönder (yerel-öncelikli senkron)
     scheduleAutoPush(workspace);
   }, [workspace, isInitialized]);
@@ -345,12 +355,14 @@ const App: React.FC = () => {
     setUndo(null);
   }, [undo]);
 
-  const updateActiveProject = useCallback((updater: (p: Project) => Project) => {
+  // Belirli bir projeyi günceller (null → etkin proje)
+  const updateProjectById = useCallback((id: string | null, updater: (p: Project) => Project) => {
     updateWorkspace(ws => ({
       ...ws,
       projects: ws.projects.map(p => {
-        if (p.id !== ws.activeProjectId) return p;
+        if (p.id !== (id ?? ws.activeProjectId)) return p;
         const next = updater(p);
+        if (next === p) return p;
         const now = new Date();
         // Yerel değişikliklerde kayıt yaşam döngüsü damgalanır (açılış, başlama, kapanış, durum günlüğü)
         const tasks = next.tasks !== p.tasks ? stampLifecycle(p.tasks, next.tasks, now) : next.tasks;
@@ -358,6 +370,7 @@ const App: React.FC = () => {
       }),
     }));
   }, [updateWorkspace]);
+  const updateActiveProject = useCallback((updater: (p: Project) => Project) => updateProjectById(null, updater), [updateProjectById]);
 
   // Risk güncellemesi + "Ne değişti?" günlüğü: eklenen/kapatılan riskleri yakalar
   const handleUpdateActiveRisks = useCallback((risks: Risk[]) => {
@@ -916,7 +929,7 @@ const App: React.FC = () => {
     updateWorkspace(ws => {
       const project = ws.projects.find(p => p.id === projectId);
       if (!project || !canEditProjectContent(ws, identityOf(ws), projectId)) return ws;
-      const r = mergeJiraIssues(project.tasks, issues, opts);
+      const r = mergeJiraIssues(project.tasks, issues, opts, ws.projects.filter(p => p.id !== projectId).flatMap(p => p.tasks.map(t => t.id)));
       if (!r.added && !r.updated) return ws;
       const next = { ...ws, projects: ws.projects.map(p => (p.id === projectId ? { ...p, tasks: r.tasks, jiraProjectKey: key, updatedAt: new Date().toISOString() } : p)) };
       return appendAudit(next, 'data.import', `"${project.name}" · Jira ${key} kayıt geçmişi (${label}): ${r.added} yeni, ${r.updated} güncellenen kayıt`, projectId);
@@ -1028,27 +1041,29 @@ const App: React.FC = () => {
   // kaynağı değilse otomatik eklenir; müşteri isteğinden açıldıysa istek
   // "göreve dönüştü" olarak işaretlenir
   // ---- Sürüm planlama sihirbazı: taslak kaydı, silme, aktarım ----
-  const handleSaveReleasePlan = useCallback((plan: ReleasePlan) => {
-    updateActiveProject(p => {
+  // Plan, açıkken proje değiştirilse de kendi projesine yazılır
+  const handleSaveReleasePlan = useCallback((projectId: string, plan: ReleasePlan) => {
+    updateProjectById(projectId, p => {
       const list = p.releasePlans || [];
       const exists = list.some(x => x.id === plan.id);
       // Aktarılmış plan taslak kaydıyla geri değişmez
       if (exists && list.find(x => x.id === plan.id)!.status === 'committed') return p;
       return { ...p, releasePlans: exists ? list.map(x => (x.id === plan.id ? plan : x)) : [...list, plan] };
     });
-  }, [updateActiveProject]);
-  const handleDeleteReleasePlan = useCallback((id: string) => {
-    updateActiveProject(p => ({ ...p, releasePlans: (p.releasePlans || []).filter(x => x.id !== id || x.status === 'committed') }));
-  }, [updateActiveProject]);
+  }, [updateProjectById]);
+  const handleDeleteReleasePlan = useCallback((projectId: string, id: string) => {
+    updateProjectById(projectId, p => ({ ...p, releasePlans: (p.releasePlans || []).filter(x => x.id !== id || x.status === 'committed') }));
+  }, [updateProjectById]);
   const handleCommitReleasePlan = useCallback((c: CommitResult) => {
-    updateActiveProject(() => c.project);
+    // Aktarım anlık görüntüden hesaplandı; projenin güncel hâline uygulanır
+    updateProjectById(c.project.id, p => applyCommit(p, c));
     updateWorkspace(ws => appendAudit(
       { ...ws, estimateLog: c.log.reduce<EstimateLogEntry[] | undefined>((log, e) => appendEstimateLog(log, e), ws.estimateLog) },
       'release.commit',
       `Sürüm planı aktarıldı: ${c.plan.name || 'Adsız sürüm'} (${c.created} yeni, ${c.updated} güncellenen görev${c.plan.baseline ? `, P80 ${c.plan.baseline.p80}` : ''})`,
       c.project.id,
     ));
-  }, [updateActiveProject, updateWorkspace]);
+  }, [updateProjectById, updateWorkspace]);
 
   const saveTaskFromForm = (t: Task) => {
     const requestId = convertingRequestId;
@@ -1967,6 +1982,13 @@ const App: React.FC = () => {
       {egg?.kind === 'hyper' && <HyperdriveOverlay onDone={() => setEgg(null)} />}
       {egg?.kind === 'space' && <SpaceMode onDone={() => setEgg(null)} />}
       {egg?.kind === 'celebrate' && <Celebration message={egg.message} onDone={() => setEgg(null)} />}
+      {storageFull && !storageWarnClosed && (
+        <div role="alert" className="fixed top-3 left-1/2 -translate-x-1/2 z-[260] w-[min(640px,calc(100vw-32px))] flex items-start gap-3 bg-amber-50 dark:bg-amber-950 text-amber-900 dark:text-amber-100 border border-amber-300 dark:border-amber-800 rounded-xl shadow-2xl px-4 py-3">
+          <i className="fa-solid fa-triangle-exclamation mt-0.5" aria-hidden="true"></i>
+          <span className="text-sm flex-1">Tarayıcı depolaması dolu: son değişiklikler bu tarayıcıya kaydedilemedi. Sayfayı kapatmadan önce bulut eşitlemesini kullanın ya da "Yedeği indir" ile yedek alın.</span>
+          <button type="button" onClick={() => setStorageWarnClosed(true)} className="opacity-70 hover:opacity-100" aria-label="Uyarıyı kapat"><i className="fa-solid fa-xmark text-sm"></i></button>
+        </div>
+      )}
       {undo && (
         <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[250] flex items-center gap-3 bg-gray-900 dark:bg-gray-800 text-white rounded-xl shadow-2xl px-4 py-2.5 border border-gray-700">
           <i className="fa-solid fa-trash-can text-gray-400 text-xs"></i>
