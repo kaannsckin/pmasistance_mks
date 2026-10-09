@@ -46,7 +46,7 @@ Tarayıcı (asistan paneli) ──► /api/ai/chat  (proxy: anahtar burada) ─�
 
 ## Onaylı değişiklikler ve ekran içi AI özellikleri
 
-**Asistan veriyi kendisi değiştirmez, öneri hazırlar.** Proje Yöneticisi ve Bölüm Sorumlusu rollerinde (kişi seçiliyken) asistana şu araçlar açılır: `oner_risk_ekle`, `oner_gorev_ekle`, `oner_gorev_durumu`, `oner_rag_guncelle`, `oner_tahsis_ayarla`.
+**Asistan veriyi kendisi değiştirmez, öneri hazırlar.** Proje Yöneticisi ve Bölüm Sorumlusu rollerinde (kişi seçiliyken) asistana şu araçlar açılır: `oner_risk_ekle`, `oner_risk_guncelle`, `oner_gorev_ekle`, `oner_gorev_durumu`, `oner_rag_guncelle`, `oner_tahsis_ayarla`; proje notlarını görebilen rollerde ayrıca `oner_istek_karari` (müşteri isteğini kabul ederek göreve dönüştürür ya da reddeder; gerekçe proje notuna yazılır) ve `oner_not_ekle`.
 - Araç yalnızca bir **öneri kartı** üretir (ne değişecek, önce/sonra). Veri, kullanıcı karttaki **Uygula** düğmesine basmadan değişmez.
 - "Uygula" anında güncel veriyle **yeniden doğrulanır**: proje sahipliği (RBAC), plan kilidi (kilitli planda yalnızca gerçekleşen), kaydın hâlâ var olması, değer aralıkları (`utils/ai/actions.ts`).
 - Her uygulama denetim günlüğüne **"AI önerisi uygulandı"** (`ai.apply`) olarak yazılır ve ekranın altında **Geri Al** sunulur. Aynı karta çift tıklama iki kez uygulamaz.
