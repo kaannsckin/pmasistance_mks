@@ -2,6 +2,8 @@
 
 Haftalık rapor düzenleyicisindeki **Taslak öner** düğmesi, PY'nin haftalık notlarından, worklog'dan, müşteri görüşmelerinden ve proje kartından kurum rapor kılavuzuna uygun bir taslak çıkarır. Bu belge asistanın nasıl öğrendiğini, neyin nerede ayarlandığını ve kalitesinin nasıl ölçüldüğünü anlatır.
 
+Haftalık rapor sayfası ilk açıldığında role göre (PY, bölüm sorumlusu, PYB destek, yönetim) sade bir adım adım rehber açılır; sonra sayfa başlığındaki ya da rapor düzenleyicideki "i" düğmesiyle, bulunduğunuz sekmenin adımından yeniden açılır (`utils/weeklyGuides.ts`).
+
 Kural: **model çıktısı hiçbir zaman doğrudan rapora yazılmaz.** Öneri önce önizlemede gösterilir; kullanıcı uygularsa maddeler rapora eklenir ve düzenlenebilir.
 
 ## Katmanlar

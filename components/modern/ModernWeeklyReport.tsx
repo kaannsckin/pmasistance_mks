@@ -9,6 +9,8 @@ import {
     nextStage, projectDepartment, reportDictionary, reportFlowOf, reportSettingsOf, STAGE_LABELS, visibleReports, weekLabel, weekProgress,
 } from '../../utils/weeklyReport';
 import { WeekPicker } from './DateRangePicker';
+import { GuideButton, GuideTour, useGuide } from './GuideTour';
+import { startStepFor } from '../../utils/guides';
 import { Icon } from './icons';
 import { rowSep } from './ui';
 import ConsolidatedReport from './weekly/ConsolidatedReport';
@@ -120,6 +122,8 @@ const ModernWeeklyReport: React.FC<ModernWeeklyReportProps> = ({
     });
     const [tab, setTab] = useState<Tab>(exec ? 'report' : steward || bs ? 'inbox' : 'mine');
     const [settingsTab, setSettingsTab] = useState<SettingsTab>('general');
+    // Rol başına rehber: ilk girişte bir kez kendiliğinden, sonra "i" ile; açık sekmenin ya da düzenleyicinin adımından başlar
+    const guide = useGuide(exec ? 'weeklyExec' : steward ? 'weeklySteward' : bs ? 'weeklyBs' : 'weeklyPy');
     const [open, setOpen] = useState<WeeklyReport | null>(null);
     const [notice, setNotice] = useState<NoticeState>(null);
     const [health, setHealth] = useState<IntegrationHealth | null>(null);
@@ -194,10 +198,16 @@ const ModernWeeklyReport: React.FC<ModernWeeklyReportProps> = ({
     }, [bs, dept, workspace, reports, year, week, peopleName]);
     const deptAdditions = bs && dept ? findReport(reports, year, week, undefined, 'department', dept) : undefined;
 
+    const guideMode = open ? 'editor' : tab === 'settings' ? `settings_${settingsTab}` : tab;
+    const showGuide = () => guide.show(startStepFor(guide.guide, guideMode));
+    const tour = guide.open ? <GuideTour guide={guide.guide} start={guide.start} onClose={guide.close} /> : null;
+
     // ---- düzenleyici açık
     if (open) {
         const live = (workspace.weeklyReports || []).find(r => r.id === open.id);
         return (
+            <>
+            {tour}
             <ReportEditor
                 key={open.id}
                 workspace={workspace}
@@ -228,7 +238,9 @@ const ModernWeeklyReport: React.FC<ModernWeeklyReportProps> = ({
                 onLogAi={onLogReportAi}
                 onSaveProjectProfile={onSaveProjectProfile}
                 onSetExemplar={steward ? onSetReportExemplar : undefined}
+                onHelp={showGuide}
             />
+            </>
         );
     }
 
@@ -243,6 +255,7 @@ const ModernWeeklyReport: React.FC<ModernWeeklyReportProps> = ({
 
     return (
         <div className="flex flex-col gap-6">
+            {tour}
             <header className="flex flex-wrap items-end justify-between gap-4">
                 <div className="max-w-[70ch]">
                     <h1 className="m-0 text-[34px] leading-tight font-bold tracking-[-0.02em] m-text">Haftalık rapor</h1>
@@ -254,6 +267,7 @@ const ModernWeeklyReport: React.FC<ModernWeeklyReportProps> = ({
                     </p>
                 </div>
                 <div className="flex items-center gap-1">
+                    <GuideButton icon="info" label="Haftalık rapor nasıl kullanılır?" onClick={showGuide} />
                     <WeekPicker year={year} week={week} label={weekLabel(year, week)} onChange={(y, w) => { setWk({ year: y, week: w }); setOpen(null); }} />
                     {!isCurrent && <button type="button" className="m-btn m-btn-plain !min-h-[40px]" onClick={() => { setWk(current); setOpen(null); }}>Bu hafta</button>}
                 </div>

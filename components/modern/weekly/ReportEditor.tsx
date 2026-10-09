@@ -230,6 +230,8 @@ export interface ReportEditorProps {
     onSaveProjectProfile?: (projectId: string, profile: ProjectAiProfile | undefined) => boolean;
     /** PYB destek: onaylı raporu AI üslup örneği olarak işaretle */
     onSetExemplar?: (reportId: string, on: boolean) => boolean;
+    /** "i": rehberi düzenleyici adımından aç */
+    onHelp?: () => void;
 }
 
 // ---------------------------------------------------------------- proje kartı
@@ -288,7 +290,7 @@ const ProjectCardSheet: React.FC<{ profile?: ProjectAiProfile; canEdit: boolean;
     );
 };
 
-const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report, isNew, dictionary, health, onBack, onSave, onAdvance, onReturn, onSetJiraKey, onOpenMeetings, onLogAi, onSaveProjectProfile, onSetExemplar }) => {
+const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report, isNew, dictionary, health, onBack, onSave, onAdvance, onReturn, onSetJiraKey, onOpenMeetings, onLogAi, onSaveProjectProfile, onSetExemplar, onHelp }) => {
     const [draft, setDraft] = useState<WeeklyReport>(report);
     const [dirty, setDirty] = useState(false);
     const [notice, setNotice] = useState<NoticeState>(null);
@@ -538,6 +540,9 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
                         </p>
                     </div>
                     <div className="flex items-center gap-2">
+                        {onHelp && (
+                            <button type="button" className="m-icon-btn" aria-label="Rapor nasıl yazılır?" title="Rapor nasıl yazılır?" onClick={onHelp}><Icon name="info" size={22} /></button>
+                        )}
                         {dirty && <span className="text-[13px] m-text-3">Kaydedilmedi</span>}
                         {onSetExemplar && report.kind === 'project' && report.stage === 'approved' && !isNew && (
                             <button type="button" className="m-btn m-btn-plain !min-h-[44px]" aria-pressed={!!report.exemplar}
