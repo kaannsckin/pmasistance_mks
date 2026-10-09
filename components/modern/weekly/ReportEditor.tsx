@@ -1,5 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { Abbreviation, CustomerMeeting, MeetingDetails, ReportAiLogEntry, ReportCategory, ReportItem, WeeklyReport, WorklogEntry, WorkspaceData } from '../../../types';
+import { Abbreviation, CustomerMeeting, MeetingDetails, ProjectAiProfile, ReportAiLogEntry, ReportCategory, ReportItem, WeeklyReport, WorklogEntry, WorkspaceData } from '../../../types';
+import { cleanProjectProfile, PROFILE_LIMITS } from '../../../utils/ai/projectProfile';
 import { suggestionLogEntry } from '../../../utils/ai/reportAiStats';
 import { ROLE_LABELS } from '../../../utils/allocations';
 import { reportGateWarning } from '../../../utils/ai/reportEval';
@@ -7,7 +8,7 @@ import { buildVariantRequest, PRODUCTION_VARIANT } from '../../../utils/ai/repor
 import { buildReportInput, parseReportSuggestion, REPORT_PROMPT_VERSION, ReportSuggestion } from '../../../utils/ai/weeklyReportPrompt';
 import { meetingsHeldInWeek, meetingsPlannedInWeek, meetingToDetails, visibleMeetings } from '../../../utils/customerMeetings';
 import { fetchJiraWorklogs, IntegrationHealth } from '../../../utils/integrations';
-import { Identity } from '../../../utils/rbac';
+import { Identity, ownsProject } from '../../../utils/rbac';
 import { relativeTime } from '../../../utils/recentChanges';
 import {
     canEditReport, CATEGORY_META, findAbbreviations, findReport, glossaryFor, itemDisplay, lintCounts, LintIssue, lintReport, locative, meetingSentence,
@@ -184,9 +185,67 @@ export interface ReportEditorProps {
     onOpenMeetings: () => void;
     /** AI önerisi günlüğü (uygulandı / vazgeçildi / hata; metin yazılmaz) */
     onLogAi?: (entry: ReportAiLogEntry) => void;
+    /** Proje kartı (yalnız proje sahibi PY) */
+    onSaveProjectProfile?: (projectId: string, profile: ProjectAiProfile | undefined) => boolean;
 }
 
-const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report, isNew, dictionary, health, onBack, onSave, onAdvance, onReturn, onSetJiraKey, onOpenMeetings, onLogAi }) => {
+// ---------------------------------------------------------------- proje kartı
+
+const emptyProfile = (): ProjectAiProfile => ({ summary: '', customers: '', product: '', stakeholders: '', reportHints: '', glossary: [] });
+
+const ProjectCardSheet: React.FC<{ profile?: ProjectAiProfile; canEdit: boolean; onClose: () => void; onSave: (p: ProjectAiProfile | undefined) => boolean }> = ({ profile, canEdit, onClose, onSave }) => {
+    const [d, setD] = useState<ProjectAiProfile>(() => ({ ...emptyProfile(), ...(profile || {}), glossary: [...(profile?.glossary || [])] }));
+    const [error, setError] = useState<string | null>(null);
+    const set = (patch: Partial<ProjectAiProfile>) => setD(x => ({ ...x, ...patch }));
+    const terms = d.glossary || [];
+    const setTerm = (i: number, patch: Partial<{ term: string; explanation: string }>) => set({ glossary: terms.map((t, k) => (k === i ? { ...t, ...patch } : t)) });
+    const text = (key: 'customers' | 'product' | 'stakeholders' | 'reportHints', label: string, placeholder: string) => (
+        <Field label={label} htmlFor={`pc-${key}`}>
+            <input id={`pc-${key}`} className="m-input" maxLength={PROFILE_LIMITS.text} disabled={!canEdit} value={d[key] || ''} placeholder={placeholder} onChange={e => set({ [key]: e.target.value })} />
+        </Field>
+    );
+    const save = () => { if (onSave(cleanProjectProfile(d))) onClose(); else setError('Kaydedilemedi: proje kartını yalnız projenin yöneticisi düzenleyebilir.'); };
+    return (
+        <Sheet
+            wide
+            title="Proje kartı"
+            subtitle="AI taslağı, konuya yabancı okurun anlaması için bu bilgileri kısa açıklama olarak kullanır; kartta olmayan teknik ayrıntıyı uydurmaz."
+            onClose={onClose}
+            footer={<>
+                <span className="flex-1 text-[12.5px] m-text-3">Kart proje kaydıyla birlikte paylaşılır (haftalık notlar gibi özel değildir).</span>
+                <button type="button" className="m-btn m-btn-plain" onClick={onClose}>{canEdit ? 'Vazgeç' : 'Kapat'}</button>
+                {canEdit && <button type="button" className="m-btn m-btn-primary" onClick={save}>Kaydet</button>}
+            </>}
+        >
+            {!canEdit && <p className="m-0 text-[14px] m-text-3">Kartı projenin yöneticisi düzenler.</p>}
+            <Field label="Proje ne yapıyor?" htmlFor="pc-summary" hint={`En çok ${PROFILE_LIMITS.summary} karakter. Ör. "Belediyeler için kurum içi e-posta ve takvim ürünü; 2026'da 3 belediyede pilot."`}>
+                <textarea id="pc-summary" className="m-input py-2.5" rows={3} maxLength={PROFILE_LIMITS.summary} disabled={!canEdit} value={d.summary || ''} onChange={e => set({ summary: e.target.value })} />
+            </Field>
+            <div className="grid gap-3 sm:grid-cols-2">
+                {text('customers', 'Müşteriler', 'Ör. Gebze Belediyesi, Kocaeli Valiliği')}
+                {text('product', 'Ürün / çıktı', 'Ör. Safir Posta 3.2')}
+                {text('stakeholders', 'Paydaşlar', 'Ör. İG, Ürün Yönetimi, Mesajlaşma birimi')}
+                {text('reportHints', 'Rapor ipuçları', 'Ör. Hakediş tutarlarını KDV hariç yazın')}
+            </div>
+            <div className="flex flex-col gap-2">
+                <h3 className="m-0 text-[15px] font-semibold m-text">Terimler <span className="m-text-3 font-normal m-tabular">{terms.length}/{PROFILE_LIMITS.terms}</span></h3>
+                {terms.map((t, i) => (
+                    <div key={i} className="flex flex-wrap items-center gap-2">
+                        <input aria-label={`Terim ${i + 1}`} className="m-input !w-40" maxLength={PROFILE_LIMITS.term} disabled={!canEdit} value={t.term} placeholder="Terim" onChange={e => setTerm(i, { term: e.target.value })} />
+                        <input aria-label={`Terim ${i + 1} açıklaması`} className="m-input flex-1 min-w-[200px]" maxLength={PROFILE_LIMITS.explanation} disabled={!canEdit} value={t.explanation} placeholder="Kısa açıklama" onChange={e => setTerm(i, { explanation: e.target.value })} />
+                        {canEdit && <button type="button" className="m-icon-btn" aria-label={`Terim ${i + 1} sil`} onClick={() => set({ glossary: terms.filter((_, k) => k !== i) })}><Icon name="trash" size={16} /></button>}
+                    </div>
+                ))}
+                {canEdit && terms.length < PROFILE_LIMITS.terms && (
+                    <button type="button" className="m-btn m-btn-plain self-start" onClick={() => set({ glossary: [...terms, { term: '', explanation: '' }] })}><Icon name="plus" size={16} />Terim ekle</button>
+                )}
+            </div>
+            {error && <p role="alert" className="m-0 text-[14px] m-ink-bad">{error}</p>}
+        </Sheet>
+    );
+};
+
+const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report, isNew, dictionary, health, onBack, onSave, onAdvance, onReturn, onSetJiraKey, onOpenMeetings, onLogAi, onSaveProjectProfile }) => {
     const [draft, setDraft] = useState<WeeklyReport>(report);
     const [dirty, setDirty] = useState(false);
     const [notice, setNotice] = useState<NoticeState>(null);
@@ -199,6 +258,7 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
     const [busy, setBusy] = useState<'file' | 'jira' | null>(null);
     const [suggestion, setSuggestion] = useState<{ s: ReportSuggestion; raw: string; input: string; promptVersion: string; model?: string } | null>(null);
     const [missingQs, setMissingQs] = useState<string[]>([]);
+    const [cardOpen, setCardOpen] = useState(false);
     const fileRef = useRef<HTMLInputElement>(null);
     const ai = useAiRun();
 
@@ -332,7 +392,7 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
     const suggest = async () => {
         if (!project) return;
         setMissingQs([]);
-        const input = buildReportInput({ project, year, week, worklog: draft.worklog, heldMeetings: held, plannedMeetings: planned, previous: prevReport, dictionary });
+        const input = buildReportInput({ project, year, week, worklog: draft.worklog, heldMeetings: held, plannedMeetings: planned, previous: prevReport, planReview: draft.planReview, dictionary });
         const promptVersion = REPORT_PROMPT_VERSION;
         const model = ai.model;
         const req = buildVariantRequest({ variant: PRODUCTION_VARIANT, ws: workspace, report: draft, input });
@@ -652,7 +712,11 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
                             </div>
                             {ai.available ? (
                                 <>
-                                    <p className="m-0 text-[13px] m-text-3">Haftalık notlar ({notes.length}), worklog ({worklog.length} konu), görüşmeler ({held.length}) ve geçen haftanın planından kılavuza uygun taslak çıkarır. Taslağı mutlaka gözden geçirin.</p>
+                                    <p className="m-0 text-[13px] m-text-3">Haftalık notlar ({notes.length}), worklog ({worklog.length} konu), görüşmeler ({held.length}), bu hafta kapanan işler, proje kartı ve geçen haftanın planından kılavuza uygun taslak çıkarır. Taslağı mutlaka gözden geçirin.</p>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        {!cleanProjectProfile(project.aiProfile) && <span className="flex-1 min-w-[180px] text-[13px] m-ink-warn">Proje kartını doldurursanız öneriler konuya yabancı okur için daha anlaşılır olur.</span>}
+                                        <button type="button" className="m-btn m-btn-plain !min-h-[44px]" onClick={() => setCardOpen(true)}><Icon name="book" size={17} />Proje kartı</button>
+                                    </div>
                                     <button type="button" className="m-btn m-btn-primary" disabled={ai.loading} onClick={suggest}>
                                         <Icon name="sparkles" size={18} />{ai.loading ? 'Öneri hazırlanıyor…' : 'Taslak öner'}
                                     </button>
@@ -797,6 +861,15 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
                         </div>
                     )}
                 </Sheet>
+            )}
+
+            {cardOpen && project && (
+                <ProjectCardSheet
+                    profile={project.aiProfile}
+                    canEdit={!!onSaveProjectProfile && ownsProject(project, identity)}
+                    onClose={() => setCardOpen(false)}
+                    onSave={p => !!onSaveProjectProfile?.(project.id, p)}
+                />
             )}
 
             {returning && (

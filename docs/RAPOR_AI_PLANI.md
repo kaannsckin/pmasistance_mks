@@ -12,7 +12,7 @@ Taban çizgisi (9 Ekim 2026): `npx vitest run` → 88 dosya, 714 test; `npx tsc 
 | 0 | Keşif ve plan | Tamam | bu commit |
 | F1 | İstem sürümü, öneri günlüğü, kabul oranı | Tamam | F1 commit |
 | F2 | Altın set, çevrimdışı değerlendirme, kalite kapısı | Tamam | F2 commit |
-| F3 | Proje kartı ve zengin girdi | Bekliyor | |
+| F3 | Proje kartı ve zengin girdi | Tamam | F3 commit |
 | F4 | Düzenlenebilir, sürümlü kılavuz | Bekliyor | |
 | F5 | Dinamik örnek ve düzeltme örnekleri | Bekliyor | |
 | F6 | Çıktı denetimi ve tek turluk düzeltme | Bekliyor | |

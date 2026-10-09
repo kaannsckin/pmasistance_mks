@@ -507,9 +507,24 @@ export interface Project {
   objectives: Objective[];
   workPackages: WorkPackage[]; // Proje bazlı iş paketleri (İP)
   releasePlans?: ReleasePlan[]; // Sürüm planlama sihirbazı taslakları ve aktarılan planlar
+  aiProfile?: ProjectAiProfile; // Proje kartı: haftalık rapor AI'sına bağlam (PY düzenler; proje satırıyla paylaşılır)
   settings: ProjectSettings;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * Proje kartı: projeye hâkim olmayan okurun anlaması için AI'ya verilen kısa
+ * tanım, müşteriler, ürün, terimler ve rapor ipuçları. Proje sahibi PY yazar.
+ */
+export interface ProjectAiProfile {
+  summary?: string;
+  customers?: string;
+  product?: string;
+  glossary?: { term: string; explanation: string }[];
+  stakeholders?: string;
+  reportHints?: string;
+  updatedAt?: string;
 }
 
 /** Arayüz tercihi: klasik (mevcut) ya da modern (sade, iOS tarzı) */

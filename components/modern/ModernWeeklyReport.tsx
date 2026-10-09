@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AiReportAssessment, ReportAiLogEntry, ReportEvalRun, ReportGatePolicy, ReportSettings, WeeklyReport, WorkspaceData } from '../../types';
+import { AiReportAssessment, ProjectAiProfile, ReportAiLogEntry, ReportEvalRun, ReportGatePolicy, ReportSettings, WeeklyReport, WorkspaceData } from '../../types';
 import { fetchIntegrationHealth, IntegrationHealth } from '../../utils/integrations';
 import { can } from '../../utils/permissions';
 import { Identity, managedDepartmentCode, ownsProject } from '../../utils/rbac';
@@ -49,6 +49,8 @@ export interface ModernWeeklyReportProps {
     onRemoveReportGolden: (reportId: string) => void;
     onAddReportEvalRun: (run: ReportEvalRun) => void;
     onUpdateReportGate: (patch: Partial<ReportGatePolicy>, label: string) => void;
+    /** Proje kartı (proje sahibi PY) */
+    onSaveProjectProfile: (projectId: string, profile: ProjectAiProfile | undefined) => boolean;
 }
 
 type Tab = 'mine' | 'inbox' | 'status' | 'report' | 'settings';
@@ -92,7 +94,7 @@ const ReportRows: React.FC<{ rows: Row[]; dictionary: ReturnType<typeof reportDi
 
 const ModernWeeklyReport: React.FC<ModernWeeklyReportProps> = ({
     workspace, identity, onSaveReport, onAdvanceReport, onReturnReport, onPublishWeek, onUnpublishWeek, onMarkEmailed, onUpdateSettings, onSetJiraKey, onOpenMeetings, onRatePmo, onSetAiAssessment, onLogReportAi,
-    onAddReportGolden, onRemoveReportGolden, onAddReportEvalRun, onUpdateReportGate,
+    onAddReportGolden, onRemoveReportGolden, onAddReportEvalRun, onUpdateReportGate, onSaveProjectProfile,
 }) => {
     const role = identity.role;
     // Ekran kipi: rapor denetçisi (yetki), bölüm sorumlusu ve PY kimlik kuralı; diğerleri yayınlanan raporu okur
@@ -213,6 +215,7 @@ const ModernWeeklyReport: React.FC<ModernWeeklyReportProps> = ({
                 onSetJiraKey={onSetJiraKey}
                 onOpenMeetings={onOpenMeetings}
                 onLogAi={onLogReportAi}
+                onSaveProjectProfile={onSaveProjectProfile}
             />
         );
     }

@@ -25,6 +25,7 @@ import { aiPolicyOf, updateAiPolicy } from './utils/ai/policy';
 import { appendReportAiLog, submitLogEntry } from './utils/ai/reportAiStats';
 import { addReportGolden, appendReportEvalRun, removeReportGolden } from './utils/ai/reportEval';
 import { VARIANT_META } from './utils/ai/reportVariants';
+import { setProjectProfile } from './utils/ai/projectProfile';
 import { stampLifecycle } from './utils/planning/lifecycle';
 import { AllocationSuggestion, ApplyMode, applyAllocationSuggestions } from './utils/taskToAllocation';
 import { applyBilledHoursActuals, planBilledHoursPoolAdditions, suggestBilledHoursActuals, BilledApplyMode, BilledHoursOptions, BilledHoursRecord } from './utils/billedHours';
@@ -67,7 +68,7 @@ import { analyzeDataHealth, applyHealthFix, HealthFix } from './utils/dataHealth
 import { appendAudit, AUDIT_ACTION_LABELS } from './utils/audit';
 import { riskScore } from './utils/risks';
 import { upsertLeave } from './utils/availability';
-import { AiReportAssessment, ReportAiLogEntry, ReportEvalRun, ReportGatePolicy, ExpectationStatus, ExpectationUrgency, HealthConfig, MeetingStatus, PestelItem, ReportFlow, ReportSettings, Risk, RoleViewConfig, SwotItem, WeeklyReport } from './types';
+import { AiReportAssessment, ProjectAiProfile, ReportAiLogEntry, ReportEvalRun, ReportGatePolicy, ExpectationStatus, ExpectationUrgency, HealthConfig, MeetingStatus, PestelItem, ReportFlow, ReportSettings, Risk, RoleViewConfig, SwotItem, WeeklyReport } from './types';
 import ModernSidebar from './components/modern/ModernSidebar';
 import ModernProjectHeader from './components/modern/ModernProjectHeader';
 import ModernPlanning from './components/modern/ModernPlanning';
@@ -852,6 +853,16 @@ const App: React.FC = () => {
       : ws));
   }, [updateWorkspace]);
 
+  // Proje kartı: yalnız proje sahibi PY (proje içeriği; denetim günlüğüne yazılmaz)
+  const handleSaveProjectProfile = useCallback((projectId: string, profile: ProjectAiProfile | undefined): boolean => {
+    const ws = workspaceRef.current;
+    if (!ws) return false;
+    const projects = setProjectProfile(ws, identityOf(ws), projectId, profile);
+    if (!projects) return false;
+    commitWorkspace({ ...ws, projects });
+    return true;
+  }, [commitWorkspace]);
+
   const handleReturnReport = useCallback((reportId: string, note: string): boolean => {
     const ws = workspaceRef.current;
     if (!ws) return false;
@@ -1326,6 +1337,7 @@ const App: React.FC = () => {
           onRemoveReportGolden={handleRemoveReportGolden}
           onAddReportEvalRun={handleAddReportEvalRun}
           onUpdateReportGate={handleUpdateReportGate}
+          onSaveProjectProfile={handleSaveProjectProfile}
         />
       ) : (
         <ModernMeetings
