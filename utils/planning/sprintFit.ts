@@ -1,10 +1,12 @@
-import { Leave, Person, Project, TaskStatus } from '../../types';
+import { Leave, Person, Project, Task, TaskStatus } from '../../types';
 import { effectiveCapacity } from '../availability';
+import { plannedShare } from '../resourcePlan';
 import { buildSprintWindows } from '../taskToAllocation';
 import { calibrator, GROUNDED, PlanningHistory } from './history';
-import { pertDays } from './lifecycle';
+import { estimateRange } from './lifecycle';
 import { distMean, EffortDist } from './monteCarlo';
 import { betaPert, mulberry32, pick, Rng, seedFrom } from './random';
+import { estimateFromHistory, MIN_REFS } from './referenceClass';
 import { DEFAULT_SPREAD } from './simulationInput';
 import { isWorkday } from './workdays';
 
@@ -47,7 +49,7 @@ export const sprintFit = (
     project: Project,
     history: PlanningHistory,
     record: { unit: string; effort: EffortDist; calibration?: number[] },
-    ctx: { people?: Person[]; leaves?: Leave[]; now?: Date; iterations?: number; sprintName?: (v: number) => string } = {},
+    ctx: { people?: Person[]; leaves?: Leave[]; now?: Date; iterations?: number; sprintName?: (v: number) => string; visibleProjectIds?: ReadonlySet<string> } = {},
 ): SprintFit => {
     const now = ctx.now || new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -67,7 +69,7 @@ export const sprintFit = (
         for (; d <= end; d.setDate(d.getDate() + 1)) {
             if (!isWorkday(d)) continue;
             team.forEach(r => {
-                const planned = r.monthlyPlan && typeof r.monthlyPlan[d.getMonth()] === 'number' ? r.monthlyPlan[d.getMonth()] / 100 : (r.participation || 100) / 100;
+                const planned = plannedShare(r, d.getMonth(), (r.participation || 100) / 100);
                 const p = people.get(fold(r.name));
                 const avail = p ? effectiveCapacity(p, ctx.leaves || [], d.getFullYear(), d.getMonth() + 1) / (p.availableAA || 1) : 1;
                 cap += planned * Math.min(1, avail);
@@ -76,24 +78,39 @@ export const sprintFit = (
         return cap;
     };
 
+    // Açık işin efor dağılımı; simülasyondaki kurallar (tek değer → kalibrasyon ya da
+    // varsayılan belirsizlik, tahmin yoksa benzer kapanmış kayıtların gerçek eforları)
+    const distOf = (t: Task): { dist: EffortDist; ratios?: number[]; share: number } | null => {
+        // Süreçteki iş: kabaca yarısı kalmış sayılır
+        const share = t.status === TaskStatus.InProgress ? 0.5 : 1;
+        const range = estimateRange(t);
+        if (!range) {
+            const ref = estimateFromHistory(
+                { name: t.name, notes: t.notes, issueType: t.issueType, unit: t.unit, priority: t.priority, labels: t.labels, workPackageId: t.workPackageId, projectId: project.id },
+                history,
+                { visibleProjectIds: ctx.visibleProjectIds },
+            );
+            return ref.effortSamples.length >= MIN_REFS ? { dist: { kind: 'samples', values: ref.effortSamples }, share } : null;
+        }
+        const { best, likely: mode, worst } = range;
+        const c = GROUNDED.has(t.estimateSource || '') ? null : cal({ unit: t.unit, issueType: t.issueType });
+        const dist: EffortDist = worst > best ? { kind: 'pert', min: best, mode, max: worst } : c ? { kind: 'fixed', value: mode } : { kind: 'pert', min: mode * DEFAULT_SPREAD.low, mode, max: mode * DEFAULT_SPREAD.high };
+        return { dist, ratios: c?.ratios, share };
+    };
+    const openInUnit = planned.filter(t => (t.version || 0) > 0 && t.status !== TaskStatus.Done && fold(t.unit) === unit);
+
     const iterations = ctx.iterations ?? 2000;
     const rows: SprintFitRow[] = [];
+    // Bitmiş sürümlerde kalan açık işler ilk açık sürüme devreder
+    let carried: Task[] = [];
     for (let i = 0; i < windows.length && rows.length < MAX_ROWS; i++) {
         const w = windows[i];
         const v = i + 1;
-        if (w.end < today) continue;
-        const open = planned.filter(t => (t.version || 0) === v && t.status !== TaskStatus.Done && fold(t.unit) === unit);
-        const dists = open.map(t => {
-            const pert = pertDays(t);
-            if (pert === null) return null;
-            const { best, avg, worst } = t.time;
-            const mode = avg > 0 ? avg : (best + worst) / 2;
-            const c = GROUNDED.has(t.estimateSource || '') ? null : cal({ unit: t.unit, issueType: t.issueType });
-            const dist: EffortDist = worst > best ? { kind: 'pert', min: best, mode, max: worst } : c ? { kind: 'fixed', value: mode } : { kind: 'pert', min: mode * DEFAULT_SPREAD.low, mode, max: mode * DEFAULT_SPREAD.high };
-            // Süreçteki iş: kabaca yarısı kalmış sayılır
-            const share = t.status === TaskStatus.InProgress ? 0.5 : 1;
-            return { dist, ratios: c?.ratios, share };
-        }).filter((x): x is NonNullable<typeof x> => !!x);
+        const own = openInUnit.filter(t => t.version === v);
+        if (w.end < today) { carried = carried.concat(own); continue; }
+        const open = carried.concat(own);
+        carried = [];
+        const dists = open.map(distOf).filter((x): x is NonNullable<typeof x> => !!x);
         const capacity = capacityOf(w.start, w.end);
         const committed = dists.reduce((s, d) => s + distMean(d.dist) * d.share * (d.ratios ? d.ratios.reduce((a, b) => a + b, 0) / d.ratios.length : 1), 0);
         let probability: number | null = null;

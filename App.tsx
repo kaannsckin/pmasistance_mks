@@ -67,7 +67,7 @@ import ModernSidebar from './components/modern/ModernSidebar';
 import ModernProjectHeader from './components/modern/ModernProjectHeader';
 import ModernPlanning from './components/modern/ModernPlanning';
 import { appendEstimateLog } from './utils/planning/estimateLog';
-import { CommitResult } from './utils/planning/releasePlan';
+import { applyCommit, CommitResult } from './utils/planning/releasePlan';
 import { appendEvalRun } from './utils/planning/evaluation';
 import { appendModelEval } from './utils/planning/ml/estimateModel';
 import { JiraImportOptions, mergeJiraIssues } from './utils/planning/jiraImport';
@@ -345,12 +345,14 @@ const App: React.FC = () => {
     setUndo(null);
   }, [undo]);
 
-  const updateActiveProject = useCallback((updater: (p: Project) => Project) => {
+  // Belirli bir projeyi günceller (null → etkin proje)
+  const updateProjectById = useCallback((id: string | null, updater: (p: Project) => Project) => {
     updateWorkspace(ws => ({
       ...ws,
       projects: ws.projects.map(p => {
-        if (p.id !== ws.activeProjectId) return p;
+        if (p.id !== (id ?? ws.activeProjectId)) return p;
         const next = updater(p);
+        if (next === p) return p;
         const now = new Date();
         // Yerel değişikliklerde kayıt yaşam döngüsü damgalanır (açılış, başlama, kapanış, durum günlüğü)
         const tasks = next.tasks !== p.tasks ? stampLifecycle(p.tasks, next.tasks, now) : next.tasks;
@@ -358,6 +360,7 @@ const App: React.FC = () => {
       }),
     }));
   }, [updateWorkspace]);
+  const updateActiveProject = useCallback((updater: (p: Project) => Project) => updateProjectById(null, updater), [updateProjectById]);
 
   // Risk güncellemesi + "Ne değişti?" günlüğü: eklenen/kapatılan riskleri yakalar
   const handleUpdateActiveRisks = useCallback((risks: Risk[]) => {
@@ -1028,27 +1031,29 @@ const App: React.FC = () => {
   // kaynağı değilse otomatik eklenir; müşteri isteğinden açıldıysa istek
   // "göreve dönüştü" olarak işaretlenir
   // ---- Sürüm planlama sihirbazı: taslak kaydı, silme, aktarım ----
-  const handleSaveReleasePlan = useCallback((plan: ReleasePlan) => {
-    updateActiveProject(p => {
+  // Plan, açıkken proje değiştirilse de kendi projesine yazılır
+  const handleSaveReleasePlan = useCallback((projectId: string, plan: ReleasePlan) => {
+    updateProjectById(projectId, p => {
       const list = p.releasePlans || [];
       const exists = list.some(x => x.id === plan.id);
       // Aktarılmış plan taslak kaydıyla geri değişmez
       if (exists && list.find(x => x.id === plan.id)!.status === 'committed') return p;
       return { ...p, releasePlans: exists ? list.map(x => (x.id === plan.id ? plan : x)) : [...list, plan] };
     });
-  }, [updateActiveProject]);
-  const handleDeleteReleasePlan = useCallback((id: string) => {
-    updateActiveProject(p => ({ ...p, releasePlans: (p.releasePlans || []).filter(x => x.id !== id || x.status === 'committed') }));
-  }, [updateActiveProject]);
+  }, [updateProjectById]);
+  const handleDeleteReleasePlan = useCallback((projectId: string, id: string) => {
+    updateProjectById(projectId, p => ({ ...p, releasePlans: (p.releasePlans || []).filter(x => x.id !== id || x.status === 'committed') }));
+  }, [updateProjectById]);
   const handleCommitReleasePlan = useCallback((c: CommitResult) => {
-    updateActiveProject(() => c.project);
+    // Aktarım anlık görüntüden hesaplandı; projenin güncel hâline uygulanır
+    updateProjectById(c.project.id, p => applyCommit(p, c));
     updateWorkspace(ws => appendAudit(
       { ...ws, estimateLog: c.log.reduce<EstimateLogEntry[] | undefined>((log, e) => appendEstimateLog(log, e), ws.estimateLog) },
       'release.commit',
       `Sürüm planı aktarıldı: ${c.plan.name || 'Adsız sürüm'} (${c.created} yeni, ${c.updated} güncellenen görev${c.plan.baseline ? `, P80 ${c.plan.baseline.p80}` : ''})`,
       c.project.id,
     ));
-  }, [updateActiveProject, updateWorkspace]);
+  }, [updateProjectById, updateWorkspace]);
 
   const saveTaskFromForm = (t: Task) => {
     const requestId = convertingRequestId;

@@ -153,6 +153,8 @@ export interface ReleasePlanItem {
   predecessorId?: string; // aynı plandaki başka satır
   sourceTaskId?: string; // havuzdan alınan mevcut görev
   ownEstimateDays?: number;
+  /** Havuzdan alınan görevin kendi aralığı (kendi tahmin değişmedikçe korunur) */
+  ownRange?: EffortRange;
   /** Kör tahmin: öneriler açılmadan önce girilen değerler (bir kez donar) */
   blind?: { effortDays?: number; priority?: Task['priority'] };
   reference?: EstimateLogEntry['reference'];

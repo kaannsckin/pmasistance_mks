@@ -97,7 +97,8 @@ const updateFrom = (e: Task, fresh: Task, issue: JiraIssueRecord): Task => ({
     status: fresh.status,
     createdAt: fresh.createdAt ?? e.createdAt,
     startedAt: fresh.startedAt ?? (fresh.statusLog ? undefined : e.startedAt),
-    resolvedAt: fresh.resolvedAt,
+    // Jira kapanış anı vermiyorsa (çözüm alanı ve geçiş yok) yereldeki kapanış korunur
+    resolvedAt: fresh.status === TaskStatus.Done ? fresh.resolvedAt ?? (e.status === TaskStatus.Done ? e.resolvedAt : undefined) : undefined,
     statusLog: fresh.statusLog ?? e.statusLog,
     unit: issue.components.length ? fresh.unit : e.unit,
     labels: fresh.labels ?? e.labels,

@@ -60,6 +60,12 @@ describe('rastgele sayı ve dağılımlar', () => {
 });
 
 describe('Monte Carlo motoru', () => {
+    it('havuzdaki iş, işi en erken bitirecek kişiye gider (izinli kişi "boş" görünse de)', () => {
+        const away = { rate: [...new Array(20).fill(0), ...new Array(380).fill(1)], base: 1 };
+        const r = runMonteCarlo(input([simTask('a', 5, { lane: -1, pool: 0 }), simTask('b', 5, { lane: -1, pool: 0 })], { lanes: [away, lane()], pools: [[0, 1]] }));
+        expect(r.devEnd.p50).toBeCloseTo(10, 5); // ikisi de müsait kişide; izinlideki 25 günde biterdi
+    });
+
     it('kapasite: %50 katılım süreyi iki katına çıkarır; kapasitesiz günler atlanır', () => {
         const half = { cum: (() => { const c = new Float64Array(401); for (let k = 0; k < 400; k++) c[k + 1] = c[k] + 0.5; return c; })(), rate: new Array(400).fill(0.5), base: 0.5, H: 400 };
         expect(finishOn(half, 0, 5)).toBeCloseTo(10);
@@ -145,6 +151,19 @@ describe('planlama geçmişi ve kalibrasyon', () => {
         expect(byId.get('h3')).toMatchObject({ effortDays: 2, effortBasis: 'logged' });
         // tahmin PERT 3,3 gün → oran = 2,5 / 3,3
         expect(byId.get('h1')!.ratio).toBeCloseTo(2.5 / 3.3, 2);
+    });
+
+    it('tek değerli tahmin ({0, 5, 0}) geçmişte ve simülasyonda aynı tabanla ölçülür', () => {
+        const tasks = Array.from({ length: 10 }, (_, i) => closed(`t${i}`, 3 + i, { actualHours: 40, time: { best: 0, avg: 5, worst: 0 } })); // farklı günlerde kapanır (toplu kapatma sayılmaz)
+        const p = createProject('T', { tasks: [...tasks, task('yeni', { time: { best: 0, avg: 5, worst: 0 } })] });
+        const h = buildHistory([p]);
+        expect(h.records.every(r => r.estimateDays === 5 && Math.abs(r.ratio! - 1) < 1e-9)).toBe(true);
+        const built = buildSimulation(p, h, {}, { now: NOW });
+        expect(built.tasks[0]).toMatchObject({ id: 'yeni', meanEffort: 5, calibrated: true });
+        expect(built.medianRatio).toBe(1);
+        // Sırası karışık girilen aralık düzeltilir (olası değer en kötüden büyük olamaz)
+        const odd = buildSimulation(createProject('O', { tasks: [task('x', { time: { best: 1, avg: 10, worst: 5 } })] }), buildHistory([]), {}, { now: NOW });
+        expect(odd.input.tasks[0].dist).toEqual({ kind: 'pert', min: 1, mode: 5, max: 10 });
     });
 
     it('kalibrasyon en özel yeterli gruptan seçilir', () => {
@@ -247,6 +266,44 @@ describe('simülasyon girdisi', () => {
         expect(r.release.p50).toBeGreaterThan(r.devEnd.p50);
     });
 
+    it('ekipten eklenen kişinin aylık planındaki boş aylar güncel katılımı izler', () => {
+        const tasks = Array.from({ length: 6 }, (_, i) => task(`t${i}`, { resourceName: 'Ayşe', time: { best: 5, avg: 5, worst: 5 } }));
+        const legacy = Object.fromEntries(Array.from({ length: 12 }, (_, i) => [i, i === 9 ? 100 : 0]));
+        const run = (monthlyPlan?: Record<number, number>) => runMonteCarlo(buildSimulation(createProject('A', { resources: [res('Ayşe', { monthlyPlan })], tasks }), buildHistory([]), {}, { now: NOW, testDays: 0, iterations: 200, seed: 3 }).input).release.p50;
+        expect(run(legacy)).toBeCloseTo(run(undefined), 5);
+        expect(run(legacy)).toBeLessThan(45);
+        // Gerçek plan: Kasım'da %0 girildiyse kişi o ay çalışmaz
+        expect(run({ 9: 100, 10: 0, 11: 100 })).toBeGreaterThan(run(undefined) + 10);
+    });
+
+    it('süreçteki işlerde geçen süre kişinin eşzamanlı işlerine bölünür, bugün sayılmaz', () => {
+        const started = '2026-09-23T09:00:00';
+        const p = createProject('S', {
+            resources: [res('Ayşe')],
+            tasks: ['a', 'b', 'c'].map(id => task(id, { resourceName: 'Ayşe', status: TaskStatus.InProgress, startedAt: started, time: { best: 9, avg: 10, worst: 12 } })),
+        });
+        const built = buildSimulation(p, buildHistory([p]), {}, { now: NOW });
+        // 23 Eyl – 6 Eki: 10 iş günü, üç işe bölünür
+        built.input.tasks.forEach(t => expect(t.doneEffort).toBeCloseTo(10 / 3, 5));
+        const fresh = buildSimulation(createProject('F', { resources: [res('Ali')], tasks: [task('x', { resourceName: 'Ali', status: TaskStatus.InProgress, startedAt: NOW.toISOString(), time: { best: 1, avg: 1, worst: 1 } })] }), buildHistory([]), {}, { now: NOW });
+        expect(fresh.input.tasks[0].doneEffort).toBe(0);
+    });
+
+    it('öncül döngüsünde yalnız döngü içindeki bağ kırılır', () => {
+        const p = createProject('D', {
+            resources: [res('Ayşe')],
+            tasks: [task('a', { version: 2, predecessor: 'b' }), task('b', { version: 2, predecessor: 'a' }), task('c', { version: 1, predecessor: 'a' })],
+        });
+        const built = buildSimulation(p, buildHistory([p]), {}, { now: NOW });
+        const idx = (id: string) => built.tasks.findIndex(t => t.id === id);
+        expect(built.input.tasks[idx('c')].pred).toBe(idx('a')); // döngüye bağlı kayıt öncülünü bekler
+        expect(built.input.tasks[idx('a')].pred === -1 || built.input.tasks[idx('b')].pred === -1).toBe(true);
+        expect(built.input.tasks[idx('a')].pred === -1 && built.input.tasks[idx('b')].pred === -1).toBe(false);
+        expect(built.warnings.find(w => w.kind === 'cycle')!.taskIds.sort()).toEqual(['a', 'b']);
+        const order = built.input.order;
+        expect(order.indexOf(idx('c'))).toBeGreaterThan(order.indexOf(idx('a')));
+    });
+
     it('tarih ↔ iş günü ofseti (tatiller düşülür)', () => {
         expect(dateAtOffset('2026-10-26', 4)).toEqual(new Date(2026, 9, 30)); // 29 Ekim tatil
         expect(offsetOf('2026-10-26', '2026-10-30')).toBe(4);
@@ -280,5 +337,20 @@ describe('yeni kayıt hangi sürüme sığar', () => {
         const none = sprintFit(p, buildHistory([p]), { unit: 'Donanım', effort: { kind: 'fixed', value: 1 } }, { now: NOW });
         expect(none.unitHasTeam).toBe(false);
         expect(none.recommended).toBeNull();
+    });
+
+    it('bitmiş sürümde kalan açık işler ilk açık sürüme devreder; tahminsiz işler benzer kayıtlardan', () => {
+        const settings = { sprintDuration: 2, projectStartDate: '2026-09-21', globalTestDays: 2 };
+        const left = Array.from({ length: 3 }, (_, i) => task(`k${i}`, { version: 1, resourceName: 'Ayşe', time: { best: 5, avg: 5, worst: 5 } }));
+        const p = createProject('C', { settings, resources: [res('Ayşe')], tasks: left });
+        const fit = sprintFit(p, buildHistory([p]), { unit: 'Yazılım', effort: { kind: 'fixed', value: 3 } }, { now: NOW, iterations: 300 });
+        expect(fit.rows[0].version).toBe(2);
+        expect(fit.rows[0].committed).toBeGreaterThan(14);
+        expect(fit.rows[0].probability!).toBeLessThan(0.05);
+        // Tahmini olmayan iş, benzer kapanmış kayıtların eforuyla yük sayılır
+        const hist = Array.from({ length: 6 }, (_, i) => closed(`h${i}`, 6, { name: `Rapor ekranı dışa aktarım ${i}` }));
+        const q = createProject('R', { settings, resources: [res('Ayşe')], tasks: [...hist, task('yeni', { version: 2, name: 'Rapor ekranı dışa aktarım yeni', time: { best: 0, avg: 0, worst: 0 } })] });
+        const f2 = sprintFit(q, buildHistory([q]), { unit: 'Yazılım', effort: { kind: 'fixed', value: 1 } }, { now: NOW, iterations: 300 });
+        expect(f2.rows[0].committed).toBeGreaterThan(4);
     });
 });

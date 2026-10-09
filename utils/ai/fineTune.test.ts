@@ -53,6 +53,15 @@ describe('ince ayar kararı', () => {
         expect(ml).toMatchObject({ aiRatio: 1.4, mlRatio: 0.8 });
     });
 
+    it('karar veremeyen değerlendirme ya da efor tahmininde geride olmayan AI "önerilir" demez', () => {
+        const big2 = { records: Array.from({ length: FT_GOOD_RECORDS }, (_, i) => ({ ...h.records[i % h.records.length], id: `c${i}` })), report: h.report };
+        expect(fineTuneReadiness({ evalRuns: [{ ...goldRun(null, 0.5), ai: { ...goldRun(null, 0.5).ai!, n: 5 } }], goldenSet: golden(60) }, big2, { model: 'm1' }).verdict).toBe('not_ready');
+        const pr = fineTuneReadiness({ evalRuns: [{ ...goldRun(false, 0.6), reasons: ['Önem doğruluğu %40; alt sınır %60.'] }], goldenSet: golden(60) }, big2, { model: 'm1' });
+        expect(pr.verdict).toBe('consider');
+        expect(pr.headline).toMatch(/geride değil/);
+        expect(pr.headline).toMatch(/Önem doğruluğu/);
+    });
+
     it('AI geride kalıyorsa veri hacmine göre: az → bekle, sınırda → düşün, yeterli → öner', () => {
         const runs = { evalRuns: [goldRun(false, 1.5)], modelEvals: [mlRun(false, 1.1)] };
         expect(fineTuneReadiness({ ...runs, goldenSet: golden(30) }, h, { model: 'm1' }).verdict).toBe('not_ready'); // 40 kayıt
@@ -70,6 +79,9 @@ describe('ince ayar veri kümesi', () => {
         expect([...names].sort((a, b) => a.localeCompare(b, 'tr'))).toEqual(['Ayşe Yılmaz', 'İsmail Kaya']); // tek sözcüklü ad maskelenmez (yanlış eşleşme riski)
         const r = redactNames('Ayşe Yılmaz, AYŞE YILMAZ ve ismail kaya geldi; Ayşe Yılmazlar değil.', names);
         expect(r).toEqual({ text: '[kişi], [kişi] ve [kişi] geldi; Ayşe Yılmazlar değil.', hits: 3 });
+        // ASCII yazım ve büyük harf; kısa çizgili ve özel karakterli adlar desenini bozmaz
+        expect(redactNames('ALI KAYA ve Ayse Yilmaz geldi', ['Ali Kaya', 'Ayşe Yılmaz']).hits).toBe(2);
+        expect(redactNames('Ayşe Yılmaz-Kaya ile Front-end Ekibi (2) toplandı', ['Ayşe Yılmaz-Kaya', 'Front-end Ekibi (2)'])).toEqual({ text: '[kişi] ile [kişi] toplandı', hits: 2 });
     });
 
     it('zaman ayrımlı bağlam, altın set dışarıda, doğrulama son kapananlar, kişi adı yok', async () => {

@@ -92,6 +92,15 @@ describe('birleştirme', () => {
         expect(reopened.resolvedAt).toBeUndefined();
         expect(reopened.statusLog!.at(-1)).toEqual({ at: '2026-09-10T08:00:00.000Z', from: TaskStatus.Done, to: TaskStatus.InProgress });
     });
+
+    it('Jira kapanış tarihi vermezse yerel kapanış tarihi korunur', () => {
+        const done = local('t1', { jiraId: 'MKS-1', status: TaskStatus.Done, resolvedAt: '2026-09-04T14:00:00.000Z' });
+        const r = mergeJiraIssues([done], [issue('MKS-1', { resolved: null, transitions: [] })], OPTS).tasks[0];
+        expect(r).toMatchObject({ status: TaskStatus.Done, resolvedAt: '2026-09-04T14:00:00.000Z' });
+        // Yerelde açıkken Jira'da kapanış tarihsiz kapanmışsa uydurulmaz
+        const open = mergeJiraIssues([local('t2', { jiraId: 'MKS-2', resolvedAt: '2026-01-01T00:00:00.000Z' })], [issue('MKS-2', { resolved: null, transitions: [] })], OPTS).tasks[0];
+        expect(open.resolvedAt).toBeUndefined();
+    });
 });
 
 describe('önizleme', () => {

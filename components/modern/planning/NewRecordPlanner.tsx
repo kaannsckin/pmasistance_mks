@@ -125,10 +125,11 @@ const NewRecordPlanner: React.FC<Props> = ({ project, history, people, leaves, v
     const effortKey = !effort ? '' : effort.dist.kind === 'samples'
         ? `s${effort.dist.values.length}:${effort.dist.values.reduce((a, b) => a + b, 0)}`
         : `${JSON.stringify(effort.dist)}|${effort.calibration?.length || 0}`;
-    const fit = useMemo<SprintFit | null>(() => (unit.trim() && effort ? sprintFit(project, history, { unit, effort: effort.dist, calibration: effort.calibration }, { people, leaves, sprintName: v => sprintLabel(v, project.settings.sprintNames) }) : null),
+    const fit = useMemo<SprintFit | null>(() => (unit.trim() && effort ? sprintFit(project, history, { unit, effort: effort.dist, calibration: effort.calibration }, { people, leaves, visibleProjectIds, sprintName: v => sprintLabel(v, project.settings.sprintNames) }) : null),
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [project, history, unit, effortKey, people, leaves]);
-    const targetVersion = version ?? fit?.recommended ?? 0;
+        [project, history, unit, effortKey, people, leaves, visibleProjectIds]);
+    // Birimde ekip yoksa kayıt havuza gider (önceki birimde seçilen sürüm geçerli değil)
+    const targetVersion = fit && !fit.unitHasTeam ? 0 : version ?? fit?.recommended ?? 0;
 
     const suggestedPriority = est.priority && est.priority.share >= 0.5 ? est.priority : null;
     const modelLog = modelEst ? logModel(modelEst) : undefined;
@@ -187,7 +188,8 @@ const NewRecordPlanner: React.FC<Props> = ({ project, history, people, leaves, v
             projectId: project.id,
             taskId: task.id,
             draft: { name: task.name, issueType: issueType || undefined, unit: task.unit || undefined, hasNotes: !!task.notes },
-            blind: blind || undefined,
+            // Öneriler hiç açılmadan gönderilen kayıtta kör tahmin şimdi donar
+            blind: blind || (hidden && (ownDays || priority) ? { effortDays: ownDays, priority: priority || undefined } : undefined),
             reference: est.method !== 'none' && est.effort && est.duration ? {
                 method: est.method, n: est.n, confidence: est.confidence, p50Days: est.duration.p50, p80Days: est.duration.p80,
                 effort: est.effort, priority: est.priority?.value, issueType: est.issueType?.value,

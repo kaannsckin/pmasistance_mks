@@ -208,7 +208,8 @@ const StepItems: React.FC<{ plan: ReleasePlan; project: Project; canEdit: boolea
     const [pool, setPool] = useState<Set<string> | null>(null);
     const units = useMemo<string[]>(() => [...new Set<string>([...project.resources.map(r => r.unit), ...project.tasks.map(t => t.unit)].map(u => (u || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'tr')), [project]);
     const wps = plan.workPackageIds.length ? project.workPackages.filter(w => plan.workPackageIds.includes(w.id)) : project.workPackages;
-    const taken = new Set(plan.items.map(i => i.sourceTaskId).filter(Boolean));
+    // Bu planda ya da başka bir taslakta alınmış havuz görevi yeniden önerilmez
+    const taken = new Set((project.releasePlans || []).filter(p => p.id !== plan.id && p.status === 'draft').concat(plan).flatMap(p => p.items.map(i => i.sourceTaskId)).filter(Boolean));
     const backlog = project.tasks.filter(t => t.status !== TaskStatus.Done && (t.version || 0) === 0 && t.includeInSprints !== false && !taken.has(t.id));
     const defaultUnit = project.resources[0]?.unit || '';
     const add = (xs: ReleasePlanItem[]) => update(p => ({ ...p, items: [...p.items, ...xs] }));
@@ -688,6 +689,7 @@ const StepCommit: React.FC<{ plan: ReleasePlan; project: Project; history: Plann
                 <>
                     <ul className="m-0 pl-5 flex flex-col gap-1.5 text-[15px] m-text">
                         <li><b>{preview.created}</b> yeni görev açılır{preview.updated ? `, havuzdaki ${preview.updated} görev güncellenir` : ''}{excluded ? `; ${excluded} kayıt kapsam dışı kalır (kararı günlüğe yazılır)` : ''}.</li>
+                        {preview.skipped.length > 0 && <li className="m-ink-warn">Havuzdan alınan {preview.skipped.length} görev bu arada başka bir sürüme ya da hedefe bağlanmış veya kapanmış; aktarılmaz: {preview.skipped.map(x => `"${x.name}"`).join(', ')}.</li>}
                         <li>Görevler simülasyon takvimine göre {versions.length > 1 ? `sürüm ${versions[0]}–${versions[versions.length - 1]} arasına` : `sürüm ${versions[0] ?? '—'} içine`} yerleşir; termin, kilometre taşının hedef tarihi (yoksa P80'i) olur.</li>
                         {preview.plan.milestones.length > 0 && <li>"{`Sürüm: ${plan.name}`}" hedefi ve {preview.plan.milestones.length} anahtar sonuç (kilometre taşları) Hedefler ekranına eklenir.</li>}
                         <li>Taban çizgisi: P50 {fmtDay(dates.p50)}, P80 {fmtDay(dates.p80)}, P95 {fmtDay(dates.p95)}{dates.targetProbability !== null ? `; hedef olasılığı ${pct(dates.targetProbability)}` : ''}. Sonradan güncel tahminle karşılaştırılır.</li>

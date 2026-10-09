@@ -6,7 +6,7 @@ import { buildHistory } from './history';
 import { runMonteCarlo } from './monteCarlo';
 import { buildSimulation } from './simulationInput';
 import {
-    autoMilestones, BASELINE_ITERATIONS, baselineGroups, buildReleaseSimulation, choiceOf, commitGroups, commitReleasePlan, createReleasePlan, decisionOf, effortOf, finalizeCommit, groupOf, itemFromTask, newItem,
+    applyCommit, autoMilestones, BASELINE_ITERATIONS, baselineGroups, buildReleaseSimulation, choiceOf, commitGroups, commitReleasePlan, createReleasePlan, decisionOf, effortOf, finalizeCommit, groupOf, itemFromTask, newItem,
     parsePastedItems, priorityOf, RELEASE_GROUP, releaseDates, sanitizeMilestones, suggestDescope, virtualProject, withReference,
 } from './releasePlan';
 
@@ -45,6 +45,20 @@ describe('kayıt girişi', () => {
     it('havuzdaki görevden satır: kaynak görev ve tahmin korunur', () => {
         const i = itemFromTask(task('h', { time: { best: 1, avg: 2, worst: 3 }, workPackageId: 'wp1' }));
         expect(i).toMatchObject({ sourceTaskId: 'h', ownEstimateDays: 2, workPackageId: 'wp1' });
+        // Üç noktalı tahmin aralığıyla korunur; kendi tahmin değişince tek değer olur
+        const r = itemFromTask(task('r', { time: { best: 1, avg: 3, worst: 8 } }));
+        expect(effortOf(r)).toEqual({ best: 1, likely: 3, worst: 8 });
+        expect(effortOf({ ...r, ownEstimateDays: 5 })).toEqual({ best: 5, likely: 5, worst: 5 });
+    });
+
+    it('geçmişten / AI\'dan / modelden üretilmiş tahmin "kendi tahminim" sayılmaz', () => {
+        for (const estimateSource of ['reference', 'ai', 'model'] as const) {
+            const i = itemFromTask(task('m', { time: { best: 1, avg: 2, worst: 4 }, estimateSource }));
+            expect(i.ownEstimateDays).toBeUndefined();
+            expect(i.manual).toEqual({ best: 1, likely: 2, worst: 4 });
+            expect(choiceOf(i)).toBe('manual');
+        }
+        expect(itemFromTask(task('u', { estimateSource: 'user' })).ownEstimateDays).toBeGreaterThan(0);
     });
 });
 
@@ -179,6 +193,32 @@ describe('aktarım', () => {
         expect(c.log).toHaveLength(5);
         expect(c.log.find(e => e.draft.name === 'Çıkarılan')!.final.source).toBe('none');
         expect(c.log.find(e => e.draft.name === 'Giriş')).toMatchObject({ taskId: giris.id, blind: { effortDays: 3 }, final: { source: 'user' } });
+    });
+
+    it('aktarım projenin güncel hâline uygulanır; başka plana geçmiş havuz görevi alınmaz', () => {
+        const proj = project();
+        proj.tasks.push(task('model', { version: 0, name: 'Model tahminli', time: { best: 1, avg: 2, worst: 4 }, estimateSource: 'model' }));
+        let p = plan([...plan().items, itemFromTask(proj.tasks[1]), itemFromTask(proj.tasks[2])]);
+        p = { ...p, milestones: autoMilestones(p, proj) };
+        proj.releasePlans = [p];
+        const sim = buildReleaseSimulation(proj, p, buildHistory([]), {}, { now: NOW, iterations: 200 });
+        const result = runMonteCarlo(sim.built.input);
+        // Havuz görevi bu arada başka bir plana aktarıldı (sürüm 3)
+        const moved = { ...proj, tasks: proj.tasks.map(t => (t.id === 'havuz' ? { ...t, version: 3 } : t)) };
+        const c = commitReleasePlan(moved, p, { built: sim.built, result }, { now: NOW });
+        expect(c.skipped.map(x => x.name)).toEqual(['Havuzdaki iş']);
+        expect(c.project.tasks.find(t => t.id === 'havuz')!.version).toBe(3);
+        expect(c.plan.baseline!.taskIds).not.toContain('havuz');
+        // Değişmeden alınan model tahmini kaynağını ve aralığını korur
+        expect(c.project.tasks.find(t => t.id === 'model')).toMatchObject({ estimateSource: 'model', time: { best: 1, avg: 2, worst: 4 } });
+        // Aktarım sürerken projeye eklenen görev ve yeni hedef korunur
+        const now = { ...moved, tasks: [...moved.tasks, task('sonradan', { version: 0 })], objectives: [...moved.objectives, { id: 'o-yeni', name: 'Yeni hedef', keyResults: [] } as never] };
+        const applied = applyCommit(now, c);
+        expect(applied.tasks.map(t => t.id)).toEqual(expect.arrayContaining(['sonradan', 'havuz', ...Object.values(c.taskIdOf)]));
+        expect(applied.tasks).toHaveLength(now.tasks.length + c.created);
+        expect(applied.objectives.map(o => o.id)).toEqual([...now.objectives.map(o => o.id), c.objectiveId]);
+        expect(applied.releasePlans!.find(x => x.id === p.id)!.status).toBe('committed');
+        expect(applyCommit(applied, c).tasks).toHaveLength(applied.tasks.length); // tekrar uygulamak çoğaltmaz
     });
 });
 

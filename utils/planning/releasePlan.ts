@@ -5,9 +5,9 @@ import {
 import { quarterLabel } from '../goals';
 import { foldTr } from '../rag/text';
 import { buildSprintWindows } from '../taskToAllocation';
-import { PlanningHistory } from './history';
+import { GROUNDED, PlanningHistory } from './history';
 import { mapJiraIssueType, mapJiraPriority } from './jiraFields';
-import { pertDays } from './lifecycle';
+import { estimateRange, pertDays } from './lifecycle';
 import { GroupStat, SimGroup, SimResult } from './monteCarlo';
 import { estimateFromHistory, RecordDraft } from './referenceClass';
 import { BuiltSimulation, buildSimulation, dateAtOffset, offsetOf } from './simulationInput';
@@ -49,11 +49,23 @@ export const createReleasePlan = (project: Pick<Project, 'settings'>, now: Date 
 
 export const newItem = (partial: Partial<ReleasePlanItem> = {}): ReleasePlanItem => ({ id: newId('ri'), name: '', ...partial });
 
-/** Havuzdaki (sürümü atanmamış) açık görevden satır */
-export const itemFromTask = (t: Task): ReleasePlanItem => newItem({
-    name: t.name, notes: t.notes || undefined, issueType: t.issueType, unit: t.unit || undefined, priority: t.priority, resourceName: t.resourceName || undefined,
-    workPackageId: t.workPackageId, sourceTaskId: t.id, ownEstimateDays: pertDays(t) ?? undefined,
-});
+/**
+ * Havuzdaki (sürümü atanmamış) açık görevden satır. Ekibin kendi tahmini
+ * "kendi tahminim" olur ve aralığı korunur; geçmişten / AI'dan / modelden
+ * üretilmiş tahmin kendi tahmin sayılmaz (yeniden kalibre edilmesin, model
+ * onu ekip tahmini sanmasın), "Elle" seçeneğinde hazır bekler.
+ */
+export const itemFromTask = (t: Task): ReleasePlanItem => {
+    const pert = pertDays(t);
+    const range = estimateRange(t) ?? undefined;
+    const grounded = GROUNDED.has(t.estimateSource || '');
+    return newItem({
+        name: t.name, notes: t.notes || undefined, issueType: t.issueType, unit: t.unit || undefined, priority: t.priority, resourceName: t.resourceName || undefined,
+        workPackageId: t.workPackageId, sourceTaskId: t.id,
+        ...(pert && !grounded ? { ownEstimateDays: pert, ownRange: range } : {}),
+        ...(pert && grounded ? { manual: range } : {}),
+    });
+};
 
 // ---------------------------------------------------------------- yapıştırma
 
@@ -131,6 +143,7 @@ export const choiceOf = (item: ReleasePlanItem): ReleaseItemChoice | null => {
     if (item.reference) return 'reference';
     if (item.ownEstimateDays) return 'own';
     if (item.ai) return 'ai';
+    if (item.manual) return 'manual'; // havuzdaki görevin geçmişe dayanan tahmini
     return null;
 };
 
@@ -140,7 +153,11 @@ export const effortOf = (item: ReleasePlanItem): EffortRange | null => {
     if (c === 'ai') return item.ai!.effort;
     if (c === 'model') return item.model!.effort;
     if (c === 'manual') { const [best, likely, worst] = [item.manual!.best, item.manual!.likely, item.manual!.worst].sort((a, b) => a - b); return { best, likely, worst }; }
-    if (c === 'own') return { best: item.ownEstimateDays!, likely: item.ownEstimateDays!, worst: item.ownEstimateDays! };
+    if (c === 'own') {
+        const r = item.ownRange;
+        // Görevden gelen aralık, kendi tahmin değiştirilmediyse korunur
+        return r && Math.abs(pertDays({ time: { best: r.best, avg: r.likely, worst: r.worst } })! - item.ownEstimateDays!) < 0.051 ? r : { best: item.ownEstimateDays!, likely: item.ownEstimateDays!, worst: item.ownEstimateDays! };
+    }
     return null;
 };
 
@@ -299,6 +316,10 @@ export interface CommitResult {
     log: EstimateLogEntry[];
     created: number;
     updated: number;
+    /** Planın Hedefler ekranına eklenen hedefi (kilometre taşı varsa) */
+    objectiveId?: string;
+    /** Havuzdan alınan ama bu arada başka bir sürüme / plana geçmiş görevler (aktarılmaz) */
+    skipped: { itemId: string; name: string }[];
     /** satır → görev, kilometre taşı → anahtar sonuç */
     taskIdOf: Record<string, string>;
     krIdOf: Record<string, string>;
@@ -322,7 +343,16 @@ export const commitReleasePlan = (
     const start = sim.built.start;
     const day = (offset: number) => toIsoDay(dateAtOffset(start, Math.max(1, Math.ceil(offset))));
     const statById = new Map(sim.result.tasks.map(t => [t.id, t]));
-    const items = includedItems(plan).filter(i => effortOf(i));
+    const byId = new Map(project.tasks.map(t => [t.id, t]));
+    // Havuzdan alınan görev bu arada başka bir sürüme ya da hedefe bağlandıysa (başka bir plan
+    // aktarıldı, elle atandı) üzerine yazılmaz; satır aktarılmaz, kullanıcıya bildirilir
+    const takenElsewhere = (i: ReleasePlanItem) => {
+        const t = i.sourceTaskId ? byId.get(i.sourceTaskId) : undefined;
+        return !!t && ((t.version || 0) > 0 || !!t.keyResultId || t.status === TaskStatus.Done);
+    };
+    const all = includedItems(plan).filter(i => effortOf(i));
+    const skipped = all.filter(takenElsewhere).map(i => ({ itemId: i.id, name: i.name.trim() }));
+    const items = all.filter(i => !takenElsewhere(i));
     const milestones = sanitizeMilestones(plan.milestones, plan);
     const msOf = new Map<string, ReleaseMilestone>();
     milestones.forEach(m => m.itemIds.forEach(id => msOf.set(id, m)));
@@ -356,9 +386,14 @@ export const commitReleasePlan = (
         const st = statById.get(releaseTaskId(i));
         const m = msOf.get(i.id);
         const p50 = st ? day(st.p50) : undefined;
+        // Havuzdaki görevin tahmini değişmeden alındıysa kaynağı (geçmiş / AI / model) korunur
+        const src = i.sourceTaskId ? byId.get(i.sourceTaskId) : undefined;
+        const r = src ? estimateRange(src) : null;
+        const kept = !!src && !!r && (c === 'own' || c === 'manual') && r.best === e.best && r.likely === e.likely && r.worst === e.worst;
         return {
             name: i.name.trim(), notes: (i.notes || '').trim(), priority: priorityOf(i), issueType: typeOf(i), unit: (i.unit || '').trim(), resourceName: i.resourceName || '',
-            workPackageId: i.workPackageId, time: { best: e.best, avg: e.likely, worst: e.worst }, estimateSource: TASK_SOURCE[c], includeInSprints: true,
+            workPackageId: i.workPackageId, includeInSprints: true,
+            ...(kept ? { time: src!.time, estimateSource: src!.estimateSource } : { time: { best: e.best, avg: e.likely, worst: e.worst }, estimateSource: TASK_SOURCE[c] }),
             version: p50 ? versionFor(p50) : maxVersion + 1,
             keyResultId: m ? krIds.get(m.id) : undefined,
             dueDate: m ? (m.targetDate || msP80(m)) : undefined,
@@ -372,7 +407,6 @@ export const commitReleasePlan = (
     const taskIdOf = new Map<string, string>();
     const krIdOf = krIds;
     let created = 0, updated = 0;
-    const byId = new Map(project.tasks.map(t => [t.id, t]));
     const existing = project.tasks.map(t => {
         const i = items.find(x => x.sourceTaskId === t.id);
         if (!i) return t;
@@ -430,6 +464,8 @@ export const commitReleasePlan = (
         log,
         created,
         updated,
+        skipped,
+        objectiveId: milestones.length ? objective.id : undefined,
         taskIdOf: Object.fromEntries(taskIdOf),
         krIdOf: Object.fromEntries(krIdOf),
     };
@@ -476,6 +512,26 @@ export const finalizeCommit = (c: CommitResult, built: BuiltSimulation, result: 
             objectives: c.project.objectives.map(o => (o.id === b.objectiveId ? { ...o, keyResults: o.keyResults.map(k => (krName.has(k.id) ? { ...k, name: krName.get(k.id)! } : k)) } : o)),
             releasePlans: (c.project.releasePlans || []).map(p => (p.id === plan.id ? plan : p)),
         },
+    };
+};
+
+/**
+ * Aktarımı projenin güncel hâline uygular. Aktarım bir anlık görüntüden
+ * hesaplanır (taban çizgisi simülasyonu sürerken proje değişmiş olabilir):
+ * yalnız planın görevleri, hedefi ve planın kendisi yazılır; projedeki
+ * diğer değişiklikler korunur.
+ */
+export const applyCommit = (current: Project, c: CommitResult): Project => {
+    const ids = new Set(Object.values(c.taskIdOf));
+    const committed = new Map(c.project.tasks.filter(t => ids.has(t.id)).map(t => [t.id, t]));
+    const have = new Set(current.tasks.map(t => t.id));
+    const known = new Set(current.objectives.map(o => o.id));
+    const plans = current.releasePlans || [];
+    return {
+        ...current,
+        tasks: [...current.tasks.map(t => (committed.has(t.id) ? { ...t, ...committed.get(t.id)! } : t)), ...[...committed.values()].filter(t => !have.has(t.id))],
+        objectives: [...current.objectives, ...c.project.objectives.filter(o => !known.has(o.id) && o.id === c.objectiveId)],
+        releasePlans: plans.some(p => p.id === c.plan.id) ? plans.map(p => (p.id === c.plan.id ? c.plan : p)) : [...plans, c.plan],
     };
 };
 

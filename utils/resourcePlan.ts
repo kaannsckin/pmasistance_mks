@@ -107,15 +107,30 @@ export const updateResource = (resources: Resource[], tasks: Task[], id: string,
 /** Aynı adla ikinci kaynak eklenmesin */
 export const hasResourceNamed = (resources: Resource[], name: string): boolean => resources.some(r => lower(r.name) === lower(name));
 
-/** Yeni kaynak: güncel ay katılımıyla aylık plan başlatılır */
+/** Yeni kaynak: aylık plan yalnız güncel ayla başlar; girilmeyen aylar güncel katılımı izler */
 export const createResource = (name: string, unit: string, title: string, participation: number, currentMonth: number): Resource => ({
     id: newId(),
     name: name.trim(),
     unit: unit.trim(),
     title: title.trim() || 'Uzman',
     participation,
-    monthlyPlan: Object.fromEntries(Array.from({ length: 12 }, (_, i) => [i, i === currentMonth ? participation : 0])),
+    monthlyPlan: { [currentMonth]: participation },
 });
+
+/**
+ * Kapasite hesabında kişinin o ayki katılım payı (1 = tam zamanlı). Aylık
+ * planda değer girilmemiş aylar güncel katılımı (`base`) izler. Önceki
+ * sürümlerde ekipten eklenen kişide yalnız eklendiği ay dolu, diğer aylar 0
+ * yazılıyordu; tek ayı dolu plan bu yüzden "plan yok" sayılır (yoksa kişi
+ * sonraki aylarda hiç çalışmıyormuş gibi görünür).
+ */
+export const plannedShare = (r: Pick<Resource, 'participation' | 'monthlyPlan'>, month: number, base = (r.participation || 0) / 100): number => {
+    const plan = r.monthlyPlan;
+    if (!plan || typeof plan[month] !== 'number') return base;
+    const filled = Object.values(plan).filter(v => typeof v === 'number' && v > 0).length;
+    if (plan[month] === 0 && filled <= 1 && (r.participation || 0) > 0) return base;
+    return plan[month] / 100;
+};
 
 /** Havuz kişisinden kaynak alanları */
 export const personToResourceFields = (p: Person): { name: string; unit: string; title: string } => ({
