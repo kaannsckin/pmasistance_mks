@@ -47,7 +47,8 @@ Kullanıcılar (2. rutin):
   kontrol [--cikti dosya.md]                                    Otomatik kapsam/gizlilik/tutarlılık kontrolleri
 
 Ortak: --dizin pilot-data (ya da PILOT_DIZIN). GG = YYYY-AA-GG.
-Bulut: PILOT_SUPABASE_URL, PILOT_SUPABASE_ANON_KEY, PILOT_SUPABASE_SERVICE_ROLE_KEY, PILOT_PASSWORD;
+Bulut: PILOT_SUPABASE_URL, PILOT_SUPABASE_ANON_KEY, PILOT_SUPABASE_SERVICE_ROLE_KEY; isteğe bağlı PILOT_PASSWORD
+       (pilot hesaplarının parolası, en az 12 karakter; yoksa sunucu anahtarından türetilir);
        izleyiciler (uygulamadan izleyen gerçek hesaplar): --izleyici ya da PILOT_IZLEYICILER.`;
 
 type Flags = Record<string, string | true>;
@@ -111,12 +112,18 @@ type Store =
     | { kind: 'file' }
     | { kind: 'supabase'; link: CloudLink; config: PilotCloudConfig; clients: CloudClients };
 
-const cloudEnv = (): PilotCloudConfig | null => cloudConfigFromEnv(process.env).config;
+/** Bulut ayarları; parola uyarısı gibi notlar bir kez stderr'e yazılır */
+let notesShown = false;
+const cloudEnv = (): PilotCloudConfig | null => {
+    const { config, notes } = cloudConfigFromEnv(process.env);
+    if (config && !notesShown) { notes.forEach(n => process.stderr.write(`Not: ${n}\n`)); notesShown = true; }
+    return config;
+};
 
 const openStore = (p: ReturnType<typeof paths>): Store => {
     const link = readCloudLink(p.dir);
     if (!link) return { kind: 'file' };
-    const { config } = cloudConfigFromEnv(process.env);
+    const config = cloudEnv();
     if (!config) return fail(`Pilot verisi Supabase'de (çalışma alanı ${link.workspaceId}, ${link.host}) ama bulut ayarları kullanılamıyor — ${cloudEnvProblem(process.env)}. Bulut ortamının ayarlarında düzeltin (değerleri sohbete yazmayın).`);
     if (hostOf(config.url) !== link.host) return fail(`PILOT_SUPABASE_URL (${hostOf(config.url)}) bulut.json'daki projeyle (${link.host}) aynı değil.`);
     return { kind: 'supabase', link, config, clients: supabaseClients(config) };
@@ -265,7 +272,7 @@ const main = async () => {
             const link = readCloudLink(p.dir);
             if (!flags.zorla && (existsSync(p.ws) || link)) fail(`${link ? `Pilot zaten Supabase'de (çalışma alanı ${link.workspaceId})` : `${p.ws} zaten var`}. Baştan kurmak için --zorla${!link && config ? '; veriyi koruyarak buluta taşımak için buluta-tasi' : ''}.`);
             // Bulut ayarı yarım ya da hatalıysa sessizce JSON'a kurulmaz
-            const anyCloudEnv = PILOT_ENV_KEYS.some(k => process.env[k]?.trim());
+            const anyCloudEnv = [...PILOT_ENV_KEYS, 'PILOT_PASSWORD'].some(k => process.env[k]?.trim());
             if (!config && (link || anyCloudEnv) && !flags.dosya) fail(`${link ? 'Pilot Supabase\'de kurulu ama b' : 'B'}ulut ayarları kullanılamıyor — ${cloudEnvProblem(process.env)}. JSON'a kurmak için --dosya.`);
             const { ws, state, last } = generate(flags);
             const cloud = config ? await setupCloud(p, config, ws, flags) : null;

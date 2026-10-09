@@ -22,11 +22,11 @@ Pilot verisi uygulamanın kendi bulut senkronizasyonuyla aynı tablolardadır (`
 | `pilot-ahmet@…` | Müdür (notlar RLS ile kapalı) | 2. rutin |
 | sizin hesabınız | PYB Destek (izleyici, her şeyi görür) | tarayıcıdan izleme |
 
-Pilot hesapları kurulumda açılır (e-posta gönderilmez, `@example.com`); hepsinin parolası `PILOT_PASSWORD`'dür. Personalar MCP sunucusuna kendi hesaplarıyla bağlanır — rolleri üyelikten gelir, RLS gerçekte olduğu gibi uygulanır. `kontrol` bunu da sınar (üyelik rolleri, müdürün notları veritabanından okuyamaması/yazamaması, PY'nin okuyabilmesi; stdio satırında MCP paketi bir personanın hesabıyla gerçekten bağlanır).
+Pilot hesapları kurulumda açılır (e-posta gönderilmez, `@example.com`); hepsinin parolası `PILOT_PASSWORD`'dür; bu değişken verilmezse (ya da 12 karakterden kısaysa) parola sunucu anahtarından türetilir (uzun, tahmin edilemez; anahtar yenilenince `pilot uyeler` hesapları eşitler). Personalar MCP sunucusuna kendi hesaplarıyla bağlanır — rolleri üyelikten gelir, RLS gerçekte olduğu gibi uygulanır. `kontrol` bunu da sınar (üyelik rolleri, müdürün notları veritabanından okuyamaması/yazamaması, PY'nin okuyabilmesi; stdio satırında MCP paketi bir personanın hesabıyla gerçekten bağlanır).
 
 **Kurulum (bir kez):**
 
-1. Bulut ortamının ayarlarında (Claude Code › ortam › değişkenler) dört değişken: `PILOT_SUPABASE_URL`, `PILOT_SUPABASE_ANON_KEY`, `PILOT_SUPABASE_SERVICE_ROLE_KEY` (Supabase › Project Settings › API › service_role — yalnız burada durur), `PILOT_PASSWORD` (pilot hesapları için yeni, uzun bir parola). İsteğe bağlı `PILOT_IZLEYICILER=siz@ornek.com` (virgülle birden çok; `e-posta:rol` ile rol seçilebilir). Değerleri sohbete ya da depoya yazmayın.
+1. Bulut ortamının ayarlarında (Claude Code › ortam › değişkenler) üç değişken: `PILOT_SUPABASE_URL`, `PILOT_SUPABASE_ANON_KEY` (anon ya da `sb_publishable_…`), `PILOT_SUPABASE_SERVICE_ROLE_KEY` (service_role ya da `sb_secret_…` — yalnız burada durur). İsteğe bağlı `PILOT_PASSWORD` (pilot hesaplarına tarayıcıdan da girmek isterseniz; en az 12 karakter). İsteğe bağlı `PILOT_IZLEYICILER=siz@ornek.com` (virgülle birden çok; `e-posta:rol` ile rol seçilebilir). Değerleri sohbete ya da depoya yazmayın.
 2. Ağ erişimi: ortamın izinli alan adlarına `*.supabase.co`.
 3. İzleyici hesabınızla uygulamadan bir kez **Kayıt ol / Giriş yap**.
 4. 1. rutin bir sonraki çalışmasında veriyi taşır (`buluta-tasi`) ya da kurar (`baslat`) ve **çalışma alanı kimliğini** (`ozet` → `calisma_alani`) özetinde yazar. İzleyici sonradan eklenecekse: `npm run -s pilot -- uyeler --izleyici siz@ornek.com`.
