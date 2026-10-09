@@ -1,0 +1,224 @@
+[
+ {
+  "id": "B-001",
+  "baslik": "kapasite_talep tüm satırlarda 'Rol atanmamış', kapasite 0 (işe alım kararına kullanılamaz)",
+  "tur": "hata",
+  "onem": "yuksek",
+  "ilk": "2026-10-09",
+  "son": "2026-10-09",
+  "gun_sayisi": 1,
+  "durum": "acik",
+  "dogrulama": "doğrulandı",
+  "kanit": "arac ahmet kapasite_talep '{}' -> 4 satır, rol 'Rol atanmamış', kapasite_aa 0, toplam_acik_aa 134.48 (departman_karnesi ise kapasite 281 AA / doluluk %48 veriyor)",
+  "kim": [
+   "ahmet"
+  ]
+ },
+ {
+  "id": "B-002",
+  "baslik": "Portföy RAG'ları PY elle girmedikçe gecikmeyi yansıtmıyor (PSL: 8 geciken, skor 72 warn, SPI 0,91, RAG 'Yolunda'; YILDIZ skor 100/Yolunda ama veri yok)",
+  "tur": "tutarsizlik",
+  "onem": "orta",
+  "ilk": "2026-10-09",
+  "son": "2026-10-09",
+  "gun_sayisi": 1,
+  "durum": "acik",
+  "dogrulama": "kısmen doğrulandı (PSL/YILDIZ doğrulandı; ATL/NHR başlangıç durumu ajan beyanı)",
+  "kanit": "proje_listesi PSL rag Yolunda geciken 8; proje_detayi PSL skor 72; proje_detayi YLD-2405 skor 100 guven low kapsam 0.32. ATL/NHR ilk bakışta 'Yolunda' idi (4 ajan bildirdi), PY'ler Riskli yaptı; ilk durum yeniden üretilemez",
+  "kim": [
+   "ahmet",
+   "selin",
+   "mert",
+   "burak"
+  ]
+ },
+ {
+  "id": "B-003",
+  "baslik": "gorev_ara 'gecikme' filtresi sessizce yok sayılıyor",
+  "tur": "hata",
+  "onem": "orta",
+  "ilk": "2026-10-09",
+  "son": "2026-10-09",
+  "gun_sayisi": 1,
+  "durum": "acik",
+  "dogrulama": "doğrulandı",
+  "kanit": "arac ahmet gorev_ara '{\"proje\":\"NHR-2403\",\"gecikme\":true,\"limit\":3}' -> eslesen 92 (18 geciken olmalı)",
+  "kim": [
+   "ahmet"
+  ]
+ },
+ {
+  "id": "B-004",
+  "baslik": "tahsis_ozeti alan:'gerceklesen' sessizce plan döndürüyor",
+  "tur": "hata",
+  "onem": "orta",
+  "ilk": "2026-10-09",
+  "son": "2026-10-09",
+  "gun_sayisi": 1,
+  "durum": "acik",
+  "dogrulama": "doğrulandı",
+  "kanit": "arac mert tahsis_ozeti '{\"alan\":\"gerceklesen\"}' -> alan plan, toplam_aa 134.48",
+  "kim": [
+   "mert"
+  ]
+ },
+ {
+  "id": "B-005",
+  "baslik": "Araç listesi parametre şeması vermiyor; yanlış/bilinmeyen parametreler sessizce yok sayılıyor (uygun_kisi_bul ay_baslangic/ay_bitis -> aylar 10-12)",
+  "tur": "kullanilabilirlik",
+  "onem": "orta",
+  "ilk": "2026-10-09",
+  "son": "2026-10-09",
+  "gun_sayisi": 1,
+  "durum": "acik",
+  "dogrulama": "doğrulandı",
+  "kanit": "arac ahmet uygun_kisi_bul '{\"rol\":\"Test\",\"ay_baslangic\":11,\"ay_bitis\":12}' -> sorgu.aylar \"10-12\"",
+  "kim": [
+   "ahmet",
+   "selin"
+  ]
+ },
+ {
+  "id": "B-006",
+  "baslik": "oneriyi_uygula ayrı çağrıda önizleme ID'sini bulamıyor",
+  "tur": "kullanilabilirlik",
+  "onem": "orta",
+  "ilk": "2026-10-09",
+  "son": "2026-10-09",
+  "gun_sayisi": 1,
+  "durum": "acik",
+  "dogrulama": "doğrulandı (nedeni belirsiz)",
+  "kanit": "arac elif oneriyi_uygula '{\"oneri_id\":\"oneri-6df7edf3\"}' --onayla -> 'bulunamadı ya da süresi doldu (30 dk)'. Not: her CLI çağrısı ayrı süreç olduğundan pilot düzeneğinden kaynaklanıyor olabilir; gerçek MCP oturumunda denenmeli",
+  "kim": [
+   "elif",
+   "burak"
+  ]
+ },
+ {
+  "id": "B-007",
+  "baslik": "Uygulama içi mesajlaşma/talep aracı yok (PY→Bölüm Sorumlusu, Müdür→PY, gelen kaynak talebi)",
+  "tur": "eksik_ozellik",
+  "onem": "orta",
+  "ilk": "2026-10-09",
+  "son": "2026-10-09",
+  "gun_sayisi": 1,
+  "durum": "acik",
+  "dogrulama": "doğrulandı (ahmet)",
+  "kanit": "araclar listesi: elif/ahmet/selin için mesaj/talep aracı yok; arac ahmet mesaj_gonder -> 'Bilinmeyen ya da bu rol için kullanılamayan araç'. Pilotta mesajlar sohbet.md ile taklit ediliyor",
+  "kim": [
+   "ahmet",
+   "elif",
+   "selin"
+  ]
+ },
+ {
+  "id": "B-008",
+  "baslik": "Bölüm sorumlusunun kendisi 'uygun kişi' olarak çıkıyor (yük 0)",
+  "tur": "tutarsizlik",
+  "onem": "orta",
+  "ilk": "2026-10-09",
+  "son": "2026-10-09",
+  "gun_sayisi": 1,
+  "durum": "acik",
+  "dogrulama": "doğrulandı",
+  "kanit": "arac selin uygun_kisi_bul '{\"rol\":\"Yazılım Geliştirme Mühendisi\"}' -> uygun_sayisi 1: Selin Kaya",
+  "kim": [
+   "selin",
+   "burak"
+  ]
+ },
+ {
+  "id": "B-009",
+  "baslik": "oner_rag_guncelle yalnız green/amber/red kabul ediyor; Türkçe değer hata, 'amber' ise 'Riskli'ye eşleniyor",
+  "tur": "kullanilabilirlik",
+  "onem": "dusuk",
+  "ilk": "2026-10-09",
+  "son": "2026-10-09",
+  "gun_sayisi": 1,
+  "durum": "acik",
+  "dogrulama": "doğrulandı",
+  "kanit": "arac elif oner_rag_guncelle '{\"proje\":\"ATL-2401\",\"rag\":\"Sarı\"}' -> 'rag green, amber ya da red olmalı.'",
+  "kim": [
+   "elif",
+   "burak"
+  ]
+ },
+ {
+  "id": "B-010",
+  "baslik": "Ekim ayı gerçekleşen adam-ay Jira worklog'a bağlı değil (NHR taslağı: plan 3,4 / gerçekleşen 0)",
+  "tur": "tutarsizlik",
+  "onem": "dusuk",
+  "ilk": "2026-10-09",
+  "son": "2026-10-09",
+  "gun_sayisi": 1,
+  "durum": "acik",
+  "dogrulama": "doğrulandı",
+  "kanit": "arac mert durum_raporu_taslagi '{\"proje\":\"NHR-2403\"}' -> 'Bu ay işgücü (AA): plan 3,4 / gerçekleşen 0'; tasarım gereği olabilir",
+  "kim": [
+   "elif",
+   "mert"
+  ]
+ },
+ {
+  "id": "B-011",
+  "baslik": "Müşteri isteklerinde yinelenen başlıklar, hepsi 'New'",
+  "tur": "tutarsizlik",
+  "onem": "dusuk",
+  "ilk": "2026-10-09",
+  "son": "2026-10-09",
+  "gun_sayisi": 1,
+  "durum": "acik",
+  "dogrulama": "doğrulandı",
+  "kanit": "musteri_istekleri NHR: 'Eski kayıtların arşivlenmesi' x2, 'Aylık özetin e-postayla gönderilmesi' x2",
+  "kim": [
+   "burak"
+  ]
+ },
+ {
+  "id": "B-012",
+  "baslik": "gorev_ara Jira anahtarıyla (NHR-61) arayınca sonuç vermiyor",
+  "tur": "kullanilabilirlik",
+  "onem": "dusuk",
+  "ilk": "2026-10-09",
+  "son": "2026-10-09",
+  "gun_sayisi": 1,
+  "durum": "acik",
+  "dogrulama": "doğrulandı",
+  "kanit": "arac burak gorev_ara '{\"proje\":\"NHR-2403\",\"metin\":\"NHR-61\"}' -> eslesen 0",
+  "kim": [
+   "burak"
+  ]
+ },
+ {
+  "id": "B-013",
+  "baslik": "[VERİ — Jira ajanına not] olaylar/*.md worklog toplamı Jira verisinden (ve uygulamadan) yüksek: 8 Ekim ATL 26.5 vs 21.5, PSL 20.5/15.5, NHR 24.5/19.5, KLK 12.5/9.5; 7 Ekim ATL 28.5/23.5. Uygulama pilot-data/jira/*.json ile birebir tutuyor (uygulama doğru)",
+  "tur": "tutarsizlik",
+  "onem": "orta",
+  "ilk": "2026-10-09",
+  "son": "2026-10-09",
+  "gun_sayisi": 1,
+  "durum": "acik",
+  "dogrulama": "doğrulandı",
+  "kanit": "pilot-data/jira/ATL.json 2026-10-08 toplamı 21.5 sa = jira_worklog 21.5; olaylar/2026-10-08.md 'Worklog: 26.5 saat'; Confluence notları da olaylar rakamını (28.5/24.5) kullanıyor",
+  "kim": [
+   "mert",
+   "elif",
+   "burak"
+  ]
+ },
+ {
+  "id": "B-014",
+  "baslik": "Plan kilidi hangi projede olduğu önceden görünmüyor, ancak öneri denenince öğreniliyor",
+  "tur": "kullanilabilirlik",
+  "onem": "dusuk",
+  "ilk": "2026-10-09",
+  "son": "2026-10-09",
+  "gun_sayisi": 1,
+  "durum": "acik",
+  "dogrulama": "doğrulandı",
+  "kanit": "kontrol #27 ve selin: 'ATLAS ... 2026 planı onayda/kilitli; plan değiştirilemez (gerçekleşen girilebilir).'",
+  "kim": [
+   "selin"
+  ]
+ }
+]
