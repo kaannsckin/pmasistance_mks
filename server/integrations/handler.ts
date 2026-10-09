@@ -202,6 +202,8 @@ export interface JiraIssueRecord {
     /** Bu kaydı engelleyen kayıtlar ("is blocked by") */
     blockedBy: string[];
     transitions: JiraTransition[];
+    /** Jira'daki termin (duedate, YYYY-AA-GG) */
+    due: string | null;
 }
 
 export type JiraIssueScope = 'done' | 'all';
@@ -299,10 +301,11 @@ export const normalizeIssue = (raw: JiraFullIssueRaw, categories: Map<string, Ji
             .filter(l => /block|engel/i.test(str(l.type?.name)) && /blocked by|engellen/i.test(str(l.type?.inward)) && str(l.inwardIssue?.key))
             .map(l => str(l.inwardIssue!.key)),
         transitions: transitionsOf(raw.changelog?.histories || [], categories),
+        due: typeof f.duedate === 'string' && DATE_RE.test(f.duedate.slice(0, 10)) ? f.duedate.slice(0, 10) : null,
     };
 };
 
-const ISSUE_FIELDS = 'summary,description,issuetype,status,priority,created,resolutiondate,components,labels,fixVersions,timeoriginalestimate,timespent,assignee,issuelinks';
+const ISSUE_FIELDS = 'summary,description,issuetype,status,priority,created,resolutiondate,duedate,components,labels,fixVersions,timeoriginalestimate,timespent,assignee,issuelinks';
 
 /**
  * Projenin kayıtlarından bir sayfa: alanlar ve durum geçmişi (changelog).

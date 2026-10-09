@@ -7,7 +7,11 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "build:mcp": "vite build -c vite.mcp.config.ts",
+    "mcp": "node dist-mcp/planasistan-mcp.mjs",
+    "build:pilot": "vite build -c vite.pilot.config.ts",
+    "pilot": "node dist-pilot/pilot.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.1",

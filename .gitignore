@@ -25,3 +25,7 @@ dist-ssr
 
 # Yönetici panelinden girilen AI ayarları (yerel geliştirme; şifreli anahtar içerir)
 .planasistan/
+
+# MCP sunucusu derlemesi (npm run build:mcp)
+dist-mcp
+dist-pilot

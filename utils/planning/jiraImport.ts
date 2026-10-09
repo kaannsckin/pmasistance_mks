@@ -13,7 +13,8 @@ import { analyzeRecords } from './recordQuality';
  * süre, story point, düzeltme sürümü; sorumlu ve birim (bileşen) Jira'da
  * doluysa. Uygulamadaki planlama alanları korunur: sürüm, öncül, iş paketi,
  * hedef bağlantısı, termin, alt görevler, yorumlar, açılıştaki tahmin ve
- * kendi tahmininiz (tahmin yoksa Jira'nınki yazılır).
+ * kendi tahmininiz (tahmin yoksa Jira'nınki yazılır; termin yoksa Jira'daki
+ * termin — duedate — yazılır).
  */
 
 export interface JiraImportOptions {
@@ -82,6 +83,7 @@ export const issueToTask = (issue: JiraIssueRecord, opts: JiraImportOptions, id 
         ...(actualHours ? { actualHours } : {}),
         ...(issue.storyPoints ? { storyPoints: issue.storyPoints } : {}),
         ...(issue.fixVersions[0] ? { fixVersion: issue.fixVersions[0] } : {}),
+        ...(issue.due ? { dueDate: issue.due } : {}),
     };
 };
 
@@ -107,6 +109,7 @@ const updateFrom = (e: Task, fresh: Task, issue: JiraIssueRecord): Task => ({
     actualHours: fresh.actualHours ?? e.actualHours,
     storyPoints: fresh.storyPoints ?? e.storyPoints,
     fixVersion: fresh.fixVersion ?? e.fixVersion,
+    ...(!e.dueDate && fresh.dueDate ? { dueDate: fresh.dueDate } : {}),
     ...(noEstimate(e) && !noEstimate(fresh) ? { time: fresh.time, availability: true, estimateSource: e.estimateSource ?? fresh.estimateSource } : {}),
 });
 

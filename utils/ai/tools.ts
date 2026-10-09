@@ -9,7 +9,7 @@ import { attentionItems, executiveSummary, portfolioHealth, projectHealth } from
 import { buildForecast, FORECAST_DIM_LABELS, FORECAST_METHOD_LABELS, ForecastDim, ForecastMethod } from '../forecast';
 import { buildPersonProfile } from '../personProfile';
 import { recentChanges } from '../recentChanges';
-import { buildRoleAnalysis, summarizeGaps } from '../roleAnalysis';
+import { buildRoleAnalysis, summarizeGaps, UNASSIGNED_ROLE } from '../roleAnalysis';
 import { RISK_BAND_LABELS, RISK_STATUS_LABELS, riskBand, riskScore, summarizeRisks } from '../risks';
 import { allPersonRoles, findAvailablePeople } from '../staffing';
 import { buildStatusReport } from '../statusReport';
@@ -309,7 +309,7 @@ export const AI_TOOLS: ToolDef[] = [
                 kisi: S.str('Atanan kişinin adı (kısmi olabilir).'),
                 geciken: S.bool('Yalnızca bitiş tarihi geçmiş ve tamamlanmamış görevler.'),
                 oncelik: S.str('Öncelik.', ['Blocker', 'High', 'Medium', 'Low']),
-                metin: S.str('Görev adında / açıklamasında geçen metin.'),
+                metin: S.str('Görev adında / açıklamasında ya da Jira anahtarında (ör. MKS-12) geçen metin.'),
                 limit: P.limit,
             }),
         },
@@ -327,7 +327,7 @@ export const AI_TOOLS: ToolDef[] = [
                     if (str(a.oncelik) && t.priority !== a.oncelik) return;
                     if (a.geciken === true && !isOverdue(t, ctx.now)) return;
                     if (kisi && !norm(t.resourceName || '').includes(kisi)) return;
-                    if (metin && !norm(`${t.name} ${t.notes || ''}`).includes(metin)) return;
+                    if (metin && !norm(`${t.jiraId || ''} ${t.name} ${t.notes || ''}`).includes(metin)) return;
                     total++;
                     if (rows.length < limit) rows.push(taskRow(t, ctx, p.name, wpNames));
                 });
@@ -518,9 +518,15 @@ export const AI_TOOLS: ToolDef[] = [
             let rows = buildRoleAnalysis(ctx.ws.allocations, ctx.ws.people, ctx.ws.projects, year, ctx.ws.leaves || []);
             if (dept) rows = rows.filter(r => r.departmentCode === dept);
             const gaps = summarizeGaps(rows);
+            // Rolü girilmemiş tahsis satırlarının talebi hiçbir rol kapasitesiyle eşleşmez → açık şişer
+            const demand = rows.reduce((s, r) => s + r.totals.planned + r.totals.proposal, 0);
+            const unassigned = rows.filter(r => r.role === UNASSIGNED_ROLE).reduce((s, r) => s + r.totals.planned + r.totals.proposal, 0);
             if (a.sadece_acik !== false) rows = rows.filter(r => r.totals.gap > 0);
             return {
                 yil: year, bolum: dept, acigi_olan_rol: gaps.rolesWithGap, toplam_acik_aa: gaps.totalGapAA,
+                ...(unassigned > 0 ? {
+                    uyari: `Planlı talebin %${Math.round((unassigned / demand) * 100)}'i (${r2(unassigned)} AA) rolü girilmemiş tahsis satırlarında; bu talep hiçbir rolün kapasitesiyle eşleşmediği için "${UNASSIGNED_ROLE}" satırında açık görünür. İşe alım kararından önce Tahsis Tablosu'nda satırlara rol girilmeli.`,
+                } : {}),
                 satirlar: rows.sort((x, y) => y.totals.gap - x.totals.gap).slice(0, 30).map(r => ({
                     bolum: r.departmentCode, rol: r.role, planli_proje_aa: r2(r.totals.planned), kapasite_aa: r2(r.totals.capacity),
                     teklif_ihtiyaci_aa: r2(r.totals.proposal), acik_aa: r2(r.totals.gap),

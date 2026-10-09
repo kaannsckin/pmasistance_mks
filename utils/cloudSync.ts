@@ -85,6 +85,8 @@ export const splitWorkspaceDoc = (ws: WorkspaceData): { core: Record<string, unk
         roleCatalog: ws.roleCatalog,
         titles: ws.titles,
         allocations: ws.allocations,
+        // Kişi uygunluğu (izin/tatil): kapasite ve doluluk hesaplarına girer, herkesle paylaşılır
+        leaves: ws.leaves || [],
         planLocks: ws.planLocks,
         snapshots: ws.snapshots,
         // Yönetimden beklentiler PM ile yönetim arasında paylaşılır
