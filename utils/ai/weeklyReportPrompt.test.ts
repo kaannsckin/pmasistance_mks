@@ -5,7 +5,9 @@ import { createProject } from '../workspace';
 import { itemDisplay, meetingSentence, newItem, weekLabel } from '../weeklyReport';
 import { summarizeWorklog } from '../worklog';
 import { PROFILE_HEADER } from './projectProfile';
-import { buildReportInput, buildReportPrompt, parseReportSuggestion, REPORT_EXAMPLE, REPORT_INPUT_BUDGET, REPORT_SYSTEM, ReportPromptInput } from './weeklyReportPrompt';
+import { buildDepartmentInput, buildReportInput, buildReportPrompt, parseReportSuggestion, REPORT_EXAMPLE, REPORT_INPUT_BUDGET, REPORT_SYSTEM, ReportPromptInput } from './weeklyReportPrompt';
+import { DEPARTMENT_TASK } from './reportGuide';
+import { buildDepartmentRequest } from './reportVariants';
 
 /** F3 öncesi girdi oluşturucu (kartsız projelerde yeni bölümler hariç aynı çıktı beklenir) */
 const legacyInput = (i: ReportPromptInput): string => {
@@ -147,6 +149,26 @@ describe('zengin girdi (proje kartı, kapanan işler, plan durumu, bütçe)', ()
         expect(input).toContain('Önemli not 0');
         expect(input).toContain('- MKS-0 ');
         expect(input).not.toContain('Kurum kısaltma sözlüğü');
+    });
+});
+
+describe('bölüm eklemesi önerisi', () => {
+    it('girdi: bölüm projelerinin raporları ve bölüm görüşmeleri; istemde bölüm görevi', () => {
+        const meeting = { date: '2026-10-06T10:00', customer: 'Kocaeli Valiliği', locationType: 'customer', location: '', customerParticipants: '', ourParticipants: 'İG', agenda: 'İşbirliği görüşmesi', title: 'İşbirliği', decisions: 'Protokol hazırlanacak', status: 'held' } as CustomerMeeting;
+        const input = buildDepartmentInput({
+            departmentName: 'Yazılım', departmentCode: 'U310', year: 2026, week: 41,
+            projectReports: [{ name: 'Safir Posta', code: 'P-100', report: { thisWeek: [newItem('delivery', 'Sürüm 3.2 teslim edildi.')], nextWeek: [newItem('plan', 'Kabul yapılacak.')] } }],
+            heldMeetings: [meeting],
+        });
+        expect(input.split('\n').slice(0, 2)).toEqual(['Bölüm: Yazılım (U310)', 'Hafta: 41. hafta (5–9 Ekim 2026)']);
+        expect(input).toContain('- Safir Posta (P-100): Sürüm 3.2 teslim edildi. | Plan: Kabul yapılacak.');
+        expect(input).toContain('Bu hafta yapılan bölüm görüşmeleri (kayıtlı):');
+        expect(buildDepartmentInput({ departmentName: 'Yazılım', departmentCode: 'U310', year: 2026, week: 41, projectReports: [] })).toContain('(henüz gönderilmiş rapor yok)');
+        const req = buildDepartmentRequest({ ws: { projects: [] }, report: { departmentCode: 'U310' }, input });
+        expect(req.system).toContain(DEPARTMENT_TASK);
+        expect(REPORT_SYSTEM).not.toContain(DEPARTMENT_TASK);
+        expect(req.promptVersion.endsWith('·bolum')).toBe(true);
+        expect(req.prompt).toContain('ÖRNEK GİRDİ');
     });
 });
 

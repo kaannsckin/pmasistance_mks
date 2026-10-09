@@ -6,8 +6,8 @@ import { ROLE_LABELS } from '../../../utils/allocations';
 import { GroundingIssue, reportGateWarning } from '../../../utils/ai/reportEval';
 import { aiPolicyOf } from '../../../utils/ai/policy';
 import { buildRepairPrompt, checkSuggestion, checkSummary, needsRepair, pickBetter, SuggestionCheck } from '../../../utils/ai/reportRepair';
-import { buildVariantRequest, PRODUCTION_VARIANT } from '../../../utils/ai/reportVariants';
-import { buildReportInput, parseReportSuggestion, ReportSuggestion } from '../../../utils/ai/weeklyReportPrompt';
+import { buildDepartmentRequest, buildVariantRequest, PRODUCTION_VARIANT } from '../../../utils/ai/reportVariants';
+import { buildDepartmentInput, buildReportInput, parseReportSuggestion, ReportSuggestion } from '../../../utils/ai/weeklyReportPrompt';
 import { reportPromptVersion } from '../../../utils/ai/reportGuide';
 import { meetingsHeldInWeek, meetingsPlannedInWeek, meetingToDetails, visibleMeetings } from '../../../utils/customerMeetings';
 import { fetchJiraWorklogs, IntegrationHealth } from '../../../utils/integrations';
@@ -436,11 +436,18 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
             report: draft, promptVersion: sug?.promptVersion || promptVersion, variant: 'full', model: sug ? sug.model : model, outcome, suggestion: sug?.s, dictionary,
             ...(sug ? { ungrounded: sug.check.ungrounded, repaired: sug.repaired } : {}),
         }));
+    // Bölüm eklemesi: bölüm projelerinin bu haftaki gönderilmiş/onaylı raporları
+    const deptProjectReports = useMemo(() => (draft.kind !== 'department' ? [] : (workspace.weeklyReports || [])
+        .filter(r => r.kind === 'project' && r.year === year && r.week === week && r.departmentCode === draft.departmentCode && r.stage !== 'draft')
+        .map(r => { const p = workspace.projects.find(x => x.id === r.projectId); return { name: p?.name || 'Silinmiş proje', code: p?.code, report: r }; })
+        .sort((a, b) => a.name.localeCompare(b.name, 'tr'))), [workspace.weeklyReports, workspace.projects, draft.kind, draft.departmentCode, year, week]);
     const suggest = async () => {
-        if (!project) return;
+        if (draft.kind === 'project' && !project) return;
         setMissingQs([]);
-        const input = buildReportInput({ project, year, week, worklog: draft.worklog, heldMeetings: held, plannedMeetings: planned, previous: prevReport, planReview: draft.planReview, dictionary });
-        const req = buildVariantRequest({ variant: PRODUCTION_VARIANT, ws: workspace, report: draft, input });
+        const input = project
+            ? buildReportInput({ project, year, week, worklog: draft.worklog, heldMeetings: held, plannedMeetings: planned, previous: prevReport, planReview: draft.planReview, dictionary })
+            : buildDepartmentInput({ departmentName: deptName, departmentCode: draft.departmentCode, year, week, projectReports: deptProjectReports, heldMeetings: held, plannedMeetings: planned, dictionary });
+        const req = project ? buildVariantRequest({ variant: PRODUCTION_VARIANT, ws: workspace, report: draft, input }) : buildDepartmentRequest({ ws: workspace, report: draft, input });
         const { promptVersion } = req;
         const model = ai.model;
         const parse = (t: string) => ({ s: parseReportSuggestion(t), raw: t });
@@ -777,7 +784,7 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
                         )}
                     </section>
 
-                    {editable && draft.kind === 'project' && project && (
+                    {editable && (draft.kind === 'department' || project) && (
                         <section aria-label="AI önerisi" className="m-surface rounded-2xl p-5 flex flex-col gap-3">
                             <div className="flex items-center justify-between gap-2">
                                 <h2 className="m-0 text-[17px] font-semibold m-text flex items-center gap-2"><Icon name="sparkles" size={18} />AI önerisi</h2>
@@ -785,11 +792,11 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
                             </div>
                             {ai.available ? (
                                 <>
-                                    <p className="m-0 text-[13px] m-text-3">Haftalık notlar ({notes.length}), worklog ({worklog.length} konu), görüşmeler ({held.length}), bu hafta kapanan işler, proje kartı ve geçen haftanın planından kılavuza uygun taslak çıkarır. Taslağı mutlaka gözden geçirin.</p>
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        {!cleanProjectProfile(project.aiProfile) && <span className="flex-1 min-w-[180px] text-[13px] m-ink-warn">Proje kartını doldurursanız öneriler konuya yabancı okur için daha anlaşılır olur.</span>}
-                                        <button type="button" className="m-btn m-btn-plain !min-h-[44px]" onClick={() => setCardOpen(true)}><Icon name="book" size={17} />Proje kartı</button>
-                                    </div>
+                                    {project ? (
+                                        <p className="m-0 text-[13px] m-text-3">Haftalık notlar ({notes.length}), worklog ({worklog.length} konu), görüşmeler ({held.length}), bu hafta kapanan işler, proje kartı ve geçen haftanın planından kılavuza uygun taslak çıkarır. Taslağı mutlaka gözden geçirin.</p>
+                                    ) : (
+                                        <p className="m-0 text-[13px] m-text-3">Bölüm projelerinin bu haftaki gönderilmiş raporlarından ({deptProjectReports.length}) ve bölüm görüşmelerinden ({held.length}) projelere bağlı olmayan bölüm gelişmeleri için taslak çıkarır. Taslağı mutlaka gözden geçirin.</p>
+                                    )}
                                     <button type="button" className="m-btn m-btn-primary" disabled={ai.loading || repairing} onClick={suggest}>
                                         <Icon name="sparkles" size={18} />{repairing ? 'Öneri düzeltiliyor…' : ai.loading ? 'Öneri hazırlanıyor…' : 'Taslak öner'}
                                     </button>
@@ -798,6 +805,12 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
                                 </>
                             ) : (
                                 <p className="m-0 text-[14px] m-text-3">AI kapalı ya da sunucuda yapılandırılmamış. Maddeleri aşağıdaki kaynaklardan ekleyebilirsiniz.</p>
+                            )}
+                            {project && (
+                                <div className="flex flex-wrap items-center gap-2">
+                                    {!cleanProjectProfile(project.aiProfile) && <span className="flex-1 min-w-[180px] text-[13px] m-ink-warn">Proje kartını doldurursanız öneriler konuya yabancı okur için daha anlaşılır olur.</span>}
+                                    <button type="button" className="m-btn m-btn-plain !min-h-[44px]" onClick={() => setCardOpen(true)}><Icon name="book" size={17} />Proje kartı</button>
+                                </div>
                             )}
                             {missingQs.length > 0 && (
                                 <div className="rounded-xl m-tone-warn px-3 py-2.5 flex flex-col gap-1">

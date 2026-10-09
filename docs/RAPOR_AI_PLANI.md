@@ -4,21 +4,23 @@ Görev tanımı: [`AJAN_GOREVI_HAFTALIK_RAPOR_AI.md`](AJAN_GOREVI_HAFTALIK_RAPOR
 somut tasarımını, varsayımları ve durumu tutar. Her faz sonunda güncellenir.
 
 Taban çizgisi (9 Ekim 2026): `npx vitest run` → 88 dosya, 714 test; `npx tsc --noEmit` temiz.
+Son durum: 96 dosya, 780 test; `npx tsc --noEmit` temiz. Tarayıcıda duman testi (sahte AI uçlarıyla): PYB destek ayar
+sekmeleri, kural önerme/etkinleştirme, altın set koşusu, PY taslak önerisi, çıktı denetimi, otomatik düzeltme ve proje kartı.
 
 ## Durum
 
 | Faz | Konu | Durum | Commit |
 |---|---|---|---|
-| 0 | Keşif ve plan | Tamam | bu commit |
-| F1 | İstem sürümü, öneri günlüğü, kabul oranı | Tamam | F1 commit |
-| F2 | Altın set, çevrimdışı değerlendirme, kalite kapısı | Tamam | F2 commit |
-| F3 | Proje kartı ve zengin girdi | Tamam | F3 commit |
-| F4 | Düzenlenebilir, sürümlü kılavuz | Tamam | F4 commit |
-| F5 | Dinamik örnek ve düzeltme örnekleri | Tamam | F5 commit |
-| F6 | Çıktı denetimi ve tek turluk düzeltme | Tamam | F6 commit |
-| F7 | Geri bildirimden öğrenilen kurallar | Tamam | F7 commit |
-| F8 | İnce ayar veri kümesi ve karar kartı | Tamam | F8 commit |
-| F9 | Belgeler ve deney rehberi | Bekliyor | |
+| 0 | Keşif ve plan | Tamam | Haftalık rapor AI: uygulama planı |
+| F1 | İstem sürümü, öneri günlüğü, kabul oranı | Tamam | Haftalık rapor AI: öneri günlüğü ve kabul oranı |
+| F2 | Altın set, çevrimdışı değerlendirme, kalite kapısı | Tamam | Haftalık rapor AI: altın set, çevrimdışı değerlendirme ve kalite kapısı |
+| F3 | Proje kartı ve zengin girdi | Tamam | Haftalık rapor AI: proje kartı ve zengin girdi |
+| F4 | Düzenlenebilir, sürümlü kılavuz | Tamam | Haftalık rapor AI: düzenlenebilir, sürümlü kurum ve bölüm kılavuzu |
+| F5 | Dinamik örnek ve düzeltme örnekleri | Tamam | Haftalık rapor AI: dinamik üslup örnekleri ve düzeltme örnekleri |
+| F6 | Çıktı denetimi ve tek turluk düzeltme | Tamam | Haftalık rapor AI: öneri önizlemesinde çıktı denetimi ve otomatik düzeltme |
+| F7 | Geri bildirimden öğrenilen kurallar | Tamam | Haftalık rapor AI: geri bildirimden öğrenilen kurallar |
+| F8 | İnce ayar veri kümesi ve karar kartı | Tamam | Haftalık rapor AI: ince ayar veri kümesi ve karar kartı |
+| F9 | Belgeler ve deney rehberi (+ bölüm eklemesi önerisi) | Tamam | Haftalık rapor AI: belgeler, deney rehberi ve bölüm eklemesi önerisi |
 
 ## Genel kararlar
 
@@ -189,6 +191,13 @@ ve `aiPolicy` (kapı, otomatik düzeltme) zaten listede. `Project.aiProfile` pro
 - Günlük kişi adı içermez; yalnız kimlik ve sayılar.
 - Dayanak denetimi sezgiseldir (özel ad tespiti); hatalı pozitif olabilir, bu yüzden yalnız uyarıdır.
 - `useAiBatch` asistan sağlayıcısının `complete` işlevini kullanır; asistan kapalıysa koşu çalışmaz.
+- **Kart katmanında küçük zaman sızıntısı:** eski girdilerde kart yoksa kartlı varyantlar projenin bugünkü kartını
+  ekler; kartın kazancı biraz iyimser görünebilir. Örnekler ve düzeltme çiftleri ise sıkı zaman ayrımlıdır.
+- **İnce ayar veri kümesinde sistem istemi** kılavuzun bugünkü sürümüdür (geçmiş kılavuz sürümleri saklanmıyor);
+  veri kartına yazıldı.
+- **Önceki hata düzeltildi:** `lintReport`'taki `\b` sınırları Türkçe harfle başlayan/biten sözcüklerde
+  çalışmıyordu ("bazı", "birkaç", "çeşitli", "iç toplantı"); düzeltme sonrası mevcut raporlarda daha çok uyarı
+  görülebilir (uyarılar göndermeyi engellemez).
 
 ## Açık sorular ve seçilen varsayılanlar
 
@@ -203,3 +212,9 @@ ve `aiPolicy` (kapı, otomatik düzeltme) zaten listede. `Project.aiProfile` pro
 | Model adı | AI durumundan (`status.model`) alınır; yoksa boş. |
 | Rapor AI kartları nerede? | Haftalık rapor › Ayarlar (PYB destek); otomatik düzeltme anahtarı admin'de. |
 | Altın kayda girdi yazılsın mı? | Hayır (özel notlar buluta taşınmasın); `aiDraft.input` ya da yerelde yeniden üretim. |
+| Lint adayları PY bazında da üretilsin mi? | Hayır; aday kapsamı bölüm ya da kurum. Proje kapsamlı kural elle eklenir. |
+| Elle eklenen kural | Doğrudan etkin (PYB desteğin kendi kararı). |
+| Kılavuza dönüşte sürüm | Etkin istem sürümü içerik özetidir; aynı içeriğe dönülünce aynı sürüm (kapı yeniden geçerli). |
+| Yerine koyma kipinde ölçüm | Yalnız son önerinin maddeleri ölçülür; sonuna eklemede önceki AI maddeleri birikir. |
+| Bölüm eklemesi önerisi | Bölüm projelerinin bu haftaki gönderilmiş/onaylı raporları + bölüm görüşmeleri; proje örnekleri yok. |
+| Kalite kapısı ve kılavuz kimde? | Haftalık rapor › Ayarlar (PYB destek, `report.review`); otomatik düzeltme anahtarı yönetici konsolunda. |

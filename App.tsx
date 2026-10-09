@@ -14,7 +14,7 @@ import {
 } from './utils/workspace';
 import { canEditPool, createAllocation, EffortField, getPlanLockStatus, ROLE_LABELS, setAllocationCell, upsertPlanLock } from './utils/allocations';
 import { applyPoolImport, PoolImportResult } from './utils/poolImporter';
-import { canCreateProject, canEditProjectContent, identityFor, identityOf, identityNeedsPerson as computeNeedsPerson, ownsProject, visibleProjectIds } from './utils/rbac';
+import { canCreateProject, canEditProjectContent, identityFor, identityOf, identityNeedsPerson as computeNeedsPerson, managedDepartmentCode, ownsProject, visibleProjectIds } from './utils/rbac';
 import { can, isConsoleRole, isManagementRole, PERMISSION_BY_KEY, resetRolePermissions, setRolePermission } from './utils/permissions';
 import { applyPreset, projectPassesView, resetRoleView, roleViewOf, sectionOfView, taskPassesView, updateRoleView, VIEW_PRESETS, ViewPresetKey } from './utils/viewConfig';
 import { AdminSection, ADMIN_SECTIONS } from './components/modern/adminSections';
@@ -819,7 +819,9 @@ const App: React.FC = () => {
     updateWorkspace(ws => {
       const who = identityOf(ws);
       const r = (ws.weeklyReports || []).find(x => x.id === entry.reportId);
-      const allowed = r ? canEditReport(ws, who, r) : !!entry.projectId && ws.projects.some(p => p.id === entry.projectId && ownsProject(p, who));
+      const allowed = r ? canEditReport(ws, who, r)
+        : entry.projectId ? ws.projects.some(p => p.id === entry.projectId && ownsProject(p, who))
+          : managedDepartmentCode(ws, who) === entry.departmentCode; // yeni bölüm eklemesi: bölüm sorumlusu
       return allowed ? { ...ws, reportAiLog: appendReportAiLog(ws.reportAiLog, entry) } : ws;
     });
   }, [updateWorkspace]);

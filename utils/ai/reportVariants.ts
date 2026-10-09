@@ -67,3 +67,13 @@ export const buildVariantRequest = (o: {
         promptVersion: L.rules ? reportPromptVersion(settings, o.report.departmentCode, o.report.projectId) : REPORT_PROMPT_VERSION,
     };
 };
+
+/**
+ * Bölüm eklemesi raporu için istem: kurum/bölüm kılavuzu ve kurallar + bölüm
+ * görev satırı; sabit örnek var, proje örnekleri yok (proje maddesi tekrarlanmasın).
+ */
+export const buildDepartmentRequest = (o: { ws: VariantWs; report: Pick<WeeklyReport, 'departmentCode'>; input: string }): { system: string; prompt: string; promptVersion: string } => ({
+    system: reportSystemFor(o.ws.reportSettings, o.report.departmentCode, { rules: true, department: true }),
+    prompt: buildReportPrompt(o.input),
+    promptVersion: `${reportPromptVersion(o.ws.reportSettings, o.report.departmentCode)}·bolum`,
+});

@@ -60,6 +60,17 @@ interface Section { rank: number; head?: string; lines: string[]; empty?: string
 
 const sectionLines = (s: Section): string[] => (s.lines.length ? [...(s.head ? [s.head] : []), ...s.lines] : s.empty ? [s.empty] : []);
 
+/** Bütçe: aşılırsa en önemsiz bölümün son satırı atılır; bölüm sırası değişmez */
+const fitSections = (header: string[], S: Section[]): string => {
+    const text = () => [...header, ...S.flatMap(sectionLines)].join('\n');
+    while (text().length > REPORT_INPUT_BUDGET) {
+        const victim = [...S].filter(x => x.lines.length).sort((a, b) => b.rank - a.rank)[0];
+        if (!victim) break;
+        victim.lines.pop();
+    }
+    return text();
+};
+
 /**
  * Rapor taslağı için girdi metni (aynı metin ince ayar veri setinde "user"
  * mesajı olur). Toplam bütçe aşılırsa en önemsiz bölümün son satırından
@@ -110,14 +121,35 @@ export const buildReportInput = (i: ReportPromptInput): string => {
     }
     if (i.dictionary?.length) S.push({ rank: RANK.other, lines: [`Kurum kısaltma sözlüğü: ${i.dictionary.map(a => `${a.abbr}=${a.expansion}`).join('; ')}`] });
 
-    // Bütçe: aşılırsa en önemsiz bölümün son satırı atılır
-    const size = () => [...header, ...S.flatMap(sectionLines)].join('\n').length;
-    while (size() > REPORT_INPUT_BUDGET) {
-        const victim = [...S].filter(x => x.lines.length).sort((a, b) => b.rank - a.rank)[0];
-        if (!victim) break;
-        victim.lines.pop();
-    }
-    return [...header, ...S.flatMap(sectionLines)].join('\n');
+    return fitSections(header, S);
+};
+
+/**
+ * Bölüm eklemesi (bölüm sorumlusu) için girdi: bölüm projelerinin bu haftaki
+ * gönderilmiş ya da onaylı raporları ve bölümün (projesiz) görüşmeleri.
+ */
+export const buildDepartmentInput = (i: {
+    departmentName: string;
+    departmentCode: string;
+    year: number;
+    week: number;
+    projectReports: { name: string; code?: string; report: Pick<WeeklyReport, 'thisWeek' | 'nextWeek'> }[];
+    heldMeetings?: CustomerMeeting[];
+    plannedMeetings?: CustomerMeeting[];
+    dictionary?: Abbreviation[];
+}): string => {
+    const header = [`Bölüm: ${i.departmentName}${i.departmentName !== i.departmentCode && i.departmentCode ? ` (${i.departmentCode})` : ''}`, `Hafta: ${weekLabel(i.year, i.week, true)}`];
+    const S: Section[] = [
+        { rank: RANK.meetings, head: 'Bu hafta yapılan bölüm görüşmeleri (kayıtlı):', lines: (i.heldMeetings || []).map(m => `- ${meetingSentence(meetingToDetails(m))}`) },
+        { rank: RANK.meetings, head: 'Gelecek hafta planlanan bölüm görüşmeleri:', lines: (i.plannedMeetings || []).map(m => `- ${m.date.slice(0, 10)} ${m.customer}: ${m.title}`) },
+        {
+            rank: RANK.notes, head: 'Bölüm projelerinin bu haftaki raporları (gönderilmiş ya da onaylı):',
+            lines: i.projectReports.map(p => `- ${p.name}${p.code ? ` (${p.code})` : ''}: ${clip([...p.report.thisWeek.map(itemDisplay), ...p.report.nextWeek.map(x => `Plan: ${itemDisplay(x)}`)].join(' | '), 600)}`),
+            empty: 'Bölüm projelerinin bu haftaki raporları: (henüz gönderilmiş rapor yok)',
+        },
+    ];
+    if (i.dictionary?.length) S.push({ rank: RANK.other, lines: [`Kurum kısaltma sözlüğü: ${i.dictionary.map(a => `${a.abbr}=${a.expansion}`).join('; ')}`] });
+    return fitSections(header, S);
 };
 
 export const EXAMPLES_HEADER = 'Kurumda onaylanmış önceki rapor maddelerinden örnekler (üslup için):';

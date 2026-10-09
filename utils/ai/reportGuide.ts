@@ -27,6 +27,9 @@ export const INSTITUTION_LIMIT = 80;
 const GUARDS = `Yalnızca sana verilen verilere dayan; tarih, rakam, kişi ya da kurum UYDURMA. Bilgi eksikse maddeyi yazma, "eksikBilgi" listesine soru olarak ekle.
 Proje kartındaki açıklamaları, konuya yabancı okurun anlaması gerektiğinde kısa açıklama olarak kullan; kartta olmayan teknik ayrıntı uydurma.`;
 
+/** Bölüm eklemesi raporu (bölüm sorumlusu) için ek görev satırı */
+export const DEPARTMENT_TASK = `Bu kez bölüm sorumlusunun "bölüm genel gelişmeleri" eklemesini hazırlıyorsun: projelere bağlı olmayan ya da birden fazla projeyi kapsayan bölüm gelişmelerini (sözleşme, İG görüşmeleri, fuar ve etkinlikler, bölüm genelinde takvim/bütçe etkileri) yaz. Proje raporlarındaki maddeleri aynen tekrarlama; yalnız bölüm düzeyinde önemli olanı özetle.`;
+
 /** Varsayılan kurum rapor kılavuzu (düzenlenebilir gövde) */
 export const DEFAULT_REPORT_GUIDE = `KURUM RAPOR KILAVUZU
 Biçim:
@@ -51,14 +54,14 @@ export const LEARNED_RULES_HEADER = 'ÖĞRENİLMİŞ KURUM KURALLARI';
 export const DEPARTMENT_GUIDE_HEADER = 'BÖLÜME ÖZGÜ EK KURALLAR';
 
 /** Sistem istemi; parametresiz çağrı varsayılan istemi verir */
-export const buildReportSystem = (o: { institutionName?: string; guide?: string; departmentGuide?: string; learnedRules?: string[] } = {}): string => {
+export const buildReportSystem = (o: { institutionName?: string; guide?: string; departmentGuide?: string; learnedRules?: string[]; department?: boolean } = {}): string => {
     const inst = o.institutionName?.trim() || DEFAULT_INSTITUTION;
     const guide = o.guide?.trim() || DEFAULT_REPORT_GUIDE;
     const extra: string[] = [];
     if (o.departmentGuide?.trim()) extra.push(`${DEPARTMENT_GUIDE_HEADER}\n${o.departmentGuide.trim()}`);
     if (o.learnedRules?.length) extra.push(`${LEARNED_RULES_HEADER}\n${o.learnedRules.map(r => `- ${r}`).join('\n')}`);
     return [
-        `Sen ${locative(inst)} proje yöneticisinin (PY) haftalık raporunu hazırlayan yazım asistanısın. Raporu müdürler okur.\n${GUARDS}`,
+        `Sen ${locative(inst)} proje yöneticisinin (PY) haftalık raporunu hazırlayan yazım asistanısın. Raporu müdürler okur.\n${GUARDS}${o.department ? `\n${DEPARTMENT_TASK}` : ''}`,
         guide,
         ...extra,
         `${CATEGORY_LINE}\n${REPORT_JSON_CONTRACT}`,
@@ -104,6 +107,8 @@ export interface ReportSystemOptions {
     rules?: boolean;
     /** Raporun projesi (proje kapsamlı kurallar için) */
     projectId?: string;
+    /** Bölüm eklemesi raporu (bölüm sorumlusu) */
+    department?: boolean;
 }
 
 /** Bir bölümün (ve projenin) raporu için sistem istemi */
@@ -114,6 +119,7 @@ export const reportSystemFor = (s: ReportSettings | undefined, departmentCode: s
         guide: rules ? customGuide(s) || undefined : undefined,
         departmentGuide: rules ? departmentGuideText(s, departmentCode) || undefined : undefined,
         learnedRules: rules ? activeRulesFor(s, departmentCode, o.projectId) : undefined,
+        department: o.department,
     });
 };
 
