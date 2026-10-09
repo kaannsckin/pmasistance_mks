@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { BROWSER_KEY_HEADER } from '../../utils/ai/protocol';
+import { BROWSER_BASE_URL_HEADER, BROWSER_KEY_HEADER, BROWSER_MODEL_HEADER, BROWSER_PROVIDER_HEADER, LEGACY_BROWSER_KEY_HEADER } from '../../utils/ai/protocol';
 import { browserKeyEnv, readBrowserKey } from './browserKey';
 import { clearGeminiCache } from './gemini';
 import { handleAiRequest } from './handler';
@@ -25,13 +25,14 @@ const SERVER = {
 const KEY = 'AIzaSyTarayiciTestAnahtari_0123456789';
 const BASE = 'https://app.local/api/ai';
 
-const req = (path: string, opts: { key?: string; token?: string; body?: unknown } = {}) => new Request(`${BASE}/${path}`, {
+const req = (path: string, opts: { key?: string; token?: string; body?: unknown; extra?: Record<string, string> } = {}) => new Request(`${BASE}/${path}`, {
     method: opts.body ? 'POST' : 'GET',
     headers: {
         host: 'app.local',
         ...(opts.body ? { 'content-type': 'application/json' } : {}),
         ...(opts.key ? { [BROWSER_KEY_HEADER]: opts.key } : {}),
         ...(opts.token ? { authorization: `Bearer ${opts.token}` } : {}),
+        ...opts.extra,
     },
     ...(opts.body ? { body: JSON.stringify(opts.body) } : {}),
 });
@@ -51,7 +52,7 @@ const recorder = (respond?: (url: string) => Response | undefined) => {
 
 beforeEach(() => { clearGeminiCache(); invalidateSettingsCache(); });
 
-describe('tarayıcıdaki Gemini test anahtarı', () => {
+describe('tarayıcıdaki AI bağlantısı', () => {
     it('sunucuda ek ayar olmadan: durum Gemini (otomatik model), kaynak "browser"; başlıksız istek sunucu ayarında kalır', async () => {
         const { calls, fetchImpl } = recorder();
         const h = await (await handleAiRequest(req('health', { key: KEY }), SERVER, { fetchImpl })).json();
@@ -94,13 +95,13 @@ describe('tarayıcıdaki Gemini test anahtarı', () => {
         const h = await (await handleAiRequest(req('health', { key: KEY }), SERVER, { fetchImpl: bad.fetchImpl })).json();
         expect(h.configured).toBe(false);
         expect(h.configSource).toBe('browser');
-        expect(h.problem).toBe('Bu tarayıcıdaki Gemini test anahtarı: Gemini API anahtarı geçersiz; Google AI Studio\'dan yeni anahtar alın. Anahtarı Yönetici konsolu › Yapay zekâ bölümünden değiştirin ya da kaldırın.');
+        expect(h.problem).toBe('Bu tarayıcıdaki AI bağlantısı: Gemini API anahtarı geçersiz; Google AI Studio\'dan yeni anahtar alın. Bağlantıyı Yönetici konsolu › Yapay zekâ bölümünden değiştirin ya da kaldırın.');
 
         clearGeminiCache();
         const denied = recorder(url => (url.includes(':streamGenerateContent') ? json(403, { error: { message: 'Permission denied' } }) : undefined));
         const res = await handleAiRequest(req('chat', { key: KEY, token: SERVER.AI_ACCESS_TOKEN, body: { messages: [{ role: 'user', content: 'x' }] } }), SERVER, { fetchImpl: denied.fetchImpl });
         expect(res.status).toBe(502);
-        expect((await res.json()).error).toMatch(/bu tarayıcıdaki Gemini test anahtarını/);
+        expect((await res.json()).error).toMatch(/bu tarayıcıdaki AI bağlantısının API anahtarını/);
     });
 
     it('AI_ALLOW_BROWSER_KEY=0: sessizce sunucu ayarına düşmez, nedenini söyler', async () => {
@@ -144,5 +145,48 @@ describe('tarayıcıdaki Gemini test anahtarı', () => {
         const env = browserKeyEnv({ ...SERVER, AI_EMBEDDING_DIMENSIONS: '1024', AI_EMBEDDING_BASE_URL: 'https://emb.kurum.local' }, KEY);
         expect(env).toMatchObject({ AI_PROVIDER: 'gemini', AI_BASE_URL: 'https://generativelanguage.googleapis.com/v1beta', AI_API_KEY: KEY, AI_MODEL: 'auto', AI_EMBEDDING_PROVIDER: 'gemini', AI_EMBEDDING_BASE_URL: 'https://generativelanguage.googleapis.com/v1beta', AI_EMBEDDING_API_KEY: KEY, AI_ACCESS_TOKEN: SERVER.AI_ACCESS_TOKEN });
         for (const k of ['AI_REASONING_EFFORT', 'AI_EXTRA_BODY', 'AI_MAX_OUTPUT_TOKENS', 'AI_EMBEDDING_DIMENSIONS']) expect(env[k]).toBeUndefined();
+    });
+    it('OpenAI: sabit adres, aynı anahtarla anlamsal arama; kurum adresi ve anahtarı kullanılmaz', async () => {
+        const oai = 'sk-proj-TarayiciAnahtari_0123456789';
+        const { calls, fetchImpl } = recorder(url => (url.endsWith('/chat/completions') ? new Response(streamOf('data: {"choices":[{"delta":{"content":"tamam"}}]}\n\ndata: [DONE]\n\n'), { status: 200 }) : undefined));
+        const extra = { [BROWSER_PROVIDER_HEADER]: 'openai', [BROWSER_MODEL_HEADER]: 'gpt-4.1-mini' };
+        const h = await (await handleAiRequest(req('health', { key: oai, extra }), SERVER, { fetchImpl })).json();
+        expect(h).toMatchObject({ configured: true, provider: 'openai', model: 'gpt-4.1-mini', embeddingModel: 'text-embedding-3-small', configSource: 'browser' });
+        const res = await handleAiRequest(req('chat', { key: oai, extra, token: SERVER.AI_ACCESS_TOKEN, body: { messages: [{ role: 'user', content: 'x' }] } }), SERVER, { fetchImpl });
+        expect(res.status).toBe(200);
+        expect(calls.at(-1)!.url).toBe('https://api.openai.com/v1/chat/completions');
+        expect(calls.at(-1)!.headers.authorization).toBe(`Bearer ${oai}`);
+        const body = JSON.parse(calls.at(-1)!.body!);
+        expect(body.reasoning_effort).toBeUndefined();
+        expect(body.chat_template_kwargs).toBeUndefined();
+    });
+
+    it('model eksik, sağlayıcı tanınmıyor ya da Azure adresi kuruma ait değilse istek gitmez', async () => {
+        const { calls, fetchImpl } = recorder();
+        const ask = async (extra: Record<string, string>) => (await (await handleAiRequest(req('health', { key: KEY, extra }), SERVER, { fetchImpl })).json()).problem as string;
+        expect(await ask({ [BROWSER_PROVIDER_HEADER]: 'anthropic' })).toMatch(/model adı eksik/);
+        expect(await ask({ [BROWSER_PROVIDER_HEADER]: 'kurum' })).toMatch(/sağlayıcı tanınmadı/);
+        expect(await ask({ [BROWSER_PROVIDER_HEADER]: 'azure', [BROWSER_MODEL_HEADER]: 'gpt', [BROWSER_BASE_URL_HEADER]: 'https://ai-api.kurum.local/v1' })).toMatch(/Azure adresi/);
+        expect(await ask({ [BROWSER_PROVIDER_HEADER]: 'azure', [BROWSER_MODEL_HEADER]: 'gpt', [BROWSER_BASE_URL_HEADER]: 'https://x.openai.azure.com.saldirgan.example/v1' })).toMatch(/Azure adresi/);
+        expect(calls).toHaveLength(0);
+        const az = readBrowserKey(new Request(BASE, { headers: { [BROWSER_KEY_HEADER]: KEY, [BROWSER_PROVIDER_HEADER]: 'azure', [BROWSER_MODEL_HEADER]: 'gpt', [BROWSER_BASE_URL_HEADER]: 'https://kaynak.openai.azure.com/openai/v1/' } }), {});
+        expect(az.conn).toMatchObject({ provider: 'azure', baseUrl: 'https://kaynak.openai.azure.com/openai/v1' });
+    });
+
+    it('sunucuda hiç ayar yokken (Vercel değişkeni yok) bağlantı tek başına çalışır: erişim koruması aranmaz', async () => {
+        const { fetchImpl } = recorder();
+        expect((await (await handleAiRequest(req('health'), {}, { fetchImpl })).json()).configured).toBe(false);
+        const h = await (await handleAiRequest(req('health', { key: KEY }), {}, { fetchImpl })).json();
+        expect(h).toMatchObject({ configured: true, authMode: 'none', configSource: 'browser' });
+        const res = await handleAiRequest(req('chat', { key: KEY, body: { messages: [{ role: 'user', content: 'x' }] } }), {}, { fetchImpl });
+        expect(res.status).toBe(200);
+        // Başlıksız istek açık uç olmaz
+        expect((await handleAiRequest(req('chat', { body: { messages: [{ role: 'user', content: 'x' }] } }), {}, { fetchImpl })).status).toBe(503);
+    });
+
+    it('eski istemcinin x-gemini-api-key başlığı Gemini bağlantısı olarak kabul edilir', async () => {
+        const { fetchImpl } = recorder();
+        const res = await handleAiRequest(new Request(`${BASE}/health`, { headers: { host: 'app.local', [LEGACY_BROWSER_KEY_HEADER]: KEY } }), SERVER, { fetchImpl });
+        expect(await res.json()).toMatchObject({ configured: true, provider: 'gemini', configSource: 'browser' });
     });
 });

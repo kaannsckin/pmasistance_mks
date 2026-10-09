@@ -1,8 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { collect, streamOf } from '../../server/ai/testUtils';
-import { configureMasking, embedTexts, fetchAiStatus, isBrowserKeyFormat, loadBrowserKey, readNdjson, saveBrowserKey, streamChat, trimHistory } from './client';
+import {
+    AI_ACCESS_TOKEN_KEY, AI_BROWSER_CONNECTION_KEY, browserSettingsExpired, configureMasking, embedTexts, fetchAiStatus, isBrowserKeyFormat, loadAccessToken,
+    loadBrowserConnection, readNdjson, saveAccessToken, saveBrowserConnection, streamChat, trimHistory,
+} from './client';
 import { buildMasker, MASK_NOTE } from './masking';
-import { BROWSER_KEY_HEADER, ChatMessage } from './protocol';
+import { BROWSER_BASE_URL_HEADER, BROWSER_KEY_HEADER, BROWSER_MODEL_HEADER, BROWSER_PROVIDER_HEADER, BROWSER_SETTINGS_TTL_MS, ChatMessage } from './protocol';
 
 describe('readNdjson', () => {
     it('satır ortasında bölünen ve sonu satırsız biten akışı ayrıştırır', async () => {
@@ -52,8 +55,8 @@ describe('stripReasoning (<think> çıktısı)', () => {
     });
 });
 
-describe('tarayıcıdaki Gemini test anahtarı', () => {
-    afterEach(() => vi.unstubAllGlobals());
+describe('tarayıcıdaki AI bağlantısı', () => {
+    afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
     const memoryStorage = () => {
         const m = new Map<string, string>();
         return { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => void m.set(k, v), removeItem: (k: string) => void m.delete(k) };
@@ -71,19 +74,53 @@ describe('tarayıcıdaki Gemini test anahtarı', () => {
         }));
         await fetchAiStatus();
         expect(seen[0][BROWSER_KEY_HEADER]).toBeUndefined();
-        saveBrowserKey(KEY);
-        expect(loadBrowserKey()).toBe(KEY);
+        saveBrowserConnection({ provider: 'gemini', apiKey: KEY });
+        expect(loadBrowserConnection()).toMatchObject({ provider: 'gemini', apiKey: KEY });
         await fetchAiStatus();
         expect(seen[1][BROWSER_KEY_HEADER]).toBe(KEY);
-        await fetchAiStatus(undefined, 'AIzaSyBaskaAnahtar_000000000000000');
-        expect(seen[2][BROWSER_KEY_HEADER]).toBe('AIzaSyBaskaAnahtar_000000000000000');
+        expect(seen[1][BROWSER_PROVIDER_HEADER]).toBe('gemini');
+        expect(seen[1][BROWSER_MODEL_HEADER]).toBeUndefined();
+        await fetchAiStatus(undefined, { provider: 'azure', apiKey: 'AzureAnahtari_00000000000000', model: 'gpt-dagitim', baseUrl: 'https://kaynak.openai.azure.com/openai/v1' });
+        expect(seen[2]).toMatchObject({ [BROWSER_KEY_HEADER]: 'AzureAnahtari_00000000000000', [BROWSER_PROVIDER_HEADER]: 'azure', [BROWSER_MODEL_HEADER]: 'gpt-dagitim', [BROWSER_BASE_URL_HEADER]: 'https://kaynak.openai.azure.com/openai/v1' });
         await fetchAiStatus(undefined, null);
         expect(seen[3][BROWSER_KEY_HEADER]).toBeUndefined();
         const r = await streamChat({ messages: [{ role: 'user', content: 'x' }] }, { authMode: 'none' });
         expect(r.text).toBe('tamam');
         expect(seen[4][BROWSER_KEY_HEADER]).toBe(KEY);
-        saveBrowserKey(null);
-        expect(loadBrowserKey()).toBeNull();
+        saveBrowserConnection(null);
+        expect(loadBrowserConnection()).toBeNull();
+    });
+
+    it('bağlantı ve erişim kodu 24 saat geçerli; süre dolunca silinir ve "süresi doldu" işaretlenir, yeniden girilince kalkar', () => {
+        const store = memoryStorage();
+        vi.stubGlobal('localStorage', store);
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2026-10-09T09:00:00Z'));
+        saveBrowserConnection({ provider: 'openai', apiKey: 'sk-proj-0123456789abcdefghij', model: 'gpt-4.1-mini' });
+        saveAccessToken('erisim-kodu');
+        expect(loadBrowserConnection()?.expiresAt).toBe(Date.now() + BROWSER_SETTINGS_TTL_MS);
+        vi.setSystemTime(new Date('2026-10-10T08:59:00Z'));
+        expect(loadBrowserConnection()?.model).toBe('gpt-4.1-mini');
+        expect(loadAccessToken()).toBe('erisim-kodu');
+        expect(browserSettingsExpired()).toBe(false);
+        vi.setSystemTime(new Date('2026-10-10T09:00:01Z'));
+        expect(loadBrowserConnection()).toBeNull();
+        expect(loadAccessToken()).toBeNull();
+        expect(store.getItem(AI_BROWSER_CONNECTION_KEY)).toBeNull();
+        expect(browserSettingsExpired()).toBe(true);
+        saveAccessToken('yeni-kod');
+        expect(browserSettingsExpired()).toBe(false);
+    });
+
+    it('eski sürümün kayıtları (düz erişim kodu, Gemini test anahtarı) yeni biçime 24 saatle taşınır', () => {
+        const store = memoryStorage();
+        vi.stubGlobal('localStorage', store);
+        store.setItem(AI_ACCESS_TOKEN_KEY, 'eski-kod');
+        store.setItem('PLANASISTAN_AI_GEMINI_TEST_KEY', KEY);
+        expect(loadAccessToken()).toBe('eski-kod');
+        expect(JSON.parse(store.getItem(AI_ACCESS_TOKEN_KEY)!).expiresAt).toBeGreaterThan(Date.now());
+        expect(loadBrowserConnection()).toMatchObject({ provider: 'gemini', apiKey: KEY });
+        expect(store.getItem('PLANASISTAN_AI_GEMINI_TEST_KEY')).toBeNull();
     });
 
     it('biçim denetimi sunucudakiyle aynı', () => {

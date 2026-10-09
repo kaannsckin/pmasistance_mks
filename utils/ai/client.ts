@@ -1,17 +1,17 @@
 import { getClient } from '../cloudSync';
 import { MASK_NOTE, Masker, mapStrings } from './masking';
-import { AI_LIMITS, AiAuthMode, AiStatus, BROWSER_KEY_HEADER, ChatMessage, ChatRequestBody, ChatStreamEvent, ToolCall } from './protocol';
+import { AI_LIMITS, AiAuthMode, AiStatus, BROWSER_BASE_URL_HEADER, BROWSER_KEY_HEADER, BROWSER_MODEL_HEADER, BROWSER_PROVIDER_HEADER, BROWSER_SETTINGS_TTL_MS, ChatMessage, ChatRequestBody, ChatStreamEvent, ToolCall } from './protocol';
 
 /**
  * Tarayıcı tarafı AI istemcisi — yalnızca kendi proxy'mizle (/api/ai) konuşur;
  * kurumun API anahtarı tarayıcıya hiç gelmez (yönetici isterse yalnız kendi
- * tarayıcısında kendi Gemini test anahtarını kullanabilir; aşağıda). Proxy başka
+ * tarayıcısında kendi AI bağlantısını 24 saatliğine kullanabilir; aşağıda). Proxy başka
  * bir adresteyse VITE_AI_PROXY_URL ile verilir (gizli değildir).
  */
 
 const PROXY_BASE = (import.meta.env.VITE_AI_PROXY_URL || '/api/ai').replace(/\/+$/, '');
 
-/** "token" modunda kullanıcının girdiği erişim kodu (cihaza özel) */
+/** "token" modunda kullanıcının girdiği erişim kodu (cihaza özel, 24 saat) */
 export const AI_ACCESS_TOKEN_KEY = 'PLANASISTAN_AI_ACCESS_TOKEN';
 
 export type AiErrorCode = 'config' | 'auth' | 'forbidden' | 'origin' | 'rate_limited' | 'bad_request' | 'upstream' | 'timeout' | 'network' | 'aborted' | 'not_found';
@@ -23,57 +23,117 @@ export class AiError extends Error {
     }
 }
 
-export const loadAccessToken = (): string | null => {
+/**
+ * Tarayıcıda saklanan AI ayarları (erişim kodu, AI bağlantısı) 24 saat geçerlidir;
+ * süresi dolunca silinir ve yönetici konsolu ya da asistan yeniden sorar.
+ * Biçim: {"value": …, "expiresAt": ms}. Eski sürümün düz metin kaydı okunduğunda
+ * yeni biçime çevrilir (süre o andan başlar).
+ */
+const EXPIRED_KEY = 'PLANASISTAN_AI_EXPIRED_AT';
+
+const readExpiring = <T>(key: string, parseLegacy: (raw: string) => T | null, now = Date.now()): { value: T; expiresAt: number } | null => {
     try {
-        return localStorage.getItem(AI_ACCESS_TOKEN_KEY);
+        const raw = localStorage.getItem(key);
+        if (!raw) return null;
+        let entry: { value: T; expiresAt: number } | null = null;
+        try {
+            const j = JSON.parse(raw) as { value?: T; expiresAt?: number };
+            if (j && typeof j === 'object' && 'value' in j && typeof j.expiresAt === 'number') entry = { value: j.value as T, expiresAt: j.expiresAt };
+        } catch { /* eski düz metin kayıt */ }
+        if (!entry) {
+            const legacy = parseLegacy(raw);
+            if (legacy === null) { localStorage.removeItem(key); return null; }
+            entry = { value: legacy, expiresAt: now + BROWSER_SETTINGS_TTL_MS };
+            localStorage.setItem(key, JSON.stringify(entry));
+        }
+        if (entry.expiresAt <= now) {
+            localStorage.removeItem(key);
+            localStorage.setItem(EXPIRED_KEY, String(now));
+            return null;
+        }
+        return entry;
     } catch {
         return null;
     }
 };
 
-export const saveAccessToken = (token: string | null): void => {
+const writeExpiring = (key: string, value: unknown, now = Date.now()): void => {
     try {
-        if (token) localStorage.setItem(AI_ACCESS_TOKEN_KEY, token);
-        else localStorage.removeItem(AI_ACCESS_TOKEN_KEY);
+        if (value === null || value === undefined) localStorage.removeItem(key);
+        else {
+            localStorage.setItem(key, JSON.stringify({ value, expiresAt: now + BROWSER_SETTINGS_TTL_MS }));
+            localStorage.removeItem(EXPIRED_KEY);
+        }
     } catch {
-        /* depolama kapalıysa kod yalnızca bu oturumda kullanılamaz */
+        /* depolama kapalıysa ayar yalnızca bu oturumda kullanılamaz */
     }
 };
+
+/** Tarayıcıdaki AI ayarlarından biri süresi dolduğu için silindi mi (yeniden girilince temizlenir) */
+export const browserSettingsExpired = (): boolean => {
+    try {
+        return !!localStorage.getItem(EXPIRED_KEY);
+    } catch {
+        return false;
+    }
+};
+
+export const loadAccessToken = (): string | null =>
+    readExpiring<string>(AI_ACCESS_TOKEN_KEY, raw => raw.trim() || null)?.value || null;
+
+export const saveAccessToken = (token: string | null): void => writeExpiring(AI_ACCESS_TOKEN_KEY, token || null);
 
 /**
- * Yönetici konsolunda "Bu tarayıcıda kullan" ile girilen Gemini test anahtarı.
- * Yalnız bu tarayıcıda saklanır ve AI isteklerinde x-gemini-api-key başlığıyla
- * proxy'ye gider; proxy bu tarayıcının isteklerini sunucu ayarı yerine Gemini'ye
- * yönlendirir. Diğer kullanıcılar sunucu ayarıyla çalışmaya devam eder.
+ * Yönetici konsolunda "Bu tarayıcıda kullan" ile girilen AI bağlantısı
+ * (sağlayıcı, model, API anahtarı; Azure'da adres). Yalnız bu tarayıcıda 24 saat
+ * saklanır ve AI isteklerinde x-ai-* başlıklarıyla proxy'ye gider; proxy bu
+ * tarayıcının isteklerini sunucu ayarı yerine bu bağlantıyla yapar. Diğer
+ * kullanıcılar sunucu ayarıyla çalışmaya devam eder.
  */
-export const AI_BROWSER_KEY = 'PLANASISTAN_AI_GEMINI_TEST_KEY';
+export const AI_BROWSER_CONNECTION_KEY = 'PLANASISTAN_AI_BROWSER_CONNECTION';
+/** Eski sürümün yalnız Gemini anahtarı (okunduğunda bağlantıya taşınır) */
+const LEGACY_GEMINI_KEY = 'PLANASISTAN_AI_GEMINI_TEST_KEY';
 
-export const loadBrowserKey = (): string | null => {
+export type BrowserAiProvider = 'gemini' | 'openai' | 'anthropic' | 'azure';
+
+export interface BrowserConnection {
+    provider: BrowserAiProvider;
+    apiKey: string;
+    /** Gemini'de boşsa otomatik seçilir; diğerlerinde zorunlu */
+    model?: string;
+    /** Yalnız Azure: https://KAYNAK.openai.azure.com/openai/v1 */
+    baseUrl?: string;
+}
+
+export const loadBrowserConnection = (): (BrowserConnection & { expiresAt: number }) | null => {
     try {
-        return localStorage.getItem(AI_BROWSER_KEY) || null;
-    } catch {
-        return null;
-    }
+        const legacy = localStorage.getItem(LEGACY_GEMINI_KEY);
+        if (legacy) {
+            localStorage.removeItem(LEGACY_GEMINI_KEY);
+            if (!localStorage.getItem(AI_BROWSER_CONNECTION_KEY)) writeExpiring(AI_BROWSER_CONNECTION_KEY, { provider: 'gemini', apiKey: legacy });
+        }
+    } catch { /* depolama kapalı */ }
+    const e = readExpiring<BrowserConnection>(AI_BROWSER_CONNECTION_KEY, () => null);
+    return e && e.value?.apiKey ? { ...e.value, expiresAt: e.expiresAt } : null;
 };
 
-export const saveBrowserKey = (key: string | null): void => {
-    try {
-        if (key) localStorage.setItem(AI_BROWSER_KEY, key);
-        else localStorage.removeItem(AI_BROWSER_KEY);
-    } catch {
-        /* depolama kapalıysa anahtar kullanılamaz */
-    }
-};
+export const saveBrowserConnection = (conn: BrowserConnection | null): void => writeExpiring(AI_BROWSER_CONNECTION_KEY, conn);
 
-/** Google API anahtarı biçimi (sunucudaki denetimle aynı) */
+/** API anahtarı biçimi (sunucudaki denetimle aynı) */
 export const isBrowserKeyFormat = (key: string): boolean => /^[A-Za-z0-9_.-]{20,200}$/.test(key);
 
-/** undefined: kayıtlı anahtar · null: anahtarsız (sunucu ayarı) · metin: bu anahtar (kaydetmeden deneme) */
-export type BrowserKeyChoice = string | null | undefined;
+/** undefined: kayıtlı bağlantı · null: bağlantısız (sunucu ayarı) · nesne: bu bağlantı (kaydetmeden deneme) */
+export type BrowserKeyChoice = BrowserConnection | null | undefined;
 
 const browserKeyHeaders = (choice: BrowserKeyChoice): Record<string, string> => {
-    const key = choice === undefined ? loadBrowserKey() : choice;
-    return key ? { [BROWSER_KEY_HEADER]: key } : {};
+    const c = choice === undefined ? loadBrowserConnection() : choice;
+    if (!c) return {};
+    return {
+        [BROWSER_KEY_HEADER]: c.apiKey,
+        [BROWSER_PROVIDER_HEADER]: c.provider,
+        ...(c.model ? { [BROWSER_MODEL_HEADER]: c.model } : {}),
+        ...(c.provider === 'azure' && c.baseUrl ? { [BROWSER_BASE_URL_HEADER]: c.baseUrl } : {}),
+    };
 };
 
 export const authHeaders = async (mode: AiAuthMode): Promise<Record<string, string>> => {

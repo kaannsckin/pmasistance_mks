@@ -129,23 +129,26 @@ Yönetici konsolu › Yapay zekâ › **AI bağlantısı** kartında sağlayıc�
 Google AI Studio'nun "Get started" adımlarıyla alınan anahtar tek başına yeterlidir:
 
 1. Google hesabıyla [Google AI Studio](https://aistudio.google.com/apikey)'yu açın, **Create API key** ile anahtar oluşturup kopyalayın.
-2. **Sunucuda hiç ayar yoksa — yalnız bu tarayıcıda:** Yönetici konsolu › Yapay zekâ › AI bağlantısı › **Bu tarayıcıda Gemini test anahtarı** kutusuna yapıştırıp **Bu tarayıcıda kullan** deyin (ayrıntı aşağıda). Yönetici anahtarı, depo ya da yeniden yayın gerekmez.
+2. **Sunucuda hiç ayar yoksa — yalnız bu tarayıcıda:** Yönetici konsolu › Yapay zekâ › AI bağlantısı › **Bu tarayıcıda AI bağlantısı** kutusunda sağlayıcı olarak Google Gemini'yi seçip anahtarı yapıştırın ve **Dene ve bu tarayıcıda kullan** deyin (ayrıntı aşağıda). Yönetici anahtarı, depo ya da yeniden yayın gerekmez; bağlantı 24 saat geçerlidir.
    **Herkes için panelden:** (AI_ADMIN_TOKEN ve depo kuruluysa) **Hızlı kurulum: Google Gemini API** kutusuna yapıştırıp **Gemini ile kur** deyin. Bağlantı test edilir ve sunucuya kaydedilir.
    **Ya da ortam değişkeniyle:** yalnız `GEMINI_API_KEY=<anahtar>` tanımlayın (Google SDK'larının kullandığı ad). Başka AI anahtarı yoksa sağlayıcı `gemini` olur. Yayında erişim koruması (`AI_ACCESS_TOKEN` ya da Supabase) yine gerekir.
 3. **Model seçimi otomatik:** Model verilmemişse (ya da `auto` ise) sunucu anahtarla Gemini'nin model listesini (`GET https://generativelanguage.googleapis.com/v1beta/models`, `x-goog-api-key` başlığı) alır. Sohbet için en yüksek sürümlü kararlı **Flash** modelini seçer (önizleme, lite, görüntü ve ses modelleri hariç). Anlamsal arama için Gemini embedding modelini 768 boyutla seçer. Liste 1 saat önbellekte tutulur; Google yeni model yayımladığında ya da eskisini kaldırdığında seçim kendiliğinden güncellenir. Belirli bir modeli sabitlemek için `AI_MODEL` yazın ya da paneldeki **Listele** ile seçin. Anlamsal aramayı kapatmak için `AI_EMBEDDING_MODEL=none` verin.
 4. **Sınırlar:** Ücretsiz katman denemek içindir. Dakikalık istek sınırı düşüktür; asistan araç kullanan bir soruda 2–4 istek atar, sınır aşılırsa "kota/hız sınırı" uyarısı çıkar. Google'ın koşullarına göre ücretsiz katmanda gönderilen içerik Google ürünlerini geliştirmek için kullanılabilir. Kurum verisiyle kalıcı kullanımda faturalı katmanı ve KVKK değerlendirmesini tercih edin. Gemini API her ülkede sunulmaz; bölge desteklenmiyorsa hata mesajı bunu söyler.
 
-#### Bu tarayıcıda Gemini test anahtarı (sunucuda ayar gerekmez)
+#### Bu tarayıcıda AI bağlantısı (sunucuda ayar gerekmez, 24 saat)
 
-Yayındaki sunucuda kurum modeli tanımlıyken ya da panel kapalıyken (AI_ADMIN_TOKEN yok) asistanı Gemini ile denemek için:
+Sunucuda (Vercel ortam değişkenlerinde) hiç AI ayarı yokken, panel kapalıyken (AI_ADMIN_TOKEN yok) ya da kurum modeli dururken başka bir sağlayıcıyı denemek için tüm AI bilgileri yönetici konsolundan girilir:
 
-- Anahtar yalnız bu tarayıcının deposunda (`localStorage`) tutulur; çalışma alanı verisine, buluta ve sunucu deposuna girmez. Her AI isteğinde `x-gemini-api-key` başlığıyla uygulamanın proxy'sine gider; proxy o istek için sağlayıcıyı Gemini'ye çevirir, modeli ve anlamsal aramayı anahtarın model listesinden seçer (yukarıdaki gibi). Anahtar loglanmaz ve saklanmaz.
-- Adres sabittir (`generativelanguage.googleapis.com`): başlıkla başka bir adrese istek gönderilemez, sunucudaki kurum anahtarı kullanılmaz ve hiçbir yanıtta dönmez. Kurum modeline özgü üretim ayarları (sıcaklık, en çok çıktı, akıl yürütme, ek alanlar) Gemini'ye taşınmaz.
-- Erişim koruması (erişim kodu / Supabase), hız sınırı ve izinli kökenler aynen geçerlidir; anahtarlı istekler ayrıca istemci IP'si başına dakikada 180 ile sınırlıdır.
-- Yalnız bu tarayıcı etkilenir: diğer kullanıcılar ve cihazlar sunucu ayarıyla çalışır. Durum kartında kaynak "Bu tarayıcıdaki Gemini test anahtarı" görünür; anahtar geçersizleşirse asistan nedenini ve nereden değiştirileceğini söyler. **Kaldır** ile silinir.
-- Gönderilen veri sunucu ayarındakiyle aynıdır: asistan sorunuza göre proje, görev ve kişi bilgilerini Gemini'ye gönderir. Ad maskeleme açıkken (varsayılan) kişi, proje ve kurum adları takma adla gider; sicil numaraları her durumda maskelenir. Ücretsiz katmanda gönderilen içerik Google ürünlerini geliştirmek için kullanılabilir.
-- Model yoğunsa (Gemini "high demand", HTTP 503) proxy isteği kısa bir beklemeyle bir kez yeniden dener; olmazsa anahtarın erişebildiği bir sonraki kararlı Flash modeline, sonra Flash-Lite'a geçer (kota dolduğunda, HTTP 429, beklemeden geçer). Bu, model otomatik seçildiğinde (`AI_MODEL` boş ya da `auto`) geçerlidir; model elle verildiyse yalnız bir kez yeniden denenir.
-- Paylaşılan bilgisayarda kullanmayın. Kurum bu kipi istemiyorsa sunucuya `AI_ALLOW_BROWSER_KEY=0` ekleyin; o zaman kayıtlı anahtarlı istekler sessizce kurum modeline düşmez, "kapalı" uyarısı verir.
+- **Girilenler:** sağlayıcı (Google Gemini, OpenAI, Anthropic, Azure OpenAI), API anahtarı, model (Gemini'de boş bırakılırsa otomatik seçilir), Azure'da kaynak adresi; sunucu erişim kodu istiyorsa (`AI_ACCESS_TOKEN`) AI erişim kodu. **Dene ve bu tarayıcıda kullan** bağlantıyı kısa bir sohbet isteğiyle dener, çalışıyorsa kaydeder.
+- **24 saat:** bağlantı ve erişim kodu bu tarayıcının deposunda (`localStorage`) 24 saat tutulur. Süre dolunca silinir; asistan "AI bağlantısının süresi doldu" der ve bu bölüm "Süresi doldu" etiketiyle açılıp bilgileri yeniden ister. **Değiştir / süreyi yenile** ile süre baştan başlar. Eski sürümde kaydedilmiş Gemini test anahtarı ve erişim kodu ilk okunuşta bu biçime 24 saatle taşınır.
+- Bilgiler çalışma alanı verisine, buluta ve sunucu deposuna girmez. Her AI isteğinde `x-ai-api-key`, `x-ai-provider`, `x-ai-model` (Azure'da `x-ai-base-url`) başlıklarıyla uygulamanın proxy'sine gider; proxy o istek için bu bağlantıyı kullanır. Anahtar loglanmaz ve saklanmaz. Eski istemcilerin `x-gemini-api-key` başlığı Gemini bağlantısı olarak kabul edilir.
+- **Adresler sabittir:** Gemini `generativelanguage.googleapis.com`, OpenAI `api.openai.com`, Anthropic `api.anthropic.com`; Azure'da yalnız `https://KAYNAK.openai.azure.com/…` kabul edilir. Başlıkla başka bir adrese istek gönderilemez; sunucudaki kurum anahtarı kullanılmaz ve hiçbir yanıtta dönmez. Kurum modeline özgü üretim ayarları (sıcaklık, en çok çıktı, akıl yürütme, ek alanlar) ve embedding ayarları taşınmaz.
+- **Anlamsal arama:** Gemini'de otomatik seçilen Gemini embedding modeli, OpenAI'de `text-embedding-3-small` aynı anahtarla kullanılır; Anthropic ve Azure'da anahtar kelime araması yapılır.
+- **Erişim koruması:** sunucuda erişim kodu ya da Supabase tanımlıysa aynen geçerlidir. Sunucuda hiç koruma tanımlı değilse bağlantılı istekler koruma aramaz (istek kurumun değil, isteği gönderenin kendi anahtarıyla gider); bağlantısız istekler yine reddedilir. Hız sınırı ve izinli kökenler geçerlidir; bağlantılı istekler ayrıca istemci IP'si başına dakikada 180 ile sınırlıdır.
+- Yalnız bu tarayıcı etkilenir: diğer kullanıcılar ve cihazlar sunucu ayarıyla çalışır. Durum kartında kaynak "Bu tarayıcıdaki AI bağlantısı (24 saat)" görünür; anahtar geçersizleşirse asistan nedenini ve nereden değiştirileceğini söyler. **Kaldır** ile silinir.
+- Gönderilen veri sunucu ayarındakiyle aynıdır: asistan sorunuza göre proje, görev ve kişi bilgilerini sağlayıcıya gönderir. Ad maskeleme açıkken (varsayılan) kişi, proje ve kurum adları takma adla gider; sicil numaraları her durumda maskelenir.
+- Gemini modeli otomatik seçildiyse ve yoğunsa (HTTP 503) proxy isteği kısa bir beklemeyle bir kez yeniden dener, olmazsa sıradaki kararlı Flash modeline, sonra Flash-Lite'a geçer (kota dolduğunda, HTTP 429, beklemeden geçer).
+- Paylaşılan bilgisayarda kullanmayın. Kalıcı ve herkes için kurulum sunucu ayarıyla (ortam değişkeni ya da panel deposu) yapılır. Kurum bu kipi istemiyorsa sunucuya `AI_ALLOW_BROWSER_KEY=0` ekleyin; o zaman bağlantılı istekler sessizce kurum modeline düşmez, "kapalı" uyarısı verir.
 
 ## 2. Sağlayıcı örnekleri
 
@@ -237,7 +240,7 @@ AI_MODEL=...
 
 ## 7. Güvenlik notları
 
-- Kurum anahtarı yalnızca sunucudadır: proxy'nin ortam değişkeninde ya da yönetici panelinden girildiyse sunucu deposunda şifreli; `/health` yalnızca sağlayıcı ve model adını gösterir. Tek istisna yöneticinin kendi tarayıcısında kullandığı Gemini test anahtarıdır (yalnız o tarayıcıda; `AI_ALLOW_BROWSER_KEY=0` ile kapatılır).
+- Kurum anahtarı yalnızca sunucudadır: proxy'nin ortam değişkeninde ya da yönetici panelinden girildiyse sunucu deposunda şifreli; `/health` yalnızca sağlayıcı ve model adını gösterir. Tek istisna yöneticinin kendi tarayıcısında 24 saatliğine kullandığı AI bağlantısıdır (yalnız o tarayıcıda; adresler sabit; `AI_ALLOW_BROWSER_KEY=0` ile kapatılır).
 - Mesaj içerikleri loglanmaz; sağlayıcı hata mesajları kısaltılıp anahtar içermeden iletilir.
 - Model yanıtları HTML olarak yorumlanmaz (`components/Markdown.tsx`), bu yüzden modelin ürettiği betik çalışamaz.
 - İstek boyutu, mesaj sayısı ve sistem talimatı sınırlıdır (`utils/ai/protocol.ts` → `AI_LIMITS`).

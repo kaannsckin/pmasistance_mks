@@ -1,4 +1,4 @@
-import { AI_LIMITS, AiStatus, BROWSER_KEY_HEADER, ChatMessage, ChatRequestBody, TOOL_NAME_PATTERN, ToolCall, ToolSpec } from '../../utils/ai/protocol.js';
+import { AI_LIMITS, AiStatus, BROWSER_BASE_URL_HEADER, BROWSER_KEY_HEADER, BROWSER_MODEL_HEADER, BROWSER_PROVIDER_HEADER, ChatMessage, ChatRequestBody, TOOL_NAME_PATTERN, ToolCall, ToolSpec } from '../../utils/ai/protocol.js';
 import { AuthResult, authorize } from './auth.js';
 import { Env, readAiConfig } from './config.js';
 import { buildEmbedRequest, parseEmbedResponse, readEmbeddingConfig, validateEmbedBody } from './embeddings.js';
@@ -80,7 +80,7 @@ const corsFor = (request: Request, allowedOrigins: string[]): Record<string, str
     if (allowedOrigins.includes(origin.replace(/\/+$/, ''))) {
         return {
             'access-control-allow-origin': origin,
-            'access-control-allow-headers': `authorization, content-type, ${BROWSER_KEY_HEADER}`,
+            'access-control-allow-headers': `authorization, content-type, ${BROWSER_KEY_HEADER}, ${BROWSER_PROVIDER_HEADER}, ${BROWSER_MODEL_HEADER}, ${BROWSER_BASE_URL_HEADER}`,
             'access-control-allow-methods': 'GET, POST, OPTIONS',
             'access-control-max-age': '600',
             vary: 'Origin',
@@ -215,7 +215,7 @@ const pause = (ms: number, signal: AbortSignal): Promise<void> => new Promise(re
 
 /** Sağlayıcı anahtarı reddederse kullanıcıya hangi anahtarın denetleneceği söylenir */
 const keyNameOf = (source: 'panel' | 'env' | 'browser'): string | undefined =>
-    source === 'browser' ? 'bu tarayıcıdaki Gemini test anahtarını (Yönetici konsolu › Yapay zekâ)' : undefined;
+    source === 'browser' ? 'bu tarayıcıdaki AI bağlantısının API anahtarını (Yönetici konsolu › Yapay zekâ)' : undefined;
 
 const hostOf = (url: string): string => {
     try {
@@ -231,16 +231,16 @@ export const handleAiRequest = async (request: Request, rawEnv: Env, opts: Handl
     const route = opts.route || (path.endsWith('/health') ? 'health' : path.endsWith('/chat') ? 'chat' : path.endsWith('/embed') ? 'embed' : path.endsWith('/admin') ? 'admin' : undefined);
     if (!route) return errorResponse(404, 'not_found', 'Bilinmeyen AI uç noktası.');
 
-    // Tarayıcıdaki Gemini test anahtarı yalnız o tarayıcının isteklerinde sunucu ayarının yerine geçer
+    // Tarayıcıdaki AI bağlantısı yalnız o tarayıcının isteklerinde sunucu ayarının yerine geçer
     const browser = route === 'admin' || request.method === 'OPTIONS' ? {} : readBrowserKey(request, rawEnv);
-    if (browser.key) {
+    if (browser.conn) {
         // Anahtar doğrulanmadan önce sağlayıcıya model listesi isteği gider: istemci başına sınırlı
         const wait = (opts.rateLimiter || sharedLimiter(BROWSER_KEY_PER_MIN)).hit(`browser-key:${clientIp(request)}`);
         if (wait > 0) return errorResponse(429, 'rate_limited', `Çok fazla istek; ${wait} sn sonra tekrar deneyin.`, { 'retry-after': String(wait) });
     }
     // Yönetici panelinden girilen bağlantı ayarları ortam değişkenlerinin üzerine yazılır
-    const eff: { env: Env; source: 'panel' | 'env' | 'browser'; auto: GeminiAuto; problem?: string } = browser.key
-        ? { ...(await prepareEnv(browserKeyEnv(rawEnv, browser.key), opts.fetchImpl)), source: 'browser' }
+    const eff: { env: Env; source: 'panel' | 'env' | 'browser'; auto: GeminiAuto; problem?: string } = browser.conn
+        ? { ...(await prepareEnv(browserKeyEnv(rawEnv, browser.conn), opts.fetchImpl)), source: 'browser' }
         : await effectiveEnv(rawEnv, { isDev: opts.isDev, fetchImpl: opts.fetchImpl });
     const env = eff.env;
     const cfg = readAiConfig(env, { isDev: opts.isDev });
@@ -252,7 +252,7 @@ export const handleAiRequest = async (request: Request, rawEnv: Env, opts: Handl
     // Yönetim ucu yapılandırma eksikken de çalışır (ilk kurulum panelden yapılabilsin)
     if (route === 'admin') return handleAiAdmin(request, rawEnv, { isDev: opts.isDev, fetchImpl: opts.fetchImpl }, cors);
 
-    // Tarayıcı anahtarı bu sunucuda kullanılamıyorsa sessizce sunucu ayarına düşülmez
+    // Tarayıcı bağlantısı bu sunucuda kullanılamıyorsa sessizce sunucu ayarına düşülmez
     if (browser.problem) {
         if (route === 'health') {
             return jsonResponse(200, { configured: false, authMode: cfg.authMode, configSource: 'browser', browserKeyAllowed: browserKeyAllowed(rawEnv), problem: browser.problem } satisfies AiStatus, cors);
