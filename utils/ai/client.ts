@@ -1,10 +1,11 @@
 import { getClient } from '../cloudSync';
-import { AI_LIMITS, AiAuthMode, AiStatus, ChatMessage, ChatRequestBody, ChatStreamEvent, ToolCall } from './protocol';
+import { AI_LIMITS, AiAuthMode, AiStatus, BROWSER_KEY_HEADER, ChatMessage, ChatRequestBody, ChatStreamEvent, ToolCall } from './protocol';
 
 /**
  * Tarayıcı tarafı AI istemcisi — yalnızca kendi proxy'mizle (/api/ai) konuşur;
- * API anahtarı tarayıcıya hiç gelmez. Proxy başka bir adresteyse
- * VITE_AI_PROXY_URL ile verilir (gizli değildir).
+ * kurumun API anahtarı tarayıcıya hiç gelmez (yönetici isterse yalnız kendi
+ * tarayıcısında kendi Gemini test anahtarını kullanabilir; aşağıda). Proxy başka
+ * bir adresteyse VITE_AI_PROXY_URL ile verilir (gizli değildir).
  */
 
 const PROXY_BASE = (import.meta.env.VITE_AI_PROXY_URL || '/api/ai').replace(/\/+$/, '');
@@ -38,6 +39,42 @@ export const saveAccessToken = (token: string | null): void => {
     }
 };
 
+/**
+ * Yönetici konsolunda "Bu tarayıcıda kullan" ile girilen Gemini test anahtarı.
+ * Yalnız bu tarayıcıda saklanır ve AI isteklerinde x-gemini-api-key başlığıyla
+ * proxy'ye gider; proxy bu tarayıcının isteklerini sunucu ayarı yerine Gemini'ye
+ * yönlendirir. Diğer kullanıcılar sunucu ayarıyla çalışmaya devam eder.
+ */
+export const AI_BROWSER_KEY = 'PLANASISTAN_AI_GEMINI_TEST_KEY';
+
+export const loadBrowserKey = (): string | null => {
+    try {
+        return localStorage.getItem(AI_BROWSER_KEY) || null;
+    } catch {
+        return null;
+    }
+};
+
+export const saveBrowserKey = (key: string | null): void => {
+    try {
+        if (key) localStorage.setItem(AI_BROWSER_KEY, key);
+        else localStorage.removeItem(AI_BROWSER_KEY);
+    } catch {
+        /* depolama kapalıysa anahtar kullanılamaz */
+    }
+};
+
+/** Google API anahtarı biçimi (sunucudaki denetimle aynı) */
+export const isBrowserKeyFormat = (key: string): boolean => /^[A-Za-z0-9_.-]{20,200}$/.test(key);
+
+/** undefined: kayıtlı anahtar · null: anahtarsız (sunucu ayarı) · metin: bu anahtar (kaydetmeden deneme) */
+export type BrowserKeyChoice = string | null | undefined;
+
+const browserKeyHeaders = (choice: BrowserKeyChoice): Record<string, string> => {
+    const key = choice === undefined ? loadBrowserKey() : choice;
+    return key ? { [BROWSER_KEY_HEADER]: key } : {};
+};
+
 export const authHeaders = async (mode: AiAuthMode): Promise<Record<string, string>> => {
     if (mode === 'token') {
         const t = loadAccessToken();
@@ -57,9 +94,9 @@ export const authHeaders = async (mode: AiAuthMode): Promise<Record<string, stri
 export const hasCredentials = async (mode: AiAuthMode): Promise<boolean> =>
     mode === 'none' || !!(await authHeaders(mode)).authorization;
 
-export const fetchAiStatus = async (signal?: AbortSignal): Promise<AiStatus & { unreachable?: boolean }> => {
+export const fetchAiStatus = async (signal?: AbortSignal, browserKey?: BrowserKeyChoice): Promise<AiStatus & { unreachable?: boolean }> => {
     try {
-        const res = await fetch(`${PROXY_BASE}/health`, { signal, cache: 'no-store' });
+        const res = await fetch(`${PROXY_BASE}/health`, { signal, cache: 'no-store', headers: browserKeyHeaders(browserKey) });
         if (!res.ok) throw new Error(String(res.status));
         return (await res.json()) as AiStatus;
     } catch (e) {
@@ -170,6 +207,8 @@ export const stripReasoning = (text: string): string => {
 export interface StreamChatOptions {
     authMode: AiAuthMode;
     signal?: AbortSignal;
+    /** Kayıtlı tarayıcı anahtarı yerine (bağlantı testi) */
+    browserKey?: BrowserKeyChoice;
     onDelta?: (text: string, full: string) => void;
 }
 
@@ -184,7 +223,7 @@ export const streamChat = async (body: ChatRequestBody, opts: StreamChatOptions)
     try {
         res = await fetch(`${PROXY_BASE}/chat`, {
             method: 'POST',
-            headers: { 'content-type': 'application/json', ...(await authHeaders(opts.authMode)) },
+            headers: { 'content-type': 'application/json', ...(await authHeaders(opts.authMode)), ...browserKeyHeaders(opts.browserKey) },
             body: JSON.stringify(body),
             signal: opts.signal,
         });
@@ -246,7 +285,7 @@ export const embedTexts = async (
         try {
             res = await fetch(`${PROXY_BASE}/embed`, {
                 method: 'POST',
-                headers: { 'content-type': 'application/json', ...(await authHeaders(authMode)) },
+                headers: { 'content-type': 'application/json', ...(await authHeaders(authMode)), ...browserKeyHeaders(undefined) },
                 body: JSON.stringify({ texts, kind }),
                 signal,
             });

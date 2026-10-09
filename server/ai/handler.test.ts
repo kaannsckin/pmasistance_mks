@@ -31,7 +31,7 @@ describe('health', () => {
     it('yapılandırma durumunu anahtarsız döndürür', async () => {
         const res = await handleAiRequest(new Request(`${URL_BASE}/health`), BASE_ENV, { isDev: true });
         const json = await res.json();
-        expect(json).toEqual({ configured: true, authMode: 'none', configSource: 'env', provider: 'openai', model: 'm1' });
+        expect(json).toEqual({ configured: true, authMode: 'none', configSource: 'env', browserKeyAllowed: true, provider: 'openai', model: 'm1' });
         expect(JSON.stringify(json)).not.toContain('gizli');
     });
 

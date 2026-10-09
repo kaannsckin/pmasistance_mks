@@ -1,4 +1,4 @@
-import { AI_LIMITS, AiStatus, ChatMessage, ChatRequestBody, TOOL_NAME_PATTERN, ToolCall, ToolSpec } from '../../utils/ai/protocol.js';
+import { AI_LIMITS, AiStatus, BROWSER_KEY_HEADER, ChatMessage, ChatRequestBody, TOOL_NAME_PATTERN, ToolCall, ToolSpec } from '../../utils/ai/protocol.js';
 import { AuthResult, authorize } from './auth.js';
 import { Env, readAiConfig } from './config.js';
 import { buildEmbedRequest, parseEmbedResponse, readEmbeddingConfig, validateEmbedBody } from './embeddings.js';
@@ -7,8 +7,11 @@ import { createRateLimiter, RateLimiter } from './rateLimit.js';
 import { parseSSE } from './sse.js';
 import { describeNetworkError, networkErrorCode, upstreamFetch } from './tls.js';
 import { handleAiAdmin } from './admin.js';
+import { clientIp } from './auth.js';
+import { browserKeyAllowed, browserKeyEnv, browserKeyProblem, readBrowserKey } from './browserKey.js';
 import { upstreamErrorMessage } from './errors.js';
-import { effectiveEnv } from './settingsStore.js';
+import { GeminiAuto } from './gemini.js';
+import { effectiveEnv, prepareEnv } from './settingsStore.js';
 
 /**
  * AI proxy — çatıdan bağımsız (Web Request → Response). Vercel fonksiyonu
@@ -29,6 +32,13 @@ export interface HandlerOptions {
     rateLimiter?: RateLimiter;
     route?: 'health' | 'chat' | 'embed' | 'admin';
 }
+
+/**
+ * Tarayıcı test anahtarıyla gelen istekler (istemci IP'si başına, dakikada).
+ * Amaç yetkilendirmeden önce giden model listesi isteklerini sınırlamak;
+ * anlamsal arama dizinlemesi (embedding grupları) takılmasın diye geniş.
+ */
+const BROWSER_KEY_PER_MIN = 180;
 
 const limiters = new Map<number, RateLimiter>();
 const sharedLimiter = (perMin: number): RateLimiter => {
@@ -68,7 +78,7 @@ const corsFor = (request: Request, allowedOrigins: string[]): Record<string, str
     if (allowedOrigins.includes(origin.replace(/\/+$/, ''))) {
         return {
             'access-control-allow-origin': origin,
-            'access-control-allow-headers': 'authorization, content-type',
+            'access-control-allow-headers': `authorization, content-type, ${BROWSER_KEY_HEADER}`,
             'access-control-allow-methods': 'GET, POST, OPTIONS',
             'access-control-max-age': '600',
             vary: 'Origin',
@@ -191,6 +201,10 @@ export const validateChatBody = (raw: unknown): { body?: ChatRequestBody; error?
     };
 };
 
+/** Sağlayıcı anahtarı reddederse kullanıcıya hangi anahtarın denetleneceği söylenir */
+const keyNameOf = (source: 'panel' | 'env' | 'browser'): string | undefined =>
+    source === 'browser' ? 'bu tarayıcıdaki Gemini test anahtarını (Yönetici konsolu › Yapay zekâ)' : undefined;
+
 const hostOf = (url: string): string => {
     try {
         return new URL(url).host;
@@ -205,8 +219,17 @@ export const handleAiRequest = async (request: Request, rawEnv: Env, opts: Handl
     const route = opts.route || (path.endsWith('/health') ? 'health' : path.endsWith('/chat') ? 'chat' : path.endsWith('/embed') ? 'embed' : path.endsWith('/admin') ? 'admin' : undefined);
     if (!route) return errorResponse(404, 'not_found', 'Bilinmeyen AI uç noktası.');
 
+    // Tarayıcıdaki Gemini test anahtarı yalnız o tarayıcının isteklerinde sunucu ayarının yerine geçer
+    const browser = route === 'admin' || request.method === 'OPTIONS' ? {} : readBrowserKey(request, rawEnv);
+    if (browser.key) {
+        // Anahtar doğrulanmadan önce sağlayıcıya model listesi isteği gider: istemci başına sınırlı
+        const wait = (opts.rateLimiter || sharedLimiter(BROWSER_KEY_PER_MIN)).hit(`browser-key:${clientIp(request)}`);
+        if (wait > 0) return errorResponse(429, 'rate_limited', `Çok fazla istek; ${wait} sn sonra tekrar deneyin.`, { 'retry-after': String(wait) });
+    }
     // Yönetici panelinden girilen bağlantı ayarları ortam değişkenlerinin üzerine yazılır
-    const eff = await effectiveEnv(rawEnv, { isDev: opts.isDev, fetchImpl: opts.fetchImpl });
+    const eff: { env: Env; source: 'panel' | 'env' | 'browser'; auto: GeminiAuto; problem?: string } = browser.key
+        ? { ...(await prepareEnv(browserKeyEnv(rawEnv, browser.key), opts.fetchImpl)), source: 'browser' }
+        : await effectiveEnv(rawEnv, { isDev: opts.isDev, fetchImpl: opts.fetchImpl });
     const env = eff.env;
     const cfg = readAiConfig(env, { isDev: opts.isDev });
     const cors = corsFor(request, cfg.config?.allowedOrigins || []);
@@ -217,16 +240,29 @@ export const handleAiRequest = async (request: Request, rawEnv: Env, opts: Handl
     // Yönetim ucu yapılandırma eksikken de çalışır (ilk kurulum panelden yapılabilsin)
     if (route === 'admin') return handleAiAdmin(request, rawEnv, { isDev: opts.isDev, fetchImpl: opts.fetchImpl }, cors);
 
+    // Tarayıcı anahtarı bu sunucuda kullanılamıyorsa sessizce sunucu ayarına düşülmez
+    if (browser.problem) {
+        if (route === 'health') {
+            return jsonResponse(200, { configured: false, authMode: cfg.authMode, configSource: 'browser', browserKeyAllowed: browserKeyAllowed(rawEnv), problem: browser.problem } satisfies AiStatus, cors);
+        }
+        return errorResponse(403, 'forbidden', browser.problem, cors);
+    }
+
     if (route === 'health') {
         if (request.method !== 'GET') return errorResponse(405, 'bad_request', 'Yalnızca GET.', cors);
+        // Gemini model listesi alınamadıysa asıl neden odur ("AI_MODEL tanımlı değil" değil)
+        // (tarayıcı anahtarındaki sorun sunucu ayarı sanılmasın diye nerede olduğu da söylenir)
+        const problem = !cfg.problem ? undefined
+            : eff.problem && !cfg.config ? (eff.source === 'browser' ? browserKeyProblem(eff.problem) : eff.problem)
+            : cfg.problem;
         const status: AiStatus = {
             configured: !!cfg.config,
             authMode: cfg.authMode,
             configSource: eff.source,
+            browserKeyAllowed: browserKeyAllowed(rawEnv),
             ...(cfg.provider ? { provider: cfg.provider } : {}),
             ...(cfg.model ? { model: cfg.model } : {}),
-            // Gemini model listesi alınamadıysa asıl neden odur ("AI_MODEL tanımlı değil" değil)
-            ...(cfg.problem ? { problem: eff.problem && !cfg.config ? eff.problem : cfg.problem } : {}),
+            ...(problem ? { problem } : {}),
         };
         const emb = readEmbeddingConfig(env);
         if (emb.config) status.embeddingModel = emb.config.model;
@@ -244,7 +280,7 @@ export const handleAiRequest = async (request: Request, rawEnv: Env, opts: Handl
         return errorResponse(status, status === 403 ? 'forbidden' : status === 401 ? 'auth' : 'upstream', message, cors);
     }
 
-    if (route === 'embed') return handleEmbed(request, env, auth.subject, cors, opts, config.timeoutMs);
+    if (route === 'embed') return handleEmbed(request, env, auth.subject, cors, opts, config.timeoutMs, keyNameOf(eff.source));
 
     const retryAfter = (opts.rateLimiter || sharedLimiter(config.rateLimitPerMin)).hit(auth.subject);
     if (retryAfter > 0) {
@@ -292,7 +328,7 @@ export const handleAiRequest = async (request: Request, rawEnv: Env, opts: Handl
         const detail = extractUpstreamError(await upstream.text().catch(() => ''));
         cleanup();
         console.error(`[ai] sağlayıcı hatası: ${config.provider} HTTP ${upstream.status}`);
-        return errorResponse(upstream.status === 429 ? 429 : 502, upstream.status === 429 ? 'rate_limited' : 'upstream', upstreamErrorMessage(upstream.status, detail), cors);
+        return errorResponse(upstream.status === 429 ? 429 : 502, upstream.status === 429 ? 'rate_limited' : 'upstream', upstreamErrorMessage(upstream.status, detail, keyNameOf(eff.source)), cors);
     }
 
     const encoder = new TextEncoder();
@@ -345,6 +381,7 @@ const handleEmbed = async (
     cors: Record<string, string>,
     opts: HandlerOptions,
     timeoutMs: number,
+    keyName?: string,
 ): Promise<Response> => {
     const emb = readEmbeddingConfig(env);
     if (!emb.config) return errorResponse(503, 'config', emb.problem || 'Embedding modeli yapılandırılmamış (AI_EMBEDDING_MODEL).', cors);
@@ -383,7 +420,7 @@ const handleEmbed = async (
         if (!res.ok) {
             console.error(`[ai] embedding hatası: ${c.provider} HTTP ${res.status}`);
             return errorResponse(res.status === 429 ? 429 : 502, res.status === 429 ? 'rate_limited' : 'upstream',
-                upstreamErrorMessage(res.status, extractUpstreamError(text)).replace('AI_API_KEY', 'AI_EMBEDDING_API_KEY').replace('AI_MODEL', 'AI_EMBEDDING_MODEL'), cors);
+                upstreamErrorMessage(res.status, extractUpstreamError(text), keyName).replace('AI_API_KEY', 'AI_EMBEDDING_API_KEY').replace('AI_MODEL', 'AI_EMBEDDING_MODEL'), cors);
         }
         let vectors: number[][];
         try {
