@@ -12,8 +12,8 @@ import { describeParams } from '../mcp/args.js';
 import { ConflictError, WorkspaceSource } from '../mcp/source.js';
 import { callAs, checksMarkdown, fileTarget, listToolsAs, PilotTarget, runChecks } from './check.js';
 import {
-    CloudClients, cloudConfigFromEnv, cloudTarget, createPilotWorkspace, ensureMemberships, ensurePilotUsers, hostOf, listMembers,
-    parseViewers, PilotCloudConfig, readCloudLink, replacePilotWorkspace, serviceSource, supabaseClients, writeCloudLink, CloudLink,
+    CloudClients, cloudConfigFromEnv, cloudEnvProblem, cloudTarget, createPilotWorkspace, ensureMemberships, ensurePilotUsers, hostOf, listMembers,
+    parseViewers, PILOT_ENV_KEYS, PilotCloudConfig, readCloudLink, replacePilotWorkspace, serviceSource, supabaseClients, writeCloudLink, CloudLink,
 } from './cloud.js';
 import { mockJiraFromDir } from './mockJira.js';
 import { addDays, at, createState, createWorld, dateOf, DayEvents, eventsMarkdown, jiraExports, runUntil, SIM_VERSION, SimState } from './sim.js';
@@ -116,8 +116,8 @@ const cloudEnv = (): PilotCloudConfig | null => cloudConfigFromEnv(process.env).
 const openStore = (p: ReturnType<typeof paths>): Store => {
     const link = readCloudLink(p.dir);
     if (!link) return { kind: 'file' };
-    const { config, missing } = cloudConfigFromEnv(process.env);
-    if (!config) return fail(`Pilot verisi Supabase'de (çalışma alanı ${link.workspaceId}, ${link.host}) ama ortamda şu değişkenler yok: ${missing.join(', ')}. Bulut ortamının ayarlarına ekleyin (değerleri sohbete yazmayın).`);
+    const { config } = cloudConfigFromEnv(process.env);
+    if (!config) return fail(`Pilot verisi Supabase'de (çalışma alanı ${link.workspaceId}, ${link.host}) ama bulut ayarları kullanılamıyor — ${cloudEnvProblem(process.env)}. Bulut ortamının ayarlarında düzeltin (değerleri sohbete yazmayın).`);
     if (hostOf(config.url) !== link.host) return fail(`PILOT_SUPABASE_URL (${hostOf(config.url)}) bulut.json'daki projeyle (${link.host}) aynı değil.`);
     return { kind: 'supabase', link, config, clients: supabaseClients(config) };
 };
@@ -264,7 +264,9 @@ const main = async () => {
             const config = flags.dosya ? null : cloudEnv();
             const link = readCloudLink(p.dir);
             if (!flags.zorla && (existsSync(p.ws) || link)) fail(`${link ? `Pilot zaten Supabase'de (çalışma alanı ${link.workspaceId})` : `${p.ws} zaten var`}. Baştan kurmak için --zorla${!link && config ? '; veriyi koruyarak buluta taşımak için buluta-tasi' : ''}.`);
-            if (!config && link && !flags.dosya) fail(`Pilot Supabase'de kurulu ama ortamda ${cloudConfigFromEnv(process.env).missing.join(', ')} yok. JSON'a kurmak için --dosya.`);
+            // Bulut ayarı yarım ya da hatalıysa sessizce JSON'a kurulmaz
+            const anyCloudEnv = PILOT_ENV_KEYS.some(k => process.env[k]?.trim());
+            if (!config && (link || anyCloudEnv) && !flags.dosya) fail(`${link ? 'Pilot Supabase\'de kurulu ama b' : 'B'}ulut ayarları kullanılamıyor — ${cloudEnvProblem(process.env)}. JSON'a kurmak için --dosya.`);
             const { ws, state, last } = generate(flags);
             const cloud = config ? await setupCloud(p, config, ws, flags) : null;
             if (!cloud) {
@@ -279,7 +281,7 @@ const main = async () => {
         }
         case 'buluta-tasi': {
             const config = cloudEnv();
-            if (!config) fail(`Ortamda ${cloudConfigFromEnv(process.env).missing.join(', ')} yok.`);
+            if (!config) fail(`Bulut ayarları kullanılamıyor — ${cloudEnvProblem(process.env)}.`);
             if (readCloudLink(p.dir)) fail('Pilot verisi zaten Supabase\'de (bulut.json).');
             if (!existsSync(p.ws)) fail(`Taşınacak veri yok: ${p.ws}`);
             const state = await readState(p);

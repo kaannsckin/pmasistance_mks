@@ -35,11 +35,52 @@ export interface PilotCloudConfig {
     password: string;
 }
 
-export const cloudConfigFromEnv = (env: Record<string, string | undefined>): { config: PilotCloudConfig | null; missing: string[] } => {
+/** Anahtarın türü: eski JWT anahtarlarında role alanı, yenilerinde sb_publishable_ / sb_secret_ öneki */
+const keyKind = (key: string): 'anon' | 'service' | 'unknown' => {
+    if (key.startsWith('sb_publishable_')) return 'anon';
+    if (key.startsWith('sb_secret_')) return 'service';
+    try {
+        const role = (JSON.parse(Buffer.from(key.split('.')[1] || '', 'base64url').toString('utf8')) as { role?: string }).role;
+        return role === 'anon' ? 'anon' : role === 'service_role' ? 'service' : 'unknown';
+    } catch {
+        return 'unknown';
+    }
+};
+
+/**
+ * Ortamdaki bulut ayarları. Eksik ve biçimce geçersiz değişkenler adıyla
+ * bildirilir (değerler hiçbir mesajda yer almaz): kopyalanmamış yer tutucu,
+ * boşluk / Türkçe karakter (HTTP başlığına giremez), yer değiştirmiş anahtarlar.
+ */
+export const cloudConfigFromEnv = (env: Record<string, string | undefined>): { config: PilotCloudConfig | null; missing: string[]; invalid: string[] } => {
     const v = (k: string) => env[k]?.trim() || '';
     const missing = PILOT_ENV_KEYS.filter(k => !v(k));
-    if (missing.length) return { config: null, missing };
-    return { config: { url: v('PILOT_SUPABASE_URL').replace(/\/$/, ''), anonKey: v('PILOT_SUPABASE_ANON_KEY'), serviceKey: v('PILOT_SUPABASE_SERVICE_ROLE_KEY'), password: v('PILOT_PASSWORD') }, missing: [] };
+    const invalid: string[] = [];
+    const placeholder = (x: string) => /^<.*>$/.test(x);
+    const url = v('PILOT_SUPABASE_URL');
+    if (url && !/^https:\/\/[^\s/<>]+\.[^\s/<>]+\/?$/.test(url)) invalid.push('PILOT_SUPABASE_URL (https://<proje>.supabase.co biçiminde olmalı)');
+    const keyRule = (name: string, want: 'anon' | 'service') => {
+        const key = v(name);
+        if (!key) return;
+        if (placeholder(key) || !/^[A-Za-z0-9_.-]{30,}$/.test(key)) {
+            invalid.push(`${name} (Supabase anahtarı değil: panelden kopyalanan uzun, boşluksuz değer olmalı; yer tutucu metin kalmış olabilir)`);
+            return;
+        }
+        const kind = keyKind(key);
+        if (kind !== 'unknown' && kind !== want) invalid.push(`${name} (${want === 'anon' ? 'anon/publishable yerine gizli anahtar' : 'service_role/secret yerine herkese açık anahtar'} girilmiş)`);
+    };
+    keyRule('PILOT_SUPABASE_ANON_KEY', 'anon');
+    keyRule('PILOT_SUPABASE_SERVICE_ROLE_KEY', 'service');
+    const password = v('PILOT_PASSWORD');
+    if (password && (placeholder(password) || password.length < 12)) invalid.push('PILOT_PASSWORD (yer tutucu metin kalmış ya da 12 karakterden kısa)');
+    if (missing.length || invalid.length) return { config: null, missing, invalid };
+    return { config: { url: url.replace(/\/$/, ''), anonKey: v('PILOT_SUPABASE_ANON_KEY'), serviceKey: v('PILOT_SUPABASE_SERVICE_ROLE_KEY'), password }, missing: [], invalid: [] };
+};
+
+/** Kullanıcıya gösterilecek ortam sorunu (yalnız değişken adları) */
+export const cloudEnvProblem = (env: Record<string, string | undefined>): string => {
+    const { missing, invalid } = cloudConfigFromEnv(env);
+    return [missing.length ? `eksik: ${missing.join(', ')}` : '', invalid.length ? `geçersiz: ${invalid.join('; ')}` : ''].filter(Boolean).join(' · ');
 };
 
 /** Jira ajanının (çalışma alanı sahibi) ve personaların hesapları */

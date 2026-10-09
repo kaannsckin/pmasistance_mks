@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ConflictError } from '../mcp/source';
 import { callAs, runChecks } from './check';
 import {
-    cloudConfigFromEnv, cloudTarget, createPilotWorkspace, ensureMemberships, ensurePilotUsers, fileAuthStorage, listMembers,
+    cloudConfigFromEnv, cloudEnvProblem, cloudTarget, createPilotWorkspace, ensureMemberships, ensurePilotUsers, fileAuthStorage, listMembers,
     parseViewers, PilotCloudConfig, pilotEmail, replacePilotWorkspace, serviceSource,
 } from './cloud';
 import { fakeCloudClients, fakeCloudServer, registerUser } from './fakeCloud';
@@ -22,10 +22,26 @@ const simulate = (end = '2026-07-15') => {
 };
 
 describe('pilot bulut ayarları', () => {
+    const jwt = (role: string) => `eyJhbGciOiJIUzI1NiJ9.${Buffer.from(JSON.stringify({ role, ref: 'x' })).toString('base64url')}.imzaimzaimzaimzaimza`;
+    const valid = { PILOT_SUPABASE_URL: 'https://x.supabase.co/', PILOT_SUPABASE_ANON_KEY: jwt('anon'), PILOT_SUPABASE_SERVICE_ROLE_KEY: jwt('service_role'), PILOT_PASSWORD: 'uzun-pilot-parolasi-42' };
+
     it('dört ortam değişkeni gerekir; eksikler adıyla bildirilir', () => {
         expect(cloudConfigFromEnv({ PILOT_SUPABASE_URL: 'https://x.supabase.co/' }).missing).toEqual(['PILOT_SUPABASE_ANON_KEY', 'PILOT_SUPABASE_SERVICE_ROLE_KEY', 'PILOT_PASSWORD']);
-        const ok = cloudConfigFromEnv({ PILOT_SUPABASE_URL: 'https://x.supabase.co/', PILOT_SUPABASE_ANON_KEY: 'a', PILOT_SUPABASE_SERVICE_ROLE_KEY: 's', PILOT_PASSWORD: 'p' });
-        expect(ok.config).toEqual({ url: 'https://x.supabase.co', anonKey: 'a', serviceKey: 's', password: 'p' });
+        expect(cloudConfigFromEnv(valid).config).toEqual({ url: 'https://x.supabase.co', anonKey: valid.PILOT_SUPABASE_ANON_KEY, serviceKey: valid.PILOT_SUPABASE_SERVICE_ROLE_KEY, password: valid.PILOT_PASSWORD });
+        // Yeni biçim anahtarlar da geçerlidir
+        expect(cloudConfigFromEnv({ ...valid, PILOT_SUPABASE_ANON_KEY: 'sb_publishable_abcdefghijklmnopqrstuvwx', PILOT_SUPABASE_SERVICE_ROLE_KEY: 'sb_secret_abcdefghijklmnopqrstuvwxyz' }).config).not.toBeNull();
+    });
+
+    it('yer tutucu ya da yer değiştirmiş anahtarlar adıyla reddedilir; değerler mesaja girmez', () => {
+        // Pilotta yaşanan durum: talimattaki yer tutucular olduğu gibi yapıştırılmış
+        const env = { ...valid, PILOT_SUPABASE_ANON_KEY: '<anon public anahtarı>', PILOT_SUPABASE_SERVICE_ROLE_KEY: '<service_role anahtarı>', PILOT_PASSWORD: '<yeni uydurduğunuz uzun bir parola>' };
+        const r = cloudConfigFromEnv(env);
+        expect(r.config).toBeNull();
+        expect(r.invalid.map(x => x.split(' ')[0])).toEqual(['PILOT_SUPABASE_ANON_KEY', 'PILOT_SUPABASE_SERVICE_ROLE_KEY', 'PILOT_PASSWORD']);
+        expect(cloudEnvProblem(env)).not.toContain('anahtarı>');
+        const swapped = cloudConfigFromEnv({ ...valid, PILOT_SUPABASE_ANON_KEY: valid.PILOT_SUPABASE_SERVICE_ROLE_KEY, PILOT_SUPABASE_SERVICE_ROLE_KEY: valid.PILOT_SUPABASE_ANON_KEY });
+        expect(swapped.invalid).toHaveLength(2);
+        expect(cloudEnvProblem({ ...valid, PILOT_SUPABASE_URL: 'yzwm.supabase.co' })).toMatch(/^geçersiz: PILOT_SUPABASE_URL/);
     });
 
     it('izleyiciler: varsayılan rol pyb_destek, geçersiz rol ya da e-posta reddedilir', () => {
