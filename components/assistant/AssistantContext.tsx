@@ -2,7 +2,9 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { View, WorkspaceData } from '../../types';
 import { AgentStep, runAgentTurn } from '../../utils/ai/agent';
 import { AiAction, AiProposal } from '../../utils/ai/actions';
-import { AiError, embedTexts, fetchAiStatus, hasCredentials, saveAccessToken, streamChat } from '../../utils/ai/client';
+import { AiError, configureMasking, embedTexts, fetchAiStatus, hasCredentials, saveAccessToken, streamChat } from '../../utils/ai/client';
+import { buildMasker, collectMaskEntries, Masker } from '../../utils/ai/masking';
+import { aiPolicyOf } from '../../utils/ai/policy';
 import { AiStatus, ChatMessage } from '../../utils/ai/protocol';
 import { buildToolContext } from '../../utils/ai/scope';
 import { buildSystemPrompt } from '../../utils/ai/systemPrompt';
@@ -123,6 +125,19 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, chat = tru
       setPhase('unavailable');
     }
   }, []);
+
+  // Ad maskeleme: tüm AI istekleri (sohbet, ekran içi AI, puanlama, embedding) güncel
+  // çalışma alanındaki kişi/proje/kurum adlarıyla maskelenir; politika kapalıysa yapılmaz
+  useEffect(() => {
+    let cache: { ws: WorkspaceData; masker: Masker } | null = null;
+    configureMasking(() => {
+      const ws = getWorkspace();
+      if (!ws || !aiPolicyOf(ws).maskNames) return null;
+      if (cache?.ws !== ws) cache = { ws, masker: buildMasker(collectMaskEntries(ws)) };
+      return cache.masker;
+    });
+    return () => configureMasking(null);
+  }, [getWorkspace]);
 
   useEffect(() => {
     configureEmbedder(status?.configured && status.embeddingModel

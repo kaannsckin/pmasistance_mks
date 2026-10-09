@@ -38,6 +38,12 @@ Tarayıcı (asistan paneli) ──► /api/ai/chat  (proxy: anahtar burada) ─�
 
 **Kapsam kuralı:** Asistan, kullanıcının arayüzde görebildiğinden fazlasını göremez (`utils/ai/scope.ts`). Proje içeriği `rbac.visibleProjectIds` ile sınırlıdır; yönetici rollerinde notlar ve müşteri istekleri veriden tamamen çıkarılır; **sicil numaraları hiçbir araç çıktısında yer almaz**. Araç sonuçları 12.000 karakterle, bir yanıt 6 araç adımıyla sınırlıdır.
 
+**Ad maskeleme (varsayılan açık):** AI'ya giden her metinde (asistan sohbeti, araç sonuçları, ekran içi AI, rapor puanlama, anlamsal arama dizinlemesi) kişi, proje ve kurum (müşteri) adları tarayıcıda, gönderilmeden önce takma adlarla değiştirilir: `Kişi-0042`, `Proje-0007`, `Kurum-0013` (`utils/ai/masking.ts`). Modelin yanıtındaki ve araç çağrılarındaki takma adlar yine tarayıcıda gerçek adlara geri çevrilir; kullanıcı gerçek adları görür, sağlayıcı görmez. Uygulamadaki veri değişmez.
+- Takma ad addan türetilir, oturumlar ve dizinleme arasında aynı kalır. Aynı adın farklı yazımları (büyük/küçük harf, "Soyad Ad") aynı takma ada gider. Tek kelimelik adlar yalnız büyük harfle başlıyorsa eşleşir; böylece sıradan kelimeler maskelenmez.
+- Model takma ada ek getirirse ("Kişi-0042'in") ek, gerçek adın ses uyumuna göre düzeltilir ("Ali Veli'nin").
+- Adlar çalışma alanından toplanır: veri havuzundaki kişiler, proje kaynakları, görev ve sürüm kalemi sorumluları, rapor yazarı / onaylayan gibi `…ByName` alanları, bölüm sorumluları, müşteri adları ve proje adları (en az 4 harf). Serbest metinde geçen ama çalışma alanında kayıtlı olmayan bir ad maskelenemez.
+- Kapatmak için: Yönetici konsolu › Yapay zekâ › Kurum geneli › **Ad maskeleme**.
+
 ## Onaylı değişiklikler ve ekran içi AI özellikleri
 
 **Asistan veriyi kendisi değiştirmez, öneri hazırlar.** Proje Yöneticisi ve Bölüm Sorumlusu rollerinde (kişi seçiliyken) asistana şu araçlar açılır: `oner_risk_ekle`, `oner_gorev_ekle`, `oner_gorev_durumu`, `oner_rag_guncelle`, `oner_tahsis_ayarla`.
@@ -137,7 +143,7 @@ Yayındaki sunucuda kurum modeli tanımlıyken ya da panel kapalıyken (AI_ADMIN
 - Adres sabittir (`generativelanguage.googleapis.com`): başlıkla başka bir adrese istek gönderilemez, sunucudaki kurum anahtarı kullanılmaz ve hiçbir yanıtta dönmez. Kurum modeline özgü üretim ayarları (sıcaklık, en çok çıktı, akıl yürütme, ek alanlar) Gemini'ye taşınmaz.
 - Erişim koruması (erişim kodu / Supabase), hız sınırı ve izinli kökenler aynen geçerlidir; anahtarlı istekler ayrıca istemci IP'si başına dakikada 180 ile sınırlıdır.
 - Yalnız bu tarayıcı etkilenir: diğer kullanıcılar ve cihazlar sunucu ayarıyla çalışır. Durum kartında kaynak "Bu tarayıcıdaki Gemini test anahtarı" görünür; anahtar geçersizleşirse asistan nedenini ve nereden değiştirileceğini söyler. **Kaldır** ile silinir.
-- Gönderilen veri sunucu ayarındakiyle aynıdır: asistan sorunuza göre proje, görev ve kişi bilgilerini (kişi adları dahil; sicil numaraları maskelenir) Gemini'ye gönderir. Ücretsiz katmanda bu içerik Google ürünlerini geliştirmek için kullanılabilir.
+- Gönderilen veri sunucu ayarındakiyle aynıdır: asistan sorunuza göre proje, görev ve kişi bilgilerini Gemini'ye gönderir. Ad maskeleme açıkken (varsayılan) kişi, proje ve kurum adları takma adla gider; sicil numaraları her durumda maskelenir. Ücretsiz katmanda gönderilen içerik Google ürünlerini geliştirmek için kullanılabilir.
 - Model yoğunsa (Gemini "high demand", HTTP 503) proxy isteği kısa bir beklemeyle bir kez yeniden dener; olmazsa anahtarın erişebildiği bir sonraki kararlı Flash modeline, sonra Flash-Lite'a geçer (kota dolduğunda, HTTP 429, beklemeden geçer). Bu, model otomatik seçildiğinde (`AI_MODEL` boş ya da `auto`) geçerlidir; model elle verildiyse yalnız bir kez yeniden denenir.
 - Paylaşılan bilgisayarda kullanmayın. Kurum bu kipi istemiyorsa sunucuya `AI_ALLOW_BROWSER_KEY=0` ekleyin; o zaman kayıtlı anahtarlı istekler sessizce kurum modeline düşmez, "kapalı" uyarısı verir.
 

@@ -130,7 +130,7 @@ const BrowserGeminiKey: React.FC<Props> = ({ status, onChanged, open }) => {
                 )}
                 {result && <p role={result.ok ? 'status' : 'alert'} className={`m-0 text-[14px] ${result.ok ? 'm-ink-ok' : 'm-ink-bad'}`}>{result.text}</p>}
                 <p className="m-0 text-[12.5px] m-text-3">
-                    Anahtar yalnız bu tarayıcının deposunda tutulur (çalışma alanı verisine ve buluta girmez) ve her AI isteğinde uygulamanın sunucusu üzerinden Google'a iletilir; sunucu onu saklamaz. Asistan sorunuza göre proje, görev ve kişi bilgilerini (kişi adları dahil; sicil numaraları maskelenir) Google'a gönderir. Ücretsiz katman denemek içindir: dakikalık istek sınırı düşüktür ve Google'ın koşullarına göre gönderilen içerik Google ürünlerini geliştirmek için kullanılabilir; gerçek kurum verisiyle kalıcı kullanımda faturalı katmanı ve KVKK değerlendirmesini tercih edin. Paylaşılan bilgisayarda kullanmayın; işiniz bitince kaldırın.
+                    Anahtar yalnız bu tarayıcının deposunda tutulur (çalışma alanı verisine ve buluta girmez) ve her AI isteğinde uygulamanın sunucusu üzerinden Google'a iletilir; sunucu onu saklamaz. Asistan sorunuza göre proje, görev ve kişi bilgilerini Google'a gönderir; "Ad maskeleme" açıkken (varsayılan) kişi, proje ve kurum adları takma adla gider, sicil numaraları her durumda maskelenir. Ücretsiz katman denemek içindir: dakikalık istek sınırı düşüktür ve Google'ın koşullarına göre gönderilen içerik Google ürünlerini geliştirmek için kullanılabilir; gerçek kurum verisiyle kalıcı kullanımda faturalı katmanı ve KVKK değerlendirmesini tercih edin. Paylaşılan bilgisayarda kullanmayın; işiniz bitince kaldırın.
                 </p>
             </div>
         </details>

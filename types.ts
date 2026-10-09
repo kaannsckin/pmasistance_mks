@@ -836,6 +836,7 @@ export interface AiPolicy {
   estimateGate?: EstimateGatePolicy; // AI tahmin önerisinin kalite kapısı
   modelEstimate?: ModelEstimatePolicy; // planlamada klasik ML modeli önerisi (varsayılan: otomatik)
   scoring?: AiScoringPolicy;
+  maskNames?: boolean; // AI'ya giden metinlerde kişi/proje/kurum adları takma adla (varsayılan açık)
 }
 
 /** Kalite kapısı: altın sette AI önerisi bu eşikleri geçmezse (zorunluysa) öneri gösterilmez */

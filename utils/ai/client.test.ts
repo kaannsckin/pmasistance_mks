@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { collect, streamOf } from '../../server/ai/testUtils';
-import { fetchAiStatus, isBrowserKeyFormat, loadBrowserKey, readNdjson, saveBrowserKey, streamChat, trimHistory } from './client';
+import { configureMasking, embedTexts, fetchAiStatus, isBrowserKeyFormat, loadBrowserKey, readNdjson, saveBrowserKey, streamChat, trimHistory } from './client';
+import { buildMasker, MASK_NOTE } from './masking';
 import { BROWSER_KEY_HEADER, ChatMessage } from './protocol';
 
 describe('readNdjson', () => {
@@ -90,5 +91,58 @@ describe('tarayıcıdaki Gemini test anahtarı', () => {
         expect(isBrowserKeyFormat('kisa')).toBe(false);
         expect(isBrowserKeyFormat(`${KEY} x`)).toBe(false);
         expect(isBrowserKeyFormat(`${KEY}\n`)).toBe(false);
+    });
+});
+
+describe('ad maskeleme (istemci)', () => {
+    afterEach(() => { vi.unstubAllGlobals(); configureMasking(null); });
+    const masker = buildMasker([{ kind: 'person', name: 'Ali Veli' }, { kind: 'project', name: 'Safir' }]);
+    const ALI = masker.mask('Ali Veli'), SAFIR = masker.mask('Safir');
+
+    it('giden sohbet maskelenir; gelen metin, akış ve araç argümanları gerçek adlara döner', async () => {
+        configureMasking(() => masker);
+        let sent = '';
+        vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
+            sent = String(init?.body);
+            const lines = [
+                { type: 'delta', text: `${ALI}'in ` },
+                { type: 'delta', text: `${SAFIR.slice(0, 7)}` },
+                { type: 'delta', text: `${SAFIR.slice(7)}'deki görevi` },
+                { type: 'tool_call', call: { id: 'c1', name: 'kisi_profili', arguments: { kisi: ALI }, meta: { thoughtSignature: 'imza' } } },
+                { type: 'done' },
+            ].map(l => JSON.stringify(l)).join('\n');
+            return new Response(streamOf(lines), { status: 200 });
+        }));
+        const shown: string[] = [];
+        const r = await streamChat({
+            system: 'Kullanıcı: Ali Veli',
+            messages: [
+                { role: 'user', content: 'Ali Veli hangi projede?' },
+                { role: 'assistant', content: '', toolCalls: [{ id: 'c0', name: 'kisi_profili', arguments: { kisi: 'Ali Veli' } }] },
+                { role: 'tool', toolCallId: 'c0', name: 'kisi_profili', content: '{"ad":"Ali Veli","proje":"Safir"}' },
+            ],
+        }, { authMode: 'none', onDelta: (_t, full) => shown.push(full) });
+        expect(sent).not.toMatch(/Ali Veli|Safir/);
+        const body = JSON.parse(sent);
+        expect(body.system).toBe(`Kullanıcı: ${ALI}\n\n${MASK_NOTE}`);
+        expect(body.messages[1].toolCalls[0].arguments.kisi).toBe(ALI);
+        expect(r.text).toBe("Ali Veli'nin Safir'deki görevi");
+        expect(r.toolCalls[0]).toEqual({ id: 'c1', name: 'kisi_profili', arguments: { kisi: 'Ali Veli' }, meta: { thoughtSignature: 'imza' } });
+        expect(shown.some(s => /Kişi-|Proje-|Pro$/.test(s))).toBe(false);
+        expect(shown.at(-1)).toBe("Ali Veli'nin Safir'deki görevi");
+    });
+
+    it('embedding metinleri de maskelenir; kapalıyken hiçbir şey değişmez', async () => {
+        const bodies: { texts: string[] }[] = [];
+        vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
+            bodies.push(JSON.parse(String(init?.body)));
+            return new Response(JSON.stringify({ vectors: [[0.1]] }), { status: 200 });
+        }));
+        configureMasking(() => masker);
+        await embedTexts(['Safir projesinde Ali Veli'], 'document', 'none');
+        configureMasking(() => null);
+        await embedTexts(['Safir projesinde Ali Veli'], 'document', 'none');
+        expect(bodies[0].texts[0]).toBe(`${SAFIR} projesinde ${ALI}`);
+        expect(bodies[1].texts[0]).toBe('Safir projesinde Ali Veli');
     });
 });
