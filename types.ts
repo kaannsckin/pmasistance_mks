@@ -916,6 +916,7 @@ export interface AiPolicy {
   scoring?: AiScoringPolicy;
   maskNames?: boolean; // AI'ya giden metinlerde kişi/proje/kurum adları takma adla (varsayılan açık)
   reportGate?: ReportGatePolicy; // haftalık rapor taslağının kalite kapısı (PYB destek ayarlar)
+  reportAutoRepair?: boolean; // rapor taslağında format/dayanak sorunu varsa tek turluk otomatik düzeltme (varsayılan kapalı)
 }
 
 /** Rapor taslağı kalite kapısı: altın sette üretim istemi (full) bu eşikleri geçmeli; zorunluysa düzenleyicide uyarı */

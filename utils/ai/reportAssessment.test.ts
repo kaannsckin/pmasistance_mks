@@ -98,7 +98,7 @@ describe('halüsinasyon güvenceleri', () => {
 
 describe('AI politikası', () => {
     it('varsayılanlar ve sadeleştirme', () => {
-        expect(aiPolicyOf(undefined)).toEqual({ enabled: true, chat: true, embedded: true, proposals: true, blindEstimate: true, estimateGate: DEFAULT_GATE, modelEstimate: 'auto', scoring: DEFAULT_SCORING, maskNames: true, reportGate: DEFAULT_REPORT_GATE });
+        expect(aiPolicyOf(undefined)).toEqual({ enabled: true, chat: true, embedded: true, proposals: true, blindEstimate: true, estimateGate: DEFAULT_GATE, modelEstimate: 'auto', scoring: DEFAULT_SCORING, maskNames: true, reportGate: DEFAULT_REPORT_GATE, reportAutoRepair: false });
         // Ad maskeleme varsayılanda açık; yalnız kapatılınca saklanır
         expect(updateAiPolicy(undefined, { maskNames: false })).toEqual({ maskNames: false });
         expect(updateAiPolicy({ maskNames: false }, { maskNames: true })).toBeUndefined();
@@ -123,6 +123,9 @@ describe('AI politikası', () => {
         const rg = updateAiPolicy(undefined, { reportGate: { enforce: true, maxUngroundedRate: 3 } });
         expect(rg).toEqual({ reportGate: { ...DEFAULT_REPORT_GATE, enforce: true, maxUngroundedRate: 1 } });
         expect(updateAiPolicy(rg, { reportGate: { enforce: false, maxUngroundedRate: DEFAULT_REPORT_GATE.maxUngroundedRate } })).toBeUndefined();
+        // Rapor otomatik düzeltmesi varsayılanda kapalı; yalnız açılınca saklanır
+        expect(updateAiPolicy(undefined, { reportAutoRepair: true })).toEqual({ reportAutoRepair: true });
+        expect(updateAiPolicy({ reportAutoRepair: true }, { reportAutoRepair: false })).toBeUndefined();
     });
 });
 

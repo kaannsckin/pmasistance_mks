@@ -3,7 +3,9 @@ import { Abbreviation, CustomerMeeting, MeetingDetails, ProjectAiProfile, Report
 import { cleanProjectProfile, PROFILE_LIMITS } from '../../../utils/ai/projectProfile';
 import { suggestionLogEntry } from '../../../utils/ai/reportAiStats';
 import { ROLE_LABELS } from '../../../utils/allocations';
-import { reportGateWarning } from '../../../utils/ai/reportEval';
+import { GroundingIssue, reportGateWarning } from '../../../utils/ai/reportEval';
+import { aiPolicyOf } from '../../../utils/ai/policy';
+import { buildRepairPrompt, checkSuggestion, checkSummary, needsRepair, pickBetter, SuggestionCheck } from '../../../utils/ai/reportRepair';
 import { buildVariantRequest, PRODUCTION_VARIANT } from '../../../utils/ai/reportVariants';
 import { buildReportInput, parseReportSuggestion, ReportSuggestion } from '../../../utils/ai/weeklyReportPrompt';
 import { reportPromptVersion } from '../../../utils/ai/reportGuide';
@@ -151,6 +153,44 @@ const ReadOnlyList: React.FC<{ items: ReportItem[]; withCategory?: boolean }> = 
         </ul>
     ) : <p className="m-0 text-[15px] m-text-3">Madde yok.</p>;
 
+const GROUNDING_LABEL: Record<GroundingIssue['kind'], string> = { number: 'rakam', date: 'tarih', name: 'ad' };
+
+/** Metindeki dayanaksız değerleri vurgular */
+const Highlighted: React.FC<{ text: string; values: string[] }> = ({ text, values }) => {
+    const vs = Array.from(new Set<string>(values)).filter(Boolean).sort((a, b) => b.length - a.length);
+    if (!vs.length) return <>{text}</>;
+    const re = new RegExp(`(${vs.map(v => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`, 'gu');
+    return <>{text.split(re).map((part, i) => (vs.includes(part) ? <mark key={i} className="m-tone-warn rounded px-0.5">{part}</mark> : part))}</>;
+};
+
+/** Öneri önizlemesi: maddeler, madde düzeyinde format sorunları ve dayanaksız bilgi */
+const SuggestionList: React.FC<{ items: ReportItem[]; check: SuggestionCheck; withCategory?: boolean }> = ({ items, check, withCategory }) =>
+    items.length ? (
+        <ul className="m-0 pl-5 flex flex-col gap-2">
+            {items.map(i => {
+                const lint = check.lint.filter(x => x.itemId === i.id);
+                const ground = check.grounding.filter(g => g.itemId === i.id);
+                return (
+                    <li key={i.id} className="text-[15px] leading-relaxed m-text">
+                        {withCategory && <span className="text-[13px] font-semibold m-text-3">{CATEGORY_META[i.category].label}: </span>}
+                        <Highlighted text={itemDisplay(i)} values={ground.map(g => g.value)} />
+                        {(lint.length > 0 || ground.length > 0) && (
+                            <div className="mt-1 flex flex-col gap-0.5">
+                                <IssueList issues={lint} />
+                                {ground.length > 0 && (
+                                    <span className="flex items-start gap-1.5 text-[13px] m-ink-warn">
+                                        <Icon name="alert" size={14} style={{ marginTop: 2 }} />
+                                        <span>Girdide dayanağı yok: {ground.map(g => `“${g.value}” (${GROUNDING_LABEL[g.kind]})`).join(', ')}. Notlarınızda yoksa düzeltin ya da çıkarın.</span>
+                                    </span>
+                                )}
+                            </div>
+                        )}
+                    </li>
+                );
+            })}
+        </ul>
+    ) : <p className="m-0 text-[15px] m-text-3">Madde yok.</p>;
+
 // ---------------------------------------------------------------- kaynaklar
 
 const SourceRow: React.FC<{ title: string; sub?: string; action: string; onAdd: () => void; added?: boolean }> = ({ title, sub, action, onAdd, added }) => (
@@ -259,7 +299,8 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
     const [abbrInputs, setAbbrInputs] = useState<Record<string, string>>({});
     const [jiraKey, setJiraKey] = useState('');
     const [busy, setBusy] = useState<'file' | 'jira' | null>(null);
-    const [suggestion, setSuggestion] = useState<{ s: ReportSuggestion; raw: string; input: string; promptVersion: string; model?: string } | null>(null);
+    const [suggestion, setSuggestion] = useState<{ s: ReportSuggestion; raw: string; input: string; promptVersion: string; model?: string; check: SuggestionCheck; repaired: boolean; repairNote?: string } | null>(null);
+    const [repairing, setRepairing] = useState(false);
     const [missingQs, setMissingQs] = useState<string[]>([]);
     const [cardOpen, setCardOpen] = useState(false);
     const fileRef = useRef<HTMLInputElement>(null);
@@ -390,8 +431,11 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
     };
 
     // ---- AI
-    const logAi = (outcome: Exclude<ReportAiLogEntry['outcome'], 'submitted'>, sug?: { s: ReportSuggestion; promptVersion: string; model?: string }, promptVersion = reportPromptVersion(workspace.reportSettings, draft.departmentCode), model = ai.model) =>
-        onLogAi?.(suggestionLogEntry({ report: draft, promptVersion: sug?.promptVersion || promptVersion, variant: 'full', model: sug ? sug.model : model, outcome, suggestion: sug?.s, dictionary }));
+    const logAi = (outcome: Exclude<ReportAiLogEntry['outcome'], 'submitted'>, sug?: NonNullable<typeof suggestion>, promptVersion = reportPromptVersion(workspace.reportSettings, draft.departmentCode), model = ai.model) =>
+        onLogAi?.(suggestionLogEntry({
+            report: draft, promptVersion: sug?.promptVersion || promptVersion, variant: 'full', model: sug ? sug.model : model, outcome, suggestion: sug?.s, dictionary,
+            ...(sug ? { ungrounded: sug.check.ungrounded, repaired: sug.repaired } : {}),
+        }));
     const suggest = async () => {
         if (!project) return;
         setMissingQs([]);
@@ -399,8 +443,27 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
         const req = buildVariantRequest({ variant: PRODUCTION_VARIANT, ws: workspace, report: draft, input });
         const { promptVersion } = req;
         const model = ai.model;
-        const res = await ai.run(req.system, req.prompt, t => ({ s: parseReportSuggestion(t), raw: t }), { onError: () => logAi('error', undefined, promptVersion, model) });
-        if (res) setSuggestion({ ...res, input, promptVersion, model });
+        const parse = (t: string) => ({ s: parseReportSuggestion(t), raw: t });
+        const res = await ai.run(req.system, req.prompt, parse, { onError: () => logAi('error', undefined, promptVersion, model) });
+        if (!res) return;
+        // Çıktı denetimi; admin açtıysa ve sorun varsa tek turluk düzeltme (daha kötüyse ilk sonuç)
+        const check = checkSuggestion(res.s, input, dictionary);
+        let chosen = { s: res.s, raw: res.raw, check, repaired: false };
+        let repairNote: string | undefined;
+        if (aiPolicyOf(workspace).reportAutoRepair && needsRepair(check)) {
+            setRepairing(true);
+            const fix = await ai.run(req.system, buildRepairPrompt(res.s, check, input), parse);
+            setRepairing(false);
+            if (fix) {
+                const best = pickBetter({ s: res.s, check }, { s: fix.s, check: checkSuggestion(fix.s, input, dictionary) });
+                chosen = { s: best.s, raw: best.repaired ? fix.raw : res.raw, check: best.check, repaired: best.repaired };
+                repairNote = best.repaired ? 'Denetimde bulunan sorunlar için otomatik düzeltme uygulandı.' : 'Otomatik düzeltme denendi; ilk öneri daha iyi olduğu için korundu.';
+            } else {
+                ai.setError(null);
+                repairNote = 'Otomatik düzeltme yapılamadı; ilk öneri gösteriliyor.';
+            }
+        }
+        setSuggestion({ ...chosen, input, promptVersion, model, repairNote });
     };
     const discardSuggestion = () => {
         if (suggestion) logAi('discarded', suggestion);
@@ -727,8 +790,8 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
                                         {!cleanProjectProfile(project.aiProfile) && <span className="flex-1 min-w-[180px] text-[13px] m-ink-warn">Proje kartını doldurursanız öneriler konuya yabancı okur için daha anlaşılır olur.</span>}
                                         <button type="button" className="m-btn m-btn-plain !min-h-[44px]" onClick={() => setCardOpen(true)}><Icon name="book" size={17} />Proje kartı</button>
                                     </div>
-                                    <button type="button" className="m-btn m-btn-primary" disabled={ai.loading} onClick={suggest}>
-                                        <Icon name="sparkles" size={18} />{ai.loading ? 'Öneri hazırlanıyor…' : 'Taslak öner'}
+                                    <button type="button" className="m-btn m-btn-primary" disabled={ai.loading || repairing} onClick={suggest}>
+                                        <Icon name="sparkles" size={18} />{repairing ? 'Öneri düzeltiliyor…' : ai.loading ? 'Öneri hazırlanıyor…' : 'Taslak öner'}
                                     </button>
                                     {gateWarning && <div role="status" className="rounded-xl m-tone-warn px-3 py-2 text-[13px]">{gateWarning}</div>}
                                     {ai.error && <div role="alert" className="rounded-xl m-tone-bad px-3 py-2 text-[14px]">{ai.error}</div>}
@@ -855,13 +918,17 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
                         <button type="button" className="m-btn m-btn-primary" onClick={() => applySuggestion('append')}>{draft.thisWeek.length || draft.nextWeek.length ? 'Sonuna ekle' : 'Taslağa uygula'}</button>
                     </>}
                 >
+                    <div role="status" className={`rounded-xl px-3 py-2.5 flex items-start gap-2 text-[14px] ${suggestion.check.errors ? 'm-tone-bad' : suggestion.check.ungrounded || suggestion.check.warnings ? 'm-tone-warn' : 'm-tone-ok'}`}>
+                        <Icon name={suggestion.check.errors || suggestion.check.ungrounded ? 'alert' : 'check'} size={16} style={{ marginTop: 2 }} />
+                        <span><b>{checkSummary(suggestion.check)}.</b>{suggestion.repairNote ? ` ${suggestion.repairNote}` : ''}{suggestion.check.ungrounded ? ' Vurgulanan bilgiler girdide (notlar, worklog, görüşmeler) geçmiyor.' : ''}</span>
+                    </div>
                     <div className="flex flex-col gap-1.5">
                         <h3 className="m-0 text-[15px] font-semibold m-text">Bu hafta</h3>
-                        <ReadOnlyList items={suggestion.s.thisWeek} withCategory />
+                        <SuggestionList items={suggestion.s.thisWeek} check={suggestion.check} withCategory />
                     </div>
                     <div className="flex flex-col gap-1.5">
                         <h3 className="m-0 text-[15px] font-semibold m-text">Gelecek hafta</h3>
-                        <ReadOnlyList items={suggestion.s.nextWeek} />
+                        <SuggestionList items={suggestion.s.nextWeek} check={suggestion.check} />
                     </div>
                     {suggestion.s.abbreviations.length > 0 && <p className="m-0 text-[14px] m-text-2">Kısaltmalar: {suggestion.s.abbreviations.map(a => `${a.abbr} (${a.expansion})`).join(', ')}</p>}
                     {suggestion.s.missing.length > 0 && (

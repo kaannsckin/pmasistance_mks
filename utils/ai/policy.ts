@@ -24,6 +24,8 @@ export interface ResolvedAiPolicy {
     maskNames: boolean;
     /** Haftalık rapor taslağının kalite kapısı */
     reportGate: ReportGatePolicy;
+    /** Rapor taslağında sorun varsa tek turluk otomatik düzeltme (varsayılan kapalı) */
+    reportAutoRepair: boolean;
 }
 
 const clampNum = (v: unknown, lo: number, hi: number, fallback: number): number => {
@@ -53,6 +55,7 @@ export const aiPolicyOf = (ws: Partial<Pick<WorkspaceData, 'aiPolicy'>> | undefi
         },
         modelEstimate: p.modelEstimate === 'on' || p.modelEstimate === 'off' ? p.modelEstimate : 'auto',
         maskNames: p.maskNames !== false,
+        reportAutoRepair: p.reportAutoRepair === true,
         reportGate: {
             enforce: p.reportGate?.enforce === true,
             maxLintErrorsPerReport: clampNum(p.reportGate?.maxLintErrorsPerReport, 0, 5, DEFAULT_REPORT_GATE.maxLintErrorsPerReport),
@@ -85,6 +88,7 @@ export const updateAiPolicy = (cur: AiPolicy | undefined, patch: Partial<Omit<Ai
     if (!r.blindEstimate) out.blindEstimate = false;
     if (r.modelEstimate !== 'auto') out.modelEstimate = r.modelEstimate;
     if (!r.maskNames) out.maskNames = false;
+    if (r.reportAutoRepair) out.reportAutoRepair = true;
     const diff = (Object.keys(DEFAULT_SCORING) as (keyof AiScoringPolicy)[]).some(k => r.scoring[k] !== DEFAULT_SCORING[k]);
     if (diff) out.scoring = r.scoring;
     if ((Object.keys(DEFAULT_GATE) as (keyof EstimateGatePolicy)[]).some(k => r.estimateGate[k] !== DEFAULT_GATE[k])) out.estimateGate = r.estimateGate;
