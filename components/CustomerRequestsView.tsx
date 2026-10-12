@@ -2,8 +2,8 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { CustomerRequest } from '../types';
 
-declare const XLSX: any;
-declare const Papa: any;
+import * as XLSX from 'xlsx';
+import Papa from 'papaparse';
 
 interface CustomerRequestsViewProps {
   requests: CustomerRequest[];
@@ -44,7 +44,7 @@ const CustomerRequestsView: React.FC<CustomerRequestsViewProps> = ({ requests, s
             let data: any[][] = [];
 
             if (file.name.endsWith('.csv')) {
-                const result = Papa.parse(content as string, { skipEmptyLines: true });
+                const result = Papa.parse<any[]>(content as string, { skipEmptyLines: true });
                 data = result.data;
             } else {
                 const workbook = XLSX.read(content, { type: 'binary' });

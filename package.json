@@ -14,19 +14,26 @@
     "pilot": "node dist-pilot/pilot.mjs"
   },
   "dependencies": {
+    "@fortawesome/fontawesome-free": "^6.5.1",
     "@supabase/supabase-js": "^2.110.1",
     "jszip": "^3.10.2",
     "nodemailer": "^10.0.15",
+    "papaparse": "^5.3.2",
     "pdfjs-dist": "^6.4.299",
     "pptxgenjs": "^4.0.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "undici": "^7.30.0"
+    "undici": "^7.30.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
+    "@types/papaparse": "^5.3.15",
     "@vitejs/plugin-react": "^5.0.0",
+    "autoprefixer": "^10.4.20",
     "playwright-core": "^1.56.1",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17",
     "typescript": "~5.8.2",
     "vite": "^6.2.0",
     "vitest": "^4.1.10"

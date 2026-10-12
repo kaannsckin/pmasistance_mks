@@ -3,8 +3,8 @@ import { Task, Resource, TimeEstimate, TaskStatus } from '../types';
 import { mapJiraIssueType, mapJiraPriority, mapJiraStatus, parseJiraDate, secondsToHours } from './planning/jiraFields';
 
 // Make Papa and XLSX available from window object
-declare const Papa: any;
-declare const XLSX: any;
+import Papa from 'papaparse';
+import * as XLSX from 'xlsx';
 
 const parseTimeEstimate = (timeStr: string): TimeEstimate => {
     if (!timeStr || typeof timeStr !== 'string') return { best: 0, avg: 0, worst: 0 };

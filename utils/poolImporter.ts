@@ -3,7 +3,7 @@ import { createAllocationId } from './allocations';
 import { createProject } from './workspace';
 
 // XLSX, index.html'de CDN'den yüklenir (mevcut importer ile aynı yaklaşım)
-declare const XLSX: any;
+import * as XLSX from 'xlsx';
 
 type SheetMatrix = (string | number | null | undefined)[][];
 export type PoolSheets = Record<string, SheetMatrix>;

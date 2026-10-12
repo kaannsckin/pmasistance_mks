@@ -9,7 +9,7 @@ import { Icon } from './icons';
 import { initialsOf } from './taskMeta';
 import { Field, rowSep, Sheet } from './ui';
 
-declare const XLSX: any;
+import * as XLSX from 'xlsx';
 
 /**
  * Modern Ekip sekmesi: ekip listesi (kişi ekle/düzenle, havuzdan seç),
@@ -129,9 +129,8 @@ const ModernTeam: React.FC<ModernTeamProps> = ({ resources, tasks, people, canEd
         const reader = new FileReader();
         reader.onload = () => {
             try {
-                if (typeof XLSX === 'undefined') throw new Error('Excel kütüphanesi yüklenemedi.');
                 const wb = XLSX.read(reader.result, { type: 'binary' });
-                const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });
+                const rows = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[wb.SheetNames[0]], { header: 1 });
                 const { resources: next, added, updated } = rowsToResourcePlan(rows, resources, currentMonth);
                 onUpdate(next);
                 setNotice({ kind: 'ok', text: `${added} kişi eklendi, ${updated} kişi güncellendi. Boş hücreler 0 sayıldı.` });

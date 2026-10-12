@@ -84,8 +84,6 @@ describe('Jira alanları', () => {
     });
 
     it('CSV içe aktarma yaşam döngüsü alanlarını alır', () => {
-        // Uygulamada PapaParse CDN'den gelir; testte virgülle ayrılmış basit satırlar yeterli
-        (globalThis as unknown as { Papa: unknown }).Papa = { parse: (text: string) => ({ data: text.split('\n').map(l => l.split(',')) }) };
         const csv = [
             'Issue key,Summary,Issue Type,Status,Priority,Created,Resolved,Original Estimate,Time Spent,Custom field (Story Points),Fix Version/s',
             'MKS-1,Giriş hatası,Bug,Done,High,2026-10-01 09:00,2026-10-05 16:00,57600,72000,3,v2.1',

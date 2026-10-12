@@ -83,7 +83,7 @@ Demo ajanların ortamında yapıldığı için üç komut, ekranın doğru gör�
 | `pilot dondur --ad K<n>-<tarih>` | Çalışma alanını (bulutta notlar dahil), simülasyon durumunu ve sahte Jira'yı `pilot-data/donmus/` altına yazar (yaklaşık 3 MB) | Her kapı gününün sonunda |
 | `pilot geri-yukle --ad …` | Bulutta çalışma alanını yerinde yeniler, durum ve Jira'yı geri koyar, sonraki günlerin olay ve Confluence dosyalarını arşive taşır; aynı günün yeniden üretimi birebir aynıdır | Demo günü `kontrol` ya da `demo-testi` KALDI ise |
 
-Geliştirme ortamında ağ politikası CDN'leri engellediği için ekranlar biçimsiz görünür; işlevsel denetimler yine çalışır ve CDN uyarısı bulgu sayılmaz. Sunum makinesinde CDN erişimi ayrıca denenir (BL-08).
+Stil (Tailwind, derleme anında), ikonlar (Font Awesome) ve Excel/CSV kitaplıkları pakete gömülüdür (BL-08); kurum ağı CDN'leri engellese de ekran biçimli görünür. Dışarıdan yalnız Geist yazı tipi (yoksa sistem yazı tipi) ve sekme simgesi gelir; bunların uyarısı bulgu sayılmaz.
 
 ## Tasarım kararları
 
