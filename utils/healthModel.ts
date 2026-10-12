@@ -1,7 +1,7 @@
 import { HealthConfig, HealthFactorKey, HealthSnapshotEntry, HealthWeekSnapshot, PmoRating, Project, TaskStatus, UserRole, WeeklyReport, WorkspaceData } from '../types';
 import { findOverAllocations } from './allocations';
 import { canFor, PermissionHolder } from './permissions';
-import { buildProjectEVM, defaultStatusMonth, ProjectEVM } from './evm';
+import { buildProjectEVM, closedStatusMonth, ProjectEVM } from './evm';
 import { daysUntilNeed, isActiveExpectation } from './expectations';
 import { riskScore } from './risks';
 import { aiPolicyOf } from './ai/policy';
@@ -471,7 +471,7 @@ export const setPmoRating = (
 
 export const buildHealthSnapshot = (ws: WorkspaceData, now: Date = new Date()): HealthWeekSnapshot => {
     const year = now.getFullYear();
-    const ctx = buildHealthContext(ws, year, defaultStatusMonth(year, now), now);
+    const ctx = buildHealthContext(ws, year, closedStatusMonth(ws, year, now), now);
     const wk = isoWeekOf(now);
     const projects: HealthSnapshotEntry[] = ws.projects.filter(p => p.status === 'devam').map(p => {
         const h = evaluateProjectHealth(ws, p, ctx);

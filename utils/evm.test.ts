@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildProjectEVM, buildPortfolioEVM, projectPercentComplete, defaultStatusMonth } from './evm';
+import { buildProjectEVM, buildPortfolioEVM, closedStatusMonth, projectPercentComplete, defaultStatusMonth } from './evm';
 import { createEmptyWorkspace, createProject } from './workspace';
 import { Allocation, Task, TaskStatus, WorkspaceData } from '../types';
 
@@ -92,5 +92,27 @@ describe('defaultStatusMonth', () => {
         expect(defaultStatusMonth(2025, now)).toBe(12);
         expect(defaultStatusMonth(2027, now)).toBe(0);
         expect(defaultStatusMonth(2026, now)).toBe(7);
+    });
+});
+
+describe('closedStatusMonth (BL-07)', () => {
+    it('gerçekleşeni girilmiş son ay; açık ay EVM\'ye girmez, CPI şişmez', () => {
+        const ws = buildWs(); // gerçekleşen Oca–Haz girilmiş
+        const now = new Date('2026-07-15T00:00:00Z'); // Temmuz ortası, Temmuz kapanmamış
+        expect(closedStatusMonth(ws, 2026, now)).toBe(6);
+        // Takvim ayıyla (7) Temmuz'un planı ve ilerlemesi sayılır, gerçekleşeni 0 kalır
+        const open = buildProjectEVM(ws, 'p1', 2026, defaultStatusMonth(2026, now));
+        const closed = buildProjectEVM(ws, 'p1', 2026, closedStatusMonth(ws, 2026, now));
+        expect(closed.statusMonth).toBe(6);
+        expect(closed.ac).toBe(open.ac); // açık ayın gerçekleşeni zaten 0
+        expect(closed.pv).toBeLessThan(open.pv);
+    });
+
+    it('takvim ayını geçmez; hiç gerçekleşen yoksa takvim ayı', () => {
+        const ws = buildWs();
+        expect(closedStatusMonth(ws, 2026, new Date('2026-03-10T00:00:00Z'))).toBe(3);
+        const empty = { ...ws, allocations: ws.allocations.map(a => ({ ...a, actual: {} })) };
+        expect(closedStatusMonth(empty, 2026, new Date('2026-07-15T00:00:00Z'))).toBe(7);
+        expect(closedStatusMonth(ws, 2025, new Date('2026-07-15T00:00:00Z'))).toBe(12);
     });
 });

@@ -1,6 +1,6 @@
 import { Project, RagStatus, TaskStatus, WorkspaceData } from '../types';
 import { findOverAllocations, getPlanLockStatus } from './allocations';
-import { buildProjectEVM, defaultStatusMonth } from './evm';
+import { buildProjectEVM, closedStatusMonth } from './evm';
 import { riskScore } from './risks';
 import { analyzeDataHealth } from './dataHealth';
 import { bandOf, buildHealthContext, evaluateProjectHealth, HealthBand, HealthConfidence, HealthContext, HealthFactor } from './healthModel';
@@ -69,7 +69,7 @@ export const projectHealth = (ws: WorkspaceData, project: Project, year: number,
 };
 
 export const portfolioHealth = (ws: WorkspaceData, year: number, statusMonth?: number, now: Date = new Date()): PortfolioHealth => {
-    const sm = statusMonth === undefined ? defaultStatusMonth(year, now) : statusMonth;
+    const sm = statusMonth === undefined ? closedStatusMonth(ws, year, now) : statusMonth;
     const ctx = buildHealthContext(ws, year, sm, now);
     const projects = ws.projects.filter(isHealthScored).map(p => projectHealth(ws, p, year, sm, now, ctx)).sort((a, b) => a.score - b.score);
     const orgScore = projects.length ? round(projects.reduce((s, p) => s + p.score, 0) / projects.length) : 100;
@@ -93,7 +93,7 @@ export interface AttentionItem {
 const todayISO = (now: Date): string => now.toISOString().split('T')[0];
 
 export const attentionItems = (ws: WorkspaceData, year: number, now: Date = new Date(), statusMonth?: number): AttentionItem[] => {
-    const sm = statusMonth === undefined ? defaultStatusMonth(year) : statusMonth;
+    const sm = statusMonth === undefined ? closedStatusMonth(ws, year, now) : statusMonth;
     const items: AttentionItem[] = [];
     const today = todayISO(now);
 

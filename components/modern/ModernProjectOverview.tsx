@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Project, ProjectSectionKey, RagStatus, Task, View, WorkspaceData } from '../../types';
 import { actorLabel } from '../../utils/audit';
 import { getPlanLockStatus } from '../../utils/allocations';
-import { defaultStatusMonth } from '../../utils/evm';
+import { closedStatusMonth } from '../../utils/evm';
 import { isHealthScored, projectHealth } from '../../utils/executive';
 import { objectiveProgress } from '../../utils/goals';
 import { currentSprint, deadlineLabel, overviewStats, teamLoad, upcomingDeadlines } from '../../utils/projectOverview';
@@ -63,7 +63,7 @@ const ModernProjectOverview: React.FC<ModernProjectOverviewProps> = ({ workspace
     const linkable = (v: View) => target(v) !== null;
     const now = new Date();
     const year = now.getFullYear();
-    const health = useMemo(() => projectHealth(workspace, project, year, defaultStatusMonth(year)), [workspace, project, year]);
+    const health = useMemo(() => projectHealth(workspace, project, year, closedStatusMonth(workspace, year)), [workspace, project, year]);
     const stats = useMemo(() => overviewStats(project), [project]);
     const sprint = useMemo(() => currentSprint(project), [project]);
     const deadlines = useMemo(() => upcomingDeadlines(project, new Date(), 5), [project]);

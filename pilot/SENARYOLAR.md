@@ -30,7 +30,7 @@ Koşular Salı ve Perşembe (1. rutin 07:45, 2. rutin 08:45). Jira ajanı son ko
 |---|---|---|---|
 | **K0 Kurulum** | 15 Ekim, 1. rutin + 2. rutin sonrası | v4 yeniden kurulum Supabase'de; `senaryo liste` S1, S3, S6, S8, S9, S10'u gösterir; `kontrol` tümü geçti; `demo-testi` GEÇTİ (CDN uyarısı hariç) | 20 Ekim'e kadar kod düzeltmesi; senaryo tarihleri kaydırılır |
 | **K1 Akış** | 22 Ekim, 2. rutin sonrası | 42. hafta raporları uçtan uca (gönderim → bölüm sorumlusu → PYB destek → yayın) MCP araçlarıyla geçti; her persona en az bir yazma aracını gerekçeli kullandı; S2 kararı uygulamada (istek dönüştü ya da reddedildi); açık yüksek bulgu yok ya da düzeltmesi planlandı | 27 Ekim'e kadar düzeltme; K2 ölçütleri değişmez |
-| **K2 Senaryo** | 5 Kasım, 2. rutin sonrası | S1–S8 başarı ölçütleri (aşağıda) değerlendirildi, en az 6/8 ✓; PY ortalaması ≥ 75; DH1–DH3 ✓; gömülü bulguların en az 3/7'si bulundu | 2. dalga zayıf senaryonun telafisine ayrılır (S12); demo kapsamı daraltılır |
+| **K2 Senaryo** | 5 Kasım, 2. rutin sonrası | S1–S8 başarı ölçütleri (aşağıda) değerlendirildi, en az 6/8 ✓; PY ortalaması ≥ 75; DH1–DH3 ✓; gömülü bulguların en az 3/6'sı bulundu | 2. dalga zayıf senaryonun telafisine ayrılır (S12); demo kapsamı daraltılır |
 | **K3 Dondurma** | 19 Kasım, 2. rutin sonrası | Kod dondurulur (sonrası yalnız demo yolunu bozan hata düzeltmesi); `demo-testi` son 3 koşuda GEÇTİ; S9–S11 değerlendirildi; demo akışı (sunum metni) yazılı; `dondur --ad K3-2026-11-19` | Demo, K3'te çalışan ekranlarla sınırlanır |
 | **K4 Karar** | 24 Kasım, 2. rutin sonrası | DH1–DH6 ✓; sunumu yapacak kişi demo akışını uygulamada baştan sona gezdi (canlı prova); `dondur --ad K4-2026-11-24` | Demo "dondurulmuş" ya da ertelenir |
 
@@ -87,7 +87,7 @@ Danışman doğrulaması (9 Ekim, 14 Ekim'e kadar üretilmiş veriyle): altı ko
 
 ## Gömülü bulgular (puanlamada kullanılır; ajanlara söylenmez)
 
-Veride bilerek bırakılmış, gerçek bir birimde de görülen sorunlar. Ajanın bulması "bulgu kalitesi" ve "veriyle tutarlılık" puanına yazılır; koordinatör raporda hangisinin kim tarafından ne zaman bulunduğunu işaretler (K2 ölçütü: en az 3/7).
+Veride bilerek bırakılmış, gerçek bir birimde de görülen sorunlar. Ajanın bulması "bulgu kalitesi" ve "veriyle tutarlılık" puanına yazılır; koordinatör raporda hangisinin kim tarafından ne zaman bulunduğunu işaretler (K2 ölçütü: en az 3/6). G7 12 Ekim'de ürün düzeltmesiyle (BL-07) kalktı; puanlamada kullanılmaz.
 
 | # | Bulgu | Kim bulmalı | Nerede görünür |
 |---|---|---|---|
@@ -97,4 +97,4 @@ Veride bilerek bırakılmış, gerçek bir birimde de görülen sorunlar. Ajanı
 | G4 | NEHİR algı farkı: RAG "Riskli", kurallara göre "Kritik" | Ahmet, Mert, Selin | `proje_detayi` › `algi_farki` |
 | G5 | Burak'ın geçmiş haftalarda iyimser RAG verme eğilimi | Selin, Ahmet | RAG geçmişi, `son_degisiklikler` |
 | G6 | YILDIZ teklif planı Kasım'da U320'yi (Hakan Öztürk, Barış Güneş, Merve Aslan) kapasite üstüne çıkarıyor — S8'den önce bile | Selin | `doluluk_analizi`, `kapasite_talep` |
-| G7 | Ay ortasında Ekim CPI'sı şişkin görünüyor (gerçekleşen ay kapanışında girildiği için; bilinen ürün açığı [BL-07](../docs/pilot/BACKLOG.md)) | Mert, Ahmet | `evm_analizi` ↔ `jira_worklog` |
+| ~~G7~~ | ~~Ay ortasında Ekim CPI'sı şişkin görünüyor~~ — kaldırıldı (12 Ekim): EVM artık gerçekleşeni girilmiş son aya kadar hesaplanır ([BL-07](../docs/pilot/BACKLOG.md)) | — | — |

@@ -14,5 +14,5 @@ Rutinlerin okuduğu talimatlar `pilot/` klasöründedir (`RUTIN_1_VERI.md`, `RUT
 **Güncelleme kuralları**
 
 - Backlog'da bir iş yapıldığında durum `Yapıldı` olur ve kanıt sütununa commit ya da test sonucu yazılır; satır silinmez.
-- BL numaraları değişmez; yeni iş bir sonraki boş numarayı alır (şu an BL-22).
+- BL numaraları değişmez; yeni iş bir sonraki boş numarayı alır (şu an BL-23).
 - Tarihli rakamlar (doluluk, CPI, test sayısı) hangi güne ait olduğu yazılarak verilir.

@@ -103,7 +103,7 @@ Dört P0 işi demo hikâyesinin ön koşuludur ve 12–16 Ekim düzenek haftası
 | 2 | Mock veri kalibrasyonu: doluluk %80–90, kapasite-talep açığı, CPI ±%10, istek ve risk geçmişi, Jira içerik uyumu | Yönetimin ilk bakacağı rakamlar | 2–3 gün | P0 | Yapıldı (BL-02) |
 | 3 | MCP rapor araçları: taslak, gönder, onay/iade, yayın; simülasyon persona raporlarını bırakır | PY'nin ana haftalık çıktısı; puanın 20'si | 3–4 gün | P0 | Yapıldı (BL-03) |
 | 4 | Demo yolu tarayıcı testi (Playwright): 6 ekran, konsol hatası, ekran görüntüsü, haftada bir | Demo arayüzde; bugün sınanmıyor | 1 gün | P0 | Yapıldı (BL-04) |
-| 5 | Ay içi tahmini gerçekleşen; maliyet sapmasında aynı dönem | EVM ve maliyet ay içinde yanıltıyor; S6 görünmüyor | 2 gün | P1 | Açık (BL-07, BL-09) |
+| 5 | Ay içi tahmini gerçekleşen; maliyet sapmasında aynı dönem | EVM ve maliyet ay içinde yanıltıyor; S6 görünmüyor | 2 gün | P1 | Yapıldı: EVM son kapanan aya kadar (BL-07), dönem sapması (BL-09); ay içi tahmin pilot sonrası (BL-22) |
 | 6 | Not, müşteri görüşmesi, risk güncelle/kapat, istek durumu araçları | PY döngüsünün üç işi eksik | 2 gün | P1 | Yapıldı, P0'a alındı (BL-05) |
 | 7 | Veri dondurma ve geri yükleme (`pilot dondur`, `pilot geri-yukle`) | Demo günü güvenliği | 0,5 gün | P1 | Yapıldı (BL-06) |
 | 8 | Önerilen RAG kuralı (PY farklı seçerse gerekçe); teklif projeleri skorlanmaz | B-002; YILDIZ skoru 100 | 1 gün | P1 | Açık (BL-10, BL-11) |

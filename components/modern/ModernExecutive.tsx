@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { ExpectationUrgency, PlanLockStatus, ProjectStatus, UserRole, View, WorkspaceData } from '../../types';
 import { actorLabel } from '../../utils/audit';
 import { orgCapacity } from '../../utils/deptScorecard';
-import { defaultStatusMonth, buildPortfolioEVM } from '../../utils/evm';
+import { closedStatusMonth, buildPortfolioEVM } from '../../utils/evm';
 import { buildExecutiveBrief } from '../../utils/execBrief';
 import { attentionProjects, attentionReasons, buildExecProjectRows, ExecProjectRow, ExecSortKey, filterExecRows, healthDistribution, SortDir, sortExecRows } from '../../utils/execOverview';
 import { buildExecReport, exportExecReportToExcel } from '../../utils/execReport';
@@ -243,7 +243,7 @@ const ModernExecutive: React.FC<ModernExecutiveProps> = ({ workspace, currentRol
     const risks = useMemo(() => topPortfolioRisks(scoped).filter(r => riskPassesView(view, r)).slice(0, 4), [scoped, view]);
     const changes = useMemo(() => recentChanges(workspace, new Date(), 7), [workspace]);
     const brief = useMemo(() => (showBrief ? buildExecutiveBrief(scoped, year, new Date(), !!onOpenAudit) : ''), [showBrief, scoped, year, onOpenAudit]);
-    const statusMonth = defaultStatusMonth(year);
+    const statusMonth = closedStatusMonth(workspace, year);
     const pending = rows.filter(r => r.lockStatus === 'submitted');
     const scoredRows = rows.filter(r => r.scored);
     const orgScore = scoredRows.length ? Math.round(scoredRows.reduce((s, r) => s + r.score, 0) / scoredRows.length) : 100;

@@ -4,7 +4,7 @@ import { AUDIT_ACTION_LABELS } from '../audit';
 import { buildCostReport, costPeriodLabel } from '../costing';
 import { CATEGORY_LABELS, analyzeDataHealth } from '../dataHealth';
 import { departmentScorecards, orgCapacity } from '../deptScorecard';
-import { buildPortfolioEVM, buildProjectEVM, defaultStatusMonth, ProjectEVM } from '../evm';
+import { buildPortfolioEVM, buildProjectEVM, closedStatusMonth, ProjectEVM } from '../evm';
 import { attentionItems, executiveSummary, isHealthScored, portfolioHealth, projectHealth } from '../executive';
 import { buildForecast, FORECAST_DIM_LABELS, FORECAST_METHOD_LABELS, ForecastDim, ForecastMethod } from '../forecast';
 import { buildPersonProfile } from '../personProfile';
@@ -249,7 +249,7 @@ export const AI_TOOLS: ToolDef[] = [
         run: (a, ctx) => {
             const p = resolveProject(ctx, a.proje);
             const year = resolveYear(ctx, a.yil);
-            const statusMonth = defaultStatusMonth(year, ctx.now);
+            const statusMonth = closedStatusMonth(ctx.ws, year, ctx.now);
             const h = projectHealth(ctx.scoped, p, year, statusMonth);
             const wpNames = new Map(p.workPackages.map(w => [w.id, w.name]));
             const today = todayIso(ctx.now);
@@ -616,7 +616,7 @@ export const AI_TOOLS: ToolDef[] = [
         },
         run: (a, ctx) => {
             const year = resolveYear(ctx, a.yil);
-            const statusMonth = defaultStatusMonth(year, ctx.now);
+            const statusMonth = closedStatusMonth(ctx.ws, year, ctx.now);
             if (str(a.proje)) {
                 const p = resolveProject(ctx, a.proje);
                 const e = buildProjectEVM(ctx.scoped, p.id, year, statusMonth);
