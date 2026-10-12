@@ -1,8 +1,8 @@
 # Backlog
 
-Son güncelleme: 12 Ekim 2026 (BL-21 yapıldı)
+Son güncelleme: 12 Ekim 2026 (BL-21, BL-11 yapıldı)
 
-21 işin 7'si yapıldı (danışman raporundaki dört P0'ın tamamı dahil), 14'ü açık. K0'dan önce zorunlu olan tek iş BL-18; demo yolunu doğrudan etkileyen açıklar BL-07, BL-08, BL-09 ve BL-11. Numaralar [`pilot/SENARYOLAR.md`](../../pilot/SENARYOLAR.md)'nin andığı BL-07, BL-08 ve BL-14 ile aynıdır.
+21 işin 8'i yapıldı (danışman raporundaki dört P0'ın tamamı dahil), 13'ü açık. K0'dan önce zorunlu olan tek iş BL-18; demo yolunu doğrudan etkileyen açıklar BL-07, BL-08 ve BL-09. Numaralar [`pilot/SENARYOLAR.md`](../../pilot/SENARYOLAR.md)'nin andığı BL-07, BL-08 ve BL-14 ile aynıdır.
 
 **Durum değerleri:** Açık · Sürüyor · Karar bekliyor · Yapıldı. Bir iş yapıldığında satır silinmez: durum `Yapıldı` olur, kanıt sütununa commit ya da test sonucu yazılır ve satır "Yapılanlar" tablosuna taşınır. Yeni iş bir sonraki boş numarayı alır (BL-22).
 
@@ -15,7 +15,6 @@ Son güncelleme: 12 Ekim 2026 (BL-21 yapıldı)
 | BL-08 | CDN bağımlılığı: Tailwind, Font Awesome, PapaParse, SheetJS `index.html`'de CDN'den yükleniyor | Kurum ağı engellerse demo ekranı biçimsiz; pilot ortamında 403 alındı | P1 | Açık | K3 (19 Kasım) | `demo-testi` CDN uyarısı |
 | BL-09 | Maliyet sapması aynı dönemin planıyla hesaplanır | `maliyet_raporu` yıllık planı (17,81 M TL) Ocak–Eylül gerçekleşeniyle kıyaslıyor: −6,01 M TL | P1 | Açık | K3 (19 Kasım) | — |
 | BL-10 | Önerilen RAG kuralı (geciken oran, SPI/CPI eşikleri, yüksek risk, engelleyici hata); PY farklı seçerse gerekçe zorunlu | B-002, danışman Soru 7; NEHİR algı farkı (G4) | P1 | Açık | K3 (19 Kasım) | — |
-| BL-11 | Teklif aşamasındaki proje sağlık skoru almaz ("—") | YILDIZ skoru 100, güven düşük: "teklifteki proje en sağlıklısı mı?" | P1 | Açık | K3 (19 Kasım) | — |
 | BL-12 | Yapılandırılmış talep: kaynak talebi ve açıklama talebi, "Yönetimden beklentiler"e bağlı | B-007, danışman Soru 10; yazışma bugün pilot dosyasında | P2 | Açık | Pilot sonrası | — |
 | BL-13 | Bölüm sorumlusu diğer bölümlerin boş kapasitesini rol bazında, adsız görür | Danışman Soru 8; S10'daki U340 çatışması | P2 | Açık | Pilot sonrası | — |
 | BL-14 | Simülasyonda arife yarım gün (28 Ekim) | S5; takvim tutarlılığı | P2 | Açık | 27 Ekim'den önce ya da hiç | — |
@@ -35,4 +34,5 @@ Son güncelleme: 12 Ekim 2026 (BL-21 yapıldı)
 | BL-04 | Demo yolu tarayıcı testi (`pilot demo-testi`) | Demo arayüzde; 4 persona, 2 arayüz, sağlık puanı MCP ile karşılaştırılır | P0 | Yapıldı | K0 | 43a2c3a; 28/28 adım |
 | BL-05 | Risk güncelleme/kapatma, müşteri isteği kararı, proje notu araçları | Ajanın yazmadığı karar demoda görünmez | P0 | Yapıldı | K0 | 81e104c |
 | BL-06 | Dondur / geri-yükle (`pilot dondur`, `pilot geri-yukle`) | Demo günü güvenliği | P1 | Yapıldı | K0 | bbe04f4 |
-| BL-21 | Arayüzdeki rapor biçim denetimi proje adlarını (NEHİR) kısaltma saymaz | MCP'de düzeltilmişti (ccf8216); arayüz aynı denetimi proje adları olmadan çalıştırıyordu: rapor hata gösterip ilerletilemiyordu | P1 | Yapıldı | K1 (22 Ekim) | Ortak `lintDictionary` (editör, liste, gönderim kapısı, MCP); `weeklyReport.test.ts` |
+| BL-21 | Arayüzdeki rapor biçim denetimi proje adlarını (NEHİR) kısaltma saymaz | MCP'de düzeltilmişti (ccf8216); arayüz aynı denetimi proje adları olmadan çalıştırıyordu: rapor hata gösterip ilerletilemiyordu | P1 | Yapıldı | K1 (22 Ekim) | Ortak `lintDictionary` (editör, liste, gönderim kapısı, MCP); `weeklyReport.test.ts`; 96aec77 |
+| BL-11 | Teklif aşamasındaki proje sağlık skoru almaz ("—") | YILDIZ skoru 100, güven düşük: "teklifteki proje en sağlıklısı mı?" | P1 | Yapıldı | K3 (19 Kasım) | Portföy ortalaması, dağılım, `portfoy_ozeti` ve proje kartı teklifi dışarıda bırakır; `executive.test.ts`, `execOverview.test.ts` |

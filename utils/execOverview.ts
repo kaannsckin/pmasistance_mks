@@ -17,6 +17,7 @@ export interface ExecProjectRow {
     ragNote?: string;
     pmName?: string;
     score: number; // 0-100 sağlık skoru
+    scored: boolean; // teklif aşamasındaki proje skorlanmaz (ekranda "—")
     band: HealthBand;
     reasons: string[];
     spi: number | null;
@@ -48,6 +49,7 @@ export const buildExecProjectRows = (ws: WorkspaceData, year: number, now: Date 
             ragNote: r.ragNote,
             pmName: p?.pmPersonId ? people.get(p.pmPersonId) : undefined,
             score: h?.score ?? 100,
+            scored: !!h,
             band: h?.band ?? 'good',
             reasons: h?.reasons ?? [],
             spi: h?.spi ?? null,
@@ -71,8 +73,9 @@ export interface HealthDistribution {
 }
 
 export const healthDistribution = (rows: ExecProjectRow[]): HealthDistribution => {
-    const d = { bad: 0, warn: 0, good: 0, total: rows.length };
-    rows.forEach(r => { d[r.band]++; });
+    const scored = rows.filter(r => r.scored);
+    const d = { bad: 0, warn: 0, good: 0, total: scored.length };
+    scored.forEach(r => { d[r.band]++; });
     return d;
 };
 

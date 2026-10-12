@@ -5,7 +5,7 @@ import { buildCostReport } from '../costing';
 import { CATEGORY_LABELS, analyzeDataHealth } from '../dataHealth';
 import { departmentScorecards, orgCapacity } from '../deptScorecard';
 import { buildPortfolioEVM, buildProjectEVM, defaultStatusMonth, ProjectEVM } from '../evm';
-import { attentionItems, executiveSummary, portfolioHealth, projectHealth } from '../executive';
+import { attentionItems, executiveSummary, isHealthScored, portfolioHealth, projectHealth } from '../executive';
 import { buildForecast, FORECAST_DIM_LABELS, FORECAST_METHOD_LABELS, ForecastDim, ForecastMethod } from '../forecast';
 import { buildPersonProfile } from '../personProfile';
 import { recentChanges } from '../recentChanges';
@@ -229,6 +229,7 @@ export const AI_TOOLS: ToolDef[] = [
                     proje: h.name, skor: h.score, bant: h.band, guven: h.confidence, rag: h.rag ? RAG_TR[h.rag] : undefined,
                     spi: r2(h.spi), cpi: r2(h.cpi), yuksek_risk: h.highRisks, nedenler: h.reasons,
                 })),
+                ...(health.unscored.length ? { skorlanmayan: health.unscored.map(u => `${u.name} (teklif aşamasında)`) } : {}),
                 dikkat_gerektirenler: attn.slice(0, 20).map(i => ({
                     onem: i.severity === 'error' ? 'kritik' : 'uyarı', kategori: i.category,
                     baslik: maskSicil(i.title, ctx.ws.people), detay: maskSicil(i.detail, ctx.ws.people),
@@ -270,7 +271,7 @@ export const AI_TOOLS: ToolDef[] = [
                 proje_yoneticisi: projectPmName(ctx, p.pmPersonId),
                 baslangic: p.settings.projectStartDate,
                 surum_suresi_hafta: p.settings.sprintDuration,
-                saglik: {
+                saglik: !isHealthScored(p) ? { skor: null, not: 'Teklif aşamasında skorlanmaz.' } : {
                     skor: h.score, bant: h.band, guven: h.confidence, kapsam: h.coverage, spi: r2(h.spi), cpi: r2(h.cpi), nedenler: h.reasons,
                     // Skorun girdileri: normalize değer (0-1, null = veri yok), ağırlık ve skordan düşürdüğü puan
                     girdiler: h.factors.map(f => ({ girdi: f.label, deger: f.value, agirlik: f.weight, kayip_puan: f.points, ayrinti: f.detail })),

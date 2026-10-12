@@ -3,7 +3,7 @@ import { Project, ProjectSectionKey, RagStatus, Task, View, WorkspaceData } from
 import { actorLabel } from '../../utils/audit';
 import { getPlanLockStatus } from '../../utils/allocations';
 import { defaultStatusMonth } from '../../utils/evm';
-import { projectHealth } from '../../utils/executive';
+import { isHealthScored, projectHealth } from '../../utils/executive';
 import { objectiveProgress } from '../../utils/goals';
 import { currentSprint, deadlineLabel, overviewStats, teamLoad, upcomingDeadlines } from '../../utils/projectOverview';
 import { recentChanges, relativeTime } from '../../utils/recentChanges';
@@ -85,14 +85,15 @@ const ModernProjectOverview: React.FC<ModernProjectOverviewProps> = ({ workspace
     const [healthInfo, setHealthInfo] = useState(false);
 
     const complete = stats.total > 0 && stats.done === stats.total;
-    // Görevi ve haftalık durumu olmayan projede skor anlamsız
-    const noHealthData = stats.total === 0 && !project.rag;
+    // Görevi ve haftalık durumu olmayan projede ve teklif aşamasında skor anlamsız
+    const proposal = !isHealthScored(project);
+    const noHealthData = proposal || (stats.total === 0 && !project.rag);
     const kpis: { key: string; label: string; value: React.ReactNode; note: string; noteTone: string; run?: () => void; hint?: string; info?: () => void }[] = [
         {
             key: 'health',
             label: 'Proje sağlığı',
             value: noHealthData ? '—' : health.score,
-            note: noHealthData ? 'Henüz veri yok' : [BAND_META[health.band].label, ...(health.band === 'good' ? [] : health.reasons.slice(0, 1)), ...(health.confidence === 'low' ? ['güven düşük'] : [])].join(' · '),
+            note: noHealthData ? (proposal ? 'Teklif aşamasında skorlanmaz' : 'Henüz veri yok') : [BAND_META[health.band].label, ...(health.band === 'good' ? [] : health.reasons.slice(0, 1)), ...(health.confidence === 'low' ? ['güven düşük'] : [])].join(' · '),
             noteTone: noHealthData ? 'm-text-3' : BAND_META[health.band].ink,
             hint: health.reasons.length ? `Skoru düşürenler: ${health.reasons.join(', ')}` : undefined,
             info: () => setHealthInfo(true),

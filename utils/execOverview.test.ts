@@ -37,6 +37,15 @@ describe('buildExecProjectRows', () => {
         expect(red.progressPct).toBe(50);
         expect(red.highRisks).toBe(2);
         expect(rows.find(r => r.projectId === 'green')!.band).toBe('good');
+        expect(rows.every(r => r.scored)).toBe(true);
+    });
+
+    it('teklif aşamasındaki proje satırda kalır ama skorlanmaz ve dağılıma girmez (BL-11)', () => {
+        const ws = buildWs();
+        const bid = createProject('Teklif'); bid.id = 'bid'; bid.status = 'teklif';
+        const rows = buildExecProjectRows({ ...ws, projects: [...ws.projects, bid] }, 2026, NOW);
+        expect(rows.find(r => r.projectId === 'bid')!.scored).toBe(false);
+        expect(healthDistribution(rows).total).toBe(5);
     });
 });
 

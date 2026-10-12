@@ -34,10 +34,14 @@ export interface ProjectHealth {
 }
 
 export interface PortfolioHealth {
-    projects: ProjectHealth[];
+    projects: ProjectHealth[]; // yalnız skorlanan projeler
     orgScore: number;
     orgBand: HealthBand;
+    unscored: { projectId: string; name: string }[]; // teklif aşamasındakiler
 }
+
+/** Teklif aşamasındaki proje skorlanmaz: verisi yoktur, 100 görünmesi "en sağlıklı" diye okunur */
+export const isHealthScored = (project: Pick<Project, 'status'>): boolean => project.status !== 'teklif';
 
 const round = (v: number): number => Math.round(v);
 
@@ -67,9 +71,10 @@ export const projectHealth = (ws: WorkspaceData, project: Project, year: number,
 export const portfolioHealth = (ws: WorkspaceData, year: number, statusMonth?: number, now: Date = new Date()): PortfolioHealth => {
     const sm = statusMonth === undefined ? defaultStatusMonth(year, now) : statusMonth;
     const ctx = buildHealthContext(ws, year, sm, now);
-    const projects = ws.projects.map(p => projectHealth(ws, p, year, sm, now, ctx)).sort((a, b) => a.score - b.score);
+    const projects = ws.projects.filter(isHealthScored).map(p => projectHealth(ws, p, year, sm, now, ctx)).sort((a, b) => a.score - b.score);
     const orgScore = projects.length ? round(projects.reduce((s, p) => s + p.score, 0) / projects.length) : 100;
-    return { projects, orgScore, orgBand: bandOf(orgScore, ctx.settings) };
+    const unscored = ws.projects.filter(p => !isHealthScored(p)).map(p => ({ projectId: p.id, name: p.name }));
+    return { projects, orgScore, orgBand: bandOf(orgScore, ctx.settings), unscored };
 };
 
 // ---------------------------------------------------------------- Dikkat
