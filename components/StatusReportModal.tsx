@@ -17,6 +17,13 @@ const StatusReportModal: React.FC<StatusReportModalProps> = ({ workspace, projec
   const [draft, setDraft] = useState<string | null>(null); // AI öncesi metin (geri dönmek için)
   const ai = useAiRun();
 
+  // Esc ile kapanır (klavye ve ekran okuyucu kullanıcıları için)
+  React.useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
   if (!report) return null;
 
   const handlePolish = async () => {
@@ -60,7 +67,7 @@ const StatusReportModal: React.FC<StatusReportModalProps> = ({ workspace, projec
             <h3 className="text-lg font-semibold text-gray-800 dark:text-white">Haftalık Durum Raporu</h3>
             <p className="text-xs text-gray-400">{report.projectName} · Hafta {report.week}/{report.year} · düzenleyip kopyalayabilirsiniz</p>
           </div>
-          <button onClick={onClose} className="w-9 h-9 rounded-xl text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"><i className="fa-solid fa-times"></i></button>
+          <button onClick={onClose} aria-label="Kapat" title="Kapat" className="w-9 h-9 rounded-xl text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"><i className="fa-solid fa-times" aria-hidden="true"></i></button>
         </div>
 
         <div className="p-6 flex-1 overflow-hidden flex flex-col">

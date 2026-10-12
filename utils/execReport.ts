@@ -8,7 +8,7 @@ import { buildCostReport, CostReport, costPeriodLabel } from './costing';
 import { PortfolioRisk, RISK_BAND_LABELS, RISK_STATUS_LABELS, summarizeRisks, topPortfolioRisks } from './risks';
 import { canFor } from './permissions';
 
-declare const XLSX: any;
+import * as XLSX from 'xlsx';
 
 /** Rolün varsayılan yetkisiyle yönetim ekranını görür mü (kimliğe göre: can(id, 'screen.executive')) */
 export const isExecRole = (role: UserRole | undefined): boolean => canFor(role, 'screen.executive');
@@ -265,10 +265,6 @@ export const buildExecWorkbookData = (report: ExecReport): Record<string, (strin
 
 /** Tarayıcıda XLSX ile .xlsx indirir. */
 export const exportExecReportToExcel = (report: ExecReport): void => {
-    if (typeof XLSX === 'undefined') {
-        alert('Excel kütüphanesi yüklenemedi. İnternet bağlantınızı kontrol edip sayfayı yenileyin.');
-        return;
-    }
     const wb = XLSX.utils.book_new();
     Object.entries(buildExecWorkbookData(report)).forEach(([name, aoa]) => {
         const sheet = XLSX.utils.aoa_to_sheet(aoa);

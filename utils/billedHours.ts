@@ -19,7 +19,7 @@ import { createAllocationId, EffortField, MONTH_INDEXES } from './allocations';
  */
 
 // XLSX, index.html'deki CDN script'inden window üzerinden gelir (poolImporter ile aynı).
-declare const XLSX: any;
+import * as XLSX from 'xlsx';
 
 export const DEFAULT_HOURS_PER_DAY = 8;
 

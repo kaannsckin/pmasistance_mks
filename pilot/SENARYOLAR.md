@@ -28,7 +28,7 @@ Koşular Salı ve Perşembe (1. rutin 07:45, 2. rutin 08:45). Jira ajanı son ko
 
 | Kapı | Ne zaman | Geçme ölçütü | Geçmezse |
 |---|---|---|---|
-| **K0 Kurulum** | 15 Ekim, 1. rutin + 2. rutin sonrası | v4 yeniden kurulum Supabase'de; `senaryo liste` S1, S3, S6, S8, S9, S10'u gösterir; `kontrol` tümü geçti; `demo-testi` GEÇTİ (CDN uyarısı hariç) | 20 Ekim'e kadar kod düzeltmesi; senaryo tarihleri kaydırılır |
+| **K0 Kurulum** | 15 Ekim, 1. rutin + 2. rutin sonrası | v4 yeniden kurulum Supabase'de; `senaryo liste` S1, S3, S6, S8, S9, S10'u gösterir; `kontrol` tümü geçti; `demo-testi` GEÇTİ (dış kaynak uyarısı hariç) | 20 Ekim'e kadar kod düzeltmesi; senaryo tarihleri kaydırılır |
 | **K1 Akış** | 22 Ekim, 2. rutin sonrası | 42. hafta raporları uçtan uca (gönderim → bölüm sorumlusu → PYB destek → yayın) MCP araçlarıyla geçti; her persona en az bir yazma aracını gerekçeli kullandı; S2 kararı uygulamada (istek dönüştü ya da reddedildi); açık yüksek bulgu yok ya da düzeltmesi planlandı | 27 Ekim'e kadar düzeltme; K2 ölçütleri değişmez |
 | **K2 Senaryo** | 5 Kasım, 2. rutin sonrası | S1–S8 başarı ölçütleri (aşağıda) değerlendirildi, en az 6/8 ✓; PY ortalaması ≥ 75; DH1–DH3 ✓; gömülü bulguların en az 3/6'sı bulundu | 2. dalga zayıf senaryonun telafisine ayrılır (S12); demo kapsamı daraltılır |
 | **K3 Dondurma** | 19 Kasım, 2. rutin sonrası | Kod dondurulur (sonrası yalnız demo yolunu bozan hata düzeltmesi); `demo-testi` son 3 koşuda GEÇTİ; S9–S11 değerlendirildi; demo akışı (sunum metni) yazılı; `dondur --ad K3-2026-11-19` | Demo, K3'te çalışan ekranlarla sınırlanır |
@@ -42,7 +42,7 @@ Koşular Salı ve Perşembe (1. rutin 07:45, 2. rutin 08:45). Jira ajanı son ko
 2. *Canlı* kararında 26 Kasım: 1. ve 2. rutin normal çalışır; 2. rutin sonunda `demo-testi`. KALDI ya da kontrol KALDI ise `npm run -s pilot -- geri-yukle --ad K4-2026-11-24` ile geri dönülür ve sunum dondurulmuş yapılır. *Dondurulmuş* kararında 26 Kasım koşuları "Koşu atlandı" der.
 3. Sunum: uygulamaya izleyici hesabıyla girilir ("Buluttan Çek"), müdür görünümüyle (`pilot uyeler --izleyici <e-posta>:mudur`). Demo akışı `demo-testi`nin gezdiği yoldur: Yönetim → Portföy → Ekip ve tahsis › Kapasite–talep → Risk raporu → Haftalık rapor; ardından NEHİR (PY gözüyle).
 4. Canlı an: Ahmet'in demo yoklaması sorularından biri, aynı çalışma alanına bağlı Claude'a (MCP) sunumda sorulur; yanıtın rakamları ekrandakilerle aynıdır.
-5. Sunum makinesinde CDN erişimi (Tailwind, ikonlar, Excel kitaplığı) önceden denenir; kurum ağı engelliyorsa ekran biçimsiz görünür ([backlog](../docs/pilot/BACKLOG.md) BL-08).
+5. Stil, ikon ve Excel kitaplıkları pakete gömülüdür ([BL-08](../docs/pilot/BACKLOG.md)); kurum ağında yalnız Geist yazı tipi (yoksa sistem yazı tipi) ve sekme simgesi dışarıdan gelir. Sunum makinesinde uygulama yine de önceden açılıp denenir.
 
 ## Senaryolar — 1. dalga (15 Ekim–5 Kasım)
 

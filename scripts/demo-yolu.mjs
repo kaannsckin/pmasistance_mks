@@ -45,8 +45,12 @@ const projectByCode = code => workspace.projects.find(p => (p.code || '').starts
 
 /* ---------------- Demo yolu ---------------- */
 
+// Font Awesome ikonunun glifi (::before) düğmenin erişilebilir adına karışır: "<glif> Pano"
+const GLYPH = '^[\\uE000-\\uF8FF\\s]*';
+const g = re => new RegExp(re.source.replace(/^\^/, GLYPH), re.flags);
+
 // Düğme adları klasik ve modern arayüzde farklı: her tıklama bir seçenek listesi
-const R = {
+const R0 = {
     yonetim: /^Yönetim(\s|$)/i,
     portfoy: /^Portföy(\s|$)/i,
     tahsis: /^(Tahsis|Ekip ve tahsis)(\s|$)/i,
@@ -60,6 +64,7 @@ const R = {
     projeRiskleri: /^Riskler$/i,
     durumRaporu: /^Durum Raporu$/i,
 };
+const R = Object.fromEntries(Object.entries(R0).map(([k, re]) => [k, g(re)]));
 
 const escapeRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const healthRe = score => new RegExp(`Portföy sağlığı[^0-9]{0,40}\\b${score}\\b`, 'i');
@@ -82,8 +87,9 @@ const journeys = () => {
         nhr && {
             persona: 'burak', role: 'py', personId: 'p14', activeProjectId: nhr.id,
             adimlar: [
-                // Modern arayüzde proje kenar çubuğundan açılır; klasikte proje çubuğu zaten görünür
-                { ad: `${nhr.name} › Pano`, tikla: [[new RegExp(`^${escapeRe(nhr.name)}`), R.pano], [R.pano]], metin: [{ ad: nhr.name, re: new RegExp(nhr.name.split(' ')[0]) }] },
+                // Klasikte proje çubuğu zaten görünür (proje adı düğmesi seçim menüsünü açar, önce Pano denenir);
+                // modern arayüzde proje kenar çubuğundan açılır
+                { ad: `${nhr.name} › Pano`, tikla: [[R.pano, g(new RegExp(`^${escapeRe(nhr.name)}`))], [R.pano]], metin: [{ ad: nhr.name, re: new RegExp(nhr.name.split(' ')[0]) }] },
                 { ad: `${nhr.name} › Görevler`, tikla: [[R.gorevler]], metin: [] },
                 { ad: `${nhr.name} › Riskler`, tikla: [[R.projeRiskleri]], metin: [] },
                 { ad: `${nhr.name} › Durum Raporu`, tikla: [[R.durumRaporu]], istege: true, metin: [] },
@@ -131,9 +137,9 @@ const startServer = async () => {
 const chromiumPath = () => [process.env.PW_CHROMIUM, '/opt/pw-browsers/chromium'].find(p => p && existsSync(p));
 
 /**
- * Uygulama Tailwind, ikon ve Excel kitaplıklarını CDN'den yükler. Vekil
- * sunucu arkasında (bulut oturumu) tarayıcı da vekili kullanır; yerel
- * önizleme sunucusu vekilden geçmez.
+ * Stil, ikon ve Excel/CSV kitaplıkları pakete gömülüdür (BL-08); dışarıdan
+ * yalnız yazı tipi ve sekme simgesi gelir. Vekil sunucu arkasında (bulut
+ * oturumu) tarayıcı da vekili kullanır; yerel önizleme sunucusu vekilden geçmez.
  */
 const proxyArgs = () => {
     const server = process.env.HTTPS_PROXY || process.env.https_proxy;
@@ -199,7 +205,7 @@ const main = async () => {
                 page.on('pageerror', e => errors.push(`sayfa: ${e.message}`));
                 page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(`konsol: ${m.text().slice(0, 300)}`); });
                 page.on('dialog', d => d.dismiss());
-                // CDN'den gelen stil ve kitaplıklar: yüklenmezse ekran biçimsiz ya da dışa aktarma bozuk olur
+                // Dış kaynaklar (yazı tipi, sekme simgesi): yüklenmezse rapora not düşülür
                 const external = url => !url.startsWith(server.url) && /^https?:/.test(url);
                 page.on('requestfailed', q => { if (external(q.url())) externalFails.add(new URL(q.url()).host); });
                 page.on('response', q => { if (external(q.url()) && q.status() >= 400) externalFails.add(`${new URL(q.url()).host} (${q.status()})`); });
@@ -244,6 +250,9 @@ const main = async () => {
                         r.ekran = file;
                     }
                     results.push(r);
+                    // Adımın açtığı pencere ya da menü sonraki tıklamayı engellemesin (sunumda da kapatılır)
+                    await page.keyboard.press('Escape');
+                    await page.waitForTimeout(200);
                     process.stderr.write(`${r.durum.padEnd(7)} ${style} ${j.persona} ${a.ad}${r.notlar.length ? ` — ${r.notlar.join('; ')}` : ''}\n`);
                 }
                 await ctx.close();

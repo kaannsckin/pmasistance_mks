@@ -7,7 +7,7 @@ import { RiskBand, riskBand, RISK_BAND_LABELS, riskScore, RISK_STATUS_LABELS } f
  * çağıran tarafından verilir.
  */
 
-declare const XLSX: any;
+import * as XLSX from 'xlsx';
 
 export interface ReportRisk extends Risk {
     projectId: string;
@@ -162,10 +162,6 @@ export const projectSummarySheet = (groups: ProjectRiskGroup[]): (string | numbe
 ];
 
 export const exportRiskReportToExcel = (rows: ReportRisk[]): void => {
-    if (typeof XLSX === 'undefined') {
-        alert('Excel kütüphanesi yüklenemedi. İnternet bağlantınızı kontrol edip sayfayı yenileyin.');
-        return;
-    }
     const wb = XLSX.utils.book_new();
     const sheets: [string, (string | number)[][], number[]][] = [
         ['Proje özeti', projectSummarySheet(groupByProject(rows)), [32, 10, 9, 9, 9, 14, 40, 10]],

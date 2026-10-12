@@ -5,7 +5,7 @@ import FilterDropdown from './FilterDropdown';
 import CostManager from './CostManager';
 import { exportResourcePlanToExcel } from '../utils/exporter';
 
-declare const XLSX: any;
+import * as XLSX from 'xlsx';
 
 interface ResourceManagerProps {
   resources: Resource[];

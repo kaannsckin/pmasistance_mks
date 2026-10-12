@@ -189,7 +189,7 @@ Yanıtlanan mesajlar yanıtlanmış sayılır; yanıtsız kalanlar sonraki koşu
 npm run -s pilot -- demo-testi
 ```
 
-Tarayıcıda (Chromium) müdür, PY, bölüm sorumlusu ve PYB destek gözüyle demo ekranlarını klasik ve modern arayüzde gezer; portföy sağlığının MCP'deki değerle aynı olduğunu denetler. Çıktı `pilot-data/demo-testi/$GUN/sonuc.md` (kalan adımların ekran görüntüsüyle). KALDI her adım en az "orta" bulgudur; demo yolunu bozan adım "yüksek". "Dış kaynak yüklenemedi" uyarısı bu ortamın ağ kısıtıdır (CDN); bulgu değil, raporda bir satır not. Komut tarayıcı bulunamadığı için çalışmazsa hatayı aynen yaz; DH7 ✗.
+Tarayıcıda (Chromium) müdür, PY, bölüm sorumlusu ve PYB destek gözüyle demo ekranlarını klasik ve modern arayüzde gezer; portföy sağlığının MCP'deki değerle aynı olduğunu denetler. Çıktı `pilot-data/demo-testi/$GUN/sonuc.md` (kalan adımların ekran görüntüsüyle). KALDI her adım en az "orta" bulgudur; demo yolunu bozan adım "yüksek". "Dış kaynak yüklenemedi" uyarısı (yazı tipi, sekme simgesi) bu ortamın ağ kısıtıdır; bulgu değil, raporda bir satır not. Stil ve kitaplıklar pakete gömülüdür: ekran biçimsiz görünüyorsa bu bir bulgudur. Komut tarayıcı bulunamadığı için çalışmazsa hatayı aynen yaz; DH7 ✗.
 
 ## 6. Kapı (yalnız kapı günlerinde)
 

@@ -151,7 +151,7 @@ gantt
 
 | Kapı | Ne zaman | Geçme ölçütü | Geçmezse |
 | --- | --- | --- | --- |
-| K0 Kurulum | 15 Ekim, iki rutin sonrası | v4 yeniden kurulum Supabase'de; `senaryo liste` S1, S3, S6, S8, S9, S10'u gösterir; `kontrol` tümü geçti; `demo-testi` GEÇTİ (CDN uyarısı hariç) | 20 Ekim'e kadar kod düzeltmesi; senaryo tarihleri kaydırılır |
+| K0 Kurulum | 15 Ekim, iki rutin sonrası | v4 yeniden kurulum Supabase'de; `senaryo liste` S1, S3, S6, S8, S9, S10'u gösterir; `kontrol` tümü geçti; `demo-testi` GEÇTİ (dış kaynak uyarısı hariç) | 20 Ekim'e kadar kod düzeltmesi; senaryo tarihleri kaydırılır |
 | K1 Akış | 22 Ekim, 2. rutin sonrası | 42. hafta raporları uçtan uca (gönderim → bölüm sorumlusu → PYB destek → yayın) MCP araçlarıyla geçti; her persona en az bir yazma aracını gerekçeli kullandı; S2 kararı uygulamada; açık yüksek bulgu yok ya da düzeltmesi planlandı | 27 Ekim'e kadar düzeltme; K2 ölçütleri değişmez |
 | K2 Senaryo | 5 Kasım, 2. rutin sonrası | S1–S8'in en az 6'sı başarı ölçütüne ulaştı; PY ortalaması ≥ 75; DH1–DH3 sağlanıyor; gömülü bulguların en az 3/6'sı bulundu | 2. dalga zayıf senaryonun telafisine ayrılır (S12); demo kapsamı daraltılır |
 | K3 Dondurma | 19 Kasım, 2. rutin sonrası | Kod dondurulur (sonrası yalnız demo yolunu bozan hata düzeltmesi); `demo-testi` son 3 koşuda GEÇTİ; S9–S11 değerlendirildi; demo akışı yazılı; `dondur --ad K3-2026-11-19` | Demo, K3'te çalışan ekranlarla sınırlanır |
@@ -236,7 +236,7 @@ Müdürün üç sorusu demonun da omurgasıdır: "Bu hafta hangi proje dikkatimi
 3. Canlı kararında 26 Kasım koşusu `kontrol` ve `demo-testi` ile biter; biri KALDI ise `geri-yukle --ad K4-2026-11-24` ile geri dönülür ve sunum dondurulmuş yapılır.
 4. Sunum: uygulamaya izleyici hesabıyla, müdür görünümüyle girilir ("Buluttan Çek"). Demo akışı `demo-testi`nin gezdiği yoldur: Yönetim → Portföy → Ekip ve tahsis › Kapasite–talep → Risk raporu → Haftalık rapor; ardından NEHİR, PY gözüyle.
 5. Canlı an: Ahmet'in demo yoklaması sorularından biri aynı çalışma alanına bağlı Claude'a (MCP) sunumda sorulur; yanıtın rakamları ekrandakilerle aynıdır.
-6. Sunum makinesinde CDN erişimi (Tailwind, ikonlar, Excel kitaplığı) önceden denenir; kurum ağı engelliyorsa ekran biçimsiz görünür (BL-08).
+6. Stil, ikon ve Excel kitaplıkları pakete gömülüdür (BL-08); dışarıdan yalnız yazı tipi ve sekme simgesi gelir. Sunum makinesinde uygulama yine de önceden açılıp denenir.
 
 ## Açıklar ve geliştirmeler
 
