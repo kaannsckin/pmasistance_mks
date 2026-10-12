@@ -7,7 +7,7 @@ Uygulamayı, gerçek veri olmadan, "kullanılıyormuş gibi" sınamak için iki 
 | **1. Jira ajanı** (Salı + Perşembe 07:45) | Son koşudan bu yana geçen günleri üretir. **Sahte Jira**: yeni kayıt, işe başlama, worklog, kapanış, yeniden açılma; gerçek Jira REST API'siyle aynı biçimde. Ayrıca Confluence tarzı toplantı/karar notları, arka plandaki birim (haftalık rapor akışı, ay başı gerçekleşen adam-ay, KALKAN'ın PY'si), ara sıra müşteri isteği ve yönetimden beklenti. Yapay zekâ günün akışına uygun notlar ekler. | [`RUTIN_1_VERI.md`](./RUTIN_1_VERI.md) |
 | **2. Rol ajanları** (Salı + Perşembe 08:45) | Otomatik kontroller; sonra 5 rol ajanı uygulamayı MCP üzerinden kendi rolleriyle **koşu başına bir kez, üç aşamada** kullanır: önce PY'ler, sonra bölüm sorumlusu ve PYB destek, en son müdür. PY'ler koşuya Jira'dan aktarımla başlar (`jira_aktar`), Perşembe haftalık raporu yazar. Koordinatör ön puan önerir, kullanıcı puanı ajanlara geri döner; karar "demoya hazır mı?" sorusuna verilir. | [`RUTIN_2_KULLANICILAR.md`](./RUTIN_2_KULLANICILAR.md) |
 
-Senaryo takvimi, ara kapılar (K0–K4) ve demo günü protokolü: [`SENARYOLAR.md`](./SENARYOLAR.md) (yalnız Jira ajanı ve koordinatör okur). Kod dalı `claude/nice-cerf-r9wv1r` (main + PR #49 + pilot v3).
+Senaryo takvimi, ara kapılar (K0–K4) ve demo günü protokolü: [`SENARYOLAR.md`](./SENARYOLAR.md) (yalnız Jira ajanı ve koordinatör okur). Pilot notu, danışman raporu, sistem tasarımı ve backlog (ana kopya): [`docs/pilot/`](../docs/pilot/README.md). Kod dalı `claude/nice-cerf-r9wv1r` (main + PR #49 + pilot v3).
 
 ## Sistem tasarımı
 

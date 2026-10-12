@@ -42,7 +42,7 @@ Koşular Salı ve Perşembe (1. rutin 07:45, 2. rutin 08:45). Jira ajanı son ko
 2. *Canlı* kararında 26 Kasım: 1. ve 2. rutin normal çalışır; 2. rutin sonunda `demo-testi`. KALDI ya da kontrol KALDI ise `npm run -s pilot -- geri-yukle --ad K4-2026-11-24` ile geri dönülür ve sunum dondurulmuş yapılır. *Dondurulmuş* kararında 26 Kasım koşuları "Koşu atlandı" der.
 3. Sunum: uygulamaya izleyici hesabıyla girilir ("Buluttan Çek"), müdür görünümüyle (`pilot uyeler --izleyici <e-posta>:mudur`). Demo akışı `demo-testi`nin gezdiği yoldur: Yönetim → Portföy → Ekip ve tahsis › Kapasite–talep → Risk raporu → Haftalık rapor; ardından NEHİR (PY gözüyle).
 4. Canlı an: Ahmet'in demo yoklaması sorularından biri, aynı çalışma alanına bağlı Claude'a (MCP) sunumda sorulur; yanıtın rakamları ekrandakilerle aynıdır.
-5. Sunum makinesinde CDN erişimi (Tailwind, ikonlar, Excel kitaplığı) önceden denenir; kurum ağı engelliyorsa ekran biçimsiz görünür (backlog BL-08).
+5. Sunum makinesinde CDN erişimi (Tailwind, ikonlar, Excel kitaplığı) önceden denenir; kurum ağı engelliyorsa ekran biçimsiz görünür ([backlog](../docs/pilot/BACKLOG.md) BL-08).
 
 ## Senaryolar — 1. dalga (15 Ekim–5 Kasım)
 
@@ -97,4 +97,4 @@ Veride bilerek bırakılmış, gerçek bir birimde de görülen sorunlar. Ajanı
 | G4 | NEHİR algı farkı: RAG "Riskli", kurallara göre "Kritik" | Ahmet, Mert, Selin | `proje_detayi` › `algi_farki` |
 | G5 | Burak'ın geçmiş haftalarda iyimser RAG verme eğilimi | Selin, Ahmet | RAG geçmişi, `son_degisiklikler` |
 | G6 | YILDIZ teklif planı Kasım'da U320'yi (Hakan Öztürk, Barış Güneş, Merve Aslan) kapasite üstüne çıkarıyor — S8'den önce bile | Selin | `doluluk_analizi`, `kapasite_talep` |
-| G7 | Ay ortasında Ekim CPI'sı şişkin görünüyor (gerçekleşen ay kapanışında girildiği için; bilinen ürün açığı BL-07) | Mert, Ahmet | `evm_analizi` ↔ `jira_worklog` |
+| G7 | Ay ortasında Ekim CPI'sı şişkin görünüyor (gerçekleşen ay kapanışında girildiği için; bilinen ürün açığı [BL-07](../docs/pilot/BACKLOG.md)) | Mert, Ahmet | `evm_analizi` ↔ `jira_worklog` |
