@@ -9,7 +9,7 @@ import { attentionItems, executiveSummary, portfolioHealth, projectHealth } from
 import { buildForecast, FORECAST_DIM_LABELS, FORECAST_METHOD_LABELS, ForecastDim, ForecastMethod } from '../forecast';
 import { buildPersonProfile } from '../personProfile';
 import { recentChanges } from '../recentChanges';
-import { buildRoleAnalysis, summarizeGaps } from '../roleAnalysis';
+import { buildRoleAnalysis, summarizeGaps, UNASSIGNED_ROLE } from '../roleAnalysis';
 import { RISK_BAND_LABELS, RISK_STATUS_LABELS, riskBand, riskScore, summarizeRisks } from '../risks';
 import { allPersonRoles, findAvailablePeople } from '../staffing';
 import { buildStatusReport } from '../statusReport';
@@ -309,7 +309,7 @@ export const AI_TOOLS: ToolDef[] = [
                 kisi: S.str('Atanan kişinin adı (kısmi olabilir).'),
                 geciken: S.bool('Yalnızca bitiş tarihi geçmiş ve tamamlanmamış görevler.'),
                 oncelik: S.str('Öncelik.', ['Blocker', 'High', 'Medium', 'Low']),
-                metin: S.str('Görev adında / açıklamasında geçen metin.'),
+                metin: S.str('Görev adında / açıklamasında ya da Jira anahtarında (ör. MKS-12) geçen metin.'),
                 limit: P.limit,
             }),
         },
@@ -327,7 +327,7 @@ export const AI_TOOLS: ToolDef[] = [
                     if (str(a.oncelik) && t.priority !== a.oncelik) return;
                     if (a.geciken === true && !isOverdue(t, ctx.now)) return;
                     if (kisi && !norm(t.resourceName || '').includes(kisi)) return;
-                    if (metin && !norm(`${t.name} ${t.notes || ''}`).includes(metin)) return;
+                    if (metin && !norm(`${t.jiraId || ''} ${t.name} ${t.notes || ''}`).includes(metin)) return;
                     total++;
                     if (rows.length < limit) rows.push(taskRow(t, ctx, p.name, wpNames));
                 });
@@ -518,9 +518,15 @@ export const AI_TOOLS: ToolDef[] = [
             let rows = buildRoleAnalysis(ctx.ws.allocations, ctx.ws.people, ctx.ws.projects, year, ctx.ws.leaves || []);
             if (dept) rows = rows.filter(r => r.departmentCode === dept);
             const gaps = summarizeGaps(rows);
+            // Rolü girilmemiş tahsis satırlarının talebi hiçbir rol kapasitesiyle eşleşmez → açık şişer
+            const demand = rows.reduce((s, r) => s + r.totals.planned + r.totals.proposal, 0);
+            const unassigned = rows.filter(r => r.role === UNASSIGNED_ROLE).reduce((s, r) => s + r.totals.planned + r.totals.proposal, 0);
             if (a.sadece_acik !== false) rows = rows.filter(r => r.totals.gap > 0);
             return {
                 yil: year, bolum: dept, acigi_olan_rol: gaps.rolesWithGap, toplam_acik_aa: gaps.totalGapAA,
+                ...(unassigned > 0 ? {
+                    uyari: `Planlı talebin %${Math.round((unassigned / demand) * 100)}'i (${r2(unassigned)} AA) rolü girilmemiş tahsis satırlarında; bu talep hiçbir rolün kapasitesiyle eşleşmediği için "${UNASSIGNED_ROLE}" satırında açık görünür. İşe alım kararından önce Tahsis Tablosu'nda satırlara rol girilmeli.`,
+                } : {}),
                 satirlar: rows.sort((x, y) => y.totals.gap - x.totals.gap).slice(0, 30).map(r => ({
                     bolum: r.departmentCode, rol: r.role, planli_proje_aa: r2(r.totals.planned), kapasite_aa: r2(r.totals.capacity),
                     teklif_ihtiyaci_aa: r2(r.totals.proposal), acik_aa: r2(r.totals.gap),
@@ -887,6 +893,105 @@ const PROPOSAL_TOOLS: ToolDef[] = [
             const rag = str(a.rag) as RagStatus;
             if (!['green', 'amber', 'red'].includes(rag)) throw new ToolError('rag green, amber ya da red olmalı.');
             return propose(ctx, { type: 'rag_guncelle', projectId: project.id, rag, ragNote: str(a.not) || undefined });
+        },
+    },
+    {
+        label: 'Risk güncelleme önerisi',
+        writeOnly: true,
+        spec: {
+            name: 'oner_risk_guncelle',
+            description: 'Var olan riski güncellemeyi ya da kapatmayı ÖNERİR (onaysız uygulanmaz). Aynı riski yeniden ekleme; bunu kullan.',
+            parameters: S.obj({
+                proje: P.project,
+                risk: S.str('Risk başlığı (kısmi).'),
+                durum: S.str('', ['open', 'monitoring', 'closed']),
+                olasilik: S.int('1-5'),
+                etki: S.int('1-5'),
+                aksiyon: S.str('Azaltıcı aksiyon'),
+                sahip: S.str('Ad soyad'),
+                gerekce: S.str('Denetim kaydına yazılır'),
+            }, ['risk']),
+        },
+        run: (a, ctx) => {
+            const project = resolveProject(ctx, a.proje);
+            const hits = matchByText(project.risks || [], str(a.risk), r => [r.title]);
+            if (hits.length === 0) throw new ToolError(`"${str(a.risk)}" adlı risk ${project.name} projesinde bulunamadı.`);
+            if (hits.length > 1) throw new ToolError(`"${str(a.risk)}" birden fazla riskle eşleşti: ${hits.slice(0, 8).map(r => r.title).join(', ')}.`);
+            const status = str(a.durum);
+            if (status && !['open', 'monitoring', 'closed'].includes(status)) throw new ToolError('durum open, monitoring ya da closed olmalı.');
+            const given = (v: unknown) => v !== undefined && v !== null && v !== '';
+            const owner = str(a.sahip) ? resolvePerson(ctx, a.sahip) : undefined;
+            return propose(ctx, {
+                type: 'risk_guncelle', projectId: project.id, riskId: hits[0].id,
+                ...(status ? { status: status as RiskStatus } : {}),
+                ...(given(a.olasilik) ? { probability: level(a.olasilik, 'Olasılık') } : {}),
+                ...(given(a.etki) ? { impact: level(a.etki, 'Etki') } : {}),
+                ...(a.aksiyon !== undefined ? { mitigation: str(a.aksiyon) } : {}),
+                ...(owner ? { ownerPersonId: owner.id } : {}),
+                ...(str(a.gerekce) ? { reason: str(a.gerekce) } : {}),
+            });
+        },
+    },
+    {
+        label: 'Müşteri isteği kararı önerisi',
+        writeOnly: true,
+        privateOnly: true,
+        spec: {
+            name: 'oner_istek_karari',
+            description: 'Yeni müşteri isteğini karara bağlamayı ÖNERİR (onaysız uygulanmaz). kabul: istekten görev açılır; ret: istek reddedilir. Gerekçe proje notuna yazılır.',
+            parameters: S.obj({
+                proje: P.project,
+                istek: S.str('İstek başlığı (kısmi).'),
+                karar: S.str('', ['kabul', 'ret']),
+                gerekce: S.str('Kapsam, efor, takvim etkisi'),
+                tarih: S.str('YYYY-AA-GG'),
+                oncelik: S.str('Kabulde görev önceliği', ['Blocker', 'High', 'Medium', 'Low']),
+                atanan: S.str('Ad soyad'),
+                bitis: S.str('YYYY-AA-GG'),
+                efor_gun: S.num('Tahmini efor (gün)'),
+            }, ['istek', 'karar', 'gerekce']),
+        },
+        run: (a, ctx) => {
+            const project = resolveProject(ctx, a.proje);
+            const open = (project.customerRequests || []).filter(r => r.status === 'New');
+            const hits = matchByText(open, str(a.istek), r => [r.title]);
+            if (hits.length === 0) throw new ToolError(`"${str(a.istek)}" adlı karar bekleyen istek ${project.name} projesinde bulunamadı.`);
+            if (hits.length > 1) throw new ToolError(`"${str(a.istek)}" birden fazla istekle eşleşti: ${hits.slice(0, 8).map(r => r.title).join(', ')}.`);
+            const decision = str(a.karar);
+            if (decision !== 'kabul' && decision !== 'ret') throw new ToolError('karar kabul ya da ret olmalı.');
+            const person = str(a.atanan) ? resolvePerson(ctx, a.atanan) : undefined;
+            const pr = str(a.oncelik);
+            const effort = days(a.efor_gun);
+            return propose(ctx, {
+                type: 'istek_karari', projectId: project.id, requestId: hits[0].id, decision, reason: str(a.gerekce), day: str(a.tarih) || undefined,
+                ...(decision === 'kabul' ? {
+                    task: {
+                        priority: (['Blocker', 'High', 'Medium', 'Low'].includes(pr) ? pr : 'Medium') as Task['priority'],
+                        resourceName: person ? personName(person) : undefined,
+                        dueDate: str(a.bitis) || undefined,
+                        // Tek nokta tahmini: iyimser/kötümser bilinmiyor (görev formunda olduğu gibi 0)
+                        time: effort > 0 ? { best: 0, avg: effort, worst: 0 } : undefined,
+                    },
+                } : {}),
+            });
+        },
+    },
+    {
+        label: 'Not önerisi',
+        writeOnly: true,
+        privateOnly: true,
+        spec: {
+            name: 'oner_not_ekle',
+            description: 'Proje notu (Günlük) eklemeyi ÖNERİR (onaysız uygulanmaz): karar, aksiyon. #etiket, @kişi, [ ] yapılacak.',
+            parameters: S.obj({
+                proje: P.project,
+                metin: S.str(''),
+                tarih: S.str('YYYY-AA-GG'),
+            }, ['metin']),
+        },
+        run: (a, ctx) => {
+            const project = resolveProject(ctx, a.proje);
+            return propose(ctx, { type: 'not_ekle', projectId: project.id, content: str(a.metin), day: str(a.tarih) || undefined });
         },
     },
     {
