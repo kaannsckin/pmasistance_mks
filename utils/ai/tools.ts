@@ -1,7 +1,7 @@
 import { PermissionKey, ProjectStatus, RagStatus, RiskStatus, Task, TaskStatus } from '../../types';
 import { getPlanLockStatus, MONTH_INDEXES, ROLE_LABELS, summarizeByProject } from '../allocations';
 import { AUDIT_ACTION_LABELS } from '../audit';
-import { buildCostReport } from '../costing';
+import { buildCostReport, costPeriodLabel } from '../costing';
 import { CATEGORY_LABELS, analyzeDataHealth } from '../dataHealth';
 import { departmentScorecards, orgCapacity } from '../deptScorecard';
 import { buildPortfolioEVM, buildProjectEVM, defaultStatusMonth, ProjectEVM } from '../evm';
@@ -636,20 +636,21 @@ export const AI_TOOLS: ToolDef[] = [
         label: 'Maliyet raporu',
         spec: {
             name: 'maliyet_raporu',
-            description: 'Tahsis × ünvan aylık maliyetinden (TL) plan ve gerçekleşen maliyet: toplam, aylık, proje ve bölüm bazında; maliyetlenemeyen (ünvanı/oranı eksik) kişi sayısı.',
+            description: 'Tahsis × ünvan aylık maliyetinden (TL) yıllık plan, gerçekleşen ve sapma (gerçekleşeni girilmiş son aya kadarki planla): toplam, aylık, proje ve bölüm bazında; maliyetlenemeyen kişi sayısı.',
             parameters: S.obj({ yil: P.year, proje: S.str('Proje adı ya da kodu (isteğe bağlı).') }),
         },
         run: (a, ctx) => {
             const year = resolveYear(ctx, a.yil);
             const c = buildCostReport(ctx.ws, year);
-            const row = (r: typeof c.byProject[number]) => ({ ad: r.label, plan_tl: r.planCost, gerceklesen_tl: r.actualCost, sapma_tl: r.varianceCost });
+            const row = (r: typeof c.byProject[number]) => ({ ad: r.label, plan_tl: r.planCost, donem_plan_tl: r.periodPlanCost, gerceklesen_tl: r.actualCost, sapma_tl: r.varianceCost });
+            const donem = costPeriodLabel(c.periodEndMonth);
             if (str(a.proje)) {
                 const p = resolveProject(ctx, a.proje, { anyProject: true });
                 const r = c.byProject.find(x => x.key === p.id);
-                return r ? { yil: year, proje: p.name, ...row(r) } : { yil: year, proje: p.name, not: 'Bu proje için maliyetlenebilir tahsis yok.' };
+                return r ? { yil: year, proje: p.name, sapma_donemi: donem, ...row(r) } : { yil: year, proje: p.name, not: 'Bu proje için maliyetlenebilir tahsis yok.' };
             }
             return {
-                yil: year, plan_tl: c.totalPlanCost, gerceklesen_tl: c.totalActualCost, sapma_tl: c.totalVarianceCost,
+                yil: year, sapma_donemi: donem, plan_tl: c.totalPlanCost, donem_plan_tl: c.totalPeriodPlanCost, gerceklesen_tl: c.totalActualCost, sapma_tl: c.totalVarianceCost,
                 aylik_plan_tl: c.monthlyPlanCost, aylik_gerceklesen_tl: c.monthlyActualCost,
                 projeler: c.byProject.slice(0, 30).map(row), bolumler: c.byDepartment.map(row),
                 maliyetlenemeyen_kisi_sayisi: c.uncostedPeople.length, maliyetli_unvan_sayisi: c.costedTitleCount,

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildCostReport, fmtTL } from './costing';
+import { buildCostReport, costPeriodLabel, fmtTL } from './costing';
 import { createEmptyWorkspace, createProject } from './workspace';
 import { WorkspaceData } from '../types';
 
@@ -41,7 +41,27 @@ describe('buildCostReport', () => {
         expect(r.monthlyActualCost[0]).toBe(90000);
         expect(r.totalPlanCost).toBe(190000);
         expect(r.totalActualCost).toBe(90000);
-        expect(r.totalVarianceCost).toBe(-100000);
+        // Sapma yalnız gerçekleşeni girilmiş Ocak'ın planıyla: 90k − 140k (Şubat planı sayılmaz)
+        expect(r.periodEndMonth).toBe(1);
+        expect(r.totalPeriodPlanCost).toBe(140000);
+        expect(r.totalVarianceCost).toBe(-50000);
+    });
+
+    it('sapma aynı dönemle kıyaslanır: kapanmamış ayların planı sapmaya girmez (BL-09)', () => {
+        const ws = buildWs();
+        // 9 ay plan 1 AA, gerçekleşen 8 ay girilmiş (Eylül kapanmamış), Ekim–Aralık yalnız plan
+        const plan = Object.fromEntries([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(m => [m, 1]));
+        const actual = Object.fromEntries([1, 2, 3, 4, 5, 6, 7, 8].map(m => [m, 1]));
+        ws.allocations = [{ id: 'y', personId: 'k1', projectId: ws.projects[0].id, year: 2026, plan, actual }];
+        const r = buildCostReport(ws, 2026);
+        expect(r.totalPlanCost).toBe(1200000);
+        expect(r.periodEndMonth).toBe(8);
+        expect(r.totalPeriodPlanCost).toBe(800000);
+        expect(r.totalVarianceCost).toBe(0); // eskiden −400 000: yıllık plan × 8 ay gerçekleşen
+        expect(r.byProject[0]).toMatchObject({ planCost: 1200000, periodPlanCost: 800000, actualCost: 800000, varianceCost: 0 });
+        expect(costPeriodLabel(r.periodEndMonth)).toBe('Oca–Ağu');
+        expect(costPeriodLabel(1)).toBe('Oca');
+        expect(costPeriodLabel(0)).toBe('—');
     });
 
     it('proje ve bölüm kırılımı doğru; plan maliyetine göre sıralı', () => {
