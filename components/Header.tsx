@@ -68,7 +68,7 @@ const TodoBell: React.FC<{ items: TodoItem[]; onNavigate: (item: TodoItem) => vo
         className="w-10 h-10 flex items-center justify-center bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500 transition-colors relative"
         title="Yapılacaklar ve hatırlatıcılar"
       >
-        <i className="fa-solid fa-bell text-[13px] text-gray-400"></i>
+        <i aria-hidden="true" className="fa-solid fa-bell text-[13px] text-gray-400"></i>
         {badge > 0 && (
           <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center border border-white dark:border-gray-700">
             {badge > 9 ? '9+' : badge}
@@ -85,7 +85,7 @@ const TodoBell: React.FC<{ items: TodoItem[]; onNavigate: (item: TodoItem) => vo
             </div>
             {items.length === 0 ? (
               <div className="px-3.5 py-6 text-center">
-                <i className="fa-solid fa-circle-check text-emerald-400 text-2xl mb-2"></i>
+                <i aria-hidden="true" className="fa-solid fa-circle-check text-emerald-400 text-2xl mb-2"></i>
                 <p className="text-xs text-gray-400">Bekleyen bir iş yok. Temiz!</p>
               </div>
             ) : (
@@ -96,7 +96,7 @@ const TodoBell: React.FC<{ items: TodoItem[]; onNavigate: (item: TodoItem) => vo
                   className="w-full flex items-start gap-2.5 px-3.5 py-2.5 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors border-t border-gray-50 dark:border-gray-700/60 first:border-t-0"
                 >
                   <span className="mt-1 w-2 h-2 rounded-full flex-none" style={{ backgroundColor: TODO_SEVERITY[item.severity].dot }}></span>
-                  <i className={`fa-solid ${item.icon} text-[11px] mt-0.5 flex-none ${TODO_SEVERITY[item.severity].text}`}></i>
+                  <i aria-hidden="true" className={`fa-solid ${item.icon} text-[11px] mt-0.5 flex-none ${TODO_SEVERITY[item.severity].text}`}></i>
                   <span className="text-xs text-gray-700 dark:text-gray-200 leading-snug">{item.text}</span>
                 </button>
               ))
@@ -146,7 +146,7 @@ const WorkspaceNavItem: React.FC<{
       }`}
       style={active ? { backgroundColor: 'var(--app-primary)' } : {}}
     >
-      <i className={`fa-solid ${icon} text-[11px] ${active ? 'text-white' : ''}`} style={!active ? { color: 'var(--app-primary)', opacity: 0.75 } : {}}></i>
+      <i aria-hidden="true" className={`fa-solid ${icon} text-[11px] ${active ? 'text-white' : ''}`} style={!active ? { color: 'var(--app-primary)', opacity: 0.75 } : {}}></i>
       {/* Dar masaüstünde yalnız ikon (menü taşmasın) */}
       <span className="hidden xl:inline">{label}</span>
     </button>
@@ -175,7 +175,7 @@ const ProjectTab: React.FC<{
       }`}
       style={active ? { color: 'var(--app-primary)' } : {}}
     >
-      <i className={`fa-solid ${icon} text-[10px]`}></i>
+      <i aria-hidden="true" className={`fa-solid ${icon} text-[10px]`}></i>
       <span>{label}</span>
     </button>
   );
@@ -201,7 +201,7 @@ const ProjectSwitcher: React.FC<{
         <span className="text-sm font-semibold text-gray-800 dark:text-gray-100 truncate">
           {active ? active.name : 'Proje seç'}
         </span>
-        <i className={`fa-solid fa-chevron-down text-[9px] text-gray-400 flex-none transition-transform group-hover:text-gray-600 ${isOpen ? 'rotate-180' : ''}`}></i>
+        <i aria-hidden="true" className={`fa-solid fa-chevron-down text-[9px] text-gray-400 flex-none transition-transform group-hover:text-gray-600 ${isOpen ? 'rotate-180' : ''}`}></i>
       </button>
       {isOpen && (
         <>
@@ -217,7 +217,7 @@ const ProjectSwitcher: React.FC<{
               >
                 <span className="w-2 h-2 rounded-full flex-none" style={{ backgroundColor: p.rag ? RAG_DOT[p.rag] : '#cbd5e1' }}></span>
                 <span className="text-sm text-gray-700 dark:text-gray-200 truncate">{p.name}</span>
-                {p.id === activeProjectId && <i className="fa-solid fa-check text-[10px] ml-auto flex-none" style={{ color: 'var(--app-primary)' }}></i>}
+                {p.id === activeProjectId && <i aria-hidden="true" className="fa-solid fa-check text-[10px] ml-auto flex-none" style={{ color: 'var(--app-primary)' }}></i>}
               </button>
             ))}
             <div className="border-t border-gray-100 dark:border-gray-700 mt-1 pt-1">
@@ -226,7 +226,7 @@ const ProjectSwitcher: React.FC<{
                 className="w-full flex items-center gap-2.5 px-3.5 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors text-sm font-medium"
                 style={{ color: 'var(--app-primary)' }}
               >
-                <i className="fa-solid fa-table-cells-large text-[11px]"></i>
+                <i aria-hidden="true" className="fa-solid fa-table-cells-large text-[11px]"></i>
                 <span>Tüm projeler & yeni proje</span>
               </button>
             </div>
@@ -256,13 +256,13 @@ const IdentitySwitcher: React.FC<{
       title="Profil değiştir"
       aria-haspopup="dialog"
     >
-      <i className={`fa-solid ${ROLE_ICONS[currentRole]} text-[11px]`} style={{ color: 'var(--app-primary)' }}></i>
+      <i aria-hidden="true" className={`fa-solid ${ROLE_ICONS[currentRole]} text-[11px]`} style={{ color: 'var(--app-primary)' }}></i>
       <span className="hidden xl:flex flex-col items-start leading-none">
         <span className="text-xs font-medium">{ROLE_LABELS[currentRole]}</span>
         {(scoped || activePerson) && <span className="text-[9px] text-gray-400 mt-0.5">{activePerson ? `${activePerson.name}` : 'kişi seçilmedi'}</span>}
       </span>
-      {needsPerson && <i className="fa-solid fa-triangle-exclamation text-[10px] text-amber-500"></i>}
-      <i className="fa-solid fa-arrow-right-arrow-left text-[9px] text-gray-400"></i>
+      {needsPerson && <i aria-hidden="true" className="fa-solid fa-triangle-exclamation text-[10px] text-amber-500"></i>}
+      <i aria-hidden="true" className="fa-solid fa-arrow-right-arrow-left text-[9px] text-gray-400"></i>
     </button>
   );
 };
@@ -344,7 +344,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSett
                 style={{ backgroundColor: 'var(--app-primary)', boxShadow: `0 12px 24px -8px var(--app-ring), inset 0 2px 4px rgba(255,255,255,0.4)` }}
               >
                 <div className={`relative flex items-center justify-center transition-all duration-200 ${status === 'launching' ? '[animation:hyper-launch_0.8s_cubic-bezier(0.6,0,1,1)_forwards]' : ''}`}>
-                  <i className={`fa-solid fa-rocket text-white text-xl drop-shadow-lg transition-transform duration-700 ${status === 'idle' ? 'rotate-0' : 'rotate-[-45deg]'}`}></i>
+                  <i aria-hidden="true" className={`fa-solid fa-rocket text-white text-xl drop-shadow-lg transition-transform duration-700 ${status === 'idle' ? 'rotate-0' : 'rotate-[-45deg]'}`}></i>
                   {status !== 'idle' && (
                     <div className="absolute top-[80%] left-1/2 -translate-x-1/2 flex flex-col items-center">
                       <div className="absolute top-0 w-6 h-6 bg-white blur-md rounded-full animate-pulse"></div>
@@ -387,7 +387,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSett
               className="w-10 h-10 flex items-center justify-center bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500 transition-colors relative"
               title={cloudLinked ? 'Bulut senkronizasyonu bağlı' : 'Bulut senkronizasyonu (Supabase)'}
             >
-              <i className="fa-solid fa-cloud text-[13px]" style={cloudLinked ? { color: 'var(--app-primary)' } : { color: '#9ca3af' }}></i>
+              <i aria-hidden="true" className="fa-solid fa-cloud text-[13px]" style={cloudLinked ? { color: 'var(--app-primary)' } : { color: '#9ca3af' }}></i>
               {cloudLinked && <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-emerald-400 border border-white dark:border-gray-700"></span>}
             </button>
             <IdentitySwitcher currentRole={currentRole} currentPersonId={currentPersonId} people={people} needsPerson={identityNeedsPerson} onOpenProfile={onOpenProfile} />
@@ -397,34 +397,34 @@ const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSett
                 if (file) onLoadProject(file);
                 if (fileInputRef.current) fileInputRef.current.value = '';
               }} />
-              <button onClick={onSaveProject} className="w-10 h-10 text-gray-400 hover:text-primary transition-colors" title="Yedek indir (JSON)">
-                <i className="fa-solid fa-download text-xs"></i>
+              <button aria-label="Yedek indir (JSON)" onClick={onSaveProject} className="w-10 h-10 text-gray-400 hover:text-primary transition-colors" title="Yedek indir (JSON)">
+                <i aria-hidden="true" className="fa-solid fa-download text-xs"></i>
               </button>
               <div className="w-px h-4 bg-gray-200 dark:bg-gray-600"></div>
-              <button onClick={() => fileInputRef.current?.click()} className="w-10 h-10 text-gray-400 hover:text-primary transition-colors" title="Yedek yükle">
-                <i className="fa-solid fa-upload text-xs"></i>
+              <button aria-label="Yedek yükle" onClick={() => fileInputRef.current?.click()} className="w-10 h-10 text-gray-400 hover:text-primary transition-colors" title="Yedek yükle">
+                <i aria-hidden="true" className="fa-solid fa-upload text-xs"></i>
               </button>
             </div>}
             <button onClick={onOpenCommandPalette} className="hidden md:flex items-center gap-2 h-10 px-3 bg-white dark:bg-gray-700 text-gray-400 rounded-lg border border-gray-200 dark:border-gray-600 hover:text-primary transition-colors" title="Hızlı git — projeye, kişiye ya da ekrana (⌘K / Ctrl+K)">
-              <i className="fa-solid fa-magnifying-glass text-[13px]"></i>
+              <i aria-hidden="true" className="fa-solid fa-magnifying-glass text-[13px]"></i>
               <kbd className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-400">⌘K</kbd>
             </button>
             {onOpenDataHealth && <button onClick={onOpenDataHealth} className="relative w-10 h-10 flex items-center justify-center bg-white dark:bg-gray-700 text-gray-400 rounded-lg border border-gray-200 dark:border-gray-600 hover:text-primary transition-colors" title="Veri sağlığı denetimi (yetim tahsis, eşleşmeyen atama, mükerrer, eksik alan)">
-              <i className="fa-solid fa-stethoscope text-[13px]"></i>
+              <i aria-hidden="true" className="fa-solid fa-stethoscope text-[13px]"></i>
               {dataHealthAlerts > 0 && (
                 <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center">
                   {dataHealthAlerts > 99 ? '99+' : dataHealthAlerts}
                 </span>
               )}
             </button>}
-            {onOpenAuditLog && <button onClick={onOpenAuditLog} className="w-10 h-10 hidden md:flex items-center justify-center bg-white dark:bg-gray-700 text-gray-400 rounded-lg border border-gray-200 dark:border-gray-600 hover:text-primary transition-colors" title="Denetim günlüğü (kritik aksiyonların kaydı)">
-              <i className="fa-solid fa-clock-rotate-left text-[13px]"></i>
+            {onOpenAuditLog && <button aria-label="Denetim günlüğü (kritik aksiyonların kaydı)" onClick={onOpenAuditLog} className="w-10 h-10 hidden md:flex items-center justify-center bg-white dark:bg-gray-700 text-gray-400 rounded-lg border border-gray-200 dark:border-gray-600 hover:text-primary transition-colors" title="Denetim günlüğü (kritik aksiyonların kaydı)">
+              <i aria-hidden="true" className="fa-solid fa-clock-rotate-left text-[13px]"></i>
             </button>}
-            <button onClick={onOpenSettings} className="w-10 h-10 flex items-center justify-center bg-white dark:bg-gray-700 text-gray-400 rounded-lg border border-gray-200 dark:border-gray-600 hover:text-primary transition-colors" title="Ayarlar">
-              <i className="fa-solid fa-sliders text-[13px]"></i>
+            <button aria-label="Ayarlar" onClick={onOpenSettings} className="w-10 h-10 flex items-center justify-center bg-white dark:bg-gray-700 text-gray-400 rounded-lg border border-gray-200 dark:border-gray-600 hover:text-primary transition-colors" title="Ayarlar">
+              <i aria-hidden="true" className="fa-solid fa-sliders text-[13px]"></i>
             </button>
-            <button onClick={onOpenAbout} className="w-10 h-10 hidden lg:flex items-center justify-center bg-white dark:bg-gray-700 text-gray-400 rounded-lg border border-gray-200 dark:border-gray-600 hover:text-primary transition-colors" title="Hakkında">
-              <i className="fa-solid fa-circle-info text-[13px]"></i>
+            <button aria-label="Hakkında" onClick={onOpenAbout} className="w-10 h-10 hidden lg:flex items-center justify-center bg-white dark:bg-gray-700 text-gray-400 rounded-lg border border-gray-200 dark:border-gray-600 hover:text-primary transition-colors" title="Hakkında">
+              <i aria-hidden="true" className="fa-solid fa-circle-info text-[13px]"></i>
             </button>
           </div>
         </div>
@@ -461,7 +461,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSett
               className="ml-auto flex-none flex items-center gap-1.5 h-8 px-3 rounded-md text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-primary hover:bg-white dark:hover:bg-gray-800 transition-colors"
               title="İş paketleri — görev/kişi bağı"
             >
-              <i className="fa-solid fa-briefcase text-[11px]"></i>
+              <i aria-hidden="true" className="fa-solid fa-briefcase text-[11px]"></i>
               <span className="hidden lg:inline">İş Paketleri</span>
             </button>
             <button
@@ -469,7 +469,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSett
               className="flex-none flex items-center gap-1.5 h-8 px-3 rounded-md text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-primary hover:bg-white dark:hover:bg-gray-800 transition-colors"
               title="Bu projenin haftalık durum raporu taslağını üret"
             >
-              <i className="fa-solid fa-file-lines text-[11px]"></i>
+              <i aria-hidden="true" className="fa-solid fa-file-lines text-[11px]"></i>
               <span className="hidden lg:inline">Durum Raporu</span>
             </button>
           </div>

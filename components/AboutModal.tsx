@@ -13,15 +13,15 @@ const AboutModal: React.FC<AboutModalProps> = ({ onClose }) => {
         <div className="flex justify-between items-center p-6 border-b dark:border-gray-700 bg-primary text-white">
           <div className="flex items-center space-x-3">
              <div className="bg-white/20 p-2 rounded-xl">
-                <i className="fa-solid fa-rocket text-xl"></i>
+                <i aria-hidden="true" className="fa-solid fa-rocket text-xl"></i>
              </div>
              <div>
                 <h2 className="text-xl font-black">PlanAsistan Hakkında</h2>
                 <p className="text-[10px] font-bold opacity-80 uppercase tracking-widest">Akıllı Proje Planlama & GitHub Pages Rehberi</p>
              </div>
           </div>
-          <button onClick={onClose} className="bg-black/10 hover:bg-black/20 w-8 h-8 rounded-full transition-colors flex items-center justify-center">
-            <i className="fa-solid fa-times"></i>
+          <button aria-label="Kapat" onClick={onClose} className="bg-black/10 hover:bg-black/20 w-8 h-8 rounded-full transition-colors flex items-center justify-center">
+            <i aria-hidden="true" className="fa-solid fa-times"></i>
           </button>
         </div>
         
@@ -29,7 +29,7 @@ const AboutModal: React.FC<AboutModalProps> = ({ onClose }) => {
         <div className="flex-grow overflow-y-auto p-8 space-y-8 custom-scrollbar">
           <section className="space-y-4">
               <h3 className="text-lg font-black text-gray-800 dark:text-white flex items-center">
-                  <i className="fa-brands fa-github mr-3 text-2xl text-primary"></i>
+                  <i aria-hidden="true" className="fa-brands fa-github mr-3 text-2xl text-primary"></i>
                   GitHub'da Nasıl Yayınlanır?
               </h3>
               <div className="space-y-3">
@@ -56,7 +56,7 @@ const AboutModal: React.FC<AboutModalProps> = ({ onClose }) => {
 
           <section className="space-y-4 pt-4 border-t dark:border-gray-700">
               <h3 className="text-lg font-black text-gray-800 dark:text-white flex items-center">
-                  <i className="fa-solid fa-star mr-3 text-2xl text-amber-500"></i>
+                  <i aria-hidden="true" className="fa-solid fa-star mr-3 text-2xl text-amber-500"></i>
                   Neden PlanAsistan?
               </h3>
               <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">

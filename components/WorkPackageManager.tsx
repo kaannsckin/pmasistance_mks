@@ -72,11 +72,11 @@ const WorkPackageManager: React.FC<WorkPackageManagerProps> = ({ isOpen, onClose
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[80vh] flex flex-col animate-fade-in-up">
         <div className="flex justify-between items-center p-5 border-b dark:border-gray-700">
             <h2 className="text-lg font-bold flex items-center text-gray-800 dark:text-white">
-                <i className="fa-solid fa-briefcase mr-3 text-primary"></i>
+                <i aria-hidden="true" className="fa-solid fa-briefcase mr-3 text-primary"></i>
                 İş Paketi Yönetimi
             </h2>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-700 dark:hover:text-white transition-colors">
-                <i className="fa-solid fa-times"></i>
+            <button aria-label="Kapat" onClick={onClose} className="text-gray-400 hover:text-gray-700 dark:hover:text-white transition-colors">
+                <i aria-hidden="true" className="fa-solid fa-times"></i>
             </button>
         </div>
         <div className="flex-grow p-6 space-y-6 overflow-y-auto custom-scrollbar">
@@ -119,7 +119,7 @@ const WorkPackageManager: React.FC<WorkPackageManagerProps> = ({ isOpen, onClose
                     onClick={handleSave}
                     className="bg-primary text-white px-4 py-2 rounded-lg shadow-md hover:opacity-90 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
                 >
-                    <i className={`fa-solid ${editingPackageId ? 'fa-save' : 'fa-plus'} mr-2`}></i>{buttonLabel}
+                    <i aria-hidden="true" className={`fa-solid ${editingPackageId ? 'fa-save' : 'fa-plus'} mr-2`}></i>{buttonLabel}
                 </button>
                 </div>
             </div>
@@ -154,10 +154,10 @@ const WorkPackageManager: React.FC<WorkPackageManagerProps> = ({ isOpen, onClose
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-4">
                             <button onClick={() => setEditingPackageId(wp.id)} className="text-primary hover:opacity-80 transition-opacity">
-                            <i className="fa-solid fa-pencil mr-1"></i> Düzenle
+                            <i aria-hidden="true" className="fa-solid fa-pencil mr-1"></i> Düzenle
                             </button>
                             <button onClick={() => onDeleteWorkPackage(wp.id)} className="text-red-600 hover:text-red-900 dark:hover:text-red-400">
-                            <i className="fa-solid fa-trash mr-1"></i> Sil
+                            <i aria-hidden="true" className="fa-solid fa-trash mr-1"></i> Sil
                             </button>
                         </td>
                         </tr>
@@ -165,7 +165,7 @@ const WorkPackageManager: React.FC<WorkPackageManagerProps> = ({ isOpen, onClose
                     })}
                     {summaryById.unassigned && (
                         <tr className="bg-amber-50/60 dark:bg-amber-900/10">
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-amber-700 dark:text-amber-300"><i className="fa-solid fa-inbox mr-2"></i>İş paketi atanmamış</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-amber-700 dark:text-amber-300"><i aria-hidden="true" className="fa-solid fa-inbox mr-2"></i>İş paketi atanmamış</td>
                         <td className="px-6 py-4 text-sm text-gray-400">Bir iş paketine bağlanmamış görevler</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-300"><b>{summaryById.unassigned.taskCount}</b> görev · %{summaryById.unassigned.donePct} tamam</td>
                         <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-300">

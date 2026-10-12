@@ -96,9 +96,9 @@ const ForecastView: React.FC<Props> = ({ allocations, people, projects, titles, 
                 <div className="flex items-center justify-between mb-2">
                     <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200">Aylık İş Yükü — Gerçekleşen & Öngörü</h3>
                     <div className="flex items-center gap-3 text-[10px] text-gray-400">
-                        <span><i className="fa-solid fa-minus" style={{ color: 'var(--app-primary)' }}></i> Gerçekleşen</span>
-                        <span><i className="fa-solid fa-ellipsis" style={{ color: 'var(--app-primary)' }}></i> Öngörü</span>
-                        <span><i className="fa-solid fa-minus text-gray-400"></i> Plan</span>
+                        <span><i aria-hidden="true" className="fa-solid fa-minus" style={{ color: 'var(--app-primary)' }}></i> Gerçekleşen</span>
+                        <span><i aria-hidden="true" className="fa-solid fa-ellipsis" style={{ color: 'var(--app-primary)' }}></i> Öngörü</span>
+                        <span><i aria-hidden="true" className="fa-solid fa-minus text-gray-400"></i> Plan</span>
                     </div>
                 </div>
                 <ForecastChart row={t} cutoffMonth={fc.cutoffMonth} />

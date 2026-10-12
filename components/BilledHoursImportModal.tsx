@@ -86,7 +86,7 @@ const BilledHoursImportModal: React.FC<Props> = ({ people, projects, defaultYear
                             "Toplam Billed Hours" pivotu · Saat → Gün (1 gün={fmt(hoursPerDay)} saat) → Adam-Ay (TR çalışma takvimi)
                         </p>
                     </div>
-                    <button onClick={onClose} className="w-9 h-9 rounded-xl text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"><i className="fa-solid fa-times"></i></button>
+                    <button aria-label="Kapat" onClick={onClose} className="w-9 h-9 rounded-xl text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"><i aria-hidden="true" className="fa-solid fa-times"></i></button>
                 </div>
 
                 <div className="p-5 space-y-4">
@@ -109,7 +109,7 @@ const BilledHoursImportModal: React.FC<Props> = ({ people, projects, defaultYear
                         <div className="space-y-3">
                             <label className="block cursor-pointer">
                                 <div className="border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl px-4 py-6 text-center text-gray-400 hover:border-blue-400 hover:text-blue-500 transition-colors">
-                                    <div className="text-2xl mb-1"><i className="fa-solid fa-file-arrow-up"></i></div>
+                                    <div className="text-2xl mb-1"><i aria-hidden="true" className="fa-solid fa-file-arrow-up"></i></div>
                                     <div className="text-sm">Pivot içeren <b>.xlsx</b> dosyasını seçin</div>
                                     <div className="text-[11px] mt-1">Sayfa1 / pivot sayfası otomatik bulunur (Project Name · Full name · aylar)</div>
                                     <input type="file" accept=".xlsx,.xls" className="hidden" onChange={e => { handleFile(e.target.files?.[0]); e.target.value = ''; }} />
@@ -131,7 +131,7 @@ const BilledHoursImportModal: React.FC<Props> = ({ people, projects, defaultYear
                         </div>
                     )}
 
-                    {busy && <p className="text-xs text-gray-400"><i className="fa-solid fa-spinner fa-spin mr-1"></i>Dosya okunuyor…</p>}
+                    {busy && <p className="text-xs text-gray-400"><i aria-hidden="true" className="fa-solid fa-spinner fa-spin mr-1"></i>Dosya okunuyor…</p>}
                     {error && (
                         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl px-4 py-3 text-[11px] text-red-600 dark:text-red-300">{error}</div>
                     )}
@@ -144,7 +144,7 @@ const BilledHoursImportModal: React.FC<Props> = ({ people, projects, defaultYear
                                 <span className="px-2.5 py-1 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300">Toplam {fmt(result.totalHours)} saat</span>
                                 <span className="px-2.5 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 font-semibold">Eşleşen {fmt(result.totalAA)} AA</span>
                                 <span className="px-2.5 py-1 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300">{result.rows.length} kişi×proje · {result.matchedProjectCount} proje</span>
-                                <button onClick={() => { setRecords(null); setPaste(''); }} className="ml-auto text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"><i className="fa-solid fa-rotate-left mr-1"></i>Başka dosya</button>
+                                <button onClick={() => { setRecords(null); setPaste(''); }} className="ml-auto text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"><i aria-hidden="true" className="fa-solid fa-rotate-left mr-1"></i>Başka dosya</button>
                             </div>
 
                             {hasUnmatched && (
@@ -229,7 +229,7 @@ const BilledHoursImportModal: React.FC<Props> = ({ people, projects, defaultYear
                             className="text-white text-xs font-semibold px-5 py-2.5 rounded-xl shadow-md hover:opacity-90 disabled:opacity-40"
                             style={{ backgroundColor: 'var(--app-primary)' }}
                         >
-                            <i className="fa-solid fa-check mr-1"></i>Gerçekleşene Uygula
+                            <i aria-hidden="true" className="fa-solid fa-check mr-1"></i>Gerçekleşene Uygula
                         </button>
                     </div>
                 </div>

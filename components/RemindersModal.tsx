@@ -19,15 +19,15 @@ const RemindersModal: React.FC<RemindersModalProps> = ({ reminders, onClose }) =
         <div className="flex justify-between items-center p-6 border-b dark:border-gray-700 bg-amber-500 text-white">
           <div className="flex items-center space-x-3">
              <div className="bg-white/20 p-2 rounded-lg">
-                <i className="fa-solid fa-bell text-xl"></i>
+                <i aria-hidden="true" className="fa-solid fa-bell text-xl"></i>
              </div>
              <div>
                 <h2 className="text-xl font-black">Anımsatıcılar</h2>
                 <p className="text-[10px] font-bold opacity-80 uppercase tracking-widest">Hatırlamanız Gereken {reminders.length} Madde</p>
              </div>
           </div>
-          <button onClick={onClose} className="bg-black/10 hover:bg-black/20 w-8 h-8 rounded-full transition-colors flex items-center justify-center">
-            <i className="fa-solid fa-times"></i>
+          <button aria-label="Kapat" onClick={onClose} className="bg-black/10 hover:bg-black/20 w-8 h-8 rounded-full transition-colors flex items-center justify-center">
+            <i aria-hidden="true" className="fa-solid fa-times"></i>
           </button>
         </div>
         
@@ -44,7 +44,7 @@ const RemindersModal: React.FC<RemindersModalProps> = ({ reminders, onClose }) =
             </div>
           )) : (
             <div className="flex flex-col items-center justify-center py-12 text-gray-400">
-               <i className="fa-solid fa-clipboard-check text-5xl mb-4 opacity-20"></i>
+               <i aria-hidden="true" className="fa-solid fa-clipboard-check text-5xl mb-4 opacity-20"></i>
                <p className="font-bold text-center">Henüz bekleyen bir anımsatıcı yok.</p>
                <p className="text-xs text-center mt-1">Notlarınıza #anımsatıcı yazarak burayı doldurabilirsiniz.</p>
             </div>

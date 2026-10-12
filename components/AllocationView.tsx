@@ -241,26 +241,26 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
     return (
       <div className="flex items-center space-x-2">
         <span className={`text-[11px] font-semibold px-2 py-1 rounded-lg ${s.cls}`}>
-          <i className={`fa-solid ${s.icon} mr-1`}></i>{s.label}
+          <i aria-hidden="true" className={`fa-solid ${s.icon} mr-1`}></i>{s.label}
         </span>
         {status === 'draft' && canManage && (
           <button onClick={() => onLockAction(projectId, year, 'submitted')} className="text-[11px] font-semibold px-2.5 py-1 rounded-lg text-white hover:opacity-90" style={{ backgroundColor: 'var(--app-primary)' }}>
-            <i className="fa-solid fa-paper-plane mr-1"></i>Onaya Gönder
+            <i aria-hidden="true" className="fa-solid fa-paper-plane mr-1"></i>Onaya Gönder
           </button>
         )}
         {status === 'submitted' && canApprovePlan(identity) && (
           <>
             <button onClick={() => onLockAction(projectId, year, 'locked')} className="text-[11px] font-semibold px-2.5 py-1 rounded-lg text-white bg-emerald-500 hover:bg-emerald-600">
-              <i className="fa-solid fa-check mr-1"></i>Onayla & Kilitle
+              <i aria-hidden="true" className="fa-solid fa-check mr-1"></i>Onayla & Kilitle
             </button>
             <button onClick={() => onLockAction(projectId, year, 'draft')} className="text-[11px] font-semibold px-2.5 py-1 rounded-lg text-white bg-red-400 hover:bg-red-500">
-              <i className="fa-solid fa-rotate-left mr-1"></i>Reddet
+              <i aria-hidden="true" className="fa-solid fa-rotate-left mr-1"></i>Reddet
             </button>
           </>
         )}
         {status === 'locked' && canApprovePlan(identity) && (
           <button onClick={() => { if (window.confirm('Plan kilidi açılsın mı? Plan hücreleri yeniden düzenlenebilir olur.')) onLockAction(projectId, year, 'draft'); }} className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-300">
-            <i className="fa-solid fa-lock-open mr-1"></i>Kilidi Aç
+            <i aria-hidden="true" className="fa-solid fa-lock-open mr-1"></i>Kilidi Aç
           </button>
         )}
       </div>
@@ -294,7 +294,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
             {selectedPerson?.roles.map(r => <option key={r} value={r}>{r}</option>)}
           </select>
           <button onClick={handleAdd} disabled={!newRow.personId || !newRow.projectId} className="text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-sm hover:opacity-90 disabled:opacity-40" style={{ backgroundColor: 'var(--app-primary)' }}>
-            <i className="fa-solid fa-plus mr-1"></i>Ekle
+            <i aria-hidden="true" className="fa-solid fa-plus mr-1"></i>Ekle
           </button>
 
           {newPersonAvail && selectedPerson && (
@@ -314,10 +314,10 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
                 const fullM = newPersonAvail.filter(a => a.full).map(a => MONTHS_TR[a.m - 1]);
                 return (
                   <span className="text-[10px] font-semibold">
-                    {overM.length > 0 && <span className="text-red-500"><i className="fa-solid fa-triangle-exclamation mr-1"></i>Aşırı: {overM.join(', ')}</span>}
+                    {overM.length > 0 && <span className="text-red-500"><i aria-hidden="true" className="fa-solid fa-triangle-exclamation mr-1"></i>Aşırı: {overM.join(', ')}</span>}
                     {overM.length > 0 && fullM.length > 0 && <span className="text-gray-300 mx-1">·</span>}
                     {fullM.length > 0 && <span className="text-amber-500">Dolu: {fullM.join(', ')}</span>}
-                    {overM.length === 0 && fullM.length === 0 && <span className="text-emerald-500"><i className="fa-solid fa-circle-check mr-1"></i>Yıl boyu uygun</span>}
+                    {overM.length === 0 && fullM.length === 0 && <span className="text-emerald-500"><i aria-hidden="true" className="fa-solid fa-circle-check mr-1"></i>Yıl boyu uygun</span>}
                   </span>
                 );
               })()}
@@ -328,7 +328,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
 
       {groupedByProject.length === 0 && (
         <div className="text-center py-16 text-gray-400">
-          <i className="fa-solid fa-table-cells-large text-3xl mb-3 opacity-40"></i>
+          <i aria-hidden="true" className="fa-solid fa-table-cells-large text-3xl mb-3 opacity-40"></i>
           <p className="text-xs">Bu yıl/filtre için tahsis kaydı yok. {canEnter ? 'Yukarıdan satır ekleyin veya Veri Havuzu ekranından Excel içe aktarın.' : ''}</p>
         </div>
       )}
@@ -342,7 +342,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
           <div key={projectId} className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden">
             <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-gray-50 dark:border-gray-700/60 bg-gray-50/60 dark:bg-gray-800">
               <div className="flex items-center space-x-2">
-                <i className="fa-solid fa-folder-open text-xs" style={{ color: 'var(--app-primary)' }}></i>
+                <i aria-hidden="true" className="fa-solid fa-folder-open text-xs" style={{ color: 'var(--app-primary)' }}></i>
                 <span className="text-[12px] font-semibold text-gray-800 dark:text-white">{projectNames.get(projectId) || 'Bilinmeyen Proje'}</span>
                 <span className="text-xs text-gray-400 font-bold">{list.length} satır · Plan Σ {fmt(planTotals.reduce((a, b) => a + b, 0))} AA · Gerç. Σ {fmt(actualTotals.reduce((a, b) => a + b, 0))} AA</span>
               </div>
@@ -353,7 +353,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
                     className="text-[11px] font-semibold px-2.5 py-1 rounded-lg border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-300 hover:text-primary hover:border-primary/40 transition-colors"
                     title="Projenin sprint planındaki görev eforlarını aylık AA önerisine çevirir"
                   >
-                    <i className="fa-solid fa-wand-magic-sparkles mr-1"></i>Görevlerden Öner
+                    <i aria-hidden="true" className="fa-solid fa-wand-magic-sparkles mr-1"></i>Görevlerden Öner
                   </button>
                 )}
                 {lockActions(projectId, canManageProject)}
@@ -398,13 +398,13 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
                         </td>
                         {canEnter && (
                           <td className="px-1 py-1 text-center">
-                            <button
+                            <button aria-label={planEditable ? 'Satırı sil' : 'Yetkiniz yok veya plan kilitli'}
                               onClick={() => { if (window.confirm('Bu tahsis satırı silinsin mi?')) onDeleteAllocation(a.id); }}
                               disabled={!planEditable}
                               className="w-6 h-6 rounded-md text-gray-300 hover:text-red-500 disabled:opacity-30 disabled:cursor-not-allowed"
                               title={planEditable ? 'Satırı sil' : 'Yetkiniz yok veya plan kilitli'}
                             >
-                              <i className="fa-solid fa-trash text-xs"></i>
+                              <i aria-hidden="true" className="fa-solid fa-trash text-xs"></i>
                             </button>
                           </td>
                         )}
@@ -507,7 +507,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
             <input type="number" min={0.05} max={1} step={0.05} value={staff.aa} onChange={e => setStaff({ ...staff, aa: parseFloat(e.target.value) || 0 })} className="mt-1 block w-24 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1.5 text-[11px] focus:outline-none" />
           </label>
           <div className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold ${fitCount > 0 ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-300' : 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-300'}`}>
-            <i className={`fa-solid ${fitCount > 0 ? 'fa-user-check' : 'fa-user-xmark'}`}></i>
+            <i aria-hidden="true" className={`fa-solid ${fitCount > 0 ? 'fa-user-check' : 'fa-user-xmark'}`}></i>
             {windowLabel} · {staff.role || 'tüm roller'} · her ay ≥ {fmt(staff.aa)} AA: <b>{fitCount} uygun kişi</b>
           </div>
         </div>
@@ -560,7 +560,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
             </tbody>
           </table>
         </div>
-        <p className="text-[11px] text-gray-400"><i className="fa-solid fa-circle-info mr-1"></i>Boş kapasite = efektif kapasite (izin düşülmüş) − mevcut plan yükü. "En dar ay" pencerede en az boşluğu olan aydır; gerekli AA'yı karşılaması gerekir.</p>
+        <p className="text-[11px] text-gray-400"><i aria-hidden="true" className="fa-solid fa-circle-info mr-1"></i>Boş kapasite = efektif kapasite (izin düşülmüş) − mevcut plan yükü. "En dar ay" pencerede en az boşluğu olan aydır; gerekli AA'yı karşılaması gerekir.</p>
       </div>
     );
   };
@@ -584,7 +584,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
       <div className="space-y-4">
         <div className="flex flex-wrap items-center gap-3">
           <div className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl border text-xs font-semibold ${gapSummary.rolesWithGap > 0 ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-600 dark:text-red-300' : 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-600 dark:text-emerald-300'}`}>
-            <i className={`fa-solid ${gapSummary.rolesWithGap > 0 ? 'fa-user-plus' : 'fa-circle-check'}`}></i>
+            <i aria-hidden="true" className={`fa-solid ${gapSummary.rolesWithGap > 0 ? 'fa-user-plus' : 'fa-circle-check'}`}></i>
             {gapSummary.rolesWithGap > 0
               ? `${gapSummary.rolesWithGap} rolde personel açığı — toplam ${fmt(gapSummary.totalGapAA)} AA işe alım/görevlendirme ihtiyacı`
               : 'Tüm rollerde kapasite talebi karşılıyor'}
@@ -596,7 +596,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
 
         {rows.length === 0 && (
           <div className="text-center py-16 text-gray-400">
-            <i className="fa-solid fa-id-badge text-3xl mb-3 opacity-40"></i>
+            <i aria-hidden="true" className="fa-solid fa-id-badge text-3xl mb-3 opacity-40"></i>
             <p className="text-xs">Bu yıl/filtre için rol verisi yok. Veri Havuzu'nda kişilere rol tanımlayın ve tahsis satırlarında rol seçin.</p>
           </div>
         )}
@@ -620,7 +620,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
                         <span className="ml-2 text-[11px] text-gray-400">{row.departmentCode}</span>
                         {row.totals.gap > 0 && (
                           <span className="ml-3 text-[11px] font-semibold text-red-500">
-                            <i className="fa-solid fa-user-plus mr-1"></i>{fmt(row.totals.gap)} AA açık
+                            <i aria-hidden="true" className="fa-solid fa-user-plus mr-1"></i>{fmt(row.totals.gap)} AA açık
                           </span>
                         )}
                       </td>
@@ -683,7 +683,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
           )}
           {canEnter && (
             <button onClick={() => setShowBilled(true)} title="Jira 'Toplam Billed Hours' pivotunu gerçekleşen tahsise (AA) aktar" className="flex items-center gap-2 px-3 py-2 rounded-xl text-[11px] font-semibold text-gray-600 dark:text-gray-200 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:border-blue-400 hover:text-blue-500 transition-colors">
-              <i className="fa-solid fa-file-import"></i><span>Jira Billed Hours</span>
+              <i aria-hidden="true" className="fa-solid fa-file-import"></i><span>Jira Billed Hours</span>
             </button>
           )}
         </div>
@@ -713,7 +713,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
         <div className="flex items-center space-x-2 flex-wrap gap-y-2">
           {([['grid', 'fa-table-cells', 'Tahsis Tablosu'], ['person', 'fa-user', 'Kişi Özeti'], ['department', 'fa-building', 'Bölüm Özeti'], ['project', 'fa-folder-open', 'Proje Özeti'], ['heatmap', 'fa-fire', 'Doluluk'], ['staffing', 'fa-user-check', 'Uygun Kişi'], ['roles', 'fa-id-badge', 'Kapasite-Talep'], ['forecast', 'fa-chart-line', 'Öngörü'], ['scenario', 'fa-flask', 'Senaryo']] as [Tab, string, string][]).map(([t, icon, label]) => (
             <button key={t} onClick={() => setTab(t)} className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all ${tab === t ? 'text-white shadow-md' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 bg-gray-50 dark:bg-gray-800'}`} style={tab === t ? { backgroundColor: 'var(--app-primary)' } : {}}>
-              <i className={`fa-solid ${icon}`}></i><span>{label}</span>
+              <i aria-hidden="true" className={`fa-solid ${icon}`}></i><span>{label}</span>
             </button>
           ))}
         </div>
@@ -726,7 +726,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
       {overAllocations.length > 0 && (
         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl px-4 py-3">
           <p className="text-xs font-semibold text-red-600 dark:text-red-300 mb-1">
-            <i className="fa-solid fa-triangle-exclamation mr-2"></i>{year} planında {overAllocations.length} aşırı tahsis
+            <i aria-hidden="true" className="fa-solid fa-triangle-exclamation mr-2"></i>{year} planında {overAllocations.length} aşırı tahsis
           </p>
           <p className="text-[11px] text-red-700 dark:text-red-300">
             {overAllocations.slice(0, 4).map(o => `${o.personName} (${MONTHS_TR[o.month - 1]}: ${fmt(o.total)}/${fmt(o.capacity)})`).join(' · ')}
@@ -743,7 +743,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
                 <h3 className="text-base font-semibold text-gray-800 dark:text-white">Görev Planından Tahsis Önerisi</h3>
                 <p className="text-xs text-gray-400">{suggestModal.projectName} · {year} · {suggestModal.result.taskCount} görev, {suggestModal.result.sprintCount} sürüm</p>
               </div>
-              <button onClick={() => setSuggestModal(null)} className="w-9 h-9 rounded-xl text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"><i className="fa-solid fa-times"></i></button>
+              <button aria-label="Kapat" onClick={() => setSuggestModal(null)} className="w-9 h-9 rounded-xl text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"><i aria-hidden="true" className="fa-solid fa-times"></i></button>
             </div>
             <div className="p-5 space-y-4">
               {suggestModal.result.unmatched.length > 0 && (
@@ -752,7 +752,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
                 </div>
               )}
               {suggestModal.result.clippedOutsideYear && (
-                <p className="text-[11px] text-gray-400"><i className="fa-solid fa-scissors mr-1"></i>Planın bir kısmı {year} dışına taştığı için kırpıldı (o aylar başka yılın tahsisine girilmeli).</p>
+                <p className="text-[11px] text-gray-400"><i aria-hidden="true" className="fa-solid fa-scissors mr-1"></i>Planın bir kısmı {year} dışına taştığı için kırpıldı (o aylar başka yılın tahsisine girilmeli).</p>
               )}
               <table className="w-full">
                 <thead>
@@ -804,7 +804,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
                   className="text-white text-xs font-semibold px-5 py-2.5 rounded-xl shadow-md hover:opacity-90 disabled:opacity-40"
                   style={{ backgroundColor: 'var(--app-primary)' }}
                 >
-                  <i className="fa-solid fa-check mr-1"></i>Uygula
+                  <i aria-hidden="true" className="fa-solid fa-check mr-1"></i>Uygula
                 </button>
               </div>
             </div>

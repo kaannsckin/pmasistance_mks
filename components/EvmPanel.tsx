@@ -38,7 +38,7 @@ const EvmPanel: React.FC<EvmPanelProps> = ({ workspace, year, projectIds }) => {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h3 className="text-sm font-semibold text-gray-800 dark:text-white flex items-center gap-2">
-            <i className="fa-solid fa-chart-pie" style={{ color: 'var(--app-primary)' }}></i>
+            <i aria-hidden="true" className="fa-solid fa-chart-pie" style={{ color: 'var(--app-primary)' }}></i>
             Kazanılmış Değer (EVM) &amp; Bütçe — {year}
           </h3>
           <p className="text-[11px] text-gray-400 mt-0.5">İlerleme görev tamamlanmasından (efor-ağırlıklı) türetilir. Maliyet = AA × ünvan aylık maliyeti.</p>
@@ -53,7 +53,7 @@ const EvmPanel: React.FC<EvmPanelProps> = ({ workspace, year, projectIds }) => {
 
       {evm.costedTitleCount === 0 ? (
         <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl px-4 py-3 text-[11px] text-amber-700 dark:text-amber-300">
-          <i className="fa-solid fa-circle-info mr-1"></i>EVM için ünvan maliyeti gerekir. Veri Havuzu → Ünvanlar'da aylık maliyet girin.
+          <i aria-hidden="true" className="fa-solid fa-circle-info mr-1"></i>EVM için ünvan maliyeti gerekir. Veri Havuzu → Ünvanlar'da aylık maliyet girin.
         </div>
       ) : evm.projects.length === 0 ? (
         <p className="text-center text-gray-400 text-xs py-8">Bu yıl/kapsam için maliyetlenebilir proje yok.</p>

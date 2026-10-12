@@ -48,16 +48,16 @@ const UtilizationHeatmap: React.FC<UtilizationHeatmapProps> = ({ allocations, pe
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-2 px-4 py-2.5 rounded-2xl border text-xs font-semibold bg-gray-50 dark:bg-gray-800/60 border-gray-100 dark:border-gray-700 text-gray-600 dark:text-gray-300">
-            <i className="fa-solid fa-gauge-high" style={{ color: 'var(--app-primary)' }}></i>
+            <i aria-hidden="true" className="fa-solid fa-gauge-high" style={{ color: 'var(--app-primary)' }}></i>
             Ortalama doluluk: <b style={{ color: 'var(--app-primary)' }}>{avgUtilization === null ? '—' : pct(avgUtilization)}</b>
           </div>
           <div className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl border text-xs font-semibold ${peopleOver > 0 ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-600 dark:text-red-300' : 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-600 dark:text-emerald-300'}`}>
-            <i className={`fa-solid ${peopleOver > 0 ? 'fa-triangle-exclamation' : 'fa-circle-check'}`}></i>
+            <i aria-hidden="true" className={`fa-solid ${peopleOver > 0 ? 'fa-triangle-exclamation' : 'fa-circle-check'}`}></i>
             {peopleOver > 0 ? `${peopleOver} kişi aşırı yüklü` : 'Aşırı yük yok'}
           </div>
           {peopleIdle > 0 && (
             <div className="flex items-center gap-2 px-4 py-2.5 rounded-2xl border text-xs font-semibold bg-sky-50 dark:bg-sky-900/20 border-sky-200 dark:border-sky-800 text-sky-600 dark:text-sky-300">
-              <i className="fa-solid fa-user-clock"></i>{peopleIdle} kişi atıl (yüksüz)
+              <i aria-hidden="true" className="fa-solid fa-user-clock"></i>{peopleIdle} kişi atıl (yüksüz)
             </div>
           )}
         </div>

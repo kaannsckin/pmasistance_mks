@@ -39,7 +39,7 @@ const KeyResultItem: React.FC<{
                     onChange={(e) => onUpdate(e.target.value)}
                     className="flex-grow bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md px-2 py-1 text-sm"
                 />
-                <button onClick={onDelete} className="p-2 text-red-500 hover:bg-red-100 rounded-md"><i className="fa-solid fa-trash-can text-xs"></i></button>
+                <button aria-label="Sil" onClick={onDelete} className="p-2 text-red-500 hover:bg-red-100 rounded-md"><i aria-hidden="true" className="fa-solid fa-trash-can text-xs"></i></button>
             </div>
         )
     }
@@ -102,7 +102,7 @@ const ObjectiveCard: React.FC<{
                         <span className="text-xs text-gray-400">Genel İlerleme</span>
                     </div>
                 ) : (
-                    <button onClick={onDeleteObjective} className="p-2 text-red-500 hover:bg-red-100 rounded-full h-8 w-8"><i className="fa-solid fa-trash-can"></i></button>
+                    <button aria-label="Sil" onClick={onDeleteObjective} className="p-2 text-red-500 hover:bg-red-100 rounded-full h-8 w-8"><i aria-hidden="true" className="fa-solid fa-trash-can"></i></button>
                 )}
             </div>
 
@@ -196,7 +196,7 @@ const GoalsView: React.FC<GoalsViewProps> = ({ objectives, tasks, onUpdateObject
         <div className="flex items-center space-x-2">
             {!isEditing ? (
                 <button onClick={() => setIsEditing(true)} className="bg-primary hover:opacity-90 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2 shadow-lg">
-                    <i className="fa-solid fa-pencil"></i>
+                    <i aria-hidden="true" className="fa-solid fa-pencil"></i>
                     <span>Hedefleri Düzenle</span>
                 </button>
             ) : (
@@ -204,7 +204,7 @@ const GoalsView: React.FC<GoalsViewProps> = ({ objectives, tasks, onUpdateObject
                     <button onClick={handleCancel} className="bg-gray-100 hover:bg-gray-200 font-bold py-2 px-4 rounded-lg">İptal</button>
                     <button onClick={handleAddObjective} className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">+ Yeni Hedef</button>
                     <button onClick={handleSave} className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg">
-                        <i className="fa-solid fa-save mr-2"></i>Kaydet
+                        <i aria-hidden="true" className="fa-solid fa-save mr-2"></i>Kaydet
                     </button>
                 </>
             )}

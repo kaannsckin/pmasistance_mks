@@ -52,7 +52,7 @@ const KanbanCard: React.FC<KanbanCardProps> = ({ task, isCompact, onViewTaskDeta
                     {task.name}
                 </h4>
             </div>
-            {isDone && <i className="fa-solid fa-check-circle text-emerald-500 text-[10px]"></i>}
+            {isDone && <i aria-hidden="true" className="fa-solid fa-check-circle text-emerald-500 text-[10px]"></i>}
         </div>
     );
   }
@@ -72,7 +72,7 @@ const KanbanCard: React.FC<KanbanCardProps> = ({ task, isCompact, onViewTaskDeta
               {task.priority}
            </span>
         </div>
-        {isDone && <i className="fa-solid fa-circle-check text-emerald-500 text-xs"></i>}
+        {isDone && <i aria-hidden="true" className="fa-solid fa-circle-check text-emerald-500 text-xs"></i>}
       </div>
 
       <h4 className={`font-bold text-[11.5px] leading-[1.3] mb-4 line-clamp-2 ${isDone ? 'text-emerald-900 dark:text-emerald-100 opacity-80' : 'text-gray-800 dark:text-gray-100'}`}>
@@ -82,11 +82,11 @@ const KanbanCard: React.FC<KanbanCardProps> = ({ task, isCompact, onViewTaskDeta
       <div className="flex items-center justify-between pt-3 border-t border-gray-50 dark:border-gray-800">
         <div className="flex items-center space-x-3">
             <span className="text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase font-mono tracking-tighter">
-                <i className="fa-brands fa-jira mr-1 text-blue-500/60"></i>
+                <i aria-hidden="true" className="fa-brands fa-jira mr-1 text-blue-500/60"></i>
                 {task.jiraId || 'N/A'}
             </span>
             <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">
-                <i className="fa-solid fa-cube mr-1 text-blue-400/50"></i>
+                <i aria-hidden="true" className="fa-solid fa-cube mr-1 text-blue-400/50"></i>
                 {task.unit}
             </span>
         </div>
@@ -105,8 +105,8 @@ const KanbanCard: React.FC<KanbanCardProps> = ({ task, isCompact, onViewTaskDeta
            <option value={TaskStatus.InProgress}>Süreçte</option>
            <option value={TaskStatus.Done}>Tamamlandı</option>
         </select>
-        <button onClick={() => onViewTaskDetails(task.id)} className="text-gray-300 hover:text-blue-500 p-1 transition-colors">
-            <i className="fa-solid fa-expand text-[10px]"></i>
+        <button aria-label="Detay" onClick={() => onViewTaskDetails(task.id)} className="text-gray-300 hover:text-blue-500 p-1 transition-colors">
+            <i aria-hidden="true" className="fa-solid fa-expand text-[10px]"></i>
         </button>
       </div>
     </div>

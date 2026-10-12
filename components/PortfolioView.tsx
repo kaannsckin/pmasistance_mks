@@ -46,7 +46,7 @@ const RAG_LABELS: Record<RagStatus, string> = {
 const StatChip: React.FC<{ icon: string; label: string; value: string }> = ({ icon, label, value }) => (
   <div className="flex items-center space-x-3 bg-white dark:bg-gray-800 px-4 py-3 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm">
     <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white" style={{ backgroundColor: 'var(--app-primary)' }}>
-      <i className={`fa-solid ${icon} text-xs`}></i>
+      <i aria-hidden="true" className={`fa-solid ${icon} text-xs`}></i>
     </div>
     <div className="flex flex-col leading-none">
       <span className="text-[11px] font-semibold text-gray-400 mb-1">{label}</span>
@@ -124,20 +124,20 @@ const ProjectCard: React.FC<{
         </div>
         <div className="flex items-center space-x-1 ml-2 flex-none">
           {canEditContent && (
-            <button onClick={() => { setTempName(project.name); setIsEditingName(true); }} className="w-7 h-7 rounded-lg text-gray-300 hover:text-primary hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors" title="Yeniden adlandır">
-              <i className="fa-solid fa-pen text-xs"></i>
+            <button aria-label="Yeniden adlandır" onClick={() => { setTempName(project.name); setIsEditingName(true); }} className="w-7 h-7 rounded-lg text-gray-300 hover:text-primary hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors" title="Yeniden adlandır">
+              <i aria-hidden="true" className="fa-solid fa-pen text-xs"></i>
             </button>
           )}
           {canManageOwner && (
-            <button onClick={() => { if (window.confirm(`"${project.name}" projesi ve tüm verileri silinecek. Emin misiniz?`)) onDelete(); }} className="w-7 h-7 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors" title="Projeyi sil">
-              <i className="fa-solid fa-trash text-xs"></i>
+            <button aria-label="Projeyi sil" onClick={() => { if (window.confirm(`"${project.name}" projesi ve tüm verileri silinecek. Emin misiniz?`)) onDelete(); }} className="w-7 h-7 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors" title="Projeyi sil">
+              <i aria-hidden="true" className="fa-solid fa-trash text-xs"></i>
             </button>
           )}
         </div>
       </div>
 
       <div className="flex items-center justify-between mb-3 gap-2">
-        <span className="text-[11px] font-semibold text-gray-400 flex-none"><i className="fa-solid fa-user-tie mr-1"></i>Proje Yön.</span>
+        <span className="text-[11px] font-semibold text-gray-400 flex-none"><i aria-hidden="true" className="fa-solid fa-user-tie mr-1"></i>Proje Yön.</span>
         {canManageOwner ? (
           <select
             value={project.pmPersonId || ''}
@@ -173,7 +173,7 @@ const ProjectCard: React.FC<{
           { icon: 'fa-bullseye', value: project.objectives.length, label: 'Hedef' },
         ].map(({ icon, value, label }) => (
           <div key={label} className="bg-gray-50 dark:bg-gray-900/50 rounded-xl px-2 py-2 text-center">
-            <i className={`fa-solid ${icon} text-xs text-gray-400 mb-1`}></i>
+            <i aria-hidden="true" className={`fa-solid ${icon} text-xs text-gray-400 mb-1`}></i>
             <div className="text-sm font-semibold text-gray-700 dark:text-gray-200 leading-none">{value}</div>
             <div className="text-[10px] font-semibold text-gray-400 mt-1">{label}</div>
           </div>
@@ -219,7 +219,7 @@ const ProjectCard: React.FC<{
 
       <div className="mt-auto flex items-center justify-between">
         <span className="text-[11px] font-semibold text-gray-300 dark:text-gray-600">
-          <i className="fa-solid fa-clock-rotate-left mr-1"></i>
+          <i aria-hidden="true" className="fa-solid fa-clock-rotate-left mr-1"></i>
           {new Date(project.updatedAt).toLocaleDateString('tr-TR')}
         </span>
         <button
@@ -227,7 +227,7 @@ const ProjectCard: React.FC<{
           className="text-white text-xs font-semibold px-4 py-2 rounded-xl shadow-md hover:opacity-90 transition-all"
           style={{ backgroundColor: 'var(--app-primary)' }}
         >
-          Aç <i className="fa-solid fa-arrow-right ml-1"></i>
+          Aç <i aria-hidden="true" className="fa-solid fa-arrow-right ml-1"></i>
         </button>
       </div>
     </div>
@@ -279,7 +279,7 @@ const PortfolioView: React.FC<PortfolioViewProps> = ({ projects, activeProjectId
 
       {needsPerson && (
         <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-2xl px-5 py-4 flex items-start gap-3">
-          <i className="fa-solid fa-user-lock text-amber-500 mt-0.5"></i>
+          <i aria-hidden="true" className="fa-solid fa-user-lock text-amber-500 mt-0.5"></i>
           <div>
             <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">Kapsam için kişi seçilmeli</p>
             <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-0.5">
@@ -311,7 +311,7 @@ const PortfolioView: React.FC<PortfolioViewProps> = ({ projects, activeProjectId
         {canCreate && (
           <div className="bg-white/50 dark:bg-gray-800/30 rounded-2xl border-2 border-dashed border-gray-200 dark:border-gray-700 p-5 flex flex-col items-center justify-center min-h-[280px] hover:border-primary/50 transition-colors">
             <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-white mb-3 shadow-lg" style={{ backgroundColor: 'var(--app-primary)' }}>
-              <i className="fa-solid fa-plus"></i>
+              <i aria-hidden="true" className="fa-solid fa-plus"></i>
             </div>
             <p className="text-xs font-semibold text-gray-400 mb-3">Yeni Proje Ekle</p>
             <input
@@ -334,7 +334,7 @@ const PortfolioView: React.FC<PortfolioViewProps> = ({ projects, activeProjectId
 
         {projects.length === 0 && !canCreate && !needsPerson && (
           <div className="col-span-full text-center py-16 text-gray-400">
-            <i className="fa-solid fa-folder-open text-3xl mb-3 opacity-40"></i>
+            <i aria-hidden="true" className="fa-solid fa-folder-open text-3xl mb-3 opacity-40"></i>
             <p className="text-xs">Kapsamınızda görüntülenecek proje yok.</p>
           </div>
         )}

@@ -1,10 +1,10 @@
 # Danışman raporu — PlanAsistan pilotu
 
-10 Ekim 2026 tarihli değerlendirme; o günden bu yana değişenler hemen altta. Rapor tarihli bir kayıttır: aşağıdaki bölümler 10 Ekim'deki hâliyle durur, yalnız iki tablonun son sütunu 12 Ekim'de eklendi.
+10 Ekim 2026 tarihli değerlendirme; o günden bu yana değişenler hemen altta. Rapor tarihli bir kayıttır: aşağıdaki bölümler 10 Ekim'deki hâliyle durur; yalnız tabloların "12 Ekim" sütunu sonradan eklendi.
 
 ## 12 Ekim güncellemesi
 
-Raporun üç kırmızı boyutunun üçü de kodda kapatıldı; takvim ise demonun ajanların kendi ortamında yapılması kararıyla Kasım sonuna uzadı.
+Raporun üç kırmızı boyutunun üçü de kodda kapatıldı; takvim ise demonun ajanların kendi ortamında yapılması kararıyla Kasım sonuna uzadı. Geliştirme listesinin on maddesinden yedisi yapıldı, ikisi kısmen (8: RAG kuralı, 10: arife), biri pilot sonrasına kaldı (9); mock veri tablosunun on maddesinden dokuzu kapandı. Kapanışlar canlı koşuda K0'da (15 Ekim) doğrulanacak (BL-18).
 
 | Konu | 10 Ekim | 12 Ekim |
 | --- | --- | --- |
@@ -15,7 +15,10 @@ Raporun üç kırmızı boyutunun üçü de kodda kapatıldı; takvim ise demonu
 | Takvim | Demo 16–20 Kasım haftası, dondurma 13 Kasım | Demo 26 Kasım (varsayım), K0–K4 kapıları, K3 dondurma 19 Kasım |
 | Demo ortamı | Dondurulmuş veri kopyası | Ajanların çalıştığı ortamın kendisi; K4'te canlı ya da dondurulmuş kararı |
 | 1. rutin modeli | Opus (karar sizin) | Sonnet; tüm ajanlar Sonnet'te |
-| Testler | 864 | 880 (106 dosya) |
+| Ürün düzeltmeleri | YILDIZ skoru 100; maliyet sapması −6,01 M TL; Ekim CPI'si şişkin | Teklif skorlanmaz (BL-11); sapma aynı dönemin planıyla (BL-09); EVM son kapanan aya kadar (BL-07); rapor biçim denetimi proje adlarını kısaltma saymaz (BL-21) |
+| Kurum ağı | Stil, ikon ve Excel kitaplıkları CDN'den (pilot ortamında 403) | Hepsi pakette (BL-08); ikonlar ekran okuyucudan gizli, ikonlu düğmelerin adı var (BL-23) |
+| Önerilen RAG kuralı | P1, K3 | Pilot sonrasına alındı (BL-10, 12 Ekim kararı); pilotta RAG'ı PY girer |
+| Testler | 864 | 886 (106 dosya) |
 
 Kalan işler ve kanıtlar: [BACKLOG.md](./BACKLOG.md).
 
@@ -35,33 +38,33 @@ Bu oturumda yapılanlar: pilot kodu ana dalla birleştirildi (864 test geçiyor)
 
 Sekiz boyutun üçü kırmızı: veri gerçekçiliği, senaryo üretimi ve demo hazırlığı. Ürünün kendisi ve rol güvenliği sağlam.
 
-| Boyut | Durum | Kanıt (9 Ekim) |
-| --- | --- | --- |
-| Ürün kapsamı | Yeşil | 27 MCP aracı; portföy, EVM, kapasite, tahsis ve rapor taslağı çalışıyor; birleşik kodda 864 birim testi geçiyor |
-| Rol ve gizlilik | Yeşil | 34/34 kontrol; müdür notları veritabanından da okuyamıyor (RLS); hiçbir çıktıda sicil yok |
-| PY iş döngüsü kapsamı | Sarı | Rapor, not, risk güncelleme ve istek araçları MCP'de yok; geçici yol talimatta |
-| Test düzeneği | Sarı | v2: üç aşama, ön puan, ajanda, demo kapısı; tarayıcı testi yok |
-| Kota ve maliyet | Sarı | Haftalık kota uyarıda, 15 Ekim'de yenilenir; koşular haftada 10'dan 4'e indi |
-| Mock veri gerçekçiliği | Kırmızı | Doluluk %49, kapasite-talepte açık 0 AA, portföy CPI 1,17, istekler ilerlemiyor (aşağıda) |
-| Senaryo üretimi | Kırmızı | 8 senaryonun 4'ü (S1, S3, S6, S8) simülasyon desteği olmadan üretilemez |
-| Demo hazırlığı | Kırmızı | Demo yolu, veri dondurma ve prova planı yoktu; bu raporda tanımlandı |
+| Boyut | Durum | Kanıt (9 Ekim) | 12 Ekim |
+| --- | --- | --- | --- |
+| Ürün kapsamı | Yeşil | 27 MCP aracı; portföy, EVM, kapasite, tahsis ve rapor taslağı çalışıyor; birleşik kodda 864 birim testi geçiyor | Yeşil: üç ürün düzeltmesi (BL-07, BL-09, BL-11), 886 test |
+| Rol ve gizlilik | Yeşil | 34/34 kontrol; müdür notları veritabanından da okuyamıyor (RLS); hiçbir çıktıda sicil yok | Yeşil: değişiklik yok |
+| PY iş döngüsü kapsamı | Sarı | Rapor, not, risk güncelleme ve istek araçları MCP'de yok; geçici yol talimatta | Yeşil: rapor, not, risk ve istek araçları MCP'de (BL-03, BL-05) |
+| Test düzeneği | Sarı | v2: üç aşama, ön puan, ajanda, demo kapısı; tarayıcı testi yok | Yeşil: `demo-testi` 28/28, CDN'siz ortamda biçimli ekranla (BL-04, BL-08) |
+| Kota ve maliyet | Sarı | Haftalık kota uyarıda, 15 Ekim'de yenilenir; koşular haftada 10'dan 4'e indi | Sarı: tüm ajanlar Sonnet, haftada dört koşu; ilk ölçüm K0'da |
+| Mock veri gerçekçiliği | Kırmızı | Doluluk %49, kapasite-talepte açık 0 AA, portföy CPI 1,17, istekler ilerlemiyor (aşağıda) | Yeşil (kodda): doluluk %88, 2 rolde açık, CPI 0,84–1,03 (BL-02) |
+| Senaryo üretimi | Kırmızı | 8 senaryonun 4'ü (S1, S3, S6, S8) simülasyon desteği olmadan üretilemez | Yeşil: `pilot senaryo` ile S1, S3, S6, S8 (BL-01) |
+| Demo hazırlığı | Kırmızı | Demo yolu, veri dondurma ve prova planı yoktu; bu raporda tanımlandı | Yeşil: demo yolu testi, `dondur` / `geri-yukle`, K0–K4 kapıları (BL-04, BL-06) |
 
 ## Mock veri: yönetimin takılacağı noktalar
 
 Yönetim ilk beş dakikada doluluk, bütçe ve kapasite rakamlarına bakar; üçü de bugün yanlış hikâye anlatıyor. Rakamlar 9 Ekim akşamı pilot verisinde (8 Ekim'e kadar) MCP araçlarıyla alındı.
 
-| Konu | Araç çıktısı | Yönetim nasıl okur | Düzeltme |
-| --- | --- | --- | --- |
-| Birim doluluğu | `departman_karnesi`: 24 kişi, kapasite 272,6 AA, plan 134,5 AA, doluluk %49; PYB (U300) %0, Sistem (U330) %44 | "Personelin yarısı boşta mı?" | Proje dışı işler için "Kurumsal işler" tahsisi ya da 2–3 arka plan projesi; PY'lerin proje yönetimi payı tahsise girsin; hedef ortalama %80–90, sıcak noktalar korunur |
-| Kapasite-talep | `kapasite_talep`: 8 rolün hiçbirinde açık yok (toplam 0 AA); aynı anda `portfoy_ozeti` 30 kişi-ay aşırı tahsis gösteriyor | "İşe alım kararını hangi rakamla vereceğiz?" | S8 rol bazında açık üretsin (ör. U320 test mühendisi); ekranda en az bir rol açığı görünsün |
-| Bütçe | `evm_analizi`: CPI ATLAS 1,23, KALKAN 1,40, portföy 1,17; Ekim gerçekleşeni 0 | "Bütçeyi hep fazla mı istiyoruz?" | Ay içi tahmini gerçekleşen (Soru 9); planlar gerçekleşene yakın, sapma ±%10 bandında; NEHİR S6 ile aşsın |
-| Maliyet sapması | `maliyet_raporu`: plan 17,81 M TL (yıl), gerçekleşen 11,80 M TL (Ocak–Eylül), sapma −6,01 M TL | "6 milyon TL harcanmamış mı?" | Sapma aynı dönemle kıyaslansın (ürün düzeltmesi) |
-| Müşteri istekleri | `musteri_istekleri`: 8 isteğin 8'i "Yeni", en eskisi 1 Haziran; iki başlık iki projede aynı açıklamayla; veri platformunda "mobil karanlık tema" | "Müşteriye yanıt vermiyor muyuz?" | Geçmiş isteklerin çoğu karara bağlanmış olsun (dönüştürüldü ya da reddedildi); şablon tekrarı kalksın; istek proje alanına uysun |
-| Riskler | `risk_listesi`: Burak'ın 4 riskinin hepsi 1 Haziran'da açılmış, hiç güncellenmemiş; NEHİR'in en yüksek riski arayüz belgesi (12) | "Risk kaydı tutulmuyor." | Dört aylık risk geçmişi: açılan, güncellenen, kapanan; NEHİR'de kalite riski |
-| Jira içeriği | NHR-41 "eşzamanlı güncellemede veri kaybı" Low öncelikte, 27 Ağustos'tan beri gecikmede, tahmin 1 gün; veri platformunda "çevrimdışıyken uygulama kapanıyor" hatası; hikâyelerde kalıp açıklama | Teknik yönetici hemen fark eder | Bileşen–hata eşlemesi proje türüne göre; veri kaybı Highest; tahminler gerçekçi dağılımda |
-| Toplantı notları | 2 Ekim'de dört projenin hepsinde "Sprint değerlendirme toplantısı" (sürüm süresi 3 hafta); bir PUSULA notunda aksiyonun tarihi yok | Dolgu izlenimi | Toplantı türü takvime uysun (Rutin 1 v2'de kural) |
-| Haftalık raporlar | Simülasyon PY projeleri dahil raporları kalıp maddelerle yazıyor; NEHİR taslağı "Genel Durum: Yeşil" diyor (18 geciken iş) | Rapor AI'ının değeri görünmez | Geçmiş raporlarda kalite dağılımı (iyi, orta, zayıf); taslak RAG çelişkisini işaretlesin |
-| YILDIZ sağlık skoru | `portfoy_ozeti`: skor 100, güven düşük, veri yok | "Teklifteki proje en sağlıklısı mı?" | Teklif aşamasındaki proje skorlanmasın ("—") |
+| Konu | Araç çıktısı | Yönetim nasıl okur | Düzeltme | 12 Ekim |
+| --- | --- | --- | --- | --- |
+| Birim doluluğu | `departman_karnesi`: 24 kişi, kapasite 272,6 AA, plan 134,5 AA, doluluk %49; PYB (U300) %0, Sistem (U330) %44 | "Personelin yarısı boşta mı?" | Proje dışı işler için "Kurumsal işler" tahsisi ya da 2–3 arka plan projesi; PY'lerin proje yönetimi payı tahsise girsin; hedef ortalama %80–90, sıcak noktalar korunur | Yapıldı: %88 (BL-02) |
+| Kapasite-talep | `kapasite_talep`: 8 rolün hiçbirinde açık yok (toplam 0 AA); aynı anda `portfoy_ozeti` 30 kişi-ay aşırı tahsis gösteriyor | "İşe alım kararını hangi rakamla vereceğiz?" | S8 rol bazında açık üretsin (ör. U320 test mühendisi); ekranda en az bir rol açığı görünsün | Yapıldı: 2 rolde açık; S8 teklif kazanımıyla büyür (BL-01, BL-02) |
+| Bütçe | `evm_analizi`: CPI ATLAS 1,23, KALKAN 1,40, portföy 1,17; Ekim gerçekleşeni 0 | "Bütçeyi hep fazla mı istiyoruz?" | Ay içi tahmini gerçekleşen (Soru 9); planlar gerçekleşene yakın, sapma ±%10 bandında; NEHİR S6 ile aşsın | Yapıldı: CPI 0,84–1,03; Ekim'in 0 gerçekleşeni EVM'e girmez (BL-02, BL-07). Ay içi tahmin pilot sonrası (BL-22) |
+| Maliyet sapması | `maliyet_raporu`: plan 17,81 M TL (yıl), gerçekleşen 11,80 M TL (Ocak–Eylül), sapma −6,01 M TL | "6 milyon TL harcanmamış mı?" | Sapma aynı dönemle kıyaslansın (ürün düzeltmesi) | Yapıldı: aynı dönemin planıyla (BL-09) |
+| Müşteri istekleri | `musteri_istekleri`: 8 isteğin 8'i "Yeni", en eskisi 1 Haziran; iki başlık iki projede aynı açıklamayla; veri platformunda "mobil karanlık tema" | "Müşteriye yanıt vermiyor muyuz?" | Geçmiş isteklerin çoğu karara bağlanmış olsun (dönüştürüldü ya da reddedildi); şablon tekrarı kalksın; istek proje alanına uysun | Yapıldı: geçmiş istekler karara bağlı, alana özgü metin (BL-02); yinelenen başlık (B-011) K0'da doğrulanacak |
+| Riskler | `risk_listesi`: Burak'ın 4 riskinin hepsi 1 Haziran'da açılmış, hiç güncellenmemiş; NEHİR'in en yüksek riski arayüz belgesi (12) | "Risk kaydı tutulmuyor." | Dört aylık risk geçmişi: açılan, güncellenen, kapanan; NEHİR'de kalite riski | Yapıldı: risk geçmişi, kapananlar var (BL-02) |
+| Jira içeriği | NHR-41 "eşzamanlı güncellemede veri kaybı" Low öncelikte, 27 Ağustos'tan beri gecikmede, tahmin 1 gün; veri platformunda "çevrimdışıyken uygulama kapanıyor" hatası; hikâyelerde kalıp açıklama | Teknik yönetici hemen fark eder | Bileşen–hata eşlemesi proje türüne göre; veri kaybı Highest; tahminler gerçekçi dağılımda | Yapıldı: alana özgü hata metinleri, ciddi hata Highest/High (BL-01, BL-02) |
+| Toplantı notları | 2 Ekim'de dört projenin hepsinde "Sprint değerlendirme toplantısı" (sürüm süresi 3 hafta); bir PUSULA notunda aksiyonun tarihi yok | Dolgu izlenimi | Toplantı türü takvime uysun (Rutin 1 v2'de kural) | Yapıldı: toplantı türü takvime bağlı, aksiyonlar tarihli (BL-02) |
+| Haftalık raporlar | Simülasyon PY projeleri dahil raporları kalıp maddelerle yazıyor; NEHİR taslağı "Genel Durum: Yeşil" diyor (18 geciken iş) | Rapor AI'ının değeri görünmez | Geçmiş raporlarda kalite dağılımı (iyi, orta, zayıf); taslak RAG çelişkisini işaretlesin | Kısmen: geçmiş RAG veriden, yoğun PY bir kademe iyimser (algı farkı); kalite dağılımı açık (BL-24), taslağın RAG çelişkisini işaretlemesi BL-10 ile pilot sonrası |
+| YILDIZ sağlık skoru | `portfoy_ozeti`: skor 100, güven düşük, veri yok | "Teklifteki proje en sağlıklısı mı?" | Teklif aşamasındaki proje skorlanmasın ("—") | Yapıldı: teklif skorlanmaz, "—" (BL-11) |
 
 Kalibrasyon `baslat --zorla` ile aynı çalışma alanında yapılır: kimlikler ve üyelikler korunur, izleyici yalnız "Buluttan Çek" der.
 
@@ -106,9 +109,9 @@ Dört P0 işi demo hikâyesinin ön koşuludur ve 12–16 Ekim düzenek haftası
 | 5 | Ay içi tahmini gerçekleşen; maliyet sapmasında aynı dönem | EVM ve maliyet ay içinde yanıltıyor; S6 görünmüyor | 2 gün | P1 | Yapıldı: EVM son kapanan aya kadar (BL-07), dönem sapması (BL-09); ay içi tahmin pilot sonrası (BL-22) |
 | 6 | Not, müşteri görüşmesi, risk güncelle/kapat, istek durumu araçları | PY döngüsünün üç işi eksik | 2 gün | P1 | Yapıldı, P0'a alındı (BL-05) |
 | 7 | Veri dondurma ve geri yükleme (`pilot dondur`, `pilot geri-yukle`) | Demo günü güvenliği | 0,5 gün | P1 | Yapıldı (BL-06) |
-| 8 | Önerilen RAG kuralı (PY farklı seçerse gerekçe); teklif projeleri skorlanmaz | B-002; YILDIZ skoru 100 | 1 gün | P1 | Açık (BL-10, BL-11) |
-| 9 | Yapılandırılmış talep: kaynak talebi ve açıklama talebi | B-007; kararlar iz bırakır | 2–3 gün | P2 | Açık (BL-12) |
-| 10 | Simülasyonda rapor günü Perşembe, arife yarım gün | Takvim tutarlılığı | 0,5 gün | P2 | Perşembe yapıldı (BL-02); arife açık (BL-14) |
+| 8 | Önerilen RAG kuralı (PY farklı seçerse gerekçe); teklif projeleri skorlanmaz | B-002; YILDIZ skoru 100 | 1 gün | P1 | Teklif skorlanmaz: yapıldı (BL-11). RAG kuralı pilot sonrasına alındı (BL-10) |
+| 9 | Yapılandırılmış talep: kaynak talebi ve açıklama talebi | B-007; kararlar iz bırakır | 2–3 gün | P2 | Açık, pilot sonrası (BL-12) |
+| 10 | Simülasyonda rapor günü Perşembe, arife yarım gün | Takvim tutarlılığı | 0,5 gün | P2 | Perşembe yapıldı (BL-02); arife açık, 27 Ekim'den önce ya da hiç (BL-14) |
 
 ## Kota ve maliyet
 

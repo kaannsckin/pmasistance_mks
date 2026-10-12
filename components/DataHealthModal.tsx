@@ -33,14 +33,14 @@ const DataHealthModal: React.FC<DataHealthModalProps> = ({ workspace, onApplyFix
         <div className="sticky top-0 bg-white dark:bg-gray-900 px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between z-10">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white" style={{ backgroundColor: 'var(--app-primary)' }}>
-              <i className="fa-solid fa-stethoscope"></i>
+              <i aria-hidden="true" className="fa-solid fa-stethoscope"></i>
             </div>
             <div>
               <h3 className="text-lg font-semibold text-gray-800 dark:text-white">Veri Sağlığı Denetimi</h3>
               <p className="text-xs text-gray-400">Gerçek veriyle çalışmadan önce tutarsızlıkları bul ve düzelt</p>
             </div>
           </div>
-          <button onClick={onClose} className="w-9 h-9 rounded-xl text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"><i className="fa-solid fa-times"></i></button>
+          <button aria-label="Kapat" onClick={onClose} className="w-9 h-9 rounded-xl text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"><i aria-hidden="true" className="fa-solid fa-times"></i></button>
         </div>
 
         <div className="p-6 space-y-5">
@@ -60,7 +60,7 @@ const DataHealthModal: React.FC<DataHealthModalProps> = ({ workspace, onApplyFix
           {report.issues.length === 0 ? (
             <div className="text-center py-14">
               <div className="w-14 h-14 rounded-2xl bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center mx-auto mb-3">
-                <i className="fa-solid fa-circle-check text-2xl text-emerald-500"></i>
+                <i aria-hidden="true" className="fa-solid fa-circle-check text-2xl text-emerald-500"></i>
               </div>
               <p className="text-sm font-semibold text-gray-700 dark:text-gray-200">Veri temiz görünüyor</p>
               <p className="text-xs text-gray-400 mt-1">Yetim tahsis, eşleşmeyen atama, mükerrer kayıt veya eksik alan bulunamadı.</p>
@@ -96,7 +96,7 @@ const DataHealthModal: React.FC<DataHealthModalProps> = ({ workspace, onApplyFix
                           className="flex-none text-[11px] font-semibold px-3 py-1.5 rounded-lg text-white hover:opacity-90 transition-opacity"
                           style={{ backgroundColor: 'var(--app-primary)' }}
                         >
-                          <i className="fa-solid fa-wrench mr-1"></i>{issue.fixLabel}
+                          <i aria-hidden="true" className="fa-solid fa-wrench mr-1"></i>{issue.fixLabel}
                         </button>
                       )}
                     </div>

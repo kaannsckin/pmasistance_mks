@@ -86,8 +86,8 @@ const KanbanColumn: React.FC<KanbanColumnProps> = ({ sprint, onDropTask, onTaskS
                             {sprint.title}
                         </h3>
                         {sprint.id !== 0 && (
-                            <button onClick={(e) => { e.stopPropagation(); setIsEditingTitle(true); }} className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-blue-500">
-                                <i className="fa-solid fa-pencil text-[9px]"></i>
+                            <button aria-label="Adı düzenle" onClick={(e) => { e.stopPropagation(); setIsEditingTitle(true); }} className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-blue-500">
+                                <i aria-hidden="true" className="fa-solid fa-pencil text-[9px]"></i>
                             </button>
                         )}
                     </div>
@@ -105,17 +105,17 @@ const KanbanColumn: React.FC<KanbanColumnProps> = ({ sprint, onDropTask, onTaskS
           
           <div className="flex items-center space-x-1 flex-shrink-0">
             {sprint.id === 0 && onCollapse && (
-              <button onClick={onCollapse} className="text-gray-300 hover:text-amber-500 p-1.5 rounded-lg hover:bg-amber-50 transition-all">
-                <i className="fa-solid fa-chevron-left text-[10px]"></i>
+              <button aria-label="Daralt" onClick={onCollapse} className="text-gray-300 hover:text-amber-500 p-1.5 rounded-lg hover:bg-amber-50 transition-all">
+                <i aria-hidden="true" className="fa-solid fa-chevron-left text-[10px]"></i>
               </button>
             )}
             {sprint.id !== 0 && (
-              <button onClick={() => onDelete(sprint)} className="text-gray-300 hover:text-red-500 p-1.5 rounded-lg hover:bg-red-50 transition-all">
-                <i className="fa-solid fa-trash text-[10px]"></i>
+              <button aria-label="Sil" onClick={() => onDelete(sprint)} className="text-gray-300 hover:text-red-500 p-1.5 rounded-lg hover:bg-red-50 transition-all">
+                <i aria-hidden="true" className="fa-solid fa-trash text-[10px]"></i>
               </button>
             )}
             <div className="drag-handle cursor-grab active:cursor-grabbing text-gray-300 hover:text-blue-500 p-1.5 rounded-lg hover:bg-blue-50 transition-all" onMouseDown={() => setIsSprintDraggable(true)} onMouseUp={() => setIsSprintDraggable(false)}>
-              <i className="fa-solid fa-grip-vertical text-[10px]"></i>
+              <i aria-hidden="true" className="fa-solid fa-grip-vertical text-[10px]"></i>
             </div>
           </div>
         </div>
@@ -149,7 +149,7 @@ const KanbanColumn: React.FC<KanbanColumnProps> = ({ sprint, onDropTask, onTaskS
         ))}
         {sprint.tasks.length === 0 && (
             <div className="h-40 flex flex-col items-center justify-center opacity-20">
-                <i className="fa-solid fa-inbox text-2xl mb-2"></i>
+                <i aria-hidden="true" className="fa-solid fa-inbox text-2xl mb-2"></i>
                 <span className="text-[8px] font-black uppercase tracking-widest">BOŞ</span>
             </div>
         )}

@@ -64,7 +64,7 @@ const ExecBriefModal: React.FC<ExecBriefModalProps> = ({ brief, year, onClose })
         <div className="sticky top-0 bg-white dark:bg-gray-900 px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between z-10 rounded-t-2xl">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white" style={{ backgroundColor: 'var(--app-primary)' }}>
-              <i className="fa-solid fa-clipboard-list"></i>
+              <i aria-hidden="true" className="fa-solid fa-clipboard-list"></i>
             </div>
             <div>
               <h3 className="text-lg font-semibold text-gray-800 dark:text-white">Yönetici Brifingi</h3>
@@ -73,12 +73,12 @@ const ExecBriefModal: React.FC<ExecBriefModalProps> = ({ brief, year, onClose })
           </div>
           <div className="flex items-center gap-2">
             <button onClick={copy} className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-2 rounded-lg text-white shadow-sm hover:opacity-90" style={{ backgroundColor: 'var(--app-primary)' }} title="Brifingi panoya kopyala">
-              <i className={`fa-solid ${copied ? 'fa-check' : 'fa-copy'}`}></i>{copied ? 'Kopyalandı' : 'Kopyala'}
+              <i aria-hidden="true" className={`fa-solid ${copied ? 'fa-check' : 'fa-copy'}`}></i>{copied ? 'Kopyalandı' : 'Kopyala'}
             </button>
             <button onClick={download} className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-300 hover:text-primary" title="Metin dosyası (.txt) olarak indir">
-              <i className="fa-solid fa-download"></i>İndir
+              <i aria-hidden="true" className="fa-solid fa-download"></i>İndir
             </button>
-            <button onClick={onClose} className="w-9 h-9 rounded-xl text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"><i className="fa-solid fa-times"></i></button>
+            <button aria-label="Kapat" onClick={onClose} className="w-9 h-9 rounded-xl text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"><i aria-hidden="true" className="fa-solid fa-times"></i></button>
           </div>
         </div>
         <div className="p-6 space-y-4">
@@ -88,7 +88,7 @@ const ExecBriefModal: React.FC<ExecBriefModalProps> = ({ brief, year, onClose })
                 <AiButton label={narrative ? 'Yeniden yaz' : 'AI ile yönetici özeti yaz'} loading={ai.loading} onClick={makeNarrative} title="Brifing verilerinden üst yönetime akıcı bir özet paragrafı üretir" />
                 {narrative && (
                   <button onClick={copyNarrative} className="text-[11px] font-semibold text-gray-500 hover:text-primary">
-                    <i className={`fa-solid ${narrativeCopied ? 'fa-check' : 'fa-copy'} mr-1`}></i>{narrativeCopied ? 'Kopyalandı' : 'Özeti kopyala'}
+                    <i aria-hidden="true" className={`fa-solid ${narrativeCopied ? 'fa-check' : 'fa-copy'} mr-1`}></i>{narrativeCopied ? 'Kopyalandı' : 'Özeti kopyala'}
                   </button>
                 )}
               </div>

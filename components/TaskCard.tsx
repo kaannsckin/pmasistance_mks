@@ -42,7 +42,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onView, onEdit, onNotify, onD
                             className="font-mono text-xs text-gray-500 hover:text-primary dark:text-gray-400 transition-colors"
                         >
                             {task.jiraId}
-                            <i className="fa-solid fa-external-link-alt text-[9px] ml-1 opacity-50"></i>
+                            <i aria-hidden="true" className="fa-solid fa-external-link-alt text-[9px] ml-1 opacity-50"></i>
                         </a>
                     )}
                 </div>
@@ -54,7 +54,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onView, onEdit, onNotify, onD
                 <div className="mt-auto space-y-2 pt-3">
                     <div className="flex flex-wrap gap-1.5">
                          <span className="inline-flex items-center px-2 py-1 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-xs">
-                            <i className="fa-solid fa-cube mr-1.5 opacity-70"></i>
+                            <i aria-hidden="true" className="fa-solid fa-cube mr-1.5 opacity-70"></i>
                             {task.unit}
                         </span>
                     </div>
@@ -74,7 +74,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onView, onEdit, onNotify, onD
 
                  {isDataMissing && (
                     <div className="mt-2 text-[10px] text-yellow-600 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20 px-2 py-1 rounded border border-yellow-100 dark:border-yellow-800 flex items-center">
-                        <i className="fa-solid fa-triangle-exclamation mr-1.5"></i>
+                        <i aria-hidden="true" className="fa-solid fa-triangle-exclamation mr-1.5"></i>
                         Eksik Süre Verisi
                     </div>
                 )}
@@ -94,18 +94,18 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onView, onEdit, onNotify, onD
                 
                 <div className="flex items-center space-x-1">
                     {isDataMissing && (
-                         <button onClick={() => onNotify(task)} title="Bildir" className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-yellow-100 text-yellow-600 transition-colors">
-                            <i className="fa-solid fa-paper-plane text-xs"></i>
+                         <button aria-label="Bildir" onClick={() => onNotify(task)} title="Bildir" className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-yellow-100 text-yellow-600 transition-colors">
+                            <i aria-hidden="true" className="fa-solid fa-paper-plane text-xs"></i>
                         </button>
                     )}
-                    <button onClick={() => onView(task)} title="Detay" className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-accent text-gray-500 hover:text-primary transition-colors">
-                        <i className="fa-solid fa-eye text-xs"></i>
+                    <button aria-label="Detay" onClick={() => onView(task)} title="Detay" className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-accent text-gray-500 hover:text-primary transition-colors">
+                        <i aria-hidden="true" className="fa-solid fa-eye text-xs"></i>
                     </button>
-                    <button onClick={() => onEdit(task)} title="Düzenle" className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-green-100 text-gray-500 hover:text-green-600 transition-colors">
-                        <i className="fa-solid fa-pencil text-xs"></i>
+                    <button aria-label="Düzenle" onClick={() => onEdit(task)} title="Düzenle" className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-green-100 text-gray-500 hover:text-green-600 transition-colors">
+                        <i aria-hidden="true" className="fa-solid fa-pencil text-xs"></i>
                     </button>
-                    <button onClick={() => onDelete(task.id)} title="Sil" className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-red-100 text-gray-500 hover:text-red-600 transition-colors">
-                        <i className="fa-solid fa-trash-can text-xs"></i>
+                    <button aria-label="Sil" onClick={() => onDelete(task.id)} title="Sil" className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-red-100 text-gray-500 hover:text-red-600 transition-colors">
+                        <i aria-hidden="true" className="fa-solid fa-trash-can text-xs"></i>
                     </button>
                 </div>
             </div>
