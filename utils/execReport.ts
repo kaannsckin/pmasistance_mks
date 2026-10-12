@@ -4,7 +4,7 @@ import {
     MonthlySummaryRow, OverAllocation, summarizeByDepartment, summarizeByPerson,
 } from './allocations';
 import { buildRoleAnalysis, EFFORT_TYPE_LABELS, RoleAnalysisRow } from './roleAnalysis';
-import { buildCostReport, CostReport } from './costing';
+import { buildCostReport, CostReport, costPeriodLabel } from './costing';
 import { PortfolioRisk, RISK_BAND_LABELS, RISK_STATUS_LABELS, summarizeRisks, topPortfolioRisks } from './risks';
 import { canFor } from './permissions';
 
@@ -227,12 +227,12 @@ export const buildExecWorkbookData = (report: ExecReport): Record<string, (strin
     const maliyet: (string | number)[][] = [
         ['MALİYET RAPORU (₺)', `${report.year}`, c.costedTitleCount === 0 ? 'Ünvan maliyetleri girilmemiş — Veri Havuzu → Ünvanlar' : ''],
         [],
-        ['Proje', 'Plan Maliyeti', 'Gerçekleşen', 'Sapma'],
-        ...c.byProject.map(r => [r.label, r.planCost, r.actualCost, r.varianceCost]),
-        ['TOPLAM', c.totalPlanCost, c.totalActualCost, c.totalVarianceCost],
+        ['Proje', 'Plan Maliyeti (yıl)', `Plan (${costPeriodLabel(c.periodEndMonth)})`, 'Gerçekleşen', 'Sapma (dönem)'],
+        ...c.byProject.map(r => [r.label, r.planCost, r.periodPlanCost, r.actualCost, r.varianceCost]),
+        ['TOPLAM', c.totalPlanCost, c.totalPeriodPlanCost, c.totalActualCost, c.totalVarianceCost],
         [],
-        ['Bölüm', 'Plan Maliyeti', 'Gerçekleşen', 'Sapma'],
-        ...c.byDepartment.map(r => [r.label, r.planCost, r.actualCost, r.varianceCost]),
+        ['Bölüm', 'Plan Maliyeti (yıl)', `Plan (${costPeriodLabel(c.periodEndMonth)})`, 'Gerçekleşen', 'Sapma (dönem)'],
+        ...c.byDepartment.map(r => [r.label, r.planCost, r.periodPlanCost, r.actualCost, r.varianceCost]),
         [],
         ['Ay', 'Plan Maliyeti', 'Gerçekleşen'],
         ...MONTHS_TR.map((m, i) => [m, c.monthlyPlanCost[i], c.monthlyActualCost[i]]),

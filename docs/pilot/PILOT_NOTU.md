@@ -87,7 +87,7 @@ Beş ajan Salı ve Perşembe 08:45'te üç aşamada (önce Elif ve Burak, sonra 
 
 **Sınırlar:** değişiklik sayısında sınır yok, her değişiklik tetikleyici ve gerekçeyle kaydedilir; ajan başına en çok 40 araç çağrısı; yetişmeyen iş ve verilen sözler `pilot-data/ajanda/` altında bir sonraki koşuya kalır.
 
-**Koordinatörün ek işleri (v3):** Perşembe koşularında ve kapı günlerinde `demo-testi` çalıştırır; kapı günlerinde ölçütleri `kapilar.md`'ye yazar ve `dondur` ile geri dönülebilir kopya alır; ajanların bulgularını gömülü bulgularla (G1–G7) karşılaştırır, ajanlara söylemez.
+**Koordinatörün ek işleri (v3):** Perşembe koşularında ve kapı günlerinde `demo-testi` çalıştırır; kapı günlerinde ölçütleri `kapilar.md`'ye yazar ve `dondur` ile geri dönülebilir kopya alır; ajanların bulgularını gömülü bulgularla (G1–G6) karşılaştırır, ajanlara söylemez.
 
 ## PY ajanlarının iş döngüsü
 
@@ -153,7 +153,7 @@ gantt
 | --- | --- | --- | --- |
 | K0 Kurulum | 15 Ekim, iki rutin sonrası | v4 yeniden kurulum Supabase'de; `senaryo liste` S1, S3, S6, S8, S9, S10'u gösterir; `kontrol` tümü geçti; `demo-testi` GEÇTİ (CDN uyarısı hariç) | 20 Ekim'e kadar kod düzeltmesi; senaryo tarihleri kaydırılır |
 | K1 Akış | 22 Ekim, 2. rutin sonrası | 42. hafta raporları uçtan uca (gönderim → bölüm sorumlusu → PYB destek → yayın) MCP araçlarıyla geçti; her persona en az bir yazma aracını gerekçeli kullandı; S2 kararı uygulamada; açık yüksek bulgu yok ya da düzeltmesi planlandı | 27 Ekim'e kadar düzeltme; K2 ölçütleri değişmez |
-| K2 Senaryo | 5 Kasım, 2. rutin sonrası | S1–S8'in en az 6'sı başarı ölçütüne ulaştı; PY ortalaması ≥ 75; DH1–DH3 sağlanıyor; gömülü bulguların en az 3/7'si bulundu | 2. dalga zayıf senaryonun telafisine ayrılır (S12); demo kapsamı daraltılır |
+| K2 Senaryo | 5 Kasım, 2. rutin sonrası | S1–S8'in en az 6'sı başarı ölçütüne ulaştı; PY ortalaması ≥ 75; DH1–DH3 sağlanıyor; gömülü bulguların en az 3/6'sı bulundu | 2. dalga zayıf senaryonun telafisine ayrılır (S12); demo kapsamı daraltılır |
 | K3 Dondurma | 19 Kasım, 2. rutin sonrası | Kod dondurulur (sonrası yalnız demo yolunu bozan hata düzeltmesi); `demo-testi` son 3 koşuda GEÇTİ; S9–S11 değerlendirildi; demo akışı yazılı; `dondur --ad K3-2026-11-19` | Demo, K3'te çalışan ekranlarla sınırlanır |
 | K4 Karar | 24 Kasım, 2. rutin sonrası | DH1–DH7 sağlanıyor; sunumu yapacak kişi demo akışını uygulamada baştan sona gezdi (canlı prova); `dondur --ad K4-2026-11-24` | Demo dondurulmuş yapılır ya da ertelenir |
 
@@ -176,7 +176,7 @@ On iki senaryo iki dalgaya yayılır: 1. dalga (S1–S8) 15 Ekim–5 Kasım, 2. 
 | S11 | 17 Kasım → 19 Kasım | ATLAS müşteri isteği: senaryo karşılaştırma görünümü | Anlatı | Elif `oner_istek_karari` ile karar verir; plan kilidi ve S3 sonrası kapasiteyle ilişkilendirir | — | Karar 2 iş günü içinde, eforu ve takvim etkisi gerekçede |
 | S12 | K2'de seçilir | Telafi: 1. dalgada başarısız kalan senaryonun bir çeşidi | — | — | — | Seçilmezse yok |
 
-S6'nın kesin rakamı ay kapanışından sonra gelir: EVM aylık gerçekleşen adam-ayla hesaplanır ve Ekim gerçekleşeni ay içinde 0 görünür (B-010, BL-07). Bu yüzden S6'nın EVM ölçütü 3 Kasım'dadır; ay içinde erken uyarı worklog'dan gelir.
+S6'nın kesin rakamı ay kapanışından sonra gelir: EVM aylık gerçekleşen adam-ayla ve gerçekleşeni girilmiş son aya kadar hesaplanır (BL-07); Ekim, 2 Kasım ay kapanışıyla girer. Bu yüzden S6'nın EVM ölçütü 3 Kasım'dadır; ay içinde erken uyarı worklog'dan gelir.
 
 ## Puanlama
 
@@ -256,7 +256,7 @@ Müdürün üç sorusu demonun da omurgasıdır: "Bu hafta hangi proje dikkatimi
 | Ajan verdiği sözü hatırlar | Her koşu sıfırdan | Yapıldı (v2): `pilot-data/ajanda/` | — |
 | Risk güncellenir ve kapanır; müşteri isteği ilerler | Yalnız risk ekleme vardı | Yapıldı: `oner_risk_guncelle`, `oner_istek_karari` | BL-05 |
 | Raporun son günü tek | Rehber Perşembe, simülasyon Cuma | Yapıldı: Perşembe teslim, Cuma bölüm onayı, Pazartesi yayın | BL-02 |
-| Gerçekleşen adam-ay worklog ile tutar | Ay içinde 0 (B-010) | Açık: ay içi tahmini gerçekleşen; Ekim CPI'si ay ortasında şişkin görünür | BL-07 |
+| Gerçekleşen adam-ay worklog ile tutar | Ay içinde 0 (B-010); Ekim CPI'si ay ortasında şişkin | Yapıldı: EVM gerçekleşeni girilmiş son aya kadar hesaplanır, CPI şişmez. Ay içi tahmini gerçekleşen pilot sonrasına kaldı | BL-07, BL-22 |
 | Maliyet sapması aynı dönemle kıyaslanır | Yıllık plan Ocak–Eylül gerçekleşeniyle | Açık | BL-09 |
 | Ajanlar uygulama üzerinden yazışır | Mesaj ve kaynak talebi aracı yok (B-007) | Açık: yazışma pilot dosyasında yürüyor | BL-12 |
 
@@ -294,7 +294,7 @@ Bu on bir soru, notun düzeltmeye açık kararlarıydı; yanıtlar 10 Ekim'de ve
 | B-008 | Orta | Bölüm sorumlusu kendisini "uygun kişi" olarak buluyor | Kodda düzeltildi, K0'da doğrulanacak |
 | B-013 | Orta | Olay dosyasındaki worklog toplamları Jira'dan yüksek (veri) | Simülasyonda düzeltildi, K0'da doğrulanacak |
 | B-009 | Düşük | RAG yalnız İngilizce değer kabul ediyor | Açık (BL-19) |
-| B-010 | Düşük | Ay içinde gerçekleşen adam-ay 0, worklog'a bağlı değil | Açık, önceliği Orta (BL-07) |
+| B-010 | Düşük | Ay içinde gerçekleşen adam-ay 0, worklog'a bağlı değil | EVM son kapanan aya kadar (BL-07); ay içi tahmin pilot sonrası (BL-22) |
 | B-011 | Düşük | Müşteri isteklerinde yinelenen başlıklar | Kodda düzeltildi, K0'da doğrulanacak |
 | B-012 | Düşük | Görev araması Jira anahtarıyla sonuç vermiyor | Kodda düzeltildi, K0'da doğrulanacak |
 | B-014 | Düşük | Plan kilidi ancak öneri denenince öğreniliyor | Açık (BL-20) |

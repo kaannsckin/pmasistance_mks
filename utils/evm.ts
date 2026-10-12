@@ -75,6 +75,22 @@ export const defaultStatusMonth = (year: number, now: Date = new Date()): number
     return now.getMonth() + 1;
 };
 
+/**
+ * EVM'nin durum ayı: gerçekleşeni girilmiş son ay (takvim ayını geçmez).
+ * Gerçekleşen adam-ay ay kapanışında girildiği için açık ay EVM'ye alınmaz;
+ * yoksa ayın planı ve ilerlemesi sayılır ama gerçekleşeni 0 kalır, CPI şişer
+ * (BL-07). Yılın hiç gerçekleşeni yoksa takvim ayı kullanılır.
+ */
+export const closedStatusMonth = (ws: Pick<WorkspaceData, 'allocations'>, year: number, now: Date = new Date()): number => {
+    const calendar = defaultStatusMonth(year, now);
+    let last = 0;
+    ws.allocations.forEach(a => {
+        if (a.year !== year) return;
+        MONTH_INDEXES.forEach(m => { if (m > last && (a.actual[m] || 0) > 0) last = m; });
+    });
+    return last === 0 ? calendar : Math.min(calendar, last);
+};
+
 const ratioOrNull = (num: number, den: number): number | null =>
     den > 1e-9 ? round2(num / den) : null;
 
@@ -138,7 +154,7 @@ export const buildPortfolioEVM = (
     projectIds?: string[],
     statusMonth?: number,
 ): PortfolioEVM => {
-    const sm = statusMonth === undefined ? defaultStatusMonth(year) : Math.max(0, Math.min(12, statusMonth));
+    const sm = statusMonth === undefined ? closedStatusMonth(ws, year) : Math.max(0, Math.min(12, statusMonth));
     const ids = projectIds ?? ws.projects.map(p => p.id);
     const projects = ids
         .map(id => buildProjectEVM(ws, id, year, sm))

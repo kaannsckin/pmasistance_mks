@@ -1,11 +1,11 @@
 import { PermissionKey, ProjectStatus, RagStatus, RiskStatus, Task, TaskStatus } from '../../types';
 import { getPlanLockStatus, MONTH_INDEXES, ROLE_LABELS, summarizeByProject } from '../allocations';
 import { AUDIT_ACTION_LABELS } from '../audit';
-import { buildCostReport } from '../costing';
+import { buildCostReport, costPeriodLabel } from '../costing';
 import { CATEGORY_LABELS, analyzeDataHealth } from '../dataHealth';
 import { departmentScorecards, orgCapacity } from '../deptScorecard';
-import { buildPortfolioEVM, buildProjectEVM, defaultStatusMonth, ProjectEVM } from '../evm';
-import { attentionItems, executiveSummary, portfolioHealth, projectHealth } from '../executive';
+import { buildPortfolioEVM, buildProjectEVM, closedStatusMonth, ProjectEVM } from '../evm';
+import { attentionItems, executiveSummary, isHealthScored, portfolioHealth, projectHealth } from '../executive';
 import { buildForecast, FORECAST_DIM_LABELS, FORECAST_METHOD_LABELS, ForecastDim, ForecastMethod } from '../forecast';
 import { buildPersonProfile } from '../personProfile';
 import { recentChanges } from '../recentChanges';
@@ -229,6 +229,7 @@ export const AI_TOOLS: ToolDef[] = [
                     proje: h.name, skor: h.score, bant: h.band, guven: h.confidence, rag: h.rag ? RAG_TR[h.rag] : undefined,
                     spi: r2(h.spi), cpi: r2(h.cpi), yuksek_risk: h.highRisks, nedenler: h.reasons,
                 })),
+                ...(health.unscored.length ? { skorlanmayan: health.unscored.map(u => `${u.name} (teklif aşamasında)`) } : {}),
                 dikkat_gerektirenler: attn.slice(0, 20).map(i => ({
                     onem: i.severity === 'error' ? 'kritik' : 'uyarı', kategori: i.category,
                     baslik: maskSicil(i.title, ctx.ws.people), detay: maskSicil(i.detail, ctx.ws.people),
@@ -248,7 +249,7 @@ export const AI_TOOLS: ToolDef[] = [
         run: (a, ctx) => {
             const p = resolveProject(ctx, a.proje);
             const year = resolveYear(ctx, a.yil);
-            const statusMonth = defaultStatusMonth(year, ctx.now);
+            const statusMonth = closedStatusMonth(ctx.ws, year, ctx.now);
             const h = projectHealth(ctx.scoped, p, year, statusMonth);
             const wpNames = new Map(p.workPackages.map(w => [w.id, w.name]));
             const today = todayIso(ctx.now);
@@ -270,7 +271,7 @@ export const AI_TOOLS: ToolDef[] = [
                 proje_yoneticisi: projectPmName(ctx, p.pmPersonId),
                 baslangic: p.settings.projectStartDate,
                 surum_suresi_hafta: p.settings.sprintDuration,
-                saglik: {
+                saglik: !isHealthScored(p) ? { skor: null, not: 'Teklif aşamasında skorlanmaz.' } : {
                     skor: h.score, bant: h.band, guven: h.confidence, kapsam: h.coverage, spi: r2(h.spi), cpi: r2(h.cpi), nedenler: h.reasons,
                     // Skorun girdileri: normalize değer (0-1, null = veri yok), ağırlık ve skordan düşürdüğü puan
                     girdiler: h.factors.map(f => ({ girdi: f.label, deger: f.value, agirlik: f.weight, kayip_puan: f.points, ayrinti: f.detail })),
@@ -615,7 +616,7 @@ export const AI_TOOLS: ToolDef[] = [
         },
         run: (a, ctx) => {
             const year = resolveYear(ctx, a.yil);
-            const statusMonth = defaultStatusMonth(year, ctx.now);
+            const statusMonth = closedStatusMonth(ctx.ws, year, ctx.now);
             if (str(a.proje)) {
                 const p = resolveProject(ctx, a.proje);
                 const e = buildProjectEVM(ctx.scoped, p.id, year, statusMonth);
@@ -635,20 +636,21 @@ export const AI_TOOLS: ToolDef[] = [
         label: 'Maliyet raporu',
         spec: {
             name: 'maliyet_raporu',
-            description: 'Tahsis × ünvan aylık maliyetinden (TL) plan ve gerçekleşen maliyet: toplam, aylık, proje ve bölüm bazında; maliyetlenemeyen (ünvanı/oranı eksik) kişi sayısı.',
+            description: 'Tahsis × ünvan aylık maliyetinden (TL) yıllık plan, gerçekleşen ve sapma (gerçekleşeni girilmiş son aya kadarki planla): toplam, aylık, proje ve bölüm bazında; maliyetlenemeyen kişi sayısı.',
             parameters: S.obj({ yil: P.year, proje: S.str('Proje adı ya da kodu (isteğe bağlı).') }),
         },
         run: (a, ctx) => {
             const year = resolveYear(ctx, a.yil);
             const c = buildCostReport(ctx.ws, year);
-            const row = (r: typeof c.byProject[number]) => ({ ad: r.label, plan_tl: r.planCost, gerceklesen_tl: r.actualCost, sapma_tl: r.varianceCost });
+            const row = (r: typeof c.byProject[number]) => ({ ad: r.label, plan_tl: r.planCost, donem_plan_tl: r.periodPlanCost, gerceklesen_tl: r.actualCost, sapma_tl: r.varianceCost });
+            const donem = costPeriodLabel(c.periodEndMonth);
             if (str(a.proje)) {
                 const p = resolveProject(ctx, a.proje, { anyProject: true });
                 const r = c.byProject.find(x => x.key === p.id);
-                return r ? { yil: year, proje: p.name, ...row(r) } : { yil: year, proje: p.name, not: 'Bu proje için maliyetlenebilir tahsis yok.' };
+                return r ? { yil: year, proje: p.name, sapma_donemi: donem, ...row(r) } : { yil: year, proje: p.name, not: 'Bu proje için maliyetlenebilir tahsis yok.' };
             }
             return {
-                yil: year, plan_tl: c.totalPlanCost, gerceklesen_tl: c.totalActualCost, sapma_tl: c.totalVarianceCost,
+                yil: year, sapma_donemi: donem, plan_tl: c.totalPlanCost, donem_plan_tl: c.totalPeriodPlanCost, gerceklesen_tl: c.totalActualCost, sapma_tl: c.totalVarianceCost,
                 aylik_plan_tl: c.monthlyPlanCost, aylik_gerceklesen_tl: c.monthlyActualCost,
                 projeler: c.byProject.slice(0, 30).map(row), bolumler: c.byDepartment.map(row),
                 maliyetlenemeyen_kisi_sayisi: c.uncostedPeople.length, maliyetli_unvan_sayisi: c.costedTitleCount,

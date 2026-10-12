@@ -159,7 +159,7 @@ npm run -s pilot -- geri-yukle --ad K1-2026-10-22          # kopyayı geri yükl
 | `puanlar.json` | Koordinatör ön puanları ve kullanıcı puanları (ajanlar son 5'ini görür) |
 | `raporlar/GG.md`, `raporlar/OZET.md` | Günlük rapor ve gün gün özet tablosu |
 | `bulgular.json` | Açık/kapanan bulgular (tekrar edenler izlenir) |
-| `gomulu.json` | Veride bilerek bırakılmış sorunlardan (G1–G7) hangisini kim, ne zaman buldu |
+| `gomulu.json` | Veride bilerek bırakılmış sorunlardan (G1–G6) hangisini kim, ne zaman buldu |
 | `kapilar.md` | Ara kapıların (K0–K4) sonucu ve K4 demo kararı |
 | `demo-testi/GG/` | Demo yolu testi sonucu (`sonuc.md`, `sonuc.json`, kalan adımların ekranı) |
 | `donmus/<ad>/` | `dondur` kopyası: çalışma alanı, simülasyon durumu, sahte Jira |

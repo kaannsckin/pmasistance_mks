@@ -5,7 +5,7 @@ import { can } from '../../utils/permissions';
 import { Identity, managedDepartmentCode, ownsProject } from '../../utils/rbac';
 import { relativeTime } from '../../utils/recentChanges';
 import {
-    actorOf, createReport, dueDate, findReport, isoWeekOf, isReportSteward, isWeekPublished, latestPublication, lintCounts, lintReport, pendingAuthors,
+    actorOf, createReport, dueDate, findReport, isoWeekOf, isReportSteward, isWeekPublished, latestPublication, lintCounts, lintDictionary, lintReport, pendingAuthors,
     nextStage, projectDepartment, reportDictionary, reportFlowOf, reportSettingsOf, STAGE_LABELS, visibleReports, weekLabel, weekProgress,
 } from '../../utils/weeklyReport';
 import { WeekPicker } from './DateRangePicker';
@@ -137,6 +137,7 @@ const ModernWeeklyReport: React.FC<ModernWeeklyReportProps> = ({
     const { year, week } = wk;
     const settings = useMemo(() => reportSettingsOf(workspace), [workspace]);
     const dictionary = useMemo(() => reportDictionary(settings), [settings]);
+    const lintDict = useMemo(() => lintDictionary(dictionary, workspace.projects), [dictionary, workspace.projects]);
     const reports = useMemo(() => visibleReports(workspace, identity).filter(r => r.year === year && r.week === week), [workspace, identity, year, week]);
     const published = isWeekPublished(workspace, year, week);
     const publication = (workspace.weeklyPublications || []).find(p => p.year === year && p.week === week);
@@ -304,7 +305,7 @@ const ModernWeeklyReport: React.FC<ModernWeeklyReportProps> = ({
                     <EmptyState icon="users" title="Kişi seçilmedi"><span className="text-[15px] m-text-3">Rapor yazmak için profil menüsünden kendinizi seçin.</span></EmptyState>
                 ) : myRows.length === 0 ? (
                     <EmptyState icon="report" title="Sahibi olduğunuz aktif proje yok"><span className="text-[15px] m-text-3 max-w-[52ch]">Haftalık rapor, proje yöneticisi olduğunuz devam eden projeler için yazılır.</span></EmptyState>
-                ) : <ReportRows rows={myRows} dictionary={dictionary} />
+                ) : <ReportRows rows={myRows} dictionary={lintDict} />
             )}
 
             {/* BS / PYDS: onay bekleyen */}
@@ -315,7 +316,7 @@ const ModernWeeklyReport: React.FC<ModernWeeklyReportProps> = ({
                     <EmptyState icon="check" tone="m-tone-ok" title="Onay bekleyen rapor yok">
                         <span className="text-[15px] m-text-3 max-w-[52ch]">{bs ? 'Proje yöneticileri raporlarını gönderdikçe burada görünür.' : 'Bölüm sorumluları onayladıkça raporlar burada format denetimine düşer.'}</span>
                     </EmptyState>
-                ) : <ReportRows rows={inbox.map(rowOf)} dictionary={dictionary} />
+                ) : <ReportRows rows={inbox.map(rowOf)} dictionary={lintDict} />
             )}
 
             {/* Bölüm / hafta durumu + hatırlatma */}
@@ -338,7 +339,7 @@ const ModernWeeklyReport: React.FC<ModernWeeklyReportProps> = ({
                                 </section>
                                 <section aria-label="Projeler" className="flex flex-col gap-2">
                                     <h2 className="m-0 text-[15px] font-semibold m-text-2">Projeler <span className="m-text-3 font-normal m-tabular">{deptRows.length}</span></h2>
-                                    {deptRows.length ? <ReportRows rows={deptRows} dictionary={dictionary} /> : <EmptyState icon="report" title="Bölümde aktif proje yok" />}
+                                    {deptRows.length ? <ReportRows rows={deptRows} dictionary={lintDict} /> : <EmptyState icon="report" title="Bölümde aktif proje yok" />}
                                 </section>
                             </>
                         )}

@@ -4,7 +4,7 @@ import { MONTHS_TR, ROLE_LABELS } from '../utils/allocations';
 import { buildExecReport, exportExecReportToExcel } from '../utils/execReport';
 import { exportExecReportToPpt } from '../utils/pptExport';
 import { baselinePlanFor, snapshotsForYear } from '../utils/snapshots';
-import { fmtTL } from '../utils/costing';
+import { costPeriodLabel, fmtTL } from '../utils/costing';
 import { RISK_BAND_HEX, RISK_BAND_LABELS, summarizeRisks, topPortfolioRisks } from '../utils/risks';
 import { AttentionCategory, attentionItems, executiveSummary, HealthBand, portfolioHealth } from '../utils/executive';
 import { orgCapacity } from '../utils/deptScorecard';
@@ -549,7 +549,7 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
             <div className="flex items-center gap-6">
               <div>
-                <p className="text-[11px] font-semibold text-gray-400 mb-1">Plan</p>
+                <p className="text-[11px] font-semibold text-gray-400 mb-1">Plan (yıl)</p>
                 <p className="text-xl font-semibold" style={{ color: 'var(--app-primary)' }}>{fmtTL(report.cost.totalPlanCost)}</p>
               </div>
               <div>
@@ -557,7 +557,7 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
                 <p className="text-xl font-semibold text-emerald-600 dark:text-emerald-400">{fmtTL(report.cost.totalActualCost)}</p>
               </div>
               <div>
-                <p className="text-[11px] font-semibold text-gray-400 mb-1">Sapma</p>
+                <p className="text-[11px] font-semibold text-gray-400 mb-1" title={`Gerçekleşen − ${costPeriodLabel(report.cost.periodEndMonth)} planı (${fmtTL(report.cost.totalPeriodPlanCost)})`}>Sapma ({costPeriodLabel(report.cost.periodEndMonth)})</p>
                 <p className={`text-xl font-semibold ${report.cost.totalVarianceCost > 0 ? 'text-red-500' : report.cost.totalVarianceCost < 0 ? 'text-amber-500' : 'text-gray-400'}`}>
                   {report.cost.totalVarianceCost > 0 ? '+' : ''}{fmtTL(report.cost.totalVarianceCost)}
                 </p>

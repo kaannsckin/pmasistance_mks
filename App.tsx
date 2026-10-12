@@ -118,7 +118,7 @@ import DataHealthSheet from './components/modern/sheets/DataHealthSheet';
 import AuditLogSheet from './components/modern/sheets/AuditLogSheet';
 import StatusReportSheet from './components/modern/sheets/StatusReportSheet';
 import {
-  actorOf, canEditReport, isReportSteward, markWeekEmailed, publishWeek, reportDictionary, reportFlowOf, reportSettingsOf, returnReportIn, saveReport, setReportAiAssessment, STAGE_LABELS, unpublishWeek, weekLabel,
+  actorOf, canEditReport, isReportSteward, lintDictionary, markWeekEmailed, publishWeek, reportDictionary, reportFlowOf, reportSettingsOf, returnReportIn, saveReport, setReportAiAssessment, STAGE_LABELS, unpublishWeek, weekLabel,
 } from './utils/weeklyReport';
 import {
   canEditMeeting, canPlanMeeting, canReviewMeeting, createMeeting, isOwnMeeting, markHeld, MeetingDraft, reviewMeeting, setMeetingStatus, updateMeeting,
@@ -798,7 +798,7 @@ const App: React.FC = () => {
   const handleSaveReport = useCallback((draft: WeeklyReport, advance = false): boolean => {
     const ws = workspaceRef.current;
     if (!ws) return false;
-    const dictionary = reportDictionary(reportSettingsOf(ws));
+    const dictionary = lintDictionary(reportDictionary(reportSettingsOf(ws)), ws.projects);
     const res = saveReport(ws, identityOf(ws), draft, actorOf(ws), { advance, dictionary });
     if (!res) return false;
     let next: WorkspaceData = { ...ws, weeklyReports: res.reports };

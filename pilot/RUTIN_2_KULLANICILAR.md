@@ -181,7 +181,7 @@ Yanıtlanan mesajlar yanıtlanmış sayılır; yanıtsız kalanlar sonraki koşu
   ```json
   [{"id": "B-015", "baslik": "…", "tur": "…", "onem": "…", "ilk": "GG", "son": "GG", "gun_sayisi": 1, "durum": "acik | kapandi", "kanit": "…", "kim": ["elif"]}]
   ```
-- **Gömülü bulgular:** `pilot/SENARYOLAR.md` › "Gömülü bulgular" (G1–G7) ile ajanların bulgu, mesaj ve `gercek_disi` alanlarını karşılaştır. Bulunanı `pilot-data/gomulu.json`'a ekle (`{"g": "G1", "persona": "selin", "tarih": "GG", "kanit": "…"}`; aynı G için ilk bulan yeterli). Ajanlara söyleme.
+- **Gömülü bulgular:** `pilot/SENARYOLAR.md` › "Gömülü bulgular" (G1–G6; G7 kaldırıldı) ile ajanların bulgu, mesaj ve `gercek_disi` alanlarını karşılaştır. Bulunanı `pilot-data/gomulu.json`'a ekle (`{"g": "G1", "persona": "selin", "tarih": "GG", "kanit": "…"}`; aynı G için ilk bulan yeterli). Ajanlara söyleme.
 
 ## 5. Demo yolu testi (Perşembe koşuları ve kapı günleri)
 

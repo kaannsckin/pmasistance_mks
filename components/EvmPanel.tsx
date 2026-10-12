@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { WorkspaceData } from '../types';
 import { MONTHS_TR } from '../utils/allocations';
 import { fmtTL } from '../utils/costing';
-import { buildPortfolioEVM, defaultStatusMonth, ProjectEVM } from '../utils/evm';
+import { buildPortfolioEVM, closedStatusMonth, ProjectEVM } from '../utils/evm';
 
 interface EvmPanelProps {
   workspace: WorkspaceData;
@@ -27,7 +27,7 @@ const Kpi: React.FC<{ label: string; value: string; tone?: string; sub?: string;
 );
 
 const EvmPanel: React.FC<EvmPanelProps> = ({ workspace, year, projectIds }) => {
-  const [statusMonth, setStatusMonth] = useState<number>(() => defaultStatusMonth(year));
+  const [statusMonth, setStatusMonth] = useState<number>(() => closedStatusMonth(workspace, year));
   const evm = useMemo(() => buildPortfolioEVM(workspace, year, projectIds, statusMonth), [workspace, year, projectIds, statusMonth]);
 
   const budgetPct = evm.bac > 0 ? Math.min(100, (evm.ac / evm.bac) * 100) : 0;

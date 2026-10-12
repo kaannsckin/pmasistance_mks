@@ -3,7 +3,7 @@ import { WeeklyReport, WorkspaceData } from '../types';
 import {
     actorOf, advanceReport, buildEml, DEFAULT_REPORT_FLOW, DEFAULT_REPORT_SETTINGS, flowBlockers, flowStages, nextStage, previousPlansOf, returnStage, dueDate, latestPublication, markWeekEmailed, publishWeek, reminderText, reportDictionary,
     returnReportIn, saveReport, unpublishWeek, canEditReport, consolidate, createReport, editReport, findAbbreviations, glossaryFor, isoWeekOf,
-    lintCounts, lintReport, locative, mailtoLink, meetingSentence, newItem, pendingAuthors, projectDepartment, renderReportHtml, renderReportText,
+    lintCounts, lintDictionary, lintReport, locative, mailtoLink, meetingSentence, newItem, pendingAuthors, projectDepartment, renderReportHtml, renderReportText,
     returnReport, setPlanReview, setReportAiAssessment, shiftWeek, teamsChatLink, visibleReports, weekLabel, weekProgress, weekStart,
 } from './weeklyReport';
 import { createEmptyWorkspace, createProject } from './workspace';
@@ -333,5 +333,22 @@ describe('akış işlemleri (yetki işlem anında)', () => {
         expect(m.text).toContain('(Safir Posta)');
         expect(m.text).toContain('8 Ekim Perşembe');
         expect(m.text).toContain('Rapor sayfası: https://app');
+    });
+
+    it('denetim sözlüğü büyük harfli proje adını kısaltma saymaz (BL-21)', () => {
+        const base = reportDictionary(DEFAULT_REPORT_SETTINGS);
+        const projects = [{ name: 'NEHİR Veri Platformu' }, { name: 'Karar Destek' }, { name: 'PY Eğitimi' }, { name: 'X Projesi' }];
+        const dict = lintDictionary(base, projects);
+        expect(dict.find(a => a.abbr === 'NEHİR')?.expansion).toBe('NEHİR Veri Platformu');
+        expect(dict.some(a => a.abbr === 'Karar')).toBe(false); // büyük harfli değil
+        expect(dict.some(a => a.abbr === 'X')).toBe(false); // tek harf
+        expect(dict.filter(a => a.abbr === 'PY')).toHaveLength(1); // kurum sözlüğündeki açılım korunur
+        expect(dict.find(a => a.abbr === 'PY')?.expansion).toBe('Proje Yöneticisi');
+
+        const report = { thisWeek: [newItem('ongoing', 'NEHİR yükleme işinde NHR-131 kapatıldı.')], nextWeek: [newItem('plan', 'NEHİR kabul testi.')], abbreviations: [] };
+        expect(lintReport(report, base).some(i => i.code === 'abbr')).toBe(true);
+        expect(lintReport(report, dict).some(i => i.code === 'abbr')).toBe(false);
+        // Rapor sonundaki kısaltma listesi proje adını açmaz (yalnız denetim sözlüğü)
+        expect(glossaryFor([report as WeeklyReport], base).some(g => g.abbr === 'NEHİR')).toBe(false);
     });
 });
