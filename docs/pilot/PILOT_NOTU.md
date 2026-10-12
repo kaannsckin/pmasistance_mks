@@ -257,7 +257,7 @@ Müdürün üç sorusu demonun da omurgasıdır: "Bu hafta hangi proje dikkatimi
 | Risk güncellenir ve kapanır; müşteri isteği ilerler | Yalnız risk ekleme vardı | Yapıldı: `oner_risk_guncelle`, `oner_istek_karari` | BL-05 |
 | Raporun son günü tek | Rehber Perşembe, simülasyon Cuma | Yapıldı: Perşembe teslim, Cuma bölüm onayı, Pazartesi yayın | BL-02 |
 | Gerçekleşen adam-ay worklog ile tutar | Ay içinde 0 (B-010); Ekim CPI'si ay ortasında şişkin | Yapıldı: EVM gerçekleşeni girilmiş son aya kadar hesaplanır, CPI şişmez. Ay içi tahmini gerçekleşen pilot sonrasına kaldı | BL-07, BL-22 |
-| Maliyet sapması aynı dönemle kıyaslanır | Yıllık plan Ocak–Eylül gerçekleşeniyle | Açık | BL-09 |
+| Maliyet sapması aynı dönemle kıyaslanır | Yıllık plan Ocak–Eylül gerçekleşeniyle | Yapıldı: sapma gerçekleşeni girilmiş son aya kadarki planla | BL-09 |
 | Ajanlar uygulama üzerinden yazışır | Mesaj ve kaynak talebi aracı yok (B-007) | Açık: yazışma pilot dosyasında yürüyor | BL-12 |
 
 ## Danışmana sorular
@@ -285,7 +285,7 @@ Bu on bir soru, notun düzeltmeye açık kararlarıydı; yanıtlar 10 Ekim'de ve
 | ID | Önem | Konu | Durum (12 Ekim) |
 | --- | --- | --- | --- |
 | B-001 | Yüksek | Kapasite-talep tüm satırlarda "Rol atanmamış", kapasite 0; işe alım kararına kullanılamıyor | Kodda düzeltildi, K0'da doğrulanacak |
-| B-002 | Orta | Portföy RAG'ı PY elle girmedikçe gecikmeyi yansıtmıyor | Açık: önerilen RAG kuralı (BL-10) |
+| B-002 | Orta | Portföy RAG'ı PY elle girmedikçe gecikmeyi yansıtmıyor | Açık: önerilen RAG kuralı pilot sonrasına alındı (BL-10) |
 | B-003 | Orta | Görev aramasında bilinmeyen filtre sessizce yok sayılıyor | Kodda düzeltildi, K0'da doğrulanacak |
 | B-004 | Orta | Tahsis özeti "gerçekleşen" istenince plan döndürüyor | Kodda düzeltildi, K0'da doğrulanacak |
 | B-005 | Orta | Araç listesi parametre şeması vermiyor; yanlış parametre sessizce yok sayılıyor | Kodda düzeltildi, K0'da doğrulanacak |
