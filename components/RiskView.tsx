@@ -123,7 +123,7 @@ const RiskView: React.FC<RiskViewProps> = ({ projectName, risks, people, canEdit
             style={{ backgroundColor: 'var(--app-primary)' }}
             title="Projenin dış çevre (PESTEL) analizini görüntüle / düzenle"
           >
-            <i className="fa-solid fa-globe"></i>
+            <i aria-hidden="true" className="fa-solid fa-globe"></i>
             PESTEL Analizi
             {pestelSummary.total > 0 && <span className="bg-white/25 rounded-md px-1.5 py-0.5 text-[10px]">{pestelSummary.total}</span>}
           </button>
@@ -132,7 +132,7 @@ const RiskView: React.FC<RiskViewProps> = ({ projectName, risks, people, canEdit
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold text-gray-600 dark:text-gray-200 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm hover:border-primary hover:text-primary transition-all"
             title="Projenin SWOT (Güçlü/Zayıf · Fırsat/Tehdit) analizini görüntüle / düzenle"
           >
-            <i className="fa-solid fa-table-cells-large"></i>
+            <i aria-hidden="true" className="fa-solid fa-table-cells-large"></i>
             SWOT Analizi
             {swotSummary.total > 0 && <span className="bg-gray-100 dark:bg-gray-700 rounded-md px-1.5 py-0.5 text-[10px]">{swotSummary.total}</span>}
           </button>
@@ -143,7 +143,7 @@ const RiskView: React.FC<RiskViewProps> = ({ projectName, risks, people, canEdit
       {aiRisks && (
         <div className="bg-indigo-50/60 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800 rounded-2xl p-4">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-bold text-gray-800 dark:text-gray-100"><i className="fa-solid fa-wand-magic-sparkles text-indigo-500 mr-2"></i>AI risk önerileri</h3>
+            <h3 className="text-sm font-bold text-gray-800 dark:text-gray-100"><i aria-hidden="true" className="fa-solid fa-wand-magic-sparkles text-indigo-500 mr-2"></i>AI risk önerileri</h3>
             <span className="text-[10px] text-gray-400">Eklemek istediklerinizi seçin; eklendikten sonra düzenleyebilirsiniz.</span>
           </div>
           <div className="space-y-2">
@@ -164,7 +164,7 @@ const RiskView: React.FC<RiskViewProps> = ({ projectName, risks, people, canEdit
           <div className="flex justify-end gap-2 mt-3">
             <button onClick={() => setAiRisks(null)} className="text-xs font-semibold px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-500">Vazgeç</button>
             <button onClick={addAiRisks} disabled={!aiRisks.some(r => r.selected)} className="text-xs font-semibold px-4 py-2 rounded-xl text-white disabled:opacity-50" style={{ backgroundColor: 'var(--app-primary)' }}>
-              <i className="fa-solid fa-plus mr-1"></i>Seçilenleri Ekle ({aiRisks.filter(r => r.selected).length})
+              <i aria-hidden="true" className="fa-solid fa-plus mr-1"></i>Seçilenleri Ekle ({aiRisks.filter(r => r.selected).length})
             </button>
           </div>
         </div>
@@ -271,13 +271,13 @@ const RiskView: React.FC<RiskViewProps> = ({ projectName, risks, people, canEdit
             <div className="flex items-center justify-between">
               <span className="text-[11px] text-gray-400">Skor: <b style={{ color: RISK_BAND_HEX[riskBand(newRisk.probability * newRisk.impact)] }}>{newRisk.probability * newRisk.impact} · {RISK_BAND_LABELS[riskBand(newRisk.probability * newRisk.impact)]}</b></span>
               <button onClick={addRisk} disabled={!newRisk.title.trim()} className="text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-sm hover:opacity-90 disabled:opacity-40" style={{ backgroundColor: 'var(--app-primary)' }}>
-                <i className="fa-solid fa-plus mr-1"></i>Ekle
+                <i aria-hidden="true" className="fa-solid fa-plus mr-1"></i>Ekle
               </button>
             </div>
           </div>
         ) : (
           <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-2xl px-4 py-3 flex items-center gap-3 self-start">
-            <i className="fa-solid fa-lock text-amber-500"></i>
+            <i aria-hidden="true" className="fa-solid fa-lock text-amber-500"></i>
             <p className="text-[11px] text-amber-700 dark:text-amber-300">Riskleri yalnızca Proje Yöneticisi ve Bölüm Sorumlusu düzenleyebilir (salt-okunur görünüm).</p>
           </div>
         )}
@@ -340,8 +340,8 @@ const RiskView: React.FC<RiskViewProps> = ({ projectName, risks, people, canEdit
                   </td>
                   {editable && (
                     <td className="px-2 py-2">
-                      <button onClick={() => { if (window.confirm('Bu risk silinsin mi?')) onUpdateRisks(risks.filter(x => x.id !== r.id)); }} className="w-7 h-7 rounded-lg text-gray-300 hover:text-red-500 transition-colors">
-                        <i className="fa-solid fa-trash text-xs"></i>
+                      <button aria-label="Sil" onClick={() => { if (window.confirm('Bu risk silinsin mi?')) onUpdateRisks(risks.filter(x => x.id !== r.id)); }} className="w-7 h-7 rounded-lg text-gray-300 hover:text-red-500 transition-colors">
+                        <i aria-hidden="true" className="fa-solid fa-trash text-xs"></i>
                       </button>
                     </td>
                   )}

@@ -56,11 +56,11 @@ const TestPeriodColumn: React.FC<TestPeriodColumnProps> = ({ sprint, allTasks, r
         onClick={() => setIsExpanded(true)}
       >
         <div className="rotate-90 origin-center whitespace-nowrap font-black text-[9px] tracking-[0.4em] text-emerald-600 dark:text-emerald-400 flex items-center uppercase">
-           <i className="fa-solid fa-flask mr-3 -rotate-90 text-[10px]"></i>
+           <i aria-hidden="true" className="fa-solid fa-flask mr-3 -rotate-90 text-[10px]"></i>
            TEST SÜRECİ
         </div>
         <div className="mt-auto p-2 text-emerald-300 opacity-0 group-hover:opacity-100 transition-opacity">
-           <i className="fa-solid fa-chevron-right text-[10px]"></i>
+           <i aria-hidden="true" className="fa-solid fa-chevron-right text-[10px]"></i>
         </div>
       </div>
     );
@@ -78,11 +78,11 @@ const TestPeriodColumn: React.FC<TestPeriodColumnProps> = ({ sprint, allTasks, r
             </div>
         </div>
         <div className="flex space-x-1.5">
-            <button onClick={() => setIsEditing(!isEditing)} className={`w-7 h-7 flex items-center justify-center rounded-lg transition-all ${isEditing ? 'bg-emerald-600 text-white shadow-md' : 'bg-white dark:bg-gray-800 text-emerald-600 border border-emerald-100 dark:border-emerald-900'}`}>
-                <i className={`fa-solid ${isEditing ? 'fa-check' : 'fa-pencil'} text-[10px]`}></i>
+            <button aria-label={isEditing ? 'Bitir' : 'Düzenle'} onClick={() => setIsEditing(!isEditing)} className={`w-7 h-7 flex items-center justify-center rounded-lg transition-all ${isEditing ? 'bg-emerald-600 text-white shadow-md' : 'bg-white dark:bg-gray-800 text-emerald-600 border border-emerald-100 dark:border-emerald-900'}`}>
+                <i aria-hidden="true" className={`fa-solid ${isEditing ? 'fa-check' : 'fa-pencil'} text-[10px]`}></i>
             </button>
-            <button onClick={() => setIsExpanded(false)} className="w-7 h-7 flex items-center justify-center bg-white dark:bg-gray-800 text-gray-400 rounded-lg border border-gray-100 dark:border-gray-800 shadow-sm">
-                <i className="fa-solid fa-chevron-left text-[10px]"></i>
+            <button aria-label="Daralt" onClick={() => setIsExpanded(false)} className="w-7 h-7 flex items-center justify-center bg-white dark:bg-gray-800 text-gray-400 rounded-lg border border-gray-100 dark:border-gray-800 shadow-sm">
+                <i aria-hidden="true" className="fa-solid fa-chevron-left text-[10px]"></i>
             </button>
         </div>
       </div>
@@ -110,7 +110,7 @@ const TestPeriodColumn: React.FC<TestPeriodColumnProps> = ({ sprint, allTasks, r
                 {assignableTasks.map(t => (
                   <div key={t.id} onClick={() => handleToggleTask(t)} className={`flex items-start p-2 rounded-lg border cursor-pointer transition-all ${taskIds.includes(t.id) ? 'bg-emerald-100 border-emerald-200' : 'bg-white dark:bg-gray-800 border-gray-100'}`}>
                     <div className={`mt-0.5 w-4 h-4 rounded border flex items-center justify-center mr-2 ${taskIds.includes(t.id) ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-gray-200 bg-gray-50'}`}>
-                       {taskIds.includes(t.id) && <i className="fa-solid fa-check text-[8px]"></i>}
+                       {taskIds.includes(t.id) && <i aria-hidden="true" className="fa-solid fa-check text-[8px]"></i>}
                     </div>
                     <div className="min-w-0">
                       <p className="text-[9px] font-black text-emerald-900 dark:text-emerald-100 truncate">{t.name}</p>
@@ -140,7 +140,7 @@ const TestPeriodColumn: React.FC<TestPeriodColumnProps> = ({ sprint, allTasks, r
               <span className="text-[8px] font-black text-emerald-600/40 uppercase tracking-widest block">KAPSAMDAKİ GÖREVLER</span>
               {assignedTasks.map(t => (
                 <div key={t.id} className="text-[9px] p-2.5 bg-white/60 dark:bg-emerald-900/10 rounded-xl border border-emerald-100 dark:border-emerald-900/50 flex items-center">
-                  <i className="fa-solid fa-check-circle mr-2.5 text-emerald-500"></i>
+                  <i aria-hidden="true" className="fa-solid fa-check-circle mr-2.5 text-emerald-500"></i>
                   <div className="min-w-0">
                     <span className="font-black block truncate text-emerald-900 dark:text-emerald-100">{t.name}</span>
                     <span className="text-[7px] text-emerald-600/60 font-black tracking-widest uppercase">{t.jiraId}</span>

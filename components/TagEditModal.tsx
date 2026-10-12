@@ -24,7 +24,7 @@ const TagEditModal: React.FC<TagEditModalProps> = ({ tag, onSave, onClose }) => 
       <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden animate-fade-in-up">
         <div className="p-6 border-b dark:border-gray-700">
             <h2 className="text-lg font-black text-gray-800 dark:text-white flex items-center">
-                <i className="fa-solid fa-pencil mr-3 text-purple-600"></i>
+                <i aria-hidden="true" className="fa-solid fa-pencil mr-3 text-purple-600"></i>
                 Etiketi Düzenle
             </h2>
             <p className="text-xs text-gray-400 mt-1">Bu etiketi değiştirdiğinizde tüm notlarınızda güncellenecektir.</p>

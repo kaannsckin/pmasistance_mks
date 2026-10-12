@@ -66,7 +66,7 @@ const ResourceColorPicker: React.FC<{ currentColor?: string, onSelect: (color: s
                             style={{ backgroundColor: c }}
                         />
                     ))}
-                    <button onClick={() => { onSelect(''); setIsOpen(false); }} className="w-4 h-4 rounded-full bg-gray-200 flex items-center justify-center text-[8px]"><i className="fa-solid fa-times"></i></button>
+                    <button aria-label="Seçimi temizle" onClick={() => { onSelect(''); setIsOpen(false); }} className="w-4 h-4 rounded-full bg-gray-200 flex items-center justify-center text-[8px]"><i aria-hidden="true" className="fa-solid fa-times"></i></button>
                 </div>
             )}
         </div>
@@ -298,12 +298,12 @@ const ResourceManager: React.FC<ResourceManagerProps> = ({ resources, setResourc
                 )}
 
                 <div className="relative">
-                    <button onMouseEnter={() => setShowHelp(true)} onMouseLeave={() => setShowHelp(false)} className="w-8 h-8 flex items-center justify-center text-primary hover:opacity-80 transition-colors">
-                        <i className="fa-solid fa-circle-question"></i>
+                    <button aria-label="Yardım" onMouseEnter={() => setShowHelp(true)} onMouseLeave={() => setShowHelp(false)} className="w-8 h-8 flex items-center justify-center text-primary hover:opacity-80 transition-colors">
+                        <i aria-hidden="true" className="fa-solid fa-circle-question"></i>
                     </button>
                     {showHelp && (
                         <div className="absolute right-0 top-10 w-80 bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 z-[110] text-[11px] animate-fade-in-up">
-                            <h4 className="font-black text-primary uppercase mb-3 flex items-center"><i className="fa-solid fa-lightbulb mr-2"></i> Akıllı İçe Aktarma</h4>
+                            <h4 className="font-black text-primary uppercase mb-3 flex items-center"><i aria-hidden="true" className="fa-solid fa-lightbulb mr-2"></i> Akıllı İçe Aktarma</h4>
                             <ul className="space-y-2 text-gray-500 dark:text-gray-400 leading-relaxed">
                                 <li>• <b>Kapasite Kontrolü:</b> Birim toplamları, o birimdeki kişi sayısına göre değerlendirilir. (3 kişi = %300 kapasite)</li>
                                 <li>• <b>Görsel Uyarılar:</b> Kapasite aşımı olduğunda hücreler otomatik olarak <b>Rose</b> tonuna döner.</li>
@@ -315,10 +315,10 @@ const ResourceManager: React.FC<ResourceManagerProps> = ({ resources, setResourc
                 <div className="flex bg-emerald-50 dark:bg-emerald-900/20 p-1 rounded-xl border border-emerald-100 dark:border-emerald-800">
                     <input type="file" ref={fileInputRef} onChange={handleImportExcel} className="hidden" accept=".xlsx, .xls, .csv" />
                     <button onClick={() => fileInputRef.current?.click()} className="bg-emerald-600 text-white h-8 px-4 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all hover:bg-emerald-700 flex items-center">
-                        <i className="fa-solid fa-file-import mr-2"></i> {isImporting ? 'İŞLENİYOR...' : 'İÇE AKTAR'}
+                        <i aria-hidden="true" className="fa-solid fa-file-import mr-2"></i> {isImporting ? 'İŞLENİYOR...' : 'İÇE AKTAR'}
                     </button>
                     <button onClick={() => exportResourcePlanToExcel(resources)} className="bg-white dark:bg-emerald-800 text-emerald-600 dark:text-emerald-100 h-8 px-4 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all hover:bg-emerald-50 ml-1 flex items-center">
-                        <i className="fa-solid fa-file-export mr-2"></i> DIŞA AKTAR
+                        <i aria-hidden="true" className="fa-solid fa-file-export mr-2"></i> DIŞA AKTAR
                     </button>
                 </div>
 
@@ -328,8 +328,8 @@ const ResourceManager: React.FC<ResourceManagerProps> = ({ resources, setResourc
                     <button onClick={() => setActiveTab('costs')} className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'costs' ? 'bg-white dark:bg-gray-700 text-amber-600 shadow-sm' : 'text-gray-500'}`}>Maliyet</button>
                 </div>
 
-                <button onClick={() => setIsFullScreen(!isFullScreen)} className="w-8 h-8 rounded-lg transition-all border flex items-center justify-center bg-white dark:bg-gray-800 text-gray-400 border-gray-200 dark:border-gray-700 hover:bg-gray-50">
-                    <i className={`fa-solid ${isFullScreen ? 'fa-compress' : 'fa-expand'} text-xs`}></i>
+                <button aria-label={isFullScreen ? 'Tam ekrandan çık' : 'Tam ekran'} onClick={() => setIsFullScreen(!isFullScreen)} className="w-8 h-8 rounded-lg transition-all border flex items-center justify-center bg-white dark:bg-gray-800 text-gray-400 border-gray-200 dark:border-gray-700 hover:bg-gray-50">
+                    <i aria-hidden="true" className={`fa-solid ${isFullScreen ? 'fa-compress' : 'fa-expand'} text-xs`}></i>
                 </button>
             </div>
         </div>
@@ -377,7 +377,7 @@ const ResourceManager: React.FC<ResourceManagerProps> = ({ resources, setResourc
                                                     <ResourceColorPicker currentColor={resource.color} onSelect={(c) => handleUpdateResourceColor(resource.id, c)} />
                                                     <div className="flex items-center space-x-2 cursor-pointer" onClick={() => handleStartEdit(resource, 'name')}>
                                                         <span className="text-xs font-bold text-gray-700 dark:text-gray-200 uppercase">{resource.name}</span>
-                                                        <i className="fa-solid fa-pencil text-[8px] text-gray-300 opacity-0 group-hover:opacity-100"></i>
+                                                        <i aria-hidden="true" className="fa-solid fa-pencil text-[8px] text-gray-300 opacity-0 group-hover:opacity-100"></i>
                                                     </div>
                                                 </div>
                                             )}
@@ -409,8 +409,8 @@ const ResourceManager: React.FC<ResourceManagerProps> = ({ resources, setResourc
                                             </div>
                                         </td>
                                         <td className="px-6 py-3 text-right">
-                                            <button onClick={() => { if(window.confirm('Bu kaynağı silmek istediğinize emin misiniz?')) setResources(resources.filter(r => r.id !== resource.id)); }} className="text-gray-300 hover:text-red-500 transition-all opacity-0 group-hover:opacity-100">
-                                                <i className="fa-solid fa-trash-can text-xs"></i>
+                                            <button aria-label="Sil" onClick={() => { if(window.confirm('Bu kaynağı silmek istediğinize emin misiniz?')) setResources(resources.filter(r => r.id !== resource.id)); }} className="text-gray-300 hover:text-red-500 transition-all opacity-0 group-hover:opacity-100">
+                                                <i aria-hidden="true" className="fa-solid fa-trash-can text-xs"></i>
                                             </button>
                                         </td>
                                     </tr>
@@ -443,7 +443,7 @@ const ResourceManager: React.FC<ResourceManagerProps> = ({ resources, setResourc
                                         <React.Fragment key={unit}>
                                             <tr className="bg-gray-50/80 dark:bg-gray-900/30 sticky top-[37px] z-20 shadow-sm border-b" style={{ borderColor: `${manMonthTableColor}20` }}>
                                                 <td className="p-1.5 pl-3 font-black border-r uppercase truncate" style={{ color: manMonthTableColor, borderRightColor: `${manMonthTableColor}20` }}>
-                                                    <i className="fa-solid fa-layer-group mr-2 opacity-50 text-[8px]"></i>{unit} TOPLAM
+                                                    <i aria-hidden="true" className="fa-solid fa-layer-group mr-2 opacity-50 text-[8px]"></i>{unit} TOPLAM
                                                 </td>
                                                 {unitTotals.map((total, i) => {
                                                     const isOverload = total > unitCapacity;

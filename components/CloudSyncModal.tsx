@@ -154,7 +154,7 @@ const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ workspace, onReplaceWor
             <h3 className="text-lg font-semibold text-gray-800 dark:text-white">Bulut Senkronizasyonu</h3>
             <p className="text-xs font-semibold text-gray-400">Supabase · Yerel-Öncelikli · Ücretsiz Katman</p>
           </div>
-          <button onClick={onClose} className="w-9 h-9 rounded-xl text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"><i className="fa-solid fa-times"></i></button>
+          <button aria-label="Kapat" onClick={onClose} className="w-9 h-9 rounded-xl text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"><i aria-hidden="true" className="fa-solid fa-times"></i></button>
         </div>
 
         <div className="p-6 space-y-6">
@@ -165,7 +165,7 @@ const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ workspace, onReplaceWor
           )}
           {conflict && (
             <div className="rounded-2xl px-4 py-3 text-[11px] font-bold bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">
-              <i className="fa-solid fa-triangle-exclamation mr-2"></i>
+              <i aria-hidden="true" className="fa-solid fa-triangle-exclamation mr-2"></i>
               Bekleyen çakışma var: bulutta sizden yeni veri yazılmış. "Buluttan Çek" ile eşitleyin.
             </div>
           )}
@@ -216,8 +216,8 @@ const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ workspace, onReplaceWor
                 <p className="text-xs font-semibold text-gray-400">Bağlı Çalışma Alanı ID</p>
                 <div className="flex items-center space-x-2">
                   <code className="text-xs text-gray-600 dark:text-gray-300 break-all flex-1">{linkedId}</code>
-                  <button onClick={() => { navigator.clipboard?.writeText(linkedId); note('ok', 'ID kopyalandı.'); }} className="w-8 h-8 rounded-lg text-gray-400 hover:text-primary flex-none" title="Kopyala">
-                    <i className="fa-solid fa-copy text-xs"></i>
+                  <button aria-label="Kopyala" onClick={() => { navigator.clipboard?.writeText(linkedId); note('ok', 'ID kopyalandı.'); }} className="w-8 h-8 rounded-lg text-gray-400 hover:text-primary flex-none" title="Kopyala">
+                    <i aria-hidden="true" className="fa-solid fa-copy text-xs"></i>
                   </button>
                 </div>
                 <p className="text-xs text-gray-400">Ekip üyeleri bu ID ile bağlanır (üyelikleri eklendikten sonra — bkz. kılavuz).</p>
@@ -225,7 +225,7 @@ const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ workspace, onReplaceWor
             ) : (
               <div className="space-y-3">
                 <button disabled={busy} onClick={handleCreateCloud} className={`${btnPrimary} w-full`} style={{ backgroundColor: 'var(--app-primary)' }}>
-                  <i className="fa-solid fa-cloud-arrow-up mr-2"></i>Bu çalışma alanını buluta taşı (yeni)
+                  <i aria-hidden="true" className="fa-solid fa-cloud-arrow-up mr-2"></i>Bu çalışma alanını buluta taşı (yeni)
                 </button>
                 <div className="flex items-center space-x-2">
                   <input className={inputCls} placeholder="…veya mevcut Çalışma Alanı ID'sine bağlan" value={workspaceId} onChange={e => setWorkspaceId(e.target.value)} />
@@ -245,10 +245,10 @@ const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ workspace, onReplaceWor
               </label>
               <div className="flex items-center space-x-2">
                 <button disabled={busy} onClick={handlePush} className={`${btnPrimary} flex-1`} style={{ backgroundColor: 'var(--app-primary)' }}>
-                  <i className="fa-solid fa-cloud-arrow-up mr-2"></i>Şimdi Gönder
+                  <i aria-hidden="true" className="fa-solid fa-cloud-arrow-up mr-2"></i>Şimdi Gönder
                 </button>
                 <button disabled={busy} onClick={handlePull} className={`${btnGhost} flex-1`}>
-                  <i className="fa-solid fa-cloud-arrow-down mr-2"></i>Buluttan Çek
+                  <i aria-hidden="true" className="fa-solid fa-cloud-arrow-down mr-2"></i>Buluttan Çek
                 </button>
               </div>
               {config?.lastSyncAt && (
@@ -260,7 +260,7 @@ const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ workspace, onReplaceWor
           </section>
 
           <p className="text-xs text-gray-400 leading-relaxed">
-            <i className="fa-solid fa-shield-halved mr-1.5"></i>
+            <i aria-hidden="true" className="fa-solid fa-shield-halved mr-1.5"></i>
             Notlar ve müşteri istekleri sunucuda ayrı bir tabloda tutulur; Müdür ve PYB Sorumlusu rollerindeki üyeler
             bu veriyi <b>veritabanı politikası (RLS) gereği</b> hiç indiremez. Uygulama çevrimdışı da çalışmaya devam eder.
           </p>

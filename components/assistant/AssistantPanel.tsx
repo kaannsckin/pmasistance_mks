@@ -43,7 +43,7 @@ const AssistantPanel: React.FC<Props> = ({ suggestions, hidden, hideLauncher, on
           aria-label="AI Asistanı aç"
           className="fixed bottom-5 right-5 z-[60] w-14 h-14 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-2xl flex items-center justify-center transition-transform hover:scale-105"
         >
-          <i className="fa-solid fa-wand-magic-sparkles text-lg"></i>
+          <i aria-hidden="true" className="fa-solid fa-wand-magic-sparkles text-lg"></i>
           {a.isStreaming && <span className="absolute top-2 right-2 w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse border-2 border-indigo-600"></span>}
         </button>
       )}

@@ -114,7 +114,7 @@ export const AiButton: React.FC<AiButtonProps> = ({ label, loading, onClick, dis
     title={title}
     className={`inline-flex items-center gap-1.5 font-semibold rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors disabled:opacity-50 ${size === 'sm' ? 'text-[11px] px-2.5 py-1' : 'text-xs px-3.5 py-2'}`}
   >
-    <i className={`fa-solid ${loading ? 'fa-circle-notch fa-spin' : 'fa-wand-magic-sparkles'}`}></i>
+    <i aria-hidden="true" className={`fa-solid ${loading ? 'fa-circle-notch fa-spin' : 'fa-wand-magic-sparkles'}`}></i>
     {loading ? 'AI çalışıyor…' : label}
   </button>
 );
@@ -122,8 +122,8 @@ export const AiButton: React.FC<AiButtonProps> = ({ label, loading, onClick, dis
 export const AiErrorNote: React.FC<{ message: string | null; onClose?: () => void }> = ({ message, onClose }) =>
   message ? (
     <div className="flex items-start gap-2 text-[11px] text-red-600 dark:text-red-300 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg px-3 py-2">
-      <i className="fa-solid fa-triangle-exclamation mt-0.5"></i>
+      <i aria-hidden="true" className="fa-solid fa-triangle-exclamation mt-0.5"></i>
       <span className="flex-1">{message}</span>
-      {onClose && <button type="button" onClick={onClose} className="text-red-400 hover:text-red-600"><i className="fa-solid fa-xmark"></i></button>}
+      {onClose && <button aria-label="Kapat" type="button" onClick={onClose} className="text-red-400 hover:text-red-600"><i aria-hidden="true" className="fa-solid fa-xmark"></i></button>}
     </div>
   ) : null;

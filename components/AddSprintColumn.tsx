@@ -15,12 +15,12 @@ const AddSprintColumn: React.FC<AddSprintColumnProps> = ({ onClick }) => {
             <div className="w-px h-full bg-transparent group-hover/add-col:bg-blue-200 dark:group-hover/add-col:bg-blue-800 transition-colors pointer-events-none" />
             
             {/* Mavi Artı Butonu */}
-            <button 
+            <button aria-label="Buraya Yeni Sürüm Ekle" 
                 onClick={(e) => { e.stopPropagation(); onClick(); }}
                 className="w-10 h-10 rounded-full bg-blue-500 text-white shadow-lg flex items-center justify-center opacity-0 scale-50 group-hover/add-col:opacity-100 group-hover/add-col:scale-100 transition-all duration-300 hover:bg-blue-600 hover:rotate-90 z-20"
                 title="Buraya Yeni Sürüm Ekle"
             >
-                <i className="fa-solid fa-plus text-lg"></i>
+                <i aria-hidden="true" className="fa-solid fa-plus text-lg"></i>
             </button>
             
             {/* Tooltip Etiketi */}

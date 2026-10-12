@@ -45,12 +45,8 @@ const projectByCode = code => workspace.projects.find(p => (p.code || '').starts
 
 /* ---------------- Demo yolu ---------------- */
 
-// Font Awesome ikonunun glifi (::before) düğmenin erişilebilir adına karışır: "<glif> Pano"
-const GLYPH = '^[\\uE000-\\uF8FF\\s]*';
-const g = re => new RegExp(re.source.replace(/^\^/, GLYPH), re.flags);
-
 // Düğme adları klasik ve modern arayüzde farklı: her tıklama bir seçenek listesi
-const R0 = {
+const R = {
     yonetim: /^Yönetim(\s|$)/i,
     portfoy: /^Portföy(\s|$)/i,
     tahsis: /^(Tahsis|Ekip ve tahsis)(\s|$)/i,
@@ -64,7 +60,6 @@ const R0 = {
     projeRiskleri: /^Riskler$/i,
     durumRaporu: /^Durum Raporu$/i,
 };
-const R = Object.fromEntries(Object.entries(R0).map(([k, re]) => [k, g(re)]));
 
 const escapeRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const healthRe = score => new RegExp(`Portföy sağlığı[^0-9]{0,40}\\b${score}\\b`, 'i');
@@ -89,7 +84,7 @@ const journeys = () => {
             adimlar: [
                 // Klasikte proje çubuğu zaten görünür (proje adı düğmesi seçim menüsünü açar, önce Pano denenir);
                 // modern arayüzde proje kenar çubuğundan açılır
-                { ad: `${nhr.name} › Pano`, tikla: [[R.pano, g(new RegExp(`^${escapeRe(nhr.name)}`))], [R.pano]], metin: [{ ad: nhr.name, re: new RegExp(nhr.name.split(' ')[0]) }] },
+                { ad: `${nhr.name} › Pano`, tikla: [[R.pano, new RegExp(`^${escapeRe(nhr.name)}`)], [R.pano]], metin: [{ ad: nhr.name, re: new RegExp(nhr.name.split(' ')[0]) }] },
                 { ad: `${nhr.name} › Görevler`, tikla: [[R.gorevler]], metin: [] },
                 { ad: `${nhr.name} › Riskler`, tikla: [[R.projeRiskleri]], metin: [] },
                 { ad: `${nhr.name} › Durum Raporu`, tikla: [[R.durumRaporu]], istege: true, metin: [] },

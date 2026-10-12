@@ -55,13 +55,13 @@ const GanttChart: React.FC<GanttChartProps> = ({ tasks, projectStartDate, onView
             {/* Toolbar */}
             <div className="flex justify-end items-center p-2 bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700 space-x-2">
                 <span className="text-xs text-gray-500 dark:text-gray-400 font-medium mr-2">Görünüm:</span>
-                <button 
+                <button aria-label="Uzaklaştır" 
                     onClick={handleZoomOut} 
                     disabled={dayWidth <= MIN_DAY_WIDTH}
                     className="p-1.5 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 disabled:opacity-30 transition-colors"
                     title="Uzaklaştır"
                 >
-                    <i className="fa-solid fa-minus"></i>
+                    <i aria-hidden="true" className="fa-solid fa-minus"></i>
                 </button>
                 <button 
                     onClick={handleResetZoom}
@@ -70,13 +70,13 @@ const GanttChart: React.FC<GanttChartProps> = ({ tasks, projectStartDate, onView
                 >
                     %{Math.round((dayWidth / DEFAULT_DAY_WIDTH) * 100)}
                 </button>
-                <button 
+                <button aria-label="Yakınlaştır" 
                     onClick={handleZoomIn}
                     disabled={dayWidth >= MAX_DAY_WIDTH}
                     className="p-1.5 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 disabled:opacity-30 transition-colors"
                     title="Yakınlaştır"
                 >
-                    <i className="fa-solid fa-plus"></i>
+                    <i aria-hidden="true" className="fa-solid fa-plus"></i>
                 </button>
             </div>
 

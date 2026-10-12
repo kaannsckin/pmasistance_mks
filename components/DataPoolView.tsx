@@ -37,7 +37,7 @@ const TabButton: React.FC<{ active: boolean; icon: string; label: string; count:
     className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all ${active ? 'text-white shadow-md' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 bg-gray-50 dark:bg-gray-800'}`}
     style={active ? { backgroundColor: 'var(--app-primary)' } : {}}
   >
-    <i className={`fa-solid ${icon}`}></i>
+    <i aria-hidden="true" className={`fa-solid ${icon}`}></i>
     <span>{label}</span>
     <span className={`px-1.5 py-0.5 rounded-md text-xs ${active ? 'bg-white/20' : 'bg-gray-200 dark:bg-gray-700'}`}>{count}</span>
   </button>
@@ -47,7 +47,7 @@ const AddCard: React.FC<{ icon: string; title: string; children: React.ReactNode
   <div className="bg-gray-50/70 dark:bg-gray-800/40 border border-dashed border-gray-200 dark:border-gray-700 rounded-2xl p-4 mb-5">
     <h4 className="text-xs font-semibold text-gray-600 dark:text-gray-200 mb-3 flex items-center gap-2">
       <span className="w-6 h-6 rounded-lg flex items-center justify-center text-white flex-none" style={{ backgroundColor: 'var(--app-primary)' }}>
-        <i className={`fa-solid ${icon} text-[10px]`}></i>
+        <i aria-hidden="true" className={`fa-solid ${icon} text-[10px]`}></i>
       </span>
       {title}
     </h4>
@@ -67,7 +67,7 @@ const Field: React.FC<{ label: string; required?: boolean; hint?: string; classN
 
 const AddButton: React.FC<{ onClick: () => void; label: string; icon?: string }> = ({ onClick, label, icon = 'fa-plus' }) => (
   <button onClick={onClick} className="text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-sm hover:opacity-90 transition-opacity flex items-center" style={{ backgroundColor: 'var(--app-primary)' }}>
-    <i className={`fa-solid ${icon} mr-2`}></i>{label}
+    <i aria-hidden="true" className={`fa-solid ${icon} mr-2`}></i>{label}
   </button>
 );
 
@@ -253,7 +253,7 @@ const DataPoolView: React.FC<DataPoolViewProps> = ({ people, departments, roleCa
                     {newPerson.roles.map(r => (
                       <span key={r} className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2 py-1 rounded-lg text-white" style={{ backgroundColor: 'var(--app-primary)' }}>
                         {r}
-                        <button onClick={() => setNewPerson({ ...newPerson, roles: newPerson.roles.filter(x => x !== r) })} className="hover:opacity-70" title="Kaldır"><i className="fa-solid fa-xmark text-[10px]"></i></button>
+                        <button aria-label="Kaldır" onClick={() => setNewPerson({ ...newPerson, roles: newPerson.roles.filter(x => x !== r) })} className="hover:opacity-70" title="Kaldır"><i aria-hidden="true" className="fa-solid fa-xmark text-[10px]"></i></button>
                       </span>
                     ))}
                   </div>
@@ -262,7 +262,7 @@ const DataPoolView: React.FC<DataPoolViewProps> = ({ people, departments, roleCa
                   <div className="flex flex-wrap gap-1.5">
                     {availableCatalogRoles.map(r => (
                       <button key={r} onClick={() => setNewPerson({ ...newPerson, roles: [...newPerson.roles, r] })} className="text-[11px] font-medium px-2 py-1 rounded-lg border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-300 hover:border-primary hover:text-primary transition-colors">
-                        <i className="fa-solid fa-plus text-[9px] mr-1"></i>{r}
+                        <i aria-hidden="true" className="fa-solid fa-plus text-[9px] mr-1"></i>{r}
                       </button>
                     ))}
                   </div>
@@ -275,7 +275,7 @@ const DataPoolView: React.FC<DataPoolViewProps> = ({ people, departments, roleCa
             </Field>
           </div>
           {dupPerson && (
-            <p className="text-[11px] text-amber-600 dark:text-amber-300 mt-3"><i className="fa-solid fa-triangle-exclamation mr-1"></i>Aynı adlı bir kişi zaten havuzda var — yine de ekleyebilirsiniz (sicil ile ayırt edin).</p>
+            <p className="text-[11px] text-amber-600 dark:text-amber-300 mt-3"><i aria-hidden="true" className="fa-solid fa-triangle-exclamation mr-1"></i>Aynı adlı bir kişi zaten havuzda var — yine de ekleyebilirsiniz (sicil ile ayırt edin).</p>
           )}
           <div className="flex justify-end mt-3">
             <AddButton onClick={addPerson} label="Personel Ekle" icon="fa-user-plus" />
@@ -317,12 +317,12 @@ const DataPoolView: React.FC<DataPoolViewProps> = ({ people, departments, roleCa
                 <td className={tdCls}><input disabled={!editable} className={inputCls} value={p.roles.join(', ')} onChange={e => updatePerson(p.id, { roles: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })} /></td>
                 <td className={tdCls}>
                   <div className="flex items-center gap-1">
-                    <button onClick={() => onViewPerson(p.id)} className="w-7 h-7 rounded-lg text-gray-300 hover:text-primary hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors" title="Kişi profili (tüm projelerdeki durumu)">
-                      <i className="fa-solid fa-chart-line text-xs"></i>
+                    <button aria-label="Kişi profili (tüm projelerdeki durumu)" onClick={() => onViewPerson(p.id)} className="w-7 h-7 rounded-lg text-gray-300 hover:text-primary hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors" title="Kişi profili (tüm projelerdeki durumu)">
+                      <i aria-hidden="true" className="fa-solid fa-chart-line text-xs"></i>
                     </button>
                     {editable && (
-                      <button onClick={() => { if (window.confirm(`${p.firstName} ${p.lastName} havuzdan silinsin mi? (Tahsis kayıtları etkilenebilir)`)) { onUpdatePeople(people.filter(x => x.id !== p.id)); flash('success', `${p.firstName} ${p.lastName} silindi.`); } }} className="w-7 h-7 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors" title="Havuzdan sil">
-                        <i className="fa-solid fa-trash text-xs"></i>
+                      <button aria-label="Havuzdan sil" onClick={() => { if (window.confirm(`${p.firstName} ${p.lastName} havuzdan silinsin mi? (Tahsis kayıtları etkilenebilir)`)) { onUpdatePeople(people.filter(x => x.id !== p.id)); flash('success', `${p.firstName} ${p.lastName} silindi.`); } }} className="w-7 h-7 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors" title="Havuzdan sil">
+                        <i aria-hidden="true" className="fa-solid fa-trash text-xs"></i>
                       </button>
                     )}
                   </div>
@@ -383,7 +383,7 @@ const DataPoolView: React.FC<DataPoolViewProps> = ({ people, departments, roleCa
               <td className={`${tdCls} text-[11px] text-gray-400`}>{people.filter(p => p.departmentCode === d.code).length} kişi</td>
               {editable && (
                 <td className={tdCls}>
-                  <button onClick={() => { if (window.confirm(`${d.code} bölümü silinsin mi?`)) { onUpdateDepartments(departments.filter(x => x.code !== d.code)); flash('success', `${d.code} bölümü silindi.`); } }} className="w-7 h-7 rounded-lg text-gray-300 hover:text-red-500 transition-colors"><i className="fa-solid fa-trash text-xs"></i></button>
+                  <button aria-label="Sil" onClick={() => { if (window.confirm(`${d.code} bölümü silinsin mi?`)) { onUpdateDepartments(departments.filter(x => x.code !== d.code)); flash('success', `${d.code} bölümü silindi.`); } }} className="w-7 h-7 rounded-lg text-gray-300 hover:text-red-500 transition-colors"><i aria-hidden="true" className="fa-solid fa-trash text-xs"></i></button>
                 </td>
               )}
             </tr>
@@ -428,7 +428,7 @@ const DataPoolView: React.FC<DataPoolViewProps> = ({ people, departments, roleCa
               <td className={`${tdCls} text-[11px] text-gray-400`}>{people.filter(p => p.roles.includes(r.name)).length}</td>
               {editable && (
                 <td className={tdCls}>
-                  <button onClick={() => onUpdateRoleCatalog(roleCatalog.filter(x => x.id !== r.id))} className="w-7 h-7 rounded-lg text-gray-300 hover:text-red-500 transition-colors"><i className="fa-solid fa-trash text-xs"></i></button>
+                  <button aria-label="Sil" onClick={() => onUpdateRoleCatalog(roleCatalog.filter(x => x.id !== r.id))} className="w-7 h-7 rounded-lg text-gray-300 hover:text-red-500 transition-colors"><i aria-hidden="true" className="fa-solid fa-trash text-xs"></i></button>
                 </td>
               )}
             </tr>
@@ -486,7 +486,7 @@ const DataPoolView: React.FC<DataPoolViewProps> = ({ people, departments, roleCa
               <td className={`${tdCls} text-[11px] text-gray-400`}>{people.filter(p => p.titleCode === t.code).length}</td>
               {editable && (
                 <td className={tdCls}>
-                  <button onClick={() => onUpdateTitles(titles.filter(x => x.code !== t.code))} className="w-7 h-7 rounded-lg text-gray-300 hover:text-red-500 transition-colors"><i className="fa-solid fa-trash text-xs"></i></button>
+                  <button aria-label="Sil" onClick={() => onUpdateTitles(titles.filter(x => x.code !== t.code))} className="w-7 h-7 rounded-lg text-gray-300 hover:text-red-500 transition-colors"><i aria-hidden="true" className="fa-solid fa-trash text-xs"></i></button>
                 </td>
               )}
             </tr>
@@ -519,7 +519,7 @@ const DataPoolView: React.FC<DataPoolViewProps> = ({ people, departments, roleCa
             style={{ backgroundColor: 'var(--app-primary)' }}
             title="U310 İşgücü Tahsisi formatındaki Excel'i içe aktar"
           >
-            {isImporting ? <i className="fa-solid fa-spinner fa-spin mr-2"></i> : <i className="fa-solid fa-file-excel mr-2"></i>}
+            {isImporting ? <i aria-hidden="true" className="fa-solid fa-spinner fa-spin mr-2"></i> : <i aria-hidden="true" className="fa-solid fa-file-excel mr-2"></i>}
             Excel İçe Aktar
           </button>
         </div>
@@ -527,7 +527,7 @@ const DataPoolView: React.FC<DataPoolViewProps> = ({ people, departments, roleCa
 
       {!editable && (
         <div className="flex items-center space-x-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-2xl px-4 py-3">
-          <i className="fa-solid fa-lock text-amber-500"></i>
+          <i aria-hidden="true" className="fa-solid fa-lock text-amber-500"></i>
           <p className="text-[11px] text-amber-700 dark:text-amber-300">
             Veri havuzunu düzenleme yetkiniz yok (varsayılan: <b>PYB Destek</b>). Şu anki rolünüz: <b>{ROLE_LABELS[currentRole]}</b> (salt-okunur görünüm).
           </p>
@@ -543,7 +543,7 @@ const DataPoolView: React.FC<DataPoolViewProps> = ({ people, departments, roleCa
 
       {feedback && (
         <div className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-[11px] font-semibold ${feedback.kind === 'error' ? 'bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-300' : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-300'}`}>
-          <i className={`fa-solid ${feedback.kind === 'error' ? 'fa-circle-exclamation' : 'fa-circle-check'}`}></i>
+          <i aria-hidden="true" className={`fa-solid ${feedback.kind === 'error' ? 'fa-circle-exclamation' : 'fa-circle-check'}`}></i>
           {feedback.text}
         </div>
       )}

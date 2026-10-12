@@ -12,7 +12,7 @@ const DeleteSprintModal: React.FC<DeleteSprintModalProps> = ({ sprint, onConfirm
     <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex justify-center items-center p-4">
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-md">
         <div className="p-6 text-center">
-          <i className="fa-solid fa-triangle-exclamation text-4xl text-red-500 mx-auto mb-4"></i>
+          <i aria-hidden="true" className="fa-solid fa-triangle-exclamation text-4xl text-red-500 mx-auto mb-4"></i>
           <h3 className="mb-5 text-lg font-normal text-gray-600 dark:text-gray-300">
             "{sprint.title}" silinecektir. İçindeki tüm görevler Backlog'a taşınacaktır. Onaylıyor musunuz?
           </h3>

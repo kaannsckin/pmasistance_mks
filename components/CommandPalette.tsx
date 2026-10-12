@@ -105,7 +105,7 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ items, onClose, onAskAI
       <div className="fixed inset-0 z-[300] flex items-start justify-center bg-black/40 pt-[12vh] px-4" onClick={onClose}>
         <div role="dialog" aria-label="Komut paleti" className="m-bg w-full max-w-xl rounded-2xl m-pop overflow-hidden" onClick={e => e.stopPropagation()}>
           <div className="flex items-center gap-3 px-4 h-14 border-b m-sep" style={{ borderBottomStyle: 'solid', borderBottomWidth: 1 }}>
-            <i className="fa-solid fa-magnifying-glass m-text-3"></i>
+            <i aria-hidden="true" className="fa-solid fa-magnifying-glass m-text-3"></i>
             <input
               ref={inputRef}
               value={query}
@@ -138,7 +138,7 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ items, onClose, onAskAI
                     className="w-full flex items-center gap-3 px-3 min-h-[48px] rounded-xl text-left border-0 cursor-pointer"
                     style={{ background: idx === active ? 'var(--m-fill)' : 'transparent' }}
                   >
-                    <span className="w-8 h-8 rounded-[9px] m-tone-accent flex items-center justify-center flex-none"><i className={`fa-solid ${it.icon} text-[13px]`}></i></span>
+                    <span className="w-8 h-8 rounded-[9px] m-tone-accent flex items-center justify-center flex-none"><i aria-hidden="true" className={`fa-solid ${it.icon} text-[13px]`}></i></span>
                     <span className="flex-1 min-w-0">
                       <span className="block text-[15px] m-text truncate">{it.label}</span>
                       {it.sublabel && <span className="block text-[13px] m-text-3 truncate">{it.sublabel}</span>}
@@ -158,7 +158,7 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ items, onClose, onAskAI
     <div className="fixed inset-0 z-[300] flex items-start justify-center bg-black/50 backdrop-blur-sm pt-[12vh] px-4" onClick={onClose}>
       <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-xl border border-gray-100 dark:border-gray-700 overflow-hidden" onClick={e => e.stopPropagation()}>
         <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100 dark:border-gray-800">
-          <i className="fa-solid fa-magnifying-glass text-gray-400 text-sm"></i>
+          <i aria-hidden="true" className="fa-solid fa-magnifying-glass text-gray-400 text-sm"></i>
           <input
             ref={inputRef}
             value={query}
@@ -188,7 +188,7 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ items, onClose, onAskAI
                   className={`w-full flex items-center gap-3 px-4 py-2 text-left transition-colors ${idx === active ? 'bg-gray-100 dark:bg-gray-800' : ''}`}
                 >
                   <span className="w-7 h-7 rounded-lg flex items-center justify-center flex-none text-white" style={{ backgroundColor: 'var(--app-primary)' }}>
-                    <i className={`fa-solid ${it.icon} text-[11px]`}></i>
+                    <i aria-hidden="true" className={`fa-solid ${it.icon} text-[11px]`}></i>
                   </span>
                   <span className="flex-1 min-w-0">
                     <span className="block text-xs font-semibold text-gray-700 dark:text-gray-200 truncate">{it.label}</span>

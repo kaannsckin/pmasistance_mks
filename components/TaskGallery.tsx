@@ -156,7 +156,7 @@ const TaskGallery: React.FC<TaskGalleryProps> = ({ tasks, resources, onEditTask,
             <label htmlFor="search" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Görev Ara</label>
             <div className="mt-1 relative rounded-md shadow-sm">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <i className="fa-solid fa-search text-gray-400"></i>
+                <i aria-hidden="true" className="fa-solid fa-search text-gray-400"></i>
               </div>
               <input
                 type="text"
@@ -227,7 +227,7 @@ const TaskGallery: React.FC<TaskGalleryProps> = ({ tasks, resources, onEditTask,
                 disabled={isLoading}
                 className="flex items-center space-x-2 bg-gray-600 text-white px-4 py-2 rounded-lg shadow-md hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:bg-gray-400"
             >
-                {isLoading ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-file-csv"></i>}
+                {isLoading ? <i aria-hidden="true" className="fa-solid fa-spinner fa-spin"></i> : <i aria-hidden="true" className="fa-solid fa-file-csv"></i>}
                 <span>{isLoading ? 'Yükleniyor...' : "CSV'den Aktar"}</span>
             </button>
              <button
@@ -235,7 +235,7 @@ const TaskGallery: React.FC<TaskGalleryProps> = ({ tasks, resources, onEditTask,
                 disabled={isLoading}
                 className="flex items-center space-x-2 bg-blue-800 text-white px-4 py-2 rounded-lg shadow-md hover:bg-blue-900 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-700 disabled:bg-gray-400"
             >
-                {isLoading ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-brands fa-jira"></i>}
+                {isLoading ? <i aria-hidden="true" className="fa-solid fa-spinner fa-spin"></i> : <i aria-hidden="true" className="fa-brands fa-jira"></i>}
                 <span>{isLoading ? 'Yükleniyor...' : "Jira'dan Aktar"}</span>
             </button>
             <button
@@ -243,7 +243,7 @@ const TaskGallery: React.FC<TaskGalleryProps> = ({ tasks, resources, onEditTask,
                 disabled={isLoading}
                 className="flex items-center space-x-2 bg-green-600 text-white px-4 py-2 rounded-lg shadow-md hover:bg-green-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:bg-gray-400"
             >
-                {isLoading ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-file-excel"></i>}
+                {isLoading ? <i aria-hidden="true" className="fa-solid fa-spinner fa-spin"></i> : <i aria-hidden="true" className="fa-solid fa-file-excel"></i>}
                 <span>{isLoading ? 'Yükleniyor...' : "Excel'den Aktar"}</span>
             </button>
             <div className="relative" ref={exportMenuRef}>
@@ -251,9 +251,9 @@ const TaskGallery: React.FC<TaskGalleryProps> = ({ tasks, resources, onEditTask,
                     onClick={() => setIsExportMenuOpen(prev => !prev)}
                     className="flex items-center space-x-2 bg-yellow-500 text-white px-4 py-2 rounded-lg shadow-md hover:bg-yellow-600 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-400"
                 >
-                    <i className="fa-solid fa-file-export"></i>
+                    <i aria-hidden="true" className="fa-solid fa-file-export"></i>
                     <span>Dışa Aktar</span>
-                    <i className={`fa-solid fa-chevron-down transition-transform duration-200 ${isExportMenuOpen ? 'rotate-180' : ''}`}></i>
+                    <i aria-hidden="true" className={`fa-solid fa-chevron-down transition-transform duration-200 ${isExportMenuOpen ? 'rotate-180' : ''}`}></i>
                 </button>
                 {isExportMenuOpen && (
                     <div className="absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white dark:bg-gray-700 ring-1 ring-black ring-opacity-5 z-20">
@@ -263,7 +263,7 @@ const TaskGallery: React.FC<TaskGalleryProps> = ({ tasks, resources, onEditTask,
                                 className="w-full text-left flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600"
                                 role="menuitem"
                             >
-                                <i className="fa-solid fa-file-excel text-green-500 w-5 mr-2"></i>
+                                <i aria-hidden="true" className="fa-solid fa-file-excel text-green-500 w-5 mr-2"></i>
                                 Excel'e Aktar
                             </button>
                             <button
@@ -271,7 +271,7 @@ const TaskGallery: React.FC<TaskGalleryProps> = ({ tasks, resources, onEditTask,
                                 className="w-full text-left flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600"
                                 role="menuitem"
                             >
-                                <i className="fa-brands fa-jira text-blue-500 w-5 mr-2"></i>
+                                <i aria-hidden="true" className="fa-brands fa-jira text-blue-500 w-5 mr-2"></i>
                                 Jira CSV Olarak Aktar
                             </button>
                             <button
@@ -279,7 +279,7 @@ const TaskGallery: React.FC<TaskGalleryProps> = ({ tasks, resources, onEditTask,
                                 className="w-full text-left flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-600"
                                 role="menuitem"
                             >
-                                <i className="fa-solid fa-diagram-project text-teal-500 w-5 mr-2"></i>
+                                <i aria-hidden="true" className="fa-solid fa-diagram-project text-teal-500 w-5 mr-2"></i>
                                 MS Project'e Aktar
                             </button>
                         </div>
@@ -290,7 +290,7 @@ const TaskGallery: React.FC<TaskGalleryProps> = ({ tasks, resources, onEditTask,
                 onClick={onNewTask}
                 className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-md hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
-                <i className="fa-solid fa-plus"></i>
+                <i aria-hidden="true" className="fa-solid fa-plus"></i>
                 <span>Yeni Görev</span>
             </button>
         </div>
@@ -312,7 +312,7 @@ const TaskGallery: React.FC<TaskGalleryProps> = ({ tasks, resources, onEditTask,
         </div>
       ) : (
          <div className="text-center py-16 bg-white dark:bg-gray-800 rounded-lg shadow-md">
-            <i className="fa-solid fa-folder-open text-5xl text-gray-400"></i>
+            <i aria-hidden="true" className="fa-solid fa-folder-open text-5xl text-gray-400"></i>
             <h3 className="mt-4 text-xl font-medium text-gray-700 dark:text-gray-300">Görev Bulunamadı</h3>
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Filtre kriterlerini değiştirmeyi deneyin veya dosya yükleyin.</p>
         </div>

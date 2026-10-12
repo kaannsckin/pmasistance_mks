@@ -11,7 +11,7 @@ interface TaskDetailModalProps {
 
 const DetailItem: React.FC<{ label: string; value: React.ReactNode; icon: string }> = ({ label, value, icon }) => (
     <div className="flex flex-col">
-        <span className="text-sm font-medium text-gray-500 dark:text-gray-400 flex items-center"><i className={`fa-solid ${icon} mr-2 w-4 text-center`}></i>{label}</span>
+        <span className="text-sm font-medium text-gray-500 dark:text-gray-400 flex items-center"><i aria-hidden="true" className={`fa-solid ${icon} mr-2 w-4 text-center`}></i>{label}</span>
         <span className="text-md text-gray-900 dark:text-white mt-1">{value || '-'}</span>
     </div>
 );
@@ -46,19 +46,19 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, onEdit
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{task.jiraId}</p>
           </div>
           <div className="flex items-center space-x-2">
-            <button 
+            <button aria-label="Görevi Düzenle" 
               onClick={() => onEdit(task)} 
               title="Görevi Düzenle" 
               className="text-gray-500 hover:text-green-600 dark:text-gray-400 dark:hover:text-green-400 transition-colors p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600"
             >
-              <i className="fa-solid fa-pencil"></i>
+              <i aria-hidden="true" className="fa-solid fa-pencil"></i>
             </button>
-            <button 
+            <button aria-label="Kapat" 
               onClick={onClose} 
               title="Kapat" 
               className="text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400 transition-colors p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600"
             >
-              <i className="fa-solid fa-times"></i>
+              <i aria-hidden="true" className="fa-solid fa-times"></i>
             </button>
           </div>
         </div>
@@ -76,7 +76,7 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, onEdit
           </div>
 
           <div>
-             <span className="text-sm font-medium text-gray-500 dark:text-gray-400 flex items-center mb-2"><i className="fa-solid fa-clock mr-2 w-4 text-center"></i>Zaman Tahminleri (İyi/Ort/Kötü)</span>
+             <span className="text-sm font-medium text-gray-500 dark:text-gray-400 flex items-center mb-2"><i aria-hidden="true" className="fa-solid fa-clock mr-2 w-4 text-center"></i>Zaman Tahminleri (İyi/Ort/Kötü)</span>
              <div className="flex space-x-2">
                 <span className="px-3 py-1 bg-green-100 text-green-800 text-sm font-medium rounded-full dark:bg-green-900 dark:text-green-300">{task.time.best} gün</span>
                 <span className="px-3 py-1 bg-blue-100 text-blue-800 text-sm font-medium rounded-full dark:bg-blue-900 dark:text-blue-300">{task.time.avg} gün</span>
@@ -86,7 +86,7 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, onEdit
           
           {task.labels && task.labels.length > 0 && (
             <div>
-              <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400 flex items-center mb-2"><i className="fa-solid fa-tags mr-2 w-4 text-center"></i>Etiketler</h4>
+              <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400 flex items-center mb-2"><i aria-hidden="true" className="fa-solid fa-tags mr-2 w-4 text-center"></i>Etiketler</h4>
               <div className="flex flex-wrap gap-2">
                 {task.labels.map((label, index) => (
                   <span key={index} className="px-2 py-1 bg-gray-200 text-gray-800 text-xs font-medium rounded-full dark:bg-gray-600 dark:text-gray-200">
@@ -98,12 +98,12 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, onEdit
           )}
 
           <div>
-            <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400 flex items-center"><i className="fa-solid fa-file-alt mr-2 w-4 text-center"></i>Açıklama</h4>
+            <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400 flex items-center"><i aria-hidden="true" className="fa-solid fa-file-alt mr-2 w-4 text-center"></i>Açıklama</h4>
             <p className="mt-1 p-3 bg-gray-50 dark:bg-gray-700 rounded-md text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{task.notes || 'Açıklama eklenmemiş.'}</p>
           </div>
 
           <div className="space-y-4 pt-4 border-t dark:border-gray-700">
-            <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400 flex items-center"><i className="fa-solid fa-comments mr-2 w-4 text-center"></i>Yorumlar ({task.comments?.length || 0})</h4>
+            <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400 flex items-center"><i aria-hidden="true" className="fa-solid fa-comments mr-2 w-4 text-center"></i>Yorumlar ({task.comments?.length || 0})</h4>
             <div className="space-y-3 max-h-48 overflow-y-auto custom-scrollbar pr-2">
               {task.comments?.map((comment, index) => (
                 <div key={index} className="flex items-start space-x-3">
