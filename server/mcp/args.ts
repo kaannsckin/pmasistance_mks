@@ -1,3 +1,4 @@
+import { normalizeEnumValue } from '../../utils/ai/enumAliases.js';
 import type { JsonSchema } from '../../utils/ai/protocol.js';
 
 /**
@@ -6,7 +7,8 @@ import type { JsonSchema } from '../../utils/ai/protocol.js';
  * `geciken`, `alan: "gerceklesen"` yerine `actual`) — MCP istemcisi bunu fark
  * edemez ve yanlış sonucu doğru sanar. Burada açık bir hata döner; hata,
  * geçerli parametreleri sayar ki model kendini düzeltebilsin. Sayı ve mantıksal
- * değerler metin olarak gelirse dönüştürülür.
+ * değerler metin olarak gelirse dönüştürülür; seçeneklerin Türkçe karşılıkları
+ * ("Kritik", "kapandı") koda çevrilir.
  */
 
 /** Parametrelerin kısa dökümü: `ad* (tür|seçenekler)`; * zorunlu */
@@ -56,6 +58,7 @@ export const validateArgs = (tool: string, schema: JsonSchema, args: Record<stri
                 break;
         }
         if (p.enum) {
+            v = Array.isArray(v) ? v.map(x => normalizeEnumValue(x, p.enum!)) : normalizeEnumValue(v, p.enum);
             const values = Array.isArray(v) ? v : [v];
             const wrong = values.find(x => !p.enum!.includes(x as string | number));
             if (wrong !== undefined) return bad(`"${key}" için geçersiz değer ${JSON.stringify(wrong)}; geçerli: ${p.enum.join(', ')}.`);
