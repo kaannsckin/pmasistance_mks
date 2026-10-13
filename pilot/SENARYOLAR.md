@@ -85,7 +85,7 @@ npm run -s pilot -- senaryo ekle --id S9 --tur kritik-hata --proje PSL --tarih 2
 npm run -s pilot -- senaryo ekle --id S10 --tur izin --kisi "Ozan Kılıç" --baslangic 2026-11-23 --bitis 2026-12-04 --neden "Yıllık izin"
 ```
 
-Doğrulama (13 Ekim, kaydırılmış takvimle, dosya modunda): 22 Ekim kurulumundan (→ 21 Ekim) hemen sonra altı komut kabul edildi; 30 Kasım'a kadar üretimde S1 (26 Ekim) ve S9 (18 Kasım) kayıtları ilgili günde açıldı, S8 11 Kasım'da YILDIZ'ı "Devam"a aldı, izin satırları olay dosyalarında göründü. Ajan müdahalesi olmadan 30 Kasım'da portföy sağlığı 62, NEHİR 29 (SPI 0,83 · CPI 0,82), PUSULA 65, KALKAN 66, ATLAS 70, YILDIZ 81; kapasite-talepte 2 rol açığı (2,2 ve 0,7 AA). S6 Ekim içinde kalır ki bütçe aşımı demodan önce kapanan ayda (Ekim) görünsün. Ajanların işi bu tabloyu değiştirir; değişimin yönü ve gerekçesi puanlanır.
+Doğrulama (13 Ekim, kaydırılmış takvimle, dosya modunda): 22 Ekim kurulumundan (→ 21 Ekim) hemen sonra altı komut kabul edildi; 30 Kasım'a kadar üretimde S1 (26 Ekim) ve S9 (18 Kasım) kayıtları ilgili günde açıldı, S8 11 Kasım'da YILDIZ'ı "Devam"a aldı, izin satırları olay dosyalarında göründü. Ajan müdahalesi olmadan 30 Kasım'da portföy sağlığı 62, NEHİR 28 (SPI 0,83 · CPI 0,82), PUSULA 65, KALKAN 66, ATLAS 70, YILDIZ 81; kapasite-talepte 2 rol açığı (2,2 ve 0,7 AA). S6 Ekim içinde kalır ki bütçe aşımı demodan önce kapanan ayda (Ekim) görünsün. Ajanların işi bu tabloyu değiştirir; değişimin yönü ve gerekçesi puanlanır.
 
 ## Gömülü bulgular (puanlamada kullanılır; ajanlara söylenmez)
 
