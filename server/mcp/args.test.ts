@@ -23,6 +23,13 @@ describe('araç argümanı denetimi', () => {
         expect('error' in validateArgs('oner_tahsis_ayarla', schema('oner_tahsis_ayarla'), { kisi: 'A', proje: 'B', ay: 2.5, aa: 1 })).toBe(true);
     });
 
+    it('seçeneğin Türkçe karşılığı koda çevrilir (B-009); tanınmayan değer yine reddedilir', () => {
+        expect(validateArgs('oner_rag_guncelle', schema('oner_rag_guncelle'), { proje: 'X', rag: 'Kritik' })).toEqual({ args: { proje: 'X', rag: 'red' } });
+        expect(validateArgs('oner_risk_guncelle', schema('oner_risk_guncelle'), { risk: 'X', durum: 'kapandı' })).toEqual({ args: { risk: 'X', durum: 'closed' } });
+        const r = validateArgs('oner_rag_guncelle', schema('oner_rag_guncelle'), { rag: 'mor' });
+        expect('error' in r && r.error).toContain('geçerli: green, amber, red');
+    });
+
     it('zorunlu parametre eksikse söyler; seçenekli metin listesi kabul edilir', () => {
         const r = validateArgs('bilgi_ara', schema('bilgi_ara'), { kaynak: 'not' });
         expect('error' in r && r.error).toContain('Zorunlu parametre eksik: sorgu');

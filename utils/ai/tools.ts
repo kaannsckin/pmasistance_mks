@@ -1,4 +1,5 @@
 import { PermissionKey, ProjectStatus, RagStatus, RiskStatus, Task, TaskStatus } from '../../types';
+import { normalizeEnumArgs } from './enumAliases';
 import { getPlanLockStatus, MONTH_INDEXES, ROLE_LABELS, summarizeByProject } from '../allocations';
 import { AUDIT_ACTION_LABELS } from '../audit';
 import { buildCostReport, costPeriodLabel } from '../costing';
@@ -204,6 +205,8 @@ export const AI_TOOLS: ToolDef[] = [
                         geciken: p.tasks.filter(t => isOverdue(t, ctx.now)).length,
                     },
                     acik_risk: (p.risks || []).filter(r => r.status !== 'closed').length,
+                    // Plan kilidi öneri denenmeden görünsün (B-014): kilitliyse yalnız gerçekleşen değişir
+                    plan_kilidi: LOCK_TR[getPlanLockStatus(ctx.ws.planLocks, p.id, ctx.year)],
                     guncellendi: p.updatedAt?.slice(0, 10),
                 })),
             };
@@ -394,7 +397,7 @@ export const AI_TOOLS: ToolDef[] = [
                 toplam_plan_aa: r2(prof.totalPlanAA),
                 toplam_gerceklesen_aa: r2(prof.totalActualAA),
                 kapasite_asimi_olan_aylar: prof.overMonths,
-                projeler: prof.byProject.map(b => ({ proje: b.projectName, rol: b.role, plan_aa: r2(b.total), aylik_plan: months12(b.months) })),
+                projeler: prof.byProject.map(b => ({ proje: b.projectName, rol: b.role, plan_aa: r2(b.total), aylik_plan: months12(b.months), plan_kilidi: LOCK_TR[getPlanLockStatus(ctx.ws.planLocks, b.projectId, year)] })),
                 gorevler: prof.tasks.filter(t => ctx.visibleProjectIds.has(t.projectId)).slice(0, 15).map(t => ({
                     proje: t.projectName, gorev: t.taskName, durum: TASK_STATUS_TR[t.status] || t.status, bitis: t.dueDate?.slice(0, 10), geciken: t.overdue || undefined,
                 })),
@@ -1053,7 +1056,7 @@ export const executeTool = async (call: Pick<ToolCall, 'name' | 'arguments'>, ct
         return { content: JSON.stringify({ hata: `Bilinmeyen ya da bu rol için kullanılamayan araç: ${call.name}` }), ok: false };
     }
     try {
-        return { content: serialize(await def.run(call.arguments || {}, ctx)), ok: true };
+        return { content: serialize(await def.run(normalizeEnumArgs(def.spec.parameters, call.arguments || {}), ctx)), ok: true };
     } catch (e) {
         if (e instanceof ToolError) return { content: JSON.stringify({ hata: e.message }), ok: false };
         console.error(`[ai] araç hatası (${call.name}):`, (e as Error)?.message);

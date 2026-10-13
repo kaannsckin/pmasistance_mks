@@ -170,6 +170,15 @@ describe('PlanAsistan MCP — değişiklikler', () => {
         expect(mem.saved[0].after.projects.find(p => p.id === 'altay')!.rag).toBe('red');
     });
 
+    it('RAG Türkçe değerle de önerilir ve uygulanır (B-009)', async () => {
+        const store = memoryProposalStore();
+        const mem = memorySource(sampleWorkspace());
+        const make = () => createPlanAsistanMcp({ source: mem.source, role: 'py', person: 'Ayşe Kaya', allowWrite: true, proposals: store, now: () => NOW });
+        const first = JSON.parse((await make().callTool('oner_rag_guncelle', { proje: 'ALTAY', rag: 'Riskli' })).content[0].text);
+        expect((await make().callTool(APPLY_TOOL, { oneri_id: first.oneri_id })).isError).toBeUndefined();
+        expect(mem.saved[0].after.projects.find(p => p.id === 'altay')!.rag).toBe('amber');
+    });
+
     it('bilinmeyen parametre ve geçersiz seçenek açık hata verir', async () => {
         const { call } = server(sampleWorkspace(), { role: 'pyb_destek' });
         const unknown = await call('gorev_ara', { gecikme: true });
