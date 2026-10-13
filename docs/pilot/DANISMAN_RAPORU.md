@@ -4,7 +4,7 @@
 
 ## 12 Ekim güncellemesi
 
-Raporun üç kırmızı boyutunun üçü de kodda kapatıldı; takvim ise demonun ajanların kendi ortamında yapılması kararıyla Kasım sonuna uzadı. Geliştirme listesinin on maddesinden yedisi yapıldı, ikisi kısmen (8: RAG kuralı, 10: arife), biri pilot sonrasına kaldı (9); mock veri tablosunun on maddesinden dokuzu kapandı. Kapanışlar canlı koşuda K0'da (15 Ekim) doğrulanacak (BL-18).
+Raporun üç kırmızı boyutunun üçü de kodda kapatıldı; takvim ise demonun ajanların kendi ortamında yapılması kararıyla Kasım sonuna uzadı. Geliştirme listesinin on maddesinden sekizi yapıldı, biri kısmen (8: RAG kuralı pilot sonrasına), biri pilot sonrasına kaldı (9); mock veri tablosunun on maddesinden dokuzu kapandı. Kapanışlar canlı koşuda K0'da (15 Ekim) doğrulanacak (BL-18).
 
 | Konu | 10 Ekim | 12 Ekim |
 | --- | --- | --- |
@@ -18,7 +18,7 @@ Raporun üç kırmızı boyutunun üçü de kodda kapatıldı; takvim ise demonu
 | Ürün düzeltmeleri | YILDIZ skoru 100; maliyet sapması −6,01 M TL; Ekim CPI'si şişkin | Teklif skorlanmaz (BL-11); sapma aynı dönemin planıyla (BL-09); EVM son kapanan aya kadar (BL-07); rapor biçim denetimi proje adlarını kısaltma saymaz (BL-21) |
 | Kurum ağı | Stil, ikon ve Excel kitaplıkları CDN'den (pilot ortamında 403) | Hepsi pakette (BL-08); ikonlar ekran okuyucudan gizli, ikonlu düğmelerin adı var (BL-23) |
 | Önerilen RAG kuralı | P1, K3 | Pilot sonrasına alındı (BL-10, 12 Ekim kararı); pilotta RAG'ı PY girer |
-| Testler | 864 | 886 (106 dosya) |
+| Testler | 864 | 888 (106 dosya) |
 
 Kalan işler ve kanıtlar: [BACKLOG.md](./BACKLOG.md).
 
@@ -111,7 +111,7 @@ Dört P0 işi demo hikâyesinin ön koşuludur ve 12–16 Ekim düzenek haftası
 | 7 | Veri dondurma ve geri yükleme (`pilot dondur`, `pilot geri-yukle`) | Demo günü güvenliği | 0,5 gün | P1 | Yapıldı (BL-06) |
 | 8 | Önerilen RAG kuralı (PY farklı seçerse gerekçe); teklif projeleri skorlanmaz | B-002; YILDIZ skoru 100 | 1 gün | P1 | Teklif skorlanmaz: yapıldı (BL-11). RAG kuralı pilot sonrasına alındı (BL-10) |
 | 9 | Yapılandırılmış talep: kaynak talebi ve açıklama talebi | B-007; kararlar iz bırakır | 2–3 gün | P2 | Açık, pilot sonrası (BL-12) |
-| 10 | Simülasyonda rapor günü Perşembe, arife yarım gün | Takvim tutarlılığı | 0,5 gün | P2 | Perşembe yapıldı (BL-02); arife açık, 27 Ekim'den önce ya da hiç (BL-14) |
+| 10 | Simülasyonda rapor günü Perşembe, arife yarım gün | Takvim tutarlılığı | 0,5 gün | P2 | Yapıldı: Perşembe (BL-02), 28 Ekim arife yarım gün (BL-14) |
 
 ## Kota ve maliyet
 

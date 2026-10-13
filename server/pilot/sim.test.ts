@@ -113,6 +113,33 @@ describe('pilot simülasyonu', () => {
         expect(events.find(e => e.gun === '2026-07-11')!.isGunu).toBe(false);
     });
 
+    it('arife (28 Ekim) yarım gün: worklog yarıya iner, 13:00\'ten sonra kayıt yok; 29 Ekim tatil (BL-14)', () => {
+        const start = '2026-10-01';
+        const state = createState(2026, start, start);
+        const events: DayEvents[] = [];
+        const ws = runUntil(state, createWorld(2026, start), '2026-10-30', e => events.push(e), { importAll: true });
+        const ev = (d: string) => events.find(e => e.gun === d)!;
+        expect(ev('2026-10-28').yarimGun).toBe(true);
+        expect(ev('2026-10-27').yarimGun).toBeUndefined();
+        expect(ev('2026-10-29').isGunu).toBe(false);
+        const hours = (d: string) => state.worklog.filter(x => x.date === d).reduce((t, x) => t + x.hours, 0);
+        const full = (hours('2026-10-26') + hours('2026-10-27')) / 2;
+        expect(hours('2026-10-28') / full).toBeGreaterThan(0.35);
+        expect(hours('2026-10-28') / full).toBeLessThan(0.65);
+        expect(hours('2026-10-29')).toBe(0);
+        // İstanbul 13:00 = 10:00Z: arifede Jira, not ve rapor zamanları öğleden önce
+        const onEve = (iso?: string | null) => !!iso && iso.startsWith('2026-10-28');
+        const stamps = [
+            ...Object.values(state.jira).flatMap(j => j.issues.flatMap(x => [x.rec.created, x.rec.resolved, ...x.rec.transitions.map(t => t.at)])),
+            ...ws.projects.flatMap(p => p.notes.map(n => n.createdAt)),
+            ...(ws.weeklyReports || []).flatMap(r => r.history.map(h => h.at)),
+        ].filter(onEve) as string[];
+        expect(stamps.length).toBeGreaterThan(0);
+        expect(stamps.filter(t => t.slice(11, 16) >= '10:00')).toEqual([]);
+        // Perşembe tatil: 44. haftanın raporu arifede, öğleden önce teslim
+        expect((ws.weeklyReports || []).some(r => r.week === 44 && onEve(r.history[0].at))).toBe(true);
+    });
+
     it('pilot 1. gün bulgularının düzeltmeleri: tahsis rolü, yönetici kapasitesi, tekrarsız istek, worklog ayrımı, tarih', () => {
         const { ws, events } = simulate();
         expect(ws.allocations.every(a => !!a.role)).toBe(true);

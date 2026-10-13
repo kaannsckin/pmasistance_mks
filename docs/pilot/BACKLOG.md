@@ -1,8 +1,8 @@
 # Backlog
 
-Son güncelleme: 12 Ekim 2026 (BL-21, BL-11, BL-09, BL-07, BL-08, BL-23 yapıldı; BL-10 pilot sonrasına alındı; BL-24 eklendi)
+Son güncelleme: 12 Ekim 2026 (BL-21, BL-11, BL-09, BL-07, BL-08, BL-23 yapıldı; BL-10 pilot sonrasına alındı; BL-24 eklendi) · 13 Ekim (BL-14 yapıldı)
 
-24 işin 12'si yapıldı (danışman raporundaki dört P0'ın tamamı dahil), 12'si açık. K0'dan önce zorunlu olan tek iş BL-18; demo yolunu doğrudan etkileyen açık iş kalmadı. BL-14 dışındaki açık işler pilot sonrasına planlı. Numaralar [`pilot/SENARYOLAR.md`](../../pilot/SENARYOLAR.md)'nin andığı BL-07, BL-08 ve BL-14 ile aynıdır.
+24 işin 13'ü yapıldı (danışman raporundaki dört P0'ın tamamı dahil), 11'i açık. K0'dan önce zorunlu olan tek iş BL-18; demo yolunu doğrudan etkileyen açık iş kalmadı. BL-18 dışındaki açık işler pilot sonrasına planlı. Numaralar [`pilot/SENARYOLAR.md`](../../pilot/SENARYOLAR.md)'nin andığı BL-07, BL-08 ve BL-14 ile aynıdır.
 
 **Durum değerleri:** Açık · Sürüyor · Karar bekliyor · Yapıldı. Bir iş yapıldığında satır silinmez: durum `Yapıldı` olur, kanıt sütununa commit ya da test sonucu yazılır ve satır "Yapılanlar" tablosuna taşınır. Yeni iş bir sonraki boş numarayı alır (BL-25).
 
@@ -14,7 +14,6 @@ Son güncelleme: 12 Ekim 2026 (BL-21, BL-11, BL-09, BL-07, BL-08, BL-23 yapıld�
 | BL-10 | Önerilen RAG kuralı (geciken oran, SPI/CPI eşikleri, yüksek risk, engelleyici hata); PY farklı seçerse gerekçe zorunlu | B-002, danışman Soru 7; NEHİR algı farkı (G4). Karar (12 Ekim): pilot sonrasına; pilotta RAG'ı PY girer, verinin RAG'la çelişkisi demoda sağlık skoruyla gösterilir | P1 | Açık | Pilot sonrası | — |
 | BL-12 | Yapılandırılmış talep: kaynak talebi ve açıklama talebi, "Yönetimden beklentiler"e bağlı | B-007, danışman Soru 10; yazışma bugün pilot dosyasında | P2 | Açık | Pilot sonrası | — |
 | BL-13 | Bölüm sorumlusu diğer bölümlerin boş kapasitesini rol bazında, adsız görür | Danışman Soru 8; S10'daki U340 çatışması | P2 | Açık | Pilot sonrası | — |
-| BL-14 | Simülasyonda arife yarım gün (28 Ekim) | S5; takvim tutarlılığı | P2 | Açık | 27 Ekim'den önce ya da hiç | — |
 | BL-15 | Araç kataloğu boyutu: sınır 16 000'den 18 000 karaktere çıkarıldı | Yeni PY yazma araçları; müdür rolünün kataloğu etkilenmedi | P2 | Açık | Pilot sonrası | `utils/ai/tools.test.ts` |
 | BL-16 | Uzak MCP (HTTP + OAuth): claude.ai web ve mobilden bağlantı | Bugün yalnız yerel stdio (Claude Desktop, Claude Code); demodaki canlı soru masaüstünden sorulur | P2 | Açık | Pilot sonrası | [`docs/MCP_KURULUM.md`](../MCP_KURULUM.md) |
 | BL-17 | JSON yedek yükleme yalnız "yedek" yetkili kimlikte görünüyor | Dosya modunda izleme talimatı bu düğmeye dayanıyor; `demo-testi` veriyi IndexedDB'ye doğrudan yazarak aşıyor | P2 | Açık | Pilot sonrası | — |
@@ -39,3 +38,4 @@ Son güncelleme: 12 Ekim 2026 (BL-21, BL-11, BL-09, BL-07, BL-08, BL-23 yapıld�
 | BL-07 | EVM'nin durum ayı gerçekleşeni girilmiş son ay: açık ayın planı ve ilerlemesi sayılıp gerçekleşeni 0 kalmaz | B-010; Ekim CPI'si ay ortasında şişkin görünüyordu (G7). Karar (12 Ekim): son kapanan ay kuralı; ay içi tahmin BL-22'ye | P1 | Yapıldı | K3 (19 Kasım) | `closedStatusMonth` (EVM, sağlık, yönetim, `evm_analizi`, `proje_detayi`); `evm.test.ts`; G7 kaldırıldı, K2 ölçütü 3/6; 57ebb24 |
 | BL-08 | Stil, ikon ve Excel/CSV kitaplıkları pakete gömülü: Tailwind derleme anında, Font Awesome, PapaParse, SheetJS npm'den | Kurum ağı CDN'i engellerse demo ekranı biçimsiz kalıyordu; pilot ortamında 403 alındı | P1 | Yapıldı | K3 (19 Kasım) | `demo-testi` 28/28, ekranlar biçimli (CDN'siz ortamda); dışarıda yalnız yazı tipi ve sekme simgesi kaldı; 6029303 |
 | BL-23 | İkon glifleri ekran okuyucudan gizlendi; yalnız ikonlu düğmelere ad verildi | BL-08 sırasında bulundu: ekran okuyucu "[glif] Pano" okuyordu, ikonlu kapatma düğmelerinin adı yoktu | P2 | Yapıldı | Pilot sonrası (öne alındı) | Klasik arayüzde 391 Font Awesome ikonuna `aria-hidden`, 84 yalnız ikonlu düğmeye `aria-label` (varsa `title`'dan); Notlar'daki yapılacak kutuları klavyeyle işaretlenir (`role="checkbox"`). Modern arayüzün ikonları zaten gizliydi. `demo-yolu` glif ayıklaması kaldırıldı, 28/28; 42272f6 |
+| BL-14 | Simülasyonda arife yarım gün (28 Ekim) | S5; takvim tutarlılığı. Karar (13 Ekim): 27 Ekim'den önce | P2 | Yapıldı | 27 Ekim'den önce | `isHalfDay`: worklog ve yeni kayıt yarıya iner, 13:00'ten sonra Jira, not ve rapor kaydı yok; 29 Ekim tatil olduğundan 44. haftanın raporu arifede öğleden önce. 27 Ekim'e kadarki olaylar eskisiyle birebir aynı (geçmiş değişmez); `kontrol` 30/30; `sim.test.ts`, `planningData.test.ts`. Uygulamanın Ekim iş günü (21) değişmedi: yüklenen 2026 takvimi 28 Ekim'i tam gün sayıyor, Ekim gerçekleşeni yarım gün kadar (≈%2) düşük çıkar; a1373f1 |
