@@ -1,6 +1,6 @@
 # Sistem tasarımı
 
-Son güncelleme: 12 Ekim 2026
+Son güncelleme: 13 Ekim 2026
 
 Pilot iki rutin, bir MCP sunucusu ve uygulamanın Supabase çalışma alanından oluşur; ajanlar uygulamaya yalnız MCP'den, kendi hesaplarıyla ve öneri → onay akışıyla yazar.
 
@@ -94,7 +94,7 @@ Stil (Tailwind, derleme anında), ikonlar (Font Awesome) ve Excel/CSV kitaplıkl
 | Rapor işlemleri genel veri girişinden ayrı kapıdan | PYB destek veri girmez ama raporu denetler ve yayınlar; müdür yalnız yayınlanmış haftayı okur | Yetki modelinde ikinci bir yol |
 | İstek ve not araçları yönetici rollerine hiç sunulmaz | Müdür notları ve müşteri isteklerini göremez (RLS ile tutarlı) | — |
 | 1 iş günü = 8 saat | Uygulamanın Billed Hours kuralı; 7 saatlik günlükler CPI'yı 1'in üstüne itiyordu | Simülasyon yeniden kuruldu (v4, `baslat --zorla`) |
-| Ajanlı dönem 12 Ekim'de başlar | Öncesini simülasyon yazar; sonrasında persona projelerinin RAG, risk, istek ve raporunu ajanlar yönetir | Geçmiş veride ajan kararı yok |
+| Ajanlı dönem 19 Ekim'de başlar (13 Ekim'de bir hafta kaydırıldı) | Öncesini simülasyon yazar; sonrasında persona projelerinin RAG, risk, istek ve raporunu ajanlar yönetir | Geçmiş veride ajan kararı yok |
 | Senaryolar `durum.json`'da; geçmişe etki eden senaryo reddedilir | Tohum 2026 ile üretim belirlenimci; senaryo geçmişi değiştiremez | Tarihi kaçan senaryo yeniden kaydedilemez |
 | Haftada iki koşu, taze oturum, tüm ajanlar Sonnet | Kota ve maliyet; bağlam her koşuda sıfırdan | Ajan hafızası ajanda dosyasına bağlı |
 | Araç kataloğu sınırı 18 000 karakter | Yeni PY yazma araçları kısaltılmış tanımlarla bile 16 000'i aştı | PY bağlamı biraz büyüdü (BL-15) |

@@ -1,6 +1,6 @@
 # 1. Rutin — Jira ajanı (Salı + Perşembe; sahte Jira + Confluence)
 
-> **Bu dosya rutin isteminden önceliklidir.** Sürüm 3 — danışman kararı, 9 Ekim 2026: rutin haftada iki kez çalışır ve son koşudan bu yana geçen günlerin hepsini üretir. Pilot 26 Kasım'a kadar sürer; demo, ajanların çalıştığı bu ortamın kendisidir (takvim ve kapılar: `pilot/SENARYOLAR.md`).
+> **Bu dosya rutin isteminden önceliklidir.** Sürüm 3 — danışman kararı, 9 Ekim 2026: rutin haftada iki kez çalışır ve son koşudan bu yana geçen günlerin hepsini üretir. Pilot 3 Aralık'a kadar sürer (13 Ekim'de bir hafta kaydırıldı); demo, ajanların çalıştığı bu ortamın kendisidir (takvim ve kapılar: `pilot/SENARYOLAR.md`).
 
 Sen PlanAsistan pilotunun **Jira ajanısın**. Kurgusal birimin son koşudan bu yana geçen günlerini üretirsin (Salı: Cuma–Pazartesi, Perşembe: Salı–Çarşamba). Proje yöneticileri gerçek Jira yerine bu veriyi kullanır; veri **gerçek Jira ile aynı biçimde** sunulur. Amaç, PY'lerin üzerinde gerçek bir iş yapabileceği kadar tutarlı ve ayrıntılı ham madde üretmek; PY'nin işini onun yerine yapmak değil.
 
@@ -16,9 +16,9 @@ Kurallar: Yalnız `claude/pilot-veri` dalına yaz ve gönder (izin bu talimatla 
 
 | Tarih | Neden |
 |---|---|
-| 2026-10-13 | Hazırlık haftası; haftalık kota 15 Ekim'de yenilenir. 15 Ekim koşusu 9–14 Ekim'i birlikte üretir. |
-| 2026-11-26 | Demo günü: yalnız `pilot-data/kapilar.md`'de "K4 kararı: canlı" satırı varsa çalış; yoksa atla ("K4 kararı canlı değil"). |
-| 2026-11-27 ve sonrası | Pilot tamamlandı. |
+| 2026-10-13, 2026-10-15, 2026-10-20 | Uygulama haftası: ajan sisteminin çalışmasında engel var, takvim bir hafta kaydırıldı. 22 Ekim koşusu yeniden kurulumla 21 Ekim'e kadar üretir. |
+| 2026-12-03 | Demo günü: yalnız `pilot-data/kapilar.md`'de "K4 kararı: canlı" satırı varsa çalış; yoksa atla ("K4 kararı canlı değil"). |
+| 2026-12-04 ve sonrası | Pilot tamamlandı. |
 
 ## Adımlar
 
@@ -35,8 +35,8 @@ Kurallar: Yalnız `claude/pilot-veri` dalına yaz ve gönder (izin bu talimatla 
    - `pilot-data/bulut.json` **varsa** (veri Supabase'de): `npm run -s pilot -- gun` (son günden düne kadar; kaçırılan günler de üretilir). Komut ortam değişkenlerinin eksik olduğunu ya da Supabase'e ulaşılamadığını söylerse **dur**: JSON'a geri dönme, veriyi elle üretme; özette hatayı aynen yaz (kullanıcı ortam ayarlarını ve ağ iznini — `*.supabase.co` — düzeltecek).
    - `bulut.json` yok, `workspace.json` var ve `PILOT_SUPABASE_*` değişkenleri tanımlı: **bir kez** `npm run -s pilot -- buluta-tasi`, sonra `gun`.
    - İkisi de yoksa: `npm run -s pilot -- baslat` (dünü dahil ~4 aylık geçmiş; tüm PY'ler geçmişi bir kez aktarmış sayılır; ortam tanımlıysa doğrudan Supabase'e kurar).
-   - `gun` "durum.json sürümü … baslat --zorla" derse simülasyon değişmiştir: `npm run -s pilot -- baslat --zorla` ile baştan kur ve bunu özette belirt (eski raporlar ve bulgular silinmez; bulutta aynı çalışma alanı yerinde yenilenir — kimlik ve üyelikler değişmez, kullanıcı yalnız "Buluttan Çek" der). **15 Ekim koşusunda bu beklenir** (simülasyon v4).
-   - **Senaryo kaydı (bir kez):** `npm run -s pilot -- senaryo liste` boş senaryo listesi gösteriyorsa `pilot/SENARYOLAR.md` › "Kayıt komutları"ndaki altı komutu aynen çalıştır (yeniden kurulumdan hemen sonra, 15 Ekim). Liste doluysa hiçbir şey ekleme. Tarihi geçtiği için reddedilen komutu değiştirme; özette yaz.
+   - `gun` "durum.json sürümü … baslat --zorla" derse simülasyon değişmiştir: `npm run -s pilot -- baslat --zorla` ile baştan kur ve bunu özette belirt (eski raporlar ve bulgular silinmez; bulutta aynı çalışma alanı yerinde yenilenir — kimlik ve üyelikler değişmez, kullanıcı yalnız "Buluttan Çek" der). **22 Ekim koşusunda bu beklenir** (veri simülasyon v3'te, kod v4).
+   - **Senaryo kaydı (bir kez):** `npm run -s pilot -- senaryo liste` boş senaryo listesi gösteriyorsa `pilot/SENARYOLAR.md` › "Kayıt komutları"ndaki altı komutu aynen çalıştır (yeniden kurulumdan hemen sonra, 22 Ekim). Liste doluysa hiçbir şey ekleme. Tarihi geçtiği için reddedilen komutu değiştirme; özette yaz.
    - İzleyici eklemek istenirse: `npm run -s pilot -- uyeler --izleyici <e-posta>`.
 4. **Zenginleştir (yapay zekâ):** Üretilen her günün `pilot-data/olaylar/GG.md` dosyasını oku. Her **iş günü** için, Jira akışıyla tutarlı:
    - Aktif projelerin 1–2'sine Confluence tarzı bir not ekle. Katılımcılar projenin ekibinden olsun; günün kayıt anahtarlarına (ör. NHR-58) ve sayılarına atıf yap; bir karar ve **sorumlu + tarihli** en az bir aksiyon yaz ("Aksiyon: Ozan Kılıç, 15 Ekim'e kadar …"). Türkçe, kurumsal, 5–12 satır.

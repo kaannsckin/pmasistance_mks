@@ -5,7 +5,7 @@ import { TaskStatus } from '../../types.js';
 import type { JiraIssueRecord } from '../../utils/integrations.js';
 import { mergeJiraIssues } from '../../utils/planning/jiraImport.js';
 import { mulberry32, normal, Rng } from '../../utils/planning/random.js';
-import { addWorkdays, isHalfDay, isWorkday, workdaysInMonth } from '../../utils/planning/workdays.js';
+import { addWorkdays, effectiveWorkdays, isHalfDay, isWorkday } from '../../utils/planning/workdays.js';
 import { isoWeekOf } from '../../utils/weeklyReport.js';
 import { createEmptyWorkspace, createProject, defaultProjectSettings } from '../../utils/workspace.js';
 import { SearchResponse, searchExport, toRawIssue } from './mockJira.js';
@@ -356,7 +356,7 @@ export const scenarioLeaves = (x: S<'izin'>): Leave[] => {
     }
     return [...byMonth.entries()].map(([m, days]) => {
         const [y, mo] = m.split('-').map(Number);
-        return { id: `${SCENARIO_LEAVE}${x.id}-${m}`, personId: x.kisi, year: y, month: mo, aa: r2(days / workdaysInMonth(y, mo)), reason: x.neden || 'Yıllık izin' };
+        return { id: `${SCENARIO_LEAVE}${x.id}-${m}`, personId: x.kisi, year: y, month: mo, aa: r2(days / effectiveWorkdays(y, mo)), reason: x.neden || 'Yıllık izin' };
     });
 };
 
@@ -500,7 +500,7 @@ export const stepDay = (state: SimState, input: WorkspaceData, day: string, opts
     if (day.endsWith('-01') && state.sonGun) {
         const prev = ym(addDays(day, -1));
         const [py, pm] = prev.split('-').map(Number);
-        const days = workdaysInMonth(py, pm);
+        const days = effectiveWorkdays(py, pm);
         const hours = state.saat[prev] || {};
         let rows = 0;
         const allocations = ws.allocations.map(a => ({ ...a, actual: { ...a.actual } }));

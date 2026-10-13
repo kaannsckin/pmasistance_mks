@@ -80,6 +80,13 @@ export const workdaysBetween = (start: string | Date, end: string | Date): numbe
 export const workdaysInMonth = (year: number, month: number): number =>
     workdaysBetween(new Date(year, month - 1, 1), new Date(year, month, 0)) || 0;
 
+/** Ayın çalışılan gün sayısı: arife yarım günleri 0,5 sayılır (ör. Ekim 2026: 20,5) */
+export const effectiveWorkdays = (year: number, month: number): number => {
+    let n = workdaysInMonth(year, month);
+    for (const d = new Date(year, month - 1, 1); d.getMonth() === month - 1; d.setDate(d.getDate() + 1)) if (isHalfDay(d)) n -= 0.5;
+    return n;
+};
+
 /** Başlangıçtan itibaren n iş günü sonraki iş günü (n = 1 → başlangıç ya da sonraki ilk iş günü) */
 export const addWorkdays = (start: Date, n: number): Date => {
     const d = dayOnly(start);

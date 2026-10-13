@@ -1,6 +1,6 @@
 # PlanAsistan pilotu — sahte veri + yapay zekâ kullanıcıları
 
-Uygulamayı, gerçek veri olmadan, "kullanılıyormuş gibi" sınamak için iki rutin. Pilot 15 Ekim–26 Kasım 2026 arasında çalışır ve **yönetim demosu bu ortamın kendisidir**: sunumda gösterilen çalışma alanı, beş ajanın altı hafta boyunca üzerinde çalıştığı alandır. Ajanın uygulamaya yazmadığı iş demoda yoktur; bu yüzden ajanların her kararı (rapor, risk, istek, not, RAG, tahsis) MCP araçlarıyla uygulamaya yazılır.
+Uygulamayı, gerçek veri olmadan, "kullanılıyormuş gibi" sınamak için iki rutin. Pilot 22 Ekim–3 Aralık 2026 arasında çalışır (13 Ekim kararıyla bir hafta kaydırıldı; 13–20 Ekim uygulama haftası) ve **yönetim demosu bu ortamın kendisidir**: sunumda gösterilen çalışma alanı, beş ajanın altı hafta boyunca üzerinde çalıştığı alandır. Ajanın uygulamaya yazmadığı iş demoda yoktur; bu yüzden ajanların her kararı (rapor, risk, istek, not, RAG, tahsis) MCP araçlarıyla uygulamaya yazılır.
 
 | Rutin | Ne yapar | Talimat |
 |---|---|---|
@@ -138,8 +138,8 @@ npm run -s pilot -- kontrol --cikti pilot-data/gunluk/$(date +%F)/kontrol.md
 
 npm run -s pilot -- senaryo liste                          # kayıtlı senaryolar (ekleme komutları: SENARYOLAR.md)
 npm run -s pilot -- demo-testi [--ekran]                   # demo yolu tarayıcı testi → pilot-data/demo-testi/<gün>/
-npm run -s pilot -- dondur --ad K1-2026-10-22              # geri dönülebilir kopya → pilot-data/donmus/<ad>/
-npm run -s pilot -- geri-yukle --ad K1-2026-10-22          # kopyayı geri yükler (bulutta yerinde)
+npm run -s pilot -- dondur --ad K1-2026-10-27              # geri dönülebilir kopya → pilot-data/donmus/<ad>/
+npm run -s pilot -- geri-yukle --ad K1-2026-10-27          # kopyayı geri yükler (bulutta yerinde)
 ```
 
 `arac` komutu MCP sunucusunu (Claude'un bağlandığı sunucunun aynısı) persona kimliğiyle çalıştırır. Bulut modunda persona kendi Supabase hesabıyla bağlanır ve onaylanan değişiklik buluta yazılır; dosya modunda veri `pilot-data/workspace.json`'dur (uygulamada **JSON yedek yükle** ile açılır).
@@ -170,5 +170,5 @@ npm run -s pilot -- geri-yukle --ad K1-2026-10-22          # kopyayı geri yükl
 `raporlar/OZET.md` her koşuda güncellenir ve iki karar taşır:
 
 - **Demo kararı** (asıl soru): DH1–DH7 ölçütleri — kontroller, açık bulgular, veri tutarlılığı, PY puan ortalaması (son 4 koşuda ≥ 80), senaryolar, müdürün demo yoklaması ve demo yolu testi. Ayrıntı: `RUTIN_2_KULLANICILAR.md` › 8.
-- **Ara kapılar:** K0 Kurulum (15 Ekim), K1 Akış (22 Ekim), K2 Senaryo (5 Kasım), K3 Dondurma (19 Kasım), K4 Karar (24 Kasım; canlı / dondurulmuş / ertele). Ölçütler: `SENARYOLAR.md`.
+- **Ara kapılar:** K0 Kurulum (22 Ekim), K1 Akış (27 Ekim), K2 Senaryo (12 Kasım), K3 Dondurma (26 Kasım), K4 Karar (1 Aralık; canlı / dondurulmuş / ertele). Ölçütler: `SENARYOLAR.md`.
 - **Kod birleştirme:** art arda 3 koşuda otomatik kontrollerin tamamı geçtiyse ve açık "yüksek" önemde bulgu yoksa PR main'e alınabilir.
