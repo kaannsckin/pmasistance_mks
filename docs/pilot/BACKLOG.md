@@ -1,8 +1,8 @@
 # Backlog
 
-Son güncelleme: 12 Ekim 2026 (BL-21, BL-11, BL-09, BL-07, BL-08, BL-23 yapıldı; BL-10 pilot sonrasına alındı; BL-24 eklendi) · 13 Ekim (BL-14, BL-25 yapıldı; takvim bir hafta kaydırıldı, uygulama haftası planlandı)
+Son güncelleme: 12 Ekim 2026 (BL-21, BL-11, BL-09, BL-07, BL-08, BL-23 yapıldı; BL-10 pilot sonrasına alındı; BL-24 eklendi) · 13 Ekim (BL-14, BL-25, BL-17 yapıldı; takvim bir hafta kaydırıldı, uygulama haftası planlandı)
 
-25 işin 14'ü yapıldı (danışman raporundaki dört P0'ın tamamı dahil), 11'i açık. K0'dan (22 Ekim) önce zorunlu olan tek iş BL-18; demo yolunu doğrudan etkileyen açık iş kalmadı. Altı açık iş uygulama haftasına alındı (aşağıda). Numaralar [`pilot/SENARYOLAR.md`](../../pilot/SENARYOLAR.md)'nin andığı BL-07, BL-08 ve BL-14 ile aynıdır.
+25 işin 15'i yapıldı (danışman raporundaki dört P0'ın tamamı dahil), 10'u açık. K0'dan (22 Ekim) önce zorunlu olan tek iş BL-18; demo yolunu doğrudan etkileyen açık iş kalmadı. Altı açık iş uygulama haftasına alındı (aşağıda). Numaralar [`pilot/SENARYOLAR.md`](../../pilot/SENARYOLAR.md)'nin andığı BL-07, BL-08 ve BL-14 ile aynıdır.
 
 **Durum değerleri:** Açık · Sürüyor · Karar bekliyor · Yapıldı. Bir iş yapıldığında satır silinmez: durum `Yapıldı` olur, kanıt sütununa commit ya da test sonucu yazılır ve satır "Yapılanlar" tablosuna taşınır. Yeni iş bir sonraki boş numarayı alır (BL-26).
 
@@ -12,7 +12,7 @@ Ajan sisteminin çalışmasında bir haftalık engel var (13 Ekim); pilot takvim
 
 | Sıra | İş | Büyüklük | Neden bu hafta |
 | --- | --- | --- | --- |
-| 1 | BL-17 JSON yedek yükleme yetkisi | Küçük | İzleme ve geri yükleme talimatı bu düğmeye dayanıyor |
+| 1 | ~~BL-17 JSON yedek yükleme yetkisi~~ (yapıldı) | Küçük | İzleme ve geri yükleme talimatı bu düğmeye dayanıyor |
 | 2 | BL-19 RAG Türkçe değer | Küçük | Ajanın Türkçe RAG'ı sessizce reddedilmesin (B-009) |
 | 3 | BL-20 Plan kilidi önceden görünür | Küçük | Ajan ve kullanıcı kilitli plana boşuna öneri yazmasın (B-014) |
 | 4 | BL-22 Ay içi tahmini gerçekleşen | Orta | Ay ortasında EVM ve maliyet "son kapanan ay"da kalıyor; S6'nın erken uyarısı ekranda görünür |
@@ -34,7 +34,6 @@ Kurallar:
 | BL-13 | Bölüm sorumlusu diğer bölümlerin boş kapasitesini rol bazında, adsız görür | Danışman Soru 8; S10'daki U340 çatışması | P2 | Açık | Uygulama haftası (21 Ekim) | — |
 | BL-15 | Araç kataloğu boyutu: sınır 16 000'den 18 000 karaktere çıkarıldı | Yeni PY yazma araçları; müdür rolünün kataloğu etkilenmedi | P2 | Açık | Pilot sonrası | `utils/ai/tools.test.ts` |
 | BL-16 | Uzak MCP (HTTP + OAuth): claude.ai web ve mobilden bağlantı | Bugün yalnız yerel stdio (Claude Desktop, Claude Code); demodaki canlı soru masaüstünden sorulur | P2 | Açık | Pilot sonrası | [`docs/MCP_KURULUM.md`](../MCP_KURULUM.md) |
-| BL-17 | JSON yedek yükleme yalnız "yedek" yetkili kimlikte görünüyor | Dosya modunda izleme talimatı bu düğmeye dayanıyor; `demo-testi` veriyi IndexedDB'ye doğrudan yazarak aşıyor | P2 | Açık | Uygulama haftası (21 Ekim) | — |
 | BL-19 | RAG Türkçe değer de kabul eder | B-009 | P2 | Açık | Uygulama haftası (21 Ekim) | — |
 | BL-20 | Plan kilidi önceden görünür (öneri denenmeden) | B-014 | P2 | Açık | Uygulama haftası (21 Ekim) | — |
 | BL-22 | Ay içi tahmini gerçekleşen adam-ay: haftalık rapor worklog'undan, ayrı görünümle; ay kapanışında PYB onayıyla kesin | Danışman Soru 9; BL-07 son kapanan ay kuralıyla kapandı, ay içi görünürlük hâlâ yok | P2 | Açık | Uygulama haftası (21 Ekim) | — |
@@ -58,3 +57,4 @@ Kurallar:
 | BL-23 | İkon glifleri ekran okuyucudan gizlendi; yalnız ikonlu düğmelere ad verildi | BL-08 sırasında bulundu: ekran okuyucu "[glif] Pano" okuyordu, ikonlu kapatma düğmelerinin adı yoktu | P2 | Yapıldı | Pilot sonrası (öne alındı) | Klasik arayüzde 391 Font Awesome ikonuna `aria-hidden`, 84 yalnız ikonlu düğmeye `aria-label` (varsa `title`'dan); Notlar'daki yapılacak kutuları klavyeyle işaretlenir (`role="checkbox"`). Modern arayüzün ikonları zaten gizliydi. `demo-yolu` glif ayıklaması kaldırıldı, 28/28; 42272f6 |
 | BL-14 | Simülasyonda arife yarım gün (28 Ekim) | S5; takvim tutarlılığı. Karar (13 Ekim): 27 Ekim'den önce | P2 | Yapıldı | 27 Ekim'den önce | `isHalfDay`: worklog ve yeni kayıt yarıya iner, 13:00'ten sonra Jira, not ve rapor kaydı yok; 29 Ekim tatil olduğundan 44. haftanın raporu arifede öğleden önce. 27 Ekim'e kadarki olaylar eskisiyle birebir aynı (geçmiş değişmez); `kontrol` 30/30; `sim.test.ts`, `planningData.test.ts`. Uygulamanın Ekim iş günü (21) değişmedi: yüklenen 2026 takvimi 28 Ekim'i tam gün sayıyor, Ekim gerçekleşeni yarım gün kadar (≈%2) düşük çıkar; a1373f1 |
 | BL-25 | Ekim 2026 çalışma günü 20,5: 28 Ekim arifesi yarım gün | Karar (13 Ekim). Uygulamanın 2026 takvimi Ekim'i 21 gün sayıyordu; Mart ve Mayıs arifeleri zaten yarımdı | P2 | Yapıldı | — | `TR_WORKDAYS_2026[10]` = 20,5; `effectiveWorkdays` (arife 0,5 gün) 12 ayda takvimle birebir; simülasyon ay kapanışı ve izin AA'sı bunu kullanır; `planningData.test.ts`, `billedHours.test.ts`; ac28e98 |
+| BL-17 | Yerel modda yedek işlemlerine giden yol görünür | JSON yedek yükleme yalnız Admin yetkisiyle görünüyordu; dosya modunda izleme talimatı ve MCP kurulumu (JSON yedeği) bu düğmeye dayanıyor | P2 | Yapıldı | Uygulama haftası (21 Ekim) | Yetki modeli değişmedi: yetkisiz kimlikte, bulut bağlı değilken klasik üst çubukta ve modern ⋯ menüsünde "Yedek al / yükle — Admin kimliğiyle" profil değiştiriciyi açar; tarayıcıda PY → Admin → ⋯ › Yedekten yükle yolu denendi. `pilot/README.md`, `docs/MCP_KURULUM.md` talimatı; `demo-testi` 28/28; 2a13a98 |

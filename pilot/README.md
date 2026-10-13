@@ -142,7 +142,7 @@ npm run -s pilot -- dondur --ad K1-2026-10-27              # geri dönülebilir 
 npm run -s pilot -- geri-yukle --ad K1-2026-10-27          # kopyayı geri yükler (bulutta yerinde)
 ```
 
-`arac` komutu MCP sunucusunu (Claude'un bağlandığı sunucunun aynısı) persona kimliğiyle çalıştırır. Bulut modunda persona kendi Supabase hesabıyla bağlanır ve onaylanan değişiklik buluta yazılır; dosya modunda veri `pilot-data/workspace.json`'dur (uygulamada **JSON yedek yükle** ile açılır).
+`arac` komutu MCP sunucusunu (Claude'un bağlandığı sunucunun aynısı) persona kimliğiyle çalıştırır. Bulut modunda persona kendi Supabase hesabıyla bağlanır ve onaylanan değişiklik buluta yazılır; dosya modunda veri `pilot-data/workspace.json`'dur (uygulamada **Yedek yükle** ile açılır; yükleme Admin yetkisi ister: yerel modda önce **Profil değiştir › Admin**, sonra **⋯ › Yedekten yükle** (klasik arayüzde üst çubuktaki yükleme simgesi bu yolu açar). Yüklenen dosyanın kimliği PYB Destek'tir, sonraki yüklemede yeniden Admin'e geçilir).
 
 `pilot-data/` içeriği:
 

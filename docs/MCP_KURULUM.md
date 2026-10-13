@@ -51,7 +51,7 @@ Uygulama yerel-öncelikli çalışır (veri tarayıcıda). MCP sunucusu veriyi i
 | Kimlik | Yedeği alan tarayıcıdaki rol + kişi (değiştirilebilir) | Bulut üyelik rolü (değiştirilebilir) |
 | Notlar / istekler | Yedekte ne varsa | RLS: Müdür ve PYB Sorumlusu hesapları okuyamaz |
 
-**A) JSON yedeği:** Uygulamada sağ üstteki **JSON yedek indir** ile çalışma alanı yedeğini alın ve dosya yolunu `PLANASISTAN_WORKSPACE_FILE` olarak verin. Yeni yedek aynı dosyanın üzerine kaydedilirse Claude bir sonraki soruda güncel veriyi görür.
+**A) JSON yedeği:** Uygulamada sağ üstteki **JSON yedek indir** ile çalışma alanı yedeğini alın (Admin yetkisi ister; yerel modda **Profil değiştir › Admin**, sonra **⋯ › Yedeği indir**) ve dosya yolunu `PLANASISTAN_WORKSPACE_FILE` olarak verin. Yeni yedek aynı dosyanın üzerine kaydedilirse Claude bir sonraki soruda güncel veriyi görür.
 
 **B) Supabase:** Uygulamanın Bulut penceresinde kullandığınız proje adresi ve anon anahtar ile **kendi** e-posta/parolanız. Hesap bir çalışma alanının üyesi olmalıdır; birden fazlaysa `PLANASISTAN_WORKSPACE_ID` ile seçin.
 
