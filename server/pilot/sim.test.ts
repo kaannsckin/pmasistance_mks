@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { TaskStatus } from '../../types';
 import { analyzeDataHealth } from '../../utils/dataHealth';
+import { DEFAULT_ABBREVIATIONS, lintDictionary, lintReport } from '../../utils/weeklyReport';
 import { serializeWorkspace } from '../../utils/workspace';
 import { runChecks } from './check';
 import { addDays, createState, createWorld, DayEvents, eventsMarkdown, jiraExports, personaOwned, runUntil, SimState } from './sim';
@@ -111,6 +112,19 @@ describe('pilot simülasyonu', () => {
         expect(eventsMarkdown(events.find(e => e.gun === '2026-07-13')!)).toContain('yayınlandı');
         expect((ws.weeklyPublications || []).length).toBeGreaterThan(2);
         expect(events.find(e => e.gun === '2026-07-11')!.isGunu).toBe(false);
+    });
+
+    it('geçmiş raporlarda kalite dağılımı: iyi, orta ve zayıf; hiçbirinde biçim hatası yok (BL-24)', () => {
+        const { ws } = simulate();
+        const reports = ws.weeklyReports || [];
+        const text = (r: typeof reports[number]) => r.thisWeek.map(i => i.text).join(' ');
+        const good = reports.filter(r => /\(\d+ saat/.test(text(r)) || r.thisWeek.some(i => i.category === 'schedule_budget'));
+        const weak = reports.filter(r => r.thisWeek.every(i => i.source === 'manual') && !/kapanan kayıt yok/.test(text(r)));
+        expect(good.length).toBeGreaterThan(0);
+        expect(weak.length).toBeGreaterThan(0);
+        expect(reports.length - good.length - weak.length).toBeGreaterThan(0);
+        const dictionary = lintDictionary(DEFAULT_ABBREVIATIONS, ws.projects);
+        reports.forEach(r => expect([r.id, lintReport(r, dictionary).filter(i => i.level === 'error').map(i => i.message)]).toEqual([r.id, []]));
     });
 
     it('arife (28 Ekim) yarım gün: worklog yarıya iner, 13:00\'ten sonra kayıt yok; 29 Ekim tatil (BL-14)', () => {

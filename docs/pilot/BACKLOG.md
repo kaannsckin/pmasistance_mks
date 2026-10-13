@@ -1,8 +1,8 @@
 # Backlog
 
-Son güncelleme: 12 Ekim 2026 (BL-21, BL-11, BL-09, BL-07, BL-08, BL-23 yapıldı; BL-10 pilot sonrasına alındı; BL-24 eklendi) · 13 Ekim (BL-14, BL-25, BL-17, BL-19, BL-20, BL-22 yapıldı; takvim bir hafta kaydırıldı, uygulama haftası planlandı)
+Son güncelleme: 12 Ekim 2026 (BL-21, BL-11, BL-09, BL-07, BL-08, BL-23 yapıldı; BL-10 pilot sonrasına alındı; BL-24 eklendi) · 13 Ekim (BL-14, BL-25, BL-17, BL-19, BL-20, BL-22, BL-24 yapıldı; takvim bir hafta kaydırıldı, uygulama haftası planlandı)
 
-25 işin 18'i yapıldı (danışman raporundaki dört P0'ın tamamı dahil), 7'si açık. K0'dan (22 Ekim) önce zorunlu olan tek iş BL-18; demo yolunu doğrudan etkileyen açık iş kalmadı. Altı açık iş uygulama haftasına alındı (aşağıda). Numaralar [`pilot/SENARYOLAR.md`](../../pilot/SENARYOLAR.md)'nin andığı BL-07, BL-08 ve BL-14 ile aynıdır.
+25 işin 19'u yapıldı (danışman raporundaki dört P0'ın tamamı dahil), 6'sı açık. K0'dan (22 Ekim) önce zorunlu olan tek iş BL-18; demo yolunu doğrudan etkileyen açık iş kalmadı. Altı açık iş uygulama haftasına alındı (aşağıda). Numaralar [`pilot/SENARYOLAR.md`](../../pilot/SENARYOLAR.md)'nin andığı BL-07, BL-08 ve BL-14 ile aynıdır.
 
 **Durum değerleri:** Açık · Sürüyor · Karar bekliyor · Yapıldı. Bir iş yapıldığında satır silinmez: durum `Yapıldı` olur, kanıt sütununa commit ya da test sonucu yazılır ve satır "Yapılanlar" tablosuna taşınır. Yeni iş bir sonraki boş numarayı alır (BL-26).
 
@@ -16,7 +16,7 @@ Ajan sisteminin çalışmasında bir haftalık engel var (13 Ekim); pilot takvim
 | 2 | ~~BL-19 RAG Türkçe değer~~ (yapıldı) | Küçük | Ajanın Türkçe RAG'ı sessizce reddedilmesin (B-009) |
 | 3 | ~~BL-20 Plan kilidi önceden görünür~~ (yapıldı) | Küçük | Ajan ve kullanıcı kilitli plana boşuna öneri yazmasın (B-014) |
 | 4 | ~~BL-22 Ay içi tahmini gerçekleşen~~ (yapıldı) | Orta | Ay ortasında EVM ve maliyet "son kapanan ay"da kalıyor; S6'nın erken uyarısı ekranda görünür |
-| 5 | BL-24 Geçmiş raporlarda kalite dağılımı | Orta | K0'da zaten `baslat --zorla` ile yeniden kurulum var; geçmişi değiştirmenin bedeli bu hafta sıfır |
+| 5 | ~~BL-24 Geçmiş raporlarda kalite dağılımı~~ (yapıldı) | Orta | K0'da zaten `baslat --zorla` ile yeniden kurulum var; geçmişi değiştirmenin bedeli bu hafta sıfır |
 | 6 | BL-13 Diğer bölümlerin boş kapasitesi (rol bazında, adsız) | Orta | S8 ve S10'daki kaynak çatışmasını Selin rakamla çözebilsin |
 
 Kurallar:
@@ -34,7 +34,6 @@ Kurallar:
 | BL-13 | Bölüm sorumlusu diğer bölümlerin boş kapasitesini rol bazında, adsız görür | Danışman Soru 8; S10'daki U340 çatışması | P2 | Açık | Uygulama haftası (21 Ekim) | — |
 | BL-15 | Araç kataloğu boyutu: sınır 16 000'den 18 000 karaktere çıkarıldı | Yeni PY yazma araçları; müdür rolünün kataloğu etkilenmedi | P2 | Açık | Pilot sonrası | `utils/ai/tools.test.ts` |
 | BL-16 | Uzak MCP (HTTP + OAuth): claude.ai web ve mobilden bağlantı | Bugün yalnız yerel stdio (Claude Desktop, Claude Code); demodaki canlı soru masaüstünden sorulur | P2 | Açık | Pilot sonrası | [`docs/MCP_KURULUM.md`](../MCP_KURULUM.md) |
-| BL-24 | Geçmiş haftalık raporlarda kalite dağılımı (iyi, orta, zayıf) | Danışman raporu, mock veri tablosu: simülasyon geçmiş raporları kalıp maddelerle yazıyor ("… tamamlandı"), rapor AI'ının farkı görünmüyor. Ajanlı dönemde persona raporlarını ajanlar yazdığı için demo etkilenmez; geçmişi değiştirmek `baslat --zorla` ister | P2 | Açık | Uygulama haftası (21 Ekim) | — |
 
 ## Yapılanlar
 
@@ -58,3 +57,4 @@ Kurallar:
 | BL-19 | Seçenekli parametrelerde Türkçe değer kabul edilir (RAG dahil) | B-009: `oner_rag_guncelle` "Sarı" değerini reddediyordu | P2 | Yapıldı | Uygulama haftası (21 Ekim) | `enumAliases`: Türkçe karşılık ve büyük/küçük harf koda çevrilir (RAG, risk ve görev durumu, öncelik, istek durumu); eşanlam yalnız o parametrenin seçeneğindeyse; tanınmayan değer yine açık hata. MCP ve uygulama içi asistan aynı yol; `enumAliases.test.ts`, `args.test.ts`, `planasistan.test.ts`, `tools.test.ts`; 28e568a |
 | BL-20 | Plan kilidi öneri denenmeden görünür | B-014: Selin kilidi ancak tahsis önerisi reddedilince öğrendi | P2 | Yapıldı | Uygulama haftası (21 Ekim) | `proje_listesi` ve `kisi_profili` (proje başına) `plan_kilidi` döner (`proje_detayi` ve `tahsis_ozeti` zaten dönüyordu); `tools.test.ts`; 28e568a |
 | BL-22 | Ay içi tahmini gerçekleşen adam-ay, ayrı görünümle | Danışman Soru 9; BL-07 son kapanan ay kuralıyla kapandı, ay içi görünürlük yoktu | P2 | Yapıldı | Uygulama haftası (21 Ekim) | `utils/inMonthActual`: haftalık rapor worklog'undan saat / (8 × ayın iş günü); plan worklog'u olan iş günlerine oranlanır. EVM'e girmez. `evm_analizi` › `ay_ici_tahmin`; klasik EVM paneli tablosu; modern proje özetinde sapma %10'u aşarsa ipucu. MCP haftalık rapor önerisi haftanın Jira worklog'unu raporla saklar. `inMonthActual.test.ts`, `planasistan.test.ts`; c133376 |
+| BL-24 | Geçmiş haftalık raporlarda kalite dağılımı (iyi, orta, zayıf) | Danışman raporu, mock veri tablosu: geçmiş raporlar tek kalıptı, rapor AI'ının farkı görünmüyordu | P2 | Yapıldı | Uygulama haftası (21 Ekim; K0 yeniden kurulumuyla girer) | İyi: saat ve tahminli kapanış, gecikme rakamı, yeniden açılan kayıt, tarihli plan; orta: eski kalıp; zayıf: kalıp cümle. 22 Ekim kurulumunda 42. haftaya kadar 76 rapor: 25 iyi, 28 orta, 23 zayıf (Burak çoğunlukla orta/zayıf). Ayrı rastgele akış: 30 Kasım doğrulaması değişmedi; hiçbir raporda biçim hatası yok (`sim.test.ts`); `kontrol` 30/30; 2b3f5b4 |
