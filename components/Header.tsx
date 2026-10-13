@@ -405,6 +405,12 @@ const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSett
                 <i aria-hidden="true" className="fa-solid fa-upload text-xs"></i>
               </button>
             </div>}
+            {/* Yerel modda yedek yalnız Yönetici yetkisiyle: düğme gizlenmesin, yolu göstersin */}
+            {!onSaveProject && !onLoadProject && !cloudLinked && (
+              <button aria-label="Yedek al / yükle: Admin kimliğiyle" onClick={onOpenProfile} className="hidden sm:flex w-10 h-10 items-center justify-center bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 text-gray-300 hover:text-primary transition-colors" title="Yedek al / yükle Admin yetkisi ister — kimlik değiştirmek için tıklayın">
+                <i aria-hidden="true" className="fa-solid fa-upload text-xs"></i>
+              </button>
+            )}
             <button onClick={onOpenCommandPalette} className="hidden md:flex items-center gap-2 h-10 px-3 bg-white dark:bg-gray-700 text-gray-400 rounded-lg border border-gray-200 dark:border-gray-600 hover:text-primary transition-colors" title="Hızlı git — projeye, kişiye ya da ekrana (⌘K / Ctrl+K)">
               <i aria-hidden="true" className="fa-solid fa-magnifying-glass text-[13px]"></i>
               <kbd className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-400">⌘K</kbd>
