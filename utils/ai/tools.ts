@@ -1,5 +1,6 @@
 import { PermissionKey, ProjectStatus, RagStatus, RiskStatus, Task, TaskStatus } from '../../types';
 import { normalizeEnumArgs } from './enumAliases';
+import { inMonthEstimates, InMonthEstimate } from '../inMonthActual';
 import { getPlanLockStatus, MONTH_INDEXES, ROLE_LABELS, summarizeByProject } from '../allocations';
 import { AUDIT_ACTION_LABELS } from '../audit';
 import { buildCostReport, costPeriodLabel } from '../costing';
@@ -57,6 +58,9 @@ const TASK_STATUS_TR: Record<TaskStatus, string> = {
     [TaskStatus.Backlog]: 'Backlog', [TaskStatus.ToDo]: 'Yapılacak', [TaskStatus.InProgress]: 'Devam Ediyor', [TaskStatus.Done]: 'Tamamlandı',
 };
 const LOCK_TR = { draft: 'Taslak', submitted: 'Onay Bekliyor', locked: 'Onaylı/Kilitli' } as const;
+
+const IN_MONTH_NOTE = 'ay_ici_tahmin: kapanmamış ayın haftalık rapor worklog\'undan tahmini gerçekleşeni; EVM\'e girmez (EVM son kapanan aya kadar), ay kapanışında kesinleşir. oran = tahmini / worklog\'u olan günlere düşen plan.';
+const inMonthRow = (x: InMonthEstimate) => ({ ay: x.month, kayitli_gun: x.coveredDays, son_kayit: x.lastDate, saat: x.hours, tahmini_gerceklesen_aa: x.estimatedAA, ayni_doneme_plan_aa: x.planToDateAA, oran: x.ratio });
 
 const str = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
 const short = (s: string | undefined, n = 200): string | undefined => {
@@ -624,14 +628,19 @@ export const AI_TOOLS: ToolDef[] = [
                 const p = resolveProject(ctx, a.proje);
                 const e = buildProjectEVM(ctx.scoped, p.id, year, statusMonth);
                 if (!e) throw new ToolError('EVM hesaplanamadı.');
-                return { yil: year, ...evmRow(e) };
+                const est = inMonthEstimates(ctx.ws, p.id, ctx.now);
+                return { yil: year, ...evmRow(e), ...(est.length ? { ay_ici_tahmin: est.map(inMonthRow), ay_ici_not: IN_MONTH_NOTE } : {}) };
             }
             const pf = buildPortfolioEVM(ctx.scoped, year, [...ctx.visibleProjectIds], statusMonth);
             return {
                 yil: year, durum_ayi: pf.statusMonth, bac: Math.round(pf.bac), pv: Math.round(pf.pv), ev: Math.round(pf.ev), ac: Math.round(pf.ac),
                 spi: r2(pf.spi), cpi: r2(pf.cpi), eac: Math.round(pf.eac), vac: Math.round(pf.vac),
                 maliyetli_unvan_sayisi: pf.costedTitleCount,
-                projeler: pf.projects.filter(e => e.costed).slice(0, 30).map(evmRow),
+                projeler: pf.projects.filter(e => e.costed).slice(0, 30).map(e => {
+                    const est = inMonthEstimates(ctx.ws, e.projectId, ctx.now);
+                    return { ...evmRow(e), ...(est.length ? { ay_ici_tahmin: est.map(inMonthRow) } : {}) };
+                }),
+                ay_ici_not: IN_MONTH_NOTE,
             };
         },
     },

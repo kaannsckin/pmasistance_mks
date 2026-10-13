@@ -230,7 +230,7 @@ export const draftPackage = (ws: WorkspaceData, ctx: ToolContext, args: Record<s
 // ---------------------------------------------------------------- öneriler
 
 export type ReportOp =
-    | { op: 'kaydet'; projectId: string; year: number; week: number; gonder: boolean; content: Pick<WeeklyReport, 'thisWeek' | 'nextWeek' | 'abbreviations' | 'planReview' | 'pmScore' | 'pmScoreNote' | 'aiDraft'> }
+    | { op: 'kaydet'; projectId: string; year: number; week: number; gonder: boolean; content: Pick<WeeklyReport, 'thisWeek' | 'nextWeek' | 'abbreviations' | 'planReview' | 'pmScore' | 'pmScoreNote' | 'aiDraft' | 'worklog'> }
     | { op: 'karar'; projectId: string; year: number; week: number; karar: 'onay' | 'iade'; not?: string }
     | { op: 'yayin'; year: number; week: number };
 
@@ -333,7 +333,10 @@ export const prepareReportOp = (ws: WorkspaceData, ctx: ToolContext, name: strin
     if (isWeekPublished(ws, w.year, w.week)) throw new Error(`${weekKey(w)} yayınlandı; rapor değişmez.`);
     const prevPlans = previousPlansOf(all, { kind: 'project', year: w.year, week: w.week, projectId: project.id, departmentCode: projectDepartment(ws, project) });
     const input = reportInput(ws, project, w, worklog);
-    const { content, problems } = buildContent(args, prevPlans, input, now);
+    const built = buildContent(args, prevPlans, input, now);
+    const problems = built.problems;
+    // Haftanın Jira worklog'u raporla saklanır (uygulamadaki "Jira'dan çek" gibi): ay içi tahmini gerçekleşen buna dayanır (BL-22)
+    const content = worklog.length ? { ...built.content, worklog } : built.content;
     if (!content.thisWeek.length && !content.nextWeek.length) throw new Error('Raporda madde yok.');
     const dictionary = reportLintDictionary(ws);
     const check = checkSuggestion(content, input, dictionary);
