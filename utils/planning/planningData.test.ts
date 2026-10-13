@@ -5,7 +5,7 @@ import { parseJiraCsv } from '../importer';
 import { mapJiraIssueType, mapJiraPriority, mapJiraStatus, parseJiraDate, secondsToHours } from './jiraFields';
 import { pertDays, stampLifecycle, taskDurations, withStatus } from './lifecycle';
 import { analyzeRecords, recordsToCsv } from './recordQuality';
-import { addWorkdays, isHalfDay, isWorkday, trHolidays, workdaysBetween, workdaysInMonth } from './workdays';
+import { addWorkdays, effectiveWorkdays, isHalfDay, isWorkday, trHolidays, workdaysBetween, workdaysInMonth } from './workdays';
 
 const task = (id: string, extra: Partial<Task> = {}): Task => ({
     id, name: `${id} kaydı için yeterli açıklama metni`, availability: true, priority: 'Medium', version: 1, predecessor: null, unit: 'Yazılım', resourceName: '',
@@ -15,7 +15,7 @@ const task = (id: string, extra: Partial<Task> = {}): Task => ({
 describe('iş günü takvimi', () => {
     it('2026 aylık iş günleri resmi tabloyla uyumlu (arife yarım günleri iş günü sayılır)', () => {
         // Tablo Mart ve Mayıs arifelerini yarım gün düşer, 28 Ekim'i düşmez
-        const expected = { ...TR_WORKDAYS_2026, 3: 21, 5: 16 };
+        const expected = { ...TR_WORKDAYS_2026, 3: 21, 5: 16, 10: 21 };
         for (let m = 1; m <= 12; m++) expect([m, workdaysInMonth(2026, m)]).toEqual([m, expected[m]]);
     });
 
@@ -39,6 +39,8 @@ describe('iş günü takvimi', () => {
         expect(isHalfDay(new Date(2028, 9, 28))).toBe(false); // Cumartesi
         expect(isWorkday(new Date(2026, 9, 28))).toBe(true);
         expect(workdaysInMonth(2026, 10)).toBe(21);
+        // Arife yarım sayılınca yüklenen 2026 takvimiyle birebir (Mart 20,5 · Mayıs 15,5 · Ekim 20,5)
+        for (let m = 1; m <= 12; m++) expect([m, effectiveWorkdays(2026, m)]).toEqual([m, TR_WORKDAYS_2026[m]]);
     });
 });
 

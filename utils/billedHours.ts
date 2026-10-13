@@ -26,10 +26,11 @@ export const DEFAULT_HOURS_PER_DAY = 8;
 /**
  * TR 2026 resmi çalışma günü takvimi (ay 1-12 → iş günü sayısı).
  * Kaynak: T.C. 2026 Resmi Tatil Takvimi (yüklenen çalışma kitabıyla birebir).
- * Mart/Mayıs yarım günler ve bayramlar nedeniyle ondalıklıdır.
+ * Mart, Mayıs ve Ekim arife yarım günleri ve bayramlar nedeniyle ondalıklıdır
+ * (`effectiveWorkdays` ile birebir).
  */
 export const TR_WORKDAYS_2026: Record<number, number> = {
-    1: 21, 2: 20, 3: 20.5, 4: 21, 5: 15.5, 6: 22, 7: 22, 8: 21, 9: 22, 10: 21, 11: 21, 12: 23,
+    1: 21, 2: 20, 3: 20.5, 4: 21, 5: 15.5, 6: 22, 7: 22, 8: 21, 9: 22, 10: 20.5, 11: 21, 12: 23,
 };
 
 const AY_ADI_INDEX: Record<string, number> = {

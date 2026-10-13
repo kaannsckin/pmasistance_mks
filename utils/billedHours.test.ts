@@ -94,6 +94,7 @@ describe('suggestBilledHoursActuals', () => {
     it('workday takvimi TR_WORKDAYS_2026 ile tutarlı', () => {
         expect(TR_WORKDAYS_2026[3]).toBe(20.5);
         expect(TR_WORKDAYS_2026[5]).toBe(15.5);
+        expect(TR_WORKDAYS_2026[10]).toBe(20.5);
     });
 });
 
