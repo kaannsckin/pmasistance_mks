@@ -50,45 +50,98 @@ PERT ve Bulanık PERT ile görev planlama · çoklu proje portföyü · adam/ay 
 ### Yetenek haritası
 
 ```mermaid
+%%{init: {"theme": "base", "themeVariables": {"fontSize": "15px", "primaryColor": "#1e3a8a", "primaryTextColor": "#ffffff", "git0": "#1d4ed8", "gitBranchLabel0": "#ffffff", "cScale0": "#1d4ed8", "cScaleLabel0": "#ffffff", "cScale1": "#0d9488", "cScaleLabel1": "#ffffff", "cScale2": "#7c3aed", "cScaleLabel2": "#ffffff", "cScale3": "#ea580c", "cScaleLabel3": "#ffffff", "cScale4": "#db2777", "cScaleLabel4": "#ffffff", "cScale5": "#16a34a", "cScaleLabel5": "#ffffff", "cScale6": "#0284c7", "cScaleLabel6": "#ffffff"}}}%%
 mindmap
-  root((PlanAsistan))
-    Proje
+  root((🧭<br/>PlanAsistan))
+    {{📋 Proje}}
       Otomatik sprint planı
-      Kanban ve Gantt
-      Risk kaydı 5x5
-      OKR ve hedefler
-      Notlar ve istekler
-    Portföy
-      Çoklu proje
+      Kanban · Gantt
+      Risk kaydı 5×5
+      OKR · notlar · istekler
+    {{🗂️ Portföy}}
       Veri havuzu
       Adam/ay tahsis
-      Plan kilidi
-      Kapasite-talep
-      Senaryo ve öngörü
-      Maliyet
-    Yönetim
+      Plan kilidi · baseline
+      Kapasite-talep · senaryo
+      Öngörü · maliyet
+    {{📊 Yönetim}}
       Yönetim ekranı
       Sağlık modeli
-      EVM
-      Baseline ve kayma
-      Excel ve PPT paketi
-    Planlama ve tahmin
+      EVM · plan kayması
+      Excel · PowerPoint paketi
+    {{🎯 Planlama ve tahmin}}
       Planlama asistanı
-      Monte Carlo
-      ML modeli
-      Geriye dönük test
-      Altın set ve kalite kapısı
-    Yapay zekâ
+      Monte Carlo P50/P80
+      Tarayıcıda ML modeli
+      Altın set · kalite kapısı
+    {{🤖 Yapay zekâ}}
       Araç kullanan asistan
       RAG bilgi tabanı
       Ad maskeleme
       Onaylı değişiklik
       Haftalık rapor AI
-    Entegrasyon
+    {{🔌 Entegrasyon}}
       Jira
       Excel
       Supabase
-      Claude MCP
+      Claude · MCP
+```
+
+### Değer akışı
+
+Veri dört katmandan geçer: girdiler çalışma alanında toplanır, hesap motorları işler, sonuçlar karar yüzeylerinde görünür. Gerçekleşen değerler, PMO puanları ve öneri günlüğü motorlara geri dönerek tahminleri kalibre eder.
+
+```mermaid
+flowchart LR
+    subgraph IN["📥 Girdiler"]
+        direction TB
+        I1["🧾 Jira<br/>kayıt · durum geçmişi · worklog"]
+        I2["📗 Excel<br/>havuz · tahsis · Billed Hours"]
+        I3["✍️ Kullanıcı<br/>görev · risk · not · rapor"]
+        I4["📚 Dokümanlar<br/>PDF · Word · Markdown"]
+    end
+
+    subgraph WS["🗄️ Çalışma alanı"]
+        direction TB
+        W1["Projeler ve görevler"]
+        W2["Veri havuzu"]
+        W3["Tahsis ve plan kilidi"]
+        W4["Haftalık raporlar"]
+    end
+
+    subgraph EN["⚙️ Hesap motorları"]
+        direction TB
+        E1["Planlama · Monte Carlo"]
+        E2["Kapasite · maliyet · öngörü"]
+        E3["EVM · sağlık modeli"]
+        E4["ML · tahmin kalitesi"]
+        E5["RAG dizini"]
+    end
+
+    subgraph OUT["🎯 Karar yüzeyleri"]
+        direction TB
+        O1["📊 Yönetim ekranı"]
+        O2["📑 Excel · PPT paketi"]
+        O3["📰 Birleşik haftalık rapor"]
+        O4["🤖 AI asistanı"]
+        O5["🔗 Claude · MCP"]
+    end
+
+    IN ==> WS ==> EN ==> OUT
+    OUT -. "gerçekleşen · PMO puanı ·<br/>öneri günlüğü → kalibrasyon" .-> EN
+
+    classDef inp fill:#e0f2fe,stroke:#0284c7,stroke-width:2px,color:#0c4a6e
+    classDef ws fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#3b0764
+    classDef en fill:#ffedd5,stroke:#ea580c,stroke-width:2px,color:#7c2d12
+    classDef out fill:#dcfce7,stroke:#16a34a,stroke-width:2px,color:#14532d
+    class I1,I2,I3,I4 inp
+    class W1,W2,W3,W4 ws
+    class E1,E2,E3,E4,E5 en
+    class O1,O2,O3,O4,O5 out
+    style IN fill:#f0f9ff,stroke:#0284c7,stroke-width:2px,color:#0c4a6e
+    style WS fill:#f5f3ff,stroke:#7c3aed,stroke-width:2px,color:#3b0764
+    style EN fill:#fff7ed,stroke:#ea580c,stroke-width:2px,color:#7c2d12
+    style OUT fill:#f0fdf4,stroke:#16a34a,stroke-width:2px,color:#14532d
 ```
 
 ---
