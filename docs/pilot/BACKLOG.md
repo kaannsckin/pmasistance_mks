@@ -1,6 +1,6 @@
 # Backlog
 
-Son güncelleme: 12 Ekim 2026 (BL-21, BL-11, BL-09, BL-07, BL-08, BL-23 yapıldı; BL-10 pilot sonrasına alındı; BL-24 eklendi) · 13 Ekim (BL-14, BL-25, BL-17, BL-19, BL-20, BL-22, BL-24 yapıldı; takvim bir hafta kaydırıldı, uygulama haftası planlandı)
+Son güncelleme: 12 Ekim 2026 (BL-21, BL-11, BL-09, BL-07, BL-08, BL-23 yapıldı; BL-10 pilot sonrasına alındı; BL-24 eklendi) · 13 Ekim (BL-14, BL-25, BL-17, BL-19, BL-20, BL-22, BL-24 yapıldı; BL-13 pilot sonrasına; takvim bir hafta kaydırıldı, uygulama haftası planlandı)
 
 25 işin 19'u yapıldı (danışman raporundaki dört P0'ın tamamı dahil), 6'sı açık. K0'dan (22 Ekim) önce zorunlu olan tek iş BL-18; demo yolunu doğrudan etkileyen açık iş kalmadı. Altı açık iş uygulama haftasına alındı (aşağıda). Numaralar [`pilot/SENARYOLAR.md`](../../pilot/SENARYOLAR.md)'nin andığı BL-07, BL-08 ve BL-14 ile aynıdır.
 
@@ -17,12 +17,12 @@ Ajan sisteminin çalışmasında bir haftalık engel var (13 Ekim); pilot takvim
 | 3 | ~~BL-20 Plan kilidi önceden görünür~~ (yapıldı) | Küçük | Ajan ve kullanıcı kilitli plana boşuna öneri yazmasın (B-014) |
 | 4 | ~~BL-22 Ay içi tahmini gerçekleşen~~ (yapıldı) | Orta | Ay ortasında EVM ve maliyet "son kapanan ay"da kalıyor; S6'nın erken uyarısı ekranda görünür |
 | 5 | ~~BL-24 Geçmiş raporlarda kalite dağılımı~~ (yapıldı) | Orta | K0'da zaten `baslat --zorla` ile yeniden kurulum var; geçmişi değiştirmenin bedeli bu hafta sıfır |
-| 6 | BL-13 Diğer bölümlerin boş kapasitesi (rol bazında, adsız) | Orta | S8 ve S10'daki kaynak çatışmasını Selin rakamla çözebilsin |
+| 6 | ~~BL-13 Diğer bölümlerin boş kapasitesi~~ (pilot sonrasına alındı, 13 Ekim) | Orta | S8 ve S10'daki kaynak çatışmasını Selin rakamla çözebilsin |
 
 Kurallar:
 - Her iş ayrı PR ile main'e girer; rutinler her koşuda main'i birleştirir. **Simülasyonu değiştiren iş (BL-24) 21 Ekim akşamına kadar main'de olmalı**, yoksa K0 kurulumuna giremez ve pilot sonrasına kalır.
-- MCP araç sözleşmesini değiştiren iş (BL-19, BL-20, BL-13) K0'dan önce girer; ajan talimatı gerekiyorsa aynı PR'da `pilot/RUTIN_2_KULLANICILAR.md` güncellenir. K0'dan sonra araç sözleşmesi değişmez, yalnız hata düzeltmesi girer.
-- BL-12 (yapılandırılmış talep) büyük iş: uygulama haftasında başlamaz; pilot sonrası. BL-10 12 Ekim kararıyla pilot sonrası. BL-15, BL-16 altyapı, pilot sonrası.
+- MCP araç sözleşmesini değiştiren iş (BL-19, BL-20) K0'dan önce girer; ajan talimatı gerekiyorsa aynı PR'da `pilot/RUTIN_2_KULLANICILAR.md` güncellenir. K0'dan sonra araç sözleşmesi değişmez, yalnız hata düzeltmesi girer.
+- BL-12 (yapılandırılmış talep) büyük iş: uygulama haftasında başlamaz; pilot sonrası. BL-10 12 Ekim, BL-13 13 Ekim kararıyla pilot sonrası. BL-15, BL-16 altyapı, pilot sonrası.
 
 ## Açık işler
 
@@ -31,7 +31,7 @@ Kurallar:
 | BL-18 | 9 Ekim bulgularının kapanış doğrulaması (B-001, B-003–B-006, B-008–B-014) | On iki düzeltme kodda; hiçbiri canlı koşuda yeniden üretilmedi, `bulgular.json`'da hepsi açık | P0 | Açık | K0 (22 Ekim) | Rutin 2: `bulgular.json` güncellemesi |
 | BL-10 | Önerilen RAG kuralı (geciken oran, SPI/CPI eşikleri, yüksek risk, engelleyici hata); PY farklı seçerse gerekçe zorunlu | B-002, danışman Soru 7; NEHİR algı farkı (G4). Karar (12 Ekim): pilot sonrasına; pilotta RAG'ı PY girer, verinin RAG'la çelişkisi demoda sağlık skoruyla gösterilir | P1 | Açık | Pilot sonrası | — |
 | BL-12 | Yapılandırılmış talep: kaynak talebi ve açıklama talebi, "Yönetimden beklentiler"e bağlı | B-007, danışman Soru 10; yazışma bugün pilot dosyasında | P2 | Açık | Pilot sonrası | — |
-| BL-13 | Bölüm sorumlusu diğer bölümlerin boş kapasitesini rol bazında, adsız görür | Danışman Soru 8; S10'daki U340 çatışması | P2 | Açık | Uygulama haftası (21 Ekim) | — |
+| BL-13 | Bölüm sorumlusu diğer bölümlerin boş kapasitesini rol bazında, adsız görür | Danışman Soru 8; S10'daki U340 çatışması. 13 Ekim incelemesi: bugün bölüm sorumlusu diğer bölümlerdeki kişileri adıyla görüyor (`uygun_kisi_bul`, `doluluk_analizi`, `kisi_profili`); iş, yeni görünümden çok bu adları gizlemek. Bu, gömülü bulgulardan G1, G2 ve G6'nın Selin tarafından adla bulunmasını engeller (Aslı Çakır, Deniz Yavuz U340; Hakan Öztürk, Barış Güneş, Merve Aslan U320). Araç kataloğu 17 673/18 000 karakter: yeni araç sığmaz, mevcut araçların çıktısı değişir. Karar (13 Ekim): pilot sonrasına; pilotta adlar görünür kalır | P2 | Açık | Pilot sonrası | — |
 | BL-15 | Araç kataloğu boyutu: sınır 16 000'den 18 000 karaktere çıkarıldı | Yeni PY yazma araçları; müdür rolünün kataloğu etkilenmedi | P2 | Açık | Pilot sonrası | `utils/ai/tools.test.ts` |
 | BL-16 | Uzak MCP (HTTP + OAuth): claude.ai web ve mobilden bağlantı | Bugün yalnız yerel stdio (Claude Desktop, Claude Code); demodaki canlı soru masaüstünden sorulur | P2 | Açık | Pilot sonrası | [`docs/MCP_KURULUM.md`](../MCP_KURULUM.md) |
 
