@@ -260,7 +260,7 @@ Müdürün üç sorusu demonun da omurgasıdır: "Bu hafta hangi proje dikkatimi
 | Ajan verdiği sözü hatırlar | Her koşu sıfırdan | Yapıldı (v2): `pilot-data/ajanda/` | — |
 | Risk güncellenir ve kapanır; müşteri isteği ilerler | Yalnız risk ekleme vardı | Yapıldı: `oner_risk_guncelle`, `oner_istek_karari` | BL-05 |
 | Raporun son günü tek | Rehber Perşembe, simülasyon Cuma | Yapıldı: Perşembe teslim, Cuma bölüm onayı, Pazartesi yayın | BL-02 |
-| Gerçekleşen adam-ay worklog ile tutar | Ay içinde 0 (B-010); Ekim CPI'si ay ortasında şişkin | Yapıldı: EVM gerçekleşeni girilmiş son aya kadar hesaplanır, CPI şişmez. Ay içi tahmini gerçekleşen pilot sonrasına kaldı | BL-07, BL-22 |
+| Gerçekleşen adam-ay worklog ile tutar | Ay içinde 0 (B-010); Ekim CPI'si ay ortasında şişkin | Yapıldı: EVM gerçekleşeni girilmiş son aya kadar hesaplanır, CPI şişmez. Ay içi tahmini gerçekleşen haftalık rapor worklog'undan ayrı görünümle (`evm_analizi` › `ay_ici_tahmin`), EVM'e girmez | BL-07, BL-22 |
 | Maliyet sapması aynı dönemle kıyaslanır | Yıllık plan Ocak–Eylül gerçekleşeniyle | Yapıldı: sapma gerçekleşeni girilmiş son aya kadarki planla | BL-09 |
 | Ajanlar uygulama üzerinden yazışır | Mesaj ve kaynak talebi aracı yok (B-007) | Açık: yazışma pilot dosyasında yürüyor | BL-12 |
 
@@ -284,7 +284,7 @@ Bu on bir soru, notun düzeltmeye açık kararlarıydı; yanıtlar 10 Ekim'de ve
 
 ## Ek: 9 Ekim pilot bulguları
 
-İlk gün 14 bulgu açıldı; hepsi koordinatör ajan tarafından yeniden üretilerek doğrulandı. On biri kodda düzeltildi (B-009 ve B-014 13 Ekim'de); `bulgular.json`'da hepsi hâlâ "açık" görünüyor, çünkü kapanışları ilk Rutin 2 koşusunda (22 Ekim, K0) yeniden üretilerek doğrulanacak (BL-18). Açık kalan üçü (B-002, B-007, B-010) tasarım kararı ya da geliştirme bekliyor.
+İlk gün 14 bulgu açıldı; hepsi koordinatör ajan tarafından yeniden üretilerek doğrulandı. On ikisi kodda düzeltildi (B-009, B-010 ve B-014 13 Ekim'de); `bulgular.json`'da hepsi hâlâ "açık" görünüyor, çünkü kapanışları ilk Rutin 2 koşusunda (22 Ekim, K0) yeniden üretilerek doğrulanacak (BL-18). Açık kalan ikisi (B-002, B-007) tasarım kararı ya da geliştirme bekliyor.
 
 | ID | Önem | Konu | Durum (12 Ekim) |
 | --- | --- | --- | --- |
@@ -298,7 +298,7 @@ Bu on bir soru, notun düzeltmeye açık kararlarıydı; yanıtlar 10 Ekim'de ve
 | B-008 | Orta | Bölüm sorumlusu kendisini "uygun kişi" olarak buluyor | Kodda düzeltildi, K0'da doğrulanacak |
 | B-013 | Orta | Olay dosyasındaki worklog toplamları Jira'dan yüksek (veri) | Simülasyonda düzeltildi, K0'da doğrulanacak |
 | B-009 | Düşük | RAG yalnız İngilizce değer kabul ediyor | Kodda düzeltildi (BL-19), K0'da doğrulanacak |
-| B-010 | Düşük | Ay içinde gerçekleşen adam-ay 0, worklog'a bağlı değil | EVM son kapanan aya kadar (BL-07); ay içi tahmin pilot sonrası (BL-22) |
+| B-010 | Düşük | Ay içinde gerçekleşen adam-ay 0, worklog'a bağlı değil | EVM son kapanan aya kadar (BL-07); ay içi tahmin ayrı görünümle (BL-22), K0'da doğrulanacak |
 | B-011 | Düşük | Müşteri isteklerinde yinelenen başlıklar | Kodda düzeltildi, K0'da doğrulanacak |
 | B-012 | Düşük | Görev araması Jira anahtarıyla sonuç vermiyor | Kodda düzeltildi, K0'da doğrulanacak |
 | B-014 | Düşük | Plan kilidi ancak öneri denenince öğreniliyor | Kodda düzeltildi (BL-20), K0'da doğrulanacak |

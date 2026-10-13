@@ -4,7 +4,7 @@
 
 ## 12 Ekim güncellemesi
 
-Raporun üç kırmızı boyutunun üçü de kodda kapatıldı; takvim ise demonun ajanların kendi ortamında yapılması kararıyla Kasım sonuna uzadı. Geliştirme listesinin on maddesinden sekizi yapıldı, biri kısmen (8: RAG kuralı pilot sonrasına), biri pilot sonrasına kaldı (9); mock veri tablosunun on maddesinden dokuzu kapandı. Kapanışlar canlı koşuda K0'da (22 Ekim) doğrulanacak (BL-18).
+Raporun üç kırmızı boyutunun üçü de kodda kapatıldı; takvim ise demonun ajanların kendi ortamında yapılması kararıyla Kasım sonuna uzadı. Geliştirme listesinin on maddesinden sekizi yapıldı (5. madde ay içi tahminle tamamlandı, BL-22), biri kısmen (8: RAG kuralı pilot sonrasına), biri pilot sonrasına kaldı (9); mock veri tablosunun on maddesinden dokuzu kapandı. Kapanışlar canlı koşuda K0'da (22 Ekim) doğrulanacak (BL-18).
 
 **13 Ekim:** ajan sisteminin çalışmasında bir haftalık engel nedeniyle takvim yedi gün kaydırıldı: K0 22 Ekim, K1 27 Ekim, K2 12 Kasım, K3 26 Kasım, K4 1 Aralık, demo varsayımı 3 Aralık. 13–20 Ekim uygulama haftasıdır; rutinler koşmaz, uygulama eksikleri kapatılır. Ayrıntı: [PILOT_NOTU.md](./PILOT_NOTU.md), [BACKLOG.md](./BACKLOG.md).
 
@@ -59,7 +59,7 @@ Yönetim ilk beş dakikada doluluk, bütçe ve kapasite rakamlarına bakar; üç
 | --- | --- | --- | --- | --- |
 | Birim doluluğu | `departman_karnesi`: 24 kişi, kapasite 272,6 AA, plan 134,5 AA, doluluk %49; PYB (U300) %0, Sistem (U330) %44 | "Personelin yarısı boşta mı?" | Proje dışı işler için "Kurumsal işler" tahsisi ya da 2–3 arka plan projesi; PY'lerin proje yönetimi payı tahsise girsin; hedef ortalama %80–90, sıcak noktalar korunur | Yapıldı: %88 (BL-02) |
 | Kapasite-talep | `kapasite_talep`: 8 rolün hiçbirinde açık yok (toplam 0 AA); aynı anda `portfoy_ozeti` 30 kişi-ay aşırı tahsis gösteriyor | "İşe alım kararını hangi rakamla vereceğiz?" | S8 rol bazında açık üretsin (ör. U320 test mühendisi); ekranda en az bir rol açığı görünsün | Yapıldı: 2 rolde açık; S8 teklif kazanımıyla büyür (BL-01, BL-02) |
-| Bütçe | `evm_analizi`: CPI ATLAS 1,23, KALKAN 1,40, portföy 1,17; Ekim gerçekleşeni 0 | "Bütçeyi hep fazla mı istiyoruz?" | Ay içi tahmini gerçekleşen (Soru 9); planlar gerçekleşene yakın, sapma ±%10 bandında; NEHİR S6 ile aşsın | Yapıldı: CPI 0,84–1,03; Ekim'in 0 gerçekleşeni EVM'e girmez (BL-02, BL-07). Ay içi tahmin pilot sonrası (BL-22) |
+| Bütçe | `evm_analizi`: CPI ATLAS 1,23, KALKAN 1,40, portföy 1,17; Ekim gerçekleşeni 0 | "Bütçeyi hep fazla mı istiyoruz?" | Ay içi tahmini gerçekleşen (Soru 9); planlar gerçekleşene yakın, sapma ±%10 bandında; NEHİR S6 ile aşsın | Yapıldı: CPI 0,84–1,03; Ekim'in 0 gerçekleşeni EVM'e girmez (BL-02, BL-07). Ay içi tahmin ayrı görünümle (BL-22) |
 | Maliyet sapması | `maliyet_raporu`: plan 17,81 M TL (yıl), gerçekleşen 11,80 M TL (Ocak–Eylül), sapma −6,01 M TL | "6 milyon TL harcanmamış mı?" | Sapma aynı dönemle kıyaslansın (ürün düzeltmesi) | Yapıldı: aynı dönemin planıyla (BL-09) |
 | Müşteri istekleri | `musteri_istekleri`: 8 isteğin 8'i "Yeni", en eskisi 1 Haziran; iki başlık iki projede aynı açıklamayla; veri platformunda "mobil karanlık tema" | "Müşteriye yanıt vermiyor muyuz?" | Geçmiş isteklerin çoğu karara bağlanmış olsun (dönüştürüldü ya da reddedildi); şablon tekrarı kalksın; istek proje alanına uysun | Yapıldı: geçmiş istekler karara bağlı, alana özgü metin (BL-02); yinelenen başlık (B-011) K0'da doğrulanacak |
 | Riskler | `risk_listesi`: Burak'ın 4 riskinin hepsi 1 Haziran'da açılmış, hiç güncellenmemiş; NEHİR'in en yüksek riski arayüz belgesi (12) | "Risk kaydı tutulmuyor." | Dört aylık risk geçmişi: açılan, güncellenen, kapanan; NEHİR'de kalite riski | Yapıldı: risk geçmişi, kapananlar var (BL-02) |
@@ -108,7 +108,7 @@ Dört P0 işi demo hikâyesinin ön koşuludur ve 12–16 Ekim düzenek haftası
 | 2 | Mock veri kalibrasyonu: doluluk %80–90, kapasite-talep açığı, CPI ±%10, istek ve risk geçmişi, Jira içerik uyumu | Yönetimin ilk bakacağı rakamlar | 2–3 gün | P0 | Yapıldı (BL-02) |
 | 3 | MCP rapor araçları: taslak, gönder, onay/iade, yayın; simülasyon persona raporlarını bırakır | PY'nin ana haftalık çıktısı; puanın 20'si | 3–4 gün | P0 | Yapıldı (BL-03) |
 | 4 | Demo yolu tarayıcı testi (Playwright): 6 ekran, konsol hatası, ekran görüntüsü, haftada bir | Demo arayüzde; bugün sınanmıyor | 1 gün | P0 | Yapıldı (BL-04) |
-| 5 | Ay içi tahmini gerçekleşen; maliyet sapmasında aynı dönem | EVM ve maliyet ay içinde yanıltıyor; S6 görünmüyor | 2 gün | P1 | Yapıldı: EVM son kapanan aya kadar (BL-07), dönem sapması (BL-09); ay içi tahmin pilot sonrası (BL-22) |
+| 5 | Ay içi tahmini gerçekleşen; maliyet sapmasında aynı dönem | EVM ve maliyet ay içinde yanıltıyor; S6 görünmüyor | 2 gün | P1 | Yapıldı: EVM son kapanan aya kadar (BL-07), dönem sapması (BL-09); ay içi tahmin ayrı görünümle (BL-22) |
 | 6 | Not, müşteri görüşmesi, risk güncelle/kapat, istek durumu araçları | PY döngüsünün üç işi eksik | 2 gün | P1 | Yapıldı, P0'a alındı (BL-05) |
 | 7 | Veri dondurma ve geri yükleme (`pilot dondur`, `pilot geri-yukle`) | Demo günü güvenliği | 0,5 gün | P1 | Yapıldı (BL-06) |
 | 8 | Önerilen RAG kuralı (PY farklı seçerse gerekçe); teklif projeleri skorlanmaz | B-002; YILDIZ skoru 100 | 1 gün | P1 | Teklif skorlanmaz: yapıldı (BL-11). RAG kuralı pilot sonrasına alındı (BL-10) |
