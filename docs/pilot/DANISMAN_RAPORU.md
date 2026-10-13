@@ -4,7 +4,9 @@
 
 ## 12 Ekim güncellemesi
 
-Raporun üç kırmızı boyutunun üçü de kodda kapatıldı; takvim ise demonun ajanların kendi ortamında yapılması kararıyla Kasım sonuna uzadı. Geliştirme listesinin on maddesinden sekizi yapıldı, biri kısmen (8: RAG kuralı pilot sonrasına), biri pilot sonrasına kaldı (9); mock veri tablosunun on maddesinden dokuzu kapandı. Kapanışlar canlı koşuda K0'da (15 Ekim) doğrulanacak (BL-18).
+Raporun üç kırmızı boyutunun üçü de kodda kapatıldı; takvim ise demonun ajanların kendi ortamında yapılması kararıyla Kasım sonuna uzadı. Geliştirme listesinin on maddesinden sekizi yapıldı, biri kısmen (8: RAG kuralı pilot sonrasına), biri pilot sonrasına kaldı (9); mock veri tablosunun on maddesinden dokuzu kapandı. Kapanışlar canlı koşuda K0'da (22 Ekim) doğrulanacak (BL-18).
+
+**13 Ekim:** ajan sisteminin çalışmasında bir haftalık engel nedeniyle takvim yedi gün kaydırıldı: K0 22 Ekim, K1 27 Ekim, K2 12 Kasım, K3 26 Kasım, K4 1 Aralık, demo varsayımı 3 Aralık. 13–20 Ekim uygulama haftasıdır; rutinler koşmaz, uygulama eksikleri kapatılır. Ayrıntı: [PILOT_NOTU.md](./PILOT_NOTU.md), [BACKLOG.md](./BACKLOG.md).
 
 | Konu | 10 Ekim | 12 Ekim |
 | --- | --- | --- |
@@ -12,7 +14,7 @@ Raporun üç kırmızı boyutunun üçü de kodda kapatıldı; takvim ise demonu
 | Senaryo üretimi | S1, S3, S6, S8 üretilemiyor | `pilot senaryo` ile altı simülasyon senaryosu; 25 Kasım'a kadar denendi |
 | Demo hazırlığı | Tarayıcı testi ve dondurma yok | `demo-testi` 28/28, `dondur` / `geri-yukle` var |
 | PY iş döngüsü | Rapor, not, risk güncelleme, istek araçları yok | Hepsi MCP'de; geçici rapor yolu kalktı |
-| Takvim | Demo 16–20 Kasım haftası, dondurma 13 Kasım | Demo 26 Kasım (varsayım), K0–K4 kapıları, K3 dondurma 19 Kasım |
+| Takvim | Demo 16–20 Kasım haftası, dondurma 13 Kasım | Demo 3 Aralık (varsayım), K0–K4 kapıları, K3 dondurma 26 Kasım (13 Ekim'de bir hafta kaydırıldı) |
 | Demo ortamı | Dondurulmuş veri kopyası | Ajanların çalıştığı ortamın kendisi; K4'te canlı ya da dondurulmuş kararı |
 | 1. rutin modeli | Opus (karar sizin) | Sonnet; tüm ajanlar Sonnet'te |
 | Ürün düzeltmeleri | YILDIZ skoru 100; maliyet sapması −6,01 M TL; Ekim CPI'si şişkin | Teklif skorlanmaz (BL-11); sapma aynı dönemin planıyla (BL-09); EVM son kapanan aya kadar (BL-07); rapor biçim denetimi proje adlarını kısaltma saymaz (BL-21) |
@@ -145,7 +147,7 @@ Bu altı yanıt takvimi ve geliştirme sırasını kesinleştirir. Son sütun 12
 
 | # | Soru | 12 Ekim |
 | --- | --- | --- |
-| 1 | Yönetim demosunun tarihi ve süresi nedir? Varsayımım 16–20 Kasım haftası, 15–20 dakika. | Açık: çalışma varsayımı 26 Kasım Perşembe öğleden sonra; kesin tarih gelince takvim ve rutin istisnaları güncellenir |
+| 1 | Yönetim demosunun tarihi ve süresi nedir? Varsayımım 16–20 Kasım haftası, 15–20 dakika. | Açık: çalışma varsayımı 3 Aralık Perşembe öğleden sonra; kesin tarih gelince takvim ve rutin istisnaları güncellenir |
 | 2 | Dinleyici kim, demodan hangi kararı istiyoruz? Varsayımım: müdür ve üstü; karar gerçek veriyle sınırlı pilot onayı. | Açık |
 | 3 | Demo canlı mı olacak, kayıtlı mı? Canlıysa hangi AI sağlayıcısı ve anahtarı kullanılacak? | Yanıtlandı: demo ajanların ortamında, "canlı gibi"; canlı mı dondurulmuş mu K4'te (24 Kasım) seçilir. AI sağlayıcısı açık |
 | 4 | P0 geliştirmelerini kim yapacak? | Yapıldı: dört P0 ve iki P1 9 Ekim'de kodlandı |

@@ -1,10 +1,12 @@
 # PlanAsistan Pilotu — Rutin Beklentileri ve Değerlendirme Notu
 
-Son güncelleme: 12 Ekim 2026
+Son güncelleme: 13 Ekim 2026 (takvim bir hafta kaydırıldı)
 
 Pilotun amacı, yönetim demosundan önce iki şeyi kanıtlamaktır: uygulama gerçekçi kullanımda doğru sonuç veriyor ve mock veri demo senaryosunu tutarlı biçimde taşıyor. Kodun ana dala alınması ikincil bir kapıdır; iki karar ayrı verilir.
 
-Pilot 15 Ekim–26 Kasım arasında Salı ve Perşembe koşularıyla yürür; **yönetim demosu, beş ajanın altı hafta çalıştığı bu ortamın kendisidir.** Ajanın uygulamaya yazmadığı iş demoda görünmez; bu yüzden rapor, risk, istek, not, RAG ve tahsis kararlarının hepsi MCP araçlarıyla uygulamaya yazılır. İlk koşu 15 Ekim 2026 (K0 kurulum kapısı).
+Pilot 22 Ekim–3 Aralık arasında Salı ve Perşembe koşularıyla yürür; **yönetim demosu, beş ajanın altı hafta çalıştığı bu ortamın kendisidir.** Ajanın uygulamaya yazmadığı iş demoda görünmez; bu yüzden rapor, risk, istek, not, RAG ve tahsis kararlarının hepsi MCP araçlarıyla uygulamaya yazılır. İlk koşu 22 Ekim 2026 (K0 kurulum kapısı).
+
+**13 Ekim kararı:** ajan sisteminin çalışmasında bir haftalık engel var. Takvim yedi gün kaydırıldı (K0 22 Ekim, demo varsayımı 3 Aralık); 13–20 Ekim **uygulama haftasıdır**: rutinler koşmaz, uygulamanın eksikleri kapatılır ve 21 Ekim akşamına kadar main'e alınır ([BACKLOG.md](./BACKLOG.md) › Uygulama haftası). Takvime bağlı olaylar (28–29 Ekim bayram, Ekim ay kapanışı) yerinde kaldı.
 
 12 Ekim itibarıyla danışman raporundaki dört P0 işi ile risk, istek ve not araçları kodda: `claude/nice-cerf-r9wv1r` dalında 106 dosyada 880 test geçiyor, rutinler bu dalı kullanır. Ayrıntı: değerlendirme ve yol haritası [DANISMAN_RAPORU.md](./DANISMAN_RAPORU.md), mimari [SISTEM_TASARIMI.md](./SISTEM_TASARIMI.md), iş listesi [BACKLOG.md](./BACKLOG.md).
 
@@ -54,7 +56,7 @@ Jira ajanı Salı ve Perşembe 07:45'te son koşudan bu yana geçen günleri ür
 
 - **Sahte Jira:** yeni kayıt, işe başlama, worklog, kapanış, yeniden açılma, termin ve sürüm. Biçim gerçek Jira REST API yanıtıyla aynıdır; uygulama gerçek Jira'ya bağlanır gibi bağlanır.
 - **Confluence notları:** iki proje için günde 1–2 toplantı tutanağı, teknik karar kaydı ya da müşteri görüşmesi. Her notta katılımcılar, günün kayıt anahtarları (ör. NHR-58), bir karar ve sorumlu-tarihli bir aksiyon bulunur. Toplantı türü takvime uyar (koordinasyon Pazartesi, sprint değerlendirme sürüm bitince).
-- **Senaryo olayları:** Jira'da iz bırakan altı senaryo (S1, S3, S6, S8, S9, S10) 15 Ekim'de `pilot senaryo ekle` ile **bir kez** kaydedilir; simülasyon ilgili günü üretirken uygular. Ajanın işi olayın notlardaki karşılığıdır (izin duyurusu, triyaj notu). Anlatı türündeki senaryoları (S2, S11) `pilot istek` ve not ile kendisi üretir.
+- **Senaryo olayları:** Jira'da iz bırakan altı senaryo (S1, S3, S6, S8, S9, S10) 22 Ekim'de `pilot senaryo ekle` ile **bir kez** kaydedilir; simülasyon ilgili günü üretirken uygular. Ajanın işi olayın notlardaki karşılığıdır (izin duyurusu, triyaj notu). Anlatı türündeki senaryoları (S2, S11) `pilot istek` ve not ile kendisi üretir.
 - **Arka plandaki birim:** KALKAN'ın PY'si, ay başı gerçekleşen adam-ay, diğer çalışanların kayıtları.
 
 **Gerçekçilik kuralları**
@@ -66,11 +68,11 @@ Jira ajanı Salı ve Perşembe 07:45'te son koşudan bu yana geçen günleri ür
 
 **Yapmaması gerekenler**
 
-- Persona PY'lerin (Elif, Burak) işini yapmamalı: projelerine Jira aktarımı, RAG, risk ve haftalık rapor girmemeli. Simülasyon v4'ten beri ajanlı dönemde (12 Ekim sonrası) persona projelerinin raporunu yazmıyor, onaylamıyor.
+- Persona PY'lerin (Elif, Burak) işini yapmamalı: projelerine Jira aktarımı, RAG, risk ve haftalık rapor girmemeli. Simülasyon v4'ten beri ajanlı dönemde (19 Ekim sonrası) persona projelerinin raporunu yazmıyor, onaylamıyor.
 - Jira dışa aktarımlarını elle düzenlememeli; yalnız simülasyon yazar.
 - "Çalışmalara devam edildi" türünden boş cümle, adı geçmeyen kişi ya da Jira'da olmayan kayıt üretmemeli; notlara "senaryo" yazmamalı.
 
-**Takvim istisnaları:** 13 Ekim atlanır (15 Ekim koşusu 9–14 Ekim'i birlikte üretir ve simülasyon v4 ile `baslat --zorla` yeniden kurulum yapar); 26 Kasım yalnız K4 kararı "canlı" ise çalışır; 27 Kasım'dan sonra pilot kapanır.
+**Takvim istisnaları:** 13, 15 ve 20 Ekim atlanır (uygulama haftası); 22 Ekim koşusu simülasyon v4 ile `baslat --zorla` yeniden kurulum yapar ve 21 Ekim'e kadar üretir; 3 Aralık yalnız K4 kararı "canlı" ise çalışır; 4 Aralık'tan sonra pilot kapanır.
 
 ## Rutin 2 — rol ajanlarından ortak beklentiler
 
@@ -130,7 +132,7 @@ Bu üç rol de gerçekçilik üzerinden puanlanır. Ek beklenti: PY'nin verisind
 
 ## Takvim ve ara kapılar
 
-Koşular Salı ve Perşembe; her kapı zamanında geçilmezse demo kapsamı daralır. 13 Ekim koşusu atlanır, 29 Ekim tatildir (44. hafta raporu 27 Ekim'de), demo tarihi kesinleşince takvim ve iki rutinin istisnaları güncellenir. Koşu koşu ayrıntı: [`pilot/SENARYOLAR.md`](../../pilot/SENARYOLAR.md).
+Koşular Salı ve Perşembe; her kapı zamanında geçilmezse demo kapsamı daralır. 13–20 Ekim koşuları atlanır (uygulama haftası), 29 Ekim tatildir (44. hafta raporu 27 Ekim'de), demo tarihi kesinleşince takvim ve iki rutinin istisnaları güncellenir. Koşu koşu ayrıntı: [`pilot/SENARYOLAR.md`](../../pilot/SENARYOLAR.md).
 
 ```mermaid
 gantt
@@ -138,45 +140,47 @@ gantt
     dateFormat YYYY-MM-DD
     axisFormat %d.%m
     section Kapılar
-    K0 Kurulum            :milestone, 2026-10-15, 0d
-    K1 Akış               :milestone, 2026-10-22, 0d
-    K2 Senaryo            :milestone, 2026-11-05, 0d
-    K3 Dondurma           :milestone, 2026-11-19, 0d
-    K4 Karar              :milestone, 2026-11-24, 0d
-    Yönetim demosu (varsayım) :crit, milestone, 2026-11-26, 0d
+    K0 Kurulum            :milestone, 2026-10-22, 0d
+    K1 Akış               :milestone, 2026-10-27, 0d
+    K2 Senaryo            :milestone, 2026-11-12, 0d
+    K3 Dondurma           :milestone, 2026-11-26, 0d
+    K4 Karar              :milestone, 2026-12-01, 0d
+    Yönetim demosu (varsayım) :crit, milestone, 2026-12-03, 0d
+    section Uygulama
+    Uygulama haftası (ajan engeli) :2026-10-13, 2026-10-21
     section Senaryolar
-    1. dalga S1–S8        :2026-10-15, 2026-11-05
-    2. dalga S9–S12       :2026-11-10, 2026-11-24
+    1. dalga S1–S8        :2026-10-22, 2026-11-12
+    2. dalga S9–S12       :2026-11-17, 2026-12-01
 ```
 
 | Kapı | Ne zaman | Geçme ölçütü | Geçmezse |
 | --- | --- | --- | --- |
-| K0 Kurulum | 15 Ekim, iki rutin sonrası | v4 yeniden kurulum Supabase'de; `senaryo liste` S1, S3, S6, S8, S9, S10'u gösterir; `kontrol` tümü geçti; `demo-testi` GEÇTİ (dış kaynak uyarısı hariç) | 20 Ekim'e kadar kod düzeltmesi; senaryo tarihleri kaydırılır |
-| K1 Akış | 22 Ekim, 2. rutin sonrası | 42. hafta raporları uçtan uca (gönderim → bölüm sorumlusu → PYB destek → yayın) MCP araçlarıyla geçti; her persona en az bir yazma aracını gerekçeli kullandı; S2 kararı uygulamada; açık yüksek bulgu yok ya da düzeltmesi planlandı | 27 Ekim'e kadar düzeltme; K2 ölçütleri değişmez |
-| K2 Senaryo | 5 Kasım, 2. rutin sonrası | S1–S8'in en az 6'sı başarı ölçütüne ulaştı; PY ortalaması ≥ 75; DH1–DH3 sağlanıyor; gömülü bulguların en az 3/6'sı bulundu | 2. dalga zayıf senaryonun telafisine ayrılır (S12); demo kapsamı daraltılır |
-| K3 Dondurma | 19 Kasım, 2. rutin sonrası | Kod dondurulur (sonrası yalnız demo yolunu bozan hata düzeltmesi); `demo-testi` son 3 koşuda GEÇTİ; S9–S11 değerlendirildi; demo akışı yazılı; `dondur --ad K3-2026-11-19` | Demo, K3'te çalışan ekranlarla sınırlanır |
-| K4 Karar | 24 Kasım, 2. rutin sonrası | DH1–DH7 sağlanıyor; sunumu yapacak kişi demo akışını uygulamada baştan sona gezdi (canlı prova); `dondur --ad K4-2026-11-24` | Demo dondurulmuş yapılır ya da ertelenir |
+| K0 Kurulum | 22 Ekim, iki rutin sonrası | v4 yeniden kurulum Supabase'de; `senaryo liste` S1, S3, S6, S8, S9, S10'u gösterir; `kontrol` tümü geçti; `demo-testi` GEÇTİ (dış kaynak uyarısı hariç) | 27 Ekim'e kadar kod düzeltmesi; senaryo tarihleri kaydırılır |
+| K1 Akış | 27 Ekim, 2. rutin sonrası | 43. hafta raporları uçtan uca (gönderim → bölüm sorumlusu → PYB destek → yayın) MCP araçlarıyla geçti; her persona en az bir yazma aracını gerekçeli kullandı; S2 kararı uygulamada; açık yüksek bulgu yok ya da düzeltmesi planlandı | 3 Kasım'a kadar düzeltme; K2 ölçütleri değişmez |
+| K2 Senaryo | 12 Kasım, 2. rutin sonrası | S1–S8'in en az 6'sı başarı ölçütüne ulaştı; PY ortalaması ≥ 75; DH1–DH3 sağlanıyor; gömülü bulguların en az 3/6'sı bulundu | 2. dalga zayıf senaryonun telafisine ayrılır (S12); demo kapsamı daraltılır |
+| K3 Dondurma | 26 Kasım, 2. rutin sonrası | Kod dondurulur (sonrası yalnız demo yolunu bozan hata düzeltmesi); `demo-testi` son 3 koşuda GEÇTİ; S9–S11 değerlendirildi; demo akışı yazılı; `dondur --ad K3-2026-11-26` | Demo, K3'te çalışan ekranlarla sınırlanır |
+| K4 Karar | 1 Aralık, 2. rutin sonrası | DH1–DH7 sağlanıyor; sunumu yapacak kişi demo akışını uygulamada baştan sona gezdi (canlı prova); `dondur --ad K4-2026-12-01` | Demo dondurulmuş yapılır ya da ertelenir |
 
 ## Senaryo takvimi
 
-On iki senaryo iki dalgaya yayılır: 1. dalga (S1–S8) 15 Ekim–5 Kasım, 2. dalga (S9–S12) 10–24 Kasım. Jira'da iz bırakan altı senaryo (S1, S3, S6, S8, S9, S10) artık simülasyonun senaryo komutuyla üretilir ve 15 Ekim'de bir kez kaydedilir. Ajanlar ne olacağını bilmez: ayrıntı `pilot/SENARYOLAR.md`'dedir ve rol ajanlarına verilmez.
+On iki senaryo iki dalgaya yayılır: 1. dalga (S1–S8) 22 Ekim–12 Kasım, 2. dalga (S9–S12) 17 Kasım–1 Aralık. Jira'da iz bırakan altı senaryo (S1, S3, S6, S8, S9, S10) artık simülasyonun senaryo komutuyla üretilir ve 22 Ekim'de bir kez kaydedilir. Ajanlar ne olacağını bilmez: ayrıntı `pilot/SENARYOLAR.md`'dedir ve rol ajanlarına verilmez.
 
 | # | Veri günü → koşu | Senaryo | Üretim | PY'den beklenen | Diğer roller | Başarı ölçütü |
 | --- | --- | --- | --- | --- | --- | --- |
-| S2 | 12–14 Ekim → 15 Ekim | PUSULA kapsam değişikliği (çevrimdışı mod) | Anlatı (`pilot istek` + not) | Burak: isteği "tahmin" eforla `oner_istek_karari` ile kabul ya da ret, plan onayda olduğundan revizyon önerir | Ahmet öncelik kararı | İstek uygulamada karara bağlı; kapsam etkisi 42. hafta raporunda |
-| S1 | 15–21 Ekim → 22 Ekim | NEHİR kritik hata zinciri (müşteride veri kaybı, Highest) | Simülasyon | Burak: aktarım, gerekçeli risk ve önlem, RAG ve gerekçesi, test kaynağı talebi, raporda dürüst anlatım | Selin talebi rakamla yanıtlar; Ahmet açıklama ister | Risk, RAG ve rapor aynı olguyu aynı rakamlarla anlatır |
-| S4 | 22 Ekim → 27 Ekim | Haftalık rapor iadesi | Rutin 2, kendiliğinden | Burak iade notunu karşılar, yeniden gönderir | Selin iade eder; Mert biçimi denetler | İade notunun her maddesi karşılanır; iade olmazsa zorlanmaz |
-| S3 | 19 Ekim duyuru, 26 Ekim–6 Kasım izin | ATLAS kilit kişi izni (Onur Çelik) | Simülasyon | Elif riski açar, işi dağıtır ya da ikame ister; plan kilitli, yalnız gerçekleşen değişir | Selin ikame önerir | Termin kaymaları raporda gerekçeli; plan kilidi korunur |
-| S6 | 19–30 Ekim → 27 Ekim ve 3 Kasım | NEHİR bütçe aşımı (fazla mesai ×1,5) | Simülasyon | Burak: 27 Ekim worklog ile erken uyarı; 3 Kasım EVM ile sapma, ek bütçe ya da kapsam önerisi | Mert maliyet ↔ tahsis; Ahmet 5 Kasım'da karar | Erken uyarı worklog rakamıyla, kesin sapma EVM aracından |
+| S2 | 19–21 Ekim → 22 Ekim | PUSULA kapsam değişikliği (çevrimdışı mod) | Anlatı (`pilot istek` + not) | Burak: isteği "tahmin" eforla `oner_istek_karari` ile kabul ya da ret, plan onayda olduğundan revizyon önerir | Ahmet öncelik kararı | İstek uygulamada karara bağlı; kapsam etkisi 43. hafta raporunda |
+| S1 | 22–26 Ekim → 27 Ekim | NEHİR kritik hata zinciri (müşteride veri kaybı, Highest) | Simülasyon | Burak: aktarım, gerekçeli risk ve önlem, RAG ve gerekçesi, test kaynağı talebi, raporda dürüst anlatım | Selin talebi rakamla yanıtlar; Ahmet açıklama ister | Risk, RAG ve rapor aynı olguyu aynı rakamlarla anlatır |
+| S4 | 27 Ekim → 3 Kasım | Haftalık rapor iadesi | Rutin 2, kendiliğinden | Burak iade notunu karşılar, yeniden gönderir | Selin iade eder; Mert biçimi denetler | İade notunun her maddesi karşılanır; iade olmazsa zorlanmaz |
+| S3 | 26 Ekim duyuru, 2–13 Kasım izin | ATLAS kilit kişi izni (Onur Çelik) | Simülasyon | Elif riski açar, işi dağıtır ya da ikame ister; plan kilitli, yalnız gerçekleşen değişir | Selin ikame önerir | Termin kaymaları raporda gerekçeli; plan kilidi korunur |
+| S6 | 22–30 Ekim → 27 Ekim ve 3 Kasım | NEHİR bütçe aşımı (fazla mesai ×1,5) | Simülasyon | Burak: 27 Ekim worklog ile erken uyarı; 3 Kasım EVM ile sapma, ek bütçe ya da kapsam önerisi | Mert maliyet ↔ tahsis; Ahmet 5 Kasım'da karar | Erken uyarı worklog rakamıyla, kesin sapma EVM aracından |
 | S5 | 28–29 Ekim → 27 Ekim | Bayram haftası | Takvim (28 Ekim yarım gün: worklog yarıya iner, BL-14) | PY'ler 44. hafta raporunu 27 Ekim'de gönderir | Mert gecikmeyi izler; 29 Ekim ajanlar çalışmaz | Tatile kayıt girilmez; rapor zamanında |
 | S7 | 2 Kasım → 3 Kasım | Ay kapanışı | Simülasyon (mevcut) | PY'ler gerçekleşeni worklog ile karşılaştırır, sapmayı açıklar | Mert worklog ↔ gerçekleşen kontrolü | Fark ±0,1 AA içinde ya da açıklamalı |
-| S8 | 4 Kasım → 5 Kasım | YILDIZ teklifi kazanıldı (U320 2 × 1,0 AA, U340 1 × 0,5 AA) | Simülasyon | — (YILDIZ'ın PY'si arka planda) | Selin kaydırma ya da işe alım önerir; Ahmet karar verir | Karar kapasite-talep rakamına dayanır |
-| S9 | 7–10 Kasım sinyal, 11 Kasım olay → 12 Kasım | PUSULA kritik hata: eşitlemede mükerrer kayıt | Simülasyon | Burak iki projede eşzamanlı krizi yönetir, öncelik sırasını gerekçelendirir, S2 kararını yeniden değerlendirir | Ahmet iki projeyi birlikte dinler | İki raporun tutarlılığı; öncelik kararı rakamlı |
-| S10 | 9 Kasım duyuru, 16–27 Kasım izin | NEHİR kilit kişi izni (Ozan Kılıç, S1 kaydı onda) | Simülasyon | Burak S1 kaydını devreder ya da ikame ister | Selin U340 kaynağını S8 ihtiyacıyla çatışma içinde değerlendirir; Ahmet önceliklendirir | Devir/ikame kararı rakamlı; kaynak çatışması açıkça çözülür |
-| S11 | 17 Kasım → 19 Kasım | ATLAS müşteri isteği: senaryo karşılaştırma görünümü | Anlatı | Elif `oner_istek_karari` ile karar verir; plan kilidi ve S3 sonrası kapasiteyle ilişkilendirir | — | Karar 2 iş günü içinde, eforu ve takvim etkisi gerekçede |
+| S8 | 11 Kasım → 12 Kasım | YILDIZ teklifi kazanıldı (U320 2 × 1,0 AA, U340 1 × 0,5 AA) | Simülasyon | — (YILDIZ'ın PY'si arka planda) | Selin kaydırma ya da işe alım önerir; Ahmet karar verir | Karar kapasite-talep rakamına dayanır |
+| S9 | 14–17 Kasım sinyal, 18 Kasım olay → 19 Kasım | PUSULA kritik hata: eşitlemede mükerrer kayıt | Simülasyon | Burak iki projede eşzamanlı krizi yönetir, öncelik sırasını gerekçelendirir, S2 kararını yeniden değerlendirir | Ahmet iki projeyi birlikte dinler | İki raporun tutarlılığı; öncelik kararı rakamlı |
+| S10 | 16 Kasım duyuru, 23 Kasım–4 Aralık izin | NEHİR kilit kişi izni (Ozan Kılıç, S1 kaydı onda) | Simülasyon | Burak S1 kaydını devreder ya da ikame ister | Selin U340 kaynağını S8 ihtiyacıyla çatışma içinde değerlendirir; Ahmet önceliklendirir | Devir/ikame kararı rakamlı; kaynak çatışması açıkça çözülür |
+| S11 | 24 Kasım → 26 Kasım | ATLAS müşteri isteği: senaryo karşılaştırma görünümü | Anlatı | Elif `oner_istek_karari` ile karar verir; plan kilidi ve S3 sonrası kapasiteyle ilişkilendirir | — | Karar 2 iş günü içinde, eforu ve takvim etkisi gerekçede |
 | S12 | K2'de seçilir | Telafi: 1. dalgada başarısız kalan senaryonun bir çeşidi | — | — | — | Seçilmezse yok |
 
-S6'nın kesin rakamı ay kapanışından sonra gelir: EVM aylık gerçekleşen adam-ayla ve gerçekleşeni girilmiş son aya kadar hesaplanır (BL-07); Ekim, 2 Kasım ay kapanışıyla girer. Bu yüzden S6'nın EVM ölçütü 3 Kasım'dadır; ay içinde erken uyarı worklog'dan gelir.
+S6'nın kesin rakamı ay kapanışından sonra gelir: EVM aylık gerçekleşen adam-ayla ve gerçekleşeni girilmiş son aya kadar hesaplanır (BL-07); Ekim, 2 Kasım ay kapanışıyla girer. Bu yüzden S6'nın EVM ölçütü 3 Kasım'dadır; ay içinde erken uyarı worklog'dan gelir. S6 kaydırmada da Ekim içinde tutuldu (22–30 Ekim): Kasım ancak 1 Aralık'ta kapanır, demodan önce EVM'e girmez.
 
 ## Puanlama
 
@@ -231,9 +235,9 @@ Müdürün üç sorusu demonun da omurgasıdır: "Bu hafta hangi proje dikkatimi
 
 **Demo günü protokolü**
 
-1. 24 Kasım 2. rutin sonunda K4 kopyası alınır (`pilot-data/donmus/K4-2026-11-24/`).
-2. K4 kararı üç seçenektir ve kullanıcı tarafından 2. rutin oturumuna yazılır: *Canlı* (26 Kasım sabahı iki rutin normal çalışır), *Dondurulmuş* (26 Kasım koşuları atlanır, demo K4 kopyasıyla) ya da *Ertele*. Yazılmazsa varsayılan dondurulmuştur.
-3. Canlı kararında 26 Kasım koşusu `kontrol` ve `demo-testi` ile biter; biri KALDI ise `geri-yukle --ad K4-2026-11-24` ile geri dönülür ve sunum dondurulmuş yapılır.
+1. 1 Aralık 2. rutin sonunda K4 kopyası alınır (`pilot-data/donmus/K4-2026-12-01/`).
+2. K4 kararı üç seçenektir ve kullanıcı tarafından 2. rutin oturumuna yazılır: *Canlı* (3 Aralık sabahı iki rutin normal çalışır), *Dondurulmuş* (3 Aralık koşuları atlanır, demo K4 kopyasıyla) ya da *Ertele*. Yazılmazsa varsayılan dondurulmuştur.
+3. Canlı kararında 3 Aralık koşusu `kontrol` ve `demo-testi` ile biter; biri KALDI ise `geri-yukle --ad K4-2026-12-01` ile geri dönülür ve sunum dondurulmuş yapılır.
 4. Sunum: uygulamaya izleyici hesabıyla, müdür görünümüyle girilir ("Buluttan Çek"). Demo akışı `demo-testi`nin gezdiği yoldur: Yönetim → Portföy → Ekip ve tahsis › Kapasite–talep → Risk raporu → Haftalık rapor; ardından NEHİR, PY gözüyle.
 5. Canlı an: Ahmet'in demo yoklaması sorularından biri aynı çalışma alanına bağlı Claude'a (MCP) sunumda sorulur; yanıtın rakamları ekrandakilerle aynıdır.
 6. Stil, ikon ve Excel kitaplıkları pakete gömülüdür (BL-08); dışarıdan yalnız yazı tipi ve sekme simgesi gelir. Sunum makinesinde uygulama yine de önceden açılıp denenir.
@@ -280,7 +284,7 @@ Bu on bir soru, notun düzeltmeye açık kararlarıydı; yanıtlar 10 Ekim'de ve
 
 ## Ek: 9 Ekim pilot bulguları
 
-İlk gün 14 bulgu açıldı; hepsi koordinatör ajan tarafından yeniden üretilerek doğrulandı. Dokuzu kodda düzeltildi; `bulgular.json`'da hepsi hâlâ "açık" görünüyor, çünkü kapanışları ilk Rutin 2 koşusunda (15 Ekim, K0) yeniden üretilerek doğrulanacak (BL-18). Açık kalan beşi tasarım kararı ya da geliştirme bekliyor.
+İlk gün 14 bulgu açıldı; hepsi koordinatör ajan tarafından yeniden üretilerek doğrulandı. Dokuzu kodda düzeltildi; `bulgular.json`'da hepsi hâlâ "açık" görünüyor, çünkü kapanışları ilk Rutin 2 koşusunda (22 Ekim, K0) yeniden üretilerek doğrulanacak (BL-18). Açık kalan beşi tasarım kararı ya da geliştirme bekliyor.
 
 | ID | Önem | Konu | Durum (12 Ekim) |
 | --- | --- | --- | --- |
