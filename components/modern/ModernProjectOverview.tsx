@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Project, ProjectSectionKey, RagStatus, Task, View, WorkspaceData } from '../../types';
 import { actorLabel } from '../../utils/audit';
-import { getPlanLockStatus } from '../../utils/allocations';
+import { getPlanLockStatus, MONTHS_TR } from '../../utils/allocations';
 import { closedStatusMonth } from '../../utils/evm';
+import { inMonthEstimates } from '../../utils/inMonthActual';
 import { isHealthScored, projectHealth } from '../../utils/executive';
 import { objectiveProgress } from '../../utils/goals';
 import { currentSprint, deadlineLabel, overviewStats, teamLoad, upcomingDeadlines } from '../../utils/projectOverview';
@@ -75,6 +76,8 @@ const ModernProjectOverview: React.FC<ModernProjectOverviewProps> = ({ workspace
     );
     const changes = useMemo(() => (showChanges ? recentChanges(workspace, new Date(), 14).filter(c => c.projectId === project.id) : []), [workspace, project.id, showChanges]);
     const lockStatus = getPlanLockStatus(workspace.planLocks || [], project.id, year);
+    // Kapanmamış ayın tahmini gerçekleşeni (haftalık rapor worklog'u; EVM'e girmez)
+    const inMonth = useMemo(() => inMonthEstimates(workspace, project.id, new Date()).slice(-1)[0], [workspace, project.id]);
     const people = useMemo(() => new Map(workspace.people.map(p => [p.id, `${p.firstName} ${p.lastName}`.trim()])), [workspace.people]);
 
     // Haftalık durum (yalnız düzenleme yetkisi olan değiştirir)
@@ -133,6 +136,9 @@ const ModernProjectOverview: React.FC<ModernProjectOverviewProps> = ({ workspace
         ...(team.unassigned ? [{ key: 'own', icon: 'users' as IconName, text: `${team.unassigned} görev kimseye atanmamış`, run: () => onNavigate(View.Tasks) }] : []),
         ...(lockStatus === 'submitted' ? [{ key: 'lock', icon: 'shield' as IconName, text: `${year} planı onay bekliyor`, run: () => onNavigate(View.Allocations) }] : []),
     ];
+    if (inMonth && inMonth.ratio !== null && Math.abs(inMonth.ratio - 1) > 0.1 && linkable(View.Allocations)) {
+        hints.push({ key: 'inmonth', icon: 'clock', text: `${MONTHS_TR[inMonth.month - 1]} (tahmini): worklog planın %${Math.round(inMonth.ratio * 100)}'i — ${inMonth.estimatedAA.toLocaleString('tr-TR')} / ${inMonth.planToDateAA.toLocaleString('tr-TR')} AA`, run: () => onNavigate(View.Allocations) });
+    }
 
     const sprintTiming = (() => {
         if (!sprint) return null;

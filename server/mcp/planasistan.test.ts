@@ -4,6 +4,7 @@ import { createMockJira, PILOT_JIRA_ENV, toRawIssue } from '../pilot/mockJira';
 import type { JiraIssueRecord } from '../../utils/integrations';
 import { APPLY_TOOL, createPlanAsistanMcp, JIRA_IMPORT_TOOL, JIRA_WORKLOG_TOOL, memoryProposalStore, PlanAsistanMcpOptions, STATUS_TOOL } from './planasistan';
 import { memorySource, sampleWorkspace } from './testUtils';
+import { REPORT_SUBMIT_TOOL } from './reports';
 
 const NOW = new Date('2026-07-15T09:00:00Z');
 
@@ -266,6 +267,19 @@ describe('PlanAsistan MCP — Jira', () => {
         expect((await mudur.call(JIRA_IMPORT_TOOL, { proje: 'ALTAY' })).isError).toBe(true);
         const noKey = await jiraServer('py', 'Mehmet Demir').call(JIRA_IMPORT_TOOL, { proje: 'Gizli Proje' });
         expect(noKey.json.hata).toContain('Jira proje anahtarı');
+    });
+
+    it('haftalık rapor önerisi haftanın Jira worklog\'unu raporla saklar; EVM aracı ay içi tahmini döner (BL-22)', async () => {
+        const { call, mem } = jiraServer('py', 'Ayşe Kaya');
+        const sent = await call(REPORT_SUBMIT_TOOL, { proje: 'ALTAY', bu_hafta: [{ kategori: 'ongoing', metin: 'Bu hafta arayüz geliştirmesine devam edildi.' }], gelecek_hafta: ['Test planı tamamlanacak.'] });
+        expect(sent.isError).toBeUndefined();
+        expect((await call(APPLY_TOOL, { oneri_id: sent.json.oneri_id })).json.uygulandi).toBe(true);
+        const saved = mem.saved[0].after.weeklyReports!.find(r => r.projectId === 'altay')!;
+        expect(saved.worklog?.map(w => [w.date.slice(0, 10), w.hours])).toEqual(expect.arrayContaining([['2026-07-14', 3], ['2026-07-15', 2], ['2026-07-15', 4]]));
+        // Aynı çalışma alanında EVM aracı kapanmamış ayın tahminini ayrıca verir
+        const evm = await server(mem.saved[0].after, { role: 'py', person: 'Ayşe Kaya' }).call('evm_analizi', { proje: 'ALTAY' });
+        expect(evm.json.ay_ici_tahmin).toEqual([expect.objectContaining({ ay: 7, kayitli_gun: 1, saat: 9 })]); // 15 Temmuz tatil: saat sayılır, plan günü değil
+        expect(evm.json.ay_ici_not).toContain('EVM\'e girmez');
     });
 
     it('worklog özeti: kişi, kayıt ve gün bazında', async () => {
