@@ -25,13 +25,14 @@ PERT ve Bulanık PERT ile görev planlama · çoklu proje portföyü · adam/ay 
 1. [Bir bakışta](#-bir-bakışta)
 2. [Sistem topolojisi](#️-sistem-topolojisi)
 3. [Teknik özellikler](#️-teknik-özellikler)
-4. [Özellikler](#-özellikler)
-5. [Roller ve yetki](#-roller-ve-yetki)
-6. [Test ve pilot: yapay zekâ ajan sistemi](#-test-ve-pilot-yapay-zekâ-ajan-sistemi)
-7. [Yerel geliştirme](#️-yerel-geliştirme)
-8. [Yayınlama](#-yayınlama)
-9. [Belgeler](#-belgeler)
-10. [Yol haritası](#️-yol-haritası)
+4. [Veri modeli (sınıf şeması)](#-veri-modeli)
+5. [Özellikler](#-özellikler)
+6. [Roller, yetki ve kullanım senaryoları](#-roller-yetki-ve-kullanım-senaryoları)
+7. [Test ve pilot: yapay zekâ ajan sistemi](#-test-ve-pilot-yapay-zekâ-ajan-sistemi)
+8. [Yerel geliştirme](#️-yerel-geliştirme)
+9. [Yayınlama](#-yayınlama)
+10. [Belgeler](#-belgeler)
+11. [Yol haritası](#️-yol-haritası)
 
 ---
 
@@ -45,6 +46,50 @@ PERT ve Bulanık PERT ile görev planlama · çoklu proje portföyü · adam/ay 
 | 🎯 **Planlama ve tahmin** | Planlama asistanı (yeni kayıt · sürüm sihirbazı · Monte Carlo), tarayıcıda eğitilen ML modeli, geriye dönük testler, altın set ve kalite kapısı |
 | 🤖 **Yapay zekâ** | Rol kapsamlı araç kullanan asistan, RAG bilgi tabanı, ad maskeleme, onaylı değişiklik, haftalık rapor asistanı, sağlayıcıdan bağımsız proxy |
 | 🔌 **Entegrasyon** | Jira (geçmiş aktarımı, gönderim, worklog, Billed Hours), Excel, Supabase bulut senkronizasyonu, Claude Desktop / Claude Code (MCP) |
+
+### Yetenek haritası
+
+```mermaid
+mindmap
+  root((PlanAsistan))
+    Proje
+      Otomatik sprint planı
+      Kanban ve Gantt
+      Risk kaydı 5x5
+      OKR ve hedefler
+      Notlar ve istekler
+    Portföy
+      Çoklu proje
+      Veri havuzu
+      Adam/ay tahsis
+      Plan kilidi
+      Kapasite-talep
+      Senaryo ve öngörü
+      Maliyet
+    Yönetim
+      Yönetim ekranı
+      Sağlık modeli
+      EVM
+      Baseline ve kayma
+      Excel ve PPT paketi
+    Planlama ve tahmin
+      Planlama asistanı
+      Monte Carlo
+      ML modeli
+      Geriye dönük test
+      Altın set ve kalite kapısı
+    Yapay zekâ
+      Araç kullanan asistan
+      RAG bilgi tabanı
+      Ad maskeleme
+      Onaylı değişiklik
+      Haftalık rapor AI
+    Entegrasyon
+      Jira
+      Excel
+      Supabase
+      Claude MCP
+```
 
 ---
 
@@ -141,6 +186,261 @@ flowchart LR
 ├── pilot/                    # Ajan rutinlerinin talimatları
 └── docs/                     # Kurulum ve tasarım belgeleri
 ```
+
+</details>
+
+---
+
+## 🧱 Veri modeli
+
+Tüm veri tek bir çalışma alanı nesnesinde (`WorkspaceData`) durur; tarayıcıda IndexedDB'ye, bulutta Supabase'e, yedekte JSON'a aynı biçimde yazılır. Tanımlar: [`types.ts`](types.ts). Şemalarda yalnız temel alanlar gösterilir.
+
+### Çalışma alanı, veri havuzu ve tahsis
+
+```mermaid
+classDiagram
+    direction LR
+    class WorkspaceData {
+        schemaVersion
+        settings
+        aiPolicy
+        rolePermissions
+    }
+    class Project {
+        name
+        code
+        status: ProjectStatus
+        rag: RagStatus
+        pmPersonId
+        jiraProjectKey
+    }
+    class Person {
+        sicil
+        firstName
+        lastName
+        departmentCode
+        titleCode
+        availableAA
+        roles[]
+    }
+    class Department {
+        code
+        name
+        leadPersonId
+    }
+    class TitleDef {
+        code
+        name
+        monthlyCost
+    }
+    class RoleCatalogEntry {
+        departmentCode
+        name
+    }
+    class Allocation {
+        personId
+        projectId
+        workPackageId
+        role
+        year
+        plan: ay→AA
+        actual: ay→AA
+    }
+    class PlanLock {
+        projectId
+        year
+        status: draft|submitted|locked
+    }
+    class Leave {
+        personId
+        year
+        month
+        aa
+    }
+    class Snapshot {
+        takenAt
+        trigger: manual|lock|monthly
+        totalPlanAA
+        totalActualAA
+    }
+    class WeeklyReport {
+        year
+        week
+        kind: project|department
+        stage: ReportStage
+        pmScore
+        aiAssessment
+    }
+    class ManagementExpectation {
+        category
+        urgency
+        status
+        response
+    }
+    class PmoRating {
+        projectId
+        week
+        score 1–10
+    }
+    class UserProfile {
+        role: UserRole
+        personId
+    }
+    class AuditEntry
+
+    WorkspaceData "1" *-- "*" Project
+    WorkspaceData "1" *-- "*" Person
+    WorkspaceData "1" *-- "*" Department
+    WorkspaceData "1" *-- "*" TitleDef
+    WorkspaceData "1" *-- "*" RoleCatalogEntry
+    WorkspaceData "1" *-- "*" Allocation
+    WorkspaceData "1" *-- "*" PlanLock
+    WorkspaceData "1" *-- "*" Leave
+    WorkspaceData "1" *-- "*" Snapshot
+    WorkspaceData "1" *-- "*" WeeklyReport
+    WorkspaceData "1" *-- "*" ManagementExpectation
+    WorkspaceData "1" *-- "*" PmoRating
+    WorkspaceData "1" *-- "*" UserProfile
+    WorkspaceData "1" *-- "*" AuditEntry
+
+    Person "*" --> "1" Department : bölüm
+    Person "*" --> "0..1" TitleDef : ünvan
+    Department --> Person : sorumlu
+    Allocation "*" --> "1" Person
+    Allocation "*" --> "1" Project
+    PlanLock "*" --> "1" Project : proje × yıl
+    Leave "*" --> "1" Person
+    Project --> Person : PY
+    WeeklyReport --> Project
+    PmoRating --> Project
+    UserProfile --> Person
+```
+
+### Proje içi model
+
+```mermaid
+classDiagram
+    direction LR
+    class Project {
+        name
+        status
+        rag
+        settings
+    }
+    class Task {
+        name
+        priority
+        status: TaskStatus
+        version
+        predecessor
+        unit
+        resourceName
+        dueDate
+        issueType
+        createdAt / startedAt / resolvedAt
+        jiraId
+        storyPoints
+        actualHours
+    }
+    class TimeEstimate {
+        best
+        avg
+        worst
+    }
+    class TaskForecast
+    class TaskStatusChange
+    class Resource {
+        name
+        participation %
+        unit
+        title
+        monthlyPlan
+    }
+    class Risk {
+        title
+        probability 1–5
+        impact 1–5
+        mitigation
+        status
+    }
+    class WorkPackage {
+        name
+        description
+    }
+    class Objective {
+        name
+        quarter
+    }
+    class KeyResult {
+        name
+    }
+    class Note {
+        content
+        week
+        tags
+    }
+    class CustomerRequest {
+        title
+        customerName
+        status: New|Converted|Rejected
+    }
+    class ReleasePlan {
+        name
+        targetDate
+        testDays
+        step 1–6
+        status: draft|committed
+    }
+    class ReleasePlanItem
+    class ReleaseMilestone
+    class ReleaseBaseline
+    class PestelItem
+    class SwotItem
+    class ProjectAiProfile
+
+    Project "1" *-- "*" Task
+    Project "1" *-- "*" Resource
+    Project "1" *-- "*" Risk
+    Project "1" *-- "*" WorkPackage
+    Project "1" *-- "*" Objective
+    Project "1" *-- "*" Note
+    Project "1" *-- "*" CustomerRequest
+    Project "1" *-- "*" ReleasePlan
+    Project "1" *-- "*" PestelItem
+    Project "1" *-- "*" SwotItem
+    Project "1" *-- "0..1" ProjectAiProfile
+
+    Task "1" *-- "1" TimeEstimate : PERT
+    Task "1" *-- "0..1" TaskForecast
+    Task "1" *-- "*" TaskStatusChange
+    Task --> Task : öncül
+    Task --> WorkPackage
+    Task --> KeyResult
+    Objective "1" *-- "*" KeyResult
+    CustomerRequest ..> Task : dönüşür
+    ReleasePlan "1" *-- "*" ReleasePlanItem
+    ReleasePlan "1" *-- "*" ReleaseMilestone
+    ReleasePlan "1" *-- "0..1" ReleaseBaseline
+    ReleasePlan --> WorkPackage
+```
+
+<details>
+<summary><b>Sınıfların kısa açıklaması</b></summary>
+
+| Sınıf | Ne tutar |
+|---|---|
+| `WorkspaceData` | Kök nesne: projeler, veri havuzu, tahsis, raporlar, günlükler, yetki ve AI ayarları |
+| `Person` · `Department` · `TitleDef` · `RoleCatalogEntry` | Veri havuzu: personel (kullanılabilir AA), bölüm ve sorumlusu, ünvan ve aylık maliyeti, rol kataloğu |
+| `Allocation` | Kişi × proje × iş paketi × rol × yıl; aylık plan ve gerçekleşen AA |
+| `PlanLock` | Proje × yıl plan durumu: taslak → onayda → kilitli |
+| `Leave` | Bir kişinin belirli aydaki izin / yarı zaman kapasite düşüşü |
+| `Snapshot` | Baseline: portföy plan-gerçekleşen fotoğrafı (elle, kilitte, aylık) |
+| `WeeklyReport` · `PmoRating` | Haftalık rapor (aşamalar, PY puanı, AI değerlendirmesi) ve PMO sağlık puanı |
+| `ManagementExpectation` | PY / bölüm sorumlusundan yönetime beklenti ve yanıtı |
+| `Task` | Görev: PERT tahmini (`TimeEstimate`), öncül, sürüm, yaşam döngüsü zamanları, Jira alanları, açılış tahmini (`TaskForecast`) |
+| `ReleasePlan` | Sürüm sihirbazı: kalemler, kilometre taşları, donmuş taban çizgisi |
+| `Risk` · `PestelItem` · `SwotItem` | Risk kaydı (olasılık × etki) ve stratejik analizler |
+| `Objective` · `KeyResult` | OKR; görevler anahtar sonuca bağlanabilir |
 
 </details>
 
@@ -346,7 +646,7 @@ Süzgeçler yalnız gösterimi daraltır; skorlar tüm veriden hesaplanır. Not 
 
 ---
 
-## 👥 Roller ve yetki
+## 👥 Roller, yetki ve kullanım senaryoları
 
 | Rol | Odak | Girdi yapar mı? | Notları görür mü? |
 |---|---|:---:|:---:|
@@ -358,6 +658,52 @@ Süzgeçler yalnız gösterimi daraltır; skorlar tüm veriden hesaplanır. Not 
 | **Admin** | Yalnız yönetici konsolu | — | — |
 
 Yönetici rolleri PM'e özel ekranları (Günlük, İstekler) göremez. Matris yönetici konsolundan değiştirilebilir; not gizliliği ve sahiplik kuralları yetkiyle değişmez.
+
+### Kullanım senaryoları
+
+```mermaid
+flowchart LR
+    PY(["👤 Proje<br/>Yöneticisi"])
+    BS(["👤 Bölüm<br/>Sorumlusu"])
+    PD(["👤 PYB Destek"])
+    YO(["👤 Yönetim<br/>Müdür · PYB Sorumlusu"])
+    AD(["👤 Admin"])
+
+    subgraph SYS["PlanAsistan"]
+        direction TB
+        U1(["Görev ve sürüm planla"])
+        U2(["Jira'dan aktar /<br/>Jira'ya gönder"])
+        U3(["Risk, RAG, not,<br/>istek yönet"])
+        U4(["Haftalık rapor yaz<br/>ve puanla"])
+        U8(["Tahsis planı gir,<br/>onaya gönder"])
+        U9(["Gerçekleşen gir"])
+        U14(["Yönetimden<br/>beklenti aç"])
+        U5(["Rapor içerik<br/>onayı / iade"])
+        U11(["Doluluk ve aşırı<br/>tahsis izle"])
+        U12(["Veri havuzunu yönet"])
+        U6(["Rapor biçim onayı,<br/>hafta yayını"])
+        U16(["PMO puanı ver"])
+        U10(["Planı onayla<br/>ve kilitle"])
+        U13(["Portföy, sağlık,<br/>EVM izle"])
+        U15(["Beklentiye<br/>yanıt ver"])
+        U7(["Yayınlanan<br/>raporu oku"])
+        U17(["Yetki, görünüm,<br/>AI politikası"])
+        U18(["Tahmin kalitesi<br/>ve ML modeli"])
+        U19(["Denetim, yedek,<br/>veri sağlığı"])
+    end
+
+    JIRA[["Jira"]]
+
+    PY --- U1 & U2 & U3 & U4 & U8
+    PY --- U9 & U14
+    BS --- U9 & U14 & U5 & U11
+    PD --- U12 & U6 & U16
+    YO --- U16 & U10 & U13 & U15 & U7
+    AD --- U17 & U18 & U19
+    U2 --- JIRA
+```
+
+> **Notlar:** Admin dışındaki tüm roller **AI asistanını** kullanır (yalnız kendi kapsamındaki veriyle). "Yönetim" kutusunda Müdür ve PYB Sorumlusu birlikte gösterildi: plan onayı, portföy izleme ve beklenti yanıtı ikisinde de vardır; PMO puanını PYB Sorumlusu (ve PYB Destek), yayınlanan haftalık raporu Müdür okur. Bunlar varsayılan yetkilerdir (`utils/permissions.ts`); admin yönetici konsolundan değiştirebilir.
 
 ---
 
