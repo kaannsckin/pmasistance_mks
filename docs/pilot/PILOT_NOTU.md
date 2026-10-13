@@ -284,7 +284,7 @@ Bu on bir soru, notun düzeltmeye açık kararlarıydı; yanıtlar 10 Ekim'de ve
 
 ## Ek: 9 Ekim pilot bulguları
 
-İlk gün 14 bulgu açıldı; hepsi koordinatör ajan tarafından yeniden üretilerek doğrulandı. Dokuzu kodda düzeltildi; `bulgular.json`'da hepsi hâlâ "açık" görünüyor, çünkü kapanışları ilk Rutin 2 koşusunda (22 Ekim, K0) yeniden üretilerek doğrulanacak (BL-18). Açık kalan beşi tasarım kararı ya da geliştirme bekliyor.
+İlk gün 14 bulgu açıldı; hepsi koordinatör ajan tarafından yeniden üretilerek doğrulandı. On biri kodda düzeltildi (B-009 ve B-014 13 Ekim'de); `bulgular.json`'da hepsi hâlâ "açık" görünüyor, çünkü kapanışları ilk Rutin 2 koşusunda (22 Ekim, K0) yeniden üretilerek doğrulanacak (BL-18). Açık kalan üçü (B-002, B-007, B-010) tasarım kararı ya da geliştirme bekliyor.
 
 | ID | Önem | Konu | Durum (12 Ekim) |
 | --- | --- | --- | --- |
@@ -297,8 +297,8 @@ Bu on bir soru, notun düzeltmeye açık kararlarıydı; yanıtlar 10 Ekim'de ve
 | B-007 | Orta | Uygulama içi mesaj ve kaynak talebi yok | Açık: yapılandırılmış talep (BL-12) |
 | B-008 | Orta | Bölüm sorumlusu kendisini "uygun kişi" olarak buluyor | Kodda düzeltildi, K0'da doğrulanacak |
 | B-013 | Orta | Olay dosyasındaki worklog toplamları Jira'dan yüksek (veri) | Simülasyonda düzeltildi, K0'da doğrulanacak |
-| B-009 | Düşük | RAG yalnız İngilizce değer kabul ediyor | Açık (BL-19) |
+| B-009 | Düşük | RAG yalnız İngilizce değer kabul ediyor | Kodda düzeltildi (BL-19), K0'da doğrulanacak |
 | B-010 | Düşük | Ay içinde gerçekleşen adam-ay 0, worklog'a bağlı değil | EVM son kapanan aya kadar (BL-07); ay içi tahmin pilot sonrası (BL-22) |
 | B-011 | Düşük | Müşteri isteklerinde yinelenen başlıklar | Kodda düzeltildi, K0'da doğrulanacak |
 | B-012 | Düşük | Görev araması Jira anahtarıyla sonuç vermiyor | Kodda düzeltildi, K0'da doğrulanacak |
-| B-014 | Düşük | Plan kilidi ancak öneri denenince öğreniliyor | Açık (BL-20) |
+| B-014 | Düşük | Plan kilidi ancak öneri denenince öğreniliyor | Kodda düzeltildi (BL-20), K0'da doğrulanacak |
