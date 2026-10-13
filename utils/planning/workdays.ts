@@ -1,7 +1,7 @@
 /**
  * Türkiye iş günü takvimi: hafta sonu ve resmi tatiller (ulusal bayramlar her
  * yıl, dini bayramlar tablo yıllarında). Arife yarım günleri iş günü sayılır
- * (süre ölçümünde gün çözünürlüğü yeterli). Tablo dışındaki yıllarda yalnız
+ * (süre ölçümünde gün çözünürlüğü yeterli); `isHalfDay` onları ayrıca bildirir. Tablo dışındaki yıllarda yalnız
  * sabit tatiller düşülür; yeni yıl eklenince DINI_BAYRAMLAR güncellenmeli.
  */
 
@@ -41,6 +41,22 @@ export const trHolidays = (year: number): Set<string> => {
 };
 
 export const isWorkday = (d: Date): boolean => d.getDay() !== 0 && d.getDay() !== 6 && !trHolidays(d.getFullYear()).has(isoDay(d));
+
+/**
+ * Arife yarım günleri: 28 Ekim ve dini bayramların ilk gününden önceki gün
+ * (tablo yıllarında), hafta içine denk gelirse. 13:00'ten sonrası tatil.
+ * İş günü sayısını değiştirmez; yalnız o günün çalışma saatini yarıya indirir.
+ */
+export const isHalfDay = (d: Date): boolean => {
+    if (!isWorkday(d)) return false;
+    const year = d.getFullYear(), day = isoDay(d);
+    if (day === `${year}-10-28`) return true;
+    return (DINI_BAYRAMLAR[year] || []).some(([from]) => {
+        const eve = new Date(`${year}-${from}T00:00:00`);
+        eve.setDate(eve.getDate() - 1);
+        return isoDay(eve) === day;
+    });
+};
 
 const dayOnly = (v: string | Date): Date => {
     const d = typeof v === 'string' ? new Date(v) : new Date(v);

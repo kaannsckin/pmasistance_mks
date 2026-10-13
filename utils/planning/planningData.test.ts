@@ -5,7 +5,7 @@ import { parseJiraCsv } from '../importer';
 import { mapJiraIssueType, mapJiraPriority, mapJiraStatus, parseJiraDate, secondsToHours } from './jiraFields';
 import { pertDays, stampLifecycle, taskDurations, withStatus } from './lifecycle';
 import { analyzeRecords, recordsToCsv } from './recordQuality';
-import { addWorkdays, isWorkday, trHolidays, workdaysBetween, workdaysInMonth } from './workdays';
+import { addWorkdays, isHalfDay, isWorkday, trHolidays, workdaysBetween, workdaysInMonth } from './workdays';
 
 const task = (id: string, extra: Partial<Task> = {}): Task => ({
     id, name: `${id} kaydı için yeterli açıklama metni`, availability: true, priority: 'Medium', version: 1, predecessor: null, unit: 'Yazılım', resourceName: '',
@@ -28,6 +28,17 @@ describe('iş günü takvimi', () => {
         expect(workdaysBetween('2026-10-26', '2026-10-30')).toBe(4); // 29 Ekim düşer
         expect(workdaysBetween('2026-10-09', '2026-10-05')).toBeNull();
         expect(addWorkdays(new Date(2026, 9, 28), 2)).toEqual(new Date(2026, 9, 30)); // 28 → (29 tatil) → 30
+    });
+
+    it('arife yarım günleri: 28 Ekim ve dini bayram arifeleri; iş günü sayısını değiştirmez', () => {
+        expect(isHalfDay(new Date(2026, 9, 28))).toBe(true); // Cumhuriyet Bayramı arifesi
+        expect(isHalfDay(new Date(2026, 2, 19))).toBe(true); // Ramazan Bayramı arifesi
+        expect(isHalfDay(new Date(2026, 4, 26))).toBe(true); // Kurban Bayramı arifesi
+        expect(isHalfDay(new Date(2026, 9, 27))).toBe(false);
+        expect(isHalfDay(new Date(2026, 9, 29))).toBe(false); // tatil
+        expect(isHalfDay(new Date(2028, 9, 28))).toBe(false); // Cumartesi
+        expect(isWorkday(new Date(2026, 9, 28))).toBe(true);
+        expect(workdaysInMonth(2026, 10)).toBe(21);
     });
 });
 
