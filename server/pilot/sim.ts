@@ -144,6 +144,13 @@ const r2 = (v: number) => Math.round(v * 100) / 100;
 const TYPES: SimIssueType[] = ['Hata', 'Hikaye', 'İyileştirme', 'Görev'];
 const BASE_HOURS: Record<SimIssueType, number> = { Hata: 6, Hikaye: 16, 'İyileştirme': 12, 'Görev': 8 };
 const TYPE_BIAS: Record<SimIssueType, number> = { Hata: 1.25, Hikaye: 1.35, 'İyileştirme': 1.1, 'Görev': 1.0 };
+/** Simülasyon metinlerinde geçen kısaltmalar */
+const SIM_ABBREVIATIONS: Record<string, string> = { PDF: 'Taşınabilir Belge Biçimi', API: 'Uygulama Programlama Arayüzü' };
+
+/** Zayıf raporların kalıp cümleleri (BL-24): kurum kılavuzunun "belirsiz ifade" dediği türden */
+const WEAK_THIS_WEEK = ['Geliştirme çalışmalarına devam edildi.', 'Hata düzeltmeleri yapıldı.', 'Test çalışmaları sürüyor.', 'Müşteri ile görüşmeler yapıldı.', 'Planlanan işler büyük ölçüde tamamlandı.'];
+const WEAK_NEXT_WEEK = ['Çalışmalara devam edilecek.', 'Açık hatalar kapatılacak.', 'Testlere devam edilecek.'];
+
 const PRIORITY_RANK: Record<string, number> = { Highest: 0, High: 1, Medium: 2, Low: 3 };
 const ascii = (s: string) => s.toLocaleLowerCase('tr-TR').replace(/ç/g, 'c').replace(/ğ/g, 'g').replace(/ı/g, 'i').replace(/ö/g, 'o').replace(/ş/g, 's').replace(/ü/g, 'u').replace(/â/g, 'a');
 
@@ -817,26 +824,64 @@ export const stepDay = (state: SimState, input: WorkspaceData, day: string, opts
             if (!(busy && rng() < 0.25)) {
                 const weekStart = addDays(day, 1 - weekday);
                 const closed = recent.filter(x => x.rec.resolved! >= at(weekStart, 0));
-                const thisWeek: ReportItem[] = closed.slice(0, 5).map((x, i) => ({
-                    id: `ri-${w.jiraKey}-${year}-${week}-b${i}`,
-                    category: x.rec.issueType === 'Hikaye' ? 'delivery' : 'ongoing',
-                    text: `${x.rec.key} ${x.rec.summary} tamamlandı.`,
-                    source: 'task',
-                }));
-                if (thisWeek.length === 0) thisWeek.push({ id: `ri-${w.jiraKey}-${year}-${week}-b0`, category: 'ongoing', text: 'Geliştirme çalışmaları sürüyor.', source: 'manual' });
-                const nextWeek: ReportItem[] = openIssues
+                const id = (k: string) => `ri-${w.jiraKey}-${year}-${week}-${k}`;
+                // Rapor kalitesi dağılımı (BL-24): geçmişte iyi, orta ve zayıf raporlar; yoğun PY daha sık zayıf yazar
+                // Ayrı rastgele akış: rapor metni dünyanın geri kalanını (Jira, saatler, skorlar) değiştirmez
+                const textRng = mulberry32(hashStr(`${state.tohum}:${day}:${w.jiraKey}:rapor`));
+                const tier = weighted(textRng, ['iyi', 'orta', 'zayif'] as const, busy ? [0.2, 0.45, 0.35] : [0.45, 0.4, 0.15]);
+                const planned = openIssues
                     .sort((a, b) => (a.rec.statusCategory === 'indeterminate' ? 0 : 1) - (b.rec.statusCategory === 'indeterminate' ? 0 : 1))
-                    .slice(0, 3)
-                    .map((x, i) => ({ id: `ri-${w.jiraKey}-${year}-${week}-p${i}`, category: 'plan', text: `${x.rec.key} ${x.rec.summary}`, source: 'task' }));
+                    .slice(0, 3);
+                let thisWeek: ReportItem[];
+                let nextWeek: ReportItem[];
+                if (tier === 'zayif') {
+                    // Kalıp cümleler: ne yapıldığı, rakam ve tarih yok
+                    thisWeek = [pick(textRng, WEAK_THIS_WEEK), ...(textRng() < 0.5 ? [pick(textRng, WEAK_THIS_WEEK)] : [])]
+                        .filter((t, i, all) => all.indexOf(t) === i)
+                        .map((text, i) => ({ id: id(`b${i}`), category: 'ongoing', text, source: 'manual' }));
+                    nextWeek = [{ id: id('p0'), category: 'plan', text: pick(textRng, WEAK_NEXT_WEEK), source: 'manual' }];
+                } else if (tier === 'orta') {
+                    thisWeek = closed.slice(0, 5).map((x, i) => ({
+                        id: id(`b${i}`), category: x.rec.issueType === 'Hikaye' ? 'delivery' : 'ongoing', text: `${x.rec.key} ${x.rec.summary} tamamlandı.`, source: 'task',
+                    }));
+                    if (thisWeek.length === 0) thisWeek.push({ id: id('b0'), category: 'ongoing', text: 'Geliştirme çalışmaları sürüyor.', source: 'manual' });
+                    nextWeek = planned.map((x, i) => ({ id: id(`p${i}`), category: 'plan', text: `${x.rec.key} ${x.rec.summary}`, source: 'task' }));
+                } else {
+                    // İyi: saat ve tahminle kapanışlar, gecikmenin rakamı, yeniden açılan kayıt, tarihli plan
+                    thisWeek = closed.slice(0, 4).map((x, i) => {
+                        const est = x.rec.originalEstimateSeconds ? Math.round(x.rec.originalEstimateSeconds / 3600) : null;
+                        return {
+                            id: id(`b${i}`), category: x.rec.issueType === 'Hikaye' ? 'delivery' : 'ongoing',
+                            text: `${x.rec.key} ${x.rec.summary} tamamlandı (${Math.round(x.spent)} saat${est ? `, tahmin ${est} saat` : ''}).`, source: 'task',
+                        };
+                    });
+                    const reopened = jira.issues.find(x => x.rec.transitions.some(t => t.to === 'Yeniden Açıldı' && t.at >= at(weekStart, 0)));
+                    if (reopened) thisWeek.push({ id: id('b-r'), category: 'ongoing', text: `${reopened.rec.key} ${reopened.rec.summary} kaydı bu hafta yeniden açıldı; kök neden inceleniyor.`, source: 'task' });
+                    if (overdue > 0) {
+                        const oldest = openTasks.filter(t => t.dueDate && t.dueDate < day).sort((a, b) => String(a.dueDate).localeCompare(String(b.dueDate)))[0];
+                        thisWeek.push({ id: id('b-g'), category: 'schedule_budget', text: `Açık ${openTasks.length} kaydın ${overdue}'i (%${Math.round(ratio * 100)}) terminini aştı${oldest ? `; en eskisi ${oldest.name} (${gunAy(String(oldest.dueDate).slice(0, 10))})` : ''}.`, source: 'task' });
+                    }
+                    if (thisWeek.length === 0) thisWeek.push({ id: id('b0'), category: 'ongoing', text: `Bu hafta kapanan kayıt yok; ${openIssues.filter(x => x.rec.statusCategory === 'indeterminate').length} kayıt üzerinde çalışılıyor.`, source: 'manual' });
+                    // Termini geçmiş işe yeni tarih verilir (gelecek haftanın aynı günü)
+                    const nextDate = gunAy(dayOf(addWorkdays(dateOf(day), 6)));
+                    nextWeek = planned.map((x, i) => {
+                        const due = x.rec.due ? String(x.rec.due).slice(0, 10) : '';
+                        const when = !due ? ` ${nextDate} tarihine kadar tamamlanacak` : due < day ? ` (termin ${gunAy(due)} geçti) ${nextDate} tarihine kadar tamamlanacak` : ` ${gunAy(due)} tarihine kadar tamamlanacak`;
+                        return { id: id(`p${i}`), category: 'plan', text: `${x.rec.key} ${x.rec.summary}${when}.`, source: 'task' };
+                    });
+                }
                 const prev = (ws.weeklyReports || []).find(r => r.projectId === w.id && r.week === (week === 1 ? 52 : week - 1));
                 const planReview = prev?.nextWeek.map(item => {
-                    const key = item.text.split(' ')[0];
-                    const x = jira.issues.find(i => i.rec.key === key);
-                    return { itemId: item.id, text: item.text, status: (x?.rec.statusCategory === 'done' ? 'done' : x?.rec.statusCategory === 'indeterminate' ? 'partial' : 'slipped') as 'done' | 'partial' | 'slipped' };
+                    // Kayıt anahtarı olmayan (kalıp) plan maddesi ölçülemez: kısmen
+                    const key = item.text.match(/\b[A-Z]+-\d+\b/)?.[0];
+                    const x = key ? jira.issues.find(i => i.rec.key === key) : undefined;
+                    return { itemId: item.id, text: item.text, status: (!key ? 'partial' : x?.rec.statusCategory === 'done' ? 'done' : x?.rec.statusCategory === 'indeterminate' ? 'partial' : 'slipped') as 'done' | 'partial' | 'slipped' };
                 });
                 const report: WeeklyReport = {
                     id: `rapor-${w.id}-${year}-${week}`, year, week, kind: 'project', projectId: w.id, departmentCode: pm.dept,
-                    thisWeek, nextWeek, abbreviations: [], stage: 'bs_review',
+                    thisWeek, nextWeek, stage: 'bs_review',
+                    // Kayıt başlıklarındaki kısaltmalar açılımıyla (kurum kılavuzu; aksi hâlde rapor biçim hatası verir)
+                    abbreviations: Object.entries(SIM_ABBREVIATIONS).filter(([abbr]) => [...thisWeek, ...nextWeek].some(i => new RegExp(`\\b${abbr}\\b`).test(i.text))).map(([abbr, expansion]) => ({ abbr, expansion })),
                     worklog: state.worklog.filter(x => x.projectId === w.id && x.date >= weekStart).map(({ projectId: _p, ...rest }) => { void _p; return rest; }),
                     ...(busy && rng() < 0.4 ? {} : { pmScore: Math.max(3, Math.min(9, 9 - Math.round(ratio * 10) - highRisks)), pmScoreNote: 'Haftalık genel değerlendirme' }),
                     ...(planReview?.length ? { planReview } : {}),
