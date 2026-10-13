@@ -4,7 +4,7 @@
 
 ## 12 Ekim güncellemesi
 
-Raporun üç kırmızı boyutunun üçü de kodda kapatıldı; takvim ise demonun ajanların kendi ortamında yapılması kararıyla Kasım sonuna uzadı. Geliştirme listesinin on maddesinden sekizi yapıldı (5. madde ay içi tahminle tamamlandı, BL-22), biri kısmen (8: RAG kuralı pilot sonrasına), biri pilot sonrasına kaldı (9); mock veri tablosunun on maddesinden dokuzu kapandı. Kapanışlar canlı koşuda K0'da (22 Ekim) doğrulanacak (BL-18).
+Raporun üç kırmızı boyutunun üçü de kodda kapatıldı; takvim ise demonun ajanların kendi ortamında yapılması kararıyla Kasım sonuna uzadı. Geliştirme listesinin on maddesinden sekizi yapıldı (5. madde ay içi tahminle tamamlandı, BL-22), biri kısmen (8: RAG kuralı pilot sonrasına), biri pilot sonrasına kaldı (9); mock veri tablosunun on maddesinin hepsi kapandı (sonuncusu, raporlarda kalite dağılımı, 13 Ekim'de: BL-24). Kapanışlar canlı koşuda K0'da (22 Ekim) doğrulanacak (BL-18).
 
 **13 Ekim:** ajan sisteminin çalışmasında bir haftalık engel nedeniyle takvim yedi gün kaydırıldı: K0 22 Ekim, K1 27 Ekim, K2 12 Kasım, K3 26 Kasım, K4 1 Aralık, demo varsayımı 3 Aralık. 13–20 Ekim uygulama haftasıdır; rutinler koşmaz, uygulama eksikleri kapatılır. Ayrıntı: [PILOT_NOTU.md](./PILOT_NOTU.md), [BACKLOG.md](./BACKLOG.md).
 
