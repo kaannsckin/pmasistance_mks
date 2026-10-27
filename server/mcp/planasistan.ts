@@ -17,6 +17,10 @@ import { canEditProjectContent, identityNeedsPerson } from '../../utils/rbac.js'
 import { APP_VERSION } from '../../utils/workspace.js';
 import { validateArgs } from './args.js';
 import { McpServerOptions, McpTool, McpToolResult } from './protocol.js';
+import {
+    applyReportOp, draftPackage, parseWeek, prepareReportOp, readReports, REPORT_DRAFT_TOOL, REPORT_READ_TOOL, REPORT_SCHEMAS, REPORT_SUBMIT_TOOL,
+    REPORT_WRITE_TOOLS, ReportOp, reportToolsFor,
+} from './reports.js';
 import { ConflictError, LoadedWorkspace, SourceError, WorkspaceSource } from './source.js';
 
 /**
@@ -138,7 +142,8 @@ const JIRA_WORKLOG_SPEC: McpTool = {
 
 export type PendingProposal =
     | { kind: 'action'; action: AiAction; title: string; at: number }
-    | { kind: 'jira'; projectId: string; key: string; issues: JiraIssueRecord[]; opts: JiraImportOptions; label: string; title: string; at: number };
+    | { kind: 'jira'; projectId: string; key: string; issues: JiraIssueRecord[]; opts: JiraImportOptions; label: string; title: string; at: number }
+    | { kind: 'report'; op: ReportOp; title: string; at: number };
 type Pending = PendingProposal;
 
 /** Uygulanmamış önerilerin deposu */
@@ -170,6 +175,7 @@ const SCHEMAS = new Map<string, ToolSpec['parameters']>([
     [JIRA_WORKLOG_TOOL, JIRA_WORKLOG_SPEC.inputSchema],
     [APPLY_TOOL, APPLY_SPEC.inputSchema],
     [STATUS_TOOL, STATUS_SPEC.inputSchema],
+    ...REPORT_SCHEMAS,
 ]);
 
 const isoDay = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -207,6 +213,12 @@ interface Session {
     roleSource: string;
     /** Değişiklik yapılamıyorsa nedeni */
     writeBlock?: string;
+    /**
+     * Rapor akışı işlemleri (gönderim, onay/iade, yayın) yapılamıyorsa nedeni:
+     * genel değişiklik kapısıyla aynı, ama rol kuralı aşamaya göre rapor
+     * araçlarında denetlenir (PYB destek veri girmez ama raporu denetler, yayınlar).
+     */
+    reportBlock?: string;
 }
 
 const findPerson = (ws: WorkspaceData, ref: string): Person => {
@@ -275,13 +287,13 @@ export const createPlanAsistanMcp = (o: PlanAsistanMcpOptions): McpServerOptions
 
         const readOnly = o.source.readOnlyReason();
         const policy = aiPolicyOf(ws);
-        const writeBlock = !o.allowWrite ? 'Değişiklik araçları kapalı: MCP ayarında PLANASISTAN_MCP_WRITE=1 verilmemiş.'
+        const reportBlock = !o.allowWrite ? 'Değişiklik araçları kapalı: MCP ayarında PLANASISTAN_MCP_WRITE=1 verilmemiş.'
             : readOnly ? readOnly
             : !policy.proposals ? 'AI değişiklik önerileri yönetici konsolunda kapatılmış (Yönetici konsolu › Yapay zekâ).'
-            : !ctx.canWrite ? `${ROLE_LABELS[role]} rolü veri girmez; değişiklikler yalnız Proje Yöneticisi ve Bölüm Sorumlusu kimliğiyle yapılır.`
             : undefined;
+        const writeBlock = reportBlock || (!ctx.canWrite ? `${ROLE_LABELS[role]} rolü veri girmez; değişiklikler yalnız Proje Yöneticisi ve Bölüm Sorumlusu kimliğiyle yapılır.` : undefined);
         if (writeBlock) ctx.canWrite = false;
-        return { loaded, ws, ctx, person, roleSource, writeBlock };
+        return { loaded, ws, ctx, person, roleSource, writeBlock, reportBlock };
     };
 
     const status = async (): Promise<McpToolResult> => {
@@ -324,10 +336,11 @@ export const createPlanAsistanMcp = (o: PlanAsistanMcpOptions): McpServerOptions
         } catch (e) {
             return fail((e as Error).message);
         }
-        if (s.writeBlock) return fail(s.writeBlock);
+        const block = p.kind === 'report' ? s.reportBlock : s.writeBlock;
+        if (block) return fail(block);
         let result: { ws: WorkspaceData; summary: string };
         try {
-            result = p.kind === 'action' ? applyAction(s.ws, p.action) : applyJira(s, p);
+            result = p.kind === 'action' ? applyAction(s.ws, p.action) : p.kind === 'report' ? applyReportOp(s.ws, s.ctx, p.op, now()) : applyJira(s, p);
         } catch (e) {
             proposals.delete(id);
             return fail(`Öneri uygulanamadı: ${(e as Error).message}`);
@@ -435,6 +448,35 @@ export const createPlanAsistanMcp = (o: PlanAsistanMcpOptions): McpServerOptions
         });
     };
 
+    /** Haftanın Jira worklog'u (Pazartesi → bugün/Pazar): haftalık rapor girdisi; Jira yoksa boş */
+    const weekWorklog = async (s: Session, args: Record<string, unknown>) => {
+        if (!o.jira) return [];
+        const project = resolveProject(s.ctx, args.proje);
+        const key = (project.jiraProjectKey || '').trim().toUpperCase();
+        if (!key || !jiraProjectAllowed(o.jira.env, key)) return [];
+        const w = parseWeek(args.hafta, now());
+        const monday = new Date(Date.UTC(w.year, 0, 4));
+        monday.setUTCDate(monday.getUTCDate() - ((monday.getUTCDay() + 6) % 7) + (w.week - 1) * 7);
+        const sunday = new Date(monday.getTime() + 6 * 86_400_000);
+        const today = isoDay(now());
+        const to = sunday.toISOString().slice(0, 10) < today ? sunday.toISOString().slice(0, 10) : today;
+        try { return await fetchJiraWorklogs(o.jira.env, key, monday.toISOString().slice(0, 10), to, o.jira.fetchImpl); } catch { return []; }
+    };
+
+    const reportTool = async (s: Session, name: string, args: Record<string, unknown>): Promise<McpToolResult> => {
+        try {
+            if (name === REPORT_READ_TOOL) return text(readReports(s.ws, s.ctx, args, now()));
+            if (s.reportBlock && REPORT_WRITE_TOOLS.has(name)) return fail(s.reportBlock);
+            if (!reportToolsFor(s.ctx, true).some(t => t.name === name)) return fail(`${name} aracı ${ROLE_LABELS[s.ctx.identity.role]} rolü için yok.`);
+            if (name === REPORT_DRAFT_TOOL) return text(draftPackage(s.ws, s.ctx, args, now(), await weekWorklog(s, args)));
+            const prepared = prepareReportOp(s.ws, s.ctx, name, args, now(), name === REPORT_SUBMIT_TOOL ? await weekWorklog(s, args) : []);
+            const oneriId = remember({ kind: 'report', op: prepared.op, title: prepared.title, at: Date.now() });
+            return text({ oneri_id: oneriId, ozet: prepared.title, ayrintilar: prepared.details, durum: MCP_PENDING_NOTE });
+        } catch (e) {
+            return fail((e as Error).message);
+        }
+    };
+
     return {
         name: 'planasistan',
         title: 'PlanAsistan',
@@ -445,17 +487,19 @@ export const createPlanAsistanMcp = (o: PlanAsistanMcpOptions): McpServerOptions
             let specs: ToolSpec[];
             let canApply = false;
             let jira: McpTool[] = [];
+            let reports: McpTool[] = [];
             try {
                 const s = await buildSession();
                 specs = toolSpecsFor(s.ctx);
-                canApply = !s.writeBlock;
-                if (o.jira) jira = [JIRA_WORKLOG_SPEC, ...(canApply ? [JIRA_IMPORT_SPEC] : [])];
+                reports = reportToolsFor(s.ctx, !s.reportBlock);
+                canApply = !s.writeBlock || reports.some(t => REPORT_WRITE_TOOLS.has(t.name));
+                if (o.jira) jira = [JIRA_WORKLOG_SPEC, ...(!s.writeBlock ? [JIRA_IMPORT_SPEC] : [])];
             } catch (e) {
                 // Kaynak şu an okunamıyor: salt-okunur katalog sunulur, her çağrı nedeni döndürür
                 log(`araç listesi kapsamsız sunuldu: ${(e as Error).message}`);
                 specs = AI_TOOLS.filter(t => !t.writeOnly).map(t => t.spec);
             }
-            return [STATUS_SPEC, ...specs.map(toMcpTool), ...jira, ...(canApply ? [APPLY_SPEC] : [])];
+            return [STATUS_SPEC, ...specs.map(toMcpTool), ...reports, ...jira, ...(canApply ? [APPLY_SPEC] : [])];
         },
         callTool: async (name, rawArgs) => {
             const schema = SCHEMAS.get(name);
@@ -472,6 +516,7 @@ export const createPlanAsistanMcp = (o: PlanAsistanMcpOptions): McpServerOptions
                 return fail((e as Error).message);
             }
             if (name === JIRA_IMPORT_TOOL) return jiraImport(s, args);
+            if (REPORT_WRITE_TOOLS.has(name) || name === REPORT_READ_TOOL || name === REPORT_DRAFT_TOOL) return reportTool(s, name, args);
             if (name === JIRA_WORKLOG_TOOL) return jiraWorklog(s, args);
             if (WRITE_TOOLS.has(name) && s.writeBlock) return fail(s.writeBlock);
             const out = await executeTool({ name, arguments: args }, s.ctx);

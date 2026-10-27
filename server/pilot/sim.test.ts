@@ -63,7 +63,8 @@ describe('pilot simülasyonu', () => {
     });
 
     it('günlük ilerlemede Jira yalnız arka plandaki PY\'nin projesine aktarılır; persona PY\'ler kendisi aktarır', () => {
-        const state = createState(2026, START);
+        // Ajanlı dönem 2 Temmuz'da başlar: öncesini simülasyon yazar, sonrasını persona ajanları
+        const state = createState(2026, START, '2026-07-02');
         const ws0 = runUntil(state, createWorld(2026, START), '2026-07-01', undefined, { importAll: true });
         const events: DayEvents[] = [];
         const ws1 = runUntil(state, ws0, END, e => events.push(e));
@@ -76,7 +77,7 @@ describe('pilot simülasyonu', () => {
         expect(count(ws1, 'prj-kalkan')).toBe(state.jira.KLK.issues.length);
         // Persona projelerinde risk eklenmez, olaylarda sinyal olarak görünür; RAG'i de PY günceller
         expect(ws1.projects.find(p => p.id === 'prj-nehir')!.risks!.length).toBe(ws0.projects.find(p => p.id === 'prj-nehir')!.risks!.length);
-        expect(events.some(e => e.projeler.NHR?.riskler.some(r => r.includes('sinyal')))).toBe(true);
+        expect(events.some(e => ['ATL', 'PSL', 'NHR'].some(k => e.projeler[k]?.riskler.some(r => r.includes('sinyal'))))).toBe(true);
         expect(events.every(e => !e.projeler.ATL?.rag)).toBe(true);
         // Jira dışa aktarımı: tüm kayıtlar, termin ve worklog dahil
         const atl = jiraExports(state).ATL;
@@ -102,10 +103,13 @@ describe('pilot simülasyonu', () => {
         expect(reports.length).toBeGreaterThan(10);
         expect(reports.some(r => r.stage === 'approved')).toBe(true);
         expect(reports.every(r => r.history[0].action === 'create')).toBe(true);
-        const friday = events.find(e => e.gun === '2026-07-10')!;
-        const md = eventsMarkdown(friday);
-        expect(md).toContain('# 2026-07-10');
+        // Perşembe teslim, Cuma bölüm onayı, Pazartesi PYB onayı ve yayın
+        const md = eventsMarkdown(events.find(e => e.gun === '2026-07-09')!);
+        expect(md).toContain('# 2026-07-09');
         expect(md).toContain('Haftalık rapor');
+        expect(eventsMarkdown(events.find(e => e.gun === '2026-07-10')!)).toContain('bölüm sorumlusunca onaylandı');
+        expect(eventsMarkdown(events.find(e => e.gun === '2026-07-13')!)).toContain('yayınlandı');
+        expect((ws.weeklyPublications || []).length).toBeGreaterThan(2);
         expect(events.find(e => e.gun === '2026-07-11')!.isGunu).toBe(false);
     });
 

@@ -83,3 +83,50 @@ Karar kartı şu durumlarda yeniden incelenir:
 - Jira'dan büyük bir kayıt geçmişi aktarıldığında.
 - AI sunucusunda model değiştiğinde.
 - Altın set 50 kaydı aştığında.
+
+## Haftalık rapor taslağı
+
+Bu bölüm, haftalık rapor AI asistanının (rapor taslağı önerisi) ince ayar kararını anlatır. Yukarıdaki kayıt tahmininden ayrı bir karardır. Ayrıntılı katmanlar ve ölçüler: [`RAPOR_AI.md`](RAPOR_AI.md).
+
+### Önce denenecekler
+
+İnce ayardan önce istem katmanları denenir. Hepsi ucuzdur ve geri alınabilir:
+
+1. **Proje kartı** (PY): projenin ne olduğu, müşterileri, terimleri.
+2. **Kurum ve bölüm kılavuzu** (PYB destek): Haftalık rapor › Ayarlar › AI kılavuzu ve kurallar.
+3. **Dinamik örnekler:** onaylı raporlardan benzer maddeler ve "AI'nın ilk yazdığı → onaylanan hâl" çiftleri.
+4. **Öğrenilmiş kurallar:** tekrarlanan format sorunlarından ve düzeltmelerden; PYB destek onaylar.
+
+Her katmanın kazancı altın sette varyantlarla ölçülür (Ayarlar › AI kalitesi › Rapor AI değerlendirmesi).
+
+### Karar ölçütleri
+
+Karar kartı (Ayarlar › AI kalitesi › AI ince ayarı) şu kuralla çalışır:
+
+| Durum | Karar |
+|---|---|
+| Üretim istemi (Tam) geçerli yapılandırmayla değerlendirilmemiş, bayat ya da altın set 20 raporun altında | Karar için veri yetersiz |
+| Üretim istemi kalite kapısından geçiyor | İnce ayar gerekmiyor |
+| Kapıdan geçmiyor, uygun rapor 300'ün altında | Karar için veri yetersiz (önce istemi iyileştirin) |
+| Kapıdan geçmiyor, en az 1.000 rapor ve 50 altın set raporu | İnce ayar önerilir |
+| Kapıdan geçmiyor, veri sınırda | İnce ayar düşünülebilir |
+
+"Uygun rapor": onaylı, AI girdisi kayıtlı (`aiDraft.input`), son hâlinde format hatası olmayan, altın sette olmayan proje raporu. Aynı girdi bir kez sayılır.
+
+### Veri kümesi
+
+- **Biçim:** sohbet (system · user · assistant), JSONL; eğitim, doğrulama ve veri kartı ayrı dosyalar.
+- **İstem eşitliği:** system = raporun bölümü ve projesi için bugünkü kılavuz ve etkin kurallar; user = "İnce ayar" (`ft`) varyantının istemi: sabit örnek ve dinamik örnek yok, proje kartı var. İnce ayarlı model kullanımda da bu varyantla çağrılmalıdır.
+- **Hedef yanıt:** PYB destekçe onaylanmış son hâl, mevcut JSON sözleşmesiyle.
+- **Altın set dışarıda:** altın setteki raporlar kümeye girmez.
+- **Zaman ayrımı:** en son haftaların %15'i doğrulama kümesidir.
+- **Gizlilik:** kişi adları `[kişi]` ile maskelenir. Proje ve kurum adları varsayılan olarak tutarlı takma adla (Proje-0000, Kurum-0000) maskelenir. Maskelenen ad sayıları veri kartına yazılır.
+
+### Uygulama adımları
+
+1. Karar "İnce ayar önerilir" ise "Veri kümesini hazırla" ile dosyaları indirin. Veri kartını ve rastgele 20 örneği elle gözden geçirin: girdiler proje notlarını içerir, başka kişisel veri kalmış olabilir.
+2. **Tercih edilen yol:** kurum içi açık ağırlıklı bir modelde (vLLM, Ollama ya da LiteLLM arkasında) LoRA ile ince ayar. Veri kurum dışına çıkacaksa önce KVKK değerlendirmesi ve onay gerekir.
+3. Düşük öğrenme oranı, 1–3 tur; doğrulama kaybını izleyin.
+4. İnce ayarlı modeli sunucuda ayrı bir model adıyla tanımlayın: `AI_PROVIDER=openai`, `AI_BASE_URL=<kurum içi uç>`, `AI_MODEL=<ince ayarlı model>`.
+5. Altın sette **İnce ayar** varyantıyla değerlendirin. Aynı kalite kapısından geçmezse önceki modele dönün.
+6. Kılavuz ya da kurallar değişince veri kümesini yeniden üretin; sistem istemi kılavuzun o anki sürümünü taşır.

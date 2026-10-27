@@ -1,9 +1,11 @@
-import { Allocation, Project, RagStatus, Resource, RiskLevel, Task, TaskStatus, WorkspaceData } from '../../types';
+import { Allocation, Project, RagStatus, Resource, RiskLevel, RiskStatus, Task, TaskStatus, WorkspaceData } from '../../types';
 import { createAllocation, getPlanLockStatus, setAllocationCell } from '../allocations';
 import { stampLifecycle } from '../planning/lifecycle';
 import { appendAudit } from '../audit';
 import { canEditActualCell, canEditPlanCell, canEditProjectContent, identityOf } from '../rbac';
-import { createRisk, riskScore } from '../risks';
+import { markConverted, REQUEST_STATUS_LABELS, taskDraftFromRequest } from '../customerRequests';
+import { createNote } from '../notes';
+import { createRisk, RISK_STATUS_LABELS, riskScore } from '../risks';
 
 /**
  * AI'nın önerdiği veri değişiklikleri — ASLA kendiliğinden uygulanmaz.
@@ -17,7 +19,11 @@ export type AiAction =
     | { type: 'gorev_ekle'; projectId: string; name: string; priority: Task['priority']; resourceName?: string; dueDate?: string; time?: { best: number; avg: number; worst: number }; notes?: string }
     | { type: 'gorev_durumu'; projectId: string; taskId: string; status: TaskStatus }
     | { type: 'rag_guncelle'; projectId: string; rag: RagStatus; ragNote?: string }
-    | { type: 'tahsis_ayarla'; personId: string; projectId: string; year: number; month: number; field: 'plan' | 'actual'; value: number };
+    | { type: 'tahsis_ayarla'; personId: string; projectId: string; year: number; month: number; field: 'plan' | 'actual'; value: number }
+    | { type: 'risk_guncelle'; projectId: string; riskId: string; status?: RiskStatus; probability?: RiskLevel; impact?: RiskLevel; mitigation?: string; ownerPersonId?: string; reason?: string }
+    // Kabul: istekten görev açılır ve istek "göreve dönüştü" olur; ret: "reddedildi". Gerekçe projenin günlüğüne not olarak düşer.
+    | { type: 'istek_karari'; projectId: string; requestId: string; decision: 'kabul' | 'ret'; reason: string; day?: string; task?: { name?: string; priority: Task['priority']; resourceName?: string; dueDate?: string; time?: { best: number; avg: number; worst: number } } }
+    | { type: 'not_ekle'; projectId: string; content: string; day?: string };
 
 export type ProposalStatus = 'pending' | 'applied' | 'rejected' | 'failed';
 
@@ -86,8 +92,42 @@ export const validateAction = (ws: WorkspaceData, action: AiAction): string | nu
             return project.tasks.some(t => t.id === action.taskId) ? null : 'Görev bulunamadı (silinmiş olabilir).';
         case 'rag_guncelle':
             return null;
+        case 'risk_guncelle': {
+            const risk = (project.risks || []).find(r => r.id === action.riskId);
+            if (!risk) return 'Risk bulunamadı (silinmiş olabilir).';
+            if (action.probability !== undefined && ![1, 2, 3, 4, 5].includes(action.probability)) return 'Olasılık 1-5 arasında olmalı.';
+            if (action.impact !== undefined && ![1, 2, 3, 4, 5].includes(action.impact)) return 'Etki 1-5 arasında olmalı.';
+            const changes = riskChanges(risk, action);
+            if (!changes.length) return 'Riskte değişen bir şey yok.';
+            return null;
+        }
+        case 'istek_karari': {
+            const req = (project.customerRequests || []).find(r => r.id === action.requestId);
+            if (!req) return 'Müşteri isteği bulunamadı (silinmiş olabilir).';
+            if (req.status !== 'New') return `İstek zaten karara bağlanmış (${REQUEST_STATUS_LABELS[req.status]}).`;
+            if (!action.reason.trim()) return 'Kararın gerekçesi boş olamaz.';
+            if (action.task?.dueDate && !/^\d{4}-\d{2}-\d{2}$/.test(action.task.dueDate)) return 'Bitiş tarihi YYYY-AA-GG biçiminde olmalı.';
+            if (action.day && !/^\d{4}-\d{2}-\d{2}$/.test(action.day)) return 'Tarih YYYY-AA-GG biçiminde olmalı.';
+            return null;
+        }
+        case 'not_ekle':
+            if (!action.content.trim()) return 'Not boş olamaz.';
+            if (action.day && !/^\d{4}-\d{2}-\d{2}$/.test(action.day)) return 'Tarih YYYY-AA-GG biçiminde olmalı.';
+            return null;
     }
 };
+
+/** Risk güncellemesinin değiştirdiği alanlar (öneri kartı ve denetim için) */
+const riskChanges = (risk: { status: RiskStatus; probability: RiskLevel; impact: RiskLevel; mitigation?: string; ownerPersonId?: string }, a: Extract<AiAction, { type: 'risk_guncelle' }>): string[] => [
+    ...(a.status && a.status !== risk.status ? ['status'] : []),
+    ...(a.probability !== undefined && a.probability !== risk.probability ? ['probability'] : []),
+    ...(a.impact !== undefined && a.impact !== risk.impact ? ['impact'] : []),
+    ...(a.mitigation !== undefined && a.mitigation.trim() !== (risk.mitigation || '') ? ['mitigation'] : []),
+    ...(a.ownerPersonId && a.ownerPersonId !== risk.ownerPersonId ? ['owner'] : []),
+];
+
+const decisionNote = (title: string, a: Extract<AiAction, { type: 'istek_karari' }>, customer: string): string =>
+    [`#müşteri-isteği #karar Müşteri isteği ${a.decision === 'kabul' ? 'kabul edildi' : 'reddedildi'}: ${title} (${customer})`, `Gerekçe: ${a.reason.trim()}`].join('\n');
 
 /** Öneri kartında gösterilecek başlık ve ayrıntılar */
 export const describeAction = (ws: WorkspaceData, action: AiAction): { title: string; details: { label: string; value: string }[] } => {
@@ -133,6 +173,45 @@ export const describeAction = (ws: WorkspaceData, action: AiAction): { title: st
                 details: [
                     { label: 'RAG', value: `${project?.rag ? RAG_TR[project.rag] : 'Belirsiz'} → ${RAG_TR[action.rag]}` },
                     ...(action.ragNote ? [{ label: 'Durum notu', value: action.ragNote }] : []),
+                ],
+            };
+        case 'risk_guncelle': {
+            const risk = project?.risks?.find(r => r.id === action.riskId);
+            const p = action.probability ?? risk?.probability;
+            const i = action.impact ?? risk?.impact;
+            return {
+                title: `${action.status === 'closed' ? 'Risk kapat' : 'Risk güncelle'}: ${risk?.title || '?'}`,
+                details: [
+                    { label: 'Proje', value: pName },
+                    ...(action.status && risk && action.status !== risk.status ? [{ label: 'Durum', value: `${RISK_STATUS_LABELS[risk.status]} → ${RISK_STATUS_LABELS[action.status]}` }] : []),
+                    ...(risk && (p !== risk.probability || i !== risk.impact) ? [{ label: 'Olasılık × Etki', value: `${risk.probability} × ${risk.impact} → ${p} × ${i} = ${(p || 0) * (i || 0)}` }] : []),
+                    ...(action.mitigation !== undefined ? [{ label: 'Aksiyon', value: action.mitigation }] : []),
+                    ...(action.ownerPersonId ? [{ label: 'Sahibi', value: fullName(ws, action.ownerPersonId) || '?' }] : []),
+                    ...(action.reason ? [{ label: 'Gerekçe', value: action.reason }] : []),
+                ],
+            };
+        }
+        case 'istek_karari': {
+            const req = project?.customerRequests?.find(r => r.id === action.requestId);
+            return {
+                title: `Müşteri isteği ${action.decision === 'kabul' ? 'kabul' : 'ret'}: ${req?.title || '?'}`,
+                details: [
+                    { label: 'Proje', value: pName },
+                    ...(req ? [{ label: 'Müşteri', value: req.customerName }] : []),
+                    { label: 'Karar', value: action.decision === 'kabul' ? 'Kabul — görev açılır' : 'Ret' },
+                    { label: 'Gerekçe', value: action.reason },
+                    ...(action.decision === 'kabul' && action.task?.resourceName ? [{ label: 'Atanan', value: action.task.resourceName }] : []),
+                    ...(action.decision === 'kabul' && action.task?.dueDate ? [{ label: 'Bitiş', value: action.task.dueDate }] : []),
+                    ...(action.decision === 'kabul' && action.task?.time ? [{ label: 'Süre (gün)', value: `${action.task.time.best} / ${action.task.time.avg} / ${action.task.time.worst}` }] : []),
+                ],
+            };
+        }
+        case 'not_ekle':
+            return {
+                title: `Not ekle: ${pName}`,
+                details: [
+                    ...(action.day ? [{ label: 'Tarih', value: action.day }] : []),
+                    { label: 'Not', value: action.content.length > 400 ? `${action.content.slice(0, 400)}…` : action.content },
                 ],
             };
         case 'tahsis_ayarla': {
@@ -240,6 +319,52 @@ export const applyAction = (ws: WorkspaceData, action: AiAction): { ws: Workspac
             }
             next = setAllocationCell(base, row.id, action.field, action.month, action.value || undefined);
             summary = `${fullName(ws, action.personId)} · ${project.name} · ${MONTHS[action.month - 1]} ${action.year} ${action.field === 'plan' ? 'plan' : 'gerçekleşen'}: ${action.value.toLocaleString('tr-TR')} AA`;
+            break;
+        }
+        case 'risk_guncelle': {
+            const risk = project.risks!.find(r => r.id === action.riskId)!;
+            const updated = {
+                ...risk,
+                ...(action.status ? { status: action.status } : {}),
+                ...(action.probability !== undefined ? { probability: action.probability } : {}),
+                ...(action.impact !== undefined ? { impact: action.impact } : {}),
+                ...(action.mitigation !== undefined ? { mitigation: action.mitigation.trim() || undefined } : {}),
+                ...(action.ownerPersonId ? { ownerPersonId: action.ownerPersonId, owner: fullName(ws, action.ownerPersonId) } : {}),
+            };
+            next = touch(ws, project.id, p => ({ ...p, risks: (p.risks || []).map(r => (r.id === risk.id ? updated : r)) }));
+            const closed = risk.status !== 'closed' && updated.status === 'closed';
+            if (closed) next = appendAudit(next, 'risk.close', `"${project.name}" · risk kapatıldı: ${risk.title}${action.reason ? ` — ${action.reason}` : ''}`, project.id);
+            summary = closed
+                ? `"${project.name}" · risk kapatıldı: ${risk.title}`
+                : `"${project.name}" · risk güncellendi: ${risk.title} (${RISK_STATUS_LABELS[updated.status]}, skor ${riskScore(updated)})`;
+            break;
+        }
+        case 'istek_karari': {
+            const req = project.customerRequests.find(r => r.id === action.requestId)!;
+            const note = createNote(decisionNote(req.title, action, req.customerName), action.day || '');
+            if (action.decision === 'kabul') {
+                const draft = taskDraftFromRequest(req, action.task?.resourceName || '');
+                const time = action.task?.time;
+                const task: Task = {
+                    ...draft,
+                    name: action.task?.name?.trim() || draft.name,
+                    priority: action.task?.priority || draft.priority,
+                    status: TaskStatus.ToDo,
+                    ...(action.task?.dueDate ? { dueDate: action.task.dueDate } : {}),
+                    ...(time ? { time, availability: time.avg > 0 } : {}),
+                };
+                next = touch(ws, project.id, p => ({ ...p, tasks: [...p.tasks, task], customerRequests: markConverted(p.customerRequests, req.id, task.id), notes: [...p.notes, note] }));
+                summary = `"${project.name}" · müşteri isteği kabul edildi, görev açıldı: ${task.name}`;
+            } else {
+                next = touch(ws, project.id, p => ({ ...p, customerRequests: p.customerRequests.map(r => (r.id === req.id ? { ...r, status: 'Rejected' as const } : r)), notes: [...p.notes, note] }));
+                summary = `"${project.name}" · müşteri isteği reddedildi: ${req.title}`;
+            }
+            break;
+        }
+        case 'not_ekle': {
+            const note = createNote(action.content.trim(), action.day || '');
+            next = touch(ws, project.id, p => ({ ...p, notes: [...p.notes, note] }));
+            summary = `"${project.name}" projesine not eklendi (${note.createdAt.slice(0, 10)})`;
             break;
         }
     }

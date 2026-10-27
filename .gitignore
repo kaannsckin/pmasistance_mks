@@ -29,3 +29,4 @@ dist-ssr
 # MCP sunucusu derlemesi (npm run build:mcp)
 dist-mcp
 dist-pilot
+/demo-testi/

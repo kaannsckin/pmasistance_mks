@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import Markdown from '../Markdown';
 import { AgentStep } from '../../utils/ai/agent';
 import { AiProposal } from '../../utils/ai/actions';
+import { browserSettingsExpired } from '../../utils/ai/client';
 import { Citation, RAG_SOURCE_LABELS } from '../../utils/rag/sources';
 import { useAssistant } from './AssistantContext';
 
@@ -221,10 +222,11 @@ const AssistantChat: React.FC<Props> = ({ variant, suggestions, onClose, onExpan
       </div>
     );
     if (a.phase === 'unavailable') {
-      return box('fa-plug-circle-xmark', 'Yapay Zekâ Henüz Hazır Değil', (
+      const expired = browserSettingsExpired();
+      return box('fa-plug-circle-xmark', expired ? 'AI Bağlantısının Süresi Doldu' : 'Yapay Zekâ Henüz Hazır Değil', (
         <>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">{a.status?.problem || 'AI sunucusu yapılandırılmamış.'}</p>
-          <p className="text-xs text-gray-400 mb-5">Kurumsal AI anahtarı yalnızca sunucuda tutulur. Yöneticiniz <code className="font-mono">AI_PROVIDER</code>, <code className="font-mono">AI_API_KEY</code>, <code className="font-mono">AI_MODEL</code> değişkenlerini tanımladığında asistan açılır (docs/AI_KURULUM.md).</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">{expired ? 'Bu tarayıcıda girilen AI bağlantısı 24 saat geçerlidir ve süresi doldu.' : a.status?.problem || 'AI sunucusu yapılandırılmamış.'}</p>
+          <p className="text-xs text-gray-400 mb-5">Yönetici konsolu › Yapay zekâ › <b>Bu tarayıcıda AI bağlantısı</b> bölümünden sağlayıcı, model ve API anahtarını girin (24 saat geçerli). Herkes için kalıcı kurulum sunucu ayarıyla yapılır (docs/AI_KURULUM.md).</p>
           <button onClick={a.recheck} className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-xl text-sm font-bold"><i className="fa-solid fa-rotate-right mr-2"></i>Tekrar Dene</button>
         </>
       ));
@@ -232,7 +234,7 @@ const AssistantChat: React.FC<Props> = ({ variant, suggestions, onClose, onExpan
     if (a.phase === 'needs_token') {
       return box('fa-key', 'Erişim Kodu Gerekli', (
         <>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">Kurumsal AI asistanı yetkili kullanıcılara açıktır. Yöneticinizden aldığınız erişim kodunu girin; kod yalnızca bu cihazda saklanır.</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">Kurumsal AI asistanı yetkili kullanıcılara açıktır. Yöneticinizden aldığınız erişim kodunu girin; kod yalnızca bu cihazda 24 saat saklanır, sonra yeniden sorulur.</p>
           {a.authError && <p className="text-sm text-red-600 mb-3">{a.authError}</p>}
           <div className="flex gap-2">
             <input

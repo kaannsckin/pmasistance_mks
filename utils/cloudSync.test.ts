@@ -77,6 +77,20 @@ describe('mergeWorkspaceDoc', () => {
         expect(merged.healthHistory).toEqual(ws.healthHistory);
     });
 
+    it('haftalık rapor AI günlüğü, altın seti ve değerlendirmeleri paylaşılır', () => {
+        const ws: WorkspaceData = {
+            ...buildWs(),
+            reportAiLog: [{ at: '2026-10-07T00:00:00Z', reportId: 'wr1', departmentCode: 'U310', promptVersion: 'rapor-taslak-1', outcome: 'discarded', nThis: 2, nNext: 1, lintErrors: 0, lintWarnings: 1 }],
+            reportGoldenSet: [{ reportId: 'wr1', addedAt: '2026-10-07T00:00:00Z' }],
+            reportEvalRuns: [{ id: 'e1', at: '2026-10-07T00:00:00Z', promptVersion: 'rapor-taslak-1', variant: 'full', n: 0, failed: 0, metrics: { lintErrorsPerReport: null, lintWarningsPerReport: null, ungroundedRate: null, recall: null, precision: null, categoryAccuracy: null, unknownAbbrPerReport: null, missingPerReport: null }, passed: null, reasons: [] }],
+        };
+        const { core, privateDoc } = splitWorkspaceDoc(ws);
+        const merged = mergeWorkspaceDoc(createEmptyWorkspace(), core as Partial<WorkspaceData>, privateDoc);
+        expect(merged.reportAiLog).toEqual(ws.reportAiLog);
+        expect(merged.reportGoldenSet).toEqual(ws.reportGoldenSet);
+        expect(merged.reportEvalRuns).toEqual(ws.reportEvalRuns);
+    });
+
     it('izinler (kişi uygunluğu) paylaşılır; buluttan çekince kaybolmaz', () => {
         const ws = { ...createEmptyWorkspace(), leaves: [{ id: 'l1', personId: 'p1', year: 2026, month: 8, aa: 0.5, reason: 'Yıllık izin' }] };
         const { core } = splitWorkspaceDoc(ws);

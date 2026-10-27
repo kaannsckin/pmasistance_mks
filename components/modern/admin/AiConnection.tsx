@@ -6,7 +6,7 @@ import {
 import { AiStatus } from '../../../utils/ai/protocol';
 import { Icon } from '../icons';
 import { Field } from '../ui';
-import BrowserGeminiKey from './BrowserGeminiKey';
+import BrowserAiConnection from './BrowserAiConnection';
 
 /**
  * AI bağlantısı (yönetici): sağlayıcı, adres, model ve API anahtarı panelden
@@ -14,14 +14,14 @@ import BrowserGeminiKey from './BrowserGeminiKey';
  * değişkenlerinin üzerine yazılır; boş alan ortam değişkenini kullanır. API
  * anahtarı sunucudan geri gelmez, yalnız son 4 hanesi gösterilir. Yönetici
  * anahtarı (AI_ADMIN_TOKEN) bu sekmenin oturumunda tutulur. Sunucu tarafı
- * kurulum yoksa (ya da yalnız denemek için) Gemini anahtarı yalnız bu tarayıcıda
- * kullanılabilir (BrowserGeminiKey).
+ * kurulum yoksa sağlayıcı, model ve anahtar yalnız bu tarayıcıda 24 saatliğine
+ * kullanılabilir (BrowserAiConnection).
  */
 
 interface Props {
     /** Kayıt / ortam değişkenlerine dönüş sonrası (denetim günlüğü, asistan durumunu yenileme) */
     onChanged: (label: string) => void;
-    /** Proxy'nin bu tarayıcı için bildirdiği durum (tarayıcı test anahtarı kartı için) */
+    /** Proxy'nin bu tarayıcı için bildirdiği durum (tarayıcı bağlantısı kartı için) */
     status?: (AiStatus & { unreachable?: boolean }) | null;
 }
 
@@ -153,7 +153,7 @@ const AiConnection: React.FC<Props> = ({ onChanged, status }) => {
         return (
             <div className="flex flex-col gap-3 text-[14px]">
                 {/* Sunucu tarafı kurulum yok: en kısa yol yalnız bu tarayıcıda anahtar */}
-                <BrowserGeminiKey status={status} onChanged={onChanged} open />
+                <BrowserAiConnection status={status} onChanged={onChanged} open />
                 <details open={load.kind === 'error'}>
                     <summary className="cursor-pointer text-[14px] font-semibold m-accent min-h-[34px] flex items-center">Bağlantıyı herkes için sunucuda ayarlamak</summary>
                     <div className="flex flex-col gap-2 mt-1">
@@ -179,7 +179,7 @@ const AiConnection: React.FC<Props> = ({ onChanged, status }) => {
                     </div>
                     {load.error && <p role="alert" className="m-0 text-[14px] m-ink-bad">{load.error}</p>}
                 </form>
-                <BrowserGeminiKey status={status} onChanged={onChanged} />
+                <BrowserAiConnection status={status} onChanged={onChanged} />
             </div>
         );
     }
@@ -231,7 +231,7 @@ const AiConnection: React.FC<Props> = ({ onChanged, status }) => {
                 </div>
             </details>
 
-            <BrowserGeminiKey status={status} onChanged={onChanged} open={!s.store.available && !s.effective.configured} />
+            <BrowserAiConnection status={status} onChanged={onChanged} open={!s.store.available && !s.effective.configured} />
 
             <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(260px, 100%), 1fr))' }}>
                 <Field label="Sağlayıcı" htmlFor="ai-provider" hint={envHint('AI_PROVIDER', 'openai')}>

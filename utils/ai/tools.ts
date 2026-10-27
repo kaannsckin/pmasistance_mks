@@ -896,6 +896,105 @@ const PROPOSAL_TOOLS: ToolDef[] = [
         },
     },
     {
+        label: 'Risk güncelleme önerisi',
+        writeOnly: true,
+        spec: {
+            name: 'oner_risk_guncelle',
+            description: 'Var olan riski güncellemeyi ya da kapatmayı ÖNERİR (onaysız uygulanmaz). Aynı riski yeniden ekleme; bunu kullan.',
+            parameters: S.obj({
+                proje: P.project,
+                risk: S.str('Risk başlığı (kısmi).'),
+                durum: S.str('', ['open', 'monitoring', 'closed']),
+                olasilik: S.int('1-5'),
+                etki: S.int('1-5'),
+                aksiyon: S.str('Azaltıcı aksiyon'),
+                sahip: S.str('Ad soyad'),
+                gerekce: S.str('Denetim kaydına yazılır'),
+            }, ['risk']),
+        },
+        run: (a, ctx) => {
+            const project = resolveProject(ctx, a.proje);
+            const hits = matchByText(project.risks || [], str(a.risk), r => [r.title]);
+            if (hits.length === 0) throw new ToolError(`"${str(a.risk)}" adlı risk ${project.name} projesinde bulunamadı.`);
+            if (hits.length > 1) throw new ToolError(`"${str(a.risk)}" birden fazla riskle eşleşti: ${hits.slice(0, 8).map(r => r.title).join(', ')}.`);
+            const status = str(a.durum);
+            if (status && !['open', 'monitoring', 'closed'].includes(status)) throw new ToolError('durum open, monitoring ya da closed olmalı.');
+            const given = (v: unknown) => v !== undefined && v !== null && v !== '';
+            const owner = str(a.sahip) ? resolvePerson(ctx, a.sahip) : undefined;
+            return propose(ctx, {
+                type: 'risk_guncelle', projectId: project.id, riskId: hits[0].id,
+                ...(status ? { status: status as RiskStatus } : {}),
+                ...(given(a.olasilik) ? { probability: level(a.olasilik, 'Olasılık') } : {}),
+                ...(given(a.etki) ? { impact: level(a.etki, 'Etki') } : {}),
+                ...(a.aksiyon !== undefined ? { mitigation: str(a.aksiyon) } : {}),
+                ...(owner ? { ownerPersonId: owner.id } : {}),
+                ...(str(a.gerekce) ? { reason: str(a.gerekce) } : {}),
+            });
+        },
+    },
+    {
+        label: 'Müşteri isteği kararı önerisi',
+        writeOnly: true,
+        privateOnly: true,
+        spec: {
+            name: 'oner_istek_karari',
+            description: 'Yeni müşteri isteğini karara bağlamayı ÖNERİR (onaysız uygulanmaz). kabul: istekten görev açılır; ret: istek reddedilir. Gerekçe proje notuna yazılır.',
+            parameters: S.obj({
+                proje: P.project,
+                istek: S.str('İstek başlığı (kısmi).'),
+                karar: S.str('', ['kabul', 'ret']),
+                gerekce: S.str('Kapsam, efor, takvim etkisi'),
+                tarih: S.str('YYYY-AA-GG'),
+                oncelik: S.str('Kabulde görev önceliği', ['Blocker', 'High', 'Medium', 'Low']),
+                atanan: S.str('Ad soyad'),
+                bitis: S.str('YYYY-AA-GG'),
+                efor_gun: S.num('Tahmini efor (gün)'),
+            }, ['istek', 'karar', 'gerekce']),
+        },
+        run: (a, ctx) => {
+            const project = resolveProject(ctx, a.proje);
+            const open = (project.customerRequests || []).filter(r => r.status === 'New');
+            const hits = matchByText(open, str(a.istek), r => [r.title]);
+            if (hits.length === 0) throw new ToolError(`"${str(a.istek)}" adlı karar bekleyen istek ${project.name} projesinde bulunamadı.`);
+            if (hits.length > 1) throw new ToolError(`"${str(a.istek)}" birden fazla istekle eşleşti: ${hits.slice(0, 8).map(r => r.title).join(', ')}.`);
+            const decision = str(a.karar);
+            if (decision !== 'kabul' && decision !== 'ret') throw new ToolError('karar kabul ya da ret olmalı.');
+            const person = str(a.atanan) ? resolvePerson(ctx, a.atanan) : undefined;
+            const pr = str(a.oncelik);
+            const effort = days(a.efor_gun);
+            return propose(ctx, {
+                type: 'istek_karari', projectId: project.id, requestId: hits[0].id, decision, reason: str(a.gerekce), day: str(a.tarih) || undefined,
+                ...(decision === 'kabul' ? {
+                    task: {
+                        priority: (['Blocker', 'High', 'Medium', 'Low'].includes(pr) ? pr : 'Medium') as Task['priority'],
+                        resourceName: person ? personName(person) : undefined,
+                        dueDate: str(a.bitis) || undefined,
+                        // Tek nokta tahmini: iyimser/kötümser bilinmiyor (görev formunda olduğu gibi 0)
+                        time: effort > 0 ? { best: 0, avg: effort, worst: 0 } : undefined,
+                    },
+                } : {}),
+            });
+        },
+    },
+    {
+        label: 'Not önerisi',
+        writeOnly: true,
+        privateOnly: true,
+        spec: {
+            name: 'oner_not_ekle',
+            description: 'Proje notu (Günlük) eklemeyi ÖNERİR (onaysız uygulanmaz): karar, aksiyon. #etiket, @kişi, [ ] yapılacak.',
+            parameters: S.obj({
+                proje: P.project,
+                metin: S.str(''),
+                tarih: S.str('YYYY-AA-GG'),
+            }, ['metin']),
+        },
+        run: (a, ctx) => {
+            const project = resolveProject(ctx, a.proje);
+            return propose(ctx, { type: 'not_ekle', projectId: project.id, content: str(a.metin), day: str(a.tarih) || undefined });
+        },
+    },
+    {
         label: 'Tahsis önerisi',
         writeOnly: true,
         spec: {

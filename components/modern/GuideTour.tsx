@@ -21,10 +21,10 @@ export const useGuide = (id: GuideId, auto = true) => {
     return { guide: GUIDES[id], open: state.open, start: state.start, show, close };
 };
 
-/** Sayfa başlığındaki "?" düğmesi */
-export const GuideButton: React.FC<{ onClick: () => void; label?: string }> = ({ onClick, label = 'Bu sayfa nasıl kullanılır?' }) => (
+/** Sayfa başlığındaki "?" (ya da "i") düğmesi */
+export const GuideButton: React.FC<{ onClick: () => void; label?: string; icon?: 'help' | 'info' }> = ({ onClick, label = 'Bu sayfa nasıl kullanılır?', icon = 'help' }) => (
     <button type="button" className="m-icon-btn" aria-label={label} title={label} onClick={onClick}>
-        <Icon name="help" size={22} />
+        <Icon name={icon} size={22} />
     </button>
 );
 

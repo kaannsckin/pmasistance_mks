@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { clearGeminiCache, geminiKeyAlias, pickGeminiChatModel, pickGeminiEmbeddingModel, withGeminiDefaults } from './gemini';
+import { clearGeminiCache, geminiKeyAlias, pickGeminiChatModel, pickGeminiEmbeddingModel, rankGeminiChatModels, withGeminiDefaults } from './gemini';
 import { handleAiRequest } from './handler';
 import { invalidateSettingsCache } from './settingsStore';
 import { streamOf } from './testUtils';
@@ -25,6 +25,14 @@ const json = (status: number, body: unknown) => new Response(JSON.stringify(body
 beforeEach(() => { clearGeminiCache(); invalidateSettingsCache(); });
 
 describe('Gemini model seçimi', () => {
+    it('yedek sırası: eski kararlı Flash\'lar, sonra Flash-Lite; takma ad ve önizleme sonda ya da hiç', () => {
+        const ids = ['gemini-3.8-flash', 'gemini-3.8-flash-001', 'gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-3.8-flash-lite-preview', 'gemini-flash-latest', 'gemini-3.9-flash-preview', 'gemini-3.1-pro'];
+        const ranked = rankGeminiChatModels(ids.map(id => ({ id, methods: gen })));
+        expect(ranked.slice(0, 4)).toEqual(['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-flash-latest']);
+        expect(ranked).not.toContain('gemini-3.8-flash-001');
+        expect(rankGeminiChatModels([{ id: 'gemini-flash-latest', methods: gen }, { id: 'gemini-2.0-flash-lite', methods: gen }])).toEqual(['gemini-flash-latest', 'gemini-2.0-flash-lite']);
+    });
+
     it('en yüksek sürümlü kararlı Flash; önizleme, lite ve görüntü modeli seçilmez', () => {
         expect(pickGeminiChatModel(asModels(MODELS))).toBe('gemini-3.5-flash');
         expect(pickGeminiChatModel(asModels(MODELS.filter(m => !/3\.5-flash$|2\.5-flash$|3\.5-flash-001/.test(m.name))))).toBe('gemini-flash-latest');
@@ -48,7 +56,7 @@ describe('Gemini model seçimi', () => {
         const fetchImpl = vi.fn(async () => json(200, { models: MODELS })) as unknown as typeof fetch;
         const r = await withGeminiDefaults({ AI_PROVIDER: 'gemini', AI_API_KEY: 'k' }, fetchImpl);
         expect(r.env).toMatchObject({ AI_MODEL: 'gemini-3.5-flash', AI_EMBEDDING_MODEL: 'gemini-embedding-001', AI_EMBEDDING_DIMENSIONS: '768' });
-        expect(r.auto).toEqual({ model: 'gemini-3.5-flash', embeddingModel: 'gemini-embedding-001' });
+        expect(r.auto).toEqual({ model: 'gemini-3.5-flash', fallbacks: ['gemini-2.5-flash', 'gemini-2.5-flash-lite'], embeddingModel: 'gemini-embedding-001' });
         await withGeminiDefaults({ AI_PROVIDER: 'gemini', AI_API_KEY: 'k' }, fetchImpl);
         expect(fetchImpl).toHaveBeenCalledTimes(1);
         // Verilen model ve "none" embedding korunur; liste istenmez
@@ -136,5 +144,64 @@ describe('yalnız anahtarla kullanıma hazır', () => {
         const fail = await withGeminiDefaults({ ...env, ...quick }, vi.fn(async () => json(400, { error: { message: 'API key not valid.' } })) as unknown as typeof fetch);
         expect(fail.env.AI_MODEL).toBeUndefined();
         expect(fail.problem).toMatch(/geçersiz/);
+    });
+});
+
+describe('model yoğunken yeniden deneme ve yedek model', () => {
+    const okSse = (text: string) => new Response(streamOf(`data: {"candidates":[{"content":{"parts":[{"text":"${text}"}]},"finishReason":"STOP"}]}\n\n`), { status: 200, headers: { 'content-type': 'text/event-stream' } });
+    const busy = () => json(503, { error: { code: 503, message: 'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.', status: 'UNAVAILABLE' } });
+    const chatReq = () => new Request('https://app.local/api/ai/chat', { method: 'POST', headers: { 'content-type': 'application/json', host: 'app.local' }, body: JSON.stringify({ messages: [{ role: 'user', content: 'selam' }] }) });
+    const run = async (env: Record<string, string>, reply: (model: string, n: number) => Response) => {
+        const tried: string[] = [];
+        const fetchImpl = vi.fn(async (url: string) => {
+            if (url.includes('/models?pageSize')) return json(200, { models: MODELS });
+            const model = /models\/([^:]+):/.exec(url)?.[1] || /chat\/completions/.test(url) && 'openai' || '?';
+            tried.push(model);
+            return reply(model, tried.length);
+        }) as unknown as typeof fetch;
+        const res = await handleAiRequest(chatReq(), env, { isDev: true, fetchImpl, retryDelayMs: 0 });
+        return { res, tried };
+    };
+    const GEM = { GEMINI_API_KEY: 'AIza-yogunluk-testi' };
+
+    it('otomatik model yoğunsa bir kez yeniden dener, sonra sıradaki modele geçer', async () => {
+        const { res, tried } = await run(GEM, model => (model === 'gemini-2.5-flash' ? okSse('yedekten') : busy()));
+        expect(res.status).toBe(200);
+        expect(await res.text()).toContain('yedekten');
+        expect(tried).toEqual(['gemini-3.5-flash', 'gemini-3.5-flash', 'gemini-2.5-flash']);
+    });
+
+    it('ilk denemede düzelirse model değişmez', async () => {
+        const { res, tried } = await run(GEM, (_m, n) => (n === 1 ? busy() : okSse('tamam')));
+        expect(res.status).toBe(200);
+        expect(tried).toEqual(['gemini-3.5-flash', 'gemini-3.5-flash']);
+    });
+
+    it('kota dolunca (429) beklemeden sıradaki model', async () => {
+        const { res, tried } = await run(GEM, model => (model === 'gemini-3.5-flash' ? json(429, { error: { message: 'Resource has been exhausted (e.g. check quota).' } }) : okSse('tamam')));
+        expect(res.status).toBe(200);
+        expect(tried).toEqual(['gemini-3.5-flash', 'gemini-2.5-flash']);
+    });
+
+    it('hepsi yoğunsa en çok 4 deneme ve Türkçe açıklama', async () => {
+        const { res, tried } = await run(GEM, () => busy());
+        expect(res.status).toBe(502);
+        expect(tried).toEqual(['gemini-3.5-flash', 'gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-2.5-flash-lite']);
+        expect((await res.json()).error).toBe('AI modeli şu an çok yoğun (sağlayıcı tarafında geçici bir durum); birkaç saniye sonra tekrar deneyin.');
+    });
+
+    it('yedek model başka nedenle reddederse asıl neden (yoğunluk) bildirilir', async () => {
+        const { res } = await run(GEM, model => (model === 'gemini-3.5-flash' ? busy() : json(400, { error: { message: 'Function call is missing a thought_signature' } })));
+        expect(res.status).toBe(502);
+        expect((await res.json()).error).toMatch(/çok yoğun/);
+    });
+
+    it('model elle verildiyse ya da sağlayıcı başkaysa yalnız bir kez yeniden denenir; 400 denenmez', async () => {
+        const fixed = await run({ ...GEM, AI_MODEL: 'gemini-3.5-flash' }, () => busy());
+        expect(fixed.tried).toEqual(['gemini-3.5-flash', 'gemini-3.5-flash']);
+        const openai = await run({ AI_PROVIDER: 'openai', AI_API_KEY: 'k', AI_MODEL: 'm', AI_BASE_URL: 'https://llm.kurum.local/v1' }, () => busy());
+        expect(openai.tried).toEqual(['openai', 'openai']);
+        const bad = await run(GEM, () => json(400, { error: { message: 'Invalid argument' } }));
+        expect(bad.tried).toEqual(['gemini-3.5-flash']);
     });
 });

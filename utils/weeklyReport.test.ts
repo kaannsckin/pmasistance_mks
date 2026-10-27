@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { WeeklyReport, WorkspaceData } from '../types';
 import {
     actorOf, advanceReport, buildEml, DEFAULT_REPORT_FLOW, DEFAULT_REPORT_SETTINGS, flowBlockers, flowStages, nextStage, previousPlansOf, returnStage, dueDate, latestPublication, markWeekEmailed, publishWeek, reminderText, reportDictionary,
-    returnReportIn, saveReport, unpublishWeek, canEditReport, consolidate, createReport, editReport, findAbbreviations, fineTuneLines, glossaryFor, isoWeekOf,
+    returnReportIn, saveReport, unpublishWeek, canEditReport, consolidate, createReport, editReport, findAbbreviations, glossaryFor, isoWeekOf,
     lintCounts, lintReport, locative, mailtoLink, meetingSentence, newItem, pendingAuthors, projectDepartment, renderReportHtml, renderReportText,
     returnReport, setPlanReview, setReportAiAssessment, shiftWeek, teamsChatLink, visibleReports, weekLabel, weekProgress, weekStart,
 } from './weeklyReport';
@@ -91,6 +91,15 @@ describe('onay akışı', () => {
 
 describe('format denetimi', () => {
     const base = { abbreviations: [], nextWeek: [newItem('plan', '13 Ekim 2026 tarihinde pilot kurulum yapılacak.')] };
+
+    it('Türkçe harfle başlayan/biten belirsiz ve rutin ifadeler yakalanır (sözcük içinde değil)', () => {
+        const codes = (t: string) => lintReport({ ...base, thisWeek: [newItem('ongoing', t)] }).map(i => i.code);
+        expect(codes('Bazı modüllerde iyileştirme yapıldı.')).toContain('vague');
+        expect(codes('Birkaç kurumla görüşüldü.')).toContain('vague');
+        expect(codes('Çeşitli düzeltmeler yapıldı.')).toContain('vague');
+        expect(codes('Ekip iç toplantı yaptı.')).toContain('routine');
+        expect(codes('Bazılarıyla 7 Ekim 2026 tarihinde sözleşme imzalandı.')).not.toContain('vague');
+    });
 
     it('kısaltma: sözlükte, raporda ya da satır içinde açılmamışsa hata', () => {
         expect(findAbbreviations('İG ile AR-GE ve SAP-42 için BİLGEM’de görüşüldü; Api değil')).toEqual(['İG', 'AR-GE', 'BİLGEM']);
@@ -185,15 +194,6 @@ describe('birleştirme ve çıktılar', () => {
         expect(eml).toMatch(/Subject: =\?UTF-8\?B\?/);
         expect(mailtoLink({ bcc: ['a@x', 'b@y'], subject: 'Hatırlatma', body: 'x'.repeat(3000) }).length).toBeLessThan(2200);
         expect(teamsChatLink(['a@x', 'b@y'], 'Merhaba', 'Rapor')).toBe('https://teams.microsoft.com/l/chat/0/0?users=a%40x,b%40y&message=Merhaba&topicName=Rapor');
-    });
-
-    it('ince ayar veri seti yalnız AI taslağı olan onaylı raporlardan', () => {
-        const withAi = { ...reports[0], aiDraft: { generatedAt: '', input: 'GİRDİ', output: '{}' } };
-        const lines = fineTuneLines([withAi, reports[1]], 'SİSTEM');
-        expect(lines).toHaveLength(1);
-        const parsed = JSON.parse(lines[0]);
-        expect(parsed.messages.map((m: { role: string }) => m.role)).toEqual(['system', 'user', 'assistant']);
-        expect(JSON.parse(parsed.messages[2].content).buHafta[0].tur).toBe('delivery');
     });
 });
 

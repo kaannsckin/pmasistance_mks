@@ -1,8 +1,9 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { createServer } from 'node:http';
-import { appendFile, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
+import { appendFile, mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Note, Project, WorkspaceData } from '../../types.js';
 import { matchByText } from '../../utils/ai/scope.js';
@@ -16,8 +17,8 @@ import {
     parseViewers, PILOT_ENV_KEYS, PilotCloudConfig, readCloudLink, replacePilotWorkspace, serviceSource, supabaseClients, writeCloudLink, CloudLink,
 } from './cloud.js';
 import { mockJiraFromDir } from './mockJira.js';
-import { addDays, at, createState, createWorld, dateOf, DayEvents, eventsMarkdown, jiraExports, runUntil, SIM_VERSION, SimState } from './sim.js';
-import { fullName, PERSONAS, personById, PROJECTS } from './world.js';
+import { addDays, addScenario, at, createState, createWorld, dateOf, DayEvents, eventsMarkdown, jiraExports, runUntil, Senaryo, SIM_VERSION, SimState } from './sim.js';
+import { fullName, PEOPLE, PERSONAS, personById, PROJECTS } from './world.js';
 
 /**
  * Pilot komut satırı (npm run pilot -- <komut>). 1. rutin veriyi üretir,
@@ -37,7 +38,18 @@ Veri (1. rutin — Jira ajanı):
   jira-sunucu [--port 8787]                                     Sahte Jira'yı HTTP'de açar (tarayıcıdaki uygulama için)
   not --proje ATL --baslik "…" --metin "…" [--etiket a,b] [--tarih GG]   Confluence tarzı toplantı/karar notu ekler
   istek --proje ATL --baslik "…" --aciklama "…" [--musteri "…"] [--tarih GG]  Müşteri isteği ekler
+  senaryo ekle --tur <tür> …                                    Jira'da ve uygulamada iz bırakan senaryo (gün üretilirken uygulanır):
+      kritik-hata      --proje NHR --tarih GG --baslik "…" [--aciklama "…"] [--oncelik Highest] [--tip Hata]
+                       [--atanan "Ad Soyad"] [--bagli NHR-41] [--tahmin 16 (saat)] [--hazirlik 5 (gün)]
+      izin             --kisi "Ad Soyad" --baslangic GG --bitis GG [--neden "Yıllık izin"]
+      fazla-mesai      --proje NHR --baslangic GG --bitis GG --carpan 1.5
+      teklif-kazanildi --proje YLD --tarih GG --baslangic GG --ihtiyac "U320:2:1.0,U340:1:0.5"
+  senaryo liste | senaryo sil --id <id>                         Senaryoları listeler / henüz başlamamış olanı siler
   ozet                                                          Veri özeti
+  dondur [--ad AD] [--zorla]                                    Demo ortamının anlık kopyası: çalışma alanı, simülasyon durumu,
+                                                                 sahte Jira → pilot-data/donmus/<AD>/ (varsayılan AD: bugün)
+  geri-yukle --ad AD                                            Kopyayı geri yükler (bulutta yerinde); sonraki günlerin olay ve
+                                                                 Confluence dosyaları arşive taşınır
 
 Kullanıcılar (2. rutin):
   personalar                                                    Pilot kullanıcıları (JSON)
@@ -45,6 +57,9 @@ Kullanıcılar (2. rutin):
   arac <persona> <arac> ['{"json":"arg"}'] [--onayla]           MCP aracını persona kimliğiyle çağırır;
                                                                  --onayla: oner_* önerisini hemen uygular
   kontrol [--cikti dosya.md]                                    Otomatik kapsam/gizlilik/tutarlılık kontrolleri
+  demo-testi [--cikti dizin] [--ekran] [--arayuz klasik,modern]  Demo yolunu gerçek tarayıcıda gezer (Chromium);
+                                                                 beklenen rakamlar MCP'den. Varsayılan çıktı:
+                                                                 pilot-data/demo-testi/<bugün>/ (sonuc.md, kalan adımların ekranı)
 
 Ortak: --dizin pilot-data (ya da PILOT_DIZIN). GG = YYYY-AA-GG.
 Bulut: PILOT_SUPABASE_URL, PILOT_SUPABASE_ANON_KEY, PILOT_SUPABASE_SERVICE_ROLE_KEY; isteğe bağlı PILOT_PASSWORD
@@ -185,6 +200,53 @@ const writeDay = async (p: ReturnType<typeof paths>, e: DayEvents) => {
     for (const c of e.confluence) await writeAtomic(join(p.confluence, c.dosya), c.icerik);
 };
 
+/** Eski kurulumun olay ve Confluence dosyalarını pilot-data/arsiv/<zaman>/ altına taşır */
+const archiveDays = async (p: ReturnType<typeof paths>): Promise<string | null> => {
+    const dirs = [p.events, p.confluence].filter(existsSync);
+    if (!dirs.length) return null;
+    const target = join(p.dir, 'arsiv', new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19));
+    await mkdir(target, { recursive: true });
+    for (const d of dirs) await rename(d, join(target, d.split(/[\\/]/).pop()!));
+    return target;
+};
+
+const personId = (ref: string | undefined, flag: string): string => {
+    if (!ref) return fail(`--${flag} gerekli (ad soyad ya da p04 gibi id).`);
+    const byId = PEOPLE.find(x => x.id === ref);
+    if (byId) return byId.id;
+    const hits = PEOPLE.filter(x => fullName(x).toLocaleLowerCase('tr-TR') === ref.toLocaleLowerCase('tr-TR'));
+    if (hits.length !== 1) fail(`--${flag} "${ref}" pilot dünyasında bulunamadı.`);
+    return hits[0].id;
+};
+
+const scenarioFromFlags = (flags: Flags, id: string): Senaryo => {
+    const tur = str(flags, 'tur');
+    const need = (k: string) => str(flags, k) || fail(`--${k} gerekli.`);
+    const proje = () => need('proje').toUpperCase();
+    switch (tur) {
+        case 'kritik-hata': return {
+            id, tur, proje: proje(), tarih: need('tarih'), baslik: need('baslik'),
+            ...(str(flags, 'aciklama') ? { aciklama: str(flags, 'aciklama') } : {}),
+            ...(str(flags, 'oncelik') ? { oncelik: str(flags, 'oncelik') } : {}),
+            ...(str(flags, 'tip') ? { tip: str(flags, 'tip') as never } : {}),
+            ...(str(flags, 'atanan') ? { atanan: personId(str(flags, 'atanan'), 'atanan') } : {}),
+            ...(str(flags, 'bagli') ? { bagli: str(flags, 'bagli') } : {}),
+            ...(str(flags, 'tahmin') ? { tahminSaat: Number(str(flags, 'tahmin')) } : {}),
+            ...(str(flags, 'hazirlik') ? { hazirlikGun: Number(str(flags, 'hazirlik')) } : {}),
+        };
+        case 'izin': return { id, tur, kisi: personId(str(flags, 'kisi'), 'kisi'), baslangic: need('baslangic'), bitis: need('bitis'), ...(str(flags, 'neden') ? { neden: str(flags, 'neden') } : {}) };
+        case 'fazla-mesai': return { id, tur, proje: proje(), baslangic: need('baslangic'), bitis: need('bitis'), carpan: Number(need('carpan')) };
+        case 'teklif-kazanildi': return {
+            id, tur, proje: proje(), tarih: need('tarih'), baslangic: need('baslangic'),
+            ihtiyac: need('ihtiyac').split(',').map(x => {
+                const [bolum, kisi, aa] = x.trim().split(':');
+                return { bolum: (bolum || '').toUpperCase(), kisi: Number(kisi), aa: Number(aa) };
+            }),
+        };
+        default: return fail(`--tur şunlardan biri olmalı: kritik-hata, izin, fazla-mesai, teklif-kazanildi`);
+    }
+};
+
 /** Notun/isteğin günü: --tarih (simülasyonun son gününü geçemez) ya da son gün */
 const noteDay = (flags: Flags, state: SimState): string => {
     const last = state.sonGun || todayTr();
@@ -275,6 +337,8 @@ const main = async () => {
             const anyCloudEnv = [...PILOT_ENV_KEYS, 'PILOT_PASSWORD'].some(k => process.env[k]?.trim());
             if (!config && (link || anyCloudEnv) && !flags.dosya) fail(`${link ? 'Pilot Supabase\'de kurulu ama b' : 'B'}ulut ayarları kullanılamıyor — ${cloudEnvProblem(process.env)}. JSON'a kurmak için --dosya.`);
             const { ws, state, last } = generate(flags);
+            // Baştan kurulumda eski günlerin olay ve Confluence dosyaları yeni Jira geçmişiyle çelişir: arşive taşınır
+            const arsiv = await archiveDays(p);
             const cloud = config ? await setupCloud(p, config, ws, flags) : null;
             if (!cloud) {
                 await writeAtomic(p.ws, serializeWorkspace(ws, false));
@@ -283,7 +347,7 @@ const main = async () => {
             await saveState(p, state);
             await saveJira(p, state);
             for (const e of last) await writeDay(p, e);
-            print({ kuruldu: p.dir, ...(cloud || { kaynak: 'workspace.json' }), ...summary(ws, state) });
+            print({ kuruldu: p.dir, ...(cloud || { kaynak: 'workspace.json' }), ...(arsiv ? { arsiv } : {}), ...summary(ws, state) });
             return;
         }
         case 'buluta-tasi': {
@@ -374,6 +438,37 @@ const main = async () => {
             print(out);
             return;
         }
+        case 'senaryo': {
+            const alt = pos[1];
+            const store = openStore(p);
+            if (alt === 'liste') {
+                const state = await readState(p);
+                print({ son_gun: state.sonGun, senaryolar: state.senaryolar || [] });
+                return;
+            }
+            if (alt === 'sil') {
+                const id = str(flags, 'id') || fail('--id gerekli.');
+                const out = await mutate(p, store, (ws, state) => {
+                    const x = (state.senaryolar || []).find(s => s.id === id);
+                    if (!x) return fail(`Senaryo yok: ${id}`);
+                    const first = x.tur === 'izin' || x.tur === 'fazla-mesai' ? x.baslangic : x.tarih;
+                    if (state.sonGun && first <= state.sonGun) return fail(`Senaryo ${first} tarihinde başladı; geçmiş değiştirilmez.`);
+                    state.senaryolar = (state.senaryolar || []).filter(s => s.id !== id);
+                    return { next: { ...ws, leaves: (ws.leaves || []).filter(l => !l.id.startsWith(`izin-sen-${id}-`)) }, out: { silindi: id } };
+                });
+                print(out);
+                return;
+            }
+            if (alt !== 'ekle') return fail('Kullanım: senaryo ekle --tur … | senaryo liste | senaryo sil --id …');
+            const out = await mutate(p, store, (ws, state) => {
+                const x = scenarioFromFlags(flags, str(flags, 'id') || `sen-${String((state.senaryolar || []).length + 1).padStart(2, '0')}`);
+                let next: WorkspaceData;
+                try { next = addScenario(state, ws, x); } catch (e) { return fail((e as Error).message); }
+                return { next, out: { eklendi: x, son_gun: state.sonGun, not: 'Etkisi ilgili gün "gun" ile üretilirken uygulanır.' } };
+            });
+            print(out);
+            return;
+        }
         case 'jira-sunucu': {
             const port = Number(str(flags, 'port') || 8787);
             const jira = mockJiraFromDir(p.jira);
@@ -431,6 +526,74 @@ const main = async () => {
             if (out) await writeAtomic(resolve(out), md);
             print(md);
             if (results.some(r => r.durum === 'KALDI')) process.exitCode = 2;
+            return;
+        }
+        case 'dondur': {
+            const ad = str(flags, 'ad') || todayTr();
+            if (!/^[\w.-]+$/.test(ad)) fail(`Geçersiz ad: ${ad} (harf, rakam, nokta, tire).`);
+            const dir = join(p.dir, 'donmus', ad);
+            if (existsSync(dir) && !flags.zorla) fail(`${dir} zaten var; üzerine yazmak için --zorla.`);
+            const store = openStore(p);
+            const { ws, state } = await readAll(p, store);
+            await rm(dir, { recursive: true, force: true });
+            await writeAtomic(join(dir, 'workspace.json'), serializeWorkspace(ws, false));
+            await writeAtomic(join(dir, 'durum.json'), JSON.stringify(state));
+            for (const [key, resp] of Object.entries(jiraExports(state))) await writeAtomic(join(dir, 'jira', `${key}.json`), JSON.stringify(resp));
+            const bilgi = { ad, zaman: new Date().toISOString(), son_gun: state.sonGun, ...(store.kind === 'supabase' ? { calisma_alani: store.link.workspaceId } : {}) };
+            await writeAtomic(join(dir, 'bilgi.json'), `${JSON.stringify(bilgi, null, 2)}\n`);
+            print({ donduruldu: dir, ...bilgi, ...summary(ws, state) });
+            return;
+        }
+        case 'geri-yukle': {
+            const ad = str(flags, 'ad') || fail('--ad gerekli (pilot-data/donmus/ altındaki kopyanın adı).');
+            const dir = join(p.dir, 'donmus', ad);
+            if (!existsSync(join(dir, 'workspace.json'))) fail(`Kopya yok: ${dir}`);
+            const ws = await readWorkspaceFile(join(dir, 'workspace.json'));
+            const state = JSON.parse(await readFile(join(dir, 'durum.json'), 'utf8')) as SimState;
+            if (state.surum !== SIM_VERSION) fail(`Kopyanın simülasyon sürümü ${state.surum}, kodunki ${SIM_VERSION}: geri yüklenemez.`);
+            const store = openStore(p);
+            if (store.kind === 'supabase') {
+                if (!await replacePilotWorkspace(store.clients.service(), store.link.workspaceId, ws)) fail(`Bulutta çalışma alanı ${store.link.workspaceId} yok.`);
+            } else await writeAtomic(p.ws, serializeWorkspace(ws, false));
+            await saveState(p, state);
+            await rm(p.jira, { recursive: true, force: true });
+            await saveJira(p, state);
+            // Kopyadan sonraki günlerin dosyaları yeni akışla çelişir: silinmez, arşive taşınır
+            const later = (d: string) => (existsSync(d) ? readdirSync(d).filter(f => f.slice(0, 10) > (state.sonGun ?? '')) : []);
+            const moved: string[] = [];
+            const target = join(p.dir, 'arsiv', `${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}-geri-yukle`);
+            for (const d of [p.events, p.confluence]) {
+                for (const f of later(d)) {
+                    await mkdir(join(target, basename(d)), { recursive: true });
+                    await rename(join(d, f), join(target, basename(d), f));
+                    moved.push(f);
+                }
+            }
+            print({ geri_yuklendi: ad, son_gun: state.sonGun, ...(store.kind === 'supabase' ? { calisma_alani: store.link.workspaceId, not: 'Tarayıcıda "Buluttan Çek".' } : {}), ...(moved.length ? { arsive_tasinan: moved.length, arsiv: target } : {}), ...summary(ws, state) });
+            return;
+        }
+        case 'demo-testi': {
+            const store = openStore(p);
+            const { ws } = await readAll(p, store);
+            const here = dirname(fileURLToPath(import.meta.url));
+            const script = [join(here, '..', 'scripts', 'demo-yolu.mjs'), resolve('scripts', 'demo-yolu.mjs')].find(existsSync)
+                || fail('scripts/demo-yolu.mjs bulunamadı (depo kökünden çalıştırın).');
+            // Ekrandaki rakamlar ajanların MCP'de gördüğüyle aynı olmalı
+            const [ozet] = await callAs(findPersona('ahmet'), targetOf(p, store), 'portfoy_ozeti', {});
+            if (ozet.isError) fail(`portfoy_ozeti: ${ozet.text}`);
+            const o = ozet.json as { saglik_skoru: number; projeler: { proje: string; skor: number }[] };
+            // Çalışma alanı kopyası depoya girmez: geçici dizinde kalır, koşudan sonra silinir
+            const tmp = await mkdtemp(join(tmpdir(), 'pilot-demo-'));
+            try {
+                await writeFile(join(tmp, 'workspace.json'), serializeWorkspace(ws, false), 'utf8');
+                await writeFile(join(tmp, 'beklenen.json'), JSON.stringify({ saglik_skoru: o.saglik_skoru, projeler: o.projeler.map(x => ({ proje: x.proje, skor: x.skor })) }), 'utf8');
+                const out = resolve(str(flags, 'cikti') || join(p.dir, 'demo-testi', todayTr()));
+                const r = spawnSync(process.execPath, [...process.execArgv, script, '--veri', join(tmp, 'workspace.json'), '--beklenen', join(tmp, 'beklenen.json'), '--cikti', out,
+                    ...(flags.ekran ? ['--ekran'] : []), ...(str(flags, 'arayuz') ? ['--arayuz', str(flags, 'arayuz')!] : [])], { stdio: 'inherit' });
+                process.exitCode = r.status ?? 1;
+            } finally {
+                await rm(tmp, { recursive: true, force: true });
+            }
             return;
         }
         default:

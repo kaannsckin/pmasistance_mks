@@ -78,7 +78,9 @@ describe('araç kataloğu', () => {
     it('araç tanımlarının toplam boyutu sınırlı kalır (her istekte gönderilir)', async () => {
         const size = JSON.stringify(AI_TOOLS.map(t => t.spec)).length;
         console.log(`araç tanımları: ${AI_TOOLS.length} adet, ${size} karakter`);
-        expect(size).toBeLessThan(16_000);
+        // 16 000'den 18 000'e: PY'nin risk güncelleme, istek kararı ve not araçları (kısaltılmış tanımlarla
+        // ~2 100 karakter). Yönetici rolleri yazma araçlarını almadığı için onların istek boyutu değişmedi.
+        expect(size).toBeLessThan(18_000);
     });
 
     it('her araç parametresiz çalışır (duman testi) ve sicil sızdırmaz', async () => {

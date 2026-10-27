@@ -82,3 +82,65 @@ describe('applyAction', () => {
         expect(() => applyAction(build('mudur', null), risk)).toThrow(/yetkiniz yok/);
     });
 });
+
+describe('risk güncelleme, istek kararı, not', () => {
+    const withData = (): WorkspaceData => {
+        const ws = build();
+        ws.projects[0].risks = [{ id: 'r1', title: 'Tedarik gecikmesi', probability: 4, impact: 3, status: 'open', createdAt: '2026-10-01T09:00:00.000Z' }];
+        ws.projects[0].customerRequests = [
+            { id: 'q1', title: 'Çevrimdışı mod', description: 'Saha ekipleri bağlantısız çalışmak istiyor.', customerName: 'Kurum B', createdAt: '2026-10-14T09:00:00.000Z', status: 'New' },
+            { id: 'q2', title: 'Eski istek', description: '', customerName: 'Kurum B', createdAt: '2026-09-01T09:00:00.000Z', status: 'Rejected' },
+        ];
+        return ws;
+    };
+
+    it('riski kapatır: durum değişir, risk.close ve ai.apply yazılır; değişiklik yoksa reddedilir', () => {
+        const close: AiAction = { type: 'risk_guncelle', projectId: 'altay', riskId: 'r1', status: 'closed', reason: 'Tedarikçi teslim etti' };
+        expect(validateAction(withData(), { ...close, status: 'open' })).toMatch(/değişen/);
+        expect(validateAction(withData(), { ...close, projectId: 'other' })).toMatch(/yetkiniz yok/);
+        expect(describeAction(withData(), close).details).toEqual(expect.arrayContaining([{ label: 'Durum', value: 'Açık → Kapandı' }]));
+        const { ws } = applyAction(withData(), close);
+        expect(ws.projects[0].risks![0].status).toBe('closed');
+        expect(ws.auditLog!.map(a => a.action)).toEqual(['ai.apply', 'risk.close']);
+        expect(ws.auditLog![1].summary).toContain('Tedarikçi teslim etti');
+    });
+
+    it('olasılık, etki, aksiyon ve sahibi günceller', () => {
+        const { ws } = applyAction(withData(), { type: 'risk_guncelle', projectId: 'altay', riskId: 'r1', probability: 5, impact: 4, mitigation: 'İkinci tedarikçi', ownerPersonId: 'dev' });
+        expect(ws.projects[0].risks![0]).toMatchObject({ status: 'open', probability: 5, impact: 4, mitigation: 'İkinci tedarikçi', owner: 'Can Er' });
+    });
+
+    it('isteği kabul eder: görev açılır, istek göreve bağlanır, gerekçe nota düşer', () => {
+        const accept: AiAction = {
+            type: 'istek_karari', projectId: 'altay', requestId: 'q1', decision: 'kabul', reason: '3 hafta ek efor; Ocak sürümüne alındı.', day: '2026-10-15',
+            task: { priority: 'High', resourceName: 'Can Er', dueDate: '2027-01-15', time: { best: 10, avg: 15, worst: 22 } },
+        };
+        const { ws } = applyAction(withData(), accept);
+        const p = ws.projects[0];
+        const task = p.tasks.find(t => t.name === 'Çevrimdışı mod')!;
+        expect(task).toMatchObject({ status: TaskStatus.ToDo, priority: 'High', resourceName: 'Can Er', dueDate: '2027-01-15', availability: true });
+        expect(task.notes).toContain('Talep eden: Kurum B');
+        expect(p.customerRequests[0]).toMatchObject({ status: 'Converted', convertedTaskId: task.id });
+        const note = p.notes[p.notes.length - 1];
+        expect(note.content).toContain('Gerekçe: 3 hafta ek efor');
+        expect(note.tags).toEqual(expect.arrayContaining(['müşteri-isteği', 'karar']));
+        expect(note.createdAt.slice(0, 10)).toBe('2026-10-15');
+    });
+
+    it('isteği reddeder; karara bağlanmış istek ve boş gerekçe reddedilir', () => {
+        const reject: AiAction = { type: 'istek_karari', projectId: 'altay', requestId: 'q1', decision: 'ret', reason: 'Sözleşme kapsamı dışında.' };
+        const { ws } = applyAction(withData(), reject);
+        expect(ws.projects[0].customerRequests[0].status).toBe('Rejected');
+        expect(ws.projects[0].tasks).toHaveLength(1);
+        expect(validateAction(withData(), { ...reject, requestId: 'q2' })).toMatch(/zaten karara/);
+        expect(validateAction(withData(), { ...reject, reason: ' ' })).toMatch(/gerekçe/);
+    });
+
+    it('proje notu ekler (etiketler ayrıştırılır); boş not reddedilir', () => {
+        const { ws } = applyAction(withData(), { type: 'not_ekle', projectId: 'altay', content: '#karar Test kaynağı istendi\n[ ] Selin Hanım\'a talep', day: '2026-10-22' });
+        const note = ws.projects[0].notes[ws.projects[0].notes.length - 1];
+        expect(note).toMatchObject({ tags: ['karar'], weekNumber: 43, year: 2026 });
+        expect(validateAction(withData(), { type: 'not_ekle', projectId: 'altay', content: '  ' })).toMatch(/boş/);
+        expect(validateAction(withData(), { type: 'not_ekle', projectId: 'altay', content: 'x', day: '22.10.2026' })).toMatch(/YYYY/);
+    });
+});

@@ -14,7 +14,7 @@ import {
 } from './utils/workspace';
 import { canEditPool, createAllocation, EffortField, getPlanLockStatus, ROLE_LABELS, setAllocationCell, upsertPlanLock } from './utils/allocations';
 import { applyPoolImport, PoolImportResult } from './utils/poolImporter';
-import { canCreateProject, canEditProjectContent, identityFor, identityOf, identityNeedsPerson as computeNeedsPerson, ownsProject, visibleProjectIds } from './utils/rbac';
+import { canCreateProject, canEditProjectContent, identityFor, identityOf, identityNeedsPerson as computeNeedsPerson, managedDepartmentCode, ownsProject, visibleProjectIds } from './utils/rbac';
 import { can, isConsoleRole, isManagementRole, PERMISSION_BY_KEY, resetRolePermissions, setRolePermission } from './utils/permissions';
 import { applyPreset, projectPassesView, resetRoleView, roleViewOf, sectionOfView, taskPassesView, updateRoleView, VIEW_PRESETS, ViewPresetKey } from './utils/viewConfig';
 import { AdminSection, ADMIN_SECTIONS } from './components/modern/adminSections';
@@ -22,6 +22,13 @@ import { portfolioHealth } from './utils/executive';
 import { addSnapshot, buildSnapshot, ensureMonthlySnapshot } from './utils/snapshots';
 import { cleanHealthConfig, ensureWeeklyHealthSnapshot, pmoRatingFor, setPmoRating } from './utils/healthModel';
 import { aiPolicyOf, updateAiPolicy } from './utils/ai/policy';
+import { appendReportAiLog, submitLogEntry } from './utils/ai/reportAiStats';
+import { addReportGolden, appendReportEvalRun, removeReportGolden } from './utils/ai/reportEval';
+import { VARIANT_META } from './utils/ai/reportVariants';
+import { setProjectProfile } from './utils/ai/projectProfile';
+import { resetReportGuide, saveDepartmentGuide, saveReportGuide } from './utils/ai/reportGuide';
+import { setReportExemplar } from './utils/ai/reportExamples';
+import { applyRuleAction, RuleAction, ruleActionLabel } from './utils/ai/reportRules';
 import { stampLifecycle } from './utils/planning/lifecycle';
 import { AllocationSuggestion, ApplyMode, applyAllocationSuggestions } from './utils/taskToAllocation';
 import { applyBilledHoursActuals, planBilledHoursPoolAdditions, suggestBilledHoursActuals, BilledApplyMode, BilledHoursOptions, BilledHoursRecord } from './utils/billedHours';
@@ -64,7 +71,7 @@ import { analyzeDataHealth, applyHealthFix, HealthFix } from './utils/dataHealth
 import { appendAudit, AUDIT_ACTION_LABELS } from './utils/audit';
 import { riskScore } from './utils/risks';
 import { upsertLeave } from './utils/availability';
-import { AiReportAssessment, ExpectationStatus, ExpectationUrgency, HealthConfig, MeetingStatus, PestelItem, ReportFlow, ReportSettings, Risk, RoleViewConfig, SwotItem, WeeklyReport } from './types';
+import { AiReportAssessment, ProjectAiProfile, ReportAiLogEntry, ReportEvalRun, ReportGatePolicy, ExpectationStatus, ExpectationUrgency, HealthConfig, MeetingStatus, PestelItem, ReportFlow, ReportSettings, Risk, RoleViewConfig, SwotItem, WeeklyReport } from './types';
 import ModernSidebar from './components/modern/ModernSidebar';
 import ModernProjectHeader from './components/modern/ModernProjectHeader';
 import ModernPlanning from './components/modern/ModernPlanning';
@@ -111,7 +118,7 @@ import DataHealthSheet from './components/modern/sheets/DataHealthSheet';
 import AuditLogSheet from './components/modern/sheets/AuditLogSheet';
 import StatusReportSheet from './components/modern/sheets/StatusReportSheet';
 import {
-  actorOf, isReportSteward, markWeekEmailed, publishWeek, reportDictionary, reportFlowOf, reportSettingsOf, returnReportIn, saveReport, setReportAiAssessment, STAGE_LABELS, unpublishWeek, weekLabel,
+  actorOf, canEditReport, isReportSteward, markWeekEmailed, publishWeek, reportDictionary, reportFlowOf, reportSettingsOf, returnReportIn, saveReport, setReportAiAssessment, STAGE_LABELS, unpublishWeek, weekLabel,
 } from './utils/weeklyReport';
 import {
   canEditMeeting, canPlanMeeting, canReviewMeeting, createMeeting, isOwnMeeting, markHeld, MeetingDraft, reviewMeeting, setMeetingStatus, updateMeeting,
@@ -791,15 +798,104 @@ const App: React.FC = () => {
   const handleSaveReport = useCallback((draft: WeeklyReport, advance = false): boolean => {
     const ws = workspaceRef.current;
     if (!ws) return false;
-    const res = saveReport(ws, identityOf(ws), draft, actorOf(ws), { advance, dictionary: reportDictionary(reportSettingsOf(ws)) });
+    const dictionary = reportDictionary(reportSettingsOf(ws));
+    const res = saveReport(ws, identityOf(ws), draft, actorOf(ws), { advance, dictionary });
     if (!res) return false;
     let next: WorkspaceData = { ...ws, weeklyReports: res.reports };
+    // Taslaktan gönderimde AI maddelerinin akıbeti öneri günlüğüne (yalnız sayılar)
+    const submitted = advance && res.from === 'draft' ? submitLogEntry(res.report, dictionary) : null;
+    if (submitted) next = { ...next, reportAiLog: appendReportAiLog(next.reportAiLog, submitted) };
     if (advance) {
       next = res.from === 'draft'
         ? appendAudit(next, 'report.submit', `${reportLabel(ws, res.report)} raporu gönderildi → ${STAGE_LABELS[res.report.stage]}`, res.report.projectId)
         : appendAudit(next, 'report.approve', `${reportLabel(ws, res.report)} raporu onaylandı → ${STAGE_LABELS[res.report.stage]}`, res.report.projectId);
     }
     commitWorkspace(next);
+    return true;
+  }, [commitWorkspace]);
+
+  // Rapor AI öneri günlüğü: raporu yazabilen (ya da yeni raporu açabilecek proje sahibi) yazar; metin yok
+  const handleLogReportAi = useCallback((entry: ReportAiLogEntry) => {
+    updateWorkspace(ws => {
+      const who = identityOf(ws);
+      const r = (ws.weeklyReports || []).find(x => x.id === entry.reportId);
+      const allowed = r ? canEditReport(ws, who, r)
+        : entry.projectId ? ws.projects.some(p => p.id === entry.projectId && ownsProject(p, who))
+          : managedDepartmentCode(ws, who) === entry.departmentCode; // yeni bölüm eklemesi: bölüm sorumlusu
+      return allowed ? { ...ws, reportAiLog: appendReportAiLog(ws.reportAiLog, entry) } : ws;
+    });
+  }, [updateWorkspace]);
+
+  // ---- Rapor AI (PYB destek): altın set, değerlendirme koşuları ve kalite kapısı ----
+  const handleAddReportGolden = useCallback((reportId: string): boolean => {
+    const ws = workspaceRef.current;
+    if (!ws) return false;
+    const items = addReportGolden(ws, identityOf(ws), reportId, actorOf(ws).name, reportDictionary(reportSettingsOf(ws)));
+    const r = (ws.weeklyReports || []).find(x => x.id === reportId);
+    if (!items || !r) return false;
+    commitWorkspace(appendAudit({ ...ws, reportGoldenSet: items }, 'report.ai', `Rapor altın setine eklendi: ${reportLabel(ws, r)}`, r.projectId));
+    return true;
+  }, [commitWorkspace]);
+  const handleRemoveReportGolden = useCallback((reportId: string) => {
+    updateWorkspace(ws => {
+      const items = removeReportGolden(ws, identityOf(ws), reportId);
+      if (!items) return ws;
+      const r = (ws.weeklyReports || []).find(x => x.id === reportId);
+      return appendAudit({ ...ws, reportGoldenSet: items }, 'report.ai', `Rapor altın setinden çıkarıldı${r ? `: ${reportLabel(ws, r)}` : ''}`, r?.projectId);
+    });
+  }, [updateWorkspace]);
+  const handleAddReportEvalRun = useCallback((run: ReportEvalRun) => {
+    updateWorkspace(ws => {
+      if (!isReportSteward(identityOf(ws))) return ws;
+      const verdict = run.passed === null ? 'karar yok' : run.passed ? 'geçti' : 'kaldı';
+      return appendAudit({ ...ws, reportEvalRuns: appendReportEvalRun(ws.reportEvalRuns, run) }, 'report.ai',
+        `Rapor AI değerlendirmesi (${VARIANT_META[run.variant].label}, ${run.promptVersion}, ${run.n} rapor): ${verdict}`);
+    });
+  }, [updateWorkspace]);
+  const handleUpdateReportGate = useCallback((patch: Partial<ReportGatePolicy>, label: string) => {
+    updateWorkspace(ws => (isReportSteward(identityOf(ws))
+      ? appendAudit({ ...ws, aiPolicy: updateAiPolicy(ws.aiPolicy, { reportGate: patch }) }, 'report.ai', `Rapor AI: ${label}`)
+      : ws));
+  }, [updateWorkspace]);
+
+  // ---- Rapor kılavuzu ve bölüm ekleri (PYB destek; her kayıt yeni sürüm) ----
+  const commitReportSettings = useCallback((make: (ws: WorkspaceData) => ReportSettings | null, label: string): boolean => {
+    const ws = workspaceRef.current;
+    if (!ws) return false;
+    const next = make(ws);
+    if (!next) return false;
+    commitWorkspace(appendAudit({ ...ws, reportSettings: next }, 'report.ai', label));
+    return true;
+  }, [commitWorkspace]);
+  const handleSaveReportGuide = useCallback((patch: { institutionName?: string; text: string }) =>
+    commitReportSettings(ws => saveReportGuide(reportSettingsOf(ws), identityOf(ws), patch, actorOf(ws).name), 'Rapor kılavuzu güncellendi'), [commitReportSettings]);
+  const handleResetReportGuide = useCallback(() =>
+    commitReportSettings(ws => resetReportGuide(reportSettingsOf(ws), identityOf(ws), actorOf(ws).name), 'Rapor kılavuzu varsayılana döndü'), [commitReportSettings]);
+  const handleSaveDepartmentGuide = useCallback((code: string, text: string) =>
+    commitReportSettings(ws => saveDepartmentGuide(reportSettingsOf(ws), identityOf(ws), code, text, actorOf(ws).name),
+      `Rapor kılavuzu bölüm eki (${code}) ${text.trim() ? 'güncellendi' : 'kaldırıldı'}`), [commitReportSettings]);
+
+  const handleReportRuleAction = useCallback((a: RuleAction) =>
+    commitReportSettings(ws => applyRuleAction(reportSettingsOf(ws), ws, identityOf(ws), a, actorOf(ws).name), ruleActionLabel(a, workspaceRef.current?.reportSettings)), [commitReportSettings]);
+
+  // "Örnek rapor" işareti: sistem alanı (yayın kilidinden bağımsız), yalnız PYB destek
+  const handleSetReportExemplar = useCallback((reportId: string, on: boolean): boolean => {
+    const ws = workspaceRef.current;
+    if (!ws) return false;
+    const reports = setReportExemplar(ws, identityOf(ws), reportId, on);
+    const r = (ws.weeklyReports || []).find(x => x.id === reportId);
+    if (!reports || !r) return false;
+    commitWorkspace(appendAudit({ ...ws, weeklyReports: reports }, 'report.ai', `${reportLabel(ws, r)} raporu AI üslup örneği ${on ? 'olarak işaretlendi' : 'olmaktan çıkarıldı'}`, r.projectId));
+    return true;
+  }, [commitWorkspace]);
+
+  // Proje kartı: yalnız proje sahibi PY (proje içeriği; denetim günlüğüne yazılmaz)
+  const handleSaveProjectProfile = useCallback((projectId: string, profile: ProjectAiProfile | undefined): boolean => {
+    const ws = workspaceRef.current;
+    if (!ws) return false;
+    const projects = setProjectProfile(ws, identityOf(ws), projectId, profile);
+    if (!projects) return false;
+    commitWorkspace({ ...ws, projects });
     return true;
   }, [commitWorkspace]);
 
@@ -957,8 +1053,12 @@ const App: React.FC = () => {
   }, [updateWorkspace]);
 
   const handleUpdateReportSettings = useCallback((reportSettings: ReportSettings) => {
-    // Onay akışı admin ayarıdır; rapor denetçisinin ayar paneli onu değiştiremez
-    updateWorkspace(ws => (isReportSteward(identityOf(ws)) ? { ...ws, reportSettings: { ...reportSettings, flow: ws.reportSettings?.flow } } : ws));
+    // Onay akışı admin ayarıdır; rapor denetçisinin ayar paneli onu değiştiremez. Kılavuz ve
+    // kurallar kendi işleyicilerinden (sürüm ve denetim kaydıyla) değişir; burada güncel hâli korunur
+    updateWorkspace(ws => (isReportSteward(identityOf(ws)) ? {
+      ...ws,
+      reportSettings: { ...reportSettings, flow: ws.reportSettings?.flow, guide: ws.reportSettings?.guide, departmentGuides: ws.reportSettings?.departmentGuides, learnedRules: ws.reportSettings?.learnedRules },
+    } : ws));
   }, [updateWorkspace]);
 
   const handleSetJiraKey = useCallback((projectId: string, key: string) => {
@@ -1272,6 +1372,17 @@ const App: React.FC = () => {
           onOpenMeetings={() => setCurrentView(View.Meetings)}
           onRatePmo={handleRatePmo}
           onSetAiAssessment={handleSetAiAssessment}
+          onLogReportAi={handleLogReportAi}
+          onAddReportGolden={handleAddReportGolden}
+          onRemoveReportGolden={handleRemoveReportGolden}
+          onAddReportEvalRun={handleAddReportEvalRun}
+          onUpdateReportGate={handleUpdateReportGate}
+          onSaveProjectProfile={handleSaveProjectProfile}
+          onSaveReportGuide={handleSaveReportGuide}
+          onResetReportGuide={handleResetReportGuide}
+          onSaveDepartmentGuide={handleSaveDepartmentGuide}
+          onSetReportExemplar={handleSetReportExemplar}
+          onReportRuleAction={handleReportRuleAction}
         />
       ) : (
         <ModernMeetings
