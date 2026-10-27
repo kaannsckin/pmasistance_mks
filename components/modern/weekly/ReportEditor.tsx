@@ -14,7 +14,7 @@ import { fetchJiraWorklogs, IntegrationHealth } from '../../../utils/integration
 import { Identity, ownsProject } from '../../../utils/rbac';
 import { relativeTime } from '../../../utils/recentChanges';
 import {
-    canEditReport, CATEGORY_META, findAbbreviations, findReport, glossaryFor, itemDisplay, lintCounts, LintIssue, lintReport, locative, meetingSentence,
+    canEditReport, CATEGORY_META, findAbbreviations, findReport, glossaryFor, itemDisplay, lintCounts, lintDictionary, LintIssue, lintReport, locative, meetingSentence,
     flowBlockers, newItem, nextStage, PLAN_REVIEW_LABELS, PLAN_REVIEW_STATUSES, reportFlowOf, returnStage, setPlanReview, shiftWeek, STAGE_LABELS, THIS_WEEK_CATEGORIES, weekLabel, weekStart,
 } from '../../../utils/weeklyReport';
 import { parseWorklogRows, summarizeWorklog, worklogInWeek } from '../../../utils/worklog';
@@ -322,7 +322,8 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
     const canReturn = editable && report.stage !== 'draft' && !!returnTo;
     const defaultDate = isoDay(weekStart(year, week));
 
-    const issues = useMemo(() => lintReport(draft, dictionary), [draft, dictionary]);
+    const lintDict = useMemo(() => lintDictionary(dictionary, workspace.projects), [dictionary, workspace.projects]);
+    const issues = useMemo(() => lintReport(draft, lintDict), [draft, lintDict]);
     const counts = lintCounts(issues);
     const byItem = useMemo(() => {
         const m = new Map<string, LintIssue[]>();
@@ -358,7 +359,7 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
     const gateWarning = useMemo(() => reportGateWarning(workspace, ai.model), [workspace, ai.model]);
 
     // Kısaltmalar
-    const knownAbbr = useMemo(() => new Set([...dictionary, ...draft.abbreviations].map(a => a.abbr.toLocaleUpperCase('tr-TR'))), [dictionary, draft.abbreviations]);
+    const knownAbbr = useMemo(() => new Set([...lintDict, ...draft.abbreviations].map(a => a.abbr.toLocaleUpperCase('tr-TR'))), [lintDict, draft.abbreviations]);
     const unknownAbbr = useMemo(() => {
         const used = [...draft.thisWeek, ...draft.nextWeek].flatMap(i => findAbbreviations([itemDisplay(i), i.text].join(' ')));
         return [...new Set(used)].filter(a => !knownAbbr.has(a.toLocaleUpperCase('tr-TR')));

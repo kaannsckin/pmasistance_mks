@@ -118,7 +118,7 @@ import DataHealthSheet from './components/modern/sheets/DataHealthSheet';
 import AuditLogSheet from './components/modern/sheets/AuditLogSheet';
 import StatusReportSheet from './components/modern/sheets/StatusReportSheet';
 import {
-  actorOf, canEditReport, isReportSteward, markWeekEmailed, publishWeek, reportDictionary, reportFlowOf, reportSettingsOf, returnReportIn, saveReport, setReportAiAssessment, STAGE_LABELS, unpublishWeek, weekLabel,
+  actorOf, canEditReport, isReportSteward, lintDictionary, markWeekEmailed, publishWeek, reportDictionary, reportFlowOf, reportSettingsOf, returnReportIn, saveReport, setReportAiAssessment, STAGE_LABELS, unpublishWeek, weekLabel,
 } from './utils/weeklyReport';
 import {
   canEditMeeting, canPlanMeeting, canReviewMeeting, createMeeting, isOwnMeeting, markHeld, MeetingDraft, reviewMeeting, setMeetingStatus, updateMeeting,
@@ -798,7 +798,7 @@ const App: React.FC = () => {
   const handleSaveReport = useCallback((draft: WeeklyReport, advance = false): boolean => {
     const ws = workspaceRef.current;
     if (!ws) return false;
-    const dictionary = reportDictionary(reportSettingsOf(ws));
+    const dictionary = lintDictionary(reportDictionary(reportSettingsOf(ws)), ws.projects);
     const res = saveReport(ws, identityOf(ws), draft, actorOf(ws), { advance, dictionary });
     if (!res) return false;
     let next: WorkspaceData = { ...ws, weeklyReports: res.reports };
@@ -1261,7 +1261,7 @@ const App: React.FC = () => {
 
   const renderView = () => {
     if (!isInitialized || !workspace) {
-      return <div className="h-[60vh] flex items-center justify-center"><i className="fa-solid fa-spinner fa-spin text-4xl text-blue-500"></i></div>;
+      return <div className="h-[60vh] flex items-center justify-center"><i aria-hidden="true" className="fa-solid fa-spinner fa-spin text-4xl text-blue-500"></i></div>;
     }
 
     // Rol bazlı yetkilendirme: notları göremeyen roller (yönetim) PM'e özel
@@ -2154,17 +2154,17 @@ const App: React.FC = () => {
         <div role="alert" className="fixed top-3 left-1/2 -translate-x-1/2 z-[260] w-[min(640px,calc(100vw-32px))] flex items-start gap-3 bg-amber-50 dark:bg-amber-950 text-amber-900 dark:text-amber-100 border border-amber-300 dark:border-amber-800 rounded-xl shadow-2xl px-4 py-3">
           <i className="fa-solid fa-triangle-exclamation mt-0.5" aria-hidden="true"></i>
           <span className="text-sm flex-1">Tarayıcı depolaması dolu: son değişiklikler bu tarayıcıya kaydedilemedi. Sayfayı kapatmadan önce bulut eşitlemesini kullanın ya da "Yedeği indir" ile yedek alın.</span>
-          <button type="button" onClick={() => setStorageWarnClosed(true)} className="opacity-70 hover:opacity-100" aria-label="Uyarıyı kapat"><i className="fa-solid fa-xmark text-sm"></i></button>
+          <button type="button" onClick={() => setStorageWarnClosed(true)} className="opacity-70 hover:opacity-100" aria-label="Uyarıyı kapat"><i aria-hidden="true" className="fa-solid fa-xmark text-sm"></i></button>
         </div>
       )}
       {undo && (
         <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[250] flex items-center gap-3 bg-gray-900 dark:bg-gray-800 text-white rounded-xl shadow-2xl px-4 py-2.5 border border-gray-700">
-          <i className="fa-solid fa-trash-can text-gray-400 text-xs"></i>
+          <i aria-hidden="true" className="fa-solid fa-trash-can text-gray-400 text-xs"></i>
           <span className="text-xs font-semibold">{undo.message}</span>
           <button onClick={handleUndo} className="text-xs font-bold px-2.5 py-1 rounded-lg text-white hover:opacity-90" style={{ backgroundColor: 'var(--app-primary)' }}>
-            <i className="fa-solid fa-rotate-left mr-1"></i>Geri Al
+            <i aria-hidden="true" className="fa-solid fa-rotate-left mr-1"></i>Geri Al
           </button>
-          <button onClick={() => setUndo(null)} className="text-gray-400 hover:text-white transition-colors" title="Kapat"><i className="fa-solid fa-xmark text-xs"></i></button>
+          <button aria-label="Kapat" onClick={() => setUndo(null)} className="text-gray-400 hover:text-white transition-colors" title="Kapat"><i aria-hidden="true" className="fa-solid fa-xmark text-xs"></i></button>
         </div>
       )}
       {isStatusReportOpen && workspace && activeProject && isModern && (

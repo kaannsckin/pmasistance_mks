@@ -1,11 +1,13 @@
 import { PermissionKey, ProjectStatus, RagStatus, RiskStatus, Task, TaskStatus } from '../../types';
+import { normalizeEnumArgs } from './enumAliases';
+import { inMonthEstimates, InMonthEstimate } from '../inMonthActual';
 import { getPlanLockStatus, MONTH_INDEXES, ROLE_LABELS, summarizeByProject } from '../allocations';
 import { AUDIT_ACTION_LABELS } from '../audit';
-import { buildCostReport } from '../costing';
+import { buildCostReport, costPeriodLabel } from '../costing';
 import { CATEGORY_LABELS, analyzeDataHealth } from '../dataHealth';
 import { departmentScorecards, orgCapacity } from '../deptScorecard';
-import { buildPortfolioEVM, buildProjectEVM, defaultStatusMonth, ProjectEVM } from '../evm';
-import { attentionItems, executiveSummary, portfolioHealth, projectHealth } from '../executive';
+import { buildPortfolioEVM, buildProjectEVM, closedStatusMonth, ProjectEVM } from '../evm';
+import { attentionItems, executiveSummary, isHealthScored, portfolioHealth, projectHealth } from '../executive';
 import { buildForecast, FORECAST_DIM_LABELS, FORECAST_METHOD_LABELS, ForecastDim, ForecastMethod } from '../forecast';
 import { buildPersonProfile } from '../personProfile';
 import { recentChanges } from '../recentChanges';
@@ -56,6 +58,9 @@ const TASK_STATUS_TR: Record<TaskStatus, string> = {
     [TaskStatus.Backlog]: 'Backlog', [TaskStatus.ToDo]: 'Yapılacak', [TaskStatus.InProgress]: 'Devam Ediyor', [TaskStatus.Done]: 'Tamamlandı',
 };
 const LOCK_TR = { draft: 'Taslak', submitted: 'Onay Bekliyor', locked: 'Onaylı/Kilitli' } as const;
+
+const IN_MONTH_NOTE = 'ay_ici_tahmin: kapanmamış ayın haftalık rapor worklog\'undan tahmini gerçekleşeni; EVM\'e girmez (EVM son kapanan aya kadar), ay kapanışında kesinleşir. oran = tahmini / worklog\'u olan günlere düşen plan.';
+const inMonthRow = (x: InMonthEstimate) => ({ ay: x.month, kayitli_gun: x.coveredDays, son_kayit: x.lastDate, saat: x.hours, tahmini_gerceklesen_aa: x.estimatedAA, ayni_doneme_plan_aa: x.planToDateAA, oran: x.ratio });
 
 const str = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
 const short = (s: string | undefined, n = 200): string | undefined => {
@@ -204,6 +209,8 @@ export const AI_TOOLS: ToolDef[] = [
                         geciken: p.tasks.filter(t => isOverdue(t, ctx.now)).length,
                     },
                     acik_risk: (p.risks || []).filter(r => r.status !== 'closed').length,
+                    // Plan kilidi öneri denenmeden görünsün (B-014): kilitliyse yalnız gerçekleşen değişir
+                    plan_kilidi: LOCK_TR[getPlanLockStatus(ctx.ws.planLocks, p.id, ctx.year)],
                     guncellendi: p.updatedAt?.slice(0, 10),
                 })),
             };
@@ -229,6 +236,7 @@ export const AI_TOOLS: ToolDef[] = [
                     proje: h.name, skor: h.score, bant: h.band, guven: h.confidence, rag: h.rag ? RAG_TR[h.rag] : undefined,
                     spi: r2(h.spi), cpi: r2(h.cpi), yuksek_risk: h.highRisks, nedenler: h.reasons,
                 })),
+                ...(health.unscored.length ? { skorlanmayan: health.unscored.map(u => `${u.name} (teklif aşamasında)`) } : {}),
                 dikkat_gerektirenler: attn.slice(0, 20).map(i => ({
                     onem: i.severity === 'error' ? 'kritik' : 'uyarı', kategori: i.category,
                     baslik: maskSicil(i.title, ctx.ws.people), detay: maskSicil(i.detail, ctx.ws.people),
@@ -248,7 +256,7 @@ export const AI_TOOLS: ToolDef[] = [
         run: (a, ctx) => {
             const p = resolveProject(ctx, a.proje);
             const year = resolveYear(ctx, a.yil);
-            const statusMonth = defaultStatusMonth(year, ctx.now);
+            const statusMonth = closedStatusMonth(ctx.ws, year, ctx.now);
             const h = projectHealth(ctx.scoped, p, year, statusMonth);
             const wpNames = new Map(p.workPackages.map(w => [w.id, w.name]));
             const today = todayIso(ctx.now);
@@ -270,7 +278,7 @@ export const AI_TOOLS: ToolDef[] = [
                 proje_yoneticisi: projectPmName(ctx, p.pmPersonId),
                 baslangic: p.settings.projectStartDate,
                 surum_suresi_hafta: p.settings.sprintDuration,
-                saglik: {
+                saglik: !isHealthScored(p) ? { skor: null, not: 'Teklif aşamasında skorlanmaz.' } : {
                     skor: h.score, bant: h.band, guven: h.confidence, kapsam: h.coverage, spi: r2(h.spi), cpi: r2(h.cpi), nedenler: h.reasons,
                     // Skorun girdileri: normalize değer (0-1, null = veri yok), ağırlık ve skordan düşürdüğü puan
                     girdiler: h.factors.map(f => ({ girdi: f.label, deger: f.value, agirlik: f.weight, kayip_puan: f.points, ayrinti: f.detail })),
@@ -393,7 +401,7 @@ export const AI_TOOLS: ToolDef[] = [
                 toplam_plan_aa: r2(prof.totalPlanAA),
                 toplam_gerceklesen_aa: r2(prof.totalActualAA),
                 kapasite_asimi_olan_aylar: prof.overMonths,
-                projeler: prof.byProject.map(b => ({ proje: b.projectName, rol: b.role, plan_aa: r2(b.total), aylik_plan: months12(b.months) })),
+                projeler: prof.byProject.map(b => ({ proje: b.projectName, rol: b.role, plan_aa: r2(b.total), aylik_plan: months12(b.months), plan_kilidi: LOCK_TR[getPlanLockStatus(ctx.ws.planLocks, b.projectId, year)] })),
                 gorevler: prof.tasks.filter(t => ctx.visibleProjectIds.has(t.projectId)).slice(0, 15).map(t => ({
                     proje: t.projectName, gorev: t.taskName, durum: TASK_STATUS_TR[t.status] || t.status, bitis: t.dueDate?.slice(0, 10), geciken: t.overdue || undefined,
                 })),
@@ -615,19 +623,24 @@ export const AI_TOOLS: ToolDef[] = [
         },
         run: (a, ctx) => {
             const year = resolveYear(ctx, a.yil);
-            const statusMonth = defaultStatusMonth(year, ctx.now);
+            const statusMonth = closedStatusMonth(ctx.ws, year, ctx.now);
             if (str(a.proje)) {
                 const p = resolveProject(ctx, a.proje);
                 const e = buildProjectEVM(ctx.scoped, p.id, year, statusMonth);
                 if (!e) throw new ToolError('EVM hesaplanamadı.');
-                return { yil: year, ...evmRow(e) };
+                const est = inMonthEstimates(ctx.ws, p.id, ctx.now);
+                return { yil: year, ...evmRow(e), ...(est.length ? { ay_ici_tahmin: est.map(inMonthRow), ay_ici_not: IN_MONTH_NOTE } : {}) };
             }
             const pf = buildPortfolioEVM(ctx.scoped, year, [...ctx.visibleProjectIds], statusMonth);
             return {
                 yil: year, durum_ayi: pf.statusMonth, bac: Math.round(pf.bac), pv: Math.round(pf.pv), ev: Math.round(pf.ev), ac: Math.round(pf.ac),
                 spi: r2(pf.spi), cpi: r2(pf.cpi), eac: Math.round(pf.eac), vac: Math.round(pf.vac),
                 maliyetli_unvan_sayisi: pf.costedTitleCount,
-                projeler: pf.projects.filter(e => e.costed).slice(0, 30).map(evmRow),
+                projeler: pf.projects.filter(e => e.costed).slice(0, 30).map(e => {
+                    const est = inMonthEstimates(ctx.ws, e.projectId, ctx.now);
+                    return { ...evmRow(e), ...(est.length ? { ay_ici_tahmin: est.map(inMonthRow) } : {}) };
+                }),
+                ay_ici_not: IN_MONTH_NOTE,
             };
         },
     },
@@ -635,20 +648,21 @@ export const AI_TOOLS: ToolDef[] = [
         label: 'Maliyet raporu',
         spec: {
             name: 'maliyet_raporu',
-            description: 'Tahsis × ünvan aylık maliyetinden (TL) plan ve gerçekleşen maliyet: toplam, aylık, proje ve bölüm bazında; maliyetlenemeyen (ünvanı/oranı eksik) kişi sayısı.',
+            description: 'Tahsis × ünvan aylık maliyetinden (TL) yıllık plan, gerçekleşen ve sapma (gerçekleşeni girilmiş son aya kadarki planla): toplam, aylık, proje ve bölüm bazında; maliyetlenemeyen kişi sayısı.',
             parameters: S.obj({ yil: P.year, proje: S.str('Proje adı ya da kodu (isteğe bağlı).') }),
         },
         run: (a, ctx) => {
             const year = resolveYear(ctx, a.yil);
             const c = buildCostReport(ctx.ws, year);
-            const row = (r: typeof c.byProject[number]) => ({ ad: r.label, plan_tl: r.planCost, gerceklesen_tl: r.actualCost, sapma_tl: r.varianceCost });
+            const row = (r: typeof c.byProject[number]) => ({ ad: r.label, plan_tl: r.planCost, donem_plan_tl: r.periodPlanCost, gerceklesen_tl: r.actualCost, sapma_tl: r.varianceCost });
+            const donem = costPeriodLabel(c.periodEndMonth);
             if (str(a.proje)) {
                 const p = resolveProject(ctx, a.proje, { anyProject: true });
                 const r = c.byProject.find(x => x.key === p.id);
-                return r ? { yil: year, proje: p.name, ...row(r) } : { yil: year, proje: p.name, not: 'Bu proje için maliyetlenebilir tahsis yok.' };
+                return r ? { yil: year, proje: p.name, sapma_donemi: donem, ...row(r) } : { yil: year, proje: p.name, not: 'Bu proje için maliyetlenebilir tahsis yok.' };
             }
             return {
-                yil: year, plan_tl: c.totalPlanCost, gerceklesen_tl: c.totalActualCost, sapma_tl: c.totalVarianceCost,
+                yil: year, sapma_donemi: donem, plan_tl: c.totalPlanCost, donem_plan_tl: c.totalPeriodPlanCost, gerceklesen_tl: c.totalActualCost, sapma_tl: c.totalVarianceCost,
                 aylik_plan_tl: c.monthlyPlanCost, aylik_gerceklesen_tl: c.monthlyActualCost,
                 projeler: c.byProject.slice(0, 30).map(row), bolumler: c.byDepartment.map(row),
                 maliyetlenemeyen_kisi_sayisi: c.uncostedPeople.length, maliyetli_unvan_sayisi: c.costedTitleCount,
@@ -1051,7 +1065,7 @@ export const executeTool = async (call: Pick<ToolCall, 'name' | 'arguments'>, ct
         return { content: JSON.stringify({ hata: `Bilinmeyen ya da bu rol için kullanılamayan araç: ${call.name}` }), ok: false };
     }
     try {
-        return { content: serialize(await def.run(call.arguments || {}, ctx)), ok: true };
+        return { content: serialize(await def.run(normalizeEnumArgs(def.spec.parameters, call.arguments || {}), ctx)), ok: true };
     } catch (e) {
         if (e instanceof ToolError) return { content: JSON.stringify({ hata: e.message }), ok: false };
         console.error(`[ai] araç hatası (${call.name}):`, (e as Error)?.message);

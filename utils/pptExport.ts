@@ -2,7 +2,7 @@ import { PlanLockStatus, ProjectStatus, RagStatus } from '../types';
 import { MONTHS_TR } from './allocations';
 import { EFFORT_TYPE_LABELS } from './roleAnalysis';
 import { ExecReport } from './execReport';
-import { fmtTL } from './costing';
+import { costPeriodLabel, fmtTL } from './costing';
 import { RISK_BAND_LABELS, RISK_STATUS_LABELS } from './risks';
 
 /**
@@ -142,9 +142,9 @@ export const exportExecReportToPpt = async (report: ExecReport, theme: string): 
         const cost = pptx.addSlide();
         addTitle(cost, `Maliyet Özeti (${report.year}, ₺)`);
         const costCards: Array<[string, string, string]> = [
-            ['Plan Maliyeti', fmtTL(report.cost.totalPlanCost), accent],
+            ['Plan Maliyeti (yıl)', fmtTL(report.cost.totalPlanCost), accent],
             ['Gerçekleşen', fmtTL(report.cost.totalActualCost), GREEN],
-            ['Sapma', `${report.cost.totalVarianceCost > 0 ? '+' : ''}${fmtTL(report.cost.totalVarianceCost)}`, report.cost.totalVarianceCost > 0 ? RED : GRAY],
+            [`Sapma (${costPeriodLabel(report.cost.periodEndMonth)})`, `${report.cost.totalVarianceCost > 0 ? '+' : ''}${fmtTL(report.cost.totalVarianceCost)}`, report.cost.totalVarianceCost > 0 ? RED : GRAY],
         ];
         costCards.forEach(([label, value, color], i) => {
             const x = 0.5 + i * 4.3;

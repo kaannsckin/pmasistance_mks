@@ -17,6 +17,13 @@ const StatusReportModal: React.FC<StatusReportModalProps> = ({ workspace, projec
   const [draft, setDraft] = useState<string | null>(null); // AI öncesi metin (geri dönmek için)
   const ai = useAiRun();
 
+  // Esc ile kapanır (klavye ve ekran okuyucu kullanıcıları için)
+  React.useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
   if (!report) return null;
 
   const handlePolish = async () => {
@@ -60,7 +67,7 @@ const StatusReportModal: React.FC<StatusReportModalProps> = ({ workspace, projec
             <h3 className="text-lg font-semibold text-gray-800 dark:text-white">Haftalık Durum Raporu</h3>
             <p className="text-xs text-gray-400">{report.projectName} · Hafta {report.week}/{report.year} · düzenleyip kopyalayabilirsiniz</p>
           </div>
-          <button onClick={onClose} className="w-9 h-9 rounded-xl text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"><i className="fa-solid fa-times"></i></button>
+          <button onClick={onClose} aria-label="Kapat" title="Kapat" className="w-9 h-9 rounded-xl text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"><i className="fa-solid fa-times" aria-hidden="true"></i></button>
         </div>
 
         <div className="p-6 flex-1 overflow-hidden flex flex-col">
@@ -69,7 +76,7 @@ const StatusReportModal: React.FC<StatusReportModalProps> = ({ workspace, projec
               <AiButton label="AI ile e-postaya dönüştür" loading={ai.loading} onClick={handlePolish} title="Taslağı verileri değiştirmeden akıcı bir yönetici e-postasına çevirir" />
               {draft !== null && !ai.loading && (
                 <button onClick={() => { setText(draft); setDraft(null); }} className="text-[11px] font-semibold text-gray-500 hover:text-primary">
-                  <i className="fa-solid fa-rotate-left mr-1"></i>Taslağa dön
+                  <i aria-hidden="true" className="fa-solid fa-rotate-left mr-1"></i>Taslağa dön
                 </button>
               )}
               {draft !== null && <span className="text-[10px] text-gray-400">AI metnini göndermeden önce sayıları kontrol edin.</span>}
@@ -92,15 +99,15 @@ const StatusReportModal: React.FC<StatusReportModalProps> = ({ workspace, projec
 
         <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between flex-none">
           <p className="text-[11px] text-gray-400">
-            <i className="fa-solid fa-circle-info mr-1"></i>
+            <i aria-hidden="true" className="fa-solid fa-circle-info mr-1"></i>
             Teams/e-postaya yapıştırın.
           </p>
           <div className="flex items-center gap-2">
             <button onClick={handleDownload} className="text-xs font-semibold px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-300 hover:text-primary transition-all">
-              <i className="fa-solid fa-download mr-1.5"></i>.txt
+              <i aria-hidden="true" className="fa-solid fa-download mr-1.5"></i>.txt
             </button>
             <button onClick={handleCopy} className="text-white text-xs font-semibold px-5 py-2.5 rounded-xl shadow-md hover:opacity-90 transition-all" style={{ backgroundColor: 'var(--app-primary)' }}>
-              <i className={`fa-solid ${copied ? 'fa-check' : 'fa-copy'} mr-1.5`}></i>{copied ? 'Kopyalandı' : 'Kopyala'}
+              <i aria-hidden="true" className={`fa-solid ${copied ? 'fa-check' : 'fa-copy'} mr-1.5`}></i>{copied ? 'Kopyalandı' : 'Kopyala'}
             </button>
           </div>
         </div>

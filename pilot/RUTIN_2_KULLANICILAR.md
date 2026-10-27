@@ -12,10 +12,10 @@ Sen PlanAsistan pilotunun **test koordinatörüsün**. Beş pilot kullanıcısı
 
 | Tarih | Neden |
 |---|---|
-| 2026-10-13 | Hazırlık haftası; haftalık kota 15 Ekim'de yenilenir. İlk v3 koşusu 15 Ekim. |
+| 2026-10-13, 2026-10-15, 2026-10-20 | Uygulama haftası: ajan sisteminin çalışmasında engel var, takvim bir hafta kaydırıldı. İlk koşu 22 Ekim (K0). |
 | 2026-10-29 | Resmî tatil (Cumhuriyet Bayramı); ajanlar çalışmaz. |
-| 2026-11-26 | Demo günü: yalnız `pilot-data/kapilar.md`'de "K4 kararı: canlı" satırı varsa çalış (aşağıda "Demo günü"); yoksa atla. |
-| 2026-11-27 ve sonrası | Pilot tamamlandı. |
+| 2026-12-03 | Demo günü: yalnız `pilot-data/kapilar.md`'de "K4 kararı: canlı" satırı varsa çalış (aşağıda "Demo günü"); yoksa atla. |
+| 2026-12-04 ve sonrası | Pilot tamamlandı. |
 
 **Veri Supabase'dedir** (`pilot-data/bulut.json`): her ajan kendi pilot hesabıyla bağlanır; rolü üyelikten gelir, RLS gerçekteki gibi uygulanır (müdür notları veritabanından da okuyamaz). Gizli bilgiler yalnız ortam değişkenlerindedir (`PILOT_SUPABASE_*`, isteğe bağlı `PILOT_PASSWORD`): değerlerini hiçbir dosyaya, commit'e, ajan istemine ya da yoruma yazma.
 
@@ -29,7 +29,7 @@ git checkout claude/pilot-veri && git pull --ff-only origin claude/pilot-veri
 git merge --no-edit origin/claude/nice-cerf-r9wv1r
 ```
 
-Kod dalı `claude/nice-cerf-r9wv1r`'dir (main + PR #49 + pilot v3). `origin/claude/zen-pasteur-6g9z3i` ya da `origin/main`'de bu dalda olmayan yeni commit varsa onları da birleştir; çakışma çıkarsa `git merge --abort` yap ve raporda belirt. 19 Kasım'dan (K3) sonra yalnız kod dalını birleştir. Sonra `npm ci && npm run build:mcp && npm run build:pilot`.
+Kod dalı `claude/nice-cerf-r9wv1r`'dir (main + PR #49 + pilot v3). `origin/claude/zen-pasteur-6g9z3i` ya da `origin/main`'de bu dalda olmayan yeni commit varsa onları da birleştir; çakışma çıkarsa `git merge --abort` yap ve raporda belirt. 26 Kasım'dan (K3) sonra yalnız kod dalını birleştir. Sonra `npm ci && npm run build:mcp && npm run build:pilot`.
 
 ```bash
 GUN=$(TZ=Europe/Istanbul date +%F)
@@ -39,7 +39,7 @@ ONCEKI=$(ls pilot-data/gunluk | grep -v "^$GUN$" | sort | tail -1)   # son koşu
 - **Pencere:** `pilot-data/olaylar/` içinde tarihi `ONCEKI` ≤ tarih < `GUN` olan dosyalar ve aynı aralıktaki `pilot-data/confluence/` notları.
 - **Veri güncel mi:** `npm run -s pilot -- ozet` → `son_gun` dün değilse 1. rutin çalışmamıştır: `npm run -s pilot -- gun` çalıştır ve raporda belirt. `bulut.json` var ama komutlar ortam değişkeni eksik ya da Supabase'e ulaşılamıyor diyorsa ajanları başlatma: kısa rapor yaz (karar: "Hazır değil — pilot ortamı bulut verisine ulaşamıyor", hata metni aynen) ve 8. adıma geç. JSON'a geri dönme.
 - **Puanlar:** `pilot-data/puanlar.json` (yoksa `[]`). Her persona için son 5 puanı gerekçesiyle hazırla: kullanıcı puanı (`kaynak: "kullanici"`) varsa o, yoksa koordinatör ön puanı "ön puan" etiketiyle.
-- **Kapı günü mü:** 15 Ekim (K0), 22 Ekim (K1), 5 Kasım (K2), 19 Kasım (K3), 24 Kasım (K4). Kapı günüyse 6. adımı da yaparsın.
+- **Kapı günü mü:** 22 Ekim (K0), 27 Ekim (K1), 12 Kasım (K2), 26 Kasım (K3), 1 Aralık (K4). Kapı günüyse 6. adımı da yaparsın.
 
 ## 1. Otomatik kontroller
 
@@ -181,7 +181,7 @@ Yanıtlanan mesajlar yanıtlanmış sayılır; yanıtsız kalanlar sonraki koşu
   ```json
   [{"id": "B-015", "baslik": "…", "tur": "…", "onem": "…", "ilk": "GG", "son": "GG", "gun_sayisi": 1, "durum": "acik | kapandi", "kanit": "…", "kim": ["elif"]}]
   ```
-- **Gömülü bulgular:** `pilot/SENARYOLAR.md` › "Gömülü bulgular" (G1–G7) ile ajanların bulgu, mesaj ve `gercek_disi` alanlarını karşılaştır. Bulunanı `pilot-data/gomulu.json`'a ekle (`{"g": "G1", "persona": "selin", "tarih": "GG", "kanit": "…"}`; aynı G için ilk bulan yeterli). Ajanlara söyleme.
+- **Gömülü bulgular:** `pilot/SENARYOLAR.md` › "Gömülü bulgular" (G1–G6; G7 kaldırıldı) ile ajanların bulgu, mesaj ve `gercek_disi` alanlarını karşılaştır. Bulunanı `pilot-data/gomulu.json`'a ekle (`{"g": "G1", "persona": "selin", "tarih": "GG", "kanit": "…"}`; aynı G için ilk bulan yeterli). Ajanlara söyleme.
 
 ## 5. Demo yolu testi (Perşembe koşuları ve kapı günleri)
 
@@ -189,24 +189,24 @@ Yanıtlanan mesajlar yanıtlanmış sayılır; yanıtsız kalanlar sonraki koşu
 npm run -s pilot -- demo-testi
 ```
 
-Tarayıcıda (Chromium) müdür, PY, bölüm sorumlusu ve PYB destek gözüyle demo ekranlarını klasik ve modern arayüzde gezer; portföy sağlığının MCP'deki değerle aynı olduğunu denetler. Çıktı `pilot-data/demo-testi/$GUN/sonuc.md` (kalan adımların ekran görüntüsüyle). KALDI her adım en az "orta" bulgudur; demo yolunu bozan adım "yüksek". "Dış kaynak yüklenemedi" uyarısı bu ortamın ağ kısıtıdır (CDN); bulgu değil, raporda bir satır not. Komut tarayıcı bulunamadığı için çalışmazsa hatayı aynen yaz; DH7 ✗.
+Tarayıcıda (Chromium) müdür, PY, bölüm sorumlusu ve PYB destek gözüyle demo ekranlarını klasik ve modern arayüzde gezer; portföy sağlığının MCP'deki değerle aynı olduğunu denetler. Çıktı `pilot-data/demo-testi/$GUN/sonuc.md` (kalan adımların ekran görüntüsüyle). KALDI her adım en az "orta" bulgudur; demo yolunu bozan adım "yüksek". "Dış kaynak yüklenemedi" uyarısı (yazı tipi, sekme simgesi) bu ortamın ağ kısıtıdır; bulgu değil, raporda bir satır not. Stil ve kitaplıklar pakete gömülüdür: ekran biçimsiz görünüyorsa bu bir bulgudur. Komut tarayıcı bulunamadığı için çalışmazsa hatayı aynen yaz; DH7 ✗.
 
 ## 6. Kapı (yalnız kapı günlerinde)
 
 `pilot/SENARYOLAR.md` › "Takvim ve ara kapılar"daki ölçütleri tek tek kanıtıyla değerlendir; `pilot-data/kapilar.md`'ye ekle (eski satırlara dokunma):
 
 ```markdown
-## K1 Akış — 2026-10-22: Geçti | Geçmedi
+## K1 Akış — 2026-10-27: Geçti | Geçmedi
 | Ölçüt | Durum | Kanıt |
 |---|---|---|
 Karar ve sonraki adım: …
 ```
 
-Sonra demonun geri dönülebilir kopyasını al: `npm run -s pilot -- dondur --ad K<n>-$GUN` (ör. `K1-2026-10-22`).
+Sonra demonun geri dönülebilir kopyasını al: `npm run -s pilot -- dondur --ad K<n>-$GUN` (ör. `K1-2026-10-27`).
 
-**K4 (24 Kasım):** ölçütlere ek olarak raporun başına "K4 kararı bekleniyor: canlı / dondurulmuş / ertele — varsayılan dondurulmuş" yaz. Kullanıcı bu oturuma `K4: canlı` (ya da `dondurulmuş`, `ertele`) yazarsa `pilot-data/kapilar.md`'ye `K4 kararı: <karar> (kullanıcı, <tarih>)` satırını ekle, `git commit -m "K4 kararı" && git push`, kısa onay yaz; başka iş yapma.
+**K4 (1 Aralık):** ölçütlere ek olarak raporun başına "K4 kararı bekleniyor: canlı / dondurulmuş / ertele — varsayılan dondurulmuş" yaz. Kullanıcı bu oturuma `K4: canlı` (ya da `dondurulmuş`, `ertele`) yazarsa `pilot-data/kapilar.md`'ye `K4 kararı: <karar> (kullanıcı, <tarih>)` satırını ekle, `git commit -m "K4 kararı" && git push`, kısa onay yaz; başka iş yapma.
 
-**Demo günü (26 Kasım, yalnız "K4 kararı: canlı" ise):** normal koşu, sonunda `kontrol` ve `demo-testi`. İkisinden biri KALDI ise `npm run -s pilot -- geri-yukle --ad K4-2026-11-24` ile geri dön, raporun ilk satırına "Demo dondurulmuş K4 kopyasıyla yapılmalı: <neden>" yaz.
+**Demo günü (3 Aralık, yalnız "K4 kararı: canlı" ise):** normal koşu, sonunda `kontrol` ve `demo-testi`. İkisinden biri KALDI ise `npm run -s pilot -- geri-yukle --ad K4-2026-12-01` ile geri dön, raporun ilk satırına "Demo dondurulmuş K4 kopyasıyla yapılmalı: <neden>" yaz.
 
 ## 7. Puan önerisi
 

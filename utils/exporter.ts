@@ -3,8 +3,8 @@ import { Task, Resource, Sprint } from '../types';
 import { calculatePertFuzzyPert } from './timeline';
 
 // Make Papa and XLSX available from window object
-declare const Papa: any;
-declare const XLSX: any;
+import Papa from 'papaparse';
+import * as XLSX from 'xlsx';
 
 const triggerDownload = (blob: Blob, filename: string) => {
     const url = window.URL.createObjectURL(blob);

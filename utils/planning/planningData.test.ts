@@ -5,7 +5,7 @@ import { parseJiraCsv } from '../importer';
 import { mapJiraIssueType, mapJiraPriority, mapJiraStatus, parseJiraDate, secondsToHours } from './jiraFields';
 import { pertDays, stampLifecycle, taskDurations, withStatus } from './lifecycle';
 import { analyzeRecords, recordsToCsv } from './recordQuality';
-import { addWorkdays, isWorkday, trHolidays, workdaysBetween, workdaysInMonth } from './workdays';
+import { addWorkdays, effectiveWorkdays, isHalfDay, isWorkday, trHolidays, workdaysBetween, workdaysInMonth } from './workdays';
 
 const task = (id: string, extra: Partial<Task> = {}): Task => ({
     id, name: `${id} kaydı için yeterli açıklama metni`, availability: true, priority: 'Medium', version: 1, predecessor: null, unit: 'Yazılım', resourceName: '',
@@ -15,7 +15,7 @@ const task = (id: string, extra: Partial<Task> = {}): Task => ({
 describe('iş günü takvimi', () => {
     it('2026 aylık iş günleri resmi tabloyla uyumlu (arife yarım günleri iş günü sayılır)', () => {
         // Tablo Mart ve Mayıs arifelerini yarım gün düşer, 28 Ekim'i düşmez
-        const expected = { ...TR_WORKDAYS_2026, 3: 21, 5: 16 };
+        const expected = { ...TR_WORKDAYS_2026, 3: 21, 5: 16, 10: 21 };
         for (let m = 1; m <= 12; m++) expect([m, workdaysInMonth(2026, m)]).toEqual([m, expected[m]]);
     });
 
@@ -28,6 +28,19 @@ describe('iş günü takvimi', () => {
         expect(workdaysBetween('2026-10-26', '2026-10-30')).toBe(4); // 29 Ekim düşer
         expect(workdaysBetween('2026-10-09', '2026-10-05')).toBeNull();
         expect(addWorkdays(new Date(2026, 9, 28), 2)).toEqual(new Date(2026, 9, 30)); // 28 → (29 tatil) → 30
+    });
+
+    it('arife yarım günleri: 28 Ekim ve dini bayram arifeleri; iş günü sayısını değiştirmez', () => {
+        expect(isHalfDay(new Date(2026, 9, 28))).toBe(true); // Cumhuriyet Bayramı arifesi
+        expect(isHalfDay(new Date(2026, 2, 19))).toBe(true); // Ramazan Bayramı arifesi
+        expect(isHalfDay(new Date(2026, 4, 26))).toBe(true); // Kurban Bayramı arifesi
+        expect(isHalfDay(new Date(2026, 9, 27))).toBe(false);
+        expect(isHalfDay(new Date(2026, 9, 29))).toBe(false); // tatil
+        expect(isHalfDay(new Date(2028, 9, 28))).toBe(false); // Cumartesi
+        expect(isWorkday(new Date(2026, 9, 28))).toBe(true);
+        expect(workdaysInMonth(2026, 10)).toBe(21);
+        // Arife yarım sayılınca yüklenen 2026 takvimiyle birebir (Mart 20,5 · Mayıs 15,5 · Ekim 20,5)
+        for (let m = 1; m <= 12; m++) expect([m, effectiveWorkdays(2026, m)]).toEqual([m, TR_WORKDAYS_2026[m]]);
     });
 });
 
@@ -84,8 +97,6 @@ describe('Jira alanları', () => {
     });
 
     it('CSV içe aktarma yaşam döngüsü alanlarını alır', () => {
-        // Uygulamada PapaParse CDN'den gelir; testte virgülle ayrılmış basit satırlar yeterli
-        (globalThis as unknown as { Papa: unknown }).Papa = { parse: (text: string) => ({ data: text.split('\n').map(l => l.split(',')) }) };
         const csv = [
             'Issue key,Summary,Issue Type,Status,Priority,Created,Resolved,Original Estimate,Time Spent,Custom field (Story Points),Fix Version/s',
             'MKS-1,Giriş hatası,Bug,Done,High,2026-10-01 09:00,2026-10-05 16:00,57600,72000,3,v2.1',

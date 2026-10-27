@@ -279,6 +279,21 @@ describe('değişiklik öneri araçları', () => {
         expect(JSON.stringify(ws)).toBe(before);
     });
 
+    it('plan kilidi öneri denenmeden görünür: proje listesi ve kişi profili (B-014)', async () => {
+        const ws = { ...buildWs(), planLocks: [{ projectId: 'altay', year: 2026, status: 'locked' as const }] };
+        const list = await run('proje_listesi', {}, ws);
+        expect(list.json.projeler.find((p: { ad: string }) => p.ad === 'ALTAY Sistemi').plan_kilidi).toBe('Onaylı/Kilitli');
+        const prof = await run('kisi_profili', { kisi: 'Ayşe Kaya' }, ws);
+        expect(prof.json.projeler[0]).toMatchObject({ proje: 'ALTAY Sistemi', plan_kilidi: 'Onaylı/Kilitli' });
+        expect((await run('proje_listesi', {})).json.projeler[0].plan_kilidi).toBe('Taslak');
+    });
+
+    it('uygulama içi asistanda da seçeneğin Türkçe karşılığı kabul edilir (B-009)', async () => {
+        const ctx = buildToolContext(buildWs(), NOW);
+        expect((await executeTool({ name: 'oner_rag_guncelle', arguments: { rag: 'Kritik' } }, ctx)).ok).toBe(true);
+        expect(ctx.proposals[0].action).toMatchObject({ type: 'rag_guncelle', projectId: 'altay', rag: 'red' });
+    });
+
     it('yetki ve doğrulama hataları modele döner', async () => {
         const ctx = buildToolContext(buildWs(), NOW);
         const other = await executeTool({ name: 'oner_tahsis_ayarla', arguments: { kisi: 'Mehmet Demir', proje: 'Gizli Proje', ay: 7, aa: 0.5 } }, ctx);

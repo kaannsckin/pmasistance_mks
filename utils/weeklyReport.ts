@@ -376,6 +376,23 @@ export const reportDictionary = (s: ReportSettings): Abbreviation[] => {
     return [...m.values()].sort((a, b) => a.abbr.localeCompare(b.abbr, 'tr'));
 };
 
+/**
+ * Biçim denetiminin sözlüğü: kurum sözlüğü + proje adları. Büyük harfli proje adı
+ * (NEHİR, ATLAS) kısaltma değil projenin adıdır; açılımı istenmez. Yalnız denetimde
+ * kullanılır: rapor sonundaki kısaltma listesine ve AI girdisine proje adı girmez.
+ */
+export const lintDictionary = (dictionary: Abbreviation[], projects: Pick<Project, 'name'>[] = []): Abbreviation[] => {
+    const known = new Set(dictionary.map(a => a.abbr.toLocaleUpperCase('tr-TR')));
+    const names = projects.flatMap(p => {
+        const first = p.name.trim().split(/\s+/)[0] || '';
+        const key = first.toLocaleUpperCase('tr-TR');
+        if (first.length < 2 || first !== key || known.has(key)) return [];
+        known.add(key);
+        return [{ abbr: first, expansion: p.name.trim() }];
+    });
+    return [...dictionary, ...names];
+};
+
 /** Haftanın rapor son günü (ör. Perşembe 8 Ekim) */
 export const dueDate = (year: number, week: number, weekday: number): Date => {
     const d = weekStart(year, week);

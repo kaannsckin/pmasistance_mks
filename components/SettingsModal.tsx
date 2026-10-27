@@ -103,11 +103,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-fade-in-up">
         <div className="flex justify-between items-center p-5 border-b dark:border-gray-700">
           <h2 className="text-lg font-bold flex items-center text-gray-800 dark:text-white">
-            <i className="fa-solid fa-sliders mr-3 text-primary"></i>
+            <i aria-hidden="true" className="fa-solid fa-sliders mr-3 text-primary"></i>
             Uygulama Ayarları
           </h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 dark:hover:text-white transition-colors">
-            <i className="fa-solid fa-times"></i>
+          <button aria-label="Kapat" onClick={onClose} className="text-gray-400 hover:text-gray-700 dark:hover:text-white transition-colors">
+            <i aria-hidden="true" className="fa-solid fa-times"></i>
           </button>
         </div>
         
@@ -147,7 +147,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     onClick={() => setDark(!dark)}
                     className={`flex items-center space-x-2 px-3 py-1.5 rounded-xl border transition-all ${dark ? 'bg-gray-700 border-gray-600 text-amber-400' : 'bg-amber-50 border-amber-100 text-amber-600'}`}
                   >
-                      <i className={`fa-solid ${dark ? 'fa-moon' : 'fa-sun'} text-xs`}></i>
+                      <i aria-hidden="true" className={`fa-solid ${dark ? 'fa-moon' : 'fa-sun'} text-xs`}></i>
                       <span className="text-[10px] font-black uppercase tracking-tighter">{dark ? 'GECE MODU' : 'GÜNDÜZ MODU'}</span>
                   </button>
               </div>

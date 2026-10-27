@@ -151,8 +151,8 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, people, 
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
         <div className="flex justify-between items-center p-4 border-b dark:border-gray-700">
           <h2 className="text-xl font-bold text-black dark:text-white">{task ? 'Görevi Düzenle' : 'Yeni Görev Ekle'}</h2>
-          <button onClick={onClose} className="text-gray-400 bg-transparent hover:bg-gray-200 hover:text-gray-900 dark:hover:bg-gray-600 dark:hover:text-white rounded-lg text-sm p-1.5 ml-auto inline-flex items-center">
-             <i className="fa-solid fa-times w-5 h-5"></i>
+          <button aria-label="Kapat" onClick={onClose} className="text-gray-400 bg-transparent hover:bg-gray-200 hover:text-gray-900 dark:hover:bg-gray-600 dark:hover:text-white rounded-lg text-sm p-1.5 ml-auto inline-flex items-center">
+             <i aria-hidden="true" className="fa-solid fa-times w-5 h-5"></i>
           </button>
         </div>
         <form onSubmit={handleSubmit} className="overflow-y-auto p-6 space-y-4">
@@ -280,7 +280,7 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, people, 
                 <input type="number" name="avg" value={formData.time.avg} onChange={handleTimeChange} placeholder="Ortalama" className={`w-full ${inputStyle}`} />
                 <input type="number" name="worst" value={formData.time.worst} onChange={handleTimeChange} placeholder="En Kötü" className={`w-full ${inputStyle}`} />
             </div>
-            {aiRationale && <p className="mt-1.5 text-[11px] text-indigo-600 dark:text-indigo-300"><i className="fa-solid fa-wand-magic-sparkles mr-1"></i>{aiRationale} <span className="text-gray-400">(değerleri değiştirebilirsiniz)</span></p>}
+            {aiRationale && <p className="mt-1.5 text-[11px] text-indigo-600 dark:text-indigo-300"><i aria-hidden="true" className="fa-solid fa-wand-magic-sparkles mr-1"></i>{aiRationale} <span className="text-gray-400">(değerleri değiştirebilirsiniz)</span></p>}
             <div className="mt-1.5"><AiErrorNote message={ai.error} onClose={() => ai.setError(null)} /></div>
           </div>
 

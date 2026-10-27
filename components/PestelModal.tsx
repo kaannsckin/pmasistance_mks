@@ -73,7 +73,7 @@ const PestelModal: React.FC<PestelModalProps> = ({ projectName, items, canEdit, 
         <div className="sticky top-0 bg-white dark:bg-gray-900 px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between z-10 rounded-t-2xl">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white" style={{ backgroundColor: 'var(--app-primary)' }}>
-              <i className="fa-solid fa-globe"></i>
+              <i aria-hidden="true" className="fa-solid fa-globe"></i>
             </div>
             <div>
               <h3 className="text-lg font-semibold text-gray-800 dark:text-white">PESTEL Analizi</h3>
@@ -82,12 +82,12 @@ const PestelModal: React.FC<PestelModalProps> = ({ projectName, items, canEdit, 
           </div>
           <div className="flex items-center gap-2">
             <button onClick={handlePng} disabled={exporting || items.length === 0} className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-2 rounded-lg text-white shadow-sm hover:opacity-90 disabled:opacity-40" style={{ backgroundColor: 'var(--app-primary)' }} title="PESTEL panosunu PNG görsel olarak indir">
-              {exporting ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-image"></i>}PNG
+              {exporting ? <i aria-hidden="true" className="fa-solid fa-spinner fa-spin"></i> : <i aria-hidden="true" className="fa-solid fa-image"></i>}PNG
             </button>
             <button onClick={() => exportPestelSvg(projectName, items)} disabled={items.length === 0} className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-300 hover:text-primary disabled:opacity-40" title="Vektörel (SVG) olarak indir">
-              <i className="fa-solid fa-bezier-curve"></i>SVG
+              <i aria-hidden="true" className="fa-solid fa-bezier-curve"></i>SVG
             </button>
-            <button onClick={onClose} className="w-9 h-9 rounded-xl text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"><i className="fa-solid fa-times"></i></button>
+            <button aria-label="Kapat" onClick={onClose} className="w-9 h-9 rounded-xl text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"><i aria-hidden="true" className="fa-solid fa-times"></i></button>
           </div>
         </div>
 
@@ -95,17 +95,17 @@ const PestelModal: React.FC<PestelModalProps> = ({ projectName, items, canEdit, 
           {/* Özet */}
           <div className="flex flex-wrap gap-3">
             <div className="flex items-center gap-2 px-4 py-2.5 rounded-2xl border text-xs font-semibold bg-gray-50 dark:bg-gray-800/60 border-gray-100 dark:border-gray-700 text-gray-600 dark:text-gray-300">
-              <i className="fa-solid fa-layer-group" style={{ color: 'var(--app-primary)' }}></i>{summary.total} faktör
+              <i aria-hidden="true" className="fa-solid fa-layer-group" style={{ color: 'var(--app-primary)' }}></i>{summary.total} faktör
             </div>
             <div className="flex items-center gap-2 px-4 py-2.5 rounded-2xl border text-xs font-semibold bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-600 dark:text-emerald-300">
-              <i className="fa-solid fa-arrow-trend-up"></i>{summary.opportunities} fırsat
+              <i aria-hidden="true" className="fa-solid fa-arrow-trend-up"></i>{summary.opportunities} fırsat
             </div>
             <div className="flex items-center gap-2 px-4 py-2.5 rounded-2xl border text-xs font-semibold bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-600 dark:text-red-300">
-              <i className="fa-solid fa-arrow-trend-down"></i>{summary.threats} tehdit
+              <i aria-hidden="true" className="fa-solid fa-arrow-trend-down"></i>{summary.threats} tehdit
             </div>
             {summary.highImpact > 0 && (
               <div className="flex items-center gap-2 px-4 py-2.5 rounded-2xl border text-xs font-semibold bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-600 dark:text-amber-300">
-                <i className="fa-solid fa-triangle-exclamation"></i>{summary.highImpact} yüksek etki
+                <i aria-hidden="true" className="fa-solid fa-triangle-exclamation"></i>{summary.highImpact} yüksek etki
               </div>
             )}
             {canEdit && aiProject && ai.available && (
@@ -117,7 +117,7 @@ const PestelModal: React.FC<PestelModalProps> = ({ projectName, items, canEdit, 
           {aiItems && (
             <div className="bg-indigo-50/60 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800 rounded-2xl p-4">
               <div className="flex items-center justify-between mb-2">
-                <h4 className="text-xs font-bold text-gray-800 dark:text-gray-100"><i className="fa-solid fa-wand-magic-sparkles text-indigo-500 mr-2"></i>AI PESTEL önerileri</h4>
+                <h4 className="text-xs font-bold text-gray-800 dark:text-gray-100"><i aria-hidden="true" className="fa-solid fa-wand-magic-sparkles text-indigo-500 mr-2"></i>AI PESTEL önerileri</h4>
                 <div className="flex gap-2">
                   <button onClick={() => addSuggestions(aiItems)} className="text-[11px] font-semibold px-3 py-1.5 rounded-lg text-white" style={{ backgroundColor: 'var(--app-primary)' }}>Tümünü ekle</button>
                   <button onClick={() => setAiItems(null)} className="text-[11px] font-semibold px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-500">Kapat</button>
@@ -130,7 +130,7 @@ const PestelModal: React.FC<PestelModalProps> = ({ projectName, items, canEdit, 
                     <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded flex-none ${kindStyle(s.kind)}`}>{PESTEL_KIND_LABELS[s.kind]}</span>
                     <span className="text-[11px] text-gray-700 dark:text-gray-200 flex-1">{s.text}</span>
                     <span className="text-[10px] text-gray-400 flex-none">etki {s.impact}</span>
-                    <button onClick={() => addSuggestions([s])} className="text-[11px] font-semibold text-indigo-600 hover:underline flex-none"><i className="fa-solid fa-plus mr-0.5"></i>Ekle</button>
+                    <button onClick={() => addSuggestions([s])} className="text-[11px] font-semibold text-indigo-600 hover:underline flex-none"><i aria-hidden="true" className="fa-solid fa-plus mr-0.5"></i>Ekle</button>
                   </div>
                 ))}
               </div>
@@ -139,7 +139,7 @@ const PestelModal: React.FC<PestelModalProps> = ({ projectName, items, canEdit, 
 
           {items.length === 0 && !canEdit && (
             <div className="text-center py-10 text-gray-400">
-              <i className="fa-solid fa-globe text-3xl mb-3 opacity-40"></i>
+              <i aria-hidden="true" className="fa-solid fa-globe text-3xl mb-3 opacity-40"></i>
               <p className="text-xs">Bu proje için henüz PESTEL analizi girilmemiş.</p>
             </div>
           )}
@@ -153,7 +153,7 @@ const PestelModal: React.FC<PestelModalProps> = ({ projectName, items, canEdit, 
                 <div key={cat} className="bg-gray-50/60 dark:bg-gray-800/40 rounded-2xl border border-gray-100 dark:border-gray-700 p-4">
                   <div className="flex items-center gap-2 mb-3">
                     <span className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs font-bold flex-none" style={{ backgroundColor: meta.hex }}>{meta.letter}</span>
-                    <span className="text-xs font-semibold text-gray-700 dark:text-gray-200"><i className={`fa-solid ${meta.icon} mr-1.5`} style={{ color: meta.hex }}></i>{meta.label}</span>
+                    <span className="text-xs font-semibold text-gray-700 dark:text-gray-200"><i aria-hidden="true" className={`fa-solid ${meta.icon} mr-1.5`} style={{ color: meta.hex }}></i>{meta.label}</span>
                     <span className="ml-auto text-[11px] font-semibold text-gray-400">{catItems.length}</span>
                   </div>
 
@@ -174,14 +174,14 @@ const PestelModal: React.FC<PestelModalProps> = ({ projectName, items, canEdit, 
                               <select className={`${inputCls} w-12 flex-none`} value={it.impact} onChange={e => update(it.id, { impact: Number(e.target.value) as RiskLevel })} title="Etki (1-5)">
                                 {LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
                               </select>
-                              <button onClick={() => remove(it.id)} className="w-6 h-6 rounded-md text-gray-300 hover:text-red-500 flex-none" title="Sil"><i className="fa-solid fa-trash text-[10px]"></i></button>
+                              <button aria-label="Sil" onClick={() => remove(it.id)} className="w-6 h-6 rounded-md text-gray-300 hover:text-red-500 flex-none" title="Sil"><i aria-hidden="true" className="fa-solid fa-trash text-[10px]"></i></button>
                             </div>
                             <input className={inputCls} value={it.note || ''} placeholder="Aksiyon / not (opsiyonel)" onChange={e => update(it.id, { note: e.target.value || undefined })} />
                             {it.kind === 'threat' && it.text.trim() && (
                               existingRiskTitles.has(pestelRiskTitle(it).toLocaleLowerCase('tr-TR'))
-                                ? <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600 dark:text-emerald-300"><i className="fa-solid fa-circle-check"></i>Risk kaydı oluşturuldu</span>
+                                ? <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600 dark:text-emerald-300"><i aria-hidden="true" className="fa-solid fa-circle-check"></i>Risk kaydı oluşturuldu</span>
                                 : <button onClick={() => onCreateRisk(it)} className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-md bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors" title="Bu tehditten risk kaydı üret">
-                                    <i className="fa-solid fa-bolt"></i>Risk Oluştur
+                                    <i aria-hidden="true" className="fa-solid fa-bolt"></i>Risk Oluştur
                                   </button>
                             )}
                           </div>
@@ -209,8 +209,8 @@ const PestelModal: React.FC<PestelModalProps> = ({ projectName, items, canEdit, 
                         onChange={e => setDrafts(d => ({ ...d, [cat]: e.target.value }))}
                         onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(cat); } }}
                       />
-                      <button onClick={() => add(cat)} className="text-white text-[11px] font-semibold px-3 py-1.5 rounded-lg flex-none hover:opacity-90" style={{ backgroundColor: 'var(--app-primary)' }}>
-                        <i className="fa-solid fa-plus"></i>
+                      <button aria-label="Ekle" onClick={() => add(cat)} className="text-white text-[11px] font-semibold px-3 py-1.5 rounded-lg flex-none hover:opacity-90" style={{ backgroundColor: 'var(--app-primary)' }}>
+                        <i aria-hidden="true" className="fa-solid fa-plus"></i>
                       </button>
                     </div>
                   )}
@@ -220,7 +220,7 @@ const PestelModal: React.FC<PestelModalProps> = ({ projectName, items, canEdit, 
           </div>
 
           {!canEdit && (
-            <p className="text-[11px] text-amber-600 dark:text-amber-300"><i className="fa-solid fa-lock mr-1"></i>PESTEL analizini yalnızca proje sahibi düzenler (salt-okunur görünüm).</p>
+            <p className="text-[11px] text-amber-600 dark:text-amber-300"><i aria-hidden="true" className="fa-solid fa-lock mr-1"></i>PESTEL analizini yalnızca proje sahibi düzenler (salt-okunur görünüm).</p>
           )}
         </div>
       </div>

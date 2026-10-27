@@ -43,7 +43,7 @@ const ScenarioView: React.FC<ScenarioViewProps> = ({ people, projects, allocatio
     <div className="space-y-4">
       <div className="bg-accent/20 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700 rounded-2xl px-4 py-3" style={{ backgroundColor: 'var(--app-accent-light)' }}>
         <p className="text-[11px] text-gray-600 dark:text-gray-300">
-          <i className="fa-solid fa-flask mr-2" style={{ color: 'var(--app-primary)' }}></i>
+          <i aria-hidden="true" className="fa-solid fa-flask mr-2" style={{ color: 'var(--app-primary)' }}></i>
           <b>Simülasyon:</b> Teklifleri "kazanılmış" sayıp varsayımsal işe alımlar ekleyin; hangi rollerin açığa düştüğünü görün. Hiçbir değişiklik kaydedilmez.
         </p>
       </div>
@@ -86,7 +86,7 @@ const ScenarioView: React.FC<ScenarioViewProps> = ({ people, projects, allocatio
                 <div key={i} className="flex items-center gap-2 text-[11px] bg-gray-50 dark:bg-gray-900/50 rounded-lg px-2 py-1.5">
                   <span className="flex-1 text-gray-600 dark:text-gray-300 truncate">{h.departmentCode} · {h.role}</span>
                   <span className="font-semibold" style={{ color: 'var(--app-primary)' }}>+{fmt(h.aa)} AA</span>
-                  <button onClick={() => setHires(prev => prev.filter((_, x) => x !== i))} className="text-gray-300 hover:text-red-500"><i className="fa-solid fa-times text-[10px]"></i></button>
+                  <button aria-label="Kaldır" onClick={() => setHires(prev => prev.filter((_, x) => x !== i))} className="text-gray-300 hover:text-red-500"><i aria-hidden="true" className="fa-solid fa-times text-[10px]"></i></button>
                 </div>
               ))}
             </div>
@@ -113,7 +113,7 @@ const ScenarioView: React.FC<ScenarioViewProps> = ({ people, projects, allocatio
             </div>
             {result.newlyStrained.length > 0 && (
               <p className="text-[11px] text-red-600 dark:text-red-300 pt-1">
-                <i className="fa-solid fa-triangle-exclamation mr-1"></i>{result.newlyStrained.length} rol senaryoda açığa düşüyor
+                <i aria-hidden="true" className="fa-solid fa-triangle-exclamation mr-1"></i>{result.newlyStrained.length} rol senaryoda açığa düşüyor
               </p>
             )}
           </div>
@@ -139,7 +139,7 @@ const ScenarioView: React.FC<ScenarioViewProps> = ({ people, projects, allocatio
                     <td colSpan={14} className="px-4 py-2 sticky left-0">
                       <span className="text-xs font-semibold text-gray-700 dark:text-gray-200">{row.role}</span>
                       <span className="ml-2 text-[11px] text-gray-400">{row.departmentCode}</span>
-                      {strained && <span className="ml-3 text-[11px] font-semibold text-red-500"><i className="fa-solid fa-triangle-exclamation mr-1"></i>senaryoda açığa düşüyor ({fmt(row.totals.gap)} AA)</span>}
+                      {strained && <span className="ml-3 text-[11px] font-semibold text-red-500"><i aria-hidden="true" className="fa-solid fa-triangle-exclamation mr-1"></i>senaryoda açığa düşüyor ({fmt(row.totals.gap)} AA)</span>}
                     </td>
                   </tr>
                   {([

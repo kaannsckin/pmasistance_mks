@@ -35,7 +35,7 @@ const StatCard: React.FC<{ title: string; value: string; subText?: string; icon:
             {subText && <p className="text-xs text-gray-400 mt-1">{subText}</p>}
         </div>
         <div className={`p-4 rounded-full text-white ${colorClass} bg-opacity-90 shadow-md`}>
-            <i className={`fa-solid ${icon} text-xl`}></i>
+            <i aria-hidden="true" className={`fa-solid ${icon} text-xl`}></i>
         </div>
     </div>
 );
@@ -43,7 +43,7 @@ const StatCard: React.FC<{ title: string; value: string; subText?: string; icon:
 const ChartContainer: React.FC<{ title: string, children: React.ReactNode, active?: boolean }> = ({ title, children, active }) => (
     <div className={`bg-white dark:bg-gray-800 p-5 rounded-xl shadow-sm border transition-colors h-full ${active ? 'border-blue-400 ring-2 ring-blue-100 dark:ring-blue-900' : 'border-gray-100 dark:border-gray-700'}`}>
         <h3 className="text-md font-semibold text-gray-800 dark:text-white mb-4 flex items-center">
-            <i className="fa-solid fa-chart-pie mr-2 text-blue-500"></i>
+            <i aria-hidden="true" className="fa-solid fa-chart-pie mr-2 text-blue-500"></i>
             {title}
         </h3>
         {children}
@@ -227,7 +227,7 @@ const DashboardMetrics: React.FC<DashboardMetricsProps> = ({ tasks, onViewTask }
                     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 h-full flex flex-col overflow-hidden max-h-[600px] xl:max-h-none">
                         <div className="p-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50 flex justify-between items-center">
                             <h3 className="font-bold text-gray-800 dark:text-white flex items-center">
-                                <i className="fa-solid fa-list-check mr-2 text-blue-500"></i>
+                                <i aria-hidden="true" className="fa-solid fa-list-check mr-2 text-blue-500"></i>
                                 {activeFilter ? `${activeFilter.value} Görevleri` : 'Görev Detayı'}
                             </h3>
                             {activeFilter && (
@@ -235,7 +235,7 @@ const DashboardMetrics: React.FC<DashboardMetricsProps> = ({ tasks, onViewTask }
                                     onClick={() => setActiveFilter(null)} 
                                     className="text-xs text-red-500 hover:text-red-700 flex items-center"
                                 >
-                                    <i className="fa-solid fa-times mr-1"></i>Temizle
+                                    <i aria-hidden="true" className="fa-solid fa-times mr-1"></i>Temizle
                                 </button>
                             )}
                         </div>
@@ -270,7 +270,7 @@ const DashboardMetrics: React.FC<DashboardMetricsProps> = ({ tasks, onViewTask }
                                 )
                             ) : (
                                 <div className="flex flex-col items-center justify-center h-full text-gray-400 text-center p-8 opacity-70">
-                                    <i className="fa-solid fa-chart-simple text-5xl mb-4 text-gray-300 dark:text-gray-600"></i>
+                                    <i aria-hidden="true" className="fa-solid fa-chart-simple text-5xl mb-4 text-gray-300 dark:text-gray-600"></i>
                                     <h4 className="text-lg font-medium text-gray-500 dark:text-gray-400">Detayları Görün</h4>
                                     <p className="text-sm mt-2">Sol taraftaki grafiklerden bir dilime veya çubuğa tıklayarak ilgili görevleri burada listeleyebilirsiniz.</p>
                                 </div>

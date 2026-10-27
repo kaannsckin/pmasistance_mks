@@ -260,9 +260,9 @@ const NotesView: React.FC<NotesViewProps> = ({ notes, resources, tagColors, setT
 
   const FormattingToolbar = () => (
       <div className="flex flex-wrap items-center space-x-1 p-2 bg-gray-50/50 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-700 backdrop-blur-sm sticky top-0 z-10">
-          <button onClick={() => applyFormatting('**', '**')} className="p-2 hover:bg-white dark:hover:bg-gray-700 rounded-lg transition-all text-xs font-black shadow-sm" title="Kalın"><i className="fa-solid fa-bold"></i></button>
-          <button onClick={() => applyFormatting('*', '*')} className="p-2 hover:bg-white dark:hover:bg-gray-700 rounded-lg transition-all text-xs italic shadow-sm" title="İtalik"><i className="fa-solid fa-italic"></i></button>
-          <button onClick={() => applyFormatting('==', '==')} className="p-2 hover:bg-white dark:hover:bg-gray-700 rounded-lg transition-all text-xs text-yellow-600 shadow-sm" title="Vurgula"><i className="fa-solid fa-highlighter"></i></button>
+          <button aria-label="Kalın" onClick={() => applyFormatting('**', '**')} className="p-2 hover:bg-white dark:hover:bg-gray-700 rounded-lg transition-all text-xs font-black shadow-sm" title="Kalın"><i aria-hidden="true" className="fa-solid fa-bold"></i></button>
+          <button aria-label="İtalik" onClick={() => applyFormatting('*', '*')} className="p-2 hover:bg-white dark:hover:bg-gray-700 rounded-lg transition-all text-xs italic shadow-sm" title="İtalik"><i aria-hidden="true" className="fa-solid fa-italic"></i></button>
+          <button aria-label="Vurgula" onClick={() => applyFormatting('==', '==')} className="p-2 hover:bg-white dark:hover:bg-gray-700 rounded-lg transition-all text-xs text-yellow-600 shadow-sm" title="Vurgula"><i aria-hidden="true" className="fa-solid fa-highlighter"></i></button>
           <div className="w-px h-4 bg-gray-200 dark:bg-gray-600 mx-1"></div>
           <button onClick={() => applyFormatting('[ ] ', '')} className="px-3 py-1.5 hover:bg-emerald-500 hover:text-white rounded-lg transition-all text-[10px] font-black text-emerald-600 uppercase tracking-tighter bg-emerald-50 dark:bg-emerald-950/20" title="ToDo Ekle">ToDo</button>
           <button onClick={() => applyFormatting('#anımsatıcı ', '')} className="px-3 py-1.5 hover:bg-amber-500 hover:text-white rounded-lg transition-all text-[10px] font-black text-amber-600 uppercase tracking-tighter bg-amber-50 dark:bg-amber-950/20 ml-1" title="Anımsatıcı Ekle">Anımsatıcı</button>
@@ -320,8 +320,8 @@ const NotesView: React.FC<NotesViewProps> = ({ notes, resources, tagColors, setT
                 >
                     {parts.map((part, i) => {
                         if (!part) return null;
-                        if (part === '[ ]') return <i key={i} onClick={(e) => { e.stopPropagation(); toggleTodo(noteId, lineIdx); }} className="fa-regular fa-square mr-3 mt-1 text-gray-300 hover:text-emerald-500 transition-colors cursor-pointer no-underline opacity-100 inline-block"></i>;
-                        if (part === '[x]') return <i key={i} onClick={(e) => { e.stopPropagation(); toggleTodo(noteId, lineIdx); }} className="fa-solid fa-square-check mr-3 mt-1 text-emerald-500 hover:text-emerald-600 transition-colors cursor-pointer no-underline opacity-100 inline-block"></i>;
+                        if (part === '[ ]') return <i key={i} role="checkbox" aria-checked={false} aria-label="Yapılacak" tabIndex={0} onClick={(e) => { e.stopPropagation(); toggleTodo(noteId, lineIdx); }} onKeyDown={(e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); toggleTodo(noteId, lineIdx); } }} className="fa-regular fa-square mr-3 mt-1 text-gray-300 hover:text-emerald-500 transition-colors cursor-pointer no-underline opacity-100 inline-block"></i>;
+                        if (part === '[x]') return <i key={i} role="checkbox" aria-checked={true} aria-label="Yapılacak" tabIndex={0} onClick={(e) => { e.stopPropagation(); toggleTodo(noteId, lineIdx); }} onKeyDown={(e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); toggleTodo(noteId, lineIdx); } }} className="fa-solid fa-square-check mr-3 mt-1 text-emerald-500 hover:text-emerald-600 transition-colors cursor-pointer no-underline opacity-100 inline-block"></i>;
                         if (part.startsWith('[c:')) { currentColor = part.slice(3, -1); return null; }
                         if (part === '[/c]') { currentColor = ''; return null; }
                         if (part.startsWith('**') && part.endsWith('**')) return <strong key={i} className="font-black" style={currentColor ? { color: currentColor } : {}}>{part.slice(2, -2)}</strong>;
@@ -337,11 +337,11 @@ const NotesView: React.FC<NotesViewProps> = ({ notes, resources, tagColors, setT
                     })}
                 </div>
 
-                <button 
+                <button aria-label={isExpanded ? 'Satır notunu kapat' : 'Satır notu'} 
                     onClick={(e) => { e.stopPropagation(); toggleLineExpansion(noteId, lineIdx, line, lineUpdates?.[lineIdx] || ''); }}
                     className={`flex-none ml-2 transition-all p-1.5 rounded-lg ${isExpanded || hasUpdate ? 'text-amber-500 opacity-100' : 'text-gray-200 opacity-0 group-hover/line:opacity-100'}`}
                 >
-                    <i className={`fa-solid ${isExpanded ? 'fa-chevron-up' : hasUpdate ? 'fa-note-sticky' : 'fa-sticky-note'} text-[10px]`}></i>
+                    <i aria-hidden="true" className={`fa-solid ${isExpanded ? 'fa-chevron-up' : hasUpdate ? 'fa-note-sticky' : 'fa-sticky-note'} text-[10px]`}></i>
                 </button>
             </div>
 
@@ -377,7 +377,7 @@ const NotesView: React.FC<NotesViewProps> = ({ notes, resources, tagColors, setT
 
             {!isExpanded && hasUpdate && (
                 <div className="ml-10 mb-4 p-3 bg-amber-50/50 dark:bg-amber-900/10 border-l-2 border-amber-500/50 text-[11px] text-amber-800 dark:text-amber-400 italic rounded-r-2xl flex items-start shadow-sm">
-                    <i className="fa-solid fa-reply fa-rotate-180 mr-3 mt-1.5 opacity-40 text-[9px]"></i>
+                    <i aria-hidden="true" className="fa-solid fa-reply fa-rotate-180 mr-3 mt-1.5 opacity-40 text-[9px]"></i>
                     <span className="leading-relaxed">{lineUpdates[lineIdx]}</span>
                 </div>
             )}
@@ -392,13 +392,13 @@ const NotesView: React.FC<NotesViewProps> = ({ notes, resources, tagColors, setT
       <aside className="w-full lg:w-72 flex-shrink-0 space-y-6 order-2 lg:order-1">
           <div className="bg-white dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700 p-6 shadow-sm sticky top-24">
               <h3 className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-6 flex items-center">
-                  <i className="fa-solid fa-compass mr-3 text-primary" style={{ color: 'var(--app-primary)' }}></i> NAVİGASYON
+                  <i aria-hidden="true" className="fa-solid fa-compass mr-3 text-primary" style={{ color: 'var(--app-primary)' }}></i> NAVİGASYON
               </h3>
               
               <div className="space-y-2 mb-8">
                   <button onClick={() => setActiveTagFilter(null)} className={`w-full text-left px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-tighter transition-all flex items-center justify-between ${activeTagFilter === null ? 'bg-primary text-white shadow-lg' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100'}`} style={activeTagFilter === null ? { backgroundColor: 'var(--app-primary)' } : {}}>
                       TÜM KAYITLAR
-                      <i className="fa-solid fa-list-ul opacity-40"></i>
+                      <i aria-hidden="true" className="fa-solid fa-list-ul opacity-40"></i>
                   </button>
                   <button onClick={() => setIsToDosOpen(true)} className="w-full text-left px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-tighter text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 transition-all flex items-center justify-between border border-emerald-100 dark:border-emerald-900/50">
                       YAPILACAKLAR
@@ -411,7 +411,7 @@ const NotesView: React.FC<NotesViewProps> = ({ notes, resources, tagColors, setT
               </div>
 
               <h3 className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-4 flex items-center">
-                  <i className="fa-solid fa-hashtag mr-3 text-purple-500"></i> ETİKETLER
+                  <i aria-hidden="true" className="fa-solid fa-hashtag mr-3 text-purple-500"></i> ETİKETLER
               </h3>
               <div className="grid grid-cols-1 gap-1">
                   {allUsedTags.map(tag => {
@@ -450,8 +450,8 @@ const NotesView: React.FC<NotesViewProps> = ({ notes, resources, tagColors, setT
              <div className="flex items-center space-x-2">
                  <button onClick={expandAll} className="px-4 py-2 rounded-xl bg-gray-100 dark:bg-gray-800 text-[9px] font-black uppercase tracking-widest text-gray-500 hover:text-primary transition-all">Tümünü Aç</button>
                  <button onClick={collapseAll} className="px-4 py-2 rounded-xl bg-gray-100 dark:bg-gray-800 text-[9px] font-black uppercase tracking-widest text-gray-500 hover:text-primary transition-all">Tümünü Kapat</button>
-                 <button onClick={() => setIsHelpOpen(true)} className="w-10 h-10 rounded-2xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-400 hover:text-primary transition-all shadow-sm">
-                    <i className="fa-solid fa-question"></i>
+                 <button aria-label="Yardım" onClick={() => setIsHelpOpen(true)} className="w-10 h-10 rounded-2xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-400 hover:text-primary transition-all shadow-sm">
+                    <i aria-hidden="true" className="fa-solid fa-question"></i>
                  </button>
              </div>
           </div>
@@ -463,7 +463,7 @@ const NotesView: React.FC<NotesViewProps> = ({ notes, resources, tagColors, setT
                     <div className="flex justify-between items-center mb-6">
                         <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">YENİ KAYIT OLUŞTUR</span>
                         <div className="flex items-center space-x-3 bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-700 p-2 px-4 rounded-2xl shadow-inner">
-                            <i className="fa-solid fa-calendar-alt text-primary opacity-60 text-xs" style={{ color: 'var(--app-primary)' }}></i>
+                            <i aria-hidden="true" className="fa-solid fa-calendar-alt text-primary opacity-60 text-xs" style={{ color: 'var(--app-primary)' }}></i>
                             <input 
                               type="date" 
                               value={creationDate} 
@@ -481,7 +481,7 @@ const NotesView: React.FC<NotesViewProps> = ({ notes, resources, tagColors, setT
                     />
                     <div className="flex justify-between items-center mt-8 pt-6 border-t dark:border-gray-700/50">
                         <p className="text-[10px] text-gray-300 dark:text-gray-600 font-black uppercase tracking-widest">
-                            <i className="fa-solid fa-keyboard mr-2"></i> CTRL + ENTER İLE HIZLI KAYDET
+                            <i aria-hidden="true" className="fa-solid fa-keyboard mr-2"></i> CTRL + ENTER İLE HIZLI KAYDET
                         </p>
                         <button 
                             onClick={handleAddNote} 
@@ -537,7 +537,7 @@ const NotesView: React.FC<NotesViewProps> = ({ notes, resources, tagColors, setT
                                 )}
                             </div>
                             <div className="text-gray-300 group-hover:text-primary transition-colors">
-                                <i className={`fa-solid fa-chevron-${isCollapsed ? 'down' : 'up'}`}></i>
+                                <i aria-hidden="true" className={`fa-solid fa-chevron-${isCollapsed ? 'down' : 'up'}`}></i>
                             </div>
                         </div>
 
@@ -567,12 +567,12 @@ const NotesView: React.FC<NotesViewProps> = ({ notes, resources, tagColors, setT
                                                 
                                                 <div className="flex items-center justify-between mt-8 pt-6 border-t border-gray-50 dark:border-gray-700/50">
                                                     <div className="flex items-center space-x-6 text-[10px] font-black text-gray-300 dark:text-gray-500 uppercase tracking-widest">
-                                                        <span className="flex items-center"><i className="fa-regular fa-clock mr-2 text-primary/40" style={{ color: 'var(--app-primary)' }}></i> {new Date(note.createdAt).toLocaleTimeString('tr-TR', { hour:'2-digit', minute:'2-digit' })}</span>
-                                                        <span className="flex items-center"><i className="fa-solid fa-quote-left mr-2 text-primary/40" style={{ color: 'var(--app-primary)' }}></i> HAFTA {note.weekNumber}</span>
+                                                        <span className="flex items-center"><i aria-hidden="true" className="fa-regular fa-clock mr-2 text-primary/40" style={{ color: 'var(--app-primary)' }}></i> {new Date(note.createdAt).toLocaleTimeString('tr-TR', { hour:'2-digit', minute:'2-digit' })}</span>
+                                                        <span className="flex items-center"><i aria-hidden="true" className="fa-solid fa-quote-left mr-2 text-primary/40" style={{ color: 'var(--app-primary)' }}></i> HAFTA {note.weekNumber}</span>
                                                     </div>
                                                     <div className="flex items-center opacity-0 group-hover:opacity-100 transition-all space-x-2">
-                                                        <button onClick={() => { setEditingNoteId(note.id); setEditInputValue(note.content); }} className="w-9 h-9 flex items-center justify-center rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-400 hover:text-primary transition-colors"><i className="fa-solid fa-pencil text-[10px]"></i></button>
-                                                        <button onClick={() => { if(window.confirm('Bu kaydı silmek istediğinize emin misiniz?')) onDeleteNote(note.id); }} className="w-9 h-9 flex items-center justify-center rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-400 hover:text-red-500 transition-colors"><i className="fa-solid fa-trash-can text-[10px]"></i></button>
+                                                        <button aria-label="Düzenle" onClick={() => { setEditingNoteId(note.id); setEditInputValue(note.content); }} className="w-9 h-9 flex items-center justify-center rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-400 hover:text-primary transition-colors"><i aria-hidden="true" className="fa-solid fa-pencil text-[10px]"></i></button>
+                                                        <button aria-label="Sil" onClick={() => { if(window.confirm('Bu kaydı silmek istediğinize emin misiniz?')) onDeleteNote(note.id); }} className="w-9 h-9 flex items-center justify-center rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-400 hover:text-red-500 transition-colors"><i aria-hidden="true" className="fa-solid fa-trash-can text-[10px]"></i></button>
                                                     </div>
                                                 </div>
                                             </div>

@@ -28,7 +28,7 @@ Teşekkürler.`;
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-lg">
         <div className="flex justify-between items-center p-4 border-b dark:border-gray-700">
           <h2 className="text-lg font-bold flex items-center">
-            <i className="fa-brands fa-microsoft-teams text-blue-500 mr-2"></i>
+            <i aria-hidden="true" className="fa-brands fa-microsoft-teams text-blue-500 mr-2"></i>
             Teams Mesaj Taslağı
           </h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-700 dark:hover:text-white">&times;</button>
@@ -53,7 +53,7 @@ Teşekkürler.`;
             onClick={handleSend}
             className="px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700 flex items-center space-x-2"
           >
-            <i className="fa-solid fa-paper-plane"></i>
+            <i aria-hidden="true" className="fa-solid fa-paper-plane"></i>
             <span>Teams'de Aç ve Gönder</span>
           </button>
         </div>

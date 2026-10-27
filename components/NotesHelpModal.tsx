@@ -12,15 +12,15 @@ const NotesHelpModal: React.FC<NotesHelpModalProps> = ({ onClose }) => {
         <div className="flex justify-between items-center p-6 border-b dark:border-gray-700 bg-blue-600 text-white">
           <div className="flex items-center space-x-3">
              <div className="bg-white/20 p-2 rounded-lg">
-                <i className="fa-solid fa-circle-info text-xl"></i>
+                <i aria-hidden="true" className="fa-solid fa-circle-info text-xl"></i>
              </div>
              <div>
                 <h2 className="text-xl font-black">Günlük Rehberi</h2>
                 <p className="text-[10px] font-bold opacity-80 uppercase tracking-widest">Özellikler ve Kısayollar</p>
              </div>
           </div>
-          <button onClick={onClose} className="bg-black/10 hover:bg-black/20 w-8 h-8 rounded-full transition-colors flex items-center justify-center">
-            <i className="fa-solid fa-times"></i>
+          <button aria-label="Kapat" onClick={onClose} className="bg-black/10 hover:bg-black/20 w-8 h-8 rounded-full transition-colors flex items-center justify-center">
+            <i aria-hidden="true" className="fa-solid fa-times"></i>
           </button>
         </div>
         
@@ -29,7 +29,7 @@ const NotesHelpModal: React.FC<NotesHelpModalProps> = ({ onClose }) => {
                 <div className="p-5 bg-emerald-50 dark:bg-emerald-900/20 rounded-2xl border border-emerald-100 dark:border-emerald-800 hover:border-emerald-400 transition-all group">
                     <div className="flex items-center space-x-3 mb-3">
                         <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center text-emerald-600">
-                            <i className="fa-solid fa-check-double"></i>
+                            <i aria-hidden="true" className="fa-solid fa-check-double"></i>
                         </div>
                         <span className="text-emerald-500 font-black text-xs uppercase tracking-widest">ToDo Listesi</span>
                     </div>
@@ -37,7 +37,7 @@ const NotesHelpModal: React.FC<NotesHelpModalProps> = ({ onClose }) => {
                         Notlarınıza interaktif ToDo listeleri ekleyin. <code className="bg-white dark:bg-gray-800 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-700 text-emerald-600">[ ] Görev</code> yazarak başlayın. 
                     </p>
                     <div className="mt-3 flex items-center text-[10px] font-bold text-emerald-600/60 uppercase">
-                        <i className="fa-solid fa-lightbulb mr-1.5"></i>
+                        <i aria-hidden="true" className="fa-solid fa-lightbulb mr-1.5"></i>
                         Pano üzerinden topluca takip edilebilir.
                     </div>
                 </div>
@@ -45,7 +45,7 @@ const NotesHelpModal: React.FC<NotesHelpModalProps> = ({ onClose }) => {
                 <div className="p-5 bg-amber-50 dark:bg-amber-900/20 rounded-2xl border border-amber-100 dark:border-amber-800 hover:border-amber-400 transition-all">
                     <div className="flex items-center space-x-3 mb-3">
                         <div className="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center text-amber-600">
-                            <i className="fa-solid fa-bell"></i>
+                            <i aria-hidden="true" className="fa-solid fa-bell"></i>
                         </div>
                         <span className="text-amber-500 font-black text-xs uppercase tracking-widest">Anımsatıcılar</span>
                     </div>
@@ -53,7 +53,7 @@ const NotesHelpModal: React.FC<NotesHelpModalProps> = ({ onClose }) => {
                         Kritik satırları <code className="bg-white dark:bg-gray-800 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-700 text-amber-600">#anımsatıcı</code> etiketiyle işaretleyerek özel panoda görünmesini sağlayın.
                     </p>
                     <div className="mt-3 flex items-center text-[10px] font-bold text-amber-600/60 uppercase">
-                        <i className="fa-solid fa-clock mr-1.5"></i>
+                        <i aria-hidden="true" className="fa-solid fa-clock mr-1.5"></i>
                         Tarih bazlı sıralama yapılır.
                     </div>
                 </div>
@@ -61,7 +61,7 @@ const NotesHelpModal: React.FC<NotesHelpModalProps> = ({ onClose }) => {
                 <div className="p-5 bg-blue-50 dark:bg-blue-900/20 rounded-2xl border border-blue-100 dark:border-blue-800 hover:border-blue-400 transition-all">
                     <div className="flex items-center space-x-3 mb-3">
                         <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center text-blue-600">
-                            <i className="fa-solid fa-palette"></i>
+                            <i aria-hidden="true" className="fa-solid fa-palette"></i>
                         </div>
                         <span className="text-blue-500 font-black text-xs uppercase tracking-widest">Görsel Düzen</span>
                     </div>
@@ -72,7 +72,7 @@ const NotesHelpModal: React.FC<NotesHelpModalProps> = ({ onClose }) => {
                         </span>
                     </p>
                     <div className="mt-3 flex items-center text-[10px] font-bold text-blue-600/60 uppercase">
-                        <i className="fa-solid fa-wand-magic-sparkles mr-1.5"></i>
+                        <i aria-hidden="true" className="fa-solid fa-wand-magic-sparkles mr-1.5"></i>
                         Özel yazı renklerini kullanın.
                     </div>
                 </div>
@@ -80,7 +80,7 @@ const NotesHelpModal: React.FC<NotesHelpModalProps> = ({ onClose }) => {
                 <div className="p-5 bg-purple-50 dark:bg-purple-900/20 rounded-2xl border border-purple-100 dark:border-purple-800 hover:border-blue-400 transition-all">
                     <div className="flex items-center space-x-3 mb-3">
                         <div className="w-8 h-8 rounded-lg bg-purple-100 dark:bg-purple-900/40 flex items-center justify-center text-purple-600">
-                            <i className="fa-solid fa-tags"></i>
+                            <i aria-hidden="true" className="fa-solid fa-tags"></i>
                         </div>
                         <span className="text-purple-500 font-black text-xs uppercase tracking-widest">Etiket & Kişi</span>
                     </div>
@@ -88,7 +88,7 @@ const NotesHelpModal: React.FC<NotesHelpModalProps> = ({ onClose }) => {
                         <code className="bg-white dark:bg-gray-800 px-1.5 py-0.5 rounded border border-purple-200 dark:border-purple-700 text-purple-600">#etiket</code> ve <code className="bg-white dark:bg-gray-800 px-1.5 py-0.5 rounded border border-purple-200 dark:border-purple-700 text-purple-600">@kişi</code> mentionları ile otomatik gruplama yapın.
                     </p>
                     <div className="mt-3 flex items-center text-[10px] font-bold text-purple-600/60 uppercase">
-                        <i className="fa-solid fa-bolt mr-1.5"></i>
+                        <i aria-hidden="true" className="fa-solid fa-bolt mr-1.5"></i>
                         Yazarken otomatik tamamlama açılır.
                     </div>
                 </div>

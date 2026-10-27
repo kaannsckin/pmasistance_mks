@@ -2,7 +2,8 @@ import React, { useMemo, useState } from 'react';
 import { WorkspaceData } from '../types';
 import { MONTHS_TR } from '../utils/allocations';
 import { fmtTL } from '../utils/costing';
-import { buildPortfolioEVM, defaultStatusMonth, ProjectEVM } from '../utils/evm';
+import { buildPortfolioEVM, closedStatusMonth, ProjectEVM } from '../utils/evm';
+import { inMonthEstimates } from '../utils/inMonthActual';
 
 interface EvmPanelProps {
   workspace: WorkspaceData;
@@ -27,8 +28,15 @@ const Kpi: React.FC<{ label: string; value: string; tone?: string; sub?: string;
 );
 
 const EvmPanel: React.FC<EvmPanelProps> = ({ workspace, year, projectIds }) => {
-  const [statusMonth, setStatusMonth] = useState<number>(() => defaultStatusMonth(year));
+  const [statusMonth, setStatusMonth] = useState<number>(() => closedStatusMonth(workspace, year));
   const evm = useMemo(() => buildPortfolioEVM(workspace, year, projectIds, statusMonth), [workspace, year, projectIds, statusMonth]);
+
+  // Kapanmamış ayın tahmini gerçekleşeni (haftalık rapor worklog'u; EVM'e girmez)
+  const estimates = useMemo(() => {
+    const now = new Date();
+    if (year !== now.getFullYear()) return [];
+    return evm.projects.flatMap(p => inMonthEstimates(workspace, p.projectId, now).slice(-1).map(e => ({ ...e, name: p.projectName, id: p.projectId })));
+  }, [workspace, year, evm.projects]);
 
   const budgetPct = evm.bac > 0 ? Math.min(100, (evm.ac / evm.bac) * 100) : 0;
   const evPct = evm.bac > 0 ? Math.min(100, (evm.ev / evm.bac) * 100) : 0;
@@ -38,7 +46,7 @@ const EvmPanel: React.FC<EvmPanelProps> = ({ workspace, year, projectIds }) => {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h3 className="text-sm font-semibold text-gray-800 dark:text-white flex items-center gap-2">
-            <i className="fa-solid fa-chart-pie" style={{ color: 'var(--app-primary)' }}></i>
+            <i aria-hidden="true" className="fa-solid fa-chart-pie" style={{ color: 'var(--app-primary)' }}></i>
             Kazanılmış Değer (EVM) &amp; Bütçe — {year}
           </h3>
           <p className="text-[11px] text-gray-400 mt-0.5">İlerleme görev tamamlanmasından (efor-ağırlıklı) türetilir. Maliyet = AA × ünvan aylık maliyeti.</p>
@@ -53,7 +61,7 @@ const EvmPanel: React.FC<EvmPanelProps> = ({ workspace, year, projectIds }) => {
 
       {evm.costedTitleCount === 0 ? (
         <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl px-4 py-3 text-[11px] text-amber-700 dark:text-amber-300">
-          <i className="fa-solid fa-circle-info mr-1"></i>EVM için ünvan maliyeti gerekir. Veri Havuzu → Ünvanlar'da aylık maliyet girin.
+          <i aria-hidden="true" className="fa-solid fa-circle-info mr-1"></i>EVM için ünvan maliyeti gerekir. Veri Havuzu → Ünvanlar'da aylık maliyet girin.
         </div>
       ) : evm.projects.length === 0 ? (
         <p className="text-center text-gray-400 text-xs py-8">Bu yıl/kapsam için maliyetlenebilir proje yok.</p>
@@ -110,6 +118,33 @@ const EvmPanel: React.FC<EvmPanelProps> = ({ workspace, year, projectIds }) => {
               </tbody>
             </table>
           </div>
+
+          {estimates.length > 0 && (
+            <div className="overflow-x-auto">
+              <p className="text-[11px] font-semibold text-gray-500 dark:text-gray-300 mb-1">Ay içi tahmin — {MONTHS_TR[estimates[0].month - 1]}</p>
+              <p className="text-[10px] text-gray-400 mb-2">Haftalık rapor worklog'undan; EVM'e girmez, ay kapanışında kesinleşir. Plan, worklog'u olan günlere oranlanır.</p>
+              <table className="w-full min-w-[560px]">
+                <thead>
+                  <tr className="bg-gray-50/80 dark:bg-gray-800/80">
+                    {['Proje', 'Kayıtlı gün', 'Tahmini gerçekleşen', 'Aynı döneme düşen plan', 'Oran'].map(h => (
+                      <th key={h} className="px-3 py-2 text-left text-[11px] font-semibold text-gray-400 whitespace-nowrap">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
+                  {estimates.map(e => (
+                    <tr key={e.id}>
+                      <td className="px-3 py-2 text-[11px] font-semibold text-gray-700 dark:text-gray-200 max-w-[180px] truncate" title={e.name}>{e.name}</td>
+                      <td className="px-3 py-2 text-[11px] text-gray-500" title={`Son kayıt ${e.lastDate}`}>{e.coveredDays.toLocaleString('tr-TR')}</td>
+                      <td className="px-3 py-2 text-[11px] text-gray-600 dark:text-gray-300">{e.estimatedAA.toLocaleString('tr-TR')} AA</td>
+                      <td className="px-3 py-2 text-[11px] text-gray-500">{e.planToDateAA.toLocaleString('tr-TR')} AA</td>
+                      <td className={`px-3 py-2 text-[11px] font-semibold ${e.ratio === null ? 'text-gray-400' : e.ratio > 1.1 ? 'text-red-500' : e.ratio < 0.9 ? 'text-amber-600 dark:text-amber-300' : 'text-emerald-600 dark:text-emerald-300'}`}>{e.ratio === null ? '—' : `%${Math.round(e.ratio * 100)}`}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </>
       )}
     </div>

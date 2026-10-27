@@ -68,7 +68,7 @@ const RoadmapCard: React.FC<{
                         {task.priority}
                     </span>
                     <span className="text-xs px-2 py-0.5 rounded-md font-medium bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 truncate max-w-[120px]">
-                       <i className="fa-solid fa-cube mr-1.5 opacity-50"></i> {task.unit}
+                       <i aria-hidden="true" className="fa-solid fa-cube mr-1.5 opacity-50"></i> {task.unit}
                     </span>
                 </div>
 
@@ -83,16 +83,16 @@ const RoadmapCard: React.FC<{
             </div>
 
             <div className="absolute top-2 right-2" ref={menuRef}>
-                <button
+                <button aria-label="Diğer işlemler"
                     onClick={(e) => { e.stopPropagation(); setIsMenuOpen(prev => !prev); }}
                     className="w-7 h-7 flex items-center justify-center rounded-md text-gray-400 dark:text-gray-500 opacity-0 group-hover:opacity-100 hover:bg-gray-100 dark:hover:bg-gray-700 transition-opacity"
                 >
-                    <i className="fa-solid fa-ellipsis-h text-sm"></i>
+                    <i aria-hidden="true" className="fa-solid fa-ellipsis-h text-sm"></i>
                 </button>
                 {isMenuOpen && (
                     <div className="absolute right-0 mt-1 w-36 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-lg shadow-2xl z-10 animate-fade-in-up">
-                        <button onClick={(e) => { e.stopPropagation(); onEditTask(task); setIsMenuOpen(false); }} className="w-full text-left text-xs px-3 py-2 flex items-center space-x-2 hover:bg-gray-50 dark:hover:bg-gray-700"><i className="fa-solid fa-pencil text-gray-400"></i><span>Düzenle</span></button>
-                        <button onClick={(e) => { e.stopPropagation(); onDeleteTask(task.id); setIsMenuOpen(false); }} className="w-full text-left text-xs px-3 py-2 flex items-center space-x-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30"><i className="fa-solid fa-trash-can"></i><span>Sil</span></button>
+                        <button onClick={(e) => { e.stopPropagation(); onEditTask(task); setIsMenuOpen(false); }} className="w-full text-left text-xs px-3 py-2 flex items-center space-x-2 hover:bg-gray-50 dark:hover:bg-gray-700"><i aria-hidden="true" className="fa-solid fa-pencil text-gray-400"></i><span>Düzenle</span></button>
+                        <button onClick={(e) => { e.stopPropagation(); onDeleteTask(task.id); setIsMenuOpen(false); }} className="w-full text-left text-xs px-3 py-2 flex items-center space-x-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30"><i aria-hidden="true" className="fa-solid fa-trash-can"></i><span>Sil</span></button>
                     </div>
                 )}
             </div>
@@ -163,12 +163,12 @@ const RoadmapView: React.FC<RoadmapViewProps> = ({ tasks, resources, onTaskStatu
               >
                 <div className="flex-none flex items-center justify-between mb-4 px-2 group">
                   <div className="flex items-center space-x-2.5">
-                    <i className={`fa-solid ${col.icon} ${col.iconColor} text-sm`}></i>
+                    <i aria-hidden="true" className={`fa-solid ${col.icon} ${col.iconColor} text-sm`}></i>
                     <span className="font-bold text-gray-600 dark:text-gray-300">{col.label}</span>
                     <span className="text-xs font-mono bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 px-2 py-0.5 rounded-full">{tasksInCol.length}</span>
                   </div>
-                  <button onClick={onNewTask} className="text-gray-400 hover:text-primary dark:hover:text-primary p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
-                    <i className="fa-solid fa-plus text-sm"></i>
+                  <button aria-label="Yeni görev" onClick={onNewTask} className="text-gray-400 hover:text-primary dark:hover:text-primary p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
+                    <i aria-hidden="true" className="fa-solid fa-plus text-sm"></i>
                   </button>
                 </div>
 
@@ -183,7 +183,7 @@ const RoadmapView: React.FC<RoadmapViewProps> = ({ tasks, resources, onTaskStatu
                         />
                     ))}
                     <button onClick={onNewTask} className="w-full text-sm p-3 rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
-                        <i className="fa-solid fa-plus mr-2"></i> Yeni Görev Ekle
+                        <i aria-hidden="true" className="fa-solid fa-plus mr-2"></i> Yeni Görev Ekle
                     </button>
                 </div>
               </div>

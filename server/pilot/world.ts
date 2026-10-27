@@ -154,7 +154,7 @@ export const availableAAOf = (personId: string): number => AVAILABLE_AA[personId
  * simülasyon "geçmişteki kullanıcılar" adına yazar; bu günden itibaren bu
  * işleri rol ajanları yapar.
  */
-export const PILOT_BASLANGIC = '2026-10-12';
+export const PILOT_BASLANGIC = '2026-10-19';
 
 /** Simülasyonun worklog ↔ adam-ay dönüşümü: uygulamanın "Jira Billed Hours" kuralıyla aynı (1 iş günü = 8 saat) */
 export const HOURS_PER_DAY = 8;

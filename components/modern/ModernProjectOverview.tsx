@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Project, ProjectSectionKey, RagStatus, Task, View, WorkspaceData } from '../../types';
 import { actorLabel } from '../../utils/audit';
-import { getPlanLockStatus } from '../../utils/allocations';
-import { defaultStatusMonth } from '../../utils/evm';
-import { projectHealth } from '../../utils/executive';
+import { getPlanLockStatus, MONTHS_TR } from '../../utils/allocations';
+import { closedStatusMonth } from '../../utils/evm';
+import { inMonthEstimates } from '../../utils/inMonthActual';
+import { isHealthScored, projectHealth } from '../../utils/executive';
 import { objectiveProgress } from '../../utils/goals';
 import { currentSprint, deadlineLabel, overviewStats, teamLoad, upcomingDeadlines } from '../../utils/projectOverview';
 import { recentChanges, relativeTime } from '../../utils/recentChanges';
@@ -63,7 +64,7 @@ const ModernProjectOverview: React.FC<ModernProjectOverviewProps> = ({ workspace
     const linkable = (v: View) => target(v) !== null;
     const now = new Date();
     const year = now.getFullYear();
-    const health = useMemo(() => projectHealth(workspace, project, year, defaultStatusMonth(year)), [workspace, project, year]);
+    const health = useMemo(() => projectHealth(workspace, project, year, closedStatusMonth(workspace, year)), [workspace, project, year]);
     const stats = useMemo(() => overviewStats(project), [project]);
     const sprint = useMemo(() => currentSprint(project), [project]);
     const deadlines = useMemo(() => upcomingDeadlines(project, new Date(), 5), [project]);
@@ -75,6 +76,8 @@ const ModernProjectOverview: React.FC<ModernProjectOverviewProps> = ({ workspace
     );
     const changes = useMemo(() => (showChanges ? recentChanges(workspace, new Date(), 14).filter(c => c.projectId === project.id) : []), [workspace, project.id, showChanges]);
     const lockStatus = getPlanLockStatus(workspace.planLocks || [], project.id, year);
+    // Kapanmamış ayın tahmini gerçekleşeni (haftalık rapor worklog'u; EVM'e girmez)
+    const inMonth = useMemo(() => inMonthEstimates(workspace, project.id, new Date()).slice(-1)[0], [workspace, project.id]);
     const people = useMemo(() => new Map(workspace.people.map(p => [p.id, `${p.firstName} ${p.lastName}`.trim()])), [workspace.people]);
 
     // Haftalık durum (yalnız düzenleme yetkisi olan değiştirir)
@@ -85,14 +88,15 @@ const ModernProjectOverview: React.FC<ModernProjectOverviewProps> = ({ workspace
     const [healthInfo, setHealthInfo] = useState(false);
 
     const complete = stats.total > 0 && stats.done === stats.total;
-    // Görevi ve haftalık durumu olmayan projede skor anlamsız
-    const noHealthData = stats.total === 0 && !project.rag;
+    // Görevi ve haftalık durumu olmayan projede ve teklif aşamasında skor anlamsız
+    const proposal = !isHealthScored(project);
+    const noHealthData = proposal || (stats.total === 0 && !project.rag);
     const kpis: { key: string; label: string; value: React.ReactNode; note: string; noteTone: string; run?: () => void; hint?: string; info?: () => void }[] = [
         {
             key: 'health',
             label: 'Proje sağlığı',
             value: noHealthData ? '—' : health.score,
-            note: noHealthData ? 'Henüz veri yok' : [BAND_META[health.band].label, ...(health.band === 'good' ? [] : health.reasons.slice(0, 1)), ...(health.confidence === 'low' ? ['güven düşük'] : [])].join(' · '),
+            note: noHealthData ? (proposal ? 'Teklif aşamasında skorlanmaz' : 'Henüz veri yok') : [BAND_META[health.band].label, ...(health.band === 'good' ? [] : health.reasons.slice(0, 1)), ...(health.confidence === 'low' ? ['güven düşük'] : [])].join(' · '),
             noteTone: noHealthData ? 'm-text-3' : BAND_META[health.band].ink,
             hint: health.reasons.length ? `Skoru düşürenler: ${health.reasons.join(', ')}` : undefined,
             info: () => setHealthInfo(true),
@@ -132,6 +136,9 @@ const ModernProjectOverview: React.FC<ModernProjectOverviewProps> = ({ workspace
         ...(team.unassigned ? [{ key: 'own', icon: 'users' as IconName, text: `${team.unassigned} görev kimseye atanmamış`, run: () => onNavigate(View.Tasks) }] : []),
         ...(lockStatus === 'submitted' ? [{ key: 'lock', icon: 'shield' as IconName, text: `${year} planı onay bekliyor`, run: () => onNavigate(View.Allocations) }] : []),
     ];
+    if (inMonth && inMonth.ratio !== null && Math.abs(inMonth.ratio - 1) > 0.1 && linkable(View.Allocations)) {
+        hints.push({ key: 'inmonth', icon: 'clock', text: `${MONTHS_TR[inMonth.month - 1]} (tahmini): worklog planın %${Math.round(inMonth.ratio * 100)}'i — ${inMonth.estimatedAA.toLocaleString('tr-TR')} / ${inMonth.planToDateAA.toLocaleString('tr-TR')} AA`, run: () => onNavigate(View.Allocations) });
+    }
 
     const sprintTiming = (() => {
         if (!sprint) return null;

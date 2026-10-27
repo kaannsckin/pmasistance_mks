@@ -79,7 +79,7 @@ const BacklogTab: React.FC<{ count: number, onClick: () => void, onDrop: (taskId
         >
             <div className="flex flex-col items-center justify-center h-full space-y-10">
                 <div className="bg-amber-100 dark:bg-amber-900/30 w-8 h-8 rounded-xl flex items-center justify-center text-amber-600 dark:text-amber-400 shadow-sm group-hover:scale-110 transition-transform">
-                    <i className="fa-solid fa-box-archive text-xs"></i>
+                    <i aria-hidden="true" className="fa-solid fa-box-archive text-xs"></i>
                 </div>
                 <div className="flex items-center font-black text-[9px] tracking-[0.4em] text-gray-400 dark:text-gray-500 uppercase" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>
                     HAVUZ • BACKLOG
@@ -220,13 +220,13 @@ const KanbanView: React.FC<KanbanViewProps> = ({ tasks, resources, sprintDuratio
         <div className="flex justify-between items-center">
           <div className="flex items-center space-x-4">
              <div className="w-10 h-10 bg-primary rounded-xl text-white shadow-lg flex items-center justify-center" style={{ backgroundColor: 'var(--app-primary)' }}>
-                <i className="fa-solid fa-layer-group text-sm"></i>
+                <i aria-hidden="true" className="fa-solid fa-layer-group text-sm"></i>
              </div>
              <div>
                 <h2 className="text-base font-black text-gray-800 dark:text-white leading-none">Sürüm Planlama</h2>
                 <div className="flex items-center space-x-3 mt-1.5">
                     <span className="text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest flex items-center">
-                        <i className="fa-solid fa-calendar-day mr-1.5 text-primary" style={{ color: 'var(--app-primary)' }}></i>{new Date(projectStartDate).toLocaleDateString('tr-TR')}
+                        <i aria-hidden="true" className="fa-solid fa-calendar-day mr-1.5 text-primary" style={{ color: 'var(--app-primary)' }}></i>{new Date(projectStartDate).toLocaleDateString('tr-TR')}
                     </span>
                     <span className="text-[9px] font-black text-primary uppercase tracking-widest px-2 py-0.5 bg-accent rounded-lg" style={{ color: 'var(--app-primary)', backgroundColor: 'var(--app-accent-light)' }}>
                         MKS SİSTEMİ
@@ -236,18 +236,18 @@ const KanbanView: React.FC<KanbanViewProps> = ({ tasks, resources, sprintDuratio
           </div>
           <div className="flex items-center space-x-2">
             <button onClick={onNewTask} className="bg-primary hover:opacity-90 text-white h-9 px-4 rounded-xl shadow-md transition-all font-black text-[10px] uppercase tracking-widest flex items-center" style={{ backgroundColor: 'var(--app-primary)' }}>
-                <i className="fa-solid fa-plus mr-2"></i> YENİ GÖREV
+                <i aria-hidden="true" className="fa-solid fa-plus mr-2"></i> YENİ GÖREV
             </button>
             <div className="bg-gray-50 dark:bg-gray-800 p-1 rounded-xl flex items-center border border-gray-100 dark:border-gray-700">
                 <button onClick={() => setIsCompact(true)} className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${isCompact ? 'bg-white dark:bg-gray-700 text-primary shadow-sm border border-gray-100 dark:border-gray-600' : 'text-gray-400 hover:text-gray-600'}`} style={isCompact ? { color: 'var(--app-primary)' } : {}}>Kompakt</button>
                 <button onClick={() => setIsCompact(false)} className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${!isCompact ? 'bg-white dark:bg-gray-700 text-primary shadow-sm border border-gray-100 dark:border-gray-600' : 'text-gray-400 hover:text-gray-600'}`} style={!isCompact ? { color: 'var(--app-primary)' } : {}}>Detaylı</button>
             </div>
             <button onClick={handleGeneratePlan} disabled={isLoading} className="bg-primary hover:opacity-90 text-white h-9 px-5 rounded-xl shadow-md transition-all font-black text-[10px] uppercase tracking-widest flex items-center disabled:opacity-50" style={{ backgroundColor: 'var(--app-primary)' }}>
-              {isLoading ? <i className="fa-solid fa-spinner fa-spin mr-2"></i> : <i className="fa-solid fa-magic mr-2"></i>}
+              {isLoading ? <i aria-hidden="true" className="fa-solid fa-spinner fa-spin mr-2"></i> : <i aria-hidden="true" className="fa-solid fa-magic mr-2"></i>}
               {isLoading ? 'HESAPLANIYOR' : 'OTOMATİK PLANLA'}
             </button>
-            <button onClick={() => setIsFullScreen(!isFullScreen)} className={`w-9 h-9 rounded-xl transition-all border flex items-center justify-center ${isFullScreen ? 'bg-accent text-primary border-primary/20' : 'bg-white dark:bg-gray-800 text-gray-400 border-gray-100 dark:border-gray-700 hover:bg-gray-50'}`} style={isFullScreen ? { backgroundColor: 'var(--app-accent-light)', color: 'var(--app-primary)' } : {}} title="Tam Ekran">
-                <i className={`fa-solid ${isFullScreen ? 'fa-compress' : 'fa-expand'} text-xs`}></i>
+            <button aria-label="Tam Ekran" onClick={() => setIsFullScreen(!isFullScreen)} className={`w-9 h-9 rounded-xl transition-all border flex items-center justify-center ${isFullScreen ? 'bg-accent text-primary border-primary/20' : 'bg-white dark:bg-gray-800 text-gray-400 border-gray-100 dark:border-gray-700 hover:bg-gray-50'}`} style={isFullScreen ? { backgroundColor: 'var(--app-accent-light)', color: 'var(--app-primary)' } : {}} title="Tam Ekran">
+                <i aria-hidden="true" className={`fa-solid ${isFullScreen ? 'fa-compress' : 'fa-expand'} text-xs`}></i>
             </button>
           </div>
         </div>
@@ -256,7 +256,7 @@ const KanbanView: React.FC<KanbanViewProps> = ({ tasks, resources, sprintDuratio
         <div className="flex-none bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-800 px-6 py-3 z-10">
           <div className="flex items-start justify-between">
             <div className="flex items-start space-x-3 min-w-0">
-              <i className="fa-solid fa-triangle-exclamation text-amber-500 mt-0.5"></i>
+              <i aria-hidden="true" className="fa-solid fa-triangle-exclamation text-amber-500 mt-0.5"></i>
               <div className="min-w-0">
                 <p className="text-[10px] font-black text-amber-700 dark:text-amber-400 uppercase tracking-widest mb-1">
                   Plan oluşturuldu — {planWarnings.length} uyarı
@@ -271,8 +271,8 @@ const KanbanView: React.FC<KanbanViewProps> = ({ tasks, resources, sprintDuratio
                 </ul>
               </div>
             </div>
-            <button onClick={() => setPlanWarnings([])} className="flex-none ml-4 w-7 h-7 rounded-lg text-amber-500 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors" title="Uyarıları kapat">
-              <i className="fa-solid fa-times text-xs"></i>
+            <button aria-label="Uyarıları kapat" onClick={() => setPlanWarnings([])} className="flex-none ml-4 w-7 h-7 rounded-lg text-amber-500 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors" title="Uyarıları kapat">
+              <i aria-hidden="true" className="fa-solid fa-times text-xs"></i>
             </button>
           </div>
         </div>

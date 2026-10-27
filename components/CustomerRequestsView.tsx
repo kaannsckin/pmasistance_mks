@@ -2,8 +2,8 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { CustomerRequest } from '../types';
 
-declare const XLSX: any;
-declare const Papa: any;
+import * as XLSX from 'xlsx';
+import Papa from 'papaparse';
 
 interface CustomerRequestsViewProps {
   requests: CustomerRequest[];
@@ -44,7 +44,7 @@ const CustomerRequestsView: React.FC<CustomerRequestsViewProps> = ({ requests, s
             let data: any[][] = [];
 
             if (file.name.endsWith('.csv')) {
-                const result = Papa.parse(content as string, { skipEmptyLines: true });
+                const result = Papa.parse<any[]>(content as string, { skipEmptyLines: true });
                 data = result.data;
             } else {
                 const workbook = XLSX.read(content, { type: 'binary' });
@@ -117,7 +117,7 @@ const CustomerRequestsView: React.FC<CustomerRequestsViewProps> = ({ requests, s
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
         <div className="flex items-center space-x-4">
             <div className="p-3 bg-purple-600 rounded-2xl text-white shadow-lg">
-                <i className="fa-solid fa-users-viewfinder text-xl"></i>
+                <i aria-hidden="true" className="fa-solid fa-users-viewfinder text-xl"></i>
             </div>
             <div>
                 <h2 className="text-2xl font-black text-gray-800 dark:text-white">Müşteri İstekleri</h2>
@@ -130,7 +130,7 @@ const CustomerRequestsView: React.FC<CustomerRequestsViewProps> = ({ requests, s
                 onClick={() => setIsModalOpen(true)}
                 className="bg-purple-600 hover:bg-purple-700 text-white px-5 py-2.5 rounded-xl shadow-lg shadow-purple-200 dark:shadow-none transition-all font-black text-xs flex items-center space-x-2"
             >
-                <i className="fa-solid fa-plus"></i>
+                <i aria-hidden="true" className="fa-solid fa-plus"></i>
                 <span>YENİ İSTEK EKLE</span>
             </button>
             <input type="file" ref={fileInputRef} onChange={handleImport} className="hidden" accept=".csv, .xlsx, .xls" />
@@ -139,7 +139,7 @@ const CustomerRequestsView: React.FC<CustomerRequestsViewProps> = ({ requests, s
                 disabled={isImporting}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl shadow-lg shadow-emerald-200 dark:shadow-none transition-all font-black text-xs flex items-center space-x-2"
             >
-                {isImporting ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-file-import"></i>}
+                {isImporting ? <i aria-hidden="true" className="fa-solid fa-spinner fa-spin"></i> : <i aria-hidden="true" className="fa-solid fa-file-import"></i>}
                 <span>DIŞARDAN AKTAR (Excel/CSV)</span>
             </button>
         </div>
@@ -149,7 +149,7 @@ const CustomerRequestsView: React.FC<CustomerRequestsViewProps> = ({ requests, s
       <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
           <div className="p-6 border-b dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/20">
               <div className="relative max-w-md">
-                  <i className="fa-solid fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                  <i aria-hidden="true" className="fa-solid fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
                   <input 
                     type="text" 
                     value={searchTerm} 
@@ -180,8 +180,8 @@ const CustomerRequestsView: React.FC<CustomerRequestsViewProps> = ({ requests, s
                           <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed italic">{request.description || 'Açıklama belirtilmemiş.'}</p>
                           
                           <div className="flex items-center space-x-4 text-[10px] font-black text-gray-400 uppercase tracking-widest pt-2">
-                              <span><i className="fa-solid fa-user mr-1.5 text-purple-400"></i> {request.customerName}</span>
-                              <span><i className="fa-solid fa-calendar mr-1.5 text-purple-400"></i> {new Date(request.createdAt).toLocaleDateString('tr-TR')}</span>
+                              <span><i aria-hidden="true" className="fa-solid fa-user mr-1.5 text-purple-400"></i> {request.customerName}</span>
+                              <span><i aria-hidden="true" className="fa-solid fa-calendar mr-1.5 text-purple-400"></i> {new Date(request.createdAt).toLocaleDateString('tr-TR')}</span>
                           </div>
                       </div>
 
@@ -195,19 +195,19 @@ const CustomerRequestsView: React.FC<CustomerRequestsViewProps> = ({ requests, s
                                   GÖREVİ OLUŞTUR
                               </button>
                           )}
-                          <button 
+                          <button aria-label="Talebi Sil" 
                             onClick={() => handleDelete(request.id)}
                             className="p-2.5 text-gray-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all"
                             title="Talebi Sil"
                           >
-                              <i className="fa-solid fa-trash-can text-sm"></i>
+                              <i aria-hidden="true" className="fa-solid fa-trash-can text-sm"></i>
                           </button>
                       </div>
                   </div>
               )) : (
                   <div className="py-20 flex flex-col items-center justify-center text-center px-6">
                       <div className="w-24 h-24 bg-gray-50 dark:bg-gray-900 rounded-full flex items-center justify-center text-4xl text-gray-200 mb-6">
-                          <i className="fa-solid fa-inbox"></i>
+                          <i aria-hidden="true" className="fa-solid fa-inbox"></i>
                       </div>
                       <h3 className="text-xl font-black text-gray-800 dark:text-white">Henüz Müşteri Talebi Yok</h3>
                       <p className="text-sm text-gray-400 max-w-sm mt-2">Butonları kullanarak yeni istek ekleyebilir veya Excel/CSV dosyası yükleyebilirsiniz.</p>
@@ -223,10 +223,10 @@ const CustomerRequestsView: React.FC<CustomerRequestsViewProps> = ({ requests, s
                   <form onSubmit={handleManualAdd}>
                     <div className="p-6 border-b dark:border-gray-700 bg-purple-600 text-white flex justify-between items-center">
                         <h2 className="text-lg font-black flex items-center">
-                            <i className="fa-solid fa-plus-circle mr-3"></i>
+                            <i aria-hidden="true" className="fa-solid fa-plus-circle mr-3"></i>
                             Yeni Müşteri Talebi
                         </h2>
-                        <button type="button" onClick={() => setIsModalOpen(false)} className="hover:rotate-90 transition-transform"><i className="fa-solid fa-times"></i></button>
+                        <button aria-label="Kapat" type="button" onClick={() => setIsModalOpen(false)} className="hover:rotate-90 transition-transform"><i aria-hidden="true" className="fa-solid fa-times"></i></button>
                     </div>
                     
                     <div className="p-6 space-y-4">

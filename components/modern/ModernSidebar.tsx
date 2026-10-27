@@ -115,6 +115,8 @@ const ToolsMenu: React.FC<Pick<ModernSidebarProps, 'onSwitchToClassic' | 'onSave
             <div className="border-t m-sep my-1"></div>
             {p.onSaveBackup && item('download', 'Yedeği indir', p.onSaveBackup)}
             {p.onLoadBackup && item('upload', 'Yedekten yükle', () => fileRef.current?.click())}
+            {/* Yerel modda yedek yalnız Yönetici yetkisiyle: düğme gizlenmesin, yolu göstersin */}
+            {!p.onSaveBackup && !p.onLoadBackup && !p.cloudLinked && item('upload', 'Yedek al / yükle', p.onOpenProfile, <span className="text-[13px] m-text-3">Admin kimliğiyle</span>)}
             {item('cloud', 'Bulut eşitleme', p.onOpenCloud, p.cloudLinked ? <span className="text-[13px] m-ink-ok font-semibold">Bağlı</span> : undefined)}
             {p.onOpenHealth && item('activity', 'Veri sağlığı', p.onOpenHealth, p.healthAlerts > 0 ? <span className="text-[13px] font-semibold m-ink-warn">{p.healthAlerts}</span> : undefined)}
             {p.onOpenAudit && item('history', 'Denetim günlüğü', p.onOpenAudit)}

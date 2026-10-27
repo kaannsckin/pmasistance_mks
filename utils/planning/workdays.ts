@@ -1,7 +1,7 @@
 /**
  * Türkiye iş günü takvimi: hafta sonu ve resmi tatiller (ulusal bayramlar her
  * yıl, dini bayramlar tablo yıllarında). Arife yarım günleri iş günü sayılır
- * (süre ölçümünde gün çözünürlüğü yeterli). Tablo dışındaki yıllarda yalnız
+ * (süre ölçümünde gün çözünürlüğü yeterli); `isHalfDay` onları ayrıca bildirir. Tablo dışındaki yıllarda yalnız
  * sabit tatiller düşülür; yeni yıl eklenince DINI_BAYRAMLAR güncellenmeli.
  */
 
@@ -42,6 +42,22 @@ export const trHolidays = (year: number): Set<string> => {
 
 export const isWorkday = (d: Date): boolean => d.getDay() !== 0 && d.getDay() !== 6 && !trHolidays(d.getFullYear()).has(isoDay(d));
 
+/**
+ * Arife yarım günleri: 28 Ekim ve dini bayramların ilk gününden önceki gün
+ * (tablo yıllarında), hafta içine denk gelirse. 13:00'ten sonrası tatil.
+ * İş günü sayısını değiştirmez; yalnız o günün çalışma saatini yarıya indirir.
+ */
+export const isHalfDay = (d: Date): boolean => {
+    if (!isWorkday(d)) return false;
+    const year = d.getFullYear(), day = isoDay(d);
+    if (day === `${year}-10-28`) return true;
+    return (DINI_BAYRAMLAR[year] || []).some(([from]) => {
+        const eve = new Date(`${year}-${from}T00:00:00`);
+        eve.setDate(eve.getDate() - 1);
+        return isoDay(eve) === day;
+    });
+};
+
 const dayOnly = (v: string | Date): Date => {
     const d = typeof v === 'string' ? new Date(v) : new Date(v);
     return new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -63,6 +79,13 @@ export const workdaysBetween = (start: string | Date, end: string | Date): numbe
 /** Bir ayın iş günü sayısı (1–12) */
 export const workdaysInMonth = (year: number, month: number): number =>
     workdaysBetween(new Date(year, month - 1, 1), new Date(year, month, 0)) || 0;
+
+/** Ayın çalışılan gün sayısı: arife yarım günleri 0,5 sayılır (ör. Ekim 2026: 20,5) */
+export const effectiveWorkdays = (year: number, month: number): number => {
+    let n = workdaysInMonth(year, month);
+    for (const d = new Date(year, month - 1, 1); d.getMonth() === month - 1; d.setDate(d.getDate() + 1)) if (isHalfDay(d)) n -= 0.5;
+    return n;
+};
 
 /** Başlangıçtan itibaren n iş günü sonraki iş günü (n = 1 → başlangıç ya da sonraki ilk iş günü) */
 export const addWorkdays = (start: Date, n: number): Date => {

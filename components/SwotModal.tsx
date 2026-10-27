@@ -69,7 +69,7 @@ const SwotModal: React.FC<SwotModalProps> = ({ projectName, items, canEdit, pest
         <div className="sticky top-0 bg-white dark:bg-gray-900 px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between z-10 rounded-t-2xl">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white" style={{ backgroundColor: 'var(--app-primary)' }}>
-              <i className="fa-solid fa-table-cells-large"></i>
+              <i aria-hidden="true" className="fa-solid fa-table-cells-large"></i>
             </div>
             <div>
               <h3 className="text-lg font-semibold text-gray-800 dark:text-white">SWOT Analizi</h3>
@@ -78,12 +78,12 @@ const SwotModal: React.FC<SwotModalProps> = ({ projectName, items, canEdit, pest
           </div>
           <div className="flex items-center gap-2">
             <button onClick={handlePng} disabled={exporting || items.length === 0} className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-2 rounded-lg text-white shadow-sm hover:opacity-90 disabled:opacity-40" style={{ backgroundColor: 'var(--app-primary)' }} title="SWOT panosunu PNG görsel olarak indir">
-              {exporting ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-image"></i>}PNG
+              {exporting ? <i aria-hidden="true" className="fa-solid fa-spinner fa-spin"></i> : <i aria-hidden="true" className="fa-solid fa-image"></i>}PNG
             </button>
             <button onClick={() => exportSwotSvg(projectName, items)} disabled={items.length === 0} className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-300 hover:text-primary disabled:opacity-40" title="Vektörel (SVG) olarak indir">
-              <i className="fa-solid fa-bezier-curve"></i>SVG
+              <i aria-hidden="true" className="fa-solid fa-bezier-curve"></i>SVG
             </button>
-            <button onClick={onClose} className="w-9 h-9 rounded-xl text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"><i className="fa-solid fa-times"></i></button>
+            <button aria-label="Kapat" onClick={onClose} className="w-9 h-9 rounded-xl text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"><i aria-hidden="true" className="fa-solid fa-times"></i></button>
           </div>
         </div>
 
@@ -91,13 +91,13 @@ const SwotModal: React.FC<SwotModalProps> = ({ projectName, items, canEdit, pest
           {/* Özet + öneri */}
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2 px-4 py-2.5 rounded-2xl border text-xs font-semibold bg-gray-50 dark:bg-gray-800/60 border-gray-100 dark:border-gray-700 text-gray-600 dark:text-gray-300">
-              <i className="fa-solid fa-layer-group" style={{ color: 'var(--app-primary)' }}></i>{summary.total} madde
+              <i aria-hidden="true" className="fa-solid fa-layer-group" style={{ color: 'var(--app-primary)' }}></i>{summary.total} madde
             </div>
             <div className="flex items-center gap-2 px-4 py-2.5 rounded-2xl border text-xs font-semibold bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-600 dark:text-emerald-300">
-              <i className="fa-solid fa-thumbs-up"></i>{summary.positive} olumlu (S+O)
+              <i aria-hidden="true" className="fa-solid fa-thumbs-up"></i>{summary.positive} olumlu (S+O)
             </div>
             <div className="flex items-center gap-2 px-4 py-2.5 rounded-2xl border text-xs font-semibold bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-600 dark:text-red-300">
-              <i className="fa-solid fa-thumbs-down"></i>{summary.negative} olumsuz (W+T)
+              <i aria-hidden="true" className="fa-solid fa-thumbs-down"></i>{summary.negative} olumsuz (W+T)
             </div>
             {canEdit && (
               <button
@@ -106,7 +106,7 @@ const SwotModal: React.FC<SwotModalProps> = ({ projectName, items, canEdit, pest
                 className="ml-auto flex items-center gap-1.5 text-[11px] font-semibold px-3 py-2.5 rounded-2xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 disabled:opacity-40 transition-colors"
                 title="PESTEL fırsat/tehditlerini ve yüksek riskleri SWOT'a ekle"
               >
-                <i className="fa-solid fa-wand-magic-sparkles"></i>
+                <i aria-hidden="true" className="fa-solid fa-wand-magic-sparkles"></i>
                 PESTEL & risklerden öner{suggestions.length > 0 && ` (${suggestions.length})`}
               </button>
             )}
@@ -119,7 +119,7 @@ const SwotModal: React.FC<SwotModalProps> = ({ projectName, items, canEdit, pest
           {aiItems && (
             <div className="bg-indigo-50/60 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800 rounded-2xl p-4">
               <div className="flex items-center justify-between mb-2">
-                <h4 className="text-xs font-bold text-gray-800 dark:text-gray-100"><i className="fa-solid fa-wand-magic-sparkles text-indigo-500 mr-2"></i>AI SWOT önerileri</h4>
+                <h4 className="text-xs font-bold text-gray-800 dark:text-gray-100"><i aria-hidden="true" className="fa-solid fa-wand-magic-sparkles text-indigo-500 mr-2"></i>AI SWOT önerileri</h4>
                 <div className="flex gap-2">
                   <button onClick={() => addAi(aiItems)} className="text-[11px] font-semibold px-3 py-1.5 rounded-lg text-white" style={{ backgroundColor: 'var(--app-primary)' }}>Tümünü ekle</button>
                   <button onClick={() => setAiItems(null)} className="text-[11px] font-semibold px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-500">Kapat</button>
@@ -130,7 +130,7 @@ const SwotModal: React.FC<SwotModalProps> = ({ projectName, items, canEdit, pest
                   <div key={i} className="flex items-center gap-2 bg-white dark:bg-gray-900 rounded-lg border border-gray-100 dark:border-gray-800 px-3 py-2">
                     <span className="text-[10px] font-bold px-1.5 py-0.5 rounded text-white flex-none" style={{ backgroundColor: SWOT_LABELS[s.quadrant].hex }}>{SWOT_LABELS[s.quadrant].label}</span>
                     <span className="text-[11px] text-gray-700 dark:text-gray-200 flex-1">{s.text}</span>
-                    <button onClick={() => addAi([s])} className="text-[11px] font-semibold text-indigo-600 hover:underline flex-none"><i className="fa-solid fa-plus mr-0.5"></i>Ekle</button>
+                    <button onClick={() => addAi([s])} className="text-[11px] font-semibold text-indigo-600 hover:underline flex-none"><i aria-hidden="true" className="fa-solid fa-plus mr-0.5"></i>Ekle</button>
                   </div>
                 ))}
               </div>
@@ -139,7 +139,7 @@ const SwotModal: React.FC<SwotModalProps> = ({ projectName, items, canEdit, pest
 
           {items.length === 0 && !canEdit && (
             <div className="text-center py-10 text-gray-400">
-              <i className="fa-solid fa-table-cells-large text-3xl mb-3 opacity-40"></i>
+              <i aria-hidden="true" className="fa-solid fa-table-cells-large text-3xl mb-3 opacity-40"></i>
               <p className="text-xs">Bu proje için henüz SWOT analizi girilmemiş.</p>
             </div>
           )}
@@ -154,7 +154,7 @@ const SwotModal: React.FC<SwotModalProps> = ({ projectName, items, canEdit, pest
                   <div className="flex items-center gap-2 mb-3">
                     <span className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm font-extrabold flex-none" style={{ backgroundColor: meta.hex }}>{meta.short}</span>
                     <div className="min-w-0">
-                      <div className="text-xs font-semibold text-gray-700 dark:text-gray-200"><i className={`fa-solid ${meta.icon} mr-1.5`} style={{ color: meta.hex }}></i>{meta.label}</div>
+                      <div className="text-xs font-semibold text-gray-700 dark:text-gray-200"><i aria-hidden="true" className={`fa-solid ${meta.icon} mr-1.5`} style={{ color: meta.hex }}></i>{meta.label}</div>
                       <div className="text-[10px] text-gray-400">{SWOT_KIND_LABELS[meta.kind]} · {meta.tone === 'pos' ? 'Olumlu' : 'Olumsuz'}</div>
                     </div>
                     <span className="ml-auto text-[11px] font-semibold text-gray-400">{quadItems.length}</span>
@@ -167,7 +167,7 @@ const SwotModal: React.FC<SwotModalProps> = ({ projectName, items, canEdit, pest
                           <div className="space-y-1.5">
                             <div className="flex items-center gap-1.5">
                               <input className={inputCls} value={it.text} placeholder={`${meta.label} maddesi`} onChange={e => update(it.id, { text: e.target.value })} />
-                              <button onClick={() => remove(it.id)} className="w-6 h-6 rounded-md text-gray-300 hover:text-red-500 flex-none" title="Sil"><i className="fa-solid fa-trash text-[10px]"></i></button>
+                              <button aria-label="Sil" onClick={() => remove(it.id)} className="w-6 h-6 rounded-md text-gray-300 hover:text-red-500 flex-none" title="Sil"><i aria-hidden="true" className="fa-solid fa-trash text-[10px]"></i></button>
                             </div>
                             <input className={inputCls} value={it.note || ''} placeholder="Aksiyon / not (opsiyonel)" onChange={e => update(it.id, { note: e.target.value || undefined })} />
                           </div>
@@ -194,8 +194,8 @@ const SwotModal: React.FC<SwotModalProps> = ({ projectName, items, canEdit, pest
                         onChange={e => setDrafts(d => ({ ...d, [q]: e.target.value }))}
                         onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(q); } }}
                       />
-                      <button onClick={() => add(q)} className="text-white text-[11px] font-semibold px-3 py-1.5 rounded-lg flex-none hover:opacity-90" style={{ backgroundColor: meta.hex }}>
-                        <i className="fa-solid fa-plus"></i>
+                      <button aria-label="Ekle" onClick={() => add(q)} className="text-white text-[11px] font-semibold px-3 py-1.5 rounded-lg flex-none hover:opacity-90" style={{ backgroundColor: meta.hex }}>
+                        <i aria-hidden="true" className="fa-solid fa-plus"></i>
                       </button>
                     </div>
                   )}
@@ -205,7 +205,7 @@ const SwotModal: React.FC<SwotModalProps> = ({ projectName, items, canEdit, pest
           </div>
 
           {!canEdit && (
-            <p className="text-[11px] text-amber-600 dark:text-amber-300"><i className="fa-solid fa-lock mr-1"></i>SWOT analizini yalnızca proje sahibi düzenler (salt-okunur görünüm).</p>
+            <p className="text-[11px] text-amber-600 dark:text-amber-300"><i aria-hidden="true" className="fa-solid fa-lock mr-1"></i>SWOT analizini yalnızca proje sahibi düzenler (salt-okunur görünüm).</p>
           )}
         </div>
       </div>

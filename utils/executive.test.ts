@@ -50,6 +50,16 @@ describe('portfolioHealth', () => {
         const h = portfolioHealth(buildWs(), 2026, 7, NOW);
         expect(h.projects[0].projectId).toBe('red'); // en düşük başta
         expect(h.orgScore).toBe(67); // (33+100)/2 = 66,5 → 67
+        expect(h.unscored).toEqual([]);
+    });
+
+    it('teklif aşamasındaki proje skorlanmaz: listede ve ortalamada yok (BL-11)', () => {
+        const ws = buildWs();
+        const bid = createProject('Teklif'); bid.id = 'bid'; bid.status = 'teklif';
+        const h = portfolioHealth({ ...ws, projects: [...ws.projects, bid] }, 2026, 7, NOW);
+        expect(h.projects.map(p => p.projectId)).not.toContain('bid');
+        expect(h.orgScore).toBe(67); // teklif (100) ortalamayı şişirmez
+        expect(h.unscored).toEqual([{ projectId: 'bid', name: 'Teklif' }]);
     });
 });
 

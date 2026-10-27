@@ -4,7 +4,7 @@ import { MONTHS_TR, ROLE_LABELS } from '../utils/allocations';
 import { buildExecReport, exportExecReportToExcel } from '../utils/execReport';
 import { exportExecReportToPpt } from '../utils/pptExport';
 import { baselinePlanFor, snapshotsForYear } from '../utils/snapshots';
-import { fmtTL } from '../utils/costing';
+import { costPeriodLabel, fmtTL } from '../utils/costing';
 import { RISK_BAND_HEX, RISK_BAND_LABELS, summarizeRisks, topPortfolioRisks } from '../utils/risks';
 import { AttentionCategory, attentionItems, executiveSummary, HealthBand, portfolioHealth } from '../utils/executive';
 import { orgCapacity } from '../utils/deptScorecard';
@@ -67,10 +67,10 @@ const KpiCard: React.FC<{ icon: string; label: string; value: string; sub?: stri
     >
       <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white flex-none ${tone === 'red' ? 'bg-red-500' : tone === 'green' ? 'bg-emerald-500' : ''}`}
            style={tone === 'default' ? { backgroundColor: 'var(--app-primary)' } : {}}>
-        <i className={`fa-solid ${icon} text-sm`}></i>
+        <i aria-hidden="true" className={`fa-solid ${icon} text-sm`}></i>
       </div>
       <div className="leading-none min-w-0 flex-1">
-        <p className="text-[11px] font-semibold text-gray-400 mb-1.5">{label}{onClick && <i className={`fa-solid fa-chevron-${active ? 'up' : 'down'} ml-1.5 text-[9px] opacity-60`}></i>}</p>
+        <p className="text-[11px] font-semibold text-gray-400 mb-1.5">{label}{onClick && <i aria-hidden="true" className={`fa-solid fa-chevron-${active ? 'up' : 'down'} ml-1.5 text-[9px] opacity-60`}></i>}</p>
         <p className="text-lg font-semibold text-gray-800 dark:text-white leading-none truncate">{value}</p>
         {sub && <p className="text-xs text-gray-400 font-bold mt-1 truncate">{sub}</p>}
       </div>
@@ -185,14 +185,14 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
             className="text-xs font-semibold px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-300 hover:text-primary transition-all flex items-center"
             title="Şu anki plan-gerçekleşen durumunun anlık görüntüsünü (baseline) kaydeder"
           >
-            <i className="fa-solid fa-camera mr-2"></i>Anlık Görüntü Al
+            <i aria-hidden="true" className="fa-solid fa-camera mr-2"></i>Anlık Görüntü Al
           </button>
           <button
             onClick={() => setShowBrief(true)}
             className="text-xs font-semibold px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-300 hover:text-primary transition-all flex items-center"
             title="Sağlık, dikkat, departman yükü ve kritik riskleri tek sayfada özetleyen brifingi aç (kopyala / indir)"
           >
-            <i className="fa-solid fa-clipboard-list mr-2"></i>Brifing
+            <i aria-hidden="true" className="fa-solid fa-clipboard-list mr-2"></i>Brifing
           </button>
           <button
             onClick={() => exportExecReportToExcel(report)}
@@ -200,7 +200,7 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
             style={{ backgroundColor: 'var(--app-primary)' }}
             title="Özet, projeler, aylık plan-gerçekleşen, bölüm/kişi AA ve aşırı tahsis sayfalarını içeren Excel indirir"
           >
-            <i className="fa-solid fa-file-excel mr-2"></i>Yönetici Paketi (Excel)
+            <i aria-hidden="true" className="fa-solid fa-file-excel mr-2"></i>Yönetici Paketi (Excel)
           </button>
           <button
             onClick={handlePptExport}
@@ -208,7 +208,7 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
             className="text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-md hover:opacity-90 transition-all flex items-center disabled:opacity-50 bg-orange-500"
             title="Kapak, KPI panosu, plan-gerçekleşen grafiği, portföy tablosu, bölüm dağılımı ve kaynak sağlığı slaytlarını içeren PowerPoint indirir"
           >
-            {isPptBusy ? <i className="fa-solid fa-spinner fa-spin mr-2"></i> : <i className="fa-solid fa-file-powerpoint mr-2"></i>}
+            {isPptBusy ? <i aria-hidden="true" className="fa-solid fa-spinner fa-spin mr-2"></i> : <i aria-hidden="true" className="fa-solid fa-file-powerpoint mr-2"></i>}
             Sunum (PPT)
           </button>
         </div>
@@ -231,26 +231,26 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
       <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm p-5">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-semibold text-gray-800 dark:text-white flex items-center gap-2">
-            <i className="fa-solid fa-bell" style={{ color: 'var(--app-primary)' }}></i>Dikkat Gerektirenler
+            <i aria-hidden="true" className="fa-solid fa-bell" style={{ color: 'var(--app-primary)' }}></i>Dikkat Gerektirenler
             {attention.length > 0 && <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-300">{attention.length}</span>}
           </h3>
         </div>
         {attention.length === 0 ? (
           <div className="flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-300 py-2">
-            <i className="fa-solid fa-circle-check"></i>Her şey yolunda — acil dikkat gerektiren bir durum yok.
+            <i aria-hidden="true" className="fa-solid fa-circle-check"></i>Her şey yolunda — acil dikkat gerektiren bir durum yok.
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             {attention.map(item => (
               <div key={item.id} className={`flex items-start gap-3 rounded-xl px-3 py-2.5 border ${item.severity === 'error' ? 'bg-red-50/60 dark:bg-red-900/15 border-red-200 dark:border-red-800' : 'bg-amber-50/60 dark:bg-amber-900/15 border-amber-200 dark:border-amber-800'}`}>
-                <i className={`fa-solid ${ATTN_ICON[item.category]} mt-0.5 flex-none ${item.severity === 'error' ? 'text-red-500' : 'text-amber-500'}`}></i>
+                <i aria-hidden="true" className={`fa-solid ${ATTN_ICON[item.category]} mt-0.5 flex-none ${item.severity === 'error' ? 'text-red-500' : 'text-amber-500'}`}></i>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-semibold text-gray-800 dark:text-gray-100">{item.title}</p>
                   <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">{item.detail}</p>
                 </div>
                 {item.projectId && (
                   <button onClick={() => onOpenProject(item.projectId!)} className="text-[11px] font-semibold px-2.5 py-1 rounded-lg flex-none text-white hover:opacity-90" style={{ backgroundColor: 'var(--app-primary)' }} title="Projeyi aç">
-                    Aç <i className="fa-solid fa-arrow-right ml-0.5"></i>
+                    Aç <i aria-hidden="true" className="fa-solid fa-arrow-right ml-0.5"></i>
                   </button>
                 )}
               </div>
@@ -301,7 +301,7 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
           )}
           {expanded === 'over' && (
             report.overAllocations.length === 0
-              ? <p className="text-xs text-emerald-600 dark:text-emerald-300"><i className="fa-solid fa-circle-check mr-1"></i>Aşırı tahsis yok.</p>
+              ? <p className="text-xs text-emerald-600 dark:text-emerald-300"><i aria-hidden="true" className="fa-solid fa-circle-check mr-1"></i>Aşırı tahsis yok.</p>
               : (
                 <div className="flex flex-wrap gap-2">
                   {report.overAllocations.map((o, i) => (
@@ -334,7 +334,7 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
       {/* Proje Sağlık Panosu — proje bazında (kurum skoru üstte) */}
       <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm p-5">
         <h3 className="text-sm font-semibold text-gray-800 dark:text-white flex items-center gap-2 mb-4">
-          <i className="fa-solid fa-heart-circle-check" style={{ color: 'var(--app-primary)' }}></i>Proje Sağlık Panosu
+          <i aria-hidden="true" className="fa-solid fa-heart-circle-check" style={{ color: 'var(--app-primary)' }}></i>Proje Sağlık Panosu
         </h3>
         {health.projects.length === 0 ? (
           <p className="text-xs text-gray-400">Proje yok.</p>
@@ -362,7 +362,7 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
         <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm p-5">
           <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
             <h3 className="text-sm font-semibold text-gray-800 dark:text-white flex items-center gap-2">
-              <i className="fa-solid fa-people-group" style={{ color: 'var(--app-primary)' }}></i>Departman Karnesi
+              <i aria-hidden="true" className="fa-solid fa-people-group" style={{ color: 'var(--app-primary)' }}></i>Departman Karnesi
             </h3>
             <p className="text-[11px] text-gray-400">
               {org.totalHeadcount} kişi · Kapasite {fmt(org.totalCapacityAA)} AA · Plan {fmt(org.totalPlannedAA)} AA · Doluluk {org.utilization === null ? '—' : `%${Math.round(org.utilization * 100)}`}
@@ -379,7 +379,7 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
                     <span className="w-2.5 h-2.5 rounded-full flex-none" style={{ backgroundColor: HEALTH_HEX[d.band] }} title={HEALTH_LABEL[d.band]}></span>
                     <span className="text-xs font-bold text-gray-700 dark:text-gray-200 truncate flex-1">{d.name}</span>
                     <span className="text-[10px] text-gray-400 flex-none">{d.headcount} kişi</span>
-                    <i className={`fa-solid fa-chevron-${isOpen ? 'up' : 'down'} text-[9px] text-gray-300 flex-none`}></i>
+                    <i aria-hidden="true" className={`fa-solid fa-chevron-${isOpen ? 'up' : 'down'} text-[9px] text-gray-300 flex-none`}></i>
                   </button>
                   <div className="mt-2">
                     <div className="flex items-center justify-between mb-1">
@@ -394,7 +394,7 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
                     <span>Kapasite <b className="text-gray-600 dark:text-gray-300">{fmt(d.capacityAA)}</b> AA</span>
                     <span>Plan <b className="text-gray-600 dark:text-gray-300">{fmt(d.plannedAA)}</b> AA</span>
                     <span>{d.projectCount} proje</span>
-                    {d.overAllocatedPeople > 0 && <span className="text-red-500 font-semibold"><i className="fa-solid fa-users-slash mr-1"></i>{d.overAllocatedPeople} aşırı</span>}
+                    {d.overAllocatedPeople > 0 && <span className="text-red-500 font-semibold"><i aria-hidden="true" className="fa-solid fa-users-slash mr-1"></i>{d.overAllocatedPeople} aşırı</span>}
                   </div>
                   {d.reasons.length > 0 && <p className="text-[10px] text-amber-500 mt-1 truncate" title={d.reasons.join(', ')}>{d.reasons.join(' · ')}</p>}
                   {isOpen && (
@@ -404,7 +404,7 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
                         return (
                           <div key={pp.personId} className="flex items-center gap-2">
                             <span className="text-[11px] text-gray-600 dark:text-gray-300 truncate flex-1">{pp.name}</span>
-                            {pp.over && <span className="text-[9px] font-bold text-red-500 flex-none" title="Bazı aylarda kapasite üstü"><i className="fa-solid fa-triangle-exclamation"></i></span>}
+                            {pp.over && <span className="text-[9px] font-bold text-red-500 flex-none" title="Bazı aylarda kapasite üstü"><i aria-hidden="true" className="fa-solid fa-triangle-exclamation"></i></span>}
                             <span className="text-[10px] text-gray-400 flex-none">{fmt(pp.plannedAA)}/{fmt(pp.capacityAA)} AA</span>
                             <span className="text-[10px] font-bold flex-none w-9 text-right" style={{ color: pu !== null && pu > 105 ? '#ef4444' : 'var(--app-primary)' }}>{pu === null ? '—' : `%${pu}`}</span>
                           </div>
@@ -423,7 +423,7 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
       {showChanges && <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm p-5">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
           <h3 className="text-sm font-semibold text-gray-800 dark:text-white flex items-center gap-2">
-            <i className="fa-solid fa-clock-rotate-left" style={{ color: 'var(--app-primary)' }}></i>Ne Değişti?
+            <i aria-hidden="true" className="fa-solid fa-clock-rotate-left" style={{ color: 'var(--app-primary)' }}></i>Ne Değişti?
             <span className="text-[11px] font-semibold text-gray-400">son {changeDays} gün · {changes.length}</span>
           </h3>
           <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-700/60 rounded-lg p-0.5">
@@ -438,7 +438,7 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
           <div className="space-y-1.5">
             {changes.slice(0, 12).map(c => (
               <div key={c.id} className="flex items-center gap-3 rounded-lg px-3 py-2 hover:bg-gray-50/60 dark:hover:bg-gray-800/40">
-                <span className="w-7 h-7 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center flex-none text-gray-500 dark:text-gray-300"><i className={`fa-solid ${AUDIT_ACTION_ICONS[c.action]} text-[11px]`}></i></span>
+                <span className="w-7 h-7 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center flex-none text-gray-500 dark:text-gray-300"><i aria-hidden="true" className={`fa-solid ${AUDIT_ACTION_ICONS[c.action]} text-[11px]`}></i></span>
                 <div className="flex-1 min-w-0">
                   <p className="text-[12px] text-gray-700 dark:text-gray-200 truncate">{c.summary}</p>
                   <p className="text-[10px] text-gray-400">{actorLabel(c)} · {relativeTime(c.at)}</p>
@@ -455,7 +455,7 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
         {/* Aylık plan vs gerçekleşen */}
         <div className="xl:col-span-2 bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm p-5">
           <h3 className="text-xs font-semibold text-gray-400 mb-4">
-            <i className="fa-solid fa-chart-column mr-2" style={{ color: 'var(--app-primary)' }}></i>
+            <i aria-hidden="true" className="fa-solid fa-chart-column mr-2" style={{ color: 'var(--app-primary)' }}></i>
             Aylık Plan vs Gerçekleşen ({year}, toplam AA)
           </h3>
           <PlanActualChart plan={report.monthlyPlan} actual={report.monthlyActual} capacity={k.monthlyCapacityAA} />
@@ -464,7 +464,7 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
         {/* Bölüm dağılımı */}
         <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm p-5">
           <h3 className="text-xs font-semibold text-gray-400 mb-4">
-            <i className="fa-solid fa-building mr-2" style={{ color: 'var(--app-primary)' }}></i>
+            <i aria-hidden="true" className="fa-solid fa-building mr-2" style={{ color: 'var(--app-primary)' }}></i>
             Bölüm Bazlı Yıllık Plan (AA)
           </h3>
           <div className="space-y-3">
@@ -503,7 +503,7 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
         <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm p-5">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-xs font-semibold text-gray-400">
-              <i className="fa-solid fa-shield-halved mr-2" style={{ color: 'var(--app-primary)' }}></i>
+              <i aria-hidden="true" className="fa-solid fa-shield-halved mr-2" style={{ color: 'var(--app-primary)' }}></i>
               Portföy Riskleri
             </h3>
             <div className="flex items-center gap-2">
@@ -531,12 +531,12 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
       <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm p-5">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-xs font-semibold text-gray-400">
-            <i className="fa-solid fa-coins mr-2" style={{ color: 'var(--app-primary)' }}></i>
+            <i aria-hidden="true" className="fa-solid fa-coins mr-2" style={{ color: 'var(--app-primary)' }}></i>
             Maliyet ({year}, ₺) — tahsis × ünvan aylık maliyeti
           </h3>
           {report.cost.uncostedPeople.length > 0 && (
             <span className="text-[11px] font-semibold text-amber-500" title={report.cost.uncostedPeople.join(', ')}>
-              <i className="fa-solid fa-triangle-exclamation mr-1"></i>
+              <i aria-hidden="true" className="fa-solid fa-triangle-exclamation mr-1"></i>
               {report.cost.uncostedPeople.length} kişi maliyetlenemedi (ünvan/₺ eksik)
             </span>
           )}
@@ -549,7 +549,7 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
             <div className="flex items-center gap-6">
               <div>
-                <p className="text-[11px] font-semibold text-gray-400 mb-1">Plan</p>
+                <p className="text-[11px] font-semibold text-gray-400 mb-1">Plan (yıl)</p>
                 <p className="text-xl font-semibold" style={{ color: 'var(--app-primary)' }}>{fmtTL(report.cost.totalPlanCost)}</p>
               </div>
               <div>
@@ -557,7 +557,7 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
                 <p className="text-xl font-semibold text-emerald-600 dark:text-emerald-400">{fmtTL(report.cost.totalActualCost)}</p>
               </div>
               <div>
-                <p className="text-[11px] font-semibold text-gray-400 mb-1">Sapma</p>
+                <p className="text-[11px] font-semibold text-gray-400 mb-1" title={`Gerçekleşen − ${costPeriodLabel(report.cost.periodEndMonth)} planı (${fmtTL(report.cost.totalPeriodPlanCost)})`}>Sapma ({costPeriodLabel(report.cost.periodEndMonth)})</p>
                 <p className={`text-xl font-semibold ${report.cost.totalVarianceCost > 0 ? 'text-red-500' : report.cost.totalVarianceCost < 0 ? 'text-amber-500' : 'text-gray-400'}`}>
                   {report.cost.totalVarianceCost > 0 ? '+' : ''}{fmtTL(report.cost.totalVarianceCost)}
                 </p>
@@ -592,7 +592,7 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
       <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm p-5">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-xs font-semibold text-gray-400">
-            <i className="fa-solid fa-camera mr-2" style={{ color: 'var(--app-primary)' }}></i>
+            <i aria-hidden="true" className="fa-solid fa-camera mr-2" style={{ color: 'var(--app-primary)' }}></i>
             Baseline & Plan Kayması ({year}) — plan onaylandığında otomatik fotoğraflanır
           </h3>
           <span className="text-xs font-semibold text-gray-400">{snapshots.length} anlık görüntü</span>
@@ -636,7 +636,7 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
       <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm overflow-hidden">
         <div className="px-5 py-3.5 border-b border-gray-50 dark:border-gray-700/60">
           <h3 className="text-xs font-semibold text-gray-400">
-            <i className="fa-solid fa-table-list mr-2" style={{ color: 'var(--app-primary)' }}></i>
+            <i aria-hidden="true" className="fa-solid fa-table-list mr-2" style={{ color: 'var(--app-primary)' }}></i>
             Proje Portföy Durumu
           </h3>
         </div>

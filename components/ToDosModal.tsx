@@ -25,15 +25,15 @@ const ToDosModal: React.FC<ToDosModalProps> = ({ todos, onClose, onToggle }) => 
         <div className="flex justify-between items-center p-6 border-b dark:border-gray-700 bg-emerald-600 text-white">
           <div className="flex items-center space-x-3">
              <div className="bg-white/20 p-2 rounded-lg">
-                <i className="fa-solid fa-check-double text-xl"></i>
+                <i aria-hidden="true" className="fa-solid fa-check-double text-xl"></i>
              </div>
              <div>
                 <h2 className="text-xl font-black">ToDo Listesi</h2>
                 <p className="text-[10px] font-bold opacity-80 uppercase tracking-widest">{pendingTodos.length} Bekleyen, {completedTodos.length} Tamamlanan</p>
              </div>
           </div>
-          <button onClick={onClose} className="bg-black/10 hover:bg-black/20 w-8 h-8 rounded-full transition-colors flex items-center justify-center">
-            <i className="fa-solid fa-times"></i>
+          <button aria-label="Kapat" onClick={onClose} className="bg-black/10 hover:bg-black/20 w-8 h-8 rounded-full transition-colors flex items-center justify-center">
+            <i aria-hidden="true" className="fa-solid fa-times"></i>
           </button>
         </div>
         
@@ -47,7 +47,7 @@ const ToDosModal: React.FC<ToDosModalProps> = ({ todos, onClose, onToggle }) => 
               <div className="space-y-3">
                   {pendingTodos.length > 0 ? pendingTodos.map((todo, idx) => (
                     <div key={idx} onClick={() => onToggle(todo.noteId, todo.lineIndex)} className="bg-gray-50 dark:bg-gray-900/40 p-4 rounded-2xl border border-gray-100 dark:border-gray-700 group hover:border-emerald-400 transition-all flex items-center space-x-4 cursor-pointer">
-                       <i className="fa-regular fa-square text-emerald-500 text-lg flex-shrink-0"></i>
+                       <i aria-hidden="true" className="fa-regular fa-square text-emerald-500 text-lg flex-shrink-0"></i>
                        <div className="flex-grow min-w-0">
                            <p className="text-sm text-gray-800 dark:text-gray-200 leading-relaxed font-bold">
                              {todo.content}
@@ -71,7 +71,7 @@ const ToDosModal: React.FC<ToDosModalProps> = ({ todos, onClose, onToggle }) => 
                 <div className="space-y-3">
                     {completedTodos.map((todo, idx) => (
                       <div key={idx} onClick={() => onToggle(todo.noteId, todo.lineIndex)} className="bg-gray-100 dark:bg-gray-800/40 p-4 rounded-2xl border border-transparent dark:border-gray-700 flex items-center space-x-4 cursor-pointer grayscale line-through decoration-gray-400">
-                         <i className="fa-solid fa-square-check text-emerald-500 text-lg flex-shrink-0"></i>
+                         <i aria-hidden="true" className="fa-solid fa-square-check text-emerald-500 text-lg flex-shrink-0"></i>
                          <div className="flex-grow min-w-0">
                              <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
                                {todo.content}

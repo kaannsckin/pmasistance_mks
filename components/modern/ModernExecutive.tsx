@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { ExpectationUrgency, PlanLockStatus, ProjectStatus, UserRole, View, WorkspaceData } from '../../types';
 import { actorLabel } from '../../utils/audit';
 import { orgCapacity } from '../../utils/deptScorecard';
-import { defaultStatusMonth, buildPortfolioEVM } from '../../utils/evm';
+import { closedStatusMonth, buildPortfolioEVM } from '../../utils/evm';
 import { buildExecutiveBrief } from '../../utils/execBrief';
 import { attentionProjects, attentionReasons, buildExecProjectRows, ExecProjectRow, ExecSortKey, filterExecRows, healthDistribution, SortDir, sortExecRows } from '../../utils/execOverview';
 import { buildExecReport, exportExecReportToExcel } from '../../utils/execReport';
@@ -62,9 +62,13 @@ const BackButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
 );
 
 const ScorePill: React.FC<{ row: ExecProjectRow }> = ({ row }) => (
-    <span className={`inline-flex items-center justify-center min-w-[52px] h-7 px-2.5 rounded-full text-[13px] font-semibold m-tabular ${BAND_META[row.band].tone}`} aria-label={`Sağlık ${row.score}, ${BAND_META[row.band].label}`}>
-        {row.score}
-    </span>
+    row.scored ? (
+        <span className={`inline-flex items-center justify-center min-w-[52px] h-7 px-2.5 rounded-full text-[13px] font-semibold m-tabular ${BAND_META[row.band].tone}`} aria-label={`Sağlık ${row.score}, ${BAND_META[row.band].label}`}>
+            {row.score}
+        </span>
+    ) : (
+        <span className="inline-flex items-center justify-center min-w-[52px] h-7 px-2.5 rounded-full text-[13px] font-semibold m-tone-hold" aria-label="Teklif aşamasında, sağlık skoru yok" title="Teklif aşamasında skorlanmaz">—</span>
+    )
 );
 
 // ------------------------------------------------------------------ Tüm projeler
@@ -239,9 +243,10 @@ const ModernExecutive: React.FC<ModernExecutiveProps> = ({ workspace, currentRol
     const risks = useMemo(() => topPortfolioRisks(scoped).filter(r => riskPassesView(view, r)).slice(0, 4), [scoped, view]);
     const changes = useMemo(() => recentChanges(workspace, new Date(), 7), [workspace]);
     const brief = useMemo(() => (showBrief ? buildExecutiveBrief(scoped, year, new Date(), !!onOpenAudit) : ''), [showBrief, scoped, year, onOpenAudit]);
-    const statusMonth = defaultStatusMonth(year);
+    const statusMonth = closedStatusMonth(workspace, year);
     const pending = rows.filter(r => r.lockStatus === 'submitted');
-    const orgScore = rows.length ? Math.round(rows.reduce((s, r) => s + r.score, 0) / rows.length) : 100;
+    const scoredRows = rows.filter(r => r.scored);
+    const orgScore = scoredRows.length ? Math.round(scoredRows.reduce((s, r) => s + r.score, 0) / scoredRows.length) : 100;
     const orgBand: HealthBand = bandOf(orgScore, healthSettingsOf(workspace));
     const k = report.kpi;
     const depts = [...org.departments].filter(d => d.utilization !== null).sort((a, b) => (b.utilization || 0) - (a.utilization || 0)).slice(0, 6);

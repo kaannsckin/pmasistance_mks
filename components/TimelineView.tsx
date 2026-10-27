@@ -58,7 +58,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({ tasks, resources, workPacka
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 bg-white dark:bg-gray-800 p-5 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
         <div>
             <h2 className="text-2xl font-bold text-gray-800 dark:text-white flex items-center">
-                <i className="fa-solid fa-chart-line text-blue-600 mr-3"></i>
+                <i aria-hidden="true" className="fa-solid fa-chart-line text-blue-600 mr-3"></i>
                 Proje Genel Bakış
             </h2>
             <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Projenin anlık durumu, metrikler ve zaman çizelgesi.</p>
@@ -80,7 +80,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({ tasks, resources, workPacka
            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden flex flex-col h-full">
                 <div className="p-4 border-b border-gray-100 dark:border-gray-700 bg-red-50 dark:bg-red-900/10 flex justify-between items-center">
                     <h3 className="font-bold text-red-700 dark:text-red-400 flex items-center">
-                        <i className="fa-solid fa-fire mr-2"></i>
+                        <i aria-hidden="true" className="fa-solid fa-fire mr-2"></i>
                         Dikkat Gerektirenler
                     </h3>
                     <span className="bg-red-100 text-red-800 text-xs font-bold px-2 py-1 rounded-full">{criticalTasks.length}</span>
@@ -97,19 +97,19 @@ const TimelineView: React.FC<TimelineViewProps> = ({ tasks, resources, workPacka
                                             <div className="flex items-center space-x-2 text-xs text-gray-500 dark:text-gray-400">
                                                 <span className="font-mono bg-gray-100 dark:bg-gray-600 px-1 rounded">{task.jiraId}</span>
                                                 <span>{task.resourceName}</span>
-                                                {task.time.avg === 0 && <span className="text-orange-500 font-bold"><i className="fa-solid fa-clock-rotate-left mr-1"></i>Süre Girilmemiş</span>}
+                                                {task.time.avg === 0 && <span className="text-orange-500 font-bold"><i aria-hidden="true" className="fa-solid fa-clock-rotate-left mr-1"></i>Süre Girilmemiş</span>}
                                             </div>
                                         </div>
                                     </div>
-                                    <button onClick={(e) => { e.stopPropagation(); onEditTask(task); }} className="text-gray-400 hover:text-blue-500 p-2">
-                                        <i className="fa-solid fa-pencil"></i>
+                                    <button aria-label="Düzenle" onClick={(e) => { e.stopPropagation(); onEditTask(task); }} className="text-gray-400 hover:text-blue-500 p-2">
+                                        <i aria-hidden="true" className="fa-solid fa-pencil"></i>
                                     </button>
                                 </div>
                             ))}
                         </div>
                     ) : (
                         <div className="flex flex-col items-center justify-center h-40 text-green-600">
-                            <i className="fa-solid fa-check-circle text-4xl mb-2"></i>
+                            <i aria-hidden="true" className="fa-solid fa-check-circle text-4xl mb-2"></i>
                             <p>Harika! Kritik sorun yok.</p>
                         </div>
                     )}
@@ -120,7 +120,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({ tasks, resources, workPacka
            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden flex flex-col h-full">
                 <div className="p-4 border-b border-gray-100 dark:border-gray-700 bg-blue-50 dark:bg-blue-900/10">
                     <h3 className="font-bold text-blue-700 dark:text-blue-400 flex items-center">
-                        <i className="fa-solid fa-flag-checkered mr-2"></i>
+                        <i aria-hidden="true" className="fa-solid fa-flag-checkered mr-2"></i>
                         Proje Özeti
                     </h3>
                 </div>
@@ -160,7 +160,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({ tasks, resources, workPacka
       <div className="bg-white dark:bg-gray-800 p-5 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
          <div className="flex justify-between items-center mb-4">
              <h2 className="text-lg font-bold text-gray-800 dark:text-white flex items-center">
-                <i className="fa-solid fa-calendar-days text-gray-500 mr-2"></i>
+                <i aria-hidden="true" className="fa-solid fa-calendar-days text-gray-500 mr-2"></i>
                 Detaylı Zaman Çizelgesi
              </h2>
          </div>
@@ -175,7 +175,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({ tasks, resources, workPacka
             </div>
          ) : (
             <div className="text-center py-16">
-                <i className="fa-solid fa-chart-gantt text-5xl text-gray-400"></i>
+                <i aria-hidden="true" className="fa-solid fa-chart-gantt text-5xl text-gray-400"></i>
                 <h3 className="mt-4 text-xl font-medium text-gray-700 dark:text-gray-300">Görüntülenecek Görev Yok</h3>
                 <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Filtre kriterlerini değiştirin veya yeni görevler ekleyin.</p>
             </div>

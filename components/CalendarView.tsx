@@ -122,14 +122,14 @@ const CalendarView: React.FC<CalendarViewProps> = ({ workspace, identity, onView
       <div className="flex items-center gap-2 flex-wrap">
         {SCOPES.map(s => (
           <button key={s.id} onClick={() => setScope(s.id)} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all ${scope === s.id ? 'text-white shadow-md' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 bg-gray-50 dark:bg-gray-800'}`} style={scope === s.id ? { backgroundColor: 'var(--app-primary)' } : {}}>
-            <i className={`fa-solid ${s.icon}`}></i><span>{s.label}</span>
+            <i aria-hidden="true" className={`fa-solid ${s.icon}`}></i><span>{s.label}</span>
           </button>
         ))}
       </div>
 
       {noPersonForMe ? (
         <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-2xl px-5 py-4 text-[11px] text-amber-700 dark:text-amber-300">
-          <i className="fa-solid fa-user-lock mr-2"></i>"Takvimim" için üst menüden kimliğinizi (kişinizi) seçin. Yönetici olarak "Ekip" takvimini kullanabilirsiniz.
+          <i aria-hidden="true" className="fa-solid fa-user-lock mr-2"></i>"Takvimim" için üst menüden kimliğinizi (kişinizi) seçin. Yönetici olarak "Ekip" takvimini kullanabilirsiniz.
         </div>
       ) : (
         <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm overflow-x-auto">

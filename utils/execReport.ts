@@ -4,11 +4,11 @@ import {
     MonthlySummaryRow, OverAllocation, summarizeByDepartment, summarizeByPerson,
 } from './allocations';
 import { buildRoleAnalysis, EFFORT_TYPE_LABELS, RoleAnalysisRow } from './roleAnalysis';
-import { buildCostReport, CostReport } from './costing';
+import { buildCostReport, CostReport, costPeriodLabel } from './costing';
 import { PortfolioRisk, RISK_BAND_LABELS, RISK_STATUS_LABELS, summarizeRisks, topPortfolioRisks } from './risks';
 import { canFor } from './permissions';
 
-declare const XLSX: any;
+import * as XLSX from 'xlsx';
 
 /** Rolün varsayılan yetkisiyle yönetim ekranını görür mü (kimliğe göre: can(id, 'screen.executive')) */
 export const isExecRole = (role: UserRole | undefined): boolean => canFor(role, 'screen.executive');
@@ -227,12 +227,12 @@ export const buildExecWorkbookData = (report: ExecReport): Record<string, (strin
     const maliyet: (string | number)[][] = [
         ['MALİYET RAPORU (₺)', `${report.year}`, c.costedTitleCount === 0 ? 'Ünvan maliyetleri girilmemiş — Veri Havuzu → Ünvanlar' : ''],
         [],
-        ['Proje', 'Plan Maliyeti', 'Gerçekleşen', 'Sapma'],
-        ...c.byProject.map(r => [r.label, r.planCost, r.actualCost, r.varianceCost]),
-        ['TOPLAM', c.totalPlanCost, c.totalActualCost, c.totalVarianceCost],
+        ['Proje', 'Plan Maliyeti (yıl)', `Plan (${costPeriodLabel(c.periodEndMonth)})`, 'Gerçekleşen', 'Sapma (dönem)'],
+        ...c.byProject.map(r => [r.label, r.planCost, r.periodPlanCost, r.actualCost, r.varianceCost]),
+        ['TOPLAM', c.totalPlanCost, c.totalPeriodPlanCost, c.totalActualCost, c.totalVarianceCost],
         [],
-        ['Bölüm', 'Plan Maliyeti', 'Gerçekleşen', 'Sapma'],
-        ...c.byDepartment.map(r => [r.label, r.planCost, r.actualCost, r.varianceCost]),
+        ['Bölüm', 'Plan Maliyeti (yıl)', `Plan (${costPeriodLabel(c.periodEndMonth)})`, 'Gerçekleşen', 'Sapma (dönem)'],
+        ...c.byDepartment.map(r => [r.label, r.planCost, r.periodPlanCost, r.actualCost, r.varianceCost]),
         [],
         ['Ay', 'Plan Maliyeti', 'Gerçekleşen'],
         ...MONTHS_TR.map((m, i) => [m, c.monthlyPlanCost[i], c.monthlyActualCost[i]]),
@@ -265,10 +265,6 @@ export const buildExecWorkbookData = (report: ExecReport): Record<string, (strin
 
 /** Tarayıcıda XLSX ile .xlsx indirir. */
 export const exportExecReportToExcel = (report: ExecReport): void => {
-    if (typeof XLSX === 'undefined') {
-        alert('Excel kütüphanesi yüklenemedi. İnternet bağlantınızı kontrol edip sayfayı yenileyin.');
-        return;
-    }
     const wb = XLSX.utils.book_new();
     Object.entries(buildExecWorkbookData(report)).forEach(([name, aoa]) => {
         const sheet = XLSX.utils.aoa_to_sheet(aoa);

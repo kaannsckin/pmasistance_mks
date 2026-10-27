@@ -50,7 +50,7 @@ const ResourceColorPicker: React.FC<{ currentColor?: string, onSelect: (color: s
                             style={{ backgroundColor: c }}
                         />
                     ))}
-                    <button onClick={() => { onSelect(''); setIsOpen(false); }} className="w-4 h-4 rounded-full bg-gray-200 flex items-center justify-center text-[8px]"><i className="fa-solid fa-times"></i></button>
+                    <button aria-label="Seçimi temizle" onClick={() => { onSelect(''); setIsOpen(false); }} className="w-4 h-4 rounded-full bg-gray-200 flex items-center justify-center text-[8px]"><i aria-hidden="true" className="fa-solid fa-times"></i></button>
                 </div>
             )}
         </div>
@@ -150,7 +150,7 @@ const CostManager: React.FC<CostManagerProps> = ({ resources, setResources, titl
                     className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-md transition-all ${isSettingsOpen ? 'text-white' : 'bg-white dark:bg-gray-800 border border-amber-100 dark:border-gray-700'}`}
                     style={isSettingsOpen ? { backgroundColor: costTableColor } : { color: costTableColor }}
                 >
-                    <i className="fa-solid fa-coins"></i>
+                    <i aria-hidden="true" className="fa-solid fa-coins"></i>
                     <span>ÜNVAN MALİYETLERİ</span>
                 </button>
             </div>

@@ -7,7 +7,7 @@ import { buildVariantRequest, PRODUCTION_VARIANT } from '../../utils/ai/reportVa
 import { buildReportInput, parseReportSuggestion } from '../../utils/ai/weeklyReportPrompt.js';
 import { resolveProject, ToolContext } from '../../utils/ai/scope.js';
 import {
-    actorOf, advanceReport, canEditReport, CATEGORY_META, createReport, dueDate, findReport, flowBlockers, isoWeekOf, isReportSteward, isWeekPublished, itemDisplay, lintCounts, lintReport,
+    actorOf, advanceReport, canEditReport, CATEGORY_META, createReport, dueDate, findReport, flowBlockers, isoWeekOf, isReportSteward, isWeekPublished, itemDisplay, lintCounts, lintDictionary, lintReport,
     newItem, nextStage, PLAN_REVIEW_STATUSES, previousPlansOf, projectDepartment, publishWeek, reportDictionary, reportFlowOf, reportSettingsOf, returnReportIn,
     saveReport, shiftWeek, STAGE_LABELS, THIS_WEEK_CATEGORIES, visibleReports, weekLabel,
 } from '../../utils/weeklyReport.js';
@@ -147,17 +147,8 @@ const actionsFor = (ws: WorkspaceData, ctx: ToolContext, r: WeeklyReport | undef
     }
 };
 
-/**
- * Biçim denetiminin sözlüğü: kurum sözlüğü + proje adları. Büyük harfli proje
- * adı (NEHİR, ATLAS) kısaltma değildir; sözlükte yoksa denetim açılım ister.
- */
-const lintDictionary = (ws: WorkspaceData): Abbreviation[] => [
-    ...reportDictionary(reportSettingsOf(ws)),
-    ...ws.projects.flatMap(p => {
-        const first = p.name.split(/\s+/)[0] || '';
-        return first.length >= 2 && first === first.toLocaleUpperCase('tr-TR') ? [{ abbr: first, expansion: p.name }] : [];
-    }),
-];
+/** Biçim denetiminin sözlüğü (uygulamadaki rapor ekranıyla aynı) */
+const reportLintDictionary = (ws: WorkspaceData): Abbreviation[] => lintDictionary(reportDictionary(reportSettingsOf(ws)), ws.projects);
 
 const ownsProject = (ctx: ToolContext, project: Project) => ctx.identity.role === 'py' && project.pmPersonId === ctx.identity.personId;
 
@@ -197,7 +188,7 @@ export const readReports = (ws: WorkspaceData, ctx: ToolContext, args: Record<st
             kisaltmalar: shown.abbreviations.map(a => ({ kisaltma: a.abbr, acilim: a.expansion })),
             py_puani: shown.pmScore, py_puani_notu: shown.pmScoreNote,
             plan_degerlendirmesi: (shown.planReview || []).map(p => ({ madde_id: p.itemId, madde: p.text, durum: p.status })),
-            bicim_denetimi: lintReport(shown, lintDictionary(ws)).map(l => `${l.level === 'error' ? 'HATA' : 'uyarı'}: ${l.message}`),
+            bicim_denetimi: lintReport(shown, reportLintDictionary(ws)).map(l => `${l.level === 'error' ? 'HATA' : 'uyarı'}: ${l.message}`),
             gecmis: shown.history.map(h => `${h.at.slice(0, 16).replace('T', ' ')} ${h.action} — ${h.byName || h.byRole}${h.note ? `: ${h.note}` : ''}`),
         } : {}),
         gecen_haftanin_plani: prevPlans.map(p => ({ madde_id: p.id, madde: itemDisplay(p) })),
@@ -239,7 +230,7 @@ export const draftPackage = (ws: WorkspaceData, ctx: ToolContext, args: Record<s
 // ---------------------------------------------------------------- öneriler
 
 export type ReportOp =
-    | { op: 'kaydet'; projectId: string; year: number; week: number; gonder: boolean; content: Pick<WeeklyReport, 'thisWeek' | 'nextWeek' | 'abbreviations' | 'planReview' | 'pmScore' | 'pmScoreNote' | 'aiDraft'> }
+    | { op: 'kaydet'; projectId: string; year: number; week: number; gonder: boolean; content: Pick<WeeklyReport, 'thisWeek' | 'nextWeek' | 'abbreviations' | 'planReview' | 'pmScore' | 'pmScoreNote' | 'aiDraft' | 'worklog'> }
     | { op: 'karar'; projectId: string; year: number; week: number; karar: 'onay' | 'iade'; not?: string }
     | { op: 'yayin'; year: number; week: number };
 
@@ -329,7 +320,7 @@ export const prepareReportOp = (ws: WorkspaceData, ctx: ToolContext, name: strin
         const owner = existing.stage === 'bs_review' ? ctx.identity.role === 'bolum_sorumlu' : (existing.stage === 'pyds_review' || existing.stage === 'approved') && isReportSteward(ctx.identity);
         if (!owner) throw new Error(`Rapor "${STAGE_LABELS[existing.stage]}" aşamasında; bu aşamanın kararı sizde değil.`);
         if (karar === 'onay' && !nextStage(existing, reportFlowOf(ws))) throw new Error('Rapor zaten onaylı.');
-        const lint = lintCounts(lintReport(existing, lintDictionary(ws)));
+        const lint = lintCounts(lintReport(existing, reportLintDictionary(ws)));
         return {
             op: { op: 'karar', projectId: project.id, ...w, karar, ...(not ? { not } : {}) },
             title: `${project.name} · ${weekKey(w)} raporu: ${karar === 'onay' ? 'onay' : 'iade'}`,
@@ -342,9 +333,12 @@ export const prepareReportOp = (ws: WorkspaceData, ctx: ToolContext, name: strin
     if (isWeekPublished(ws, w.year, w.week)) throw new Error(`${weekKey(w)} yayınlandı; rapor değişmez.`);
     const prevPlans = previousPlansOf(all, { kind: 'project', year: w.year, week: w.week, projectId: project.id, departmentCode: projectDepartment(ws, project) });
     const input = reportInput(ws, project, w, worklog);
-    const { content, problems } = buildContent(args, prevPlans, input, now);
+    const built = buildContent(args, prevPlans, input, now);
+    const problems = built.problems;
+    // Haftanın Jira worklog'u raporla saklanır (uygulamadaki "Jira'dan çek" gibi): ay içi tahmini gerçekleşen buna dayanır (BL-22)
+    const content = worklog.length ? { ...built.content, worklog } : built.content;
     if (!content.thisWeek.length && !content.nextWeek.length) throw new Error('Raporda madde yok.');
-    const dictionary = lintDictionary(ws);
+    const dictionary = reportLintDictionary(ws);
     const check = checkSuggestion(content, input, dictionary);
     const gonder = args.gonder === true;
     const flow = reportFlowOf(ws);
@@ -382,7 +376,7 @@ export const applyReportOp = (ws: WorkspaceData, ctx: ToolContext, op: ReportOp,
     if (!project) throw new Error('Proje bulunamadı.');
     const reports = ws.weeklyReports || [];
     const existing = findReport(reports, op.year, op.week, op.projectId);
-    const dictionary = lintDictionary(ws);
+    const dictionary = reportLintDictionary(ws);
     if (op.op === 'karar') {
         if (!existing) throw new Error('Rapor bulunamadı.');
         if (op.karar === 'iade') {

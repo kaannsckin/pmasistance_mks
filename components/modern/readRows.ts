@@ -1,5 +1,5 @@
-declare const XLSX: any;
-declare const Papa: any;
+import * as XLSX from 'xlsx';
+import Papa from 'papaparse';
 
 /** Excel/CSV dosyasını satır dizisine çevirir (ilk sayfa; başlık satırı dahil) */
 export const readRows = (file: File): Promise<unknown[][]> => new Promise((resolve, reject) => {
@@ -9,12 +9,10 @@ export const readRows = (file: File): Promise<unknown[][]> => new Promise((resol
     reader.onload = () => {
         try {
             if (csv) {
-                if (typeof Papa === 'undefined') throw new Error('CSV kütüphanesi yüklenemedi.');
-                resolve(Papa.parse(reader.result as string, { skipEmptyLines: true }).data);
+                resolve(Papa.parse<unknown[]>(reader.result as string, { skipEmptyLines: true }).data);
             } else {
-                if (typeof XLSX === 'undefined') throw new Error('Excel kütüphanesi yüklenemedi.');
                 const wb = XLSX.read(reader.result, { type: 'binary' });
-                resolve(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 }));
+                resolve(XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[wb.SheetNames[0]], { header: 1 }));
             }
         } catch (e) {
             reject(e);

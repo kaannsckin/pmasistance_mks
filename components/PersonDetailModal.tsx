@@ -69,7 +69,7 @@ const PersonDetailModal: React.FC<PersonDetailModalProps> = ({ workspace, person
             <select value={year} onChange={e => setYear(parseInt(e.target.value, 10))} className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-gray-700 dark:text-gray-200 focus:outline-none">
               {YEAR_RANGE.map(y => <option key={y} value={y}>{y}</option>)}
             </select>
-            <button onClick={onClose} className="w-9 h-9 rounded-xl text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"><i className="fa-solid fa-times"></i></button>
+            <button aria-label="Kapat" onClick={onClose} className="w-9 h-9 rounded-xl text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"><i aria-hidden="true" className="fa-solid fa-times"></i></button>
           </div>
         </div>
 
@@ -92,7 +92,7 @@ const PersonDetailModal: React.FC<PersonDetailModalProps> = ({ workspace, person
           {/* Aylık doluluk (kapasite çizgili) */}
           <div>
             <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-300 mb-3">
-              <i className="fa-solid fa-gauge-high mr-2" style={{ color: 'var(--app-primary)' }}></i>
+              <i aria-hidden="true" className="fa-solid fa-gauge-high mr-2" style={{ color: 'var(--app-primary)' }}></i>
               Aylık Doluluk (tüm projeler, {year})
             </h4>
             <div className="flex items-end gap-1.5 h-32 px-1">
@@ -134,12 +134,12 @@ const PersonDetailModal: React.FC<PersonDetailModalProps> = ({ workspace, person
           <div>
             <div className="flex items-center justify-between mb-3">
               <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-300">
-                <i className="fa-solid fa-plane-departure mr-2" style={{ color: 'var(--app-primary)' }}></i>
+                <i aria-hidden="true" className="fa-solid fa-plane-departure mr-2" style={{ color: 'var(--app-primary)' }}></i>
                 Uygunluk & İzin ({year}){annualLeave > 0 ? <span className="text-amber-500 ml-1">· {fmt(annualLeave)} AA izin</span> : ''}
               </h4>
               {canEditLeave && onSetLeave && (
                 <button onClick={() => setShowLeave(v => !v)} className="text-[11px] font-semibold px-2.5 py-1 rounded-lg border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-300 hover:text-primary hover:border-primary/40 transition-colors">
-                  <i className={`fa-solid ${showLeave ? 'fa-check' : 'fa-pen'} mr-1`}></i>{showLeave ? 'Bitir' : 'İzin Gir'}
+                  <i aria-hidden="true" className={`fa-solid ${showLeave ? 'fa-check' : 'fa-pen'} mr-1`}></i>{showLeave ? 'Bitir' : 'İzin Gir'}
                 </button>
               )}
             </div>
@@ -199,7 +199,7 @@ const PersonDetailModal: React.FC<PersonDetailModalProps> = ({ workspace, person
           {/* Proje kırılımı */}
           <div>
             <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-300 mb-3">
-              <i className="fa-solid fa-folder-open mr-2" style={{ color: 'var(--app-primary)' }}></i>
+              <i aria-hidden="true" className="fa-solid fa-folder-open mr-2" style={{ color: 'var(--app-primary)' }}></i>
               Proje Dağılımı ({year} Plan AA)
             </h4>
             {byProject.length === 0 ? (
@@ -225,7 +225,7 @@ const PersonDetailModal: React.FC<PersonDetailModalProps> = ({ workspace, person
           {person.roles.length > 0 && (
             <div>
               <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-300 mb-2">
-                <i className="fa-solid fa-id-badge mr-2" style={{ color: 'var(--app-primary)' }}></i>Roller
+                <i aria-hidden="true" className="fa-solid fa-id-badge mr-2" style={{ color: 'var(--app-primary)' }}></i>Roller
               </h4>
               <div className="flex flex-wrap gap-1.5">
                 {person.roles.map(r => (
@@ -238,7 +238,7 @@ const PersonDetailModal: React.FC<PersonDetailModalProps> = ({ workspace, person
           {/* Görevler */}
           <div>
             <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-300 mb-3">
-              <i className="fa-solid fa-list-check mr-2" style={{ color: 'var(--app-primary)' }}></i>
+              <i aria-hidden="true" className="fa-solid fa-list-check mr-2" style={{ color: 'var(--app-primary)' }}></i>
               Üzerindeki Görevler ({tasks.length})
             </h4>
             {tasks.length === 0 ? (
@@ -251,7 +251,7 @@ const PersonDetailModal: React.FC<PersonDetailModalProps> = ({ workspace, person
                     <span className="flex-1 text-xs text-gray-700 dark:text-gray-200 truncate" title={t.taskName}>{t.taskName}</span>
                     <span className="text-[11px] text-gray-400 flex-none">{t.projectName}</span>
                     <span className="text-[11px] font-semibold flex-none" style={{ color: STATUS_COLORS[t.status] }}>{STATUS_LABELS[t.status]}</span>
-                    {t.overdue && <span className="text-[10px] font-semibold text-red-500 flex-none"><i className="fa-solid fa-calendar-xmark mr-1"></i>gecikmiş</span>}
+                    {t.overdue && <span className="text-[10px] font-semibold text-red-500 flex-none"><i aria-hidden="true" className="fa-solid fa-calendar-xmark mr-1"></i>gecikmiş</span>}
                   </div>
                 ))}
               </div>
@@ -261,7 +261,7 @@ const PersonDetailModal: React.FC<PersonDetailModalProps> = ({ workspace, person
           {/* Sahibi Olduğu Riskler */}
           <div>
             <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-300 mb-3">
-              <i className="fa-solid fa-shield-halved mr-2" style={{ color: 'var(--app-primary)' }}></i>
+              <i aria-hidden="true" className="fa-solid fa-shield-halved mr-2" style={{ color: 'var(--app-primary)' }}></i>
               Sahibi Olduğu Riskler ({risks.length})
             </h4>
             {risks.length === 0 ? (
