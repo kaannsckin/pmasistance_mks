@@ -1,6 +1,19 @@
 # Danışman raporu — PlanAsistan pilotu
 
-10 Ekim 2026 tarihli değerlendirme; o günden bu yana değişenler hemen altta. Rapor tarihli bir kayıttır: aşağıdaki bölümler 10 Ekim'deki hâliyle durur; yalnız tabloların "12 Ekim" sütunu sonradan eklendi.
+10 Ekim 2026 tarihli değerlendirme; o günden bu yana değişenler hemen altta (en yenisi üstte). Rapor tarihli bir kayıttır: aşağıdaki bölümler 10 Ekim'deki hâliyle durur; yalnız tabloların "12 Ekim" sütunu sonradan eklendi.
+
+## 2 Kasım güncellemesi
+
+**Pilot üç hafta boyunca hiç koşmadı; 3 Kasım'da yeniden başlıyor ve demo tarihi (3 Aralık) değişmiyor.** 22–29 Ekim'de pilotun Supabase sunucusuna ulaşılamadı (27 Ekim vekil 502, 2 Kasım sabahı Cloudflare 521 "Web server is down"; aynı gün yeniden erişilebilir oldu). Talimat bu durumda durmayı söylüyordu: veri 8 Ekim'de kaldı, K0 ve K1 yapılmadı, tek rapor (27 Ekim) "ortama erişim yok" dedi. Bunu kimse fark etmedi, çünkü rutinler "başarılı" bitiyordu; demodan önceki en büyük ders budur.
+
+| Ne oldu | Karar (2 Kasım) |
+| --- | --- |
+| Bulut kesilince pilot duruyordu | Pilot artık dosya modunda sürer; bulut dönünce aynı çalışma alanına taşınır (BL-26). Bulut aynı gün döndü: `kontrol` 34/34, RLS sağlam |
+| Takvim geçti (K0 22 Ekim, K1 27 Ekim) | Tek dalga: K0 3 Kasım, K1 10 Kasım, K2 19 Kasım, K3 26 Kasım, K4 1 Aralık, demo 3 Aralık. On bir senaryonun on biri korunur (S5 bayram geçmişte kaldı) |
+| Doğru saatle ölçünce veri hikâyeyi taşımıyordu: demo günü portföy 37, ajansız KALKAN 16, ATLAS'ta bile açık işlerin tamamı gecikmiş | Sürüm devri (BL-27), Jira termininin uygulamaya taşınması (BL-28, gerçek kullanımda da bir açık), KALKAN ve YILDIZ kalibrasyonu (BL-29). Ajanların Jira aktarımı taklit edilince demo günü portföy 57, NEHİR 20 ve her noktada en kötü proje |
+| Önceki doğrulamalar veri tarihini değil bugünün tarihini kullanmıştı | Ölçümler artık veri gününün saatiyle yapılır (doğrulama tabloları `pilot/SENARYOLAR.md`'de) |
+
+**Kalan riskler:** (1) Supabase projesi ücretsiz katmandaysa yedi gün hareketsizlikte duraklar; haftada iki koşu bunu önler, ama demo haftasından sonra kapanabilir. (2) Rutinlerin "başarılı" bitmesi işin yapıldığını göstermez: kullanıcı her Salı ve Perşembe `pilot-data/raporlar/OZET.md`'ye bir göz atmalı; satır yoksa koşu yapılmamıştır. (3) Takvimde pay kalmadı: K0 ya da K1 kaçarsa demo kapsamı daraltılır, tarih değil.
 
 ## 12 Ekim güncellemesi
 

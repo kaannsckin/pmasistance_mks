@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { appendFile, mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -18,7 +18,7 @@ import {
 } from './cloud.js';
 import { mockJiraFromDir } from './mockJira.js';
 import { addDays, addScenario, at, createState, createWorld, dateOf, DayEvents, eventsMarkdown, jiraExports, runUntil, Senaryo, SIM_VERSION, SimState } from './sim.js';
-import { fullName, PEOPLE, PERSONAS, personById, PROJECTS } from './world.js';
+import { fullName, PEOPLE, PERSONAS, personById, PILOT_BASLANGIC, PROJECTS } from './world.js';
 
 /**
  * Pilot komut satırı (npm run pilot -- <komut>). 1. rutin veriyi üretir,
@@ -29,10 +29,15 @@ import { fullName, PEOPLE, PERSONAS, personById, PROJECTS } from './world.js';
 const USAGE = `PlanAsistan pilot
 
 Veri (1. rutin — Jira ajanı):
-  baslat [--tarih GG] [--gecmis 120] [--tohum 2026] [--zorla] [--dosya]
+  baslat [--tarih GG] [--gecmis 120] [--tohum 2026] [--ajanli GG] [--zorla] [--dosya]
                                                                 Kurgusal birimi kurar, geçmişi dünü dahil doldurur.
-                                                                PILOT_SUPABASE_* ortamı varsa Supabase'e (--dosya: JSON'a)
+                                                                --ajanli: rol ajanlarının işe başladığı gün (öncesini
+                                                                simülasyon yazar; varsayılan ${PILOT_BASLANGIC}).
+                                                                PILOT_SUPABASE_* ortamı varsa Supabase'e (--dosya: JSON'a;
+                                                                bulut bağlantısı bulut.beklemede.json'a park edilir)
+  bulut-yokla                                                   Supabase'e bu ortamdan ulaşılıyor mu (çıkış kodu 0 / 3)
   buluta-tasi                                                   JSON'daki pilot verisini Supabase'e taşır
+                                                                (park edilmiş bağlantı varsa aynı çalışma alanına)
   uyeler [--izleyici e-posta[:rol],…]                           Pilot hesaplarını ve üyelikleri kurar/listeler
   gun [--tarih GG]                                              Sahte Jira'yı ve birimi bu güne kadar ilerletir (varsayılan: dün)
   jira-sunucu [--port 8787]                                     Sahte Jira'yı HTTP'de açar (tarayıcıdaki uygulama için)
@@ -48,7 +53,8 @@ Veri (1. rutin — Jira ajanı):
   ozet                                                          Veri özeti
   dondur [--ad AD] [--zorla]                                    Demo ortamının anlık kopyası: çalışma alanı, simülasyon durumu,
                                                                  sahte Jira → pilot-data/donmus/<AD>/ (varsayılan AD: bugün)
-  geri-yukle --ad AD                                            Kopyayı geri yükler (bulutta yerinde); sonraki günlerin olay ve
+  geri-yukle --ad AD [--dosya]                                  Kopyayı geri yükler (bulutta yerinde; --dosya: dosya moduna,
+                                                                 bulut bağlantısı park edilir); sonraki günlerin olay ve
                                                                  Confluence dosyaları arşive taşınır
 
 Kullanıcılar (2. rutin):
@@ -292,27 +298,46 @@ const generate = (flags: Flags) => {
     const bugun = str(flags, 'tarih') || todayTr();
     const gecmis = Number(str(flags, 'gecmis') || 120);
     const tohum = Number(str(flags, 'tohum') || 2026);
+    const ajanli = str(flags, 'ajanli') || PILOT_BASLANGIC;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(ajanli)) fail(`--ajanli YYYY-AA-GG olmalı: ${ajanli}`);
     const from = dateOf(addDays(bugun, -gecmis));
     const baslangic = `${from.getFullYear()}-${String(from.getMonth() + 1).padStart(2, '0')}-01`;
-    const state = createState(tohum, baslangic);
+    // Ajanlar işe başlamadan önceki günleri (PY raporu, aktarım, onay) simülasyon "geçmişteki kullanıcılar" adına yazar
+    const state = createState(tohum, baslangic, ajanli);
     const last: DayEvents[] = [];
     const ws = runUntil(state, createWorld(tohum, baslangic), addDays(bugun, -1), e => { last.push(e); if (last.length > 7) last.shift(); }, { importAll: true });
     return { ws, state, last };
 };
 
 /** Bulut kurulumu: pilot hesapları, çalışma alanı (varsa yerinde yenilenir), üyelikler */
+/**
+ * Supabase'e ulaşılamayınca pilot dosya modunda sürer; bulut bağlantısı silinmez,
+ * buraya park edilir ki bağlantı dönünce aynı çalışma alanı (kimlik, üyelikler,
+ * izleyiciler) yerinde yenilensin.
+ */
+const parkedLinkPath = (p: ReturnType<typeof paths>) => join(p.dir, 'bulut.beklemede.json');
+const readParkedLink = (p: ReturnType<typeof paths>): CloudLink | null => {
+    try {
+        const v = JSON.parse(readFileSync(parkedLinkPath(p), 'utf8')) as CloudLink;
+        return v.workspaceId ? v : null;
+    } catch {
+        return null;
+    }
+};
+
 const setupCloud = async (p: ReturnType<typeof paths>, config: PilotCloudConfig, ws: WorkspaceData, flags: Flags) => {
     const viewers = parseViewers(str(flags, 'izleyici') || process.env.PILOT_IZLEYICILER);
     const clients = supabaseClients(config);
     const admin = clients.service();
     const users = await ensurePilotUsers(admin, config.password);
-    const old = readCloudLink(p.dir);
+    const old = readCloudLink(p.dir) || readParkedLink(p);
     const reused = !!old && old.host === hostOf(config.url) && await replacePilotWorkspace(admin, old.workspaceId, ws);
     const workspaceId = reused ? old!.workspaceId : await createPilotWorkspace(admin, users.jira, ws);
     const uyelik = await ensureMemberships(admin, workspaceId, users, viewers);
     writeCloudLink(p.dir, { workspaceId, host: hostOf(config.url), kuruldu: new Date().toISOString() });
     // Tek doğru kaynak bulut: eski JSON kalırsa yanlışlıkla okunur
     if (existsSync(p.ws)) await rm(p.ws);
+    await rm(parkedLinkPath(p), { force: true });
     return {
         kaynak: `Supabase (${hostOf(config.url)})`,
         calisma_alani: workspaceId,
@@ -342,12 +367,39 @@ const main = async () => {
             const cloud = config ? await setupCloud(p, config, ws, flags) : null;
             if (!cloud) {
                 await writeAtomic(p.ws, serializeWorkspace(ws, false));
-                if (link) await rm(join(p.dir, 'bulut.json'));
+                if (link) await rename(join(p.dir, 'bulut.json'), parkedLinkPath(p));
             }
             await saveState(p, state);
             await saveJira(p, state);
             for (const e of last) await writeDay(p, e);
-            print({ kuruldu: p.dir, ...(cloud || { kaynak: 'workspace.json' }), ...(arsiv ? { arsiv } : {}), ...summary(ws, state) });
+            const parked = !cloud ? readParkedLink(p) : null;
+            print({
+                kuruldu: p.dir, ajanli: state.ajanli, ...(cloud || { kaynak: 'workspace.json' }),
+                ...(parked ? { bulut_beklemede: parked.workspaceId, not: 'Bulut bağlantısı park edildi; Supabase\'e ulaşılınca "buluta-tasi" aynı çalışma alanını yerinde yeniler.' } : {}),
+                ...(arsiv ? { arsiv } : {}), ...summary(ws, state),
+            });
+            return;
+        }
+        case 'bulut-yokla': {
+            const config = cloudEnv();
+            if (!config) {
+                print({ erisim: false, neden: `Bulut ayarları kullanılamıyor — ${cloudEnvProblem(process.env)}` });
+                process.exitCode = 3;
+                return;
+            }
+            const link = readCloudLink(p.dir) || readParkedLink(p);
+            const timeout = new Promise<{ error: string }>(res => setTimeout(() => res({ error: 'zaman aşımı (20 sn)' }), 20_000).unref());
+            const probe = Promise.resolve(supabaseClients(config).service().from('workspaces').select('id').limit(1))
+                .then(r => ({ error: r.error ? r.error.message : '' }), (e: Error & { cause?: Error }) => ({ error: `${e?.message || e}${e?.cause ? ` (${e.cause.message})` : ''}` }));
+            const r = await Promise.race([probe, timeout]);
+            // Kapalı (duraklatılmış) projede Cloudflare HTML hata sayfası döner: başlığı yeter
+            if (r.error.startsWith('<')) r.error = r.error.match(/<title>([^<]*)<\/title>/i)?.[1]?.trim() || 'HTML hata sayfası (sunucu yanıt vermiyor)';
+            print({
+                erisim: !r.error, host: hostOf(config.url),
+                ...(link ? { calisma_alani: link.workspaceId, mod: readCloudLink(p.dir) ? 'bulut' : 'dosya (bulut bağlantısı park edilmiş)' } : {}),
+                ...(r.error ? { neden: r.error } : {}),
+            });
+            if (r.error) process.exitCode = 3;
             return;
         }
         case 'buluta-tasi': {
@@ -551,10 +603,15 @@ const main = async () => {
             const ws = await readWorkspaceFile(join(dir, 'workspace.json'));
             const state = JSON.parse(await readFile(join(dir, 'durum.json'), 'utf8')) as SimState;
             if (state.surum !== SIM_VERSION) fail(`Kopyanın simülasyon sürümü ${state.surum}, kodunki ${SIM_VERSION}: geri yüklenemez.`);
-            const store = openStore(p);
-            if (store.kind === 'supabase') {
+            // --dosya: buluta ulaşılamıyorken kopya dosya moduna yüklenir; bulut bağlantısı park edilir (buluta-tasi ile döner)
+            const toFile = !!flags.dosya;
+            const store = toFile ? null : openStore(p);
+            if (store?.kind === 'supabase') {
                 if (!await replacePilotWorkspace(store.clients.service(), store.link.workspaceId, ws)) fail(`Bulutta çalışma alanı ${store.link.workspaceId} yok.`);
-            } else await writeAtomic(p.ws, serializeWorkspace(ws, false));
+            } else {
+                await writeAtomic(p.ws, serializeWorkspace(ws, false));
+                if (toFile && existsSync(join(p.dir, 'bulut.json'))) await rename(join(p.dir, 'bulut.json'), parkedLinkPath(p));
+            }
             await saveState(p, state);
             await rm(p.jira, { recursive: true, force: true });
             await saveJira(p, state);
@@ -569,7 +626,7 @@ const main = async () => {
                     moved.push(f);
                 }
             }
-            print({ geri_yuklendi: ad, son_gun: state.sonGun, ...(store.kind === 'supabase' ? { calisma_alani: store.link.workspaceId, not: 'Tarayıcıda "Buluttan Çek".' } : {}), ...(moved.length ? { arsive_tasinan: moved.length, arsiv: target } : {}), ...summary(ws, state) });
+            print({ geri_yuklendi: ad, son_gun: state.sonGun, ...(store?.kind === 'supabase' ? { calisma_alani: store.link.workspaceId, not: 'Tarayıcıda "Buluttan Çek".' } : { kaynak: 'workspace.json', ...(readParkedLink(p) ? { bulut_beklemede: readParkedLink(p)!.workspaceId } : {}) }), ...(moved.length ? { arsive_tasinan: moved.length, arsiv: target } : {}), ...summary(ws, state) });
             return;
         }
         case 'demo-testi': {
