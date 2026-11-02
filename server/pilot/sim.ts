@@ -28,7 +28,7 @@ import { availableAAOf, DEPARTMENTS, fullName, HOURS_PER_DAY, PEOPLE, PERSONAS, 
  * tarihinden türetilir). Saatler İstanbul saatine göre UTC ISO yazılır.
  */
 
-export const SIM_VERSION = 4;
+export const SIM_VERSION = 5;
 
 /**
  * Senaryo: Jira'da ve uygulamada iz bırakan, tarihli olay (pilot senaryo
@@ -423,6 +423,8 @@ const applyProposalWon = (ws: WorkspaceData, x: S<'teklif-kazanildi'>, events: D
             added.push(`${fullName(person)} ${String(n.aa).replace('.', ',')} AA`);
         });
     });
+    // Teklif dönemindeki ön plan başlangıçtan önceki aylarda kalmaz: kalırsa planlanan değer doğar, yeni proje SPI 0 görünür
+    allocations.filter(a => a.projectId === w.id && a.year === year).forEach(a => { for (let m = 1; m < fromMonth; m++) delete a.plan[m]; });
     const projects = ws.projects.map(p => (p.id === w.id ? { ...p, status: 'devam' as const, updatedAt: at(x.tarih, 15), settings: { ...p.settings, projectStartDate: x.baslangic } } : p));
     const aylar = fromMonth === 12 ? 'Aralık' : `${AYLAR[fromMonth - 1]}–Aralık`;
     events.genel.push(`${w.name}: teklif kabul edildi; durum "Devam", başlangıç ${gunAy(x.baslangic)}. Plan (${aylar}): ${added.join(', ')}.`);
@@ -433,6 +435,21 @@ const transition = (rec: JiraIssueRecord, when: string, to: string, toCategory: 
     rec.transitions.push({ at: when, from: rec.status, to, fromCategory: rec.statusCategory, toCategory });
     rec.status = to;
     rec.statusCategory = toCategory;
+};
+
+/** Başlanmamış ve terminini aşmış kaydın bir sonraki sürüme devredilme olasılığı (ekip terminini taşır) */
+const DEVIR_OLASILIGI = 0.65;
+
+/** Günün içinde bulunduğu sürümün sonu (planOf ile aynı kural); son üç günündeyse bir sonraki sürümün sonu */
+const nextSprintEnd = (project: Project, day: string): string => {
+    const dur = 7 * (project.settings.sprintDuration || 3);
+    const endOf = (s: number) => {
+        const d = dateOf(project.settings.projectStartDate.slice(0, 10));
+        d.setDate(d.getDate() + s * dur - 3);
+        return dayOf(d);
+    };
+    const s = sprintNo(project, day);
+    return endOf(s) > day ? endOf(s) : endOf(s + 1);
 };
 
 const sprintNo = (project: Project, day: string): number => {
@@ -545,6 +562,15 @@ export const stepDay = (state: SimState, input: WorkspaceData, day: string, opts
         const team = Object.keys(w.team).filter(pid => pid !== w.pm);
 
         if (work) {
+            // Sürüm devri: başlanmamış, terminini aşmış kaydın terminini ekip çoğunlukla bir sonraki sürüm sonuna
+            // taşır; bir kısmı eski terminde kalır. Devam eden kayıt terminde kalır: gerçek gecikme orada görünür.
+            // Karar kayıt + eski termin tohumlu (günün akışını değiştirmez, her gün aynı sonucu verir).
+            jira.issues.forEach(x => {
+                if (x.rec.statusCategory !== 'new' || !x.rec.due || String(x.rec.due).slice(0, 10) >= day) return;
+                if (mulberry32(hashStr(`${x.rec.key}:${x.rec.due}`))() >= DEVIR_OLASILIGI) return;
+                x.rec.due = nextSprintEnd(project, day);
+            });
+
             // Senaryo: kritik hata (yeni Jira kaydı)
             ofType(state, 'kritik-hata').filter(x => x.proje === w.jiraKey && x.tarih === day).forEach(x => {
                 const type = x.tip || 'Hata';
