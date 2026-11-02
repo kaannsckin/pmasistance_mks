@@ -47,6 +47,7 @@ export interface Task {
   labels?: string[];
   includeInSprints?: boolean;
   dueDate?: string; // ISO string date
+  jiraDueDate?: string; // Jira'dan son aktarılan termin: uygulamadaki termin buna eşitse elle değiştirilmemiştir
   subtasks?: { text: string; completed: boolean }[];
   comments?: { author: string; text: string; date: string }[];
   keyResultId?: string;

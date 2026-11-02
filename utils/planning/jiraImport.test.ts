@@ -107,6 +107,16 @@ describe('birleştirme', () => {
         expect(r.tasks.find(t => t.id === 'b')!.dueDate).toBe('2026-12-01');
     });
 
+    it('Jira\'da taşınan termin, uygulamada elle değiştirilmemişse güncellenir', () => {
+        const first = mergeJiraIssues([], [issue('MKS-40', { due: '2026-10-09' }), issue('MKS-41', { due: '2026-10-09' })], OPTS).tasks;
+        expect(first[0]).toMatchObject({ dueDate: '2026-10-09', jiraDueDate: '2026-10-09' });
+        // MKS-41'in terminini PY uygulamada elle değiştirdi; ekip Jira'da ikisini de bir sonraki sürüme taşıdı
+        const edited = first.map(t => (t.jiraId === 'MKS-41' ? { ...t, dueDate: '2026-10-15' } : t));
+        const r = mergeJiraIssues(edited, [issue('MKS-40', { due: '2026-10-30' }), issue('MKS-41', { due: '2026-10-30' })], OPTS).tasks;
+        expect(r.find(t => t.jiraId === 'MKS-40')).toMatchObject({ dueDate: '2026-10-30', jiraDueDate: '2026-10-30' });
+        expect(r.find(t => t.jiraId === 'MKS-41')).toMatchObject({ dueDate: '2026-10-15', jiraDueDate: '2026-10-30' });
+    });
+
     it('Jira kapanış tarihi vermezse yerel kapanış tarihi korunur', () => {
         const done = local('t1', { jiraId: 'MKS-1', status: TaskStatus.Done, resolvedAt: '2026-09-04T14:00:00.000Z' });
         const r = mergeJiraIssues([done], [issue('MKS-1', { resolved: null, transitions: [] })], OPTS).tasks[0];
