@@ -13,7 +13,7 @@ import { describeParams } from '../mcp/args.js';
 import { ConflictError, WorkspaceSource } from '../mcp/source.js';
 import { callAs, checksMarkdown, fileTarget, listToolsAs, PilotTarget, runChecks } from './check.js';
 import {
-    CloudClients, cloudConfigFromEnv, cloudEnvProblem, cloudTarget, createPilotWorkspace, ensureMemberships, ensurePilotUsers, hostOf, listMembers,
+    CloudClients, cloudConfigFromEnv, cloudEnvProblem, cloudTarget, createPilotWorkspace, ensureMemberships, findPilotWorkspace, ensurePilotUsers, hostOf, listMembers,
     parseViewers, PILOT_ENV_KEYS, PilotCloudConfig, readCloudLink, replacePilotWorkspace, serviceSource, supabaseClients, writeCloudLink, CloudLink,
 } from './cloud.js';
 import { mockJiraFromDir } from './mockJira.js';
@@ -331,8 +331,11 @@ const setupCloud = async (p: ReturnType<typeof paths>, config: PilotCloudConfig,
     const admin = clients.service();
     const users = await ensurePilotUsers(admin, config.password);
     const old = readCloudLink(p.dir) || readParkedLink(p);
-    const reused = !!old && old.host === hostOf(config.url) && await replacePilotWorkspace(admin, old.workspaceId, ws);
-    const workspaceId = reused ? old!.workspaceId : await createPilotWorkspace(admin, users.jira, ws);
+    // Bağlantı dosyası yoksa var olan pilot çalışma alanı adla aranır: yenisi açılırsa izleyiciler eski alanda kalır
+    const found = old ? null : await findPilotWorkspace(admin, users.jira);
+    const targetId = old ? (old.host === hostOf(config.url) ? old.workspaceId : null) : found;
+    const reused = !!targetId && await replacePilotWorkspace(admin, targetId, ws);
+    const workspaceId = reused ? targetId! : await createPilotWorkspace(admin, users.jira, ws);
     const uyelik = await ensureMemberships(admin, workspaceId, users, viewers);
     writeCloudLink(p.dir, { workspaceId, host: hostOf(config.url), kuruldu: new Date().toISOString() });
     // Tek doğru kaynak bulut: eski JSON kalırsa yanlışlıkla okunur
@@ -341,7 +344,7 @@ const setupCloud = async (p: ReturnType<typeof paths>, config: PilotCloudConfig,
     return {
         kaynak: `Supabase (${hostOf(config.url)})`,
         calisma_alani: workspaceId,
-        ...(reused ? { not: 'Var olan çalışma alanı yerinde yenilendi (kimlik ve üyelikler aynı; tarayıcıda "Buluttan Çek").' } : {}),
+        ...(reused ? { not: `Var olan çalışma alanı yerinde yenilendi (kimlik ve üyelikler aynı; tarayıcıda "Buluttan Çek")${found ? '; bağlantı dosyası yoktu, alan adıyla bulundu' : ''}.` } : {}),
         uyelikler: uyelik.eklenen,
         ...(uyelik.kayitsiz.length ? { kayitsiz_izleyiciler: uyelik.kayitsiz, uyari: 'Bu izleyiciler uygulamadan kayıt olduktan sonra "pilot uyeler" yeniden çalıştırılmalı.' } : {}),
     };
