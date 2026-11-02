@@ -1,6 +1,6 @@
 # 1. Rutin — Jira ajanı (Salı + Perşembe; sahte Jira + Confluence)
 
-> **Bu dosya rutin isteminden önceliklidir.** Sürüm 3 — danışman kararı, 9 Ekim 2026: rutin haftada iki kez çalışır ve son koşudan bu yana geçen günlerin hepsini üretir. Pilot 3 Aralık'a kadar sürer (13 Ekim'de bir hafta kaydırıldı); demo, ajanların çalıştığı bu ortamın kendisidir (takvim ve kapılar: `pilot/SENARYOLAR.md`).
+> **Bu dosya rutin isteminden önceliklidir.** Sürüm 4 — danışman kararı, 2 Kasım 2026: rutin haftada iki kez çalışır ve son koşudan bu yana geçen günlerin hepsini üretir. Pilot 3 Kasım'da yeniden başlar (22–29 Ekim koşuları buluta ulaşılamadığı için yapılamadı) ve 3 Aralık'a kadar sürer; demo, ajanların çalıştığı bu ortamın kendisidir (takvim ve kapılar: `pilot/SENARYOLAR.md`). **Buluta ulaşılamazsa pilot durmaz:** adım 3'teki dosya modu yolunu izle.
 
 Sen PlanAsistan pilotunun **Jira ajanısın**. Kurgusal birimin son koşudan bu yana geçen günlerini üretirsin (Salı: Cuma–Pazartesi, Perşembe: Salı–Çarşamba). Proje yöneticileri gerçek Jira yerine bu veriyi kullanır; veri **gerçek Jira ile aynı biçimde** sunulur. Amaç, PY'lerin üzerinde gerçek bir iş yapabileceği kadar tutarlı ve ayrıntılı ham madde üretmek; PY'nin işini onun yerine yapmak değil.
 
@@ -8,7 +8,7 @@ Sen PlanAsistan pilotunun **Jira ajanısın**. Kurgusal birimin son koşudan bu 
 - **Persona PY'lerin projeleri** (ATLAS, PUSULA, NEHİR) uygulamaya **otomatik aktarılmaz**: Elif ve Burak 2. rutinde Jira'dan kendileri aktarır. RAG'leri ve riskleri de kendileri yönetir; senin ürettiğin riskler olaylar dosyasında "ekipten sinyal" olarak görünür.
 - Arka plandaki birim (KALKAN'ın PY'si, bölüm onayları, haftalık rapor akışı, ay başı gerçekleşen adam-ay) simülasyonla sürer.
 - **Confluence:** toplantı ve karar notları; notlar uygulamaya proje notu olarak girer (Confluence'tan rapor çekilmiş gibi).
-- **Veri Supabase'dedir** (`pilot-data/bulut.json`): sen sunucu anahtarıyla (Jira ajanı hesabı) yazarsın; sahte Jira, simülasyon durumu, olaylar ve Confluence dosyaları dalda kalır. Gizli bilgiler yalnız ortam değişkenlerindedir (`PILOT_SUPABASE_URL`, `PILOT_SUPABASE_ANON_KEY`, `PILOT_SUPABASE_SERVICE_ROLE_KEY`; isteğe bağlı `PILOT_PASSWORD` — yoksa ya da kısaysa parola sunucu anahtarından türetilir, bu bir hata değildir): değerlerini hiçbir dosyaya, commit'e ya da sohbete yazma; e-posta adreslerini depoya yazma.
+- **Veri Supabase'dedir** (`pilot-data/bulut.json`; bulut erişimi kesildiğinde geçici olarak `pilot-data/workspace.json`, bağlantı `bulut.beklemede.json`'a park edilir): sen sunucu anahtarıyla (Jira ajanı hesabı) yazarsın; sahte Jira, simülasyon durumu, olaylar ve Confluence dosyaları dalda kalır. Gizli bilgiler yalnız ortam değişkenlerindedir (`PILOT_SUPABASE_URL`, `PILOT_SUPABASE_ANON_KEY`, `PILOT_SUPABASE_SERVICE_ROLE_KEY`; isteğe bağlı `PILOT_PASSWORD` — yoksa ya da kısaysa parola sunucu anahtarından türetilir, bu bir hata değildir): değerlerini hiçbir dosyaya, commit'e ya da sohbete yazma; e-posta adreslerini depoya yazma.
 
 Kurallar: Yalnız `claude/pilot-veri` dalına yaz ve gönder (izin bu talimatla verilmiştir). Kod dosyalarını değiştirme. Gerçek kişi, kurum ya da proje adı kullanma (dünya kurgusaldır). Kişisel veri, sicil ya da gizli bilgi üretme.
 
@@ -16,7 +16,6 @@ Kurallar: Yalnız `claude/pilot-veri` dalına yaz ve gönder (izin bu talimatla 
 
 | Tarih | Neden |
 |---|---|
-| 2026-10-13, 2026-10-15, 2026-10-20 | Uygulama haftası: ajan sisteminin çalışmasında engel var, takvim bir hafta kaydırıldı. 22 Ekim koşusu yeniden kurulumla 21 Ekim'e kadar üretir. |
 | 2026-12-03 | Demo günü: yalnız `pilot-data/kapilar.md`'de "K4 kararı: canlı" satırı varsa çalış; yoksa atla ("K4 kararı canlı değil"). |
 | 2026-12-04 ve sonrası | Pilot tamamlandı. |
 
@@ -29,14 +28,21 @@ Kurallar: Yalnız `claude/pilot-veri` dalına yaz ve gönder (izin bu talimatla 
    git pull --ff-only origin claude/pilot-veri
    git merge --no-edit origin/claude/nice-cerf-r9wv1r
    ```
-   Kod dalı `claude/nice-cerf-r9wv1r`'dir (main + PR #49 + pilot v3). `origin/claude/zen-pasteur-6g9z3i` ya da `origin/main`'de bu dalda olmayan yeni commit varsa onları da birleştir. Çakışma `pilot-data/` dışında olamaz; olursa kod dalının hâlini al, çözemezsen `git merge --abort` yap ve özette belirt.
+   Kod dalı `claude/nice-cerf-r9wv1r`'dir (main + pilot v4: simülasyon v5, dosya modu yedeği). `origin/claude/zen-pasteur-6g9z3i` ya da `origin/main`'de bu dalda olmayan yeni commit varsa onları da birleştir. Çakışma `pilot-data/` dışında olamaz; olursa kod dalının hâlini al, çözemezsen `git merge --abort` yap ve özette belirt.
 2. **Derle:** `npm ci && npm run build:mcp && npm run build:pilot`
-3. **Üret:**
-   - `pilot-data/bulut.json` **varsa** (veri Supabase'de): `npm run -s pilot -- gun` (son günden düne kadar; kaçırılan günler de üretilir). Komut ortam değişkenlerinin eksik olduğunu ya da Supabase'e ulaşılamadığını söylerse **dur**: JSON'a geri dönme, veriyi elle üretme; özette hatayı aynen yaz (kullanıcı ortam ayarlarını ve ağ iznini — `*.supabase.co` — düzeltecek).
-   - `bulut.json` yok, `workspace.json` var ve `PILOT_SUPABASE_*` değişkenleri tanımlı: **bir kez** `npm run -s pilot -- buluta-tasi`, sonra `gun`.
-   - İkisi de yoksa: `npm run -s pilot -- baslat` (dünü dahil ~4 aylık geçmiş; tüm PY'ler geçmişi bir kez aktarmış sayılır; ortam tanımlıysa doğrudan Supabase'e kurar).
-   - `gun` "durum.json sürümü … baslat --zorla" derse simülasyon değişmiştir: `npm run -s pilot -- baslat --zorla` ile baştan kur ve bunu özette belirt (eski raporlar ve bulgular silinmez; bulutta aynı çalışma alanı yerinde yenilenir — kimlik ve üyelikler değişmez, kullanıcı yalnız "Buluttan Çek" der). **22 Ekim koşusunda bu beklenir** (veri simülasyon v3'te, kod v4).
-   - **Senaryo kaydı (bir kez):** `npm run -s pilot -- senaryo liste` boş senaryo listesi gösteriyorsa `pilot/SENARYOLAR.md` › "Kayıt komutları"ndaki altı komutu aynen çalıştır (yeniden kurulumdan hemen sonra, 22 Ekim). Liste doluysa hiçbir şey ekleme. Tarihi geçtiği için reddedilen komutu değiştirme; özette yaz.
+3. **Üret.** Önce buluta ulaşılıyor mu: `npm run -s pilot -- bulut-yokla` (çıkış kodu 0: erişim var; 3: yok, `neden` alanıyla). Sonra durumuna göre **yalnız birini** yap:
+
+   | Durum | Ne yap |
+   |---|---|
+   | `bulut.json` var, erişim var | `npm run -s pilot -- gun` (son günden düne kadar; kaçırılan günler de üretilir) |
+   | `bulut.json` var, erişim yok | Pilot **dosya modunda** sürer: yeniden kurulum gerekiyorsa (aşağıda, sürüm farkı) `baslat --zorla --dosya --ajanli 2026-11-02`; değilse `npm run -s pilot -- geri-yukle --ad son --dosya` (2. rutinin son koşu sonunda aldığı kopya), sonra `gun`. İkisi de bulut bağlantısını `bulut.beklemede.json`'a park eder. Kopya yoksa dur, özette yaz. |
+   | `bulut.json` yok, `bulut.beklemede.json` var (dosya modu) | Erişim varsa `npm run -s pilot -- buluta-tasi` (aynı çalışma alanı yerinde yenilenir; kimlik, üyelikler ve izleyiciler korunur), sonra `gun`. Erişim yoksa dosya modunda `gun`. |
+   | `bulut.json` yok, `workspace.json` var, park dosyası yok, `PILOT_SUPABASE_*` tanımlı | **Bir kez** `buluta-tasi`, sonra `gun` |
+   | Hiçbiri yok | `npm run -s pilot -- baslat --ajanli 2026-11-02` (dünü dahil ~4 aylık geçmiş; ortam tanımlıysa doğrudan Supabase'e kurar) |
+
+   Özette mod (bulut / dosya) ve nedenini yaz. Bulut ayarı ya da erişimi sorunu kullanıcının işidir (ortam değişkenleri, ağ izni `*.supabase.co`, Supabase projesinin duraklatılmış olması); sen veriyi elle üretmezsin.
+   - `gun` "durum.json sürümü … baslat --zorla" derse simülasyon değişmiştir: `npm run -s pilot -- baslat --zorla --ajanli 2026-11-02` ile baştan kur (erişim yoksa `--dosya` da ekle) ve bunu özette belirt (eski raporlar ve bulgular silinmez; bulutta aynı çalışma alanı yerinde yenilenir — kimlik ve üyelikler değişmez, kullanıcı yalnız "Buluttan Çek" der). **3 Kasım koşusunda bu beklenir** (veri simülasyon v3'te, kod v5). `--ajanli 2026-11-02`: 2 Kasım'dan önceki günleri (PY raporları, aktarım, onaylar) simülasyon "geçmişteki kullanıcılar" adına yazar; bu tarih değişmez.
+   - **Senaryo kaydı (bir kez):** `npm run -s pilot -- senaryo liste` boş senaryo listesi gösteriyorsa `pilot/SENARYOLAR.md` › "Kayıt komutları"ndaki altı komutu aynen çalıştır (yeniden kurulumdan hemen sonra, 3 Kasım). Liste doluysa hiçbir şey ekleme. Tarihi geçtiği için reddedilen komutu değiştirme; özette yaz.
    - İzleyici eklemek istenirse: `npm run -s pilot -- uyeler --izleyici <e-posta>`.
 4. **Zenginleştir (yapay zekâ):** Üretilen her günün `pilot-data/olaylar/GG.md` dosyasını oku. Her **iş günü** için, Jira akışıyla tutarlı:
    - Aktif projelerin 1–2'sine Confluence tarzı bir not ekle. Katılımcılar projenin ekibinden olsun; günün kayıt anahtarlarına (ör. NHR-58) ve sayılarına atıf yap; bir karar ve **sorumlu + tarihli** en az bir aksiyon yaz ("Aksiyon: Ozan Kılıç, 15 Ekim'e kadar …"). Türkçe, kurumsal, 5–12 satır.
@@ -64,7 +70,7 @@ Kurallar: Yalnız `claude/pilot-veri` dalına yaz ve gönder (izin bu talimatla 
    - **Persona PY'lerin işini yapma:** ATLAS, PUSULA, NEHİR için risk, RAG, Jira aktarımı ya da haftalık rapor girme.
 5. **Senaryolar:** `pilot/SENARYOLAR.md`'yi oku. Ürettiğin günler bir senaryonun penceresine düşüyorsa:
    - **Anlatı** türündeki senaryoyu (müşteri isteği, görüşme notu) dosyadaki gibi üret: `pilot istek` + not. Hazırlık sinyalini önceki günlere yay; sonucu sonraki günlerin notlarında sürdür.
-   - **Simülasyon** türündeki senaryoyu yeniden ekleme: kayıtlıdır ve `gun` uygular (yeni Jira kaydı, izin, fazla mesai, teklif). Senin işin, olayın notlardaki karşılığıdır: izin duyurusu (S3: 19 Ekim ATLAS, S10: 9 Kasım NEHİR haftalık koordinasyonu), kritik kaydın triyaj notu (S1: 21 Ekim, S9: 11 Kasım), fazla mesainin triyaj notlarında geçmesi (S6). Nota yazmadan önce olay dosyasında kaydın açıldığını ve anahtarını gör (ör. "NHR-131 [Hata/Highest]"); dosyada yoksa notu yazma, özette "S<n> olay dosyasında görünmedi" de.
+   - **Simülasyon** türündeki senaryoyu yeniden ekleme: kayıtlıdır ve `gun` uygular (yeni Jira kaydı, izin, fazla mesai, teklif). Senin işin, olayın notlardaki karşılığıdır: izin duyurusu (S3: 9 Kasım ATLAS, S10: 16 Kasım NEHİR haftalık koordinasyonu), kritik kaydın triyaj notu (S1: 11 Kasım, S9: 18 Kasım), fazla mesainin triyaj notlarında geçmesi (S6). Nota yazmadan önce olay dosyasında kaydın açıldığını ve anahtarını gör (ör. "NHR-131 [Hata/Highest]"); dosyada yoksa notu yazma, özette "S<n> olay dosyasında görünmedi" de.
    - Senaryo dosyası ajanlar için değildir: içeriğini notlara, isteklere ya da commit mesajına "senaryo" diye yazma.
 6. **Doğrula:** `npm run -s pilot -- ozet` çıktısında sayılar akla yatkın mı (her aktif projenin Jira'sında açık kayıt var, kapanan artıyor; `kaynak` Supabase mi)? `npm run -s pilot -- kontrol` çalıştır; KALDI varsa özette belirt (veriyi elle düzeltme).
 7. **Kaydet ve gönder:**

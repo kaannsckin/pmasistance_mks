@@ -1,6 +1,6 @@
 # 2. Rutin — 5 rol ajanı (Salı + Perşembe; test, puan, kapı ve rapor)
 
-> **Bu dosya rutin isteminden önceliklidir.** Sürüm 3 — danışman kararı, 9 Ekim 2026. Ajanlar koşu başına **tek tur** çalışır, ama **üç aşamada**: önce PY'ler, sonra bölüm sorumlusu ve PYB destek, en son müdür. Bir aşama, önceki aşamaların bugünkü çıktısını görür. Ajanlara sonradan mesaj gönderilmez (ikinci tur yok).
+> **Bu dosya rutin isteminden önceliklidir.** Sürüm 4 — danışman kararı, 2 Kasım 2026 (pilot 3 Kasım'da yeniden başlar; 22–29 Ekim koşuları buluta ulaşılamadığı için yapılamadı). Ajanlar koşu başına **tek tur** çalışır, ama **üç aşamada**: önce PY'ler, sonra bölüm sorumlusu ve PYB destek, en son müdür. Bir aşama, önceki aşamaların bugünkü çıktısını görür. Ajanlara sonradan mesaj gönderilmez (ikinci tur yok).
 
 Sen PlanAsistan pilotunun **test koordinatörüsün**. Beş pilot kullanıcısı (yapay zekâ ajanı) uygulamayı kendi rolleriyle, MCP sunucusu üzerinden (Claude'un bağlandığı sunucunun aynısıyla) kullanır. Jira verisini 1. rutin (Jira ajanı) sağlar.
 
@@ -12,12 +12,10 @@ Sen PlanAsistan pilotunun **test koordinatörüsün**. Beş pilot kullanıcısı
 
 | Tarih | Neden |
 |---|---|
-| 2026-10-13, 2026-10-15, 2026-10-20 | Uygulama haftası: ajan sisteminin çalışmasında engel var, takvim bir hafta kaydırıldı. İlk koşu 22 Ekim (K0). |
-| 2026-10-29 | Resmî tatil (Cumhuriyet Bayramı); ajanlar çalışmaz. |
 | 2026-12-03 | Demo günü: yalnız `pilot-data/kapilar.md`'de "K4 kararı: canlı" satırı varsa çalış (aşağıda "Demo günü"); yoksa atla. |
 | 2026-12-04 ve sonrası | Pilot tamamlandı. |
 
-**Veri Supabase'dedir** (`pilot-data/bulut.json`): her ajan kendi pilot hesabıyla bağlanır; rolü üyelikten gelir, RLS gerçekteki gibi uygulanır (müdür notları veritabanından da okuyamaz). Gizli bilgiler yalnız ortam değişkenlerindedir (`PILOT_SUPABASE_*`, isteğe bağlı `PILOT_PASSWORD`): değerlerini hiçbir dosyaya, commit'e, ajan istemine ya da yoruma yazma.
+**Veri Supabase'dedir** (`pilot-data/bulut.json`): her ajan kendi pilot hesabıyla bağlanır; rolü üyelikten gelir, RLS gerçekteki gibi uygulanır (müdür notları veritabanından da okuyamaz). **Dosya modu:** buluta ulaşılamadığında 1. rutin pilotu `pilot-data/workspace.json`'a geçirir (bağlantı `bulut.beklemede.json`'da park edilir). Bu durumda ajanlar aynı komutlarla çalışır; kimlik ve rol persona tanımından gelir, RLS kontrolleri yapılmaz. Raporun ilk satırlarına "Mod: dosya (neden)" yaz; bulut dönünce 1. rutin aynı çalışma alanına taşır. Gizli bilgiler yalnız ortam değişkenlerindedir (`PILOT_SUPABASE_*`, isteğe bağlı `PILOT_PASSWORD`): değerlerini hiçbir dosyaya, commit'e, ajan istemine ya da yoruma yazma.
 
 Kurallar: Yalnız `claude/pilot-veri` dalına yaz ve gönder (izin bu talimatla verilmiştir). Kod dosyalarını değiştirme; hata bulursan düzeltme, raporla. Veri yalnız `pilot-data/` altında değişir. Bulguları abartma ya da uydurma: her bulgu bir araç çıktısına, komuta ya da dosyaya dayanır.
 
@@ -29,7 +27,7 @@ git checkout claude/pilot-veri && git pull --ff-only origin claude/pilot-veri
 git merge --no-edit origin/claude/nice-cerf-r9wv1r
 ```
 
-Kod dalı `claude/nice-cerf-r9wv1r`'dir (main + PR #49 + pilot v3). `origin/claude/zen-pasteur-6g9z3i` ya da `origin/main`'de bu dalda olmayan yeni commit varsa onları da birleştir; çakışma çıkarsa `git merge --abort` yap ve raporda belirt. 26 Kasım'dan (K3) sonra yalnız kod dalını birleştir. Sonra `npm ci && npm run build:mcp && npm run build:pilot`.
+Kod dalı `claude/nice-cerf-r9wv1r`'dir (main + pilot v4: simülasyon v5, dosya modu yedeği). `origin/claude/zen-pasteur-6g9z3i` ya da `origin/main`'de bu dalda olmayan yeni commit varsa onları da birleştir; çakışma çıkarsa `git merge --abort` yap ve raporda belirt. 26 Kasım'dan (K3) sonra yalnız kod dalını birleştir. Sonra `npm ci && npm run build:mcp && npm run build:pilot`.
 
 ```bash
 GUN=$(TZ=Europe/Istanbul date +%F)
@@ -37,9 +35,9 @@ ONCEKI=$(ls pilot-data/gunluk | grep -v "^$GUN$" | sort | tail -1)   # son koşu
 ```
 
 - **Pencere:** `pilot-data/olaylar/` içinde tarihi `ONCEKI` ≤ tarih < `GUN` olan dosyalar ve aynı aralıktaki `pilot-data/confluence/` notları.
-- **Veri güncel mi:** `npm run -s pilot -- ozet` → `son_gun` dün değilse 1. rutin çalışmamıştır: `npm run -s pilot -- gun` çalıştır ve raporda belirt. `bulut.json` var ama komutlar ortam değişkeni eksik ya da Supabase'e ulaşılamıyor diyorsa ajanları başlatma: kısa rapor yaz (karar: "Hazır değil — pilot ortamı bulut verisine ulaşamıyor", hata metni aynen) ve 8. adıma geç. JSON'a geri dönme.
+- **Veri güncel mi:** `npm run -s pilot -- ozet` → `son_gun` dün değilse ya da `ozet` sürüm farkı ("baslat --zorla") ya da bulut hatası veriyorsa önce 1. rutinin bugünkü commit'ini ("Pilot verisi: …") bekle: 5 dakikada bir `git fetch origin claude/pilot-veri && git log -1 --format='%cd %s' origin/claude/pilot-veri`, en çok 45 dakika; gelince `git pull --ff-only` ve `ozet`'i yinele. Gelmezse 1. rutin çalışmamış ya da yarım kalmıştır: `pilot/RUTIN_1_VERI.md` adım 3'ü (bulut-yokla, gerekirse dosya modu, `gun`, senaryo kaydı) **kendin uygula** ve raporda belirt; notları (adım 4) yazma. Ajanları ancak `ozet` dünü gösterince başlat. Bu da olmuyorsa kısa rapor yaz (karar: "Hazır değil — pilot verisi üretilemedi", hata metni aynen) ve 8. adıma geç.
 - **Puanlar:** `pilot-data/puanlar.json` (yoksa `[]`). Her persona için son 5 puanı gerekçesiyle hazırla: kullanıcı puanı (`kaynak: "kullanici"`) varsa o, yoksa koordinatör ön puanı "ön puan" etiketiyle.
-- **Kapı günü mü:** 22 Ekim (K0), 27 Ekim (K1), 12 Kasım (K2), 26 Kasım (K3), 1 Aralık (K4). Kapı günüyse 6. adımı da yaparsın.
+- **Kapı günü mü:** 3 Kasım (K0), 10 Kasım (K1), 19 Kasım (K2), 26 Kasım (K3), 1 Aralık (K4). Kapı günüyse 6. adımı da yaparsın.
 
 ## 1. Otomatik kontroller
 
@@ -196,13 +194,13 @@ Tarayıcıda (Chromium) müdür, PY, bölüm sorumlusu ve PYB destek gözüyle d
 `pilot/SENARYOLAR.md` › "Takvim ve ara kapılar"daki ölçütleri tek tek kanıtıyla değerlendir; `pilot-data/kapilar.md`'ye ekle (eski satırlara dokunma):
 
 ```markdown
-## K1 Akış — 2026-10-27: Geçti | Geçmedi
+## K1 Akış — 2026-11-10: Geçti | Geçmedi
 | Ölçüt | Durum | Kanıt |
 |---|---|---|
 Karar ve sonraki adım: …
 ```
 
-Sonra demonun geri dönülebilir kopyasını al: `npm run -s pilot -- dondur --ad K<n>-$GUN` (ör. `K1-2026-10-27`).
+Sonra demonun geri dönülebilir kopyasını al: `npm run -s pilot -- dondur --ad K<n>-$GUN` (ör. `K1-2026-11-10`).
 
 **K4 (1 Aralık):** ölçütlere ek olarak raporun başına "K4 kararı bekleniyor: canlı / dondurulmuş / ertele — varsayılan dondurulmuş" yaz. Kullanıcı bu oturuma `K4: canlı` (ya da `dondurulmuş`, `ertele`) yazarsa `pilot-data/kapilar.md`'ye `K4 kararı: <karar> (kullanıcı, <tarih>)` satırını ekle, `git commit -m "K4 kararı" && git push`, kısa onay yaz; başka iş yapma.
 
@@ -276,6 +274,7 @@ Veri kaynağı (Supabase çalışma alanı kimliği). Penceredeki Jira akışın
 ## 9. Kaydet, gönder, bildir
 
 ```bash
+npm run -s pilot -- dondur --ad son --zorla   # bulut kesilirse 1. rutin buradan dosya moduna geçer
 git add -A pilot-data && git commit -m "Pilot raporu: $GUN" && git push -u origin claude/pilot-veri
 ```
 

@@ -1,6 +1,6 @@
 # Pilot belgeleri
 
-PlanAsistan pilotunun (22 Ekim–3 Aralık 2026; 13 Ekim'de bir hafta kaydırıldı) belgelerinin **ana kopyası bu klasördür**. claude.ai'deki belge kopyaları artık güncellenmez; bir değişiklik buraya commit olarak girer, eski hâl git geçmişinde kalır.
+PlanAsistan pilotunun (3 Kasım–3 Aralık 2026; 13 Ekim'de bir hafta kaydırıldı, 22 Ekim–2 Kasım koşuları bulut erişimi olmadığı için yapılamadı) belgelerinin **ana kopyası bu klasördür**. claude.ai'deki belge kopyaları artık güncellenmez; bir değişiklik buraya commit olarak girer, eski hâl git geçmişinde kalır.
 
 | Belge | Ne anlatır | Kim günceller |
 | --- | --- | --- |
@@ -14,5 +14,5 @@ Rutinlerin okuduğu talimatlar `pilot/` klasöründedir (`RUTIN_1_VERI.md`, `RUT
 **Güncelleme kuralları**
 
 - Backlog'da bir iş yapıldığında durum `Yapıldı` olur ve kanıt sütununa commit ya da test sonucu yazılır; satır silinmez.
-- BL numaraları değişmez; yeni iş bir sonraki boş numarayı alır (şu an BL-26).
+- BL numaraları değişmez; yeni iş bir sonraki boş numarayı alır (şu an BL-30).
 - Tarihli rakamlar (doluluk, CPI, test sayısı) hangi güne ait olduğu yazılarak verilir.

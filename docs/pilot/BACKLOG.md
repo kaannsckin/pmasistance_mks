@@ -1,8 +1,8 @@
 # Backlog
 
-Son güncelleme: 12 Ekim 2026 (BL-21, BL-11, BL-09, BL-07, BL-08, BL-23 yapıldı; BL-10 pilot sonrasına alındı; BL-24 eklendi) · 13 Ekim (BL-14, BL-25, BL-17, BL-19, BL-20, BL-22, BL-24 yapıldı; BL-13 pilot sonrasına; takvim bir hafta kaydırıldı, uygulama haftası planlandı)
+Son güncelleme: 12 Ekim 2026 (BL-21, BL-11, BL-09, BL-07, BL-08, BL-23 yapıldı; BL-10 pilot sonrasına alındı; BL-24 eklendi) · 13 Ekim (BL-14, BL-25, BL-17, BL-19, BL-20, BL-22, BL-24 yapıldı; BL-13 pilot sonrasına; takvim bir hafta kaydırıldı, uygulama haftası planlandı) · 2 Kasım (pilot yeniden başlatma: BL-26–BL-29 eklendi ve yapıldı; BL-18 hedefi 3 Kasım)
 
-25 işin 19'u yapıldı (danışman raporundaki dört P0'ın tamamı dahil), 6'sı açık. K0'dan (22 Ekim) önce zorunlu olan tek iş BL-18; demo yolunu doğrudan etkileyen açık iş kalmadı. Altı açık iş uygulama haftasına alındı (aşağıda). Numaralar [`pilot/SENARYOLAR.md`](../../pilot/SENARYOLAR.md)'nin andığı BL-07, BL-08 ve BL-14 ile aynıdır.
+29 işin 23'ü yapıldı (danışman raporundaki dört P0'ın tamamı dahil), 6'sı açık. K0'dan (3 Kasım) önce zorunlu olan tek iş BL-18; demo yolunu doğrudan etkileyen açık iş kalmadı. 2 Kasım'da pilotun yeniden başlaması için dört iş eklendi ve aynı gün yapıldı (BL-26–BL-29, aşağıda).
 
 **Durum değerleri:** Açık · Sürüyor · Karar bekliyor · Yapıldı. Bir iş yapıldığında satır silinmez: durum `Yapıldı` olur, kanıt sütununa commit ya da test sonucu yazılır ve satır "Yapılanlar" tablosuna taşınır. Yeni iş bir sonraki boş numarayı alır (BL-26).
 
@@ -28,7 +28,7 @@ Kurallar:
 
 | ID | İş | Neden / kaynak | Öncelik | Durum | Hedef | Kanıt |
 | --- | --- | --- | --- | --- | --- | --- |
-| BL-18 | 9 Ekim bulgularının kapanış doğrulaması (B-001, B-003–B-006, B-008–B-014) | On iki düzeltme kodda; hiçbiri canlı koşuda yeniden üretilmedi, `bulgular.json`'da hepsi açık | P0 | Açık | K0 (22 Ekim) | Rutin 2: `bulgular.json` güncellemesi |
+| BL-18 | 9 Ekim bulgularının kapanış doğrulaması (B-001, B-003–B-006, B-008–B-014) | On iki düzeltme kodda; hiçbiri canlı koşuda yeniden üretilmedi, `bulgular.json`'da hepsi açık | P0 | Açık | K0 (3 Kasım) | Rutin 2: `bulgular.json` güncellemesi |
 | BL-10 | Önerilen RAG kuralı (geciken oran, SPI/CPI eşikleri, yüksek risk, engelleyici hata); PY farklı seçerse gerekçe zorunlu | B-002, danışman Soru 7; NEHİR algı farkı (G4). Karar (12 Ekim): pilot sonrasına; pilotta RAG'ı PY girer, verinin RAG'la çelişkisi demoda sağlık skoruyla gösterilir | P1 | Açık | Pilot sonrası | — |
 | BL-12 | Yapılandırılmış talep: kaynak talebi ve açıklama talebi, "Yönetimden beklentiler"e bağlı | B-007, danışman Soru 10; yazışma bugün pilot dosyasında | P2 | Açık | Pilot sonrası | — |
 | BL-13 | Bölüm sorumlusu diğer bölümlerin boş kapasitesini rol bazında, adsız görür | Danışman Soru 8; S10'daki U340 çatışması. 13 Ekim incelemesi: bugün bölüm sorumlusu diğer bölümlerdeki kişileri adıyla görüyor (`uygun_kisi_bul`, `doluluk_analizi`, `kisi_profili`); iş, yeni görünümden çok bu adları gizlemek. Bu, gömülü bulgulardan G1, G2 ve G6'nın Selin tarafından adla bulunmasını engeller (Aslı Çakır, Deniz Yavuz U340; Hakan Öztürk, Barış Güneş, Merve Aslan U320). Araç kataloğu 17 673/18 000 karakter: yeni araç sığmaz, mevcut araçların çıktısı değişir. Karar (13 Ekim): pilot sonrasına; pilotta adlar görünür kalır | P2 | Açık | Pilot sonrası | — |
@@ -39,6 +39,10 @@ Kurallar:
 
 | ID | İş | Neden / kaynak | Öncelik | Durum | Hedef | Kanıt |
 | --- | --- | --- | --- | --- | --- | --- |
+| BL-26 | Bulut kesilince pilot dosya modunda sürer: `bulut-yokla`, `geri-yukle --dosya`, park edilen bağlantıyla `buluta-tasi`; 2. rutin her koşu sonunda `dondur --ad son` | 22–29 Ekim'de Supabase'e ulaşılamadı (vekil 502, Cloudflare 521); talimat durmayı söylediği için K0 ve K1 hiç yapılmadı, iki hafta kayboldu | P0 | Yapıldı | K0 (3 Kasım) | Pilot verisi kopyasında: erişim yok → dosya modunda kurulum, bağlantı park edildi; `dondur --ad son` → `geri-yukle --ad son --dosya`; aynı gün bulut döndü, `kontrol` 34/34 (bulut, RLS); c437c43 |
+| BL-27 | Simülasyonda sürüm devri: başlanmamış, terminini aşmış kayıt %65 olasılıkla bir sonraki sürüm sonuna taşınır | Doğru saatle ölçünce geciken oranı her projede birikiyordu (ATLAS SPI 1,00 iken açık işlerin %43'ü gecikmiş, demo günü %100) | P0 | Yapıldı | K0 (3 Kasım) | Simülasyon v5; ajanların Jira aktarımı taklit edilerek 3 Kasım–3 Aralık ölçüldü (`pilot/SENARYOLAR.md` › doğrulama); 2dc5157 |
+| BL-28 | Jira'da taşınan termin uygulamaya taşınır, uygulamada elle değiştirilmemişse (`jiraDueDate`) | Aktarım var olan görevin terminini hiç güncellemiyordu: Jira'da sürüme taşınan iş uygulamada geciken görünüyordu (gerçek kullanımda da) | P1 | Yapıldı | K0 (3 Kasım) | `jiraImport.test.ts` (elle değiştirilen termin korunur); f12958e |
+| BL-29 | Kalibrasyon: KALKAN akışı 0,5/gün, efor sapması 1,0; kazanılan teklifin başlangıç öncesi planı silinir; `baslat --ajanli` | KALKAN (ajan yok) demo günü 16'ya düşüyordu; kazanılan YILDIZ SPI 0 görünüyordu; boş geçen 3 hafta ajanlı dönem sayılıyordu | P0 | Yapıldı | K0 (3 Kasım) | 3 Aralık: NEHİR 20, KALKAN 54, PUSULA 58, ATLAS 72, YILDIZ 81 (SPI yok); 2dc5157, c437c43 |
 | BL-01 | Senaryo komutu: kritik hata, izin, fazla mesai, teklif kazanımı | S1, S3, S6, S8–S10 Jira'da iz bırakmalı | P0 | Yapıldı | K0 | 1c00b80; senaryo testleri 31/31 |
 | BL-02 | Mock veri kalibrasyonu: 8 saatlik gün, kurum görevleri düşülmüş kapasite, istek ve risk geçmişi; rapor günü Perşembe | Doluluk %49 → %88, kapasite-talep 2 rolde açık, CPI 0,84–1,03 | P0 | Yapıldı | K0 | 1c00b80; `kontrol` 30/30 (dosya modu) |
 | BL-03 | MCP haftalık rapor araçları: taslak, kaydet/gönder, onay/iade, yayın | PY'nin ana haftalık çıktısı; puanın 20'si | P0 | Yapıldı | K0 | ccf8216; uçtan uca rapor akışı testi |
