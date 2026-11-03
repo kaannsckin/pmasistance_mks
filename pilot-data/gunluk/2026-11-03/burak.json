@@ -1,0 +1,59 @@
+{
+"persona": "burak", "kosu": "2026-11-03 Salı",
+"yapilanlar": [
+{"is": "Jira güncelleme PSL ve NHR", "araclar": ["jira_aktar"], "sonuc": "Önizleme PSL 1 yeni / 95 güncellenen, NHR 2 yeni / 89 güncellenen; ikisi onaylanıp yazıldı. Olay dosyalarında PSL 3 yeni (PSL-108/109/110), NHR 3 yeni (NHR-105/106/107); önizleme sayısı az. Bir kısmı önceki aktarımlarda alınmış olabilir (tahmin, doğrulanmadı)."},
+{"is": "PUSULA ve NEHİR karşılaştırması", "araclar": ["proje_detayi", "risk_listesi", "tahsis_ozeti"], "sonuc": "NEHİR daha riskli: sağlık 41 (kötü), 12/24 açık kayıt gecikmiş, 1 yüksek risk, 2 kişi kapasite üstü. PUSULA 53: 6/23 gecikmiş, SPI ve CPI 0,85, 1 kişi kapasite üstü; PSL-93 ve PSL-86 yeniden açıldı, saha bağlantı şikâyeti."},
+{"is": "RAG güncelleme", "araclar": ["oner_rag_guncelle"], "sonuc": "PSL 'Yolunda' yerine amber (uygulamada 'Riskli'). NHR zaten 'Riskli', değişmedi."},
+{"is": "NHR hata oranı ve yeniden açılanlar", "araclar": ["oner_risk_ekle", "notlari_ara"], "sonuc": "NHR-92 kapanıştan 1 gün sonra yeniden açıldı. Açık 24 kaydın 7'si hata. 'Hata yükü ve yeniden açılan kayıtlar' riski eklendi; 26 Ekim 'Performans hedefi' riski tekrar açılmadı."},
+{"is": "Kapasite", "araclar": ["doluluk_analizi", "uygun_kisi_bul", "kisi_profili", "departman_karnesi"], "sonuc": "Aslı Çakır plan 0,7, kapasite 0,5 (12 ay aşım). Veri Bilimci için Kasım-Aralık uygun kişi yok; en yakın Can Erdem 0,2/0,26 AA. U340 doluluğu %103. Selin'e talep yazıldı."},
+{"is": "Müşteri isteği", "araclar": ["musteri_istekleri", "oner_istek_karari", "oner_gorev_ekle"], "sonuc": "'Aylık veri kalitesi özeti' (26 Ekim, bekliyordu) reddedildi, değişiklik talebi olarak yazılacak. Kapsam toplantısı görevi 9 Kasım için açıldı."},
+{"is": "Notlar ve Jira dışı görevler", "araclar": ["notlari_ara", "oner_not_ekle", "oner_gorev_ekle"], "sonuc": "İki projenin günlüğüne karar ve sorumlu/tarihli aksiyonlar yazıldı. PSL sürüm notları görevi (Barış Güneş, 4 Kasım) açıldı."},
+{"is": "Ekim ay kapanışı", "araclar": ["tahsis_ozeti", "jira_worklog"], "sonuc": "PSL plan 3,9, gerçekleşen 3,88 AA, worklog 461,5 sa. NHR plan 3,85, gerçekleşen 3,87 AA, worklog 466 sa. Sapma ihmal edilebilir, ayar yapılmadı. Plan kilidi PSL 'Onay Bekliyor', NHR 'Taslak'."},
+{"is": "2026-H44 rapor durumu", "araclar": ["haftalik_rapor"], "sonuc": "İkisi 'PYB destekte', 30 Ekim Selin bölüm onayı; iade yok. PSL H44 'Müşteri ile görüşmeler yapıldı' maddesi çok genel. H45 Perşembe."},
+{"is": "Rol sınırı denemesi", "araclar": ["oner_tahsis_ayarla"], "sonuc": "Can Erdem için NHR Kasım 0,2 AA tahsis önerisi alındı, uygulanmadı; bölüm sorumlusu onayı gerekir. Uygulama engellemedi."}
+],
+"degisiklikler": [
+{"arac": "jira_aktar", "ozet": "PSL: 1 yeni, 95 güncellenen", "tetikleyici": "Her koşu ilk iş; PSL-108/109/110", "gerekce": "Senkron", "uygulandi": true},
+{"arac": "jira_aktar", "ozet": "NHR: 2 yeni, 89 güncellenen", "tetikleyici": "NHR-105/106/107, NHR-92 yeniden açıldı", "gerekce": "Senkron", "uygulandi": true},
+{"arac": "oner_rag_guncelle", "ozet": "PSL RAG amber (uygulamada Riskli)", "tetikleyici": "2 Kasım triyaj: PSL-86 yeniden açıldı (%146 aşım), PSL-92 saha şikâyeti, PSL-93 yeniden açıldı", "gerekce": "6 geciken kayıt, SPI/CPI 0,85, uygulama 'Yolunda' gösteriyordu", "uygulandi": true},
+{"arac": "oner_risk_ekle", "ozet": "PSL: Saha bağlantı sorunu ve yeniden açılan kayıtlar (4x3=12)", "tetikleyici": "2 Kasım PSL-86 triyaj notu", "gerekce": "Mevcut PSL riskleri bu sinyali kapsamıyor", "uygulandi": true},
+{"arac": "oner_risk_ekle", "ozet": "NHR: Hata yükü ve yeniden açılan kayıtlar (3x3=9)", "tetikleyici": "28 Ekim NHR-92 yeniden açıldı; 7 hata açık", "gerekce": "NHR kalite sinyali için risk yok", "uygulandi": true},
+{"arac": "oner_istek_karari", "ozet": "NHR 'Aylık veri kalitesi özeti' reddedildi", "tetikleyici": "2 Kasım koordinasyon kararı; istek 26 Ekim'den beri bekliyordu", "gerekce": "12/24 gecikmiş kayıt ve kapasite aşımı; değişiklik talebi olarak yazılacak", "uygulandi": true},
+{"arac": "oner_gorev_ekle", "ozet": "NHR: Müşteri kapsam netleştirme toplantısı (Burak, 9 Kasım)", "tetikleyici": "2 Kasım NHR-154 aksiyonu", "gerekce": "Jira dışı iş", "uygulandi": true},
+{"arac": "oner_gorev_ekle", "ozet": "PSL: Sürüm notları (Barış Güneş, 4 Kasım)", "tetikleyici": "26 Ekim PSL-137 aksiyonu", "gerekce": "Jira dışı iş", "uygulandi": true},
+{"arac": "oner_not_ekle", "ozet": "PSL günlük: RAG amber, PSL-86, PSL-92 öncelik, aksiyonlar", "tetikleyici": "2 Kasım PSL notları", "gerekce": "Salı karar kaydı", "uygulandi": true},
+{"arac": "oner_not_ekle", "ozet": "NHR günlük: NHR-92, istek reddi, Aslı Çakır yükü, aksiyonlar", "tetikleyici": "2 Kasım NHR notları", "gerekce": "Salı karar kaydı", "uygulandi": true}
+],
+"haftalik_rapor": [], "rapor_kararlari": [],
+"bulgular": [
+{"tur": "tutarsizlik", "onem": "orta", "baslik": "RAG 'amber' uygulamada 'Riskli' etiketiyle görünüyor; PSL ile NHR aynı etiketi alıyor", "kanit": "oner_rag_guncelle PSL rag=amber --onayla -> proje_listesi: rag 'Riskli' (PSL) ve 'Riskli' (NHR, skor 41)", "beklenen": "Amber ve kırmızı ayrışmalı", "gerceklesen": "Skor 41 ve 53 olan iki proje aynı etiketle görünüyor"},
+{"tur": "tutarsizlik", "onem": "dusuk", "baslik": "Jira aktarım önizlemesindeki 'yeni' sayısı olay dosyalarıyla tutmuyor", "kanit": "jira_aktar PSL 'yeni': 1, olaylarda PSL-108/109/110; NHR 'yeni': 2, olaylarda NHR-105/106/107", "beklenen": "Pencere olayları kadar yeni kayıt", "gerceklesen": "PSL 1, NHR 2 (neden görülemiyor)"},
+{"tur": "eksik_ozellik", "onem": "orta", "baslik": "PY için kişiye/bölüm sorumlusuna mesaj gönderme aracı yok", "kanit": "pilot araclar burak: listede mesaj/talep aracı yok", "beklenen": "Kapasite talebini uygulama içinden iletmek", "gerceklesen": "Talep yalnız çıktıdaki mesajlar alanında"},
+{"tur": "tutarsizlik", "onem": "dusuk", "baslik": "PSL H44 plan değerlendirmesinde PSL-86 'done', sonra yeniden açıldı", "kanit": "haftalik_rapor PSL 2026-H44: ri-PSL-2026-43-p1 'done'; 2 Kasım triyaj: PSL-86 yeniden açıldı", "beklenen": "H45'te partial/not_done", "gerceklesen": "H44'te done"}
+],
+"yanitlar": [],
+"mesajlar": [
+{"kime": "selin", "metin": "Selin Hanım, NEHİR'de Veri Bilimci Aslı Çakır'ın planı 0,7 AA, kapasitesi 0,5 AA; Ocak-Aralık hep aşımda. U340 doluluğu %103. NHR'de 12/24 açık kayıt gecikmiş, NHR-92 yeniden açıldı. Kasım ve Aralık için Veri Bilimci desteği rica ediyorum: ayda 0,2 AA. Tek aday Can Erdem (Kasım 0,2, Aralık 0,26 AA boşta). Uygun olursa tahsisi siz onaylayın; Perşembe H45 raporunda durumu yazacağım."},
+{"kime": "ahmet", "metin": "Ahmet Bey, Selin Hanım'dan Can Erdem için 0,2 AA/ay onayı çıkmazsa U340 dışında Veri Bilimci desteğine ihtiyacım olacak (NHR, Kasım-Aralık). U340'ta Veri Bilimci kalmadı: Aslı, Ozan ve Deniz'in Kasım yükü kapasite üstü (en dar ay -0,2 ile -0,3 AA)."},
+{"kime": "Kerem Doğan", "metin": "5 Kasım'a kadar PSL açık hata önceliklendirmesi ve saha bağlantı örnekleri (PSL-92) sende; PSL-86 bu hafta kapanmalı."},
+{"kime": "Aslı Çakır", "metin": "NHR-92 düzeltmesi ve kabul testi bugün (3 Kasım) bitmeli; test kapanıştan önce çalışacak."}
+],
+"ajanda": [
+{"madde": "Selin'den Veri Bilimci desteği (Can Erdem 0,2 AA/ay Kasım-Aralık) cevabı; gelmezse Ahmet Bey'e eskalasyon", "kime": "selin", "termin": "2026-11-05", "durum": "acik"},
+{"madde": "NHR performans ölçüm raporunu paylaş (Tuğba Kurt 4 Kasım'a kadar rapor verecek; Burak 5 Kasım)", "kime": "burak", "termin": "2026-11-05", "durum": "acik"},
+{"madde": "NHR müşteri kapsam toplantısı ve değişiklik talebi", "kime": "burak", "termin": "2026-11-09", "durum": "acik"},
+{"madde": "PSL ve NHR 2026-H45 haftalık raporlarını yaz (PSL-86 plan değerlendirmesi partial/not_done düzelt)", "kime": "burak", "termin": "2026-11-05", "durum": "acik"},
+{"madde": "Hedef: PSL-86 kapansın ve PSL-92 başlasın", "kime": "Ece Polat / Kerem Doğan", "termin": "2026-11-06", "durum": "acik"},
+{"madde": "Hedef: NHR-92 düzeltme + kabul testi", "kime": "Aslı Çakır", "termin": "2026-11-03", "durum": "acik"},
+{"madde": "PSL açık hata önceliklendirmesi ve saha örnekleri", "kime": "Kerem Doğan", "termin": "2026-11-05", "durum": "acik"},
+{"madde": "Konum servisi açık kayıt tahmin gözden geçirme", "kime": "Ece Polat", "termin": "2026-11-04", "durum": "acik"},
+{"madde": "PSL sürüm notları", "kime": "Barış Güneş", "termin": "2026-11-04", "durum": "acik"},
+{"madde": "NHR test senaryolarını güncelleme (26 Ekim'de 30 Ekim sözü verilmişti, kapanışı görülmüyor; geç)", "kime": "burak", "termin": "2026-11-05", "durum": "acik"}
+],
+"gercek_disi": [
+{"kimin_verisi": "Confluence (PSL ve NHR haftalık notları)", "ne": "Kapanmış kayıtlar 'sürüyor' diye yazılmış: PSL-103 28 Ekim'de kapandı ama 26 Ekim notunda 'sürüyor'; NHR-78 notlarda 'sürüyor' (%72, %128) oysa 30 Ekim'de 24,5 sa ile kapandı; NHR-92 26,5/16 sa oranı %66, notta %69/%75", "kanit": "olaylar/2026-10-28.md, olaylar/2026-10-30.md ve confluence/2026-10-26-PSL-137.md, 2026-10-28-NHR-144.md"}
+],
+"demo_yoklamasi": [],
+"arac_cagrisi": 39, "memnuniyet": 7,
+"gunun_notu": "İki proje, tek Salı: NEHİR'in yükü gerçekten ağır, PUSULA'nın RAG'ı gerçeğin gerisinde kalmıştı; ikisini de yazdım, Perşembe raporları sözüm."
+}
