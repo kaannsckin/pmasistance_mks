@@ -1,10 +1,10 @@
 # Demo yolu testi — GEÇTİ
 
-2026-11-03 05:49 UTC · 28 adım · 0 kalan · arayüz: klasik, modern
+2026-11-03 06:06 UTC · 28 adım · 0 kalan · arayüz: klasik, modern
 
 **Uyarı:** dış kaynak yüklenemedi (ekran biçimsiz ya da dışa aktarma bozuk olabilir): cdn-icons-png.flaticon.com
 
-Beklenen (MCP, müdür): portföy sağlığı 66 · NEHİR Veri Platformu 44 · PUSULA Saha Mobil Uygulaması 56 · KALKAN Siber İzleme 79 · ATLAS Karar Destek Sistemi 83
+Beklenen (MCP, müdür): portföy sağlığı 63 · NEHİR Veri Platformu 40 · PUSULA Saha Mobil Uygulaması 47 · KALKAN Siber İzleme 79 · ATLAS Karar Destek Sistemi 84
 
 | Arayüz | Persona | Adım | Durum | Not |
 |---|---|---|---|---|

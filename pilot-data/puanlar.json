@@ -1,0 +1,82 @@
+[
+  {
+    "tarih": "2026-11-03",
+    "persona": "elif",
+    "puan": 83,
+    "kaynak": "koordinator",
+    "kirilim": {
+      "tutarlilik": 28,
+      "dongu": 17,
+      "rapor": 12,
+      "gerekce": 13,
+      "iletisim": 8,
+      "bulgu": 5,
+      "eksi": 0
+    },
+    "gerekce": "ön puan: rakamlar araçla tutuyor, riskler/görev/not uygulamada doğrulandı; Ekim kapanışı ve Selin talebi rakamlı. Rapor bugün yok (Perşembe), nötr. G2 ilk bulan +2."
+  },
+  {
+    "tarih": "2026-11-03",
+    "persona": "burak",
+    "puan": 80,
+    "kaynak": "koordinator",
+    "kirilim": {
+      "tutarlilik": 26,
+      "dongu": 17,
+      "rapor": 14,
+      "gerekce": 13,
+      "iletisim": 8,
+      "bulgu": 5,
+      "eksi": -3
+    },
+    "gerekce": "ön puan: PSL RAG amber, 2 risk, istek reddi, 2 görev uygulamada doğrulandı; mesajlar rakamlı. G1 ilk bulan +2. Eksi: \"RAG etiketi PSL/NHR ayırt edilemiyor\" bulgusu temelsiz (ikisi de amber), Confluence yüzdeleri yeniden üretilmedi."
+  },
+  {
+    "tarih": "2026-11-03",
+    "persona": "selin",
+    "puan": 85,
+    "kaynak": "koordinator",
+    "kirilim": {
+      "tutarlilik": 29,
+      "dongu": 16,
+      "rapor": 15,
+      "gerekce": 13,
+      "iletisim": 9,
+      "bulgu": 3,
+      "eksi": 0
+    },
+    "gerekce": "ön puan: iki talebi rakamlarla doğruladı, aşımı kaynak eklemekle değil yeniden dağıtımla çözmeyi önerdi; bugün karar verilecek rapor yoktu."
+  },
+  {
+    "tarih": "2026-11-03",
+    "persona": "mert",
+    "puan": 88,
+    "kaynak": "koordinator",
+    "kirilim": {
+      "tutarlilik": 29,
+      "dongu": 19,
+      "rapor": 14,
+      "gerekce": 13,
+      "iletisim": 9,
+      "bulgu": 5,
+      "eksi": -1
+    },
+    "gerekce": "ön puan: Ekim kapanışı ve maliyet/tahsis doğrulandı, H44 yayınlandı, 4 gerçek bulgu yeniden üretildi (G3 ilk bulan). Eksi: py_puani eksik NHR raporunu ve kendi kendine onayı bulduğu hâlde iade etmeden onayladı."
+  },
+  {
+    "tarih": "2026-11-03",
+    "persona": "ahmet",
+    "puan": 86,
+    "kaynak": "koordinator",
+    "kirilim": {
+      "tutarlilik": 29,
+      "dongu": 18,
+      "rapor": 14,
+      "gerekce": 14,
+      "iletisim": 9,
+      "bulgu": 2,
+      "eksi": 0
+    },
+    "gerekce": "ön puan: kaydırma kararı rakama dayalı, PY'lerden tarihli açıklama istedi; demo yoklaması 3/3 tutarlı ama her soru 6 çağrı (DH6 ≤3 değil). Karar yazma aracı yok (B-015), kusur uygulamada."
+  }
+]

@@ -1,0 +1,45 @@
+{
+"persona": "ahmet", "kosu": "2026-11-03 Salı",
+"yapilanlar": [
+{"is": "Portföy, EVM, maliyet ve kapasite okuması", "araclar": ["portfoy_ozeti","proje_listesi","evm_analizi","maliyet_raporu","kapasite_talep","departman_karnesi","doluluk_analizi","is_yuku_ongorusu"], "sonuc": "Portföy sağlığı 63/100. NEHİR (40) ve PUSULA (47) riskli. EVM: SPI 0,95, CPI 0,96, BAC 22.910.600, EAC 23.791.849, VAC -881.249 TL. PUSULA VAC -1.012.914, NEHİR VAC -710.491 TL. ATLAS ve KALKAN bütçe altında (+323.950 ve +313.786 TL)."},
+{"is": "2026-H44 yayınlanan raporların okunması", "araclar": ["haftalik_rapor","proje_detayi","risk_listesi"], "sonuc": "PSL raporu tek satır; Jira'da PSL-93 (78,5/38 sa) ve PSL-86 (32/13 sa) yeniden açılmış, PSL-92 Yapılacak. NHR raporunda 12 geciken kayıt ve NHR-92 yeniden açılması yok, PY puanı boş. ATL 'Yolunda' ama ATL-130 riski tahminin %208 üzerinde, son 7 günde kapanan 11'den 5'e düşmüş; raporda yok."},
+{"is": "Burak'ın kaynak mesajının değerlendirilmesi", "araclar": ["uygun_kisi_bul","kisi_profili","doluluk_analizi","kapasite_talep"], "sonuc": "Karar: işe alım değil, kaydırma. Tek uygun Veri Bilimci Can Erdem (boş Kasım 0,20, Aralık 0,26; yıllık doluluk %44). Aslı %138, Deniz %114, Ozan dolu. Rol açığı yılda 0,59 AA."},
+{"is": "Rol sınırı denemesi", "araclar": ["bilgi_ara"], "sonuc": "kaynak=not reddedildi: 'Bu rol proje notlarına ve müşteri isteklerine erişemez.' Beklenen."}
+],
+"degisiklikler": [],
+"haftalik_rapor": [
+{"proje": "ATL", "hafta": "2026-H44", "gonderildi": true, "duzeltmeler": [], "dayanaksiz_uyarisi": ["Rapor 'Yolunda'; ATL-130 (%208) ve ATL-102/116/139 (~2 kat) raporda yok; plan ATL-102 ve ATL-112 aynı başlıkla iki kez"], "py_puani": 8, "rag": "Yolunda", "rag_gerekcesi": "SPI 1,03, CPI 1,04, geciken %9"},
+{"proje": "PSL", "hafta": "2026-H44", "gonderildi": true, "duzeltmeler": [], "dayanaksiz_uyarisi": ["Maddeler tarih, kayıt no ve rakam içermiyor"], "py_puani": 7, "rag": "Riskli", "rag_gerekcesi": "SPI/CPI 0,85, 6 geciken, söz tutma %67"},
+{"proje": "NHR", "hafta": "2026-H44", "gonderildi": true, "duzeltmeler": [], "dayanaksiz_uyarisi": ["PY puanı yok; 12 geciken kayıt ve NHR-92 yeniden açılması raporda yok; NHR-59 (10 Eylül), NHR-65 (28 Eylül) için yeni tarih yok"], "py_puani": null, "rag": "Riskli", "rag_gerekcesi": "SPI 0,87, CPI 0,89, geciken %58, 1 yüksek risk"},
+{"proje": "KLK", "hafta": "2026-H44", "gonderildi": true, "duzeltmeler": [], "dayanaksiz_uyarisi": [], "py_puani": 8, "rag": "Yolunda", "rag_gerekcesi": "SPI 1,11, CPI 1,11, geciken %14"}
+],
+"rapor_kararlari": [],
+"bulgular": [
+{"tur": "eksik_ozellik", "onem": "yuksek", "baslik": "Müdür rolünde karar kaydı için yazma aracı yok", "kanit": "pilot araclar ahmet → 18 araç, hepsi okuma/analiz; karar/onay yazan araç yok", "beklenen": "Müdür kararı (kaynak kaydırma, plan onayı) uygulamaya yazılabilmeli", "gerceklesen": "Karar yalnız mesajla iletilebiliyor; PSL planı 'Onay Bekliyor' kalıyor"},
+{"tur": "tutarsizlik", "onem": "orta", "baslik": "KLK H44 raporunda bölüm sorumlusu onayını PY kendisi vermiş", "kanit": "haftalik_rapor KLK 2026-H44 gecmis: '2026-10-28 09:40 submit — Can Erdem', '2026-10-30 08:00 bs_approve — Can Erdem'", "beklenen": "bs_approve bölüm sorumlusundan", "gerceklesen": "Gönderen ve onaylayan aynı kişi"},
+{"tur": "tutarsizlik", "onem": "dusuk", "baslik": "kapasite_talep U340 Veri Bilimci açık AA, kapasite-plan farkıyla uyuşmuyor", "kanit": "kapasite_talep 2026 → U340 Veri Bilimci: planli_proje_aa 31,24, kapasite_aa 32,84, acik_aa 0,59 (fark 1,6)", "beklenen": "acik_aa tanımı açık", "gerceklesen": "İşe alım sinyali yanıltıcı olabilir"},
+{"tur": "eksik_ozellik", "onem": "orta", "baslik": "Toparlanma planı ve tarihi uygulamada tutulmuyor", "kanit": "bilgi_ara 'toparlanma planı kurtarma tarihi' → yalnız kılavuz sayfaları; risk_listesi'nde yalnız aksiyon metni", "beklenen": "Riskli projede toparlanma tarihi ve sorumlusu görülebilmeli", "gerceklesen": "NHR'nin 12 geciken kaydı için tarih yok"}
+],
+"yanitlar": [{"kime": "burak", "mesaj_tarihi": "2026-11-03", "metin": "Burak, sonuç: NHR için işe alım yok, Can Erdem'den kaydırma var. Can Erdem'in boş kapasitesi Kasım 0,20 ve Aralık 0,26 AA; yıllık doluluğu %44. Talebiniz 0,2 AA/ay buna sığıyor. U340 Veri Bilimci rol açığı yılda yalnız 0,59 AA, iki aylık ihtiyaç için kadro açmam. Selin Hanım'dan onayı bugün istiyorum. Kayıt Aslı (%138) ve Ozan'ı kurtarmaz; NHR'de geciken 12 kaydın dördü Aslı'da (NHR-61, 82, 88, 92), üçü Ozan'da (NHR-59, 65, 87). 5 Kasım'a kadar rakamlı bir NHR toparlanma planı bekliyorum: 12 geciken kaydın yeni tarihleri, NHR-92'nin bugünkü durumu, performans riskinin (skor 16) yük testi tarihi ve Can Erdem'in 0,2 AA'sını hangi kayıtlara vereceğiniz. CPI 0,89, EAC 6.283.041 TL (BAC 5.572.550 TL) için ek bütçe sorusu o plana göre."}],
+"mesajlar": [
+{"kime": "selin", "metin": "Selin Hanım, Can Erdem'in NHR'ye Kasım-Aralık 0,2 AA/ay kaydırılmasını onaylamanızı rica ediyorum. Can Erdem efektif kapasite 0,5 AA/ay, plan Kasım 0,30, Aralık 0,24; boş 0,20 ve 0,26 AA. U340 doluluğu %103; Aslı Çakır %138, Deniz Yavuz %114. uygun_kisi_bul: Can Erdem tek uygun. İşe alım önermiyorum; veri bilimci açığı yılda 0,59 AA. KLK SPI/CPI 1,11, bu yük KLK'yı riske atmıyor. Cevabınızı 4 Kasım'a kadar bekliyorum."},
+{"kime": "burak", "metin": "PSL için açıklama istiyorum (5 Kasım): H44 raporunda yalnız 'Müşteri ile görüşmeler yapıldı' yazıyor; PSL-93 (78,5 sa / 38 sa tahmin) ve PSL-86 (32 / 13 sa) yeniden açıldı, PSL-92 hâlâ Yapılacak, SPI/CPI 0,85, EAC 6.612.014 TL (BAC 5.599.100, VAC -1.012.914 TL). Lütfen: yeniden açılma nedeni, PSL-92 için tarih ve sorumlu, kabul tarihi riski ve ek maliyet beklentisi. PSL 2026 planı onayımı bekliyor."},
+{"kime": "elif", "metin": "Elif Hanım, ATL 'Yolunda' ve SPI 1,03 ama risk kaydınızda ATL-130 tahminin %208 üzerinde ve çözümsüz; son 7 günde kapanan kayıt 11'den 5'e düşmüş; ATL-102/116/139 yaklaşık 2 kat. H44 raporunda bunlar yok. Proje %87 tamam, EAC 7.880.000 TL (BAC 8.203.950 TL). 5 Kasım'a kadar kısa açıklama bekliyorum: Onur Çelik'in 4 Kasım ölçüm raporunun sonucu, ATL-130'un yeni tahmini, ATL-129 test ortamının (Merve Aslan 9 Kasım) hazır olup olmayacağı ve sürüm tarihine etkisi. ATL-132 ve ATL-134 için yeni tarih yazın."},
+{"kime": "Can Erdem", "metin": "Can Bey, H44 raporunuzda bölüm sorumlusu onayı sizin adınıza görünüyor (bs_approve — Can Erdem, gönderen de siz). Bundan sonra onayın ayrı kişiden geçmesini rica ederim. Selin Hanım onaylarsa Kasım-Aralık için NHR'ye 0,2 AA/ay ayırabilir misiniz; KLK'daki 15 Kasım teslimleri için payınız 0,30 AA'nın altında kalıyor."}
+],
+"ajanda": [
+{"madde": "Selin'den Can Erdem 0,2 AA/ay (NHR, Kasım-Aralık) onayını al; çıkmazsa Aslı ve Deniz yükünü yeniden değerlendir", "kime": "selin", "termin": "2026-11-04", "durum": "acik"},
+{"madde": "Burak'tan NHR toparlanma planı: 12 geciken kaydın yeni tarihleri, NHR-92 durumu, yük testi tarihi, Can Erdem'in 0,2 AA dağılımı", "kime": "burak", "termin": "2026-11-05", "durum": "acik"},
+{"madde": "Burak'tan PSL açıklaması: PSL-93, PSL-86 yeniden açılma nedeni, PSL-92 tarihi, ek maliyet; ardından PSL 2026 planı onay kararı", "kime": "burak", "termin": "2026-11-05", "durum": "acik"},
+{"madde": "Elif'ten ATL-130 ve ATL-129 açıklaması, ATL-132/134 yeni tarihleri", "kime": "elif", "termin": "2026-11-05", "durum": "acik"},
+{"madde": "2026-H45 yayınında NHR ve PSL raporlarında rakam, kayıt no ve tarih ara; ATL raporunda ATL-130'u ara", "kime": "burak, elif", "termin": "2026-11-10", "durum": "acik"},
+{"madde": "KLK bölüm sorumlusu onayının ayrı kişiden geçmesini Selin'e hatırlat", "kime": "selin", "termin": "2026-11-10", "durum": "acik"}
+],
+"gercek_disi": [],
+"demo_yoklamasi": [
+{"soru": 1, "araclar": ["portfoy_ozeti","proje_listesi","risk_listesi","proje_detayi"], "cagri": 6, "tutarli": true, "yanit_ozeti": "NEHİR (skor 40, 12 geciken, SPI 0,87, CPI 0,89, 1 yüksek risk) ve PUSULA (47, SPI/CPI 0,85, PSL-93/86 yeniden açıldı) riskli. ATLAS raporda yeşil ama ATL-130 riski (%208) gözetilmeli. KALKAN yolunda (79). Portföy 63/100."},
+{"soru": 2, "araclar": ["kapasite_talep","uygun_kisi_bul","departman_karnesi","doluluk_analizi","kisi_profili","is_yuku_ongorusu"], "cagri": 6, "tutarli": true, "yanit_ozeti": "Kaydırmayla. U340 %103 ama Can Erdem %44 (boş Kasım 0,20, Aralık 0,26), Aslı %138, Deniz %114. Rol açığı yılda 0,59 AA; işe alım orantısız. kapasite_talep'teki 0,59 ile kapasite-plan farkı (1,6) uyuşmuyor."},
+{"soru": 3, "araclar": ["proje_detayi","risk_listesi","evm_analizi","bilgi_ara"], "cagri": 6, "tutarli": true, "yanit_ozeti": "En riskli NEHİR (40). Uygulamada toparlanma planı/tarihi yok; yalnız risk aksiyonları (NHR-92 düzeltmesi 3 Kasım, yük testi tarihi yok). Burak'tan 5 Kasım'a plan istendi; tarih uydurulmadı."}
+],
+"arac_cagrisi": 23, "memnuniyet": 6, "gunun_notu": "Rakamlar tutarlı ve rol sınırı çalışıyor, ancak müdür kararlarını uygulamaya yazamıyorum ve toparlanma tarihi uygulamada yok; kararlar yalnız mesaj olarak kaldı."
+}

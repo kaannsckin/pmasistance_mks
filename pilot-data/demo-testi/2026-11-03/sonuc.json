@@ -1,5 +1,5 @@
 {
-  "tarih": "2026-11-03T05:49:55.373Z",
+  "tarih": "2026-11-03T06:06:05.129Z",
   "sonuc": "GEÇTİ",
   "adim": 28,
   "kalan": 0,
@@ -7,15 +7,15 @@
     "cdn-icons-png.flaticon.com"
   ],
   "beklenen": {
-    "saglik_skoru": 66,
+    "saglik_skoru": 63,
     "projeler": [
       {
         "proje": "NEHİR Veri Platformu",
-        "skor": 44
+        "skor": 40
       },
       {
         "proje": "PUSULA Saha Mobil Uygulaması",
-        "skor": 56
+        "skor": 47
       },
       {
         "proje": "KALKAN Siber İzleme",
@@ -23,7 +23,7 @@
       },
       {
         "proje": "ATLAS Karar Destek Sistemi",
-        "skor": 83
+        "skor": 84
       }
     ]
   },

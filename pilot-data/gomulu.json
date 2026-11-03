@@ -1,0 +1,20 @@
+[
+  {
+    "g": "G1",
+    "persona": "burak",
+    "tarih": "2026-11-03",
+    "kanit": "kisi_profili/doluluk_analizi: \"Aslı Çakır plan 0,7, kapasitesi 0,5 (12 ay aşım)\" — Burak mesajı ve Selin yanıtı"
+  },
+  {
+    "g": "G2",
+    "persona": "elif",
+    "tarih": "2026-11-03",
+    "kanit": "doluluk_analizi/kisi_profili: Onur Çelik Nisan–Ekim 1,2/0,9 aşım; Elif Selin'e yazdı"
+  },
+  {
+    "g": "G3",
+    "persona": "mert",
+    "tarih": "2026-11-03",
+    "kanit": "maliyet_raporu: \"maliyetlenemeyen_kisi_sayisi\": 1; Mert bulgu açtı"
+  }
+]

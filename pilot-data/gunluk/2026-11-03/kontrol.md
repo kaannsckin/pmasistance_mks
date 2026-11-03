@@ -28,7 +28,7 @@
 | 22 | bilinmeyen parametre sessizce yok sayılmaz | ✅ GEÇTİ | "gecikme" bu aracın parametresi değil. gorev_ara parametreleri: proje (metin), durum (Backlog\|ToDo\|InProgress\|Done), kisi (metin), geciken (true\|false), oncelik |
 | 23 | Jira: uygulamanın istemcisi sahte Jira'yı sayfa sayfa eksiksiz okur | ✅ GEÇTİ | ATL 145, PSL 110, NHR 107, KLK 54 |
 | 24 | Jira: ATL worklog toplamı (2026-10-21 – 2026-11-03) | ✅ GEÇTİ | istemci 232.5 sa, dışa aktarım 232.5 sa, 87 kayıt |
-| 25 | elif: jira_aktar → onay → görevler Jira ile aynı | ✅ GEÇTİ | 2 yeni, 131 güncellenen; projede 145 Jira görevi / dışa aktarımda 145 |
+| 25 | elif: jira_aktar → onay → görevler Jira ile aynı | ✅ GEÇTİ | 0 yeni, 131 güncellenen; projede 145 Jira görevi / dışa aktarımda 145 |
 | 26 | burak: başkasının projesine Jira aktarımı reddedilir | ✅ GEÇTİ | "ATL-2401" projesi kullanıcının yetki kapsamında değil; içeriği gösterilemez. |
 | 27 | elif: öneri → onay → dosyaya yazıldı | ✅ GEÇTİ | risk eklendi ve yeniden okununca görüldü |
 | 28 | burak: başkasının projesine öneri reddedilir | ✅ GEÇTİ | "ATL-2401" projesi kullanıcının yetki kapsamında değil; içeriği gösterilemez. |
@@ -36,5 +36,5 @@
 | 30 | bulut: persona üyelikleri ve rolleri | ✅ GEÇTİ | 5 persona doğru rolde · çalışma alanında 7 üye |
 | 31 | ahmet (müdür): notlar veritabanında okunamaz (RLS) | ✅ GEÇTİ | özel satır görünmüyor |
 | 32 | ahmet (müdür): notlara yazamaz (RLS) | ✅ GEÇTİ | yazma reddedildi (0 satır) |
-| 33 | elif (PY): notlar veritabanından okunur | ✅ GEÇTİ | özel belge sürüm 10 |
+| 33 | elif (PY): notlar veritabanından okunur | ✅ GEÇTİ | özel belge sürüm 15 |
 | 34 | sicil sızıntısı | ✅ GEÇTİ | hiçbir araç çıktısında sicil yok |
