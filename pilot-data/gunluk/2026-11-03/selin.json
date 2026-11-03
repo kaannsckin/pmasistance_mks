@@ -1,0 +1,24 @@
+{
+"persona": "selin", "kosu": "2026-11-03 Salı",
+"yapilanlar": [
+{"is": "Onur Çelik Kasım doluluğunu doğruladım", "araclar": ["doluluk_analizi","kisi_profili"], "sonuc": "Kasım plan 1,2 AA (ATLAS 0,8 kilitli + KALKAN 0,4 taslak), efektif 0,42 (izin 0,48): aşım 0,78. Nisan-Ekim 1,2/0,9 ve Aralık 0,96/0,9 de aşım; 9 ay aşımlı, yıllık oran 1,26. U310'da 3 kişi aşımlı, bölüm doluluğu 0,90."},
+{"is": "ATLAS ek kaynak talebini sınadım", "araclar": ["uygun_kisi_bul","kapasite_talep"], "sonuc": "Kasım için U310'da 0,4 AA'yı tek başına karşılayan kimse yok (uygun_sayisi 0). Boşluklar: Selin 0,3, Burak 0,1, Elif 0,1, Emre 0,1, Gizem 0,1, Kerem 0,1, Tuğba 0,1, Ece 0. kapasite_talep U310 için açık rol göstermiyor (0 AA)."},
+{"is": "NEHİR Veri Bilimci talebini doğruladım", "araclar": ["kisi_profili","departman_karnesi","tahsis_ozeti"], "sonuc": "Aslı Çakır plan 0,7 / kapasite 0,5 (tüm yıl); U340 doluluk 1,03. Can Erdem kapasite 0,5, KALKAN'da 0,3 (Aralık 0,24): Kasım boşluk 0,2, Aralık 0,26. NEHİR planı Taslak."},
+{"is": "H44 raporlarını kontrol ettim", "araclar": ["haftalik_rapor"], "sonuc": "ATL, PSL, NHR H44 raporlarında 2026-10-30 08:00 bs_approve (Selin), aşama 'PYB destekte'. Bugün yeniden gönderilen rapor yok, karar gerekmedi."},
+{"is": "Rol sınırı denemesi (bir kez)", "araclar": ["oner_risk_ekle"], "sonuc": "ATLAS'a risk eklemeyi denedi; uygulama reddetti: 'yalnızca proje sahibi Proje Yöneticisi'. Beklenen davranış."}
+],
+"degisiklikler": [], "haftalik_rapor": [], "rapor_kararlari": [], "bulgular": [],
+"yanitlar": [
+{"kime": "elif", "mesaj_tarihi": "2026-11-03", "metin": "Elif, rakamları kendim doğruladım: Onur Çelik Kasım plan 1,2, efektif 0,42, aşım 0,78 (ATL 0,8 kilitli + KLK 0,4 taslak). Nisan-Ekim 1,2/0,9 ve Aralık 0,96/0,9 de aşım. Sorun 'ek kaynak' değil 'yeniden dağıtım': 0,4 eklersek Onur'un aşımı kalkmıyor. Önerim: Onur'un ATL Kasım payı 0,8'den 0,42'ye insin (-0,38, yaklaşık 0,4); yerine Selin Kaya 0,3 + Emre Koç 0,1 = 0,4 AA geçsin. Boşlukları uygun_kisi_bul'dan okudum (Selin 0,3, Emre 0,1); U310'da tek kişi 0,4 karşılamıyor, bu yüzden bölüyoruz. Bölüm olarak bu bölüşümü onaylıyorum; ATL planı kilitli olduğu için tahsisi ben yazamıyorum, kilidin açılması ya da değişikliğin PYB üzerinden yapılması gerekiyor, bunu sen başlat. Onur'un KLK 0,4'ünü kaydırmak tek başına yetmez (0,8 > 0,42 kalır); KLK PY'si Can Erdem ile görüşmeni, KLK Kasım payını en az 0,2'ye çekmeyi ayrıca istiyorum, KLK'da Onur'un geciken görevi var (Kural motoru hata yönetimi, bitiş 26 Ekim), kapanmadan çekmek riskli. Aralık için Onur 0,96/0,9 aşımı da aynı düzenlemeyle kapanmalı: Aralık için de Selin 0,1 ayırabilirim. Yanıtını 5 Kasım'a kadar bekliyorum."},
+{"kime": "burak", "mesaj_tarihi": "2026-11-03", "metin": "Burak, rakamlar tutuyor: Aslı Çakır plan 0,7 / kapasite 0,5 (yıl boyu aşım 0,2), U340 doluluk 1,03. Can Erdem kapasite 0,5, KLK'da 0,3 (Aralık 0,24): Kasım boşluğu 0,2, Aralık 0,26. Önerin (ayda 0,2 AA) Can'ı Kasım'da tam 0,5'e, Aralık'ta 0,44'e çıkarır, aşım yaratmaz; U310 açısından itirazım yok. Ancak Can U340'ta, onayı U340 bölüm sorumlusundan ve Can'dan alınmalı; ben kendi bölümüm dışındaki kişinin tahsisini onaylayamam. Önce NHR'de Aslı'nın Kasım/Aralık payını 0,7'den 0,5'e indirip Can'a 0,2 yazman gerekir (NHR planı taslak, açık); aksi halde toplam NHR aşımı büyür. NHR-92'nin yeniden açılması ve 12/24 gecikme için ek kaynak Veri Bilimci mi yoksa yazılım tarafı mı gerektiriyor, bunu gecikme nedenleriyle yaz; gerekirse U310'dan destek konuşuruz (sınırlı, 0,1'lik parçalar)."}
+],
+"mesajlar": [],
+"ajanda": [
+{"madde": "ATL Kasım: Onur 0,8'den 0,42'ye, yerine Selin 0,3 + Emre 0,1 (plan kilidi açılınca); Elif'ten yanıt/kilit durumu", "kime": "elif", "termin": "2026-11-05", "durum": "acik"},
+{"madde": "KLK'da Onur Kasım payını 0,4'ten en az 0,2'ye çekme görüşmesi (KLK PY'si Can Erdem)", "kime": "elif", "termin": "2026-11-05", "durum": "acik"},
+{"madde": "Can Erdem'in NHR'ye 0,2 AA aktarımı için U340 sorumlusu onayı; Burak'ın tahsisi yazması", "kime": "burak", "termin": "2026-11-07", "durum": "acik"},
+{"madde": "Onur Çelik Nisan-Ekim 1,2/0,9 yapısal aşım: gelecek koşuda kalıcı çözüm gündemi", "kime": "selin", "termin": "2026-11-10", "durum": "acik"}
+],
+"gercek_disi": [], "demo_yoklamasi": [],
+"arac_cagrisi": 13, "memnuniyet": 7, "gunun_notu": "Onur'un aşımı ek kaynakla değil, ATL payının yeniden dağıtılmasıyla kapanır; kilitli planı ben yazamıyorum."
+}
