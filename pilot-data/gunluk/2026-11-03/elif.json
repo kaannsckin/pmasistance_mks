@@ -1,0 +1,43 @@
+{
+"persona": "elif", "kosu": "2026-11-03 Salı",
+"yapilanlar": [
+{"is": "Jira güncellemesi (ATL)", "araclar": ["jira_aktar", "gorev_ara"], "sonuc": "Önizleme: 2 yeni, 131 güncellenen, 12 değişmeyen. Olay dosyalarında 3 yeni kayıt (ATL-143 30 Eki; ATL-144, ATL-145 2 Kas). Fark: ATL-143 uygulamada zaten vardı (gorev_ara ile doğrulandı, bitiş 2026-11-30). --onayla ile uygulandı: 2 yeni, 131 güncellenen."},
+{"is": "ATLAS durumu, geciken ve yaklaşan işler", "araclar": ["proje_detayi", "risk_listesi"], "sonuc": "Sağlık 87 (good), SPI 1,03, CPI 1,04; 145 görev, 123 tamamlandı, 22 açık. Geciken 2: ATL-132 (Cem Bulut), ATL-134 (Merve Aslan), bitiş 30 Ekim, Devam Ediyor. Yaklaşan 14 gün: 10 görev. Durum değişikliği önerilmedi."},
+{"is": "Notları okuma ve günlüğe karar yazma", "araclar": ["oner_not_ekle", "oneriyi_uygula"], "sonuc": "27 Eki risk toplantısı, 27 Eki ve 2 Kas teknik karar kayıtları ve 2 Kas koordinasyon notu okundu; sorumlu ve tarihli aksiyonlarla günlüğe yazıldı."},
+{"is": "Risk sinyalleri", "araclar": ["oner_risk_ekle", "oner_risk_guncelle", "oneriyi_uygula"], "sonuc": "2 yeni risk: test ortamı hazır değil (3x3=9), ATL-130 tahmin aşımı (3x4=12). Mevcut 2 açık riskle çakışma yok."},
+{"is": "Jira dışı iş", "araclar": ["oner_gorev_ekle", "oneriyi_uygula"], "sonuc": "'Kabul testi senaryolarının güncellenmesi' görevi (Elif Yılmaz, bitiş 4 Kasım, High). Tetikleyici: 27 Eki risk toplantısı aksiyonu."},
+{"is": "Kaynak doluluğu (Kasım-Aralık)", "araclar": ["doluluk_analizi", "kisi_profili", "uygun_kisi_bul"], "sonuc": "Onur Çelik Kasım: plan 1,2 AA, efektif kapasite 0,42 (izin 0,48), aşım 0,78 AA. Deniz Yavuz 1,2/0,9. Merve Aslan 1,0/0,9. Aralık Onur 0,96/0,9. Ekibin 3/9'u kapasite üstü. Yazılım Geliştirme Mühendisi rolü için Kasım-Aralık 0,5 AA boş kapasite yok; en iyi aday Selin Kaya 0,3, Burak Demir 0,1, Emre Koç 0,1 AA. Selin'e mesaj yazıldı."},
+{"is": "Ekim ay kapanışı", "araclar": ["tahsis_ozeti", "jira_worklog", "oner_not_ekle", "oneriyi_uygula"], "sonuc": "Ekim gerçekleşen 5,40 AA, plan 5,35 (+0,05). Worklog 657,5 sa (6 kişi). Kişi bazında en çok +0,03 sapma; saat/AA yaklaşık 143-146. Sapma ATL-104 ve ATL-102 tahmin aşımlarından. Plan kilitli, düzeltme yapılmadı; not günlüğe yazıldı."},
+{"is": "Geçen haftanın raporu (2026-H44)", "araclar": ["haftalik_rapor"], "sonuc": "Aşama PYB destekte. 28 Eki gönderim, 30 Eki bölüm sorumlusu onayı. İade/biçim hatası yok, PY puanı 8. Perşembe H45 raporu yazılacak."},
+{"is": "Rol sınırı denemesi (1 kez)", "araclar": ["oner_tahsis_ayarla"], "sonuc": "Onur Çelik ATL Kasım planını 0,8'den 0,4'e indirme önizlemesi; uygulama reddetti: plan onayda/kilitli."}
+],
+"degisiklikler": [
+{"arac": "jira_aktar", "ozet": "ATL Jira aktarımı: 2 yeni, 131 güncellenen", "tetikleyici": "Günlük sabah güncellemesi; ATL-144, ATL-145 olay dosyaları", "gerekce": "Önizleme olay dosyalarıyla karşılaştırıldı; fark ATL-143'ün zaten uygulamada olması", "uygulandi": true},
+{"arac": "oner_gorev_ekle", "ozet": "Kabul testi senaryolarının güncellenmesi (Elif Yılmaz, 4 Kasım, High)", "tetikleyici": "27 Eki ATL risk toplantısı aksiyonu", "gerekce": "Jira dışı iş, terminli aksiyon", "uygulandi": true},
+{"arac": "oner_risk_ekle", "ozet": "Risk: Test ortamı hazır değil (3x3=9)", "tetikleyici": "2 Kas koordinasyon notu; ATL-129 Yapılacak, bitiş 9 Kas", "gerekce": "Q4 ilk sürüm kabulü etkilenebilir; sahibi Elif", "uygulandi": true},
+{"arac": "oner_risk_ekle", "ozet": "Risk: ATL-130 zaman aşımı, tahminin %208 üzerinde (3x4=12)", "tetikleyici": "2 Kas koordinasyon notu; son 7 günde 11 yerine 5 kapanış", "gerekce": "Müşteri ortamında tekrarlıyor; Onur'un performans raporuyla kapsam belirlenecek", "uygulandi": true},
+{"arac": "oner_not_ekle", "ozet": "ATL günlüğüne 3 Kas değerlendirmesi: kararlar, geciken işler, 5 aksiyon", "tetikleyici": "27 Eki ve 2 Kas Confluence notları, Jira güncellemesi", "gerekce": "Karar ve aksiyonların günlüğe yazılması", "uygulandi": true},
+{"arac": "oner_not_ekle", "ozet": "ATL günlüğüne Ekim ay kapanışı: 5,40 gerçekleşen / 5,35 plan", "tetikleyici": "Ay kapanışı; 1 Kas olay satırı", "gerekce": "Sapma worklog ile karşılaştırıldı; plan kilitli", "uygulandi": true}
+],
+"haftalik_rapor": [], "rapor_kararlari": [],
+"bulgular": [
+{"tur": "tutarsizlik", "onem": "dusuk", "baslik": "Jira önizleme sayısı olay dosyasındaki yeni kayıt sayısından 1 az", "kanit": "jira_aktar ATL → yeni: 2, guncellenecek: 131; olaylar: ATL-143 (30 Eki), ATL-144, ATL-145 (2 Kas)", "beklenen": "Önizleme penceredeki 3 yeni kaydı göstermeli ya da önceki aktarımı belirtmeli", "gerceklesen": "ATL-143 önceden vardı; önizleme bunu belirtmiyor; 131 güncellenenin nedeni ayrıştırılmıyor."},
+{"tur": "kullanilabilirlik", "onem": "dusuk", "baslik": "Kilitli planda Kasım kapasite aşımı için PY'nin tek yolu mesaj", "kanit": "oner_tahsis_ayarla {kisi: Onur Çelik, proje: ATL, ay: 11, alan: plan, aa: 0.4} → '2026 planı onayda/kilitli; plan değiştirilemez (gerçekleşen girilebilir)'", "beklenen": "Hata mesajı bölüm sorumlusuna talep yolunu göstersin", "gerceklesen": "Yalnız red mesajı; uygulama içinden talep aracı yok"},
+{"tur": "eksik_ozellik", "onem": "orta", "baslik": "İzin sonrası efektif kapasiteyle plan uyumsuzluğu için uyarı yok", "kanit": "kisi_profili Onur Çelik → efektif_kapasite Kasım 0.42, aylik_plan Kasım 1.2, kapasite_asimi_olan_aylar [4..12]", "beklenen": "Kasım izni planlanırken aşım uyarısı", "gerceklesen": "Aşım yalnız analiz araçlarında görülüyor; plan kilitli olduğundan düzeltilemiyor"}
+],
+"yanitlar": [],
+"mesajlar": [{"kime": "selin", "metin": "Selin Hanım, ATLAS Kasım doluluğu için talep: Onur Çelik'in Kasım planı 1,2 AA, izin düşülünce efektif kapasitesi 0,42 AA (aşım 0,78 AA; Nisan-Ekim 1,2/0,9 ve Aralık 0,96/0,9 de aşım). Deniz Yavuz Kasım 1,2/0,9, Merve Aslan 1,0/0,9. ATL planı kilitli olduğundan oner_tahsis_ayarla reddetti. Talebim: Kasım için Yazılım Geliştirme Mühendisi rolünde 0,4 AA ek kaynak. uygun_kisi_bul: boşluk Selin Kaya 0,3 AA, Burak Demir 0,1 AA, Emre Koç 0,1 AA; 0,5 AA'ya uygun kimse yok. Onur'un KLK'daki 0,4 AA'lık payının (Kasım) kaydırılıp kaydırılamayacağını da görüşmek isterim. 5 Kasım'a kadar yanıtınıza göre H45 raporuna yansıtacağım."}],
+"ajanda": [
+{"madde": "Selin Kaya'dan Onur Çelik Kasım kapasite aşımı (0,78 AA) talebine yanıt al", "kime": "selin", "termin": "2026-11-05", "durum": "acik"},
+{"madde": "Test senaryolarını güncelle (ATL görevi açıldı)", "kime": "elif", "termin": "2026-11-04", "durum": "acik"},
+{"madde": "ATL-104 sapma nedenlerini Cem Bulut'tan teyit et", "kime": "Cem Bulut", "termin": "2026-11-03", "durum": "acik"},
+{"madde": "ATL-130 performans ölçüm raporu paylaşılacak; rapora göre risk ve tahmin güncellenecek", "kime": "Onur Çelik", "termin": "2026-11-04", "durum": "acik"},
+{"madde": "Kabul testi tahmin kılavuzu taslağı Elif'e iletilecek", "kime": "Merve Aslan", "termin": "2026-11-10", "durum": "acik"},
+{"madde": "ATL-132 ve ATL-134 gecikme nedenleri/yeni bitiş tarihleri; kapanmadıysa risk değerlendirmesine al", "kime": "Cem Bulut, Merve Aslan", "termin": "2026-11-04", "durum": "acik"},
+{"madde": "Hedef: ATL-129 test ortamı kurulumu (9 Kasım), ATL-130 rapor sonrası kapsam kararı; haftalık kapanış 5'in üstüne çıkmalı (önceki hafta 11)", "kime": "elif", "termin": "2026-11-09", "durum": "acik"},
+{"madde": "2026-H45 haftalık raporunu yaz ve bölüm sorumlusuna gönder", "kime": "elif", "termin": "2026-11-05", "durum": "acik"},
+{"madde": "Selin'e söz: 5 Kasım'a kadar yanıtına göre H45 raporuna kaynak durumu yansıt", "kime": "selin", "termin": "2026-11-05", "durum": "acik"}
+],
+"gercek_disi": [], "demo_yoklamasi": [],
+"arac_cagrisi": 28, "memnuniyet": 8, "gunun_notu": "Veriye bakıp yalnız tetikleyicili işleri yazdım; kaynak aşımı kilitli planda yalnızca mesajla çözülebiliyor."
+}
