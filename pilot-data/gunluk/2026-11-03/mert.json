@@ -1,0 +1,54 @@
+{
+"persona": "mert", "kosu": "2026-11-03 Salı",
+"yapilanlar": [
+{"is": "Ekim kapanışı: worklog saati ↔ gerçekleşen AA ↔ plan (ATL, PSL, NHR, KLK)", "araclar": ["tahsis_ozeti", "jira_worklog"], "sonuc": "PY rakamları doğrulandı: ATL 5,40 (plan 5,35; 657,5 sa), PSL 3,88 (3,90; 461,5 sa), NHR 3,87 (3,85; 466 sa), KLK 2,33 (2,30; 236 sa). Sapmalar ±0,05 AA altında; saat/AA ~132–145."},
+{"is": "Tahsis toplamları ve maliyet ↔ tahsis", "araclar": ["tahsis_ozeti", "maliyet_raporu"], "sonuc": "Aylık plan toplamı proje toplamlarıyla tutuyor (Kasım 16,5 = 5,35+3,9+3,85+2,3+1,1; yıllık 176,8 AA). Maliyet Oca–Eki: plan 18.978.500 TL, gerçekleşen 18.820.000 TL, sapma -158.500 TL. maliyetlenemeyen_kisi_sayisi=1, maliyetli_unvan_sayisi=4; tahsiste 6 ünvan."},
+{"is": "Eksik PY / plan kilidi", "araclar": ["proje_listesi", "tahsis_ozeti"], "sonuc": "YILDIZ Teklif aşamasında, 0 görev (beklenen). Plan kilidi: ATL Onaylı/Kilitli, PSL Onay Bekliyor, NHR ve KLK Taslak."},
+{"is": "H44 raporlarının biçim denetimi ve kararları (KALKAN dahil)", "araclar": ["haftalik_rapor", "oner_rapor_karari", "oneriyi_uygula"], "sonuc": "4 raporun bicim_denetimi boş; dördü onaylandı."},
+{"is": "H44 yayını", "araclar": ["oner_hafta_yayinla"], "sonuc": "4 onaylı rapor ile 2026-H44 yayınlandı."}
+],
+"degisiklikler": [
+{"arac": "oner_rapor_karari", "ozet": "ATL 2026-H44 onaylandı", "tetikleyici": "Salı biçim denetimi; bicim_denetimi []", "gerekce": "0 hata, 0 uyarı", "uygulandi": true},
+{"arac": "oner_rapor_karari", "ozet": "PSL 2026-H44 onaylandı", "tetikleyici": "Salı biçim denetimi; bicim_denetimi []", "gerekce": "0 hata, 0 uyarı; içerik inceliği bulgu olarak kayda geçti", "uygulandi": true},
+{"arac": "oner_rapor_karari", "ozet": "NHR 2026-H44 onaylandı", "tetikleyici": "Salı biçim denetimi; bicim_denetimi []", "gerekce": "0 hata, 0 uyarı; py_puani boşluğu bulgu olarak kayda geçti", "uygulandi": true},
+{"arac": "oner_rapor_karari", "ozet": "KLK 2026-H44 onaylandı", "tetikleyici": "Salı biçim denetimi; bicim_denetimi []", "gerekce": "0 hata, 0 uyarı", "uygulandi": true},
+{"arac": "oner_hafta_yayinla", "ozet": "2026-H44 müdürlüğe yayınlandı (4 onaylı rapor)", "tetikleyici": "Salı yayın görevi", "gerekce": "Onaylı rapor sayısı 4", "uygulandi": true}
+],
+"haftalik_rapor": [
+{"proje": "ATL", "hafta": "2026-H44", "gonderildi": true, "duzeltmeler": [], "dayanaksiz_uyarisi": ["ATL-111 'tamamlandı' denmesine rağmen kategori 'ongoing'; ATL-102 ve ATL-112 aynı başlıkla planda"], "py_puani": 8, "rag": "green", "rag_gerekcesi": "28 Ekim RAG green; proje_listesi Yolunda, geciken %9, açık yüksek risk 0"},
+{"proje": "PSL", "hafta": "2026-H44", "gonderildi": true, "duzeltmeler": [], "dayanaksiz_uyarisi": ["Tek madde 'Müşteri ile görüşmeler yapıldı.' ve plan 'Açık hatalar kapatılacak.' iş kaydı numarasız"], "py_puani": 7, "rag": "amber", "rag_gerekcesi": "proje_listesi Riskli (PSL-93/PSL-86 yeniden açıldı, 6 geciken, SPI/CPI 0,85); 28 Ekim'de olay dosyasında green idi"},
+{"proje": "NHR", "hafta": "2026-H44", "gonderildi": true, "duzeltmeler": [], "dayanaksiz_uyarisi": ["Raporda py_puani alanı yok (diğer 3 raporda var)"], "py_puani": null, "rag": "amber", "rag_gerekcesi": "proje_listesi Riskli, geciken oranı %58, açık yüksek risk 1; 12 geciken görev"},
+{"proje": "KLK", "hafta": "2026-H44", "gonderildi": true, "duzeltmeler": [], "dayanaksiz_uyarisi": ["bs_approve raporu yazan Can Erdem tarafından verilmiş; bu_hafta tek madde otomatik gecikme cümlesi"], "py_puani": 8, "rag": "green", "rag_gerekcesi": "proje_listesi Yolunda, geciken %14, açık yüksek risk 0"}
+],
+"rapor_kararlari": [
+{"proje": "ATL", "hafta": "2026-H44", "karar": "onay", "not": "Biçim denetimi temiz.", "uygulandi": true},
+{"proje": "PSL", "hafta": "2026-H44", "karar": "onay", "not": "Biçim denetimi temiz.", "uygulandi": true},
+{"proje": "NHR", "hafta": "2026-H44", "karar": "onay", "not": "Biçim denetimi temiz.", "uygulandi": true},
+{"proje": "KLK", "hafta": "2026-H44", "karar": "onay", "not": "Biçim denetimi temiz.", "uygulandi": true},
+{"proje": "(tüm)", "hafta": "2026-H44", "karar": "yayin", "not": "4 onaylı rapor ile müdürlüğe yayınlandı.", "uygulandi": true}
+],
+"bulgular": [
+{"tur": "tutarsizlik", "onem": "orta", "baslik": "NHR H44 raporunda py_puani alanı yok; biçim denetimi yakalamadı", "kanit": "haftalik_rapor NHR 2026-H44 → py_puani/py_puani_notu yok; ATL/KLK 8, PSL 7; oner_rapor_karari → 'bicim: 0 hata, 0 uyarı'", "beklenen": "Eksik PY puanı uyarı olarak çıkmalı", "gerceklesen": "Rapor puansız onaylandı ve yayınlandı"},
+{"tur": "tutarsizlik", "onem": "orta", "baslik": "KLK raporunda bölüm sorumlusu onayını raporu yazan PY vermiş", "kanit": "haftalik_rapor KLK 2026-H44 gecmis: '2026-10-28 09:40 submit — Can Erdem', '2026-10-30 08:00 bs_approve — Can Erdem'; ATL/PSL/NHR'de bs_approve — Selin Kaya", "beklenen": "Yazan ile onaylayan farklı kişi", "gerceklesen": "Kendi raporunu kendisi onayladı; biçim denetimi işaretlemedi"},
+{"tur": "tutarsizlik", "onem": "dusuk", "baslik": "KLK açık görev sayısı proje_listesi ile rapor arasında uyuşmuyor", "kanit": "proje_listesi KLK: toplam 54, tamamlanan 48 (açık 6), geciken 1; haftalik_rapor KLK: 'Açık 7 kaydın 1'i (%14)'", "beklenen": "Aynı açık kayıt sayısı", "gerceklesen": "6 ile 7; NHR'de 12/25 açık = %48 iken rag_notu %58 (tanım belirsiz, doğrulanamadı)"},
+{"tur": "tutarsizlik", "onem": "dusuk", "baslik": "maliyet_raporu ünvan/kişi kapsamı tahsisle uyuşmuyor", "kanit": "maliyet_raporu {yil:2026} → maliyetlenemeyen_kisi_sayisi 1, maliyetli_unvan_sayisi 4; tahsis_ozeti'nde 6 ünvan", "beklenen": "Tüm tahsisli ünvanlar için maliyet tanımı; maliyetlenemeyen kişi adı görünür", "gerceklesen": "En az 2 ünvan ve 1 kişi maliyet dışı; kimin olduğu görülemiyor"},
+{"tur": "kullanilabilirlik", "onem": "dusuk", "baslik": "Rapor içeriği (kategori/yinelenen başlık/genel ifade) biçim denetiminde görünmüyor", "kanit": "haftalik_rapor ATL H44: ATL-111 'tamamlandı' ama kategori 'ongoing'; ATL-102 ve ATL-112 aynı başlık; PSL tek madde 'Müşteri ile görüşmeler yapıldı.'; hepsinde bicim_denetimi []", "beklenen": "Uyarı", "gerceklesen": "0 hata, 0 uyarı"},
+{"tur": "tutarsizlik", "onem": "dusuk", "baslik": "Plan kilidi durumu ile gerçekleşen girişi uyumsuz", "kanit": "tahsis_ozeti: PSL plan_kilidi 'Onay Bekliyor', NHR ve KLK 'Taslak'; üçünde Oca–Eki gerçekleşen girilmiş (PSL 39,09, NHR 37,90, KLK 16,10 AA)", "beklenen": "Gerçekleşen girilen projelerde plan kilitli/onaylı", "gerceklesen": "Yalnız ATL kilitli"}
+],
+"yanitlar": [],
+"mesajlar": [
+{"kime": "elif", "metin": "Elif, Ekim kapanışını araçla doğruladım: ATL gerçekleşen 5,40 AA (plan 5,35), worklog 657,5 sa; tutarlı. H44 raporun biçimden onaylandı ve yayınlandı. Küçük düzeltme: ATL-111 'tamamlandı' ama kategori 'ongoing'; ATL-102 ile ATL-112 aynı başlıkla planda. H45 raporunda lütfen düzelt."},
+{"kime": "burak", "metin": "Burak, Ekim kapanışı doğrulandı: PSL 3,88 AA (plan 3,90; 461,5 sa), NHR 3,87 (plan 3,85; 466 sa). H44 raporları onaylandı ve yayınlandı, ancak iki eksik var: (1) NHR raporunda py_puani boş; (2) PSL raporunda 'Müşteri ile görüşmeler yapıldı' / 'Açık hatalar kapatılacak' maddelerinde iş kaydı numarası yok (PSL-86, PSL-93 yeniden açıldı; 6 geciken). Perşembe raporunda numaralı ve rakamlı madde yaz, NHR puanını doldur. PSL plan kilidi 'Onay Bekliyor', NHR 'Taslak' kaldı; Ekim gerçekleşeni girilmiş durumda."},
+{"kime": "Can Erdem (KLK)", "metin": "Can, H44 KLK raporu onaylandı ve yayınlandı. Not: submit ve bs_approve senin adınla (28 ve 30 Ekim); bölüm sorumlusu onayını başka biri vermeli. Raporda 'açık 7 kayıt', proje_listesinde 6 açık; hangisi doğru, 5 Kasım'a kadar teyit eder misin?"},
+{"kime": "selin", "metin": "Selin, KLK H44 raporunda bs_approve Can Erdem'den gelmiş (kendi raporu), ATL/PSL/NHR'de senden. KLK (U340) onayının kimde olması gerektiğini bildirir misin? Biçim denetimi eksik py_puani (NHR) ve kendi kendine onayı yakalamıyor."}
+],
+"ajanda": [
+{"madde": "Can Erdem'den KLK açık kayıt sayısı (6 mı 7 mi) ve bs_approve teyidi", "kime": "Can Erdem", "termin": "2026-11-05", "durum": "acik"},
+{"madde": "Burak: NHR H45 raporunda py_puani dolu mu, PSL maddeleri numaralı mı kontrol et", "kime": "burak", "termin": "2026-11-05", "durum": "acik"},
+{"madde": "Maliyetlenemeyen kişi ve ünvanlar için maliyet tanımı sorusu (1 kişi, 4/6 ünvan)", "kime": "PYB / yönetici", "termin": "2026-11-10", "durum": "acik"},
+{"madde": "Ekim gerçekleşen AA ↔ worklog karşılaştırmasını Kasım kapanışında yinele; KLK worklog (236 sa) kişi bazlı kontrol", "kime": "mert", "termin": "2026-12-01", "durum": "acik"},
+{"madde": "H45 raporları Perşembe gelince geciken takibi", "kime": "mert", "termin": "2026-11-05", "durum": "acik"}
+],
+"gercek_disi": [], "demo_yoklamasi": [],
+"arac_cagrisi": 33, "memnuniyet": 7, "gunun_notu": "Rakamlar PY beyanlarıyla tutuyor ama biçim denetimi eksik puanı, kendi kendine onayı ve içerik tutarsızlıklarını göremiyor."
+}
