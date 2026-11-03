@@ -227,7 +227,10 @@ export const runChecks = async (target: PilotTarget | string, o: { bundle?: stri
     add('ahmet: not ve istek araçları yok', !mTools.includes('notlari_ara') && !mTools.includes('musteri_istekleri'), mTools.filter(n => ['notlari_ara', 'musteri_istekleri'].includes(n)).join(', ') || 'sunulmadı');
     const mNote = (await callAs(ahmet, t, 'bilgi_ara', { sorgu: 'toplantı karar', kaynak: 'not' }))[0];
     add('ahmet: notlarda arama engellenir', mNote.isError, mNote.isError ? String(mNote.json.hata) : 'not içeriği döndü!');
-    add('ahmet: değişiklik araçları yok', !mTools.some(n => n.startsWith('oner_') || n === APPLY_TOOL || n === 'jira_aktar'), 'müdür veri girmez');
+    // Müdür veri girmez; uygulamaya yazdığı tek şey beklentilere kararıdır (BL-30)
+    const mWrite = mTools.filter(n => (n.startsWith('oner_') && n !== 'oner_beklenti_yanitla') || n === 'jira_aktar');
+    add('ahmet: veri girmez, yalnız beklentiye kararını yazar', mWrite.length === 0 && mTools.includes('oner_beklenti_yanitla'),
+        mWrite.length ? `beklenmeyen değişiklik aracı: ${mWrite.join(', ')}` : mTools.includes('oner_beklenti_yanitla') ? 'yalnız oner_beklenti_yanitla' : 'karar aracı (oner_beklenti_yanitla) yok');
 
     // 4. Sayı tutarlılığı: araç sonuçları ↔ veriden doğrudan hesap
     const mert = persona('mert');

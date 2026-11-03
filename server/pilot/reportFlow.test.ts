@@ -39,7 +39,7 @@ describe('haftalık rapor akışı (MCP, persona kimlikleriyle)', () => {
         expect(await names('mert')).toEqual(expect.arrayContaining(['oner_rapor_karari', 'oner_hafta_yayinla', 'oneriyi_uygula']));
         const ahmet = await names('ahmet');
         expect(ahmet).toContain('haftalik_rapor');
-        expect(ahmet.filter(n => n.startsWith('oner_'))).toEqual([]);
+        expect(ahmet.filter(n => n.startsWith('oner_'))).toEqual(['oner_beklenti_yanitla']);
     });
 
     it('taslak paketi uygulamanın istemidir; gönderim, iade, onaylar ve yayın akıştan geçer', async () => {
