@@ -275,8 +275,11 @@ Veri kaynağı (Supabase çalışma alanı kimliği). Penceredeki Jira akışın
 
 ```bash
 npm run -s pilot -- dondur --ad son --zorla   # bulut kesilirse 1. rutin buradan dosya moduna geçer
+test -f pilot-data/donmus/son/workspace.json || echo "UYARI: son kopyası alınamadı"
 git add -A pilot-data && git commit -m "Pilot raporu: $GUN" && git push -u origin claude/pilot-veri
 ```
+
+`son` kopyası **her koşuda** alınır, kapı günü de: kapı kopyası (`K<n>-GG`) onun yerine geçmez. 3 Kasım'da bu adım atlandı. Kopya alınamadıysa raporun Veri bölümüne yaz.
 
 Ağ hatasında 2, 4, 8, 16 sn bekleyerek en çok 4 kez yeniden dene.
 
