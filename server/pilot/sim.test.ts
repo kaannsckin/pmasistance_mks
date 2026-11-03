@@ -2,9 +2,9 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { TaskStatus } from '../../types';
+import { ManagementExpectation, TaskStatus } from '../../types';
 import { analyzeDataHealth } from '../../utils/dataHealth';
-import { DEFAULT_ABBREVIATIONS, lintDictionary, lintReport } from '../../utils/weeklyReport';
+import { DEFAULT_ABBREVIATIONS, flowBlockers, lintDictionary, lintReport, reportFlowOf } from '../../utils/weeklyReport';
 import { serializeWorkspace } from '../../utils/workspace';
 import { runChecks } from './check';
 import { addDays, createState, createWorld, DayEvents, eventsMarkdown, jiraExports, personaOwned, runUntil, SimState } from './sim';
@@ -165,6 +165,61 @@ describe('pilot simülasyonu', () => {
         const day = events.find(e => e.gun === '2026-07-08')!;
         expect(day.projeler.ATL.genelSaat).toBeGreaterThan(0);
         expect(eventsMarkdown(day)).toContain('Jira dışı genel gider');
+    });
+
+    it('ajanlı dönemde persona projelerine beklenti açılmaz, müdür adına yanıt yazılmaz (BL-30)', () => {
+        const AJANLI = '2026-08-01';
+        const run = (ajanli: string) => {
+            const state = createState(2026, START, ajanli);
+            return runUntil(state, createWorld(2026, START), '2026-11-30', undefined, { importAll: true }).expectations || [];
+        };
+        const persona = (e: ManagementExpectation) => !!e.projectId && personaOwned(e.projectId);
+        const after = (iso?: string) => !!iso && iso.slice(0, 10) >= AJANLI;
+
+        // Karşılaştırma: ajanlı dönem hiç başlamasaydı simülasyon bu ikisini de yapardı (test boşa geçmesin)
+        const eski = run('2099-01-01');
+        expect(eski.some(e => persona(e) && after(e.createdAt))).toBe(true);
+        expect(eski.some(e => after(e.respondedAt))).toBe(true);
+
+        const yeni = run(AJANLI);
+        expect(yeni.filter(e => persona(e) && after(e.createdAt))).toEqual([]);
+        expect(yeni.filter(e => after(e.respondedAt))).toEqual([]);
+        // Ajanlı dönemden önceki beklentiler aynen durur (geçmiş değişmez)
+        const once = (l: ManagementExpectation[]) => l.filter(e => !after(e.createdAt)).map(e => e.id);
+        expect(once(yeni)).toEqual(once(eski));
+    });
+
+    it('PY bölüm sorumlusuysa kendi raporunu onaylamaz: KALKAN raporu doğrudan PYB desteğe gider (B-016)', () => {
+        const { ws } = simulate();
+        const reports = (ws.weeklyReports || []).filter(r => r.kind === 'project');
+        expect(reports.filter(r => r.history.some(h => h.action === 'bs_approve' && h.byName === r.authorName))).toEqual([]);
+        const klk = reports.filter(r => r.projectId === 'prj-kalkan');
+        expect(klk.length).toBeGreaterThan(0);
+        klk.forEach(r => {
+            expect(r.history.map(h => h.action)).not.toContain('bs_approve');
+            expect(r.stage === 'pyds_review' || r.history.some(h => h.action === 'pyds_approve')).toBe(true);
+        });
+        // Diğer projelerde bölüm onayı sürer
+        expect(reports.some(r => r.projectId !== 'prj-kalkan' && r.history.some(h => h.action === 'bs_approve'))).toBe(true);
+    });
+
+    it('ajanlı dönemde PY puanı zorunlu; geçmişteki puansız haftalar aynen kalır (B-017)', () => {
+        const AJANLI = '2026-08-03';
+        const run = (ajanli: string) => runUntil(createState(2026, START, ajanli), createWorld(2026, START), '2026-09-30', undefined, { importAll: true });
+        const eski = run('2099-01-01');
+        const yeni = run(AJANLI);
+        expect(reportFlowOf(eski).requirePmScore).toBe(false);
+        expect(reportFlowOf(yeni).requirePmScore).toBe(true);
+        // Uygulamanın akış kuralı puansız raporu gönderimde durdurur (ekranda ve MCP'de)
+        expect(flowBlockers({ kind: 'project', stage: 'draft', pmScore: undefined }, reportFlowOf(yeni))).toContain('Proje sağlığı puanı verilmeli');
+        // Geçmiş değişmez: ajanlı dönemden önceki raporlar (puansızlar dahil) iki koşuda aynı
+        const before = (w: typeof yeni) => (w.weeklyReports || []).filter(r => r.createdAt.slice(0, 10) < AJANLI).map(r => [r.id, r.pmScore]);
+        expect(before(eski).some(([, score]) => score === undefined)).toBe(true);
+        expect(before(yeni)).toEqual(before(eski));
+        // Simülasyonun ajanlı dönemde yazdığı raporlar (arka plandaki PY) puanlı
+        const after = (yeni.weeklyReports || []).filter(r => r.kind === 'project' && r.createdAt.slice(0, 10) >= AJANLI);
+        expect(after.length).toBeGreaterThan(0);
+        after.forEach(r => expect(r.pmScore).toBeDefined());
     });
 
     it('uygulamanın veri sağlığı motoru üretilen veride çalışır', () => {

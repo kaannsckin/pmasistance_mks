@@ -1,6 +1,6 @@
 # PlanAsistan pilotu — sahte veri + yapay zekâ kullanıcıları
 
-Uygulamayı, gerçek veri olmadan, "kullanılıyormuş gibi" sınamak için iki rutin. Pilot 22 Ekim–3 Aralık 2026 arasında çalışır (13 Ekim kararıyla bir hafta kaydırıldı; 13–20 Ekim uygulama haftası) ve **yönetim demosu bu ortamın kendisidir**: sunumda gösterilen çalışma alanı, beş ajanın altı hafta boyunca üzerinde çalıştığı alandır. Ajanın uygulamaya yazmadığı iş demoda yoktur; bu yüzden ajanların her kararı (rapor, risk, istek, not, RAG, tahsis) MCP araçlarıyla uygulamaya yazılır.
+Uygulamayı, gerçek veri olmadan, "kullanılıyormuş gibi" sınamak için iki rutin. Pilot 3 Kasım–3 Aralık 2026 arasında çalışır (22 Ekim–2 Kasım koşuları buluta ulaşılamadığı için yapılamadı; 2 Kasım kararıyla takvim tek dalgada sıkıştırıldı) ve **yönetim demosu bu ortamın kendisidir**: sunumda gösterilen çalışma alanı, beş ajanın altı hafta boyunca üzerinde çalıştığı alandır. Ajanın uygulamaya yazmadığı iş demoda yoktur; bu yüzden ajanların her kararı (rapor, risk, istek, not, RAG, tahsis) MCP araçlarıyla uygulamaya yazılır.
 
 | Rutin | Ne yapar | Talimat |
 |---|---|---|
@@ -47,6 +47,7 @@ flowchart LR
 - **Tek doğru kaynak** uygulamanın Supabase çalışma alanıdır; sahte Jira ve simülasyon durumu dalda durur. Ajanlar uygulamaya yalnız MCP'den, kendi hesaplarıyla, öneri → onay akışıyla yazar; rolleri üyelikten gelir ve RLS gerçekteki gibi uygulanır.
 - **Haftalık rapor akışı** uygulamanın kendi akışıdır: PY `haftalik_rapor_taslagi` (uygulamanın AI paketi) → `oner_haftalik_rapor` (AI taslağı ve gönderilen hâl birlikte saklanır) → Selin `oner_rapor_karari` (Perşembe) → Mert biçim onayı ve `oner_hafta_yayinla` (Salı) → müdür yayınlananı görür.
 - **Demo güvencesi:** `demo-testi` ekranları gerçek tarayıcıda gezer ve sağlık puanını MCP ile karşılaştırır; her kapıda `dondur` ile geri dönülebilir kopya alınır, `geri-yukle` aynı çalışma alanını yerinde eski hâline getirir.
+- **Bulut kesilirse pilot durmaz:** 2. rutin her koşu sonunda `dondur --ad son` alır; 1. rutin `bulut-yokla` başarısızsa `geri-yukle --ad son --dosya` ile dosya moduna geçer, bulut dönünce `buluta-tasi` aynı çalışma alanını yerinde yeniler (kimlik, üyelik, izleyiciler korunur).
 
 Uygulamanın çalışma alanı **Supabase'de** durur (aşağıda "Bulut modu"); sahte Jira, simülasyon durumu, olaylar, raporlar ve bulgular **`claude/pilot-veri`** dalında (`pilot-data/`, kod dalına karışmaz).
 
@@ -138,8 +139,10 @@ npm run -s pilot -- kontrol --cikti pilot-data/gunluk/$(date +%F)/kontrol.md
 
 npm run -s pilot -- senaryo liste                          # kayıtlı senaryolar (ekleme komutları: SENARYOLAR.md)
 npm run -s pilot -- demo-testi [--ekran]                   # demo yolu tarayıcı testi → pilot-data/demo-testi/<gün>/
-npm run -s pilot -- dondur --ad K1-2026-10-27              # geri dönülebilir kopya → pilot-data/donmus/<ad>/
-npm run -s pilot -- geri-yukle --ad K1-2026-10-27          # kopyayı geri yükler (bulutta yerinde)
+npm run -s pilot -- dondur --ad K1-2026-11-10              # geri dönülebilir kopya → pilot-data/donmus/<ad>/
+npm run -s pilot -- geri-yukle --ad K1-2026-11-10          # kopyayı geri yükler (bulutta yerinde; --dosya: dosya moduna)
+npm run -s pilot -- bulut-yokla                            # Supabase'e bu ortamdan ulaşılıyor mu (çıkış 0 / 3)
+npm run -s pilot -- baslat --zorla --ajanli 2026-11-02     # yeniden kurulum; ajanların başladığı gün (öncesini simülasyon yazar)
 ```
 
 `arac` komutu MCP sunucusunu (Claude'un bağlandığı sunucunun aynısı) persona kimliğiyle çalıştırır. Bulut modunda persona kendi Supabase hesabıyla bağlanır ve onaylanan değişiklik buluta yazılır; dosya modunda veri `pilot-data/workspace.json`'dur (uygulamada **Yedek yükle** ile açılır; yükleme Admin yetkisi ister: yerel modda önce **Profil değiştir › Admin**, sonra **⋯ › Yedekten yükle** (klasik arayüzde üst çubuktaki yükleme simgesi bu yolu açar). Yüklenen dosyanın kimliği PYB Destek'tir, sonraki yüklemede yeniden Admin'e geçilir).
@@ -170,5 +173,5 @@ npm run -s pilot -- geri-yukle --ad K1-2026-10-27          # kopyayı geri yükl
 `raporlar/OZET.md` her koşuda güncellenir ve iki karar taşır:
 
 - **Demo kararı** (asıl soru): DH1–DH7 ölçütleri — kontroller, açık bulgular, veri tutarlılığı, PY puan ortalaması (son 4 koşuda ≥ 80), senaryolar, müdürün demo yoklaması ve demo yolu testi. Ayrıntı: `RUTIN_2_KULLANICILAR.md` › 8.
-- **Ara kapılar:** K0 Kurulum (22 Ekim), K1 Akış (27 Ekim), K2 Senaryo (12 Kasım), K3 Dondurma (26 Kasım), K4 Karar (1 Aralık; canlı / dondurulmuş / ertele). Ölçütler: `SENARYOLAR.md`.
+- **Ara kapılar:** K0 Kurulum (3 Kasım), K1 Akış (10 Kasım), K2 Senaryo (19 Kasım), K3 Dondurma (26 Kasım), K4 Karar (1 Aralık; canlı / dondurulmuş / ertele). Ölçütler: `SENARYOLAR.md`.
 - **Kod birleştirme:** art arda 3 koşuda otomatik kontrollerin tamamı geçtiyse ve açık "yüksek" önemde bulgu yoksa PR main'e alınabilir.

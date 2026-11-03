@@ -83,7 +83,7 @@ export const issueToTask = (issue: JiraIssueRecord, opts: JiraImportOptions, id 
         ...(actualHours ? { actualHours } : {}),
         ...(issue.storyPoints ? { storyPoints: issue.storyPoints } : {}),
         ...(issue.fixVersions[0] ? { fixVersion: issue.fixVersions[0] } : {}),
-        ...(issue.due ? { dueDate: issue.due } : {}),
+        ...(issue.due ? { dueDate: issue.due, jiraDueDate: issue.due } : {}),
     };
 };
 
@@ -109,7 +109,9 @@ const updateFrom = (e: Task, fresh: Task, issue: JiraIssueRecord): Task => ({
     actualHours: fresh.actualHours ?? e.actualHours,
     storyPoints: fresh.storyPoints ?? e.storyPoints,
     fixVersion: fresh.fixVersion ?? e.fixVersion,
-    ...(!e.dueDate && fresh.dueDate ? { dueDate: fresh.dueDate } : {}),
+    // Termin: Jira'da değişen termin, uygulamada elle değiştirilmemişse (son aktarılanla aynıysa) taşınır
+    ...(fresh.dueDate && (!e.dueDate || e.dueDate === e.jiraDueDate) ? { dueDate: fresh.dueDate } : {}),
+    ...(fresh.jiraDueDate ? { jiraDueDate: fresh.jiraDueDate } : {}),
     ...(noEstimate(e) && !noEstimate(fresh) ? { time: fresh.time, availability: true, estimateSource: e.estimateSource ?? fresh.estimateSource } : {}),
 });
 
