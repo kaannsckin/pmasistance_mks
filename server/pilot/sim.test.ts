@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { TaskStatus } from '../../types';
+import { ManagementExpectation, TaskStatus } from '../../types';
 import { analyzeDataHealth } from '../../utils/dataHealth';
 import { DEFAULT_ABBREVIATIONS, lintDictionary, lintReport } from '../../utils/weeklyReport';
 import { serializeWorkspace } from '../../utils/workspace';
@@ -165,6 +165,28 @@ describe('pilot simülasyonu', () => {
         const day = events.find(e => e.gun === '2026-07-08')!;
         expect(day.projeler.ATL.genelSaat).toBeGreaterThan(0);
         expect(eventsMarkdown(day)).toContain('Jira dışı genel gider');
+    });
+
+    it('ajanlı dönemde persona projelerine beklenti açılmaz, müdür adına yanıt yazılmaz (BL-30)', () => {
+        const AJANLI = '2026-08-01';
+        const run = (ajanli: string) => {
+            const state = createState(2026, START, ajanli);
+            return runUntil(state, createWorld(2026, START), '2026-11-30', undefined, { importAll: true }).expectations || [];
+        };
+        const persona = (e: ManagementExpectation) => !!e.projectId && personaOwned(e.projectId);
+        const after = (iso?: string) => !!iso && iso.slice(0, 10) >= AJANLI;
+
+        // Karşılaştırma: ajanlı dönem hiç başlamasaydı simülasyon bu ikisini de yapardı (test boşa geçmesin)
+        const eski = run('2099-01-01');
+        expect(eski.some(e => persona(e) && after(e.createdAt))).toBe(true);
+        expect(eski.some(e => after(e.respondedAt))).toBe(true);
+
+        const yeni = run(AJANLI);
+        expect(yeni.filter(e => persona(e) && after(e.createdAt))).toEqual([]);
+        expect(yeni.filter(e => after(e.respondedAt))).toEqual([]);
+        // Ajanlı dönemden önceki beklentiler aynen durur (geçmiş değişmez)
+        const once = (l: ManagementExpectation[]) => l.filter(e => !after(e.createdAt)).map(e => e.id);
+        expect(once(yeni)).toEqual(once(eski));
     });
 
     it('uygulamanın veri sağlığı motoru üretilen veride çalışır', () => {
