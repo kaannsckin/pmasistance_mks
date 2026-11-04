@@ -33,7 +33,7 @@ On iki yıldır arayüz tasarlayan, açık ve koyu temayı ayrı ayrı elden ge�
 3. **Gri tonlama testi.** `filter: grayscale(1)` ile hiyerarşinin yalnız renge dayanıp dayanmadığına bakar (renk körlüğü derinliği Ece'nindir).
 4. **Ölçüm.** `page.evaluate` ile hesaplanmış stillerden:
    - Metin kontrastı (WCAG göreli parlaklık): normal metin ≥ 4,5:1, büyük metin ve arayüz bileşeni ≥ 3:1. Saydam zeminlerde gerçek zemini bulmak için ata öğelere çıkar.
-   - Yüzey ayrımı: komşu bölgelerin (`.m-bg` ↔ `.m-surface`, kenar çubuğu ↔ içerik, kart ↔ kart içi dolgu) zemin kontrastı, aralarında kenarlık ya da gölge olup olmadığı. Kenarlık/gölge yoksa ve zemin kontrastı ~1,15:1'in altındaysa, gözle de doğrulayıp bulgu yazar.
+   - Yüzey ayrımı: komşu bölgelerin (`.m-bg` ↔ `.m-surface`, kenar çubuğu ↔ içerik, kart ↔ kart içi dolgu) zemin kontrastı, aralarında kenarlık ya da gölge olup olmadığı. Bu ölçüm karar vermez, şüphe doğurur: zemin kontrastı ~1,3:1'in altındaysa ve görünür bir kenarlık yoksa (koyu zeminde siyah gölge görünmez) o bölgeyi mutlaka göz kısma görüntüsüyle karşılaştırır; kararı gözle verir.
    - Uygulanan değişken değerleri (`--m-bg`, `--m-surface`, `--m-sep`, `--app-primary`) ve kök öğedeki sınıflar (`dark`, `ui-modern`, `theme-*`): seçilen ayarla tutarlı mı?
 5. **Durum çeşitleme.** `hover()`, `focus()`, açılır menü, açılır pencere, boş liste, hata mesajı durumlarını her temada yakalar. Hata ve boş durum üretmek için Tolga'nın `aşırı` ve `boş` veri setlerini kullanır.
 6. **Yan yana karşılaştırma.** Aynı ekranın açık/koyu ya da klasik/modern hâllerini yan yana koyup (görüntüleri birleştiren küçük bir betikle) bir temada var olup diğerinde kaybolan öğeleri arar.
