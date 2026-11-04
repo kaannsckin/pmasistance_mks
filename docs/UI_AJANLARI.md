@@ -98,7 +98,9 @@ Dört ajan aynı biçimi kullanır ki bulgular birleştirilebilsin ve çapraz do
 
 ## Çalışma ortamı
 
-- **Derleme ve sunucu:** `npx vite build` bir kez (paralel koşuda koordinatör yapar; dört ajan aynı anda derlemez). Her ajan kendi portunda `npx vite preview --port <port> --strictPort --host 127.0.0.1` açar ve iş bitince kapatır.
+- **Ortak betik:** [`scripts/ui-test/ortak.mjs`](../scripts/ui-test/ortak.mjs). Ajan betikleri bunu mutlak yolla içe aktarır: `baslat(ajan)` sunucuyu ve tarayıcıyı açar, `oturum(koşul)` istenen koşulda (arayüz, sistem teması, Gece/Gündüz, renk teması, persona, proje, ekran, mobil, hareket, zorlu renk, veri seti) yalıtılmış bir sayfa verir. Ölçümler: `kontrastTara`, `yuzeyAyrimi`, `kokDurum`, `tasmaTara`, `dokunmaHedefleri`, `adsizOgeler`, `ariaOzet`, `odakTuru`, `cokmeVarMi`, `depoOku`. Süzgeçler: `suzgec(page, 'bulanik' | 'gri' | 'protanopi' | 'deuteranopi' | 'tritanopi' | null)`. Gezinme: `tikla(page, [düzenli ifade…])`, hazır adlar `R`. Görüntü: `foto(page, dizin, ad)`.
+- **Hazırlık ve birleştirme:** [`scripts/ui-test/hazirla.mjs`](../scripts/ui-test/hazirla.mjs) (Tur 0) ve [`scripts/ui-test/birlestir.mjs`](../scripts/ui-test/birlestir.mjs) (Tur 3). Koordinatör talimatı: [`UI_KOORDINATOR.md`](./UI_KOORDINATOR.md).
+- **Derleme ve sunucu:** derleme koordinatörün işidir (`hazirla.mjs`); dört ajan aynı anda derlemez. Her ajan kendi portunda önizleme sunucusu açar (`baslat` bunu yapar) ve iş bitince kapatır (`bitir`).
 
   | Ajan | Port |
   |---|---|

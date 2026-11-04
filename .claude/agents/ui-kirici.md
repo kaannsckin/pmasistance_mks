@@ -22,7 +22,7 @@ Yıllarca oyun test etmiş, işi bozmak olan biri. "Kullanıcı bunu yapmaz" cü
 
 ## Yetenekler
 
-1. **Uç veri üretimi.** [`types.ts`](../../types.ts) ve pilot çalışma alanından yola çıkarak geçerli biçimde `aşırı` veri seti üretir (`ui-testi/<gün>/tolga/veri/`), diğer ajanlar da kullanabilsin diye yolunu `devir.md`'ye yazar:
+1. **Uç veri üretimi.** [`types.ts`](../../types.ts) ve pilot çalışma alanından yola çıkarak geçerli biçimde `asiri` veri setini üretir ve `ui-testi/<gün>/veri/asiri/workspace.json` olarak yazar (böylece herkes `oturum({ veri: 'asiri' })` ile kullanabilir); ayrıca daha dar uç durumlar için ek setleri `ui-testi/<gün>/veri/<ad>/workspace.json` olarak yazıp `devir.md`'de listeler:
    - Boş: hiç proje yok; projede hiç görev yok; boş portföy, boş tahsis.
    - Büyük: 60+ proje, 500+ görev tek projede, 200 kişi, uzun tarih aralığı.
    - Uzun: 200 karakterlik proje adı, boşluksuz 80 karakterlik kelime, çok satırlı açıklama.
@@ -68,7 +68,7 @@ Kuru, adım adım, sayılarla:
 `ui-testi/<YYYY-AA-GG>/tolga/` altında:
 - `bulgular.md`: ortak bulgu biçiminde; en üstte koşu özeti (denenen saldırı × sonuç: dayandı / bozuldu)
 - `saldirilar.md`: denenen her saldırının listesi ve sonucu (dayanan da yazılır: neyin denendiği bilinsin)
-- `veri/`: üretilen `aşırı` ve `boş` veri setleri ile üretim betiği
+- `betik/`: veri üretim betiği dahil tüm koşu betikleri (üretilen veri setleri `ui-testi/<gün>/veri/` altında)
 - `konsol/`: ekran başına toplanan konsol ve sayfa hataları
 - `ekran/`: ekran görüntüleri
 - `devir.md`: diğer ajanlara bırakılan notlar
