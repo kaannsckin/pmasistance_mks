@@ -178,7 +178,8 @@ export const ciktiDizini = (ajan, g = gun()) => {
  *   gece      true | false                            (uygulamanın Gece/Gündüz ayarı, settings.isDarkMode)
  *   renk      'classic' | 'emerald' | 'purple' | 'orange'  (settings.theme)
  *   persona   'ahmet' | 'elif' | 'burak' | 'selin' | 'mert'
- *   proje     proje kimliği ya da ad/kod başı ('NEHİR', 'prj-nehir') → activeProjectId
+ *   proje     proje kimliği ya da ad/kod başı ('NEHİR', 'prj-nehir') → activeProjectId; modern arayüzde
+ *             proje ayrıca tıklanıp açılır (projeAc: false ile kapatılır)
  *   ekran     EKRANLAR anahtarı ya da { width, height }
  *   mobil     true → isMobile + hasTouch
  *   hareket   'reduce' | 'no-preference'
@@ -226,10 +227,19 @@ export const baslat = async (ajan, { port } = {}) => {
                 ...(k.ayarlar || {}),
             },
         };
-        await page.goto(sunucu.url);
+        // Veri, uygulama hiç çalışmadan aynı kökenli boş bir sayfada yüklenir: uygulamanın ilk
+        // açılışta yazdığı örnek proje, yüklenen veriyi ezmesin (boş veri setinde yarış vardı)
+        const bosSayfa = `${sunucu.url}__ui-test-yukle`;
+        await page.route(bosSayfa, r => r.fulfill({ contentType: 'text/html', body: '<!doctype html><title>ui-test</title>' }));
+        await page.goto(bosSayfa);
         await seed(page, ws);
-        await page.reload();
+        await page.unroute(bosSayfa);
+        await page.goto(sunucu.url);
         if (k.bekle !== false) await hazirBekle(page);
+        // Modern arayüz açılışta Portföy'ü gösterir: istenen proje varsa kenar çubuğundan ya da listeden açılır
+        if (proje && k.projeAc !== false && k.bekle !== false && ws.settings.uiStyle === 'modern') {
+            await tikla(page, [new RegExp(`^${proje.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`)]).catch(() => null);
+        }
         // IndexedDB'nin açılışta yeniden kurulmasından doğan yarış hataları bulgu değildir
         for (let i = hatalar.length - 1; i >= 0; i--) if (/IndexedDB|indexedDB/.test(hatalar[i])) hatalar.splice(i, 1);
         return { ctx, page, hatalar, diyaloglar, disKaynak, kosul: { ...k, ekran }, kapat: () => ctx.close() };
@@ -408,13 +418,16 @@ export const tasmaTara = (page, { sinir = 60 } = {}) => page.evaluate(({ sinir, 
 /** Dokunma hedefleri: görünür etkileşimli öğelerden min×min px altında kalanlar */
 export const dokunmaHedefleri = (page, { min = 44, sinir = 80 } = {}) => page.evaluate(({ min, sinir, Y }) => {
     const { parse, ratio, over, hex, bgOf, visible, path, name } = eval(Y); // eslint-disable-line no-eval
-    const out = []; let toplam = 0;
+    const out = []; let toplam = 0; let ekranDisi = 0;
     for (const el of document.querySelectorAll('a[href], button, input:not([type=hidden]), select, textarea, [role=button], [role=tab], [role=menuitem], [role=checkbox], [role=switch], [tabindex]:not([tabindex="-1"])')) {
-        if (!visible(el)) continue; toplam++;
+        if (!visible(el)) continue;
         const r = el.getBoundingClientRect();
+        // Ekranın yatayda dışında kalanlar (ör. kapalı çekmece) hedef değildir; ayrıca sayılır
+        if (r.right <= 0 || r.left >= innerWidth) { ekranDisi++; continue; }
+        toplam++;
         if (r.width < min || r.height < min) out.push({ ad: name(el), etiket: el.tagName.toLowerCase(), boyut: `${Math.round(r.width)}×${Math.round(r.height)}`, yol: path(el), alt24: r.width < 24 || r.height < 24 });
     }
-    return { toplam, kucuk: out.length, alt24: out.filter(x => x.alt24).length, ornekler: out.slice(0, sinir) };
+    return { toplam, ekranDisi, kucuk: out.length, alt24: out.filter(x => x.alt24).length, ornekler: out.slice(0, sinir) };
 }, { min, sinir, Y: SAYFA_YARDIMCI });
 
 /** Adsız düğme/bağlantılar ve etiketsiz giriş alanları (ekran okuyucu ne okur?) */
