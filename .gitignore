@@ -30,3 +30,6 @@ dist-ssr
 dist-mcp
 dist-pilot
 /demo-testi/
+
+# UI/UX çarpışma testi çıktıları (docs/UI_AJANLARI.md)
+/ui-testi/
