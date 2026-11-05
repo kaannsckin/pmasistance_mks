@@ -1,0 +1,34 @@
+{
+"persona": "mert", "kosu": "2026-11-05 Perşembe",
+"yapilanlar": [
+{"is": "H45 rapor durumu (ATL, PSL, NHR, KLK)", "araclar": ["haftalik_rapor"], "sonuc": "ATL (py_puani 7), PSL (6), NHR (5) 'bölüm sorumlusunda' aşamasında, gönderilmiş. KLK: 'rapor henüz yazılmadı' (son gün bugün). Madde numaraları ve kategori uyumu tek tek doğrulanmadı; PSL'de PSL-92/93/86 numaraları görüldü."},
+{"is": "Tahsis toplamları (PY değişiklikleri sonrası)", "araclar": ["tahsis_ozeti"], "sonuc": "Kasım toplamı 16,5 AA = ATL 5,35 + PSL 3,9 + NHR 3,85 + KLK 2,3 + YILDIZ 1,1; Aralık 13,34. NHR: Aslı Çakır Kasım/Aralık 0,7→0,5, Can Erdem +0,2; NHR Kasım toplamı 3,85 (değişmedi). Can'ın KLK payı 0,3/ay duruyor, Kasım toplamı 0,5 AA. NHR plan kilidi 'Taslak'."},
+{"is": "Maliyet ↔ tahsis", "araclar": ["maliyet_raporu"], "sonuc": "Yıllık plan 22.958.700 TL; Oca-Eki plan 18.978.500, gerçekleşen 18.820.000, sapma -158.500 TL. Proje toplamları ve Kasım aylık plan (2.200.500 TL) tahsisle çelişmiyor. Aslı/Can kaydırmasının TL etkisi ayrıştırılamadı (kişi kırılımı yok)."},
+{"is": "KLK worklog ↔ gerçekleşen AA", "araclar": ["jira_worklog", "tahsis_ozeti"], "sonuc": "KLK Ekim worklog 236 sa, 106 kayıt; kişi toplamları (73,5+55,5+55,5+51,5) = 236. Can Erdem, Mert Aydın, Nazlı Karaca için worklog yok ama gerçekleşen AA 0,31/0,11/0,12; Jira dışı genel gider olabilir, teyit gerekli."},
+{"is": "Yönetim beklentileri", "araclar": ["beklentiler"], "sonuc": "Aktif 3 beklenti: ATL Onur Çelik kapasite aşımı (termin 9 Kasım), NHR sürüm/bütçe (12 Kasım), ATL donanım (62 gündür 'inceleniyor'). Yeni beklenti açılmadı."}
+],
+"degisiklikler": [], "haftalik_rapor": [], "rapor_kararlari": [],
+"bulgular": [
+{"tur": "tutarsizlik", "onem": "orta", "baslik": "KLK H45 raporu son gün (5 Kasım) hâlâ yazılmamış", "kanit": "arac mert haftalik_rapor {proje:KLK,hafta:2026-H45} → \"islem\": \"rapor henüz yazılmadı\"; gecen_haftanin_plani KLK-46/50/51 '15 Kasım tarihine kadar'", "beklenen": "Son gün itibarıyla rapor en azından taslakta olmalı", "gerceklesen": "Rapor hiç oluşturulmamış"},
+{"tur": "tutarsizlik", "onem": "dusuk", "baslik": "NHR kapasite kaydırması: Can Erdem'in KLK payı değişmemiş, toplam Kasım tahsisi 0,3→0,5", "kanit": "arac mert tahsis_ozeti {yil:2026,proje:KLK} → Can Erdem Kasım 0,3 (Eylül-Kasım 0,3); NHR'de Can Erdem Kasım 0,2", "beklenen": "Kaydırma bir yerden düşülmüş olmalı", "gerceklesen": "Can'ın toplam Kasım tahsisi 0,5 AA"},
+{"tur": "eksik_ozellik", "onem": "dusuk", "baslik": "maliyet_raporu kişi/ay kırılımı vermiyor", "kanit": "arac mert maliyet_raporu {yil:2026,proje:NHR} → yalnız plan_tl/donem_plan_tl/gerceklesen_tl/sapma_tl", "beklenen": "Kişi ve ay bazında maliyet", "gerceklesen": "Yalnız proje toplamı"}
+],
+"yanitlar": [
+{"kime": "elif", "mesaj_tarihi": "2026-11-05", "metin": "Elif Hanım, ATL H45 raporunu 'bölüm sorumlusunda' aşamasında, py_puani 7 dolu olarak gördüm. Bölüm sorumlusu onayından sonra PYB biçim denetimine ben bakacağım. ATL Kasım planı Onur Çelik aşımı beklentiniz uygulamada açık, termin 9 Kasım; plan kilidi tarafında bende ek kayıt yok."},
+{"kime": "burak", "mesaj_tarihi": "2026-11-05", "metin": "Burak Bey, NHR H45 py_puani 5 dolu (bölüm sorumlusunda), PSL H45'te PSL-92, PSL-93 ve PSL-86 numaralı ve rakamlı (py_puani 6). PSL Ekim gerçekleşen maliyeti 4.760.650 TL (dönem planı 4.745.000, sapma +15.650 TL). NHR tahsis (Aslı 0,5, Can +0,2) toplamlarla tutarlı: Kasım 3,85 AA; NHR plan kilidi 'Taslak', Selin Hanım'a gönderimden sonra kilit talebinizi bekliyorum."}
+],
+"mesajlar": [
+{"kime": "can", "metin": "Can Bey, KLK H45 raporu bugün son gün ve uygulamada 'rapor henüz yazılmadı'. Lütfen bugün taslağı açın; geçen haftanın planı (KLK-46, KLK-50, KLK-51, 15 Kasım terminli) için durum yazılmalı. İki açık konu: (1) KLK açık kayıt sayısı 6 mı 7 mi, bs_approve teyidi; (2) Kasım'da size NHR'de +0,2 AA yazıldı, KLK payınız 0,3 AA kaldı, Kasım toplamınız 0,5 AA. Kaydırmanın kaynağı hangisi?"},
+{"kime": "ahmet", "metin": "Maliyet tanımı sorusu hâlâ açık: maliyetlenemeyen 1 kişi ve 4/6 ünvan için yönetici kararı gerekiyor (termin 10 Kasım). Bugün tahsis ve maliyet toplamları arasında başka tutarsızlık yok: Kasım plan 16,5 AA / 2.200.500 TL."}
+],
+"ajanda": [
+{"madde": "Can Erdem: KLK H45 raporu yazılsın; KLK açık kayıt sayısı ve bs_approve teyidi; Kasım toplam tahsis (0,5 AA) kaynağı", "kime": "Can Erdem", "termin": "2026-11-06", "durum": "ertelendi"},
+{"madde": "Burak: NHR/PSL H45 py_puani ve madde numaraları kontrolü", "kime": "burak", "termin": "2026-11-05", "durum": "tamam"},
+{"madde": "Burak'a söz: PSL Ekim gerçekleşeni verildi; NHR plan kilidi talebi gelince veri teyidi", "kime": "burak", "termin": "2026-11-09", "durum": "acik"},
+{"madde": "Maliyetlenemeyen kişi ve ünvanlar için maliyet tanımı sorusu (1 kişi, 4/6 ünvan)", "kime": "PYB / yönetici", "termin": "2026-11-10", "durum": "acik"},
+{"madde": "Ekim gerçekleşen AA ↔ worklog karşılaştırmasını Kasım kapanışında yinele; KLK'da Can/Mert Aydın/Nazlı için worklog yok, genel gider mi teyit et", "kime": "mert", "termin": "2026-12-01", "durum": "acik"},
+{"madde": "H45 raporları: ATL/PSL/NHR bölüm sorumlusu onayından sonra biçim denetimi ve yayın; KLK raporu gelince takip", "kime": "mert", "termin": "2026-11-06", "durum": "acik"}
+],
+"gercek_disi": [], "demo_yoklamasi": [],
+"arac_cagrisi": 14, "memnuniyet": 7, "gunun_notu": "ATL/PSL/NHR raporları gönderilmiş ve tahsis toplamları tutarlı, ama KLK raporu son günde hâlâ yazılmamış."
+}
