@@ -1,0 +1,65 @@
+{
+"persona": "elif", "kosu": "2026-11-05 Perşembe",
+"yapilanlar": [
+{"is": "Jira güncellemesi (ATL)", "araclar": ["jira_aktar"], "sonuc": "Önizleme: alınan 148, yeni 3, güncellenecek 135. Olay dosyalarında 3-4 Kasım için ATL'de 3 yeni kayıt (ATL-146, ATL-147, ATL-148); sayı tutuyor. --onayla ile uygulandı."},
+{"is": "Gecikme, risk ve görev incelemesi", "araclar": ["gorev_ara", "risk_listesi", "evm_analizi", "musteri_istekleri", "jira_worklog", "notlari_ara", "proje_detayi", "tahsis_ozeti", "kisi_profili"], "sonuc": "Geciken 2 görev: ATL-134 (Merve Aslan, bitiş 30 Ekim) ve kendi kabul testi senaryo güncellemesi (bitiş 4 Kasım, yapılmadı). ATL-130 3 Kasım'da kapanmış ama risk kaydı 'çözümsüz' diyordu. Yeni müşteri isteği yok. Onur Çelik'in 4 Kasım ölçüm raporu notlarda görünmüyor."},
+{"is": "Risk güncelleme ve yeni risk", "araclar": ["oner_risk_guncelle", "oner_risk_ekle"], "sonuc": "ATL-130 riski izlemeye alındı (skor 12→8). ATL-146 veri kaybı için yeni risk (3x4=12). Aynı risk ikinci kez açılmadı."},
+{"is": "Yönetim beklentisi", "araclar": ["beklentiler", "oner_beklenti_ac"], "sonuc": "Yalnız bkl-00078 (donanım) açıktı. Selin'in önerisi için yeni beklenti: kaynak, önemli, termin 9 Kasım."},
+{"is": "Günlük notu", "araclar": ["oner_not_ekle"], "sonuc": "5 Kasım kararları ve sorumlu/tarihli aksiyonlar ATL günlüğüne yazıldı."},
+{"is": "H45 haftalık rapor", "araclar": ["haftalik_rapor_taslagi", "haftalik_rapor", "jira_worklog", "oner_haftalik_rapor", "oner_rag_guncelle"], "sonuc": "AI paketi alındı, ai_taslagi saklandı. Rapor düzeltilip PY puanı 7 ile bölüm sorumlusuna gönderildi. RAG yeşil, gerekçeli."}
+],
+"degisiklikler": [
+{"arac": "jira_aktar", "ozet": "ATL Jira aktarımı (3 yeni)", "tetikleyici": "Perşembe rutini; ATL-146/147/148", "gerekce": "Önizleme olay sayısıyla tuttu", "uygulandi": true},
+{"arac": "oner_risk_guncelle", "ozet": "ATL-130 riski Açık→İzleniyor, skor 8", "tetikleyici": "3 Kasım: ATL-130 kapandı (22 sa, tahmin 6 sa)", "gerekce": "Kayıt eskimişti; ölçüm raporu gelmediği için kapatılmadı", "uygulandi": true},
+{"arac": "oner_risk_ekle", "ozet": "ATL-146 eşzamanlı güncellemede veri kaybı riski (3x4=12)", "tetikleyici": "3 Kasım hata triyaj notu: ATL-146 Highest, v1.15 yeni özellikleri durduruldu", "gerekce": "Risk kayıtlarında yoktu", "uygulandi": true},
+{"arac": "oner_beklenti_ac", "ozet": "Onur Çelik Kasım/Aralık aşımı: ATL plan kilidi açılıp 0,38 AA yeniden dağıtım (Selin 0,3 + Emre 0,1)", "tetikleyici": "Selin 3 Kasım mesajı; oner_tahsis_ayarla plan kilidi nedeniyle reddetti", "gerekce": "Onur Kasım plan 1,2, efektif 0,42, aşım 0,78 AA", "uygulandi": true},
+{"arac": "oner_not_ekle", "ozet": "Perşembe kararı ve aksiyonlar ATL günlüğüne", "tetikleyici": "Ajanda ve 3-4 Kasım notları", "gerekce": "PY günlüğü", "uygulandi": true},
+{"arac": "oner_haftalik_rapor", "ozet": "H45 raporu bölüm sorumlusuna gönderildi (12 bu hafta, 4 gelecek hafta maddesi, py_puani 7)", "tetikleyici": "Perşembe rapor günü", "gerekce": "Kaynaklarla doğrulanmış, kayıt numaralı", "uygulandi": true},
+{"arac": "oner_rag_guncelle", "ozet": "RAG yeşil, rakamlı not", "tetikleyici": "Haftalık rapor", "gerekce": "SPI 1,05, CPI 1,07, geciken 2 görev, açık yüksek risk 0", "uygulandi": true}
+],
+"haftalik_rapor": [
+{"proje": "ATL", "hafta": "2026-H45", "gonderildi": true,
+"duzeltmeler": ["AI taslağındaki 'Çalışmalara devam edildi.' ve 'Test ortamı kurulacak.' gibi belirsiz maddeler silindi ya da kayıt no, kişi ve tarihle yazıldı.", "AI taslağı 'ATL-130 giderildi' diyordu ama 22 sa harcama ve tahmin aşımı belirtilmemişti; aşımlar saat saat yazıldı.", "ATL-111 kategori uyumsuzluğu (Mert'in notu): kapanışlar schedule_budget altında.", "ATL-102 ve ATL-112 aynı başlıkla planda: ATL-112 maddesi 'ikinci kayıt, Onur Çelik' ile ayrıştırıldı.", "Kısaltmalar açıldı.", "Plan değerlendirmesi: ATL-102 done, ATL-112 partial, ATL-116 done.", "py_puani eklendi (7)."],
+"dayanaksiz_uyarisi": ["Onur Çelik 1,2/0,42/0,78 AA ve Selin Kaya adı: paket dışı; kaynak kisi_profili ve Selin'in mesajı.", "EVM rakamları (%89, SPI 1,05, CPI 1,07, EAC 7.702.921 TL, BAC 8.203.950 TL): paket dışı; kaynak evm_analizi.", "ATL-129 ve 9 Kasım: Jira bitiş tarihi ve risk kaydından.", "'8 Jira kaydı kapandı': taslak paketindeki kapanış listesinden.", "3 Kasım toplantısında yer bilgisi yok, uydurulmadı."],
+"py_puani": 7, "rag": "green", "rag_gerekcesi": "SPI 1,05, CPI 1,07, tamamlanma %89, geciken 2/21 görev (~%9,5), açık yüksek risk 0 (en yüksek skor 12). İzleme: ATL-146, Onur Çelik aşımı 0,78 AA, ATL-134 gecikmesi, kapanış hızı."}
+],
+"rapor_kararlari": [],
+"bulgular": [
+{"tur": "kullanilabilirlik", "onem": "orta", "baslik": "Haftalık rapor AI paketi EVM/kapasite gibi kaynakları içermiyor; 'dayanaksız' uyarısı doğru verileri işaretliyor", "kanit": "oner_haftalik_rapor çıktısı: 'rakam \"0,42\" girdide yok', 'rakam \"7.702.921\" girdide yok', 'tarih \"9 Kasım\" girdide yok'", "beklenen": "Araçtan alınan rakamlar için kaynak notu kabul edilmeli ya da paket EVM/tahsis özetini içermeli", "gerceklesen": "Uyarı kaynak notuyla da kalkmıyor, 17 uyarı"},
+{"tur": "tutarsizlik", "onem": "orta", "baslik": "ATL-130 kapalı ama risk kaydı 'çözümsüz' açık kalmış", "kanit": "gorev_ara ATL-130 durum 'Tamamlandı'; risk_listesi 'ATL-130 … %208 üzerinde, çözümsüz' Açık", "beklenen": "Görev kapanınca bağlı riskin PY'ye hatırlatılması", "gerceklesen": "Kayıtlar kendiliğinden güncellenmiyor"},
+{"tur": "eksik_ozellik", "onem": "dusuk", "baslik": "Görev bitiş tarihini değiştirecek araç yok", "kanit": "pilot araclar elif: oner_gorev_durumu yalnız durum, oner_gorev_ekle yalnız yeni görev", "beklenen": "ATL-134 için yeni bitiş tarihi girilebilmeli", "gerceklesen": "Tarih uygulamaya yazılamadı"}
+],
+"yanitlar": [
+{"kime": "selin", "mesaj_tarihi": "2026-11-03", "metin": "Selin, rakamlar aracımla tuttu: Onur Kasım plan 1,2, efektif 0,42, aşım 0,78 AA. Öneriyi (Onur ATL Kasım 0,8→0,42; Selin Kaya 0,3 + Emre Koç 0,1) destekliyorum. ATL planı kilitli: oner_tahsis_ayarla 'plan değiştirilemez' verdi. Bu yüzden uygulamada yönetimden beklenti açtım (kaynak, önemli, termin 9 Kasım). Kilit açılınca tahsisi yazacağız. KLK payını en az 0,2 AA çekmek için Can Erdem ile görüşüyorum. Aralık 0,96/0,9 için senin 0,1 AA'nı da aynı beklentiye ekledim; H45 raporunda kaynak durumu yansıtıldı."},
+{"kime": "mert", "mesaj_tarihi": "2026-11-03", "metin": "Mert, H45 raporunda düzelttim: kapanış maddeleri kayıt numaralı ve kategori metinle uyumlu, ATL-102 ve ATL-112 ayrı maddeler, kısaltmalar açıldı, py_puani 7 ile bölüm sorumlusuna gönderildi."},
+{"kime": "ahmet", "mesaj_tarihi": "2026-11-03", "metin": "Ahmet Bey, 5 Kasım durumu (araçtan): tamamlanma %89, SPI 1,05, CPI 1,07, EAC 7.702.921 TL, BAC 8.203.950 TL; sizin yazdığınız %87 / 7.880.000 TL jira_aktar öncesi değer olmalı. ATL-130 3 Kasım'da kapandı (22 sa, tahmin 6 sa); riski izlemeye aldım (skor 8). Onur Çelik'in 4 Kasım ölçüm raporu henüz notlarda yok; 6 Kasım istedim. ATL-129 test ortamı Jira'da 9 Kasım (Merve Aslan); sürüm tarihine etkiyi 9 Kasım sonrası yazacağım (tahmin: etki yok). Kapanan kayıt: 2-4 Kasım'da 8 (önceki 7 günde 11). ATL-132 4 Kasım'da kapandı. ATL-134 yeni tarihi Merve'den 6 Kasım'a kadar alıyorum (tahmin 9 Kasım). Yeni risk: ATL-146 veri kaybı (skor 12), v1.15 yeni özellikleri durdu; Cem Bulut kök neden planı bugün."}
+],
+"mesajlar": [
+{"kime": "onur", "metin": "Onur, ATL-130 3 Kasım'da kapandı (22 sa/tahmin 6 sa). 4 Kasım için söz verdiğin performans ölçüm raporunu notlarda göremedim. 6 Kasım'a kadar paylaşır mısın? Sonuca göre ATL-130 riskini kapatacağım. Kasım kapasiten 0,42 efektif, 1,2 planlı; yeniden dağıtım için yönetimden karar istedim."},
+{"kime": "cem", "metin": "Cem, ATL-146 için kök neden ve düzeltme planın bugün (5 Kasım) bekleniyor. Tahmin 6 sa; ATL-130 ve ATL-138'de 2-4 kat aştığımız için bir üst boy düşün. ATL-104 sapma nedenlerini (3 Kasım sözü) de bugün ilet."},
+{"kime": "merve", "metin": "Merve, ATL-132 4 Kasım'da kapanmış. ATL-134 (bitiş 30 Ekim) için yeni bitiş tarihini 6 Kasım'a kadar yaz. ATL-129 test ortamını 9 Kasım'da bitirir misin? Kabul testi tahmin kılavuzu taslağı 10 Kasım'da bende olmalı."},
+{"kime": "can", "metin": "Can, Onur Çelik'in Kasım toplamı 1,2 AA, efektif 0,42 (aşım 0,78). KLK Kasım payını (0,4) en az 0,2 AA'ya çekebilir miyiz? Onur'un KLK'da geciken görevi (Kural motoru hata yönetimi, bitiş 26 Ekim) var, kapanmadan çekmek riskli. Bu hafta 15 dk görüşelim mi?"}
+],
+"ajanda": [
+{"madde": "Selin'den Onur Çelik Kasım kapasite aşımı talebine yanıt al", "kime": "selin", "termin": "2026-11-05", "durum": "tamam"},
+{"madde": "Selin'e söz: H45 raporuna kaynak durumunu yansıt", "kime": "selin", "termin": "2026-11-05", "durum": "tamam"},
+{"madde": "2026-H45 haftalık raporunu yaz ve bölüm sorumlusuna gönder", "kime": "elif", "termin": "2026-11-05", "durum": "tamam"},
+{"madde": "Test senaryolarını güncelle (ATL görevi, 4 Kasım termini kaçtı)", "kime": "elif", "termin": "2026-11-06", "durum": "ertelendi"},
+{"madde": "ATL-104 sapma nedenlerini Cem Bulut'tan teyit et (3 Kasım sözü yanıtsız)", "kime": "Cem Bulut", "termin": "2026-11-05", "durum": "acik"},
+{"madde": "ATL-130 performans ölçüm raporu paylaşılacak; rapora göre risk ve tahmin güncellenecek", "kime": "Onur Çelik", "termin": "2026-11-06", "durum": "ertelendi"},
+{"madde": "ATL-134 yeni bitiş tarihi, kapanmadıysa risk değerlendirmesi", "kime": "Merve Aslan", "termin": "2026-11-06", "durum": "ertelendi"},
+{"madde": "ATL-146 kök neden ve düzeltme planı", "kime": "Cem Bulut", "termin": "2026-11-05", "durum": "acik"},
+{"madde": "Hedef: ATL-129 test ortamı; ATL-130 rapor sonrası kapsam kararı; haftalık kapanış 5'in üstünde (bu hafta 8)", "kime": "elif", "termin": "2026-11-09", "durum": "acik"},
+{"madde": "Kabul testi tahmin kılavuzu taslağı Elif'e iletilecek", "kime": "Merve Aslan", "termin": "2026-11-10", "durum": "acik"},
+{"madde": "KLK Kasım payı en az 0,2 AA çekilmesi görüşmesi (Onur Çelik aşımı)", "kime": "can", "termin": "2026-11-06", "durum": "acik"},
+{"madde": "Onur Çelik yeniden dağıtım beklentisinin yönetim yanıtını takip et; karar çıkınca Selin 0,3 + Emre 0,1 tahsisi yazılacak", "kime": "yonetim", "termin": "2026-11-09", "durum": "acik"},
+{"madde": "ATL-129 sonrası sürüm tarihi etkisini Ahmet'e yaz", "kime": "ahmet", "termin": "2026-11-09", "durum": "acik"},
+{"madde": "ATL-146 plan sonrası v1.15 tarihi etkisini değerlendir", "kime": "elif", "termin": "2026-11-06", "durum": "acik"}
+],
+"gercek_disi": [
+{"kimin_verisi": "Ahmet (3 Kasım mesajı)", "ne": "%87 tamam ve EAC 7.880.000 TL yazmış; evm_analizi 5 Kasım: %89, SPI 1,05, EAC 7.702.921 TL", "kanit": "jira_aktar sonrası fark, kasıtlı gerçek dışı değil"},
+{"kimin_verisi": "Risk kaydı (ATL-130)", "ne": "ATL-130 'çözümsüz' görünüyordu", "kanit": "gorev_ara: ATL-130 Tamamlandı (3 Kasım kapanış, 22 sa/tahmin 6 sa)"}
+],
+"demo_yoklamasi": [],
+"arac_cagrisi": 37, "memnuniyet": 7, "gunun_notu": "ATL-130 kapanmış olmasına rağmen risk kaydı 'çözümsüz' diyordu; Onur'un ölçüm raporu ve Cem'in ATL-146 planı gelmezse yönetim beklentisine ekleyeceğim."
+}
