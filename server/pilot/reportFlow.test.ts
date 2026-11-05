@@ -39,7 +39,7 @@ describe('haftalık rapor akışı (MCP, persona kimlikleriyle)', () => {
         expect(await names('mert')).toEqual(expect.arrayContaining(['oner_rapor_karari', 'oner_hafta_yayinla', 'oneriyi_uygula']));
         const ahmet = await names('ahmet');
         expect(ahmet).toContain('haftalik_rapor');
-        expect(ahmet.filter(n => n.startsWith('oner_'))).toEqual([]);
+        expect(ahmet.filter(n => n.startsWith('oner_'))).toEqual(['oner_beklenti_yanitla']);
     });
 
     it('taslak paketi uygulamanın istemidir; gönderim, iade, onaylar ve yayın akıştan geçer', async () => {
@@ -61,6 +61,13 @@ describe('haftalık rapor akışı (MCP, persona kimlikleriyle)', () => {
         const bad = await call('burak', 'oner_haftalik_rapor', { ...submit, bu_hafta: [{ kategori: 'ongoing', metin: 'Bu hafta QWZ modülünün entegrasyonu tamamlandı.' }] });
         expect(bad.ok).toBe(false);
         expect(JSON.stringify(bad.json)).toContain('gönderilemez');
+        // Ajanlı dönemde PY puanı zorunlu (B-017): puansız rapor gönderilmez, taslak olarak kaydedilebilir
+        const { py_puani: _puan, ...unscored } = submit;
+        void _puan;
+        const noScore = await call('burak', 'oner_haftalik_rapor', unscored);
+        expect(noScore.ok).toBe(false);
+        expect(JSON.stringify(noScore.json)).toContain('Proje sağlığı puanı verilmeli');
+        expect((await call('burak', 'oner_haftalik_rapor', { ...unscored, gonder: false })).ok).toBe(true);
 
         expect((await call('burak', 'oner_haftalik_rapor', submit, true)).ok).toBe(true);
         expect((await call('elif', 'oner_haftalik_rapor', { ...submit, gonder: false })).ok).toBe(false);

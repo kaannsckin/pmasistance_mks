@@ -21,6 +21,9 @@ import {
     applyReportOp, draftPackage, parseWeek, prepareReportOp, readReports, REPORT_DRAFT_TOOL, REPORT_READ_TOOL, REPORT_SCHEMAS, REPORT_SUBMIT_TOOL,
     REPORT_WRITE_TOOLS, ReportOp, reportToolsFor,
 } from './reports.js';
+import {
+    applyExpectationOp, EXPECTATION_READ_TOOL, EXPECTATION_SCHEMAS, EXPECTATION_WRITE_TOOLS, ExpectationOp, expectationToolsFor, prepareExpectationOp, readExpectations,
+} from './expectations.js';
 import { ConflictError, LoadedWorkspace, SourceError, WorkspaceSource } from './source.js';
 
 /**
@@ -143,7 +146,8 @@ const JIRA_WORKLOG_SPEC: McpTool = {
 export type PendingProposal =
     | { kind: 'action'; action: AiAction; title: string; at: number }
     | { kind: 'jira'; projectId: string; key: string; issues: JiraIssueRecord[]; opts: JiraImportOptions; label: string; title: string; at: number }
-    | { kind: 'report'; op: ReportOp; title: string; at: number };
+    | { kind: 'report'; op: ReportOp; title: string; at: number }
+    | { kind: 'expectation'; op: ExpectationOp; title: string; at: number };
 type Pending = PendingProposal;
 
 /** Uygulanmamış önerilerin deposu */
@@ -176,6 +180,7 @@ const SCHEMAS = new Map<string, ToolSpec['parameters']>([
     [APPLY_TOOL, APPLY_SPEC.inputSchema],
     [STATUS_TOOL, STATUS_SPEC.inputSchema],
     ...REPORT_SCHEMAS,
+    ...EXPECTATION_SCHEMAS,
 ]);
 
 const isoDay = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -296,6 +301,14 @@ export const createPlanAsistanMcp = (o: PlanAsistanMcpOptions): McpServerOptions
         return { loaded, ws, ctx, person, roleSource, writeBlock, reportBlock };
     };
 
+    /** Rol veri girmese de rapor ve beklenti kararlarını yazabilir (müdür, PYB destek): durum bunu söyler */
+    const degisiklikDurumu = (s: Session): string => {
+        if (!s.writeBlock) return `açık (oner_* + ${APPLY_TOOL}, kullanıcı onayıyla)`;
+        const partial = s.reportBlock ? [] : [...reportToolsFor(s.ctx, true), ...expectationToolsFor(s.ctx, true)]
+            .map(t => t.name).filter(n => REPORT_WRITE_TOOLS.has(n) || EXPECTATION_WRITE_TOOLS.has(n));
+        return partial.length ? `kısmen açık: yalnız ${partial.join(', ')} (kullanıcı onayıyla); diğer değişiklikler kapalı — ${s.writeBlock}` : `kapalı — ${s.writeBlock}`;
+    };
+
     const status = async (): Promise<McpToolResult> => {
         if (!o.source) return text({ durum: 'yapılandırılmamış', hata: o.setupError || NOT_CONFIGURED });
         try {
@@ -316,7 +329,7 @@ export const createPlanAsistanMcp = (o: PlanAsistanMcpOptions): McpServerOptions
                 toplam_proje: s.ws.projects.length,
                 varsayilan_proje: active ? (active.code ? `${active.name} (${active.code})` : active.name) : 'yok (projeyi adıyla belirtin)',
                 notlar_ve_istekler: s.ctx.canSeePrivate ? (s.loaded.privateVisible ? 'görülebilir' : 'bu hesap için bulutta okunamıyor') : 'bu rol göremez',
-                degisiklik: s.writeBlock ? `kapalı — ${s.writeBlock}` : `açık (oner_* + ${APPLY_TOOL}, kullanıcı onayıyla)`,
+                degisiklik: degisiklikDurumu(s),
                 bilgi_arama: 'anahtar kelime (Bilgi Bankası\'na yüklenen dokümanlar MCP\'de aranmaz)',
                 jira: o.jira ? `bağlı (${hostOf(o.jira.env.JIRA_BASE_URL)})` : 'yapılandırılmamış (JIRA_BASE_URL + JIRA_TOKEN ya da JIRA_EMAIL + JIRA_API_TOKEN)',
             });
@@ -336,11 +349,15 @@ export const createPlanAsistanMcp = (o: PlanAsistanMcpOptions): McpServerOptions
         } catch (e) {
             return fail((e as Error).message);
         }
-        const block = p.kind === 'report' ? s.reportBlock : s.writeBlock;
+        // Rapor ve beklenti araçlarında yetkiyi rol kuralı (utils) denetler: müdür veri girmez ama beklentiye kararını yazar
+        const block = p.kind === 'report' || p.kind === 'expectation' ? s.reportBlock : s.writeBlock;
         if (block) return fail(block);
         let result: { ws: WorkspaceData; summary: string };
         try {
-            result = p.kind === 'action' ? applyAction(s.ws, p.action) : p.kind === 'report' ? applyReportOp(s.ws, s.ctx, p.op, now()) : applyJira(s, p);
+            result = p.kind === 'action' ? applyAction(s.ws, p.action)
+                : p.kind === 'report' ? applyReportOp(s.ws, s.ctx, p.op, now())
+                : p.kind === 'expectation' ? applyExpectationOp(s.ws, s.ctx, p.op, now())
+                : applyJira(s, p);
         } catch (e) {
             proposals.delete(id);
             return fail(`Öneri uygulanamadı: ${(e as Error).message}`);
@@ -477,6 +494,19 @@ export const createPlanAsistanMcp = (o: PlanAsistanMcpOptions): McpServerOptions
         }
     };
 
+    const expectationTool = (s: Session, name: string, args: Record<string, unknown>): McpToolResult => {
+        try {
+            if (name === EXPECTATION_READ_TOOL) return text(readExpectations(s.ws, s.ctx, args, now()));
+            if (s.reportBlock) return fail(s.reportBlock);
+            if (!expectationToolsFor(s.ctx, true).some(t => t.name === name)) return fail(`${name} aracı ${ROLE_LABELS[s.ctx.identity.role]} rolü için yok.`);
+            const prepared = prepareExpectationOp(s.ws, s.ctx, name, args);
+            const oneriId = remember({ kind: 'expectation', op: prepared.op, title: prepared.title, at: Date.now() });
+            return text({ oneri_id: oneriId, ozet: prepared.title, ayrintilar: prepared.details, durum: MCP_PENDING_NOTE });
+        } catch (e) {
+            return fail((e as Error).message);
+        }
+    };
+
     return {
         name: 'planasistan',
         title: 'PlanAsistan',
@@ -488,18 +518,20 @@ export const createPlanAsistanMcp = (o: PlanAsistanMcpOptions): McpServerOptions
             let canApply = false;
             let jira: McpTool[] = [];
             let reports: McpTool[] = [];
+            let expectations: McpTool[] = [];
             try {
                 const s = await buildSession();
                 specs = toolSpecsFor(s.ctx);
                 reports = reportToolsFor(s.ctx, !s.reportBlock);
-                canApply = !s.writeBlock || reports.some(t => REPORT_WRITE_TOOLS.has(t.name));
+                expectations = expectationToolsFor(s.ctx, !s.reportBlock);
+                canApply = !s.writeBlock || reports.some(t => REPORT_WRITE_TOOLS.has(t.name)) || expectations.some(t => EXPECTATION_WRITE_TOOLS.has(t.name));
                 if (o.jira) jira = [JIRA_WORKLOG_SPEC, ...(!s.writeBlock ? [JIRA_IMPORT_SPEC] : [])];
             } catch (e) {
                 // Kaynak şu an okunamıyor: salt-okunur katalog sunulur, her çağrı nedeni döndürür
                 log(`araç listesi kapsamsız sunuldu: ${(e as Error).message}`);
                 specs = AI_TOOLS.filter(t => !t.writeOnly).map(t => t.spec);
             }
-            return [STATUS_SPEC, ...specs.map(toMcpTool), ...reports, ...jira, ...(canApply ? [APPLY_SPEC] : [])];
+            return [STATUS_SPEC, ...specs.map(toMcpTool), ...reports, ...expectations, ...jira, ...(canApply ? [APPLY_SPEC] : [])];
         },
         callTool: async (name, rawArgs) => {
             const schema = SCHEMAS.get(name);
@@ -517,6 +549,7 @@ export const createPlanAsistanMcp = (o: PlanAsistanMcpOptions): McpServerOptions
             }
             if (name === JIRA_IMPORT_TOOL) return jiraImport(s, args);
             if (REPORT_WRITE_TOOLS.has(name) || name === REPORT_READ_TOOL || name === REPORT_DRAFT_TOOL) return reportTool(s, name, args);
+            if (EXPECTATION_WRITE_TOOLS.has(name) || name === EXPECTATION_READ_TOOL) return expectationTool(s, name, args);
             if (name === JIRA_WORKLOG_TOOL) return jiraWorklog(s, args);
             if (WRITE_TOOLS.has(name) && s.writeBlock) return fail(s.writeBlock);
             const out = await executeTool({ name, arguments: args }, s.ctx);

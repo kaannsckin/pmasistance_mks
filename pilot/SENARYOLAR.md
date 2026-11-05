@@ -27,7 +27,7 @@ Koşular Salı ve Perşembe (1. rutin 07:45, 2. rutin 08:45). Jira ajanı son ko
 | Kapı | Ne zaman | Geçme ölçütü | Geçmezse |
 |---|---|---|---|
 | **K0 Kurulum** | 3 Kasım, 1. rutin + 2. rutin sonrası | v5 yeniden kurulum yapıldı (bulutta ya da dosya modunda; mod raporda yazılı); `senaryo liste` S1, S3, S6, S8, S9, S10'u gösterir; `kontrol` tümü geçti; `demo-testi` GEÇTİ; beş ajan çalıştı ve her biri en az bir yazma aracını gerekçeli kullandı | 5 Kasım'a kadar kod ya da talimat düzeltmesi |
-| **K1 Akış** | 10 Kasım, 2. rutin sonrası | 45. hafta raporları uçtan uca (5 Kasım gönderim → bölüm sorumlusu → 10 Kasım PYB destek ve yayın → müdür okur) MCP araçlarıyla geçti; S2 kararı uygulamada (istek dönüştü ya da reddedildi); açık yüksek bulgu yok ya da düzeltmesi planlandı | 12 Kasım'a kadar düzeltme; K2 ölçütleri değişmez |
+| **K1 Akış** | 10 Kasım, 2. rutin sonrası | 45. hafta raporları uçtan uca (5 Kasım gönderim → bölüm sorumlusu → 10 Kasım PYB destek ve yayın → müdür okur) MCP araçlarıyla geçti; S2 kararı uygulamada (istek dönüştü ya da reddedildi); K0'da sağlanamayan yazma ölçütü: Ahmet en az bir kararını `oner_beklenti_yanitla` ile uygulamaya yazdı (BL-30, 3 Kasım kararı); açık yüksek bulgu yok ya da düzeltmesi planlandı | 12 Kasım'a kadar düzeltme; K2 ölçütleri değişmez |
 | **K2 Senaryo** | 19 Kasım, 2. rutin sonrası | S1, S2, S4, S7 başarı ölçütleri ile S3 ve S6'nın erken tepkisi değerlendirildi, en az 4/6 ✓; PY ortalaması ≥ 75; DH1–DH3 ✓; gömülü bulguların en az 3/6'sı bulundu | Kalan iki koşudan biri zayıf senaryonun telafisine ayrılır (S12); demo kapsamı daraltılır |
 | **K3 Dondurma** | 26 Kasım, 2. rutin sonrası | Kod dondurulur (sonrası yalnız demo yolunu bozan hata düzeltmesi); `demo-testi` son 3 koşuda GEÇTİ; S8–S11'e ilk tepkiler değerlendirildi; demo akışı (sunum metni) yazılı; veri buluttaysa son iki koşu bulutta geçti; `dondur --ad K3-2026-11-26` | Demo, K3'te çalışan ekranlarla sınırlanır |
 | **K4 Karar** | 1 Aralık, 2. rutin sonrası | DH1–DH7 ✓; sunumu yapacak kişi demo akışını uygulamada baştan sona gezdi (canlı prova); `dondur --ad K4-2026-12-01` | Demo "dondurulmuş" ya da ertelenir |
@@ -45,6 +45,8 @@ Koşular Salı ve Perşembe (1. rutin 07:45, 2. rutin 08:45). Jira ajanı son ko
 ## Senaryolar (3 Kasım–1 Aralık, tek dalga)
 
 **Tür:** *Anlatı* = Jira ajanı `pilot istek` ve `pilot not` ile üretir. *Simülasyon* = `pilot senaryo` kaydıyla Jira'da ve uygulamada iz bırakır (kayıt komutları aşağıda). 28–29 Ekim bayramı (eski S5) geçmişte kaldı: yeniden kurulum onu arife yarım günüyle üretir.
+
+**Yönetim kararları uygulamada yazılır (BL-30, 3 Kasım):** aşağıda "Ahmet karar verir" denen her yerde beklenen, PY'nin ya da bölüm sorumlusunun kararı `oner_beklenti_ac` ile istemesi ve Ahmet'in `oner_beklenti_yanitla` ile rakam ve tarihle yanıtlamasıdır ("Yönetimden beklentiler" ekranı, demoda görünür). Yalnız mesajda kalan karar başarı ölçütünü karşılamaz.
 
 | # | Veri günü | Senaryo | Tür | Jira ajanı ne üretir | Beklenen tepki | Başarı ölçütü |
 |---|---|---|---|---|---|---|

@@ -6,7 +6,7 @@ import type { JiraIssueRecord } from '../../utils/integrations.js';
 import { mergeJiraIssues } from '../../utils/planning/jiraImport.js';
 import { mulberry32, normal, Rng } from '../../utils/planning/random.js';
 import { addWorkdays, effectiveWorkdays, isHalfDay, isWorkday } from '../../utils/planning/workdays.js';
-import { isoWeekOf } from '../../utils/weeklyReport.js';
+import { isoWeekOf, reportFlowOf, reportSettingsOf } from '../../utils/weeklyReport.js';
 import { createEmptyWorkspace, createProject, defaultProjectSettings } from '../../utils/workspace.js';
 import { SearchResponse, searchExport, toRawIssue } from './mockJira.js';
 import { ACTIONS, AYLAR, DECISIONS, DOMAIN_REQUESTS, DOMAIN_RISKS, gunAy, issueText, MEETINGS, pick, RISKS, SimIssueType } from './text.js';
@@ -553,6 +553,14 @@ export const stepDay = (state: SimState, input: WorkspaceData, day: string, opts
     /** Persona PY'nin projesi ajanlı dönemde mi (öncesini simülasyon "geçmişteki PY" olarak yazar) */
     const agentic = (projectId: string) => personaOwned(projectId) && day >= (state.ajanli || PILOT_BASLANGIC);
 
+    // Kurum kararı (B-017): ajanlı dönemde haftalık proje raporunda PY sağlık puanı zorunludur. Uygulamanın
+    // akış kuralı (requirePmScore) puansız raporu gönderimde durdurur, ekranda da MCP'de de. Ajanlı dönemden
+    // önceki geçmiş aynen kalır: o dönemde yoğun PY bazı haftalar puan vermemişti.
+    if (day >= (state.ajanli || PILOT_BASLANGIC) && !reportFlowOf(ws).requirePmScore) {
+        ws = { ...ws, reportSettings: { ...reportSettingsOf(ws), flow: { ...reportFlowOf(ws), requirePmScore: true } } };
+        events.genel.push('Kurum kararı: haftalık proje raporunda PY sağlık puanı zorunlu (Yönetici konsolu › Rapor akışı).');
+    }
+
     PROJECTS.forEach((w, pi) => {
         if (w.rate === 0 || w.status !== 'devam') return;
         const project = ws.projects[pi];
@@ -903,13 +911,17 @@ export const stepDay = (state: SimState, input: WorkspaceData, day: string, opts
                     const x = key ? jira.issues.find(i => i.rec.key === key) : undefined;
                     return { itemId: item.id, text: item.text, status: (!key ? 'partial' : x?.rec.statusCategory === 'done' ? 'done' : x?.rec.statusCategory === 'indeterminate' ? 'partial' : 'slipped') as 'done' | 'partial' | 'slipped' };
                 });
+                // PY aynı zamanda bölümün sorumlusuysa (KALKAN: Can Erdem, U340) kendi raporunu onaylamaz (B-016):
+                // bölüm onayı atlanır, rapor doğrudan PYB desteğin biçim onayına gider
+                const selfLead = DEPARTMENTS.find(d => d.code === pm.dept)?.lead === w.pm;
                 const report: WeeklyReport = {
                     id: `rapor-${w.id}-${year}-${week}`, year, week, kind: 'project', projectId: w.id, departmentCode: pm.dept,
-                    thisWeek, nextWeek, stage: 'bs_review',
+                    thisWeek, nextWeek, stage: selfLead ? 'pyds_review' : 'bs_review',
                     // Kayıt başlıklarındaki kısaltmalar açılımıyla (kurum kılavuzu; aksi hâlde rapor biçim hatası verir)
                     abbreviations: Object.entries(SIM_ABBREVIATIONS).filter(([abbr]) => [...thisWeek, ...nextWeek].some(i => new RegExp(`\\b${abbr}\\b`).test(i.text))).map(([abbr, expansion]) => ({ abbr, expansion })),
                     worklog: state.worklog.filter(x => x.projectId === w.id && x.date >= weekStart).map(({ projectId: _p, ...rest }) => { void _p; return rest; }),
-                    ...(busy && rng() < 0.4 ? {} : { pmScore: Math.max(3, Math.min(9, 9 - Math.round(ratio * 10) - highRisks)), pmScoreNote: 'Haftalık genel değerlendirme' }),
+                    // Yoğun PY bazı haftalar puan vermez; puan zorunluysa (B-017) verir. Rastgele akış aynı kalır.
+                    ...(busy && rng() < 0.4 && !reportFlowOf(ws).requirePmScore ? {} : { pmScore: Math.max(3, Math.min(9, 9 - Math.round(ratio * 10) - highRisks)), pmScoreNote: 'Haftalık genel değerlendirme' }),
                     ...(planReview?.length ? { planReview } : {}),
                     authorPersonId: w.pm, authorName: fullName(pm), createdAt: atDay(16), updatedAt: atDay(17),
                     history: [
@@ -918,7 +930,9 @@ export const stepDay = (state: SimState, input: WorkspaceData, day: string, opts
                     ],
                 };
                 ws = { ...ws, weeklyReports: [...(ws.weeklyReports || []).filter(r => r.id !== report.id), report] };
-                pd.rapor = `${year}-H${week} haftalık rapor bölüm sorumlusu onayına gönderildi`;
+                pd.rapor = selfLead
+                    ? `${year}-H${week} haftalık rapor PYB destek onayına gönderildi (PY bölüm sorumlusu; bölüm onayı atlandı)`
+                    : `${year}-H${week} haftalık rapor bölüm sorumlusu onayına gönderildi`;
             } else {
                 pd.rapor = `${year}-H${week} haftalık rapor GÖNDERİLMEDİ (gecikti)`;
             }
@@ -936,9 +950,12 @@ export const stepDay = (state: SimState, input: WorkspaceData, day: string, opts
         const reports = (ws.weeklyReports || []).map(r => {
             if (r.stage !== from || !simDoes(r)) return r;
             moved++;
-            const approver = bs
-                ? fullName(personById(DEPARTMENTS.find(d => d.code === r.departmentCode)?.lead || 'p01'))
-                : fullName(personById('p23'));
+            const leadId = DEPARTMENTS.find(d => d.code === r.departmentCode)?.lead || 'p01';
+            // Yazarı bölüm sorumlusu olan rapor (ör. PYB iadesinden dönen) onaylanmaz: PY düzeltip yeniden gönderir (B-016)
+            if (bs && leadId === r.authorPersonId) {
+                return { ...r, stage: to as WeeklyReport['stage'], updatedAt: atDay(11), history: [...r.history, { at: atDay(11), action: 'submit' as const, byRole: 'py' as const, byName: r.authorName || fullName(personById(leadId)) }] };
+            }
+            const approver = bs ? fullName(personById(leadId)) : fullName(personById('p23'));
             return {
                 ...r, stage: to as WeeklyReport['stage'], updatedAt: atDay(11),
                 history: [...r.history, { at: atDay(11), action: (bs ? 'bs_approve' : 'pyds_approve') as 'bs_approve' | 'pyds_approve', byRole: (bs ? 'bolum_sorumlu' : 'pyb_destek') as 'bolum_sorumlu' | 'pyb_destek', byName: approver }],
@@ -959,22 +976,31 @@ export const stepDay = (state: SimState, input: WorkspaceData, day: string, opts
         }
     }
 
-    // 10. Yönetimden beklenti: ara sıra yeni talep; açık talepler zamanla yanıtlanır
+    // 10. Yönetimden beklenti: ara sıra yeni talep; açık talepler zamanla yanıtlanır.
+    // Ajanlı dönemde (BL-30) persona PY'nin projesine beklentiyi PY ajanı açar, yanıtı müdür
+    // ajanı yazar: simülasyon yalnız arka plandaki PY (KALKAN) adına açar, müdür adına yanıt
+    // yazmaz. Rastgele akış aynı kalsın diye kayıt yine üretilir (sıra ve sayaç), eklenmez.
     if (work) {
+        const mudurAjan = day >= (state.ajanli || PILOT_BASLANGIC);
         let expectations = ws.expectations || [];
         if (rng() < 0.03) {
             const w = pick(rng, PROJECTS.filter(x => x.rate > 0));
-            expectations = [...expectations, {
+            const item: ManagementExpectation = {
                 id: next('bkl'), title: `${w.name.split(' ')[0]} için ${pick(rng, ['takvim onayı', 'ek bütçe', 'donanım alımı', 'müşteriyle üst düzey toplantı'])}`,
                 category: pick(rng, ['schedule', 'budget', 'procurement', 'customer'] as const), urgency: pick(rng, ['critical', 'important', 'normal'] as const), status: 'open',
                 projectId: w.id, createdAt: atDay(13), updatedAt: atDay(13), createdByRole: 'py', createdByPersonId: w.pm, createdByName: fullName(personById(w.pm)),
-            }];
-            events.genel.push(`Yönetimden yeni beklenti: ${expectations[expectations.length - 1].title}`);
+            };
+            if (!agentic(w.id)) {
+                expectations = [...expectations, item];
+                events.genel.push(`Yönetimden yeni beklenti: ${item.title}`);
+            }
         }
-        expectations = expectations.map(e => {
-            if (e.status !== 'open' || rng() >= 0.15) return e;
-            return { ...e, status: 'acknowledged' as const, response: 'İnceleniyor; haftaya karar verilecek.', respondedAt: atDay(15), respondedByName: fullName(personById('p21')), respondedByRole: 'mudur' as const, updatedAt: atDay(15) };
-        });
+        if (!mudurAjan) {
+            expectations = expectations.map(e => {
+                if (e.status !== 'open' || rng() >= 0.15) return e;
+                return { ...e, status: 'acknowledged' as const, response: 'İnceleniyor; haftaya karar verilecek.', respondedAt: atDay(15), respondedByName: fullName(personById('p21')), respondedByRole: 'mudur' as const, updatedAt: atDay(15) };
+            });
+        }
         ws = { ...ws, expectations };
     }
 
