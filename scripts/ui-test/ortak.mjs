@@ -16,14 +16,26 @@
  * sunucusunda açar ve çalışma alanını uygulamanın IndexedDB deposuna yazar.
  */
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
-/** Koşu günü (İstanbul saatiyle YYYY-AA-GG); UI_TEST_GUN ile sabitlenebilir */
-export const gun = () => process.env.UI_TEST_GUN || new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Istanbul' }).format(new Date());
+/** Bugün (İstanbul saatiyle YYYY-AA-GG) */
+export const bugun = () => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Istanbul' }).format(new Date());
+
+/**
+ * Koşu günü: UI_TEST_GUN verilmişse o; yoksa en son hazırlanan koşu (ui-testi/<gün>/kosu.json);
+ * hiç koşu yoksa bugün. Böylece gece yarısını aşan bir koşu dizinini kaybetmez; yeni koşuyu
+ * hazirla.mjs bugünün tarihiyle açar.
+ */
+export const gun = () => {
+    if (process.env.UI_TEST_GUN) return process.env.UI_TEST_GUN;
+    const kok = join(ROOT, 'ui-testi');
+    const gunler = existsSync(kok) ? readdirSync(kok).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d) && existsSync(join(kok, d, 'kosu.json'))).sort() : [];
+    return gunler.at(-1) || bugun();
+};
 
 export const KOK_DIZIN = (g = gun()) => join(ROOT, 'ui-testi', g);
 

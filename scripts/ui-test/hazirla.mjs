@@ -2,7 +2,7 @@
 /**
  * UI/UX çarpışma testi, Tur 0 (hazırlık). Koordinatör koşu başında bir kez çalıştırır.
  *
- *   node scripts/ui-test/hazirla.mjs [--derle] [--gun YYYY-AA-GG]
+ *   node scripts/ui-test/hazirla.mjs [--derle] [--gun YYYY-AA-GG]   (gün verilmezse bugün)
  *
  * 1. Uygulamayı derler (dist/ yoksa ya da --derle ile); pilot komut satırını derler (dist-pilot/ yoksa).
  * 2. Veri setlerini kurar: ui-testi/<gün>/veri/pilot (pilot simülasyonu, tohum 2026) ve veri/bos.
@@ -17,9 +17,9 @@ import { join } from 'node:path';
 
 const args = process.argv.slice(2);
 const flag = n => { const i = args.indexOf(`--${n}`); if (i < 0) return undefined; const v = args[i + 1]; return v && !v.startsWith('--') ? v : true; };
-if (typeof flag('gun') === 'string') process.env.UI_TEST_GUN = flag('gun');
-
 const ui = await import('./ortak.mjs');
+// Hazırlık yeni bir koşu açar: gün verilmezse bugün (ortak.gun() aksi hâlde son koşuyu seçerdi)
+process.env.UI_TEST_GUN = typeof flag('gun') === 'string' ? flag('gun') : ui.bugun();
 const { ROOT, AJANLAR } = ui;
 const g = ui.gun();
 const kok = ui.KOK_DIZIN(g);

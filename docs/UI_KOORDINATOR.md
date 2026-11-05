@@ -10,7 +10,7 @@ Bu talimatı dört ajanı yöneten oturum (koordinatör) izler. Ajanların karak
 node scripts/ui-test/hazirla.mjs
 ```
 
-Bağımlılıkları kurar, uygulamayı ve pilot komut satırını derler, `pilot` ve `bos` veri setlerini `ui-testi/<gün>/veri/` altına kurar, ajan dizinlerini açar, `kosu.json` yazar ve iki arayüz × sistem açık/koyu duman testi yapar. Duman testi KALDI ise (çıkış kodu 2) ajanları başlatma; `ui-testi/<gün>/duman/` altındaki görüntüye bak ve sorunu kullanıcıya bildir. Kod değiştiyse `--derle` ile yeniden derle.
+Bağımlılıkları kurar, uygulamayı ve pilot komut satırını derler, `pilot` ve `bos` veri setlerini `ui-testi/<gün>/veri/` altına kurar, ajan dizinlerini açar, `kosu.json` yazar ve iki arayüz × sistem açık/koyu duman testi yapar. Duman testi KALDI ise (çıkış kodu 2) ajanları başlatma; `ui-testi/<gün>/duman/` altındaki görüntüye bak ve sorunu kullanıcıya bildir. Kod değiştiyse `--derle` ile yeniden derle. Koşunun günü `hazirla.mjs`'nin açtığı gündür; koşu gece yarısını aşarsa ajan betikleri ve `birlestir.mjs` en son hazırlanan koşuyu kullanmaya devam eder (`UI_TEST_GUN` ile başka bir gün seçilebilir).
 
 ## Tur 1 · Bağımsız keşif (paralel)
 
