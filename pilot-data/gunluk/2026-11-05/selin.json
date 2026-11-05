@@ -1,0 +1,47 @@
+{
+"persona": "selin", "kosu": "2026-11-05 Perşembe",
+"yapilanlar": [
+{"is": "Elif ve Burak'ın A aşaması iddialarını doğruladı (NHR tahsisi, ATL kilidi)", "araclar": ["tahsis_ozeti","kisi_profili","beklentiler"], "sonuc": "NHR: Aslı Çakır Kas/Ara 0,5/0,5, Can Erdem 0,2/0,2 (Can toplam 0,5 ve 0,44, efektif 0,5: aşım yok). ATL planı Onaylı/Kilitli; Onur Çelik ATL 0,8 + KLK 0,4 = 1,2 / efektif 0,42 (aşım 0,78); Elif'in beklentisi (termin 9 Kasım) açık, ikinci kez açılmadı."},
+{"is": "U310 doluluk kontrolü", "araclar": ["doluluk_analizi"], "sonuc": "U310 9 kişi, ortalama doluluk %90, 3 kişi kapasite üstü; Onur Çelik yıllık oran 1,26 (Nis-Ara 9 ay aşım). Aralık 0,96/0,9."},
+{"is": "ATL H45 raporu: karşılaştırıp onayladı", "araclar": ["haftalik_rapor","evm_analizi","tahsis_ozeti","oner_rapor_karari"], "sonuc": "SPI 1,05, CPI 1,07, BAC 8.203.950, EAC 7.702.921, %89 araçla aynı; Jira'da 2-4 Kasım'da kapanan 8 kayıt ve saat aşımları eşleşti; Ekim 5,40/5,35 AA doğru. Onay uygulandı."},
+{"is": "PSL H45 raporunu onayladı", "araclar": ["haftalik_rapor","evm_analizi","proje_listesi","oner_rapor_karari"], "sonuc": "SPI 0,89, CPI 0,88, BAC 5.599.100, EAC 6.347.533, VAC -748.433, geciken 5/23 araçla aynı. Onay uygulandı."},
+{"is": "NHR H45 raporunu iade etti", "araclar": ["haftalik_rapor","evm_analizi","oner_rapor_karari"], "sonuc": "Raporda BAC 5.572.550, VAC -796.560, SPI 0,86, CPI 0,87; evm_analizi (iki çağrı) BAC 5.620.650, VAC -748.460, SPI 0,87, CPI 0,88. Madde madde iade uygulandı."},
+{"is": "Rol sınırı denemesi (bir kez)", "araclar": ["haftalik_rapor"], "sonuc": "KLK (U340) H45 raporu: 'rapor henüz yazılmadı'; U340 raporuna karar aracı yok."}
+],
+"degisiklikler": [
+{"arac": "oner_rapor_karari", "ozet": "ATL 2026-H45 onay", "tetikleyici": "Perşembe rapor takvimi", "gerekce": "Rakamlar evm_analizi/tahsis_ozeti/Jira ile tutarlı", "uygulandi": true},
+{"arac": "oner_rapor_karari", "ozet": "PSL 2026-H45 onay", "tetikleyici": "Perşembe rapor takvimi", "gerekce": "EVM, geciken sayısı ve RAG araçla tutarlı", "uygulandi": true},
+{"arac": "oner_rapor_karari", "ozet": "NHR 2026-H45 iade", "tetikleyici": "Perşembe rapor takvimi", "gerekce": "BAC/VAC/SPI/CPI araçtan farklı (4 rakam)", "uygulandi": true}
+],
+"haftalik_rapor": [],
+"rapor_kararlari": [
+{"proje": "ATL", "hafta": "2026-H45", "karar": "onay", "not": "8 kapanan kayıt ve saat aşımları Jira ile, SPI 1,05/CPI 1,07/BAC 8.203.950/EAC 7.702.921 evm_analizi ile, Ekim 5,40/5,35 AA tahsis_ozeti ile, Onur 1,2/0,42 kisi_profili ile aynı. Plan kilitli, tahsis değişmedi (beklenti 9 Kasım).", "uygulandi": true},
+{"proje": "PSL", "hafta": "2026-H45", "karar": "onay", "not": "SPI 0,89, CPI 0,88, BAC 5.599.100, EAC 6.347.533, VAC -748.433 ve 5/23 geciken araçla aynı; amber gerekçesi uyumlu; 4 biçim uyarısı yalnız üslup.", "uygulandi": true},
+{"proje": "NHR", "hafta": "2026-H45", "karar": "iade", "not": "BAC 5.572.550 (araç 5.620.650), VAC -796.560 (araç -748.460), SPI 0,86 (araç 0,87), CPI 0,87 (araç 0,88): araçtan düzeltilmeli; aynı rakamlar yönetim beklentisinde de var. Kalan içerik (Can 0,2, Aslı 0,5, 13/27 geciken) tutarlı; düzeltilince onaylanacak.", "uygulandi": true}
+],
+"bulgular": [
+{"tur": "tutarsizlik", "onem": "orta", "baslik": "NHR EVM değerleri rapor/rag notu ile evm_analizi arasında farklı", "kanit": "arac selin evm_analizi {proje:NHR} → bac_butce 5620650, spi 0.87, cpi 0.88, vac_sapma -748460; rapor ve rag_notu: SPI 0,86, CPI 0,87, BAC 5.572.550, VAC -796.560", "beklenen": "Tek kaynaktan aynı rakam", "gerceklesen": "PY'nin yazdığı rakamlar araçla uyuşmuyor"},
+{"tur": "oneri", "onem": "orta", "baslik": "Rapor biçim denetimi rakam tutarlılığını (EVM) kontrol etmiyor", "kanit": "haftalik_rapor NHR H45 bicim_denetimi: yalnız 'Uzun cümle' uyarıları; yanlış BAC/VAC/SPI/CPI uyarı üretmedi", "beklenen": "EVM rakamlarını araçla karşılaştıran uyarı", "gerceklesen": "Yalnız üslup uyarısı"},
+{"tur": "tutarsizlik", "onem": "dusuk", "baslik": "Aslı Çakır Ocak-Ekim NHR planı 0,7 iken efektif kapasite 0,5", "kanit": "kisi_profili Aslı Çakır: aylik_plan 0,7 (Oca-Eki), efektif 0,5, kapasite_asimi_olan_aylar [1..10]", "beklenen": "Plan kapasiteyi aşmaz", "gerceklesen": "10 ay yapısal aşım; Kas/Ara düzeltildi"}
+],
+"yanitlar": [
+{"kime": "mert", "mesaj_tarihi": "2026-11-03", "metin": "Mert, KLK (U340) onayı U340 bölüm sorumlusunda olmalı; KLK PY'si Can Erdem kendi raporunu onaylayamaz, U310 sorumlusu olarak ben de KLK'ya karar veremem (bugün KLK H45 raporunu açmayı denedim: 'rapor henüz yazılmadı', karar aracı bende yok). Biçim denetimine iki istek: py_puani eksikliği ve PY=onaylayan çakışması uyarısı, ayrıca EVM rakamı araçla uyuşmazsa uyarı (NHR H45'te BAC/VAC/SPI/CPI farkı denetimden geçti)."},
+{"kime": "ahmet", "mesaj_tarihi": "2026-11-03", "metin": "Ahmet Bey, geç yanıt için özür. Can Erdem'in NHR'ye Kasım-Aralık 0,2 AA/ay kaydırılmasına U310 olarak itirazım yok; tahsis_ozeti ile doğruladım: Can Kas 0,5 (KLK 0,3 + NHR 0,2), Ara 0,44, efektif 0,5, aşım yok. Aslı Çakır 0,5 (efektif 0,5). Onayı U340 sorumlusu vermeli. Burak NHR-78/NHR-88 için kullanacak."},
+{"kime": "elif", "mesaj_tarihi": "2026-11-05", "metin": "Elif, doğruladım: Onur ATL 0,8 + KLK 0,4 = 1,2 / efektif 0,42, aşım 0,78 (Aralık 0,96/0,9). ATL planı hâlâ kilitli, tahsis değişmedi. Beklentin (9 Kasım) açık, yenisini açmadım. ATL H45 raporunu onayladım; PYB desteğe gitti. KLK'dan en az 0,2 AA çekme görüşmesinin sonucunu 9 Kasım'a kadar yaz."},
+{"kime": "burak", "mesaj_tarihi": "2026-11-05", "metin": "Burak, NHR tahsisini doğruladım (Aslı 0,5/0,5; Can 0,2/0,2). U310'dan destek istemediğin için bölüm payı değişmedi. NHR H45 raporunu iade ettim: BAC 5.572.550 yerine 5.620.650, VAC -796.560 yerine -748.460, SPI 0,86 yerine 0,87, CPI 0,87 yerine 0,88 (evm_analizi). Beklentindeki rakamları da düzelt, yeniden gönderince onaylarım. PSL H45 onaylandı."}
+],
+"mesajlar": [],
+"ajanda": [
+{"madde": "ATL Kasım: Onur 0,8'den 0,42'ye, yerine Selin 0,3 + Emre 0,1 (plan kilidi açılınca); beklenti termin 9 Kasım", "kime": "elif", "termin": "2026-11-09", "durum": "acik"},
+{"madde": "KLK'da Onur Kasım payını 0,4'ten en az 0,2'ye çekme görüşmesi sonucu", "kime": "elif", "termin": "2026-11-09", "durum": "acik"},
+{"madde": "Can Erdem NHR 0,2 AA: U340 sorumlusu onayı (tahsis yazıldı, doğrulandı)", "kime": "burak", "termin": "2026-11-07", "durum": "tamam"},
+{"madde": "NHR H45 raporu düzeltilip yeniden gönderilince onay (BAC/VAC/SPI/CPI)", "kime": "burak", "termin": "2026-11-06", "durum": "acik"},
+{"madde": "Onur Çelik Nisan-Ekim 1,2/0,9 yapısal aşım: kalıcı çözüm gündemi", "kime": "selin", "termin": "2026-11-10", "durum": "acik"},
+{"madde": "ATL kilidi 9 Kasım'da açılmazsa Onur Aralık 0,96/0,9 için yönetime ek hatırlatma", "kime": "selin", "termin": "2026-11-10", "durum": "acik"}
+],
+"gercek_disi": [
+{"kimin_verisi": "burak (NHR H45 raporu ve beklenti metni)", "ne": "BAC 5.572.550, VAC -796.560, SPI 0,86, CPI 0,87; araç 5.620.650, -748.460, 0,87, 0,88", "kanit": "evm_analizi {proje:NEHİR Veri Platformu} → bac_butce 5620650, spi 0.87, cpi 0.88, vac_sapma -748460"}
+],
+"demo_yoklamasi": [],
+"arac_cagrisi": 24, "memnuniyet": 8, "gunun_notu": "ATL ve PSL rakamlarla onaylandı, NHR'de dört EVM değeri araçtan farklı çıktığı için gerekçeli iade edildi; ATL kilidi açılmadığından Onur aşımı sürüyor."
+}
