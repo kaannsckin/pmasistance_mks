@@ -78,5 +78,85 @@
       "eksi": 0
     },
     "gerekce": "ön puan: kaydırma kararı rakama dayalı, PY'lerden tarihli açıklama istedi; demo yoklaması 3/3 tutarlı ama her soru 6 çağrı (DH6 ≤3 değil). Karar yazma aracı yok (B-015), kusur uygulamada."
+  },
+  {
+    "tarih": "2026-11-05",
+    "persona": "elif",
+    "puan": 86,
+    "kaynak": "koordinator",
+    "kirilim": {
+      "tutarlilik": 28,
+      "dongu": 18,
+      "rapor": 17,
+      "gerekce": 13,
+      "iletisim": 7,
+      "bulgu": 3,
+      "eksi": 0
+    },
+    "gerekce": "ön puan: H45 raporu AI taslağından kayıt numaralı, kaynaklı düzeltmeyle çıktı, Selin rakamlarla onayladı; risk/beklenti/not uygulamada. Eksi yok; kendi görevi (kabul testi, 4 Kasım) kaçtı, ertelendi (iletişim −1)."
+  },
+  {
+    "tarih": "2026-11-05",
+    "persona": "burak",
+    "puan": 80,
+    "kaynak": "koordinator",
+    "kirilim": {
+      "tutarlilik": 24,
+      "dongu": 19,
+      "rapor": 14,
+      "gerekce": 14,
+      "iletisim": 6,
+      "bulgu": 3,
+      "eksi": 0
+    },
+    "gerekce": "ön puan: S2 isteği 1 gün içinde gerekçeli reddedildi (kapsam/efor/takvim), PSL raporu onaylandı. NHR raporunda EVM rakamları kendi tahsis değişikliğinden önceki değerdi, iade edildi; yanıtta \"Ahmet Bey onayladı\" abartılı, Can Erdem tahsisi U340 onayı beklenmeden yazıldı."
+  },
+  {
+    "tarih": "2026-11-05",
+    "persona": "selin",
+    "puan": 92,
+    "kaynak": "koordinator",
+    "kirilim": {
+      "tutarlilik": 30,
+      "dongu": 18,
+      "rapor": 19,
+      "gerekce": 14,
+      "iletisim": 8,
+      "bulgu": 3,
+      "eksi": 0
+    },
+    "gerekce": "ön puan: ATL ve PSL raporlarını araç rakamlarıyla onayladı, NHR'yi dört EVM değeri farkıyla gerekçeli iade etti (yeniden üretildi); tüm gelen mesajlara yanıt (Mert, Ahmet'e 3 Kasım yanıtları geç)."
+  },
+  {
+    "tarih": "2026-11-05",
+    "persona": "mert",
+    "puan": 82,
+    "kaynak": "koordinator",
+    "kirilim": {
+      "tutarlilik": 28,
+      "dongu": 16,
+      "rapor": 14,
+      "gerekce": 12,
+      "iletisim": 9,
+      "bulgu": 3,
+      "eksi": 0
+    },
+    "gerekce": "ön puan: tahsis/maliyet/worklog kontrolleri tutarlı, KLK raporunun son gün yazılmadığını yakalayıp Can'a rakamlı hatırlattı; bugün biçim onayı sırasında rapor yoktu. Yeni bulguları tek tek yeniden üretilemeyen küçük kalemler."
+  },
+  {
+    "tarih": "2026-11-05",
+    "persona": "ahmet",
+    "puan": 90,
+    "kaynak": "koordinator",
+    "kirilim": {
+      "tutarlilik": 30,
+      "dongu": 18,
+      "rapor": 17,
+      "gerekce": 14,
+      "iletisim": 9,
+      "bulgu": 2,
+      "eksi": 0
+    },
+    "gerekce": "ön puan: üç beklentiyi oner_beklenti_yanitla ile uygulamaya yazdı (BL-30), rakamları araçtan aldı (kapasite_talep 1,39 AA yeniden üretildi); demo yoklaması 1/1/2 çağrı ve tutarlı."
   }
 ]

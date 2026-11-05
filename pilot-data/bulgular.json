@@ -20,8 +20,8 @@
     "tur": "tutarsizlik",
     "onem": "orta",
     "ilk": "2026-10-09",
-    "son": "2026-11-03",
-    "gun_sayisi": 2,
+    "son": "2026-11-05",
+    "gun_sayisi": 3,
     "durum": "acik",
     "dogrulama": "kısmen doğrulandı (PSL/YILDIZ doğrulandı; ATL/NHR başlangıç durumu ajan beyanı)",
     "kanit": "proje_listesi PSL rag Yolunda geciken 8; proje_detayi PSL skor 72; proje_detayi YLD-2405 skor 100 guven low kapsam 0.32. ATL/NHR ilk bakışta 'Yolunda' idi (4 ajan bildirdi), PY'ler Riskli yaptı; ilk durum yeniden üretilemez",
@@ -100,8 +100,8 @@
     "tur": "eksik_ozellik",
     "onem": "orta",
     "ilk": "2026-10-09",
-    "son": "2026-11-03",
-    "gun_sayisi": 2,
+    "son": "2026-11-05",
+    "gun_sayisi": 3,
     "durum": "acik",
     "dogrulama": "doğrulandı (ahmet)",
     "kanit": "araclar listesi: elif/ahmet/selin için mesaj/talep aracı yok; arac ahmet mesaj_gonder -> 'Bilinmeyen ya da bu rol için kullanılamayan araç'. Pilotta mesajlar sohbet.md ile taklit ediliyor",
@@ -118,8 +118,8 @@
     "tur": "tutarsizlik",
     "onem": "orta",
     "ilk": "2026-10-09",
-    "son": "2026-11-03",
-    "gun_sayisi": 2,
+    "son": "2026-11-05",
+    "gun_sayisi": 3,
     "durum": "acik",
     "dogrulama": "doğrulandı",
     "kanit": "arac selin uygun_kisi_bul '{\"rol\":\"Yazılım Geliştirme Mühendisi\"}' -> uygun_sayisi 1: Selin Kaya",
@@ -229,13 +229,14 @@
     "tur": "eksik_ozellik",
     "onem": "orta",
     "ilk": "2026-11-03",
-    "son": "2026-11-03",
+    "son": "2026-11-05",
     "gun_sayisi": 1,
-    "durum": "acik",
+    "durum": "kapandi",
     "kanit": "pilot araclar ahmet → 18 araç listelendi, hiçbiri oner_* ya da karar yazan araç değil (haftalik_rapor, kapasite_talep, evm_analizi … okuma/analiz). Pilot talimatı \"kararın uygulamaya yazılmadıysa yapılmamış sayılır\" der; Ahmet bugün kararı (Can Erdem kaydırma, işe alım yok) yalnız mesajla iletti.",
     "kim": [
       "ahmet"
-    ]
+    ],
+    "not": "5 Kasım: Ahmet oner_beklenti_yanitla ile 3 kararını uygulamaya yazdı (BL-30); araclar ahmet → oner_beklenti_yanitla var"
   },
   {
     "id": "B-016",
@@ -258,14 +259,15 @@
     "tur": "tutarsizlik",
     "onem": "orta",
     "ilk": "2026-11-03",
-    "son": "2026-11-03",
-    "gun_sayisi": 1,
+    "son": "2026-11-05",
+    "gun_sayisi": 2,
     "durum": "acik",
     "kanit": "arac mert haftalik_rapor {proje:NHR,hafta:2026-H44} → py_puani satırı yok (KLK: \"py_puani\": 8); Mert'in oner_rapor_karari yanıtı biçim denetimi 0 hata/0 uyarı. Kendim yeniden ürettim (alan yok); denetim sonucunu Mert bildirdi.",
     "kim": [
       "mert",
       "ahmet"
-    ]
+    ],
+    "not": "H44 raporu değişmez; H45 NHR raporunda py_puani 5 dolu. Denetim kuralı eksikliği sürüyor"
   },
   {
     "id": "B-018",
@@ -287,8 +289,8 @@
     "tur": "tutarsizlik",
     "onem": "dusuk",
     "ilk": "2026-11-03",
-    "son": "2026-11-03",
-    "gun_sayisi": 1,
+    "son": "2026-11-05",
+    "gun_sayisi": 2,
     "durum": "acik",
     "kanit": "arac mert maliyet_raporu {yil:2026} → \"maliyetlenemeyen_kisi_sayisi\": 1, \"maliyetli_unvan_sayisi\": 4. Kişi adı yok.",
     "kim": [
@@ -301,8 +303,8 @@
     "tur": "tutarsizlik",
     "onem": "dusuk",
     "ilk": "2026-11-03",
-    "son": "2026-11-03",
-    "gun_sayisi": 1,
+    "son": "2026-11-05",
+    "gun_sayisi": 2,
     "durum": "acik",
     "kanit": "arac ahmet kapasite_talep {yil:2026,bolum:U340} → Veri Bilimci planli_proje_aa 31,24, kapasite_aa 32,84, acik_aa 0,59 (32,84−31,24=1,60).",
     "kim": [
@@ -335,6 +337,51 @@
     "kanit": "arac elif oner_tahsis_ayarla {kisi:Onur Çelik,proje:ATL,ay:11,alan:plan,aa:0.4} → \"hata\": \"…2026 planı onayda/kilitli; plan değiştirilemez (gerçekleşen girilebilir).\" Başka yönlendirme yok. Kendim yeniden ürettim.",
     "kim": [
       "elif"
+    ]
+  },
+  {
+    "id": "B-023",
+    "baslik": "PY, tahsisi değiştirmeden önce okuduğu EVM rakamlarını rapora yazdı; tahsis sonrası BAC/VAC/SPI/CPI değişti, NHR raporu iade edildi",
+    "tur": "tutarsizlik",
+    "onem": "orta",
+    "ilk": "2026-11-05",
+    "son": "2026-11-05",
+    "gun_sayisi": 1,
+    "durum": "acik",
+    "kanit": "arac selin evm_analizi {proje:NEHİR Veri Platformu} → bac_butce 5620650, vac_sapma -748460, spi 0.87, cpi 0.88; Burak'ın H45 raporu/beklentisi: BAC 5.572.550, VAC -796.560, SPI 0,86, CPI 0,87; Selin iade etti (rapor aşaması \"Taslak\" — kendim gördüm). Aynı koşuda Burak NHR tahsisini (Aslı 0,7→0,5, Can +0,2) raporu yazmadan sonra değiştirmiş.",
+    "kim": [
+      "burak",
+      "selin",
+      "ahmet"
+    ]
+  },
+  {
+    "id": "B-025",
+    "baslik": "oner_tahsis_ayarla ile açılan yeni tahsis satırı rolsüz; kapasite_talep sahte \"Rol atanmamış 0,4 AA\" açığı gösteriyor",
+    "tur": "tutarsizlik",
+    "onem": "orta",
+    "ilk": "2026-11-05",
+    "son": "2026-11-05",
+    "gun_sayisi": 1,
+    "durum": "acik",
+    "kanit": "arac ahmet kapasite_talep {yil:2026,bolum:U340} → \"Rol atanmamış\": planli_proje_aa 0.4, kapasite_aa 0, acik_aa 0.4; uyarı: \"rolü girilmemiş tahsis satırlarında\". Kaynak: Burak'ın Can Erdem NHR Kasım+Aralık 0,2+0,2 yeni satırı. Kendim yeniden ürettim.",
+    "kim": [
+      "burak",
+      "ahmet"
+    ]
+  },
+  {
+    "id": "B-026",
+    "baslik": "Seed beklenti bkl-nhr-01: durum \"Karşılandı\" ama yanıt \"İnceleniyor; haftaya karar verilecek.\"",
+    "tur": "tutarsizlik",
+    "onem": "dusuk",
+    "ilk": "2026-11-05",
+    "son": "2026-11-05",
+    "gun_sayisi": 1,
+    "durum": "acik",
+    "kanit": "arac mert beklentiler {durum:tumu} → bkl-nhr-01 durum Karşılandı, yanit \"İnceleniyor; haftaya karar verilecek.\", yanıtlayan Ahmet Şahin, açılış 2026-07-01. Kendim yeniden ürettim. [Jira ajanı için not: mock seed verisi]",
+    "kim": [
+      "burak"
     ]
   }
 ]
