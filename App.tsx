@@ -38,6 +38,8 @@ import { inspectStored, KvStore, openIndexedDbStore, rawStoreDump, requestPersis
 import StoreRecovery, { StoreProblem } from './components/StoreRecovery';
 import OtherTabNotice from './components/OtherTabNotice';
 import { createTabLock, TabLock, TabRole } from './utils/tabLock';
+import { confirmLeave } from './utils/unsavedGuard';
+import { confirmDestructive } from './utils/confirmOnce';
 import CloudSyncModal from './components/CloudSyncModal';
 import Header from './components/Header';
 import TaskGallery from './components/TaskGallery';
@@ -151,7 +153,12 @@ const createSampleProject = (): Project =>
 const MODERN_PROJECT_VIEWS: View[] = [View.Overview, View.Roadmap, View.Tasks, View.Kanban, View.Planning, View.Risks, View.Resources, View.Goals, View.Requests, View.Notes, View.AI];
 
 const App: React.FC = () => {
-  const [currentView, setCurrentView] = useState<View>(View.Portfolio);
+  const [currentView, setCurrentViewState] = useState<View>(View.Portfolio);
+  // Ekran değişikliği kaydedilmemiş işi (haftalık rapor taslağı, görev formu) sormadan atmaz (UI-KRC-04)
+  const setCurrentView = useCallback((v: React.SetStateAction<View>) => {
+    if (!confirmLeave()) return;
+    setCurrentViewState(v);
+  }, []);
   const [workspace, setWorkspace] = useState<WorkspaceData | null>(null);
 
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
@@ -381,6 +388,7 @@ const App: React.FC = () => {
   const attention = useMemo(() => (workspace ? reportAttention(workspace) : { reportBadge: 0, meetingBadge: 0, items: [] }), [workspace]);
 
   const handleTodoNavigate = useCallback((item: TodoItem) => {
+    if (!confirmLeave()) return;
     // Proje bağlamı gerekiyorsa önce o projeyi aç, sonra ekrana geç
     if (item.projectId) {
       setWorkspace(prev => (prev && visibleProjectIds(prev, identityOf(prev)).has(item.projectId!) ? { ...prev, activeProjectId: item.projectId! } : prev));
@@ -577,6 +585,21 @@ const App: React.FC = () => {
   }, [updateWorkspace, projectHomeView]);
 
   const handleSetProjectOwner = useCallback((projectId: string, personId: string | undefined) => {
+    // Geri dönülmesi zor değişiklikler onaysız yapılmaz (UI-KRC-14): PY kendi projesini devrederse
+    // projeyi bir daha göremez; sahipsiz proje hiçbir PY'nin kapsamında değildir
+    const ws0 = workspaceRef.current;
+    const project0 = ws0?.projects.find(p => p.id === projectId);
+    if (ws0 && project0 && project0.pmPersonId !== personId) {
+      const me = identityOf(ws0);
+      const name = personId ? (() => { const o = ws0.people.find(p => p.id === personId); return o ? `${o.firstName} ${o.lastName}`.trim() : personId; })() : '';
+      const givingAway = me.role === 'py' && !!me.personId && project0.pmPersonId === me.personId;
+      const message = givingAway
+        ? (personId
+          ? `"${project0.name}" projesini ${name} adlı kişiye devretmek üzeresiniz. Devrettikten sonra bu projeyi göremez ve düzenleyemezsiniz. Devam edilsin mi?`
+          : `"${project0.name}" projesini sahipsiz bırakmak üzeresiniz. Sonra bu projeyi göremez ve düzenleyemezsiniz. Devam edilsin mi?`)
+        : (!personId ? `"${project0.name}" projesi sahipsiz kalacak; hiçbir proje yöneticisi göremeyecek. Devam edilsin mi?` : null);
+      if (message && !window.confirm(message)) return;
+    }
     updateWorkspace(ws => {
       if (!canAssignProjectOwner(ws, identityOf(ws), projectId)) return ws;
       const project = ws.projects.find(p => p.id === projectId);
@@ -590,6 +613,7 @@ const App: React.FC = () => {
   }, [updateWorkspace]);
 
   const handleOpenProject = useCallback((projectId: string) => {
+    if (!confirmLeave()) return;
     updateWorkspace(ws => (visibleProjectIds(ws, identityOf(ws)).has(projectId) ? { ...ws, activeProjectId: projectId } : ws));
     setCurrentView(projectHomeView);
   }, [updateWorkspace, projectHomeView]);
@@ -648,6 +672,7 @@ const App: React.FC = () => {
 
   // ---- Kimlik / RBAC ----
   const handleChangeIdentity = useCallback((role: UserRole, personId?: string) => {
+    if (!confirmLeave()) return;
     updateWorkspace(ws => {
       const next = { ...ws, currentRole: role, currentPersonId: personId };
       // Kapsam değişince görünmeyen bir proje aktifse ilk görünür projeye/portföye geç
@@ -1243,6 +1268,7 @@ const App: React.FC = () => {
 
   // Arayüz tercihi (Ayarlar → Arayüz ya da profil menüsündeki kısayol): anında geçiş
   const handleSetUiStyle = useCallback((uiStyle: UiStyle) => {
+    if (!confirmLeave()) return;
     updateWorkspace(ws => ({ ...ws, settings: { ...ws.settings, uiStyle } }));
     // Genel bakış yalnız modern arayüzde var
     if (uiStyle === 'classic') setCurrentView(v => (v === View.Overview ? View.Roadmap : v));
@@ -1625,7 +1651,15 @@ const App: React.FC = () => {
     const changeTaskStatus = (id: string, s: TaskStatus) => setTasks(prev => prev.map(t => t.id === id ? { ...t, status: s } : t));
     const viewTask = (t: Task) => { setViewingTask(t); setIsDetailModalOpen(true); };
     const editTask = (t: Task) => { setEditingTask(t); setIsFormModalOpen(true); };
-    const deleteTask = (taskId: string) => { if (window.confirm('Emin misiniz?')) setTasks(prev => prev.filter(t => t.id !== taskId)); };
+    // Görev silme: onay hangi görevin silineceğini yazar, çift tıkın ikinci tıkı yok sayılır,
+    // silme geri alınabilir (UI-KRC-03)
+    const deleteTask = (taskId: string) => {
+      const target = tasks.find(t => t.id === taskId);
+      if (!target || !confirmDestructive(`"${target.name}" görevi silinecek. Emin misiniz?`)) return;
+      const snapshot = workspaceRef.current;
+      setTasks(prev => prev.filter(t => t.id !== taskId));
+      if (snapshot) showUndo(`"${target.name}" silindi`, snapshot);
+    };
     const notifyTask = (t: Task) => { setTeamsTask(t); setIsTeamsModalOpen(true); };
     const newTask = () => { if (canWriteActive) { setEditingTask(null); setIsFormModalOpen(true); } };
     const celebrate = (message: string) => setEgg({ kind: 'celebrate', message });
@@ -1819,7 +1853,7 @@ const App: React.FC = () => {
             tasks={tasks} resources={resources}
             onEditTask={(t) => { setEditingTask(t); setIsFormModalOpen(true); }} onViewTask={(t) => { setViewingTask(t); setIsDetailModalOpen(true); }}
             onNotifyTask={(t) => { setTeamsTask(t); setIsTeamsModalOpen(true); }} onNewTask={() => { setEditingTask(null); setIsFormModalOpen(true); }}
-            onDeleteTask={(taskId) => { if(window.confirm('Emin misiniz?')) setTasks(prev => prev.filter(t => t.id !== taskId)); }}
+            onDeleteTask={deleteTask}
             onDataImport={(nt, nr) => { setTasks(prev => [...prev, ...nt]); setResources(prev => [...prev, ...nr]); }}
             onTaskStatusChange={(id, s) => setTasks(prev => prev.map(t => t.id === id ? { ...t, status: s } : t))}
           />
@@ -1861,7 +1895,7 @@ const App: React.FC = () => {
             onNewTask={() => { setEditingTask(null); setIsFormModalOpen(true); }}
             onViewTask={(t) => { setViewingTask(t); setIsDetailModalOpen(true); }}
             onEditTask={(t) => { setEditingTask(t); setIsFormModalOpen(true); }}
-            onDeleteTask={(taskId) => { if(window.confirm('Emin misiniz?')) setTasks(prev => prev.filter(t => t.id !== taskId)); }}
+            onDeleteTask={deleteTask}
           />
         );
       case View.Goals:

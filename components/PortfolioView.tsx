@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Person, Project, ProjectStatus, RagStatus, TaskStatus } from '../types';
 import { canAssignProjectOwner, canCreateProject, canEditProjectContent, Identity } from '../utils/rbac';
+import { confirmDestructive } from '../utils/confirmOnce';
 
 interface PortfolioViewProps {
   projects: Project[];
@@ -129,7 +130,7 @@ const ProjectCard: React.FC<{
             </button>
           )}
           {canManageOwner && (
-            <button aria-label="Projeyi sil" onClick={() => { if (window.confirm(`"${project.name}" projesi ve tüm verileri silinecek. Emin misiniz?`)) onDelete(); }} className="w-7 h-7 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors" title="Projeyi sil">
+            <button aria-label="Projeyi sil" onClick={() => { if (confirmDestructive(`"${project.name}" projesi ve tüm verileri silinecek. Emin misiniz?`)) onDelete(); }} className="w-7 h-7 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors" title="Projeyi sil">
               <i aria-hidden="true" className="fa-solid fa-trash text-xs"></i>
             </button>
           )}

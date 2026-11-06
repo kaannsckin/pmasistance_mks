@@ -8,6 +8,7 @@ import { calculatePertFuzzyPert } from '../../utils/timeline';
 import { useAiRun } from '../assistant/AiButton';
 import { activeVersion } from '../../utils/projectOverview';
 import DecimalInput from '../DecimalInput';
+import { useUnsavedGuard } from '../useUnsavedGuard';
 import { Icon } from './icons';
 import { PRIORITY_META, sprintLabel, TASK_STATUS_LABELS, uniq } from './taskMeta';
 import { Field, Sheet } from './ui';
@@ -61,6 +62,14 @@ const TaskFormSheet: React.FC<TaskFormSheetProps> = ({ task, tasks, resources, p
     // Müşteri isteğinden açılan taslak listede yoktur → "yeni görev" sayılır
     const isNew = !task || !tasks.some(t => t.id === task.id);
     const [d, setD] = useState<Draft>(() => (task ? fromTask(task) : emptyDraft(resources, tasks)));
+    // Yazılanlar Esc, arka plana tıklama ya da Vazgeç ile sessizce kaybolmasın (UI-KRC-09)
+    const [initialDraft] = useState(() => JSON.stringify(d));
+    const dirty = JSON.stringify(d) !== initialDraft;
+    useUnsavedGuard('gorev-formu', dirty, 'Görev kaydedilmedi. Yazdıklarınız silinsin mi?');
+    const requestClose = () => {
+        if (dirty && !window.confirm('Görev kaydedilmedi. Yazdıklarınız silinsin mi?')) return;
+        onClose();
+    };
     const [objectiveId, setObjectiveId] = useState(() => (task?.keyResultId ? objectives.find(o => o.keyResults.some(kr => kr.id === task.keyResultId))?.id || '' : ''));
     const [labelText, setLabelText] = useState(() => (task?.labels || []).join(', '));
     const [touched, setTouched] = useState(false);
@@ -139,11 +148,11 @@ const TaskFormSheet: React.FC<TaskFormSheetProps> = ({ task, tasks, resources, p
     return (
         <Sheet
             title={isNew ? 'Yeni görev' : 'Görevi düzenle'}
-            onClose={onClose}
+            onClose={requestClose}
             wide
             footer={<>
                 <span className="flex-1"></span>
-                <button type="button" className="m-btn m-btn-plain" onClick={onClose}>Vazgeç</button>
+                <button type="button" className="m-btn m-btn-plain" onClick={requestClose}>Vazgeç</button>
                 <button type="button" className="m-btn m-btn-primary" onClick={save}>{isNew ? 'Görevi ekle' : 'Kaydet'}</button>
             </>}
         >

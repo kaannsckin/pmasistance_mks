@@ -8,6 +8,8 @@ import { defineConfig } from 'vite';
  * `node` ile tek başına çalışır. Ayrıntı: docs/MCP_KURULUM.md
  */
 export default defineConfig({
+    // Tarayıcı dosyaları (public/: servis çalışanı, manifest) Node paketine girmez
+    publicDir: false,
     resolve: {
         // undici'nin kullanılmayan SQLite önbelleği deneysel özellik uyarısı basmasın
         alias: { '@': path.resolve(__dirname, '.'), 'node:sqlite': path.resolve(__dirname, 'server/mcp/sqliteStub.ts') },

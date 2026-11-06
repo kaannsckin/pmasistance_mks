@@ -3,6 +3,7 @@ import {
     createProject,
     legacyToProject,
     migrateLegacyWorkspace,
+    normalizeTask,
     normalizeWorkspace,
     parseImportedJson,
     resolveWorkspaceFromStorage,
@@ -135,5 +136,26 @@ describe('normalizeWorkspace', () => {
         const ws = normalizeWorkspace({ projects: [p] });
         expect(ws.projects[0].workPackages).toEqual([]);
         expect(ws.projects[0].status).toBe('devam');
+    });
+});
+
+describe('normalizeTask (UI-KRC-06: bozuk yedek beyaz ekran)', () => {
+    it('boş görev nesnesi çizilebilir bir göreve onarılır', () => {
+        const t = normalizeTask({}, 0);
+        expect(t.name).toBe('Adsız görev');
+        expect(t.time).toEqual({ best: 0, avg: 0, worst: 0 });
+        expect(typeof t.id).toBe('string');
+        expect(t.predecessor).toBeNull();
+    });
+    it('geçerli görev aynı nesne olarak döner', () => {
+        const ok = { id: 't1', name: 'A', status: 'ToDo', priority: 'High', version: 2, predecessor: null, unit: 'U310', resourceName: 'K', jiraId: '', notes: '', availability: true, time: { best: 1, avg: 2, worst: 3 } };
+        expect(normalizeTask(ok)).toBe(ok);
+    });
+    it('eski proje yedeğinde ve çalışma alanında görevler onarılır', () => {
+        const r = parseImportedJson(JSON.stringify({ name: 'Bozuk', tasks: [{}] }), 'Bozuk');
+        expect(r.kind).toBe('legacyProject');
+        if (r.kind === 'legacyProject') expect(r.project.tasks[0].name).toBe('Adsız görev');
+        const ws = normalizeWorkspace({ projects: [{ id: 'p', name: 'P', tasks: [{ name: 'Yarım' }] } as never] });
+        expect(ws.projects[0].tasks[0].time.avg).toBe(0);
     });
 });

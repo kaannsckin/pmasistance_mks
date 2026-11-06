@@ -7,6 +7,8 @@ import { defineConfig } from 'vite';
  * dist-pilot/pilot.mjs. Ayrıntı: pilot/README.md
  */
 export default defineConfig({
+    // Tarayıcı dosyaları (public/: servis çalışanı, manifest) Node paketine girmez
+    publicDir: false,
     resolve: {
         // undici'nin kullanılmayan SQLite önbelleği deneysel özellik uyarısı basmasın
         alias: { '@': path.resolve(__dirname, '.'), 'node:sqlite': path.resolve(__dirname, 'server/mcp/sqliteStub.ts') },

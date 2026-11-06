@@ -1,4 +1,4 @@
-import { Project, ProjectData, ProjectSettings, WorkspaceData } from '../types';
+import { Project, ProjectData, ProjectSettings, Task, TaskStatus, WorkspaceData } from '../types';
 import { migrateRolePermissions, PERMISSIONS_REV } from './permissions';
 
 export const APP_VERSION = '2.2.0';
@@ -62,10 +62,47 @@ export const createEmptyWorkspace = (): WorkspaceData => ({
 });
 
 /** Eski tek proje verisini (v1.x yedek/localStorage) bir Project'e dönüştürür. */
+const TASK_STATUSES = new Set<string>(Object.values(TaskStatus));
+const TASK_PRIORITIES = new Set<string>(['Blocker', 'High', 'Medium', 'Low']);
+const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : 0);
+const str = (v: unknown): string => (typeof v === 'string' ? v : '');
+
+/**
+ * Eksik ya da bozuk alanlı görevi ekranların güvenle çizebileceği biçime getirir (UI-KRC-06).
+ * Bozuk bir yedekten gelen `{}` görevi uygulamayı beyaz ekrana düşürüyordu; depoya yazıldıysa
+ * her açılışta. Geçerli görev aynı nesne olarak döner (gereksiz yeniden yazım olmaz).
+ */
+export const normalizeTask = (raw: unknown, index = 0): Task => {
+    const t = (raw && typeof raw === 'object' ? raw : {}) as Partial<Task> & Record<string, unknown>;
+    const time = (t.time && typeof t.time === 'object' ? t.time : {}) as Partial<Task['time']>;
+    const valid = typeof t.id === 'string' && t.id !== '' && typeof t.name === 'string'
+        && TASK_STATUSES.has(t.status as string) && TASK_PRIORITIES.has(t.priority as string)
+        && typeof t.version === 'number' && typeof time.best === 'number' && typeof time.avg === 'number' && typeof time.worst === 'number'
+        && typeof t.unit === 'string' && typeof t.resourceName === 'string' && typeof t.jiraId === 'string' && typeof t.notes === 'string';
+    if (valid) return t as Task;
+    return {
+        ...t,
+        id: typeof t.id === 'string' && t.id ? t.id : `task-onarildi-${index}-${Math.random().toString(36).slice(2, 7)}`,
+        name: typeof t.name === 'string' && t.name.trim() ? t.name : 'Adsız görev',
+        status: TASK_STATUSES.has(t.status as string) ? (t.status as TaskStatus) : TaskStatus.ToDo,
+        priority: TASK_PRIORITIES.has(t.priority as string) ? (t.priority as Task['priority']) : 'Medium',
+        version: typeof t.version === 'number' && Number.isFinite(t.version) ? t.version : 0,
+        predecessor: typeof t.predecessor === 'string' ? t.predecessor : null,
+        unit: str(t.unit),
+        resourceName: str(t.resourceName),
+        jiraId: str(t.jiraId),
+        notes: str(t.notes),
+        time: { best: num(time.best), avg: num(time.avg), worst: num(time.worst) },
+        availability: typeof t.availability === 'boolean' ? t.availability : num(time.avg) > 0,
+    } as Task;
+};
+
+const normalizeTasks = (tasks: unknown): Task[] => (Array.isArray(tasks) ? tasks.map(normalizeTask) : []);
+
 export const legacyToProject = (legacy: ProjectData, name: string): Project => {
     const s = legacy.settings || ({} as ProjectData['settings']);
     return createProject(name, {
-        tasks: legacy.tasks || [],
+        tasks: normalizeTasks(legacy.tasks),
         resources: legacy.resources || [],
         notes: legacy.notes || [],
         customerRequests: legacy.customerRequests || [],
@@ -108,7 +145,7 @@ export const normalizeWorkspace = (raw: Partial<WorkspaceData>): WorkspaceData =
         ...p,
         id: p.id || createProjectId(),
         status: p.status || 'devam',
-        tasks: p.tasks || [],
+        tasks: normalizeTasks(p.tasks),
         resources: p.resources || [],
         notes: p.notes || [],
         customerRequests: p.customerRequests || [],

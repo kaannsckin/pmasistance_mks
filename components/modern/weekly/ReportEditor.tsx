@@ -1,6 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { Abbreviation, CustomerMeeting, MeetingDetails, ProjectAiProfile, ReportAiLogEntry, ReportCategory, ReportItem, WeeklyReport, WorklogEntry, WorkspaceData } from '../../../types';
 import { cleanProjectProfile, PROFILE_LIMITS } from '../../../utils/ai/projectProfile';
+import { useUnsavedGuard } from '../../useUnsavedGuard';
 import { suggestionLogEntry } from '../../../utils/ai/reportAiStats';
 import { ROLE_LABELS } from '../../../utils/allocations';
 import { GroundingIssue, reportGateWarning } from '../../../utils/ai/reportEval';
@@ -293,6 +294,8 @@ const ProjectCardSheet: React.FC<{ profile?: ProjectAiProfile; canEdit: boolean;
 const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report, isNew, dictionary, health, onBack, onSave, onAdvance, onReturn, onSetJiraKey, onOpenMeetings, onLogAi, onSaveProjectProfile, onSetExemplar, onHelp }) => {
     const [draft, setDraft] = useState<WeeklyReport>(report);
     const [dirty, setDirty] = useState(false);
+    // Kaydedilmemiş taslak: kenar çubuğu, arayüz değişimi, yenileme ve kapanışta sorulur (UI-KRC-04)
+    useUnsavedGuard('haftalik-rapor', dirty, 'Haftalık rapor taslağında kaydedilmemiş değişiklikler var. Çıkılsın mı?');
     const [notice, setNotice] = useState<NoticeState>(null);
     const [addMenu, setAddMenu] = useState(false);
     const [returning, setReturning] = useState(false);
