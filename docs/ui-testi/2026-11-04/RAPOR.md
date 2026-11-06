@@ -17,7 +17,17 @@ Açılışta verdiğin iki örnek doğrulandı: "modernde beyaz mod çalışmıy
 | UI-KRC-02, UI-KRC-13 iki sekme | Düzeltildi: tek etkin sekme; öteki sekme "Burada kullan" ile taze veriyle devralıyor | `0da1439` |
 | UI-AKS-02 yetki (UI-AKS-03 dahil) | Düzeltildi: açık proje kapsamla sınırlı, proje yazımları merkezde korunuyor | `8c947fb` |
 
-Doğrulama koordinatörün yeniden ürettiği senaryolarla yapıldı (bozuk depo üç biçimde, iki sekmede görev ve rapor gönderimi, PY ve müdür yetkisi), ayrıca demo yolu testi 28/28 geçti. Bağımsız doğrulama bir sonraki çarpışma koşusunun işi.
+| **K2** (19 satırın 19'u) | | |
+| 3.1 varsayılan Sürüm 1 · 3.3 ondalık süre · 3.2 aşırı tahsis sayısı | Düzeltildi | `7c98907` |
+| 1.3 kaydedilmemiş iş · 1.4 çift tık silme · 2.2 sahiplik devri onayı · 1.5 hata sınırı ve bozuk yedek · 1.6 çevrimdışı | Düzeltildi | `81204cd` |
+| 4.1 Gece/Gündüz (Sistem/Gündüz/Gece) · 4.2 koyu modda eski ekranlar · 4.3 Uygula düğmesi · 4.4 Ayrıntılı analiz · 4.5 segment sayacı · 4.6 klasik kontrast | Düzeltildi | `1268d3e` |
+| 5.1 Ayarlar penceresi · 5.2 pencere odağı · 5.3 anahtarlar · 6.1 çekmece · 7.1 yüksek karşıtlık | Düzeltildi | `eeb79ae` |
+
+K2'lerle birlikte kapanan K3'ler: UI-KRC-08, UI-KRC-09, UI-ERS-06, UI-ERS-07 (K4), UI-ERS-08, UI-ERS-12, UI-GRS-05, UI-GRS-18.
+
+Doğrulama koordinatörün yeniden ürettiği senaryolarla yapıldı; demo yolu testi her iki turdan sonra 28/28 geçti. Ölçülen K2 sonuçlarından: eşik altı metin Ayrıntılı analiz koyu 78 → 1, açık 42 → 0; Kapasite–talep koyu 207 → 2; Portföy klasik açık 24 → 0. Bağımsız doğrulama bir sonraki çarpışma koşusunun işi.
+
+Açık kalanlar: klasik koyu temada Portföy'de 4 küçük metin (yüzde göstergeleri 2,84:1, "Asistan" 2,9:1); klasik arayüzde müdür "Yeni Görev"i görüyor (kaydetse de yazılmıyor); UI-ERS-10 "Diğer araçlar" menüsünde ok tuşu; UI-AKS-13 yenilemede konum kaybı.
 
 | | |
 |---|---|
