@@ -18,6 +18,8 @@ interface ModernTaskListProps {
     onDeleteTask: (id: string) => void;
     onNotifyTask?: (task: Task) => void;
     onDataImport: (tasks: Task[], resources: Resource[]) => void;
+    /** Salt okunur (yetki yok): içe aktarma, durum değişikliği ve görev işlemleri gizlenir */
+    readOnly?: boolean;
     onCelebrate?: (message: string) => void;
     /** Admin görünüm ayarı: en düşük öncelik ve sıralama */
     minPriority?: TaskPriority;
@@ -30,7 +32,7 @@ const lower = (s: string) => s.toLocaleLowerCase('tr-TR');
 
 type ImportKind = 'excel' | 'jira' | 'csv';
 
-const ModernTaskList: React.FC<ModernTaskListProps> = ({ tasks, resources, sprintNames, onStatusChange, onViewTask, onEditTask, onDeleteTask, onNotifyTask, onDataImport, onCelebrate, minPriority = 'Low' as TaskPriority, sortKey = 'smart' as TaskSortKey }) => {
+const ModernTaskList: React.FC<ModernTaskListProps> = ({ tasks, resources, sprintNames, onStatusChange, onViewTask, onEditTask, onDeleteTask, onNotifyTask, onDataImport, onCelebrate, readOnly = false, minPriority = 'Low' as TaskPriority, sortKey = 'smart' as TaskSortKey }) => {
     const [query, setQuery] = useState('');
     const [status, setStatus] = useState<string>('all');
     const [person, setPerson] = useState<string>('all');
@@ -66,6 +68,7 @@ const ModernTaskList: React.FC<ModernTaskListProps> = ({ tasks, resources, sprin
     })).filter(g => g.rows.length > 0), [filtered, sortKey]);
 
     const changeStatus = (id: string, next: TaskStatus) => {
+        if (readOnly) return;
         const message = onCelebrate ? celebrationFor(tasks, id, next, sprintNames) : null;
         if (message) onCelebrate!(message);
         onStatusChange(id, next);
@@ -144,8 +147,8 @@ const ModernTaskList: React.FC<ModernTaskListProps> = ({ tasks, resources, sprin
                         <>
                             <div className="fixed inset-0 z-40" onClick={() => setIoOpen(false)} aria-hidden="true"></div>
                             <div role="menu" className="absolute right-0 top-full mt-2 w-64 m-surface m-pop rounded-2xl py-1.5 z-50">
-                                <p className="px-3.5 pt-1 pb-1 text-[13px] font-semibold m-text-3">İçe aktar</p>
-                                {([['excel', 'Excel dosyasından'], ['jira', 'Jira CSV dosyasından'], ['csv', 'CSV şablonundan']] as [ImportKind, string][]).map(([k, label]) => (
+                                {!readOnly && <p className="px-3.5 pt-1 pb-1 text-[13px] font-semibold m-text-3">İçe aktar</p>}
+                                {!readOnly && ([['excel', 'Excel dosyasından'], ['jira', 'Jira CSV dosyasından'], ['csv', 'CSV şablonundan']] as [ImportKind, string][]).map(([k, label]) => (
                                     <button key={k} type="button" role="menuitem" onClick={() => startImport(k)} className="m-row-link w-full flex items-center gap-3 min-h-[44px] px-3.5 text-[15px]">
                                         <span className="m-text-3"><Icon name="upload" size={18} /></span>{label}
                                     </button>
@@ -232,7 +235,7 @@ const ModernTaskList: React.FC<ModernTaskListProps> = ({ tasks, resources, sprin
                                                 {late > 0 && <span className="text-[13px] m-ink-bad">{late} gün gecikti</span>}
                                                 {late === 0 && missingEstimate(t) && <span className="text-[13px] m-ink-warn">Süre tahmini yok</span>}
                                             </span>
-                                            <TaskActionsMenu task={t} onStatusChange={changeStatus} onEdit={onEditTask} onDelete={onDeleteTask} onNotify={onNotifyTask} />
+                                            {!readOnly && <TaskActionsMenu task={t} onStatusChange={changeStatus} onEdit={onEditTask} onDelete={onDeleteTask} onNotify={onNotifyTask} />}
                                         </div>
                                     );
                                 })}

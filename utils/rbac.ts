@@ -1,6 +1,6 @@
 import { PermissionKey, PlanLock, Project, UserRole, WorkspaceData } from '../types';
 import { getPlanLockStatus } from './allocations';
-import { can, canFor, PermissionHolder, permissionsFor } from './permissions';
+import { can, canFor, isManagementRole, PermissionHolder, permissionsFor } from './permissions';
 
 /**
  * RBAC — kimlik + sahiplik + net kapsam.
@@ -94,6 +94,14 @@ export const canEditProjectContent = (ws: WsLike, id: Identity, projectId: strin
     const project = ws.projects.find(p => p.id === projectId);
     return !!project && ownsProject(project, id);
 };
+
+/**
+ * Proje verisine (görev, kaynak, not, hedef, ayar…) herhangi bir yoldan yazılabilir mi? (UI-AKS-02)
+ * Kapsam dışı projeye ve salt okunur yönetim rollerine (müdür, PYB sorumlusu, admin) hiçbir
+ * yoldan yazılmaz. Ekran bazındaki daha dar kurallar (ör. riskler yalnız sahip PM) ayrıca geçerlidir.
+ */
+export const canWriteProject = (ws: WsLike, id: Identity, projectId: string): boolean =>
+    !isManagementRole(id.role) && visibleProjectIds(ws, id).has(projectId);
 
 /** Yeni proje oluşturabilir mi? */
 export const canCreateProject = (id: Identity): boolean => can(id, 'project.create');

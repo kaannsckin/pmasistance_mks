@@ -15,6 +15,8 @@ interface ModernBoardProps {
     onDeleteTask: (id: string) => void;
     onNotifyTask?: (task: Task) => void;
     onNewTask: () => void;
+    /** Salt okunur (yetki yok): ekleme, sürükleme, durum değişikliği ve görev işlemleri gizlenir */
+    readOnly?: boolean;
     /** Sürüm ya da proje tamamen bitince (sürpriz kutlama) */
     onCelebrate?: (message: string) => void;
     /** Admin görünüm ayarı: en düşük öncelik ve sıralama */
@@ -24,7 +26,7 @@ interface ModernBoardProps {
 
 const COLUMNS: BoardColumn[] = [TaskStatus.ToDo, TaskStatus.InProgress, TaskStatus.Done];
 
-const ModernBoard: React.FC<ModernBoardProps> = ({ tasks, sprintNames, onStatusChange, onViewTask, onEditTask, onDeleteTask, onNotifyTask, onNewTask, onCelebrate, minPriority = 'Low' as TaskPriority, sortKey = 'smart' as TaskSortKey }) => {
+const ModernBoard: React.FC<ModernBoardProps> = ({ tasks, sprintNames, onStatusChange, onViewTask, onEditTask, onDeleteTask, onNotifyTask, onNewTask, onCelebrate, readOnly = false, minPriority = 'Low' as TaskPriority, sortKey = 'smart' as TaskSortKey }) => {
     const [sprint, setSprint] = useState<string>('all');
     const [person, setPerson] = useState<string>('all');
     const [dragOver, setDragOver] = useState<BoardColumn | null>(null);
@@ -50,7 +52,7 @@ const ModernBoard: React.FC<ModernBoardProps> = ({ tasks, sprintNames, onStatusC
 
     const changeStatus = (id: string, status: TaskStatus) => {
         const task = tasks.find(t => t.id === id);
-        if (!task || columnOf(task.status) === status) return;
+        if (readOnly || !task || columnOf(task.status) === status) return;
         const message = onCelebrate ? celebrationFor(tasks, id, status, sprintNames) : null;
         if (message) onCelebrate!(message);
         onStatusChange(id, status);
@@ -94,9 +96,11 @@ const ModernBoard: React.FC<ModernBoardProps> = ({ tasks, sprintNames, onStatusC
                                 <span aria-hidden="true" className="w-3 h-3 rounded-full box-border" style={{ border: `2px solid ${meta.ring}`, background: meta.fill }}></span>
                                 <h2 className="m-0 text-[17px] font-semibold m-text">{meta.label}</h2>
                                 <span className="text-[15px] m-text-3 m-tabular">{list.length}</span>
-                                <button type="button" className="m-icon-btn ml-auto" style={{ color: 'var(--m-accent)' }} aria-label={`${meta.label}: yeni görev`} onClick={onNewTask}>
-                                    <Icon name="plus" strokeWidth={2} />
-                                </button>
+                                {!readOnly && (
+                                    <button type="button" className="m-icon-btn ml-auto" style={{ color: 'var(--m-accent)' }} aria-label={`${meta.label}: yeni görev`} onClick={onNewTask}>
+                                        <Icon name="plus" strokeWidth={2} />
+                                    </button>
+                                )}
                             </div>
                             {list.length === 0 && <p className="m-0 px-3 py-4 text-[14px] m-text-3 rounded-2xl border-2 border-dashed m-sep text-center">Görev yok</p>}
                             {list.map(t => {
@@ -107,9 +111,9 @@ const ModernBoard: React.FC<ModernBoardProps> = ({ tasks, sprintNames, onStatusC
                                 return (
                                     <article
                                         key={t.id}
-                                        draggable
+                                        draggable={!readOnly}
                                         onDragStart={(e) => { e.dataTransfer.setData('text/plain', t.id); e.dataTransfer.effectAllowed = 'move'; }}
-                                        className="m-surface rounded-[14px] flex items-start gap-1 pl-4 pr-1 py-1 cursor-grab active:cursor-grabbing"
+                                        className={`m-surface rounded-[14px] flex items-start gap-1 pl-4 pr-1 py-1 ${readOnly ? '' : 'cursor-grab active:cursor-grabbing'}`}
                                     >
                                         <button type="button" onClick={() => onViewTask(t)} className="flex-1 min-w-0 flex flex-col gap-2 py-2.5 text-left bg-transparent border-0 p-0 cursor-pointer" style={{ font: 'inherit' }}>
                                             <span className="flex items-center gap-2 flex-wrap">
@@ -129,7 +133,7 @@ const ModernBoard: React.FC<ModernBoardProps> = ({ tasks, sprintNames, onStatusC
                                                 )}
                                             </span>
                                         </button>
-                                        <TaskActionsMenu task={t} onStatusChange={changeStatus} onEdit={onEditTask} onDelete={onDeleteTask} onNotify={onNotifyTask} />
+                                        {!readOnly && <TaskActionsMenu task={t} onStatusChange={changeStatus} onEdit={onEditTask} onDelete={onDeleteTask} onNotify={onNotifyTask} />}
                                     </article>
                                 );
                             })}

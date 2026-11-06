@@ -14,7 +14,7 @@ import {
 } from './utils/workspace';
 import { canEditPool, createAllocation, EffortField, getPlanLockStatus, ROLE_LABELS, setAllocationCell, upsertPlanLock } from './utils/allocations';
 import { applyPoolImport, PoolImportResult } from './utils/poolImporter';
-import { canCreateProject, canEditProjectContent, identityFor, identityOf, identityNeedsPerson as computeNeedsPerson, managedDepartmentCode, ownsProject, visibleProjectIds } from './utils/rbac';
+import { canAssignProjectOwner, canCreateProject, canEditProjectContent, canWriteProject, identityFor, identityOf, identityNeedsPerson as computeNeedsPerson, managedDepartmentCode, ownsProject, visibleProjectIds } from './utils/rbac';
 import { can, isConsoleRole, isManagementRole, PERMISSION_BY_KEY, resetRolePermissions, setRolePermission } from './utils/permissions';
 import { applyPreset, projectPassesView, resetRoleView, roleViewOf, sectionOfView, taskPassesView, updateRoleView, VIEW_PRESETS, ViewPresetKey } from './utils/viewConfig';
 import { AdminSection, ADMIN_SECTIONS } from './components/modern/adminSections';
@@ -302,13 +302,18 @@ const App: React.FC = () => {
   }, []);
 
   const settings = workspace?.settings;
-  const activeProject = useMemo(
-    () => workspace?.projects.find(p => p.id === workspace.activeProjectId) ?? null,
-    [workspace]
-  );
 
   // ---- Kimlik + kapsam ----
   const identity = useMemo(() => (workspace ? identityOf(workspace) : { role: 'py' as UserRole }), [workspace]);
+  // Açık proje yalnız kimliğin kapsamından seçilir (UI-AKS-02): PY başka PY'nin projesini
+  // (görevlerini, notlarını) hiçbir yoldan açamaz; kapsam dışı activeProjectId yok sayılır
+  const scopeIds = useMemo(() => (workspace ? visibleProjectIds(workspace, identity) : new Set<string>()), [workspace, identity]);
+  const activeProject = useMemo(
+    () => workspace?.projects.find(p => p.id === workspace.activeProjectId && scopeIds.has(p.id)) ?? null,
+    [workspace, scopeIds]
+  );
+  // Açık projeye yazabilir mi (salt okunur yönetim rolleri ve kapsam dışı: hayır)
+  const canWriteActive = !!workspace && !!activeProject && canWriteProject(workspace, identity, activeProject.id);
   // Ekran yetkileri (admin değiştirebilir; not gizliliği kilitli)
   const canExecutive = can(identity, 'screen.executive');
   const canAdmin = can(identity, 'screen.admin');
@@ -378,7 +383,7 @@ const App: React.FC = () => {
   const handleTodoNavigate = useCallback((item: TodoItem) => {
     // Proje bağlamı gerekiyorsa önce o projeyi aç, sonra ekrana geç
     if (item.projectId) {
-      setWorkspace(prev => (prev ? { ...prev, activeProjectId: item.projectId! } : prev));
+      setWorkspace(prev => (prev && visibleProjectIds(prev, identityOf(prev)).has(item.projectId!) ? { ...prev, activeProjectId: item.projectId! } : prev));
     }
     setCurrentView(item.view);
   }, []);
@@ -479,6 +484,8 @@ const App: React.FC = () => {
       ...ws,
       projects: ws.projects.map(p => {
         if (p.id !== (id ?? ws.activeProjectId)) return p;
+        // Merkezi koruma (UI-AKS-02): kapsam dışı projeye ve salt okunur yönetim rollerine yazılmaz
+        if (!canWriteProject(ws, identityOf(ws), p.id)) return p;
         const next = updater(p);
         if (next === p) return p;
         const now = new Date();
@@ -493,6 +500,7 @@ const App: React.FC = () => {
   // Risk güncellemesi + "Ne değişti?" günlüğü: eklenen/kapatılan riskleri yakalar
   const handleUpdateActiveRisks = useCallback((risks: Risk[]) => {
     updateWorkspace(ws => {
+      if (!ws.activeProjectId || !canEditProjectContent(ws, identityOf(ws), ws.activeProjectId)) return ws;
       const proj = ws.projects.find(p => p.id === ws.activeProjectId);
       let next: WorkspaceData = {
         ...ws,
@@ -570,6 +578,7 @@ const App: React.FC = () => {
 
   const handleSetProjectOwner = useCallback((projectId: string, personId: string | undefined) => {
     updateWorkspace(ws => {
+      if (!canAssignProjectOwner(ws, identityOf(ws), projectId)) return ws;
       const project = ws.projects.find(p => p.id === projectId);
       const ownerName = personId ? (() => { const o = ws.people.find(p => p.id === personId); return o ? `${o.firstName} ${o.lastName}`.trim() : personId; })() : 'boş';
       const next = {
@@ -581,7 +590,7 @@ const App: React.FC = () => {
   }, [updateWorkspace]);
 
   const handleOpenProject = useCallback((projectId: string) => {
-    updateWorkspace(ws => ({ ...ws, activeProjectId: projectId }));
+    updateWorkspace(ws => (visibleProjectIds(ws, identityOf(ws)).has(projectId) ? { ...ws, activeProjectId: projectId } : ws));
     setCurrentView(projectHomeView);
   }, [updateWorkspace, projectHomeView]);
 
@@ -591,8 +600,10 @@ const App: React.FC = () => {
 
   const handleDeleteProject = useCallback((projectId: string) => {
     const snapshot = workspaceRef.current;
-    const removed = snapshot?.projects.find(p => p.id === projectId);
+    if (!snapshot || !canAssignProjectOwner(snapshot, identityOf(snapshot), projectId)) return;
+    const removed = snapshot.projects.find(p => p.id === projectId);
     updateWorkspace(ws => {
+      if (!canAssignProjectOwner(ws, identityOf(ws), projectId)) return ws;
       const projects = ws.projects.filter(p => p.id !== projectId);
       const next = {
         ...ws,
@@ -601,18 +612,19 @@ const App: React.FC = () => {
       };
       return appendAudit(next, 'project.delete', `"${removed?.name || projectId}" projesi silindi`);
     });
-    if (snapshot) showUndo(`"${removed?.name || 'Proje'}" silindi`, snapshot);
+    showUndo(`"${removed?.name || 'Proje'}" silindi`, snapshot);
   }, [updateWorkspace, showUndo]);
 
   const handleRenameProject = useCallback((projectId: string, name: string) => {
-    updateWorkspace(ws => ({
+    updateWorkspace(ws => (canEditProjectContent(ws, identityOf(ws), projectId) ? {
       ...ws,
       projects: ws.projects.map(p => p.id === projectId ? { ...p, name, updatedAt: new Date().toISOString() } : p),
-    }));
+    } : ws));
   }, [updateWorkspace]);
 
   const handleSetProjectRag = useCallback((projectId: string, rag: RagStatus | undefined, ragNote?: string) => {
     updateWorkspace(ws => {
+      if (!canEditProjectContent(ws, identityOf(ws), projectId)) return ws;
       const prev = ws.projects.find(p => p.id === projectId);
       const next = {
         ...ws,
@@ -628,10 +640,10 @@ const App: React.FC = () => {
   }, [updateWorkspace]);
 
   const handleSetProjectStatus = useCallback((projectId: string, status: ProjectStatus) => {
-    updateWorkspace(ws => ({
+    updateWorkspace(ws => (canAssignProjectOwner(ws, identityOf(ws), projectId) ? {
       ...ws,
       projects: ws.projects.map(p => p.id === projectId ? { ...p, status, updatedAt: new Date().toISOString() } : p),
-    }));
+    } : ws));
   }, [updateWorkspace]);
 
   // ---- Kimlik / RBAC ----
@@ -1615,7 +1627,7 @@ const App: React.FC = () => {
     const editTask = (t: Task) => { setEditingTask(t); setIsFormModalOpen(true); };
     const deleteTask = (taskId: string) => { if (window.confirm('Emin misiniz?')) setTasks(prev => prev.filter(t => t.id !== taskId)); };
     const notifyTask = (t: Task) => { setTeamsTask(t); setIsTeamsModalOpen(true); };
-    const newTask = () => { setEditingTask(null); setIsFormModalOpen(true); };
+    const newTask = () => { if (canWriteActive) { setEditingTask(null); setIsFormModalOpen(true); } };
     const celebrate = (message: string) => setEgg({ kind: 'celebrate', message });
     const convertRequest = (r: CustomerRequest) => {
       setConvertingRequestId(r.id);
@@ -1752,7 +1764,7 @@ const App: React.FC = () => {
           canEdit={canEditProjectContent(workspace, identity, activeProject.id)}
           onNavigate={setCurrentView}
           onViewTask={viewTask}
-          onNewTask={newTask}
+          onNewTask={canWriteActive ? newTask : undefined}
           onSetRag={handleSetProjectRag}
           onCelebrate={celebrate}
           sections={roleView.projectSections}
@@ -1773,6 +1785,7 @@ const App: React.FC = () => {
           onNotifyTask={notifyTask}
           onNewTask={newTask}
           onCelebrate={celebrate}
+          readOnly={!canWriteActive}
           minPriority={roleView.minTaskPriority}
           sortKey={roleView.taskSort}
         />
@@ -1791,6 +1804,7 @@ const App: React.FC = () => {
           onNotifyTask={notifyTask}
           onDataImport={(nt: Task[], nr: Resource[]) => { setTasks(prev => [...prev, ...nt]); setResources(prev => [...prev, ...nr]); }}
           onCelebrate={celebrate}
+          readOnly={!canWriteActive}
           minPriority={roleView.minTaskPriority}
           sortKey={roleView.taskSort}
         />
@@ -2062,7 +2076,7 @@ const App: React.FC = () => {
                   exec={isManagementRole(identity.role)}
                   aiEnabled={isAIChatEnabled}
                   onStatusReport={() => setIsStatusReportOpen(true)}
-                  onNewTask={() => { setEditingTask(null); setIsFormModalOpen(true); }}
+                  onNewTask={canWriteActive ? () => { setEditingTask(null); setIsFormModalOpen(true); } : undefined}
                   onOpenWorkPackages={() => setIsWpManagerOpen(true)}
                   sections={roleView.projectSections}
                 />
@@ -2147,7 +2161,7 @@ const App: React.FC = () => {
           task={liveViewingTask}
           project={activeProject}
           authorName={currentActorName}
-          canEdit={!isManagementRole(identity.role)}
+          canEdit={canWriteActive}
           onClose={() => setIsDetailModalOpen(false)}
           onEdit={(t: Task) => { setIsDetailModalOpen(false); setEditingTask(t); setIsFormModalOpen(true); }}
           onSave={handleUpdateTask}

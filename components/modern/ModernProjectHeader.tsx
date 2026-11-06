@@ -32,7 +32,8 @@ interface ModernProjectHeaderProps {
     exec: boolean;
     aiEnabled: boolean;
     onStatusReport: () => void;
-    onNewTask: () => void;
+    /** Yoksa (yazma yetkisi yok) "Yeni görev" gösterilmez */
+    onNewTask?: () => void;
     onOpenWorkPackages: () => void;
     /** Rolün görebildiği sekmeler (admin görünüm ayarı); yoksa hepsi */
     sections?: ReadonlySet<ProjectSectionKey>;
@@ -95,10 +96,12 @@ const ModernProjectHeader: React.FC<ModernProjectHeaderProps> = ({ project, owne
                             <Icon name="report" size={18} />
                             Durum raporu
                         </button>
-                        <button type="button" className="m-btn m-btn-primary" onClick={onNewTask}>
-                            <Icon name="plus" size={18} strokeWidth={2.2} />
-                            Yeni görev
-                        </button>
+                        {onNewTask && (
+                            <button type="button" className="m-btn m-btn-primary" onClick={onNewTask}>
+                                <Icon name="plus" size={18} strokeWidth={2.2} />
+                                Yeni görev
+                            </button>
+                        )}
                     </div>
                 </div>
             </div>

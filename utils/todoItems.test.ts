@@ -10,6 +10,9 @@ const buildWs = (): WorkspaceData => {
     const p2 = createProject('Proje B');
     p2.rag = 'red';
     p2.ragNote = 'Bütçe aşımı';
+    // PY (k1) iki projenin de sahibi: proje uyarıları yalnız kapsamındaki projeler için
+    p1.pmPersonId = 'k1';
+    p2.pmPersonId = 'k1';
     p1.tasks = [
         { id: 't1', name: 'Geciken', availability: true, priority: 'High', version: 1, predecessor: null, unit: 'X', resourceName: 'K', time: { best: 1, avg: 1, worst: 1 }, jiraId: '', notes: '', status: TaskStatus.ToDo, dueDate: '2026-04-01' },
         { id: 't2', name: 'Biten', availability: true, priority: 'High', version: 1, predecessor: null, unit: 'X', resourceName: 'K', time: { best: 1, avg: 1, worst: 1 }, jiraId: '', notes: '', status: TaskStatus.Done, dueDate: '2026-04-01' },
@@ -17,6 +20,7 @@ const buildWs = (): WorkspaceData => {
     return {
         ...createEmptyWorkspace(),
         currentRole: 'py',
+        currentPersonId: 'k1',
         projects: [p1, p2],
         people: [{ id: 'k1', firstName: 'Kaan', lastName: 'T', departmentCode: 'U310', availableAA: 1, roles: [] }],
         allocations: [
@@ -28,6 +32,20 @@ const buildWs = (): WorkspaceData => {
 };
 
 describe('buildTodoItems', () => {
+    it('PY başka PY\'nin projesinin uyarılarını görmez ve oraya yönlendirilmez (UI-AKS-02, UI-AKS-03)', () => {
+        const ws = buildWs();
+        ws.projects[1] = { ...ws.projects[1], pmPersonId: 'k2' }; // Proje B başka PY'nin
+        ws.projects[1].tasks = ws.projects[0].tasks.map(t => ({ ...t, id: `b-${t.id}` }));
+        const items = buildTodoItems(ws, NOW);
+        const texts = items.map(i => i.text).join(' | ');
+        expect(texts).toContain('Proje A — 1 görev terminini aştı');
+        expect(texts).not.toContain('Proje B');
+        expect(items.some(i => i.projectId === ws.projects[1].id)).toBe(false);
+        // Müdür hepsini görür
+        const mudur = buildTodoItems({ ...ws, currentRole: 'mudur' }, NOW).map(i => i.text).join(' | ');
+        expect(mudur).toContain('Proje B — 1 görev terminini aştı');
+    });
+
     it('PY: eksik gerçekleşen ayı, taslak planı, geciken görevi ve kritik projeyi listeler', () => {
         const items = buildTodoItems(buildWs(), NOW);
         const texts = items.map(i => i.text).join(' | ');

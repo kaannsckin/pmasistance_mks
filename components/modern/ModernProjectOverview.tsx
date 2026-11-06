@@ -29,7 +29,8 @@ interface ModernProjectOverviewProps {
     canEdit: boolean;
     onNavigate: (view: View) => void;
     onViewTask: (task: Task) => void;
-    onNewTask: () => void;
+    /** Yoksa (yazma yetkisi yok) "Yeni görev" gösterilmez */
+    onNewTask?: () => void;
     onSetRag: (projectId: string, rag: RagStatus | undefined, note?: string) => void;
     onCelebrate: (message: string) => void;
     /** Admin görünüm ayarı: görünen sekmeler (gizli sekmenin kartı ve bağlantısı gösterilmez), en düşük risk skoru */
@@ -190,7 +191,7 @@ const ModernProjectOverview: React.FC<ModernProjectOverviewProps> = ({ workspace
                 {stats.total === 0 ? (
                     <Card title="Başlayalım" labelledBy="po-start" subtitle="Projede henüz görev yok">
                         <div className="flex flex-wrap gap-2.5">
-                            <button type="button" className="m-btn m-btn-primary" onClick={onNewTask}><Icon name="plus" size={18} strokeWidth={2.2} />Yeni görev</button>
+                            {onNewTask && <button type="button" className="m-btn m-btn-primary" onClick={onNewTask}><Icon name="plus" size={18} strokeWidth={2.2} />Yeni görev</button>}
                             {linkable(View.Tasks) && <button type="button" className="m-btn m-btn-gray" onClick={() => onNavigate(View.Tasks)}><Icon name="upload" size={18} />Excel'den aktar</button>}
                             {linkable(View.Resources) && <button type="button" className="m-btn m-btn-gray" onClick={() => onNavigate(View.Resources)}><Icon name="users" size={18} />Ekibi tanımla</button>}
                         </div>

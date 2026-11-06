@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
     canAddAllocationToProject, canCreateProject, canEditActualCell, canEditAllocationCell,
-    canEditPlanCell, canEditProjectContent, Identity, identityNeedsPerson,
+    canEditPlanCell, canEditProjectContent, canWriteProject, Identity, identityNeedsPerson,
     managesPerson, ownsProject, seesAllProjects, visiblePersonIds, visibleProjectIds,
 } from './rbac';
 import { createEmptyWorkspace, createProject } from './workspace';
@@ -119,5 +119,33 @@ describe('tahsis hücresi düzenleme', () => {
         expect(canAddAllocationToProject(ws, py('pm1'), ws.projects[1].id)).toBe(false);
         expect(canAddAllocationToProject(ws, bolum('pm1'), ws.projects[0].id)).toBe(true);
         expect(canAddAllocationToProject(ws, { role: 'mudur' }, ws.projects[0].id)).toBe(false);
+    });
+});
+
+describe('proje yazma koruması (UI-AKS-02)', () => {
+    it('PY yalnız kendi projesine yazar; başka PY\'nin projesine hiçbir yoldan yazamaz', () => {
+        const ws = buildWs();
+        const [a, b] = ws.projects;
+        expect(canWriteProject(ws, py('pm1'), a.id)).toBe(true);
+        expect(canWriteProject(ws, py('pm1'), b.id)).toBe(false);
+        expect(canWriteProject(ws, py(), a.id)).toBe(false); // kişi seçilmemiş PY
+    });
+
+    it('salt okunur yönetim rolleri her projeyi görür ama hiçbirine yazamaz', () => {
+        const ws = buildWs();
+        for (const role of ['mudur', 'pyb_sorumlu', 'admin'] as const) {
+            ws.projects.forEach(p => expect(canWriteProject(ws, { role }, p.id)).toBe(false));
+        }
+    });
+
+    it('bölüm sorumlusu yalnız kapsamındaki (bölüm personelinin çalıştığı) projeye yazabilir', () => {
+        const ws = buildWs();
+        const [a, b] = ws.projects;
+        expect(canWriteProject(ws, bolum('worker'), b.id)).toBe(true);
+        expect(canWriteProject(ws, bolum('worker'), a.id)).toBe(false);
+    });
+
+    it('bilinmeyen proje kimliğine yazılmaz', () => {
+        expect(canWriteProject(buildWs(), py('pm1'), 'yok')).toBe(false);
     });
 });

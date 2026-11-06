@@ -1,7 +1,7 @@
 import { TaskStatus, View, WorkspaceData } from '../types';
 import { canApprovePlan, canEditPool, canEnterData, findOverAllocations, getPlanLockStatus, MONTHS_TR } from './allocations';
 import { can } from './permissions';
-import { identityOf } from './rbac';
+import { identityOf, visibleProjectIds } from './rbac';
 import { reportAttention } from './reportAttention';
 
 /**
@@ -27,6 +27,10 @@ export const buildTodoItems = (ws: WorkspaceData, now: Date = new Date()): TodoI
     const currentMonth = now.getMonth() + 1; // 1-12
     const items: TodoItem[] = [];
     const projectName = new Map(ws.projects.map(p => [p.id, p.name]));
+    // Proje uyarıları yalnız kimliğin kapsamındaki projeler için (UI-AKS-02, UI-AKS-03):
+    // PY başka PY'nin projesini ne listede görür ne de buradan açar
+    const scope = visibleProjectIds(ws, id);
+    const scopedProjects = ws.projects.filter(p => scope.has(p.id));
 
     const yearAllocations = ws.allocations.filter(a => a.year === year);
     const projectsWithPlan = new Set(
@@ -66,7 +70,7 @@ export const buildTodoItems = (ws: WorkspaceData, now: Date = new Date()): TodoI
 
         // 3) Onaya gönderilmemiş taslak planlar (plan verisi olan projeler)
         projectsWithPlan.forEach(pid => {
-            if (getPlanLockStatus(ws.planLocks, pid, year) === 'draft') {
+            if (scope.has(pid) && getPlanLockStatus(ws.planLocks, pid, year) === 'draft') {
                 items.push({
                     id: `draft-${pid}-${year}`,
                     severity: 'info',
@@ -78,9 +82,9 @@ export const buildTodoItems = (ws: WorkspaceData, now: Date = new Date()): TodoI
         });
     }
 
-    // 4) Termini geçen görevler (proje bazında; yönetici de görür)
+    // 4) Termini geçen görevler (kapsamdaki projeler; yönetici hepsini görür)
     const today = now.toISOString().split('T')[0];
-    ws.projects.forEach(p => {
+    scopedProjects.forEach(p => {
         const overdue = p.tasks.filter(t => t.dueDate && t.dueDate < today && t.status !== TaskStatus.Done);
         if (overdue.length > 0) {
             items.push({
@@ -95,7 +99,7 @@ export const buildTodoItems = (ws: WorkspaceData, now: Date = new Date()): TodoI
     });
 
     // 5) Kritik (kırmızı) RAG projeleri
-    ws.projects.filter(p => p.rag === 'red').forEach(p => {
+    scopedProjects.filter(p => p.rag === 'red').forEach(p => {
         items.push({
             id: `rag-${p.id}`,
             severity: 'danger',
