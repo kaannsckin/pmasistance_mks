@@ -206,6 +206,14 @@ const ModernTaskList: React.FC<ModernTaskListProps> = ({ tasks, resources, sprin
                                     const prio = PRIORITY_META[t.priority];
                                     return (
                                         <div key={t.id} className="grid items-center gap-3 pl-2 pr-2 py-1.5 min-h-[60px] border-t m-sep" style={{ gridTemplateColumns: GRID }}>
+                                            {readOnly ? (
+                                                // Salt okunur: durum işareti düğme gibi davranmaz (tıklanınca hiçbir şey olmuyordu)
+                                                <span className="inline-flex items-center justify-center w-11 h-11" role="img" aria-label={meta.label}>
+                                                    <span aria-hidden="true" className="w-5 h-5 rounded-full box-border flex items-center justify-center" style={{ border: `2px solid ${meta.ring}`, background: meta.fill, color: 'var(--m-on-accent)' }}>
+                                                        {isDone && <Icon name="check" size={12} strokeWidth={3} />}
+                                                    </span>
+                                                </span>
+                                            ) : (
                                             <button
                                                 type="button"
                                                 className="m-icon-btn"
@@ -216,6 +224,7 @@ const ModernTaskList: React.FC<ModernTaskListProps> = ({ tasks, resources, sprin
                                                     {isDone && <Icon name="check" size={12} strokeWidth={3} />}
                                                 </span>
                                             </button>
+                                            )}
                                             <button type="button" onClick={() => onViewTask(t)} className="min-w-0 flex flex-col gap-0.5 text-left bg-transparent border-0 p-0 cursor-pointer" style={{ font: 'inherit' }}>
                                                 <span className={`text-[15px] font-semibold truncate ${isDone ? 'm-text-2' : 'm-text'}`}>{t.name}</span>
                                                 <span className="text-[13px] m-text-3 truncate">{[t.jiraId, t.unit].filter(Boolean).join(' · ') || 'Numara yok'}</span>

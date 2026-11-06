@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-    canAddAllocationToProject, canCreateProject, canEditActualCell, canEditAllocationCell,
+    canAddAllocationToProject, canAssignProjectOwner, canCreateProject, canEditActualCell, canEditAllocationCell,
     canEditPlanCell, canEditProjectContent, canWriteProject, Identity, identityNeedsPerson,
     managesPerson, ownsProject, seesAllProjects, visiblePersonIds, visibleProjectIds,
 } from './rbac';
@@ -136,6 +136,15 @@ describe('proje yazma koruması (UI-AKS-02)', () => {
         for (const role of ['mudur', 'pyb_sorumlu', 'admin'] as const) {
             ws.projects.forEach(p => expect(canWriteProject(ws, { role }, p.id)).toBe(false));
         }
+    });
+
+    it('PYB destek her projeyi görür ama proje içeriğine yazamaz; sahip atama yetkisi sürer', () => {
+        const ws = buildWs();
+        ws.projects.forEach(p => {
+            expect(visibleProjectIds(ws, { role: 'pyb_destek' }).has(p.id)).toBe(true);
+            expect(canWriteProject(ws, { role: 'pyb_destek' }, p.id)).toBe(false);
+            expect(canAssignProjectOwner(ws, { role: 'pyb_destek' }, p.id)).toBe(true);
+        });
     });
 
     it('bölüm sorumlusu yalnız kapsamındaki (bölüm personelinin çalıştığı) projeye yazabilir', () => {

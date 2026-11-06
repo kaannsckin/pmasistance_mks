@@ -98,10 +98,12 @@ export const canEditProjectContent = (ws: WsLike, id: Identity, projectId: strin
 /**
  * Proje verisine (görev, kaynak, not, hedef, ayar…) herhangi bir yoldan yazılabilir mi? (UI-AKS-02)
  * Kapsam dışı projeye ve salt okunur yönetim rollerine (müdür, PYB sorumlusu, admin) hiçbir
- * yoldan yazılmaz. Ekran bazındaki daha dar kurallar (ör. riskler yalnız sahip PM) ayrıca geçerlidir.
+ * yoldan yazılmaz. PYB destek tüm projeleri görür ama proje içeriğine (görev, kaynak, not…) yazmaz:
+ * işi portföy düzeyindedir (veri havuzu, proje açma, sahip atama, rapor yayını; bunların kendi
+ * yetki denetimleri var). Ekran bazındaki daha dar kurallar (ör. riskler yalnız sahip PM) ayrıca geçerlidir.
  */
 export const canWriteProject = (ws: WsLike, id: Identity, projectId: string): boolean =>
-    !isManagementRole(id.role) && visibleProjectIds(ws, id).has(projectId);
+    !isManagementRole(id.role) && id.role !== 'pyb_destek' && visibleProjectIds(ws, id).has(projectId);
 
 /** Yeni proje oluşturabilir mi? */
 export const canCreateProject = (id: Identity): boolean => can(id, 'project.create');
