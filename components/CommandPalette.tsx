@@ -115,6 +115,8 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ items, onClose, onAskAI
               role="combobox"
               aria-expanded="true"
               aria-controls="cmd-list"
+              aria-activedescendant={filtered[active] ? `cmd-opt-${active}` : undefined}
+              aria-autocomplete="list"
               placeholder={onAskAI ? "Projeye, kişiye, ekrana git — ya da asistana sor…" : "Projeye, kişiye ya da ekrana git…"}
               className="flex-1 bg-transparent border-0 outline-none text-[17px] m-text"
             />
@@ -131,6 +133,8 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ items, onClose, onAskAI
                   <button
                     type="button"
                     role="option"
+                    id={`cmd-opt-${idx}`}
+                    tabIndex={-1}
                     aria-selected={idx === active}
                     data-idx={idx}
                     onMouseEnter={() => setActive(idx)}
@@ -182,6 +186,10 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ items, onClose, onAskAI
                   <div className="px-4 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-gray-400">{it.group}</div>
                 )}
                 <button
+                  role="option"
+                  id={`cmd-opt-${idx}`}
+                  tabIndex={-1}
+                  aria-selected={idx === active}
                   data-idx={idx}
                   onMouseEnter={() => setActive(idx)}
                   onClick={() => run(idx)}

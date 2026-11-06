@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useModalFocus } from '../useModalFocus';
 import { RagStatus, UserRole, View } from '../../types';
 import { ROLE_LABELS } from '../../utils/allocations';
@@ -101,17 +101,34 @@ const NavItem: React.FC<{ icon: IconName; label: string; active: boolean; onClic
 );
 
 /** "Diğer" menüsü: yedek, bulut, veri sağlığı, denetim ve arayüz (profil seçimi ayrı pencerede) */
-const ToolsMenu: React.FC<Pick<ModernSidebarProps, 'onSwitchToClassic' | 'onSaveBackup' | 'onLoadBackup' | 'cloudLinked' | 'onOpenCloud' | 'healthAlerts' | 'onOpenHealth' | 'onOpenAudit' | 'onOpenAbout' | 'onOpenProfile' | 'consoleMode'> & { onDone: () => void }> = (p) => {
+const ToolsMenu: React.FC<Pick<ModernSidebarProps, 'onSwitchToClassic' | 'onSaveBackup' | 'onLoadBackup' | 'cloudLinked' | 'onOpenCloud' | 'healthAlerts' | 'onOpenHealth' | 'onOpenAudit' | 'onOpenAbout' | 'onOpenProfile' | 'consoleMode'> & { onDone: (returnFocus?: boolean) => void }> = (p) => {
     const fileRef = useRef<HTMLInputElement>(null);
+    // Menü klavyesi (UI-ERS-10): açılınca ilk öğe odaklanır; ↑/↓, Home/End öğeler arasında gezer;
+    // Esc ve Tab menüyü kapatır, odak "Diğer araçlar"a döner
+    const menuRef = useRef<HTMLDivElement>(null);
+    useEffect(() => { menuRef.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus(); }, []);
+    const onMenuKey = (e: React.KeyboardEvent) => {
+        const items = [...(menuRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') || [])];
+        const i = items.indexOf(document.activeElement as HTMLElement);
+        const go = (n: number) => { e.preventDefault(); items[(n + items.length) % items.length]?.focus(); };
+        if (e.key === 'ArrowDown') go(i + 1);
+        else if (e.key === 'ArrowUp') go(i - 1);
+        else if (e.key === 'Home') go(0);
+        else if (e.key === 'End') go(items.length - 1);
+        else if (e.key === 'Escape' || e.key === 'Tab') {
+            if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); }
+            p.onDone(true);
+        }
+    };
     const item = (icon: IconName, label: string, run: () => void, trailing?: React.ReactNode) => (
-        <button type="button" role="menuitem" onClick={() => { run(); p.onDone(); }} className="m-row-link w-full flex items-center gap-3 min-h-[44px] px-3.5 text-[15px]">
+        <button type="button" role="menuitem" tabIndex={-1} onClick={() => { run(); p.onDone(); }} className="m-row-link w-full flex items-center gap-3 min-h-[44px] px-3.5 text-[15px]">
             <span className="m-text-3"><Icon name={icon} size={18} /></span>
             <span className="flex-1 min-w-0 truncate">{label}</span>
             {trailing}
         </button>
     );
     return (
-        <div role="menu" aria-label="Diğer araçlar" className="absolute bottom-full left-2 right-2 mb-2 m-surface m-pop rounded-2xl py-1.5 z-50 max-h-[70vh] overflow-y-auto">
+        <div ref={menuRef} role="menu" aria-label="Diğer araçlar" onKeyDown={onMenuKey} className="absolute bottom-full left-2 right-2 mb-2 m-surface m-pop rounded-2xl py-1.5 z-50 max-h-[70vh] overflow-y-auto">
             {item('userCog', 'Profil değiştir', p.onOpenProfile)}
             <div className="border-t m-sep my-1"></div>
             {p.onSaveBackup && item('download', 'Yedeği indir', p.onSaveBackup)}
@@ -141,6 +158,7 @@ const ModernSidebar: React.FC<ModernSidebarProps> = (props) => {
     const { consoleMode, adminSection, onAdminSection } = props;
     const { isOpen, onClose, currentView, hasActiveProject, onNavigate, exec, canAdmin, onOpenProfile, expectationBadge, reportBadge, meetingBadge, projects, activeProjectId, onOpenProject, canCreateProject, onNewProject, onOpenSearch, currentRole, currentPersonId, people, needsPerson, onOpenSettings, onLogoLaunch, onHyperdrive } = props;
     const [menuOpen, setMenuOpen] = useState(false);
+    const toolsBtnRef = useRef<HTMLButtonElement>(null);
     const assistant = useAssistantOptional();
     // Dar ekranda açık çekmece pencere gibi davranır (UI-ERS-08): odak içeri girer, Tab içeride döner,
     // Esc kapatır, kapanınca odak "Menüyü aç"a döner. Geniş ekranda kenar çubuğu sayfanın parçasıdır.
@@ -259,12 +277,12 @@ const ModernSidebar: React.FC<ModernSidebarProps> = (props) => {
                                 </span>
                             </span>
                         </button>
-                        <button type="button" className="m-icon-btn" aria-label="Diğer araçlar" aria-haspopup="menu" aria-expanded={menuOpen} onClick={() => setMenuOpen(o => !o)}><Icon name="more" /></button>
+                        <button ref={toolsBtnRef} type="button" className="m-icon-btn" aria-label="Diğer araçlar" aria-haspopup="menu" aria-expanded={menuOpen} onClick={() => setMenuOpen(o => !o)}><Icon name="more" /></button>
                         <button type="button" className="m-icon-btn" aria-label="Ayarlar" onClick={() => { onOpenSettings(); onClose(); }}><Icon name="sliders" /></button>
                         {menuOpen && (
                             <>
                                 <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} aria-hidden="true"></div>
-                                <ToolsMenu {...props} onOpenProfile={() => { onOpenProfile(); onClose(); }} onDone={() => setMenuOpen(false)} />
+                                <ToolsMenu {...props} onOpenProfile={() => { onOpenProfile(); onClose(); }} onDone={(returnFocus) => { setMenuOpen(false); if (returnFocus) toolsBtnRef.current?.focus(); }} />
                             </>
                         )}
                     </div>

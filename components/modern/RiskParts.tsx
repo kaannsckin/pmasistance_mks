@@ -37,6 +37,12 @@ export const RiskScorePill: React.FC<{ score: number; muted?: boolean }> = ({ sc
  * 5×5 olasılık × etki matrisi. Dolu hücre bant rengiyle, boş hücre açık
  * tonla. Tıklanabilirse hücre seçimi listeyi süzer (tekrar tıklama kaldırır).
  */
+/** Düzey yalnız renkle anlatılmasın (UI-ERS-05, UI-GRS-08): dolu hücrede düzeyin baş harfi */
+const BAND_LETTER: Record<RiskBand, string> = { low: 'D', medium: 'O', high: 'Y' };
+const BandMark: React.FC<{ band: RiskBand }> = ({ band }) => (
+    <span aria-hidden="true" className="absolute top-1 left-1.5 text-[11px] font-bold leading-none opacity-90">{BAND_LETTER[band]}</span>
+);
+
 export const RiskMatrix: React.FC<{ counts: Record<string, number>; selected?: string | null; onSelect?: (key: string | null) => void }> = ({ counts, selected, onSelect }) => (
     <div className="flex flex-col gap-2">
         <div className="flex gap-2">
@@ -58,9 +64,9 @@ export const RiskMatrix: React.FC<{ counts: Record<string, number>; selected?: s
                             };
                             const label = `Olasılık ${p} × Etki ${i} = ${p * i}, ${RISK_BAND_LABELS[band]}: ${n} risk`;
                             return onSelect && n > 0 ? (
-                                <button key={key} type="button" aria-label={label} aria-pressed={isSel} title={label} onClick={() => onSelect(isSel ? null : key)} className="aspect-square rounded-lg border-0 text-[15px] font-bold m-tabular cursor-pointer" style={style}>{n}</button>
+                                <button key={key} type="button" aria-label={label} aria-pressed={isSel} title={label} onClick={() => onSelect(isSel ? null : key)} className="relative aspect-square rounded-lg border-0 text-[15px] font-bold m-tabular cursor-pointer" style={style}>{n}<BandMark band={band} /></button>
                             ) : (
-                                <span key={key} title={label} className="aspect-square rounded-lg flex items-center justify-center text-[15px] font-bold m-tabular" style={style}>{n || ''}</span>
+                                <span key={key} title={label} className="relative aspect-square rounded-lg flex items-center justify-center text-[15px] font-bold m-tabular" style={style}>{n ? <>{n}<BandMark band={band} /></> : ''}</span>
                             );
                         })}
                     </React.Fragment>
@@ -75,7 +81,7 @@ export const RiskMatrix: React.FC<{ counts: Record<string, number>; selected?: s
                 {(['low', 'medium', 'high'] as RiskBand[]).map(b => (
                     <span key={b} className="inline-flex items-center gap-1.5 text-[12px] m-text-2">
                         <span aria-hidden="true" className="w-2.5 h-2.5 rounded-sm" style={{ background: RISK_TONE[b].solid }}></span>
-                        {RISK_BAND_LABELS[b]}
+                        <span><b className="font-bold">{BAND_LETTER[b]}</b> {RISK_BAND_LABELS[b]}</span>
                     </span>
                 ))}
             </span>

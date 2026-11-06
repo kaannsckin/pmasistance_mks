@@ -180,7 +180,7 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
           </p>
         </div>
         <div className="flex items-center space-x-2">
-          <select value={year} onChange={e => setYear(parseInt(e.target.value, 10))} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-[11px] font-semibold text-gray-700 dark:text-gray-200 focus:outline-none">
+          <select aria-label="Yıl" value={year} onChange={e => setYear(parseInt(e.target.value, 10))} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-[11px] font-semibold text-gray-700 dark:text-gray-200 focus:outline-none">
             {YEAR_RANGE.map(y => <option key={y} value={y}>{y}</option>)}
           </select>
           <button
@@ -252,7 +252,7 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
                   <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">{item.detail}</p>
                 </div>
                 {item.projectId && (
-                  <button onClick={() => onOpenProject(item.projectId!)} className="text-[11px] font-semibold px-2.5 py-1 rounded-lg flex-none text-white hover:opacity-90" style={{ backgroundColor: 'var(--app-primary)' }} title="Projeyi aç">
+                  <button onClick={() => onOpenProject(item.projectId!)} aria-label={`Projeyi aç: ${item.title}`} className="text-[11px] font-semibold px-2.5 py-1 rounded-lg flex-none text-white hover:opacity-90" style={{ backgroundColor: 'var(--app-primary)' }} title="Projeyi aç">
                     Aç <i aria-hidden="true" className="fa-solid fa-arrow-right ml-0.5"></i>
                   </button>
                 )}
@@ -353,7 +353,7 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
                   </p>
                   {ph.reasons.length > 0 && <p className="text-[10px] text-amber-700 dark:text-amber-300 mt-0.5 truncate" title={ph.reasons.join(', ')}>{ph.reasons.join(', ')}</p>}
                 </div>
-                <button onClick={() => onOpenProject(ph.projectId)} className="text-[11px] font-semibold px-2.5 py-1 rounded-lg flex-none text-white hover:opacity-90" style={{ backgroundColor: 'var(--app-primary)' }}>Aç</button>
+                <button onClick={() => onOpenProject(ph.projectId)} aria-label={`${ph.name} projesini aç`} className="text-[11px] font-semibold px-2.5 py-1 rounded-lg flex-none text-white hover:opacity-90" style={{ backgroundColor: 'var(--app-primary)' }}>Aç</button>
               </div>
             ))}
           </div>
@@ -446,7 +446,7 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
                   <p className="text-[12px] text-gray-700 dark:text-gray-200 truncate">{c.summary}</p>
                   <p className="text-[10px] text-gray-400">{actorLabel(c)} · {relativeTime(c.at)}</p>
                 </div>
-                {c.projectName && <button onClick={() => onOpenProject(c.projectId!)} className="text-[11px] font-semibold px-2.5 py-1 rounded-lg flex-none text-white hover:opacity-90" style={{ backgroundColor: 'var(--app-primary)' }}>Aç</button>}
+                {c.projectName && <button onClick={() => onOpenProject(c.projectId!)} aria-label={`${c.projectName} projesini aç`} className="text-[11px] font-semibold px-2.5 py-1 rounded-lg flex-none text-white hover:opacity-90" style={{ backgroundColor: 'var(--app-primary)' }}>Aç</button>}
               </div>
             ))}
             {changes.length > 12 && <p className="text-[11px] text-gray-400 px-3 pt-1">ve {changes.length - 12} değişiklik daha…</p>}
@@ -656,7 +656,7 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
               {report.projects.map(p => (
                 <tr key={p.projectId} className="hover:bg-gray-50/60 dark:hover:bg-gray-800/40 cursor-pointer" onClick={() => onOpenProject(p.projectId)} title="Projeyi aç">
                   <td className="px-4 py-2.5">
-                    <span className="text-[11px] font-semibold text-gray-700 dark:text-gray-200">{p.name}</span>
+                    <button type="button" onClick={e => { e.stopPropagation(); onOpenProject(p.projectId); }} className="text-[11px] font-semibold text-gray-700 dark:text-gray-200 text-left hover:underline focus-visible:underline">{p.name}</button>
                     {p.code && <span className="ml-2 text-[11px] font-semibold text-gray-400">{p.code}</span>}
                   </td>
                   <td className="px-4 py-2.5 text-xs font-bold text-gray-500">{STATUS_TR[p.status]}</td>

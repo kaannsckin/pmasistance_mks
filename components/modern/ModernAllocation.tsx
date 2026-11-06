@@ -262,7 +262,7 @@ const ModernAllocation: React.FC<ModernAllocationProps> = (props) => {
                     </section>
 
                     <div className="flex flex-wrap items-start gap-5">
-                        <section aria-label="Aylık doluluk" className="flex flex-col gap-3 min-w-0" style={{ flex: '999 1 980px' }}>
+                        <section aria-label="Aylık doluluk; hücreler arasında ok tuşlarıyla gezin" className="flex flex-col gap-3 min-w-0" style={{ flex: '999 1 980px' }}>
                             <div className="m-surface rounded-2xl overflow-x-auto">
                                 <div style={{ minWidth: 960 }}>
                                     <div aria-hidden="true" className="grid items-center gap-1.5 px-4 pt-3 pb-2 text-[13px] m-text-3" style={{ gridTemplateColumns: 'minmax(200px, 1.6fr) repeat(12, minmax(52px, 1fr)) 72px' }}>
@@ -273,7 +273,7 @@ const ModernAllocation: React.FC<ModernAllocationProps> = (props) => {
                                     {util.rows.length === 0 && (
                                         <p className="m-0 px-5 py-10 text-center text-[15px] m-text-3 border-t m-sep">Bu süzgeçte kişi yok. Veri havuzuna personel ekleyin ya da süzgeci değiştirin.</p>
                                     )}
-                                    {util.rows.map(r => {
+                                    {util.rows.map((r, ri) => {
                                         const person = personById.get(r.personId);
                                         const planRow = planUtil?.rows.find(x => x.personId === r.personId);
                                         return (
@@ -294,6 +294,21 @@ const ModernAllocation: React.FC<ModernAllocationProps> = (props) => {
                                                             key={c.month}
                                                             type="button"
                                                             onClick={() => setPicked({ personId: r.personId, month: c.month })}
+                                                            // Isı haritası tek Tab durağıdır, hücreler arasında ok tuşlarıyla gezilir (UI-ERS-11):
+                                                            // 312 hücre ayrı ayrı Tab sırasındaydı; altındaki "Tahsisi düzenle"ye 311 Tab gerekiyordu
+                                                            tabIndex={(sel ? isSel : ri === 0 && c.month === 1) ? 0 : -1}
+                                                            data-heat-r={ri}
+                                                            data-heat-m={c.month}
+                                                            onKeyDown={e => {
+                                                                const moves: Record<string, [number, number]> = { ArrowRight: [0, 1], ArrowLeft: [0, -1], ArrowDown: [1, 0], ArrowUp: [-1, 0], Home: [0, -12], End: [0, 12] };
+                                                                const mv = moves[e.key];
+                                                                if (!mv) return;
+                                                                e.preventDefault();
+                                                                const nr = Math.min(util.rows.length - 1, Math.max(0, ri + mv[0]));
+                                                                const nm = Math.min(12, Math.max(1, c.month + mv[1]));
+                                                                const next = (e.currentTarget.closest('section')?.querySelector(`[data-heat-r="${nr}"][data-heat-m="${nm}"]`) ?? null) as HTMLElement | null;
+                                                                if (next) { e.currentTarget.tabIndex = -1; next.tabIndex = 0; next.focus(); }
+                                                            }}
                                                             aria-pressed={isSel}
                                                             aria-label={`${r.name}, ${MONTH_LONG[c.month - 1]}: ${c.level === 'empty' ? 'tahsis yok' : `${pct(c.ratio)}, ${st.label}`}${planCell ? `, plan ${pct(planCell.ratio)}` : ''}`}
                                                             className="h-11 rounded-[10px] border-0 flex flex-col items-center justify-center leading-none cursor-pointer m-tabular"

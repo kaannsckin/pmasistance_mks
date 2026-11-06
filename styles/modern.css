@@ -188,7 +188,7 @@ html.dark .ui-modern .m-segment[aria-selected="true"] :is(.m-text-2, .m-text-3) 
 @media (min-width: 1024px) { .ui-modern .lg\:hidden { display: none !important; } }
 
 /* Kenar çubuğu (dar ekranda çekmece) */
-.ui-modern .m-sidebar { width: 264px; flex: none; }
+.ui-modern .m-sidebar { width: 16.5rem; flex: none; } /* yazı büyüyünce kenar çubuğu da genişler (UI-ERS-13) */
 @media (max-width: 1023px) {
   /* Kapalı çekmece görünmez: Tab sırasında ve erişilebilirlik ağacında kalmaz (UI-ERS-02); kayma
      bitince gizlenir, açılırken hemen görünür */
