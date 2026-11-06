@@ -9,6 +9,16 @@
 
 Açılışta verdiğin iki örnek doğrulandı: "modernde beyaz mod çalışmıyor" ve "siyah modda bölge ayrımı net değil".
 
+### Düzeltme durumu (6 Kasım)
+
+| Bulgu | Durum | Commit |
+|---|---|---|
+| UI-KRC-01 bozuk depo kaydı (UI-KRC-08'in bozuk alan ve engelli depo durumları dahil) | Düzeltildi: okunamayan depoya yazılmıyor, kurtarma ekranı açılıyor | `6ea3630` |
+| UI-KRC-02, UI-KRC-13 iki sekme | Düzeltildi: tek etkin sekme; öteki sekme "Burada kullan" ile taze veriyle devralıyor | `0da1439` |
+| UI-AKS-02 yetki (UI-AKS-03 dahil) | Düzeltildi: açık proje kapsamla sınırlı, proje yazımları merkezde korunuyor | `8c947fb` |
+
+Doğrulama koordinatörün yeniden ürettiği senaryolarla yapıldı (bozuk depo üç biçimde, iki sekmede görev ve rapor gönderimi, PY ve müdür yetkisi), ayrıca demo yolu testi 28/28 geçti. Bağımsız doğrulama bir sonraki çarpışma koşusunun işi.
+
 | | |
 |---|---|
 | Kod | `claude/zealous-tesla-hidbc9` (uygulama kodu `main` 964cfab ile aynı) |
