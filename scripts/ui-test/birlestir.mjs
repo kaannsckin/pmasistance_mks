@@ -49,7 +49,7 @@ for (const ajan of Object.keys(ui.AJANLAR)) {
         // Çapraz doğrulama kararları: "| UI-XXX-NN | doğrulandı/reddedildi/… | gerekçe |"
         if (tur === 2) {
             for (const satir of metin.split('\n')) {
-                const m = satir.match(/^\|\s*(UI-[A-Z]{3}-\d+)\s*\|\s*([^|]+)\|\s*([^|]*)\|?/);
+                const m = satir.match(/^\|\s*(UI-[A-Z]{3}-\d+)[^|]*\|\s*([^|]+)\|\s*([^|]*)\|?/); // kimlik yanında not olabilir: \"UI-KRC-01 (K1)\"
                 if (m) kararlar.push({ id: m[1], denetci: ajan, karar: m[2].trim(), gerekce: m[3].trim() });
             }
         }
@@ -59,7 +59,9 @@ for (const ajan of Object.keys(ui.AJANLAR)) {
 for (const b of bulgular) {
     const k = kararlar.filter(x => x.id === b.id);
     b.capraz = k.map(x => `${x.denetci}: ${x.karar}`).join('; ');
-    const dogru = k.some(x => /doğrulandı/i.test(x.karar));
+    // "önem değişmeli" de bulgunun yeniden üretildiği anlamına gelir; önem önerisi ayrıca taşınır
+    const dogru = k.some(x => /doğrulandı|önem değişmeli/i.test(x.karar));
+    b.onemOnerisi = k.map(x => (x.karar.match(/K[1-4]\s*[→>-]+\s*K[1-4]/) || [])[0]).filter(Boolean).join(', ');
     const red = k.some(x => /reddedildi/i.test(x.karar));
     b.durum = dogru && !red ? 'doğrulandı' : red && !dogru ? 'reddedildi' : dogru && red ? 'çelişkili' : 'aday';
 }
@@ -76,9 +78,9 @@ const md = [
     '',
     `Ajan başına: ${Object.entries(sayac(bulgular, b => b.ajan)).map(([k, v]) => `${k} ${v}`).join(', ')} · çapraz karar: ${kararlar.length}`,
     '',
-    '| Bulgu | Önem | Durum | Başlık | Ekran | Arayüz | Kapsam | Çapraz | Kaynak |',
-    '|---|---|---|---|---|---|---|---|---|',
-    ...bulgular.map(b => `| ${b.id} | ${b.onem} | ${b.durum} | ${esc(b.baslik)} | ${esc(b.ekran)} | ${esc(b.arayuz)} | ${esc(b.kapsam)} | ${esc(b.capraz)} | ${b.kaynak} |`),
+    '| Bulgu | Önem | Öneri | Durum | Başlık | Ekran | Arayüz | Kapsam | Çapraz | Kaynak |',
+    '|---|---|---|---|---|---|---|---|---|---|',
+    ...bulgular.map(b => `| ${b.id} | ${b.onem} | ${b.onemOnerisi || ''} | ${b.durum} | ${esc(b.baslik)} | ${esc(b.ekran)} | ${esc(b.arayuz)} | ${esc(b.kapsam)} | ${esc(b.capraz)} | ${b.kaynak} |`),
     '',
 ];
 const sahipsiz = kararlar.filter(k => !bulgular.some(b => b.id === k.id));
