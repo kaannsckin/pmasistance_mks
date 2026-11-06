@@ -184,7 +184,7 @@ Ajanlar bunları denedi ve sağlam buldu:
 
 ## Altyapı notları
 
-Koşu sırasında ortak betikte dört hata çıktı ve düzeltildi. Hepsi ajanlar tarafından fark edildi:
+Koşu sırasında ortak betikte beş hata çıktı ve düzeltildi; dördünü ajanlar, birini koordinatör fark etti:
 
 | Hata | Bulan | Düzeltme |
 |---|---|---|
