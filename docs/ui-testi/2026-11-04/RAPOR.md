@@ -40,11 +40,13 @@ Yeni adlar (UI-AKS-08): resmî akış **Haftalık rapor**; Teams/e-posta için �
 
 Doğrulama: her grup sonrası tarayıcıda bulgunun senaryosu yeniden üretildi, birim testleri 930/930, demo yolu 28/28. Ölçülenlerden: süzgeç taşması Liste 1526, Pano 1687, Tahsis 1835 px → üçü de 1440/1440; "Tahsisi düzenle"ye 311 → 22 Tab; Durum özeti metin kutusu 45 → 340 px.
 
-Açık kalanlar:
+| **Kararlar ve K4** (6 Kasım) | Durum | Commit |
+|---|---|---|
+| UI-GRS-09 Gün Batımı teması: kararla vurgu rengi kehribar (açık #8A6100, koyu #FFD43B); "N gün kaldı" hapı nötr | Düzeltildi | `434829a` |
+| Karar: PYB destek proje içeriğine (görev, kaynak, not) yazmaz; proje açma, sahip atama, veri havuzu, rapor yayını sürer. Salt okunur listede durum dairesi düğme değil | Düzeltildi | `547e792` |
+| UI-AKS-14 kısaltmalar · UI-AKS-19 telefonda Portföy · UI-GRS-12 klasikte modern ekranlar · UI-GRS-17 kenar çubuğu | Düzeltildi | `ef9ecb6` |
 
-- **UI-GRS-09** (K3): Gün Batımı temasında vurgu turuncusu uyarı turuncusuyla aynı. Vurgu rengini değiştirmek marka kararı olduğu için bekliyor.
-- K4'ler: UI-AKS-14 açıklanmamış kısaltmalar, UI-AKS-19 telefonda Portföy sırası, UI-GRS-12 klasikte modern "ada" ekranlar, UI-GRS-17 kenar çubuğu alt menüsü. UI-GRS-18 hata ekranı K2'de kapandı.
-- Bağımsız doğrulama: bu düzeltmeleri ajanlar değil koordinatör doğruladı; bir sonraki çarpışma koşusu bunu yapmalı.
+**70 bulgunun 70'i için düzeltme yapıldı.** Hepsini koordinatör doğruladı, ajanlar değil; bağımsız doğrulama yeni çarpışma koşusunun işi.
 
 | | |
 |---|---|
