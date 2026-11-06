@@ -18,6 +18,8 @@ interface ModernPortfolioProps {
     onTodoNavigate: (item: TodoItem) => void;
     onOpenProject: (id: string) => void;
     onCreateProject: (name: string) => void;
+    /** PoC bulgu takip Excel'inden proje oluşturma / güncelleme penceresi */
+    onImportFindings?: () => void;
     onDeleteProject: (id: string) => void;
     onRenameProject: (id: string, name: string) => void;
     onSetRag: (id: string, rag: RagStatus | undefined, note?: string) => void;
@@ -133,7 +135,7 @@ const ProjectSheet: React.FC<{
 };
 
 const ModernPortfolio: React.FC<ModernPortfolioProps> = (props) => {
-    const { projects, people, identity, needsPerson, todoItems, onTodoNavigate, onOpenProject, onCreateProject, createRequest, sortKey, healthScores } = props;
+    const { projects, people, identity, needsPerson, todoItems, onTodoNavigate, onOpenProject, onCreateProject, onImportFindings, createRequest, sortKey, healthScores } = props;
     const [filter, setFilter] = useState<Filter>('all');
     const [showAllTodos, setShowAllTodos] = useState(false);
     const [sheetId, setSheetId] = useState<string | null>(null);
@@ -209,9 +211,16 @@ const ModernPortfolio: React.FC<ModernPortfolioProps> = (props) => {
                     <h1 className="m-0 mt-0.5 text-[34px] leading-tight font-bold tracking-[-0.02em] m-text">Portföy</h1>
                 </div>
                 {canCreate && (
-                    <button type="button" className="m-btn m-btn-primary" onClick={() => setCreating(true)}>
-                        <Icon name="plus" size={18} strokeWidth={2.2} />Yeni proje
-                    </button>
+                    <div className="flex flex-wrap items-center gap-2">
+                        {onImportFindings && (
+                            <button type="button" className="m-btn m-btn-gray" onClick={onImportFindings} title="PoC bulgu takip Excel'inden proje oluştur ya da güncelle">
+                                <Icon name="upload" size={18} />Excel'den aktar
+                            </button>
+                        )}
+                        <button type="button" className="m-btn m-btn-primary" onClick={() => setCreating(true)}>
+                            <Icon name="plus" size={18} strokeWidth={2.2} />Yeni proje
+                        </button>
+                    </div>
                 )}
             </header>
 

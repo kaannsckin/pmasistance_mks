@@ -59,6 +59,8 @@ import RiskView from './components/RiskView';
 import StatusReportModal from './components/StatusReportModal';
 import DataHealthModal from './components/DataHealthModal';
 import AuditLogModal from './components/AuditLogModal';
+import GibImportModal, { GibImportChoice } from './components/GibImportModal';
+import { applyGibImport, formatPercent, GibImportPackage } from './utils/gibFindings';
 import { CommandItem } from './components/CommandPalette';
 import { AssistantProvider } from './components/assistant/AssistantContext';
 import AssistantPanel, { AssistantCommandPalette } from './components/assistant/AssistantPanel';
@@ -169,6 +171,7 @@ const App: React.FC = () => {
   const [isPaletteOpen, setIsPaletteOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isWpManagerOpen, setIsWpManagerOpen] = useState(false);
+  const [isGibImportOpen, setIsGibImportOpen] = useState(false);
   // Modern arayüz: dar ekranda kenar çubuğu çekmecesi, "yeni proje" isteği, sürprizler
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [newProjectRequest, setNewProjectRequest] = useState(0);
@@ -506,6 +509,29 @@ const App: React.FC = () => {
       return appendAudit(next, 'project.owner', `"${project?.name || projectId}" sahibi: ${ownerName}`, projectId);
     });
   }, [updateWorkspace]);
+
+  // PoC Bulgu Takip Excel'i → proje (yeni ya da Test No eşleşmesiyle güncelleme); PY gerekirse havuza açılır
+  const handleApplyGibImport = useCallback((pkg: GibImportPackage, choice: GibImportChoice) => {
+    updateWorkspace(ws => {
+      const who = identityOf(ws);
+      // Yetki işlem anında yeniden doğrulanır
+      if (choice.projectId ? !canEditProjectContent(ws, who, choice.projectId) : !canCreateProject(who)) return ws;
+      const opts = { ...choice, ...(choice.newPmName && !canEditPool(who) ? { newPmName: undefined, pmPersonId: choice.pmPersonId || ws.currentPersonId } : {}) };
+      const res = applyGibImport(ws, pkg, opts);
+      const pm = res.workspace.people.find(p => p.id === res.pmPersonId);
+      const pmName = pm ? `${pm.firstName} ${pm.lastName}`.trim() : 'atanmadı';
+      const s = pkg.summary;
+      const counts = res.createdProject
+        ? `${res.added} bulgu`
+        : `+${res.added} yeni, ${res.updated} güncellendi${res.kept ? `, ${res.kept} uygulama görevi korundu` : ''}`;
+      const score = s.pocScore !== undefined ? ` · PoC skoru ${formatPercent(s.pocScore)}, zorunlu açık ${s.mandatoryOpen}` : '';
+      let next = appendAudit(res.workspace, 'data.import',
+        `PoC bulgu Excel'i → "${choice.projectName}": ${counts} · PY: ${pmName}${res.createdPerson ? ' (havuza eklendi)' : ''}${score}`, res.projectId);
+      if (res.createdProject) next = appendAudit(next, 'project.create', `"${choice.projectName}" projesi Excel'den oluşturuldu`, res.projectId);
+      return next;
+    });
+    setCurrentView(projectHomeView);
+  }, [updateWorkspace, projectHomeView]);
 
   const handleOpenProject = useCallback((projectId: string) => {
     updateWorkspace(ws => ({ ...ws, activeProjectId: projectId }));
@@ -1505,6 +1531,7 @@ const App: React.FC = () => {
           onTodoNavigate={handleTodoNavigate}
           onOpenProject={handleOpenProject}
           onCreateProject={handleCreateProject}
+          onImportFindings={() => setIsGibImportOpen(true)}
           onDeleteProject={handleDeleteProject}
           onRenameProject={handleRenameProject}
           onSetRag={handleSetProjectRag}
@@ -1526,6 +1553,7 @@ const App: React.FC = () => {
           needsPerson={needsPerson}
           onOpenProject={handleOpenProject}
           onCreateProject={handleCreateProject}
+          onImportFindings={() => setIsGibImportOpen(true)}
           onDeleteProject={handleDeleteProject}
           onRenameProject={handleRenameProject}
           onSetRag={handleSetProjectRag}
@@ -2115,6 +2143,17 @@ const App: React.FC = () => {
           workspace={workspace}
           onApplyFix={handleApplyHealthFix}
           onClose={() => setIsHealthModalOpen(false)}
+        />
+      )}
+      {isGibImportOpen && workspace && canCreateProject(identity) && (
+        <GibImportModal
+          people={workspace.people}
+          projects={workspace.projects}
+          canAddPerson={canEditPool(identity)}
+          editableProjectIds={new Set(workspace.projects.filter(p => canEditProjectContent(workspace, identity, p.id)).map(p => p.id))}
+          currentPersonId={workspace.currentPersonId}
+          onApply={handleApplyGibImport}
+          onClose={() => setIsGibImportOpen(false)}
         />
       )}
       {isAuditModalOpen && canAudit && workspace && isModern && (
