@@ -34,7 +34,8 @@ import { AllocationSuggestion, ApplyMode, applyAllocationSuggestions } from './u
 import { applyBilledHoursActuals, planBilledHoursPoolAdditions, suggestBilledHoursActuals, BilledApplyMode, BilledHoursOptions, BilledHoursRecord } from './utils/billedHours';
 import { buildTodoItems, TodoItem } from './utils/todoItems';
 import { loadCloudConfig, scheduleAutoPush } from './utils/cloudSync';
-import { joinStored, openIndexedDbStore, requestPersistentStorage, WorkspacePersister } from './utils/workspaceStore';
+import { inspectStored, KvStore, openIndexedDbStore, rawStoreDump, requestPersistentStorage, WorkspacePersister } from './utils/workspaceStore';
+import StoreRecovery, { StoreProblem } from './components/StoreRecovery';
 import CloudSyncModal from './components/CloudSyncModal';
 import Header from './components/Header';
 import TaskGallery from './components/TaskGallery';
@@ -184,49 +185,103 @@ const App: React.FC = () => {
   // ---- Açılış: IndexedDB → (taşıma) localStorage v2 → v1 migration → örnek proje ----
   // Kalıcı depo IndexedDB (parçalı, kota sorunu yok); yoksa localStorage
   const persister = useRef<WorkspacePersister | null>(null);
+  // Açılamayan depo: uygulama hiçbir şey yazmaz, kurtarma ekranı gösterilir (UI-KRC-01).
+  // Okunamayan veri "boş" sayılıp üzerine örnek çalışma alanı yazılırsa geri dönülmez biçimde kaybolur.
+  const [storeProblem, setStoreProblem] = useState<StoreProblem | null>(null);
+  const rawStore = useRef<{ kv: KvStore | null; records: Map<string, unknown> | null }>({ kv: null, records: null });
   useEffect(() => {
     let cancelled = false;
+    const fail = (problem: StoreProblem) => { if (!cancelled) setStoreProblem(problem); };
+    const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
     (async () => {
       const kv = await openIndexedDbStore();
-      let stored: ReturnType<typeof joinStored> = null;
+      rawStore.current.kv = kv;
+      let stored: { workspace: WorkspaceData; orphans: string[] } | null = null;
       if (kv) {
-        try { stored = joinStored(await kv.readAll()); } catch (e) { console.error('Tarayıcı deposu okunamadı', e); }
+        let records: Map<string, unknown>;
+        try { records = await kv.readAll(); } catch (e) {
+          console.error('Tarayıcı deposu okunamadı', e);
+          fail({ reason: 'read', detail: message(e) });
+          return;
+        }
+        rawStore.current.records = records;
+        const state = inspectStored(records);
+        if (state.kind === 'unreadable') {
+          fail(state.reason === 'format' ? { reason: 'format', format: state.format } : { reason: 'meta' });
+          return;
+        }
+        if (state.kind === 'ok') stored = state;
       }
       if (cancelled) return;
-      // IndexedDB'de veri varsa o esastır; yarıda kalmış taşımadan kalan localStorage kopyası silinir
-      if (stored) { try { localStorage.removeItem(WORKSPACE_STORAGE_KEY); localStorage.removeItem(LEGACY_STORAGE_KEY); } catch { /* yok */ } }
-      const fromLocal = stored ? null : resolveWorkspaceFromStorage(
-        localStorage.getItem(WORKSPACE_STORAGE_KEY),
-        localStorage.getItem(LEGACY_STORAGE_KEY)
-      ).workspace;
-      const resolved = stored ? normalizeWorkspace(stored.workspace) : fromLocal;
-      let initial: WorkspaceData;
-      if (resolved) {
-        // Ayın ilk açılışında otomatik baseline (plan kayması trendi için) ve
-        // haftalık sağlık fotoğrafı (sağlık modelinin eğitim verisi)
-        const withBaseline = ensureMonthlySnapshot(resolved) || resolved;
-        initial = ensureWeeklyHealthSnapshot(withBaseline) || withBaseline;
-      } else {
-        const sample = createSampleProject();
-        initial = { ...createEmptyWorkspace(), projects: [sample], activeProjectId: sample.id };
+      try {
+        // IndexedDB'de veri varsa o esastır; yarıda kalmış taşımadan kalan localStorage kopyası silinir
+        if (stored) { try { localStorage.removeItem(WORKSPACE_STORAGE_KEY); localStorage.removeItem(LEGACY_STORAGE_KEY); } catch { /* yok */ } }
+        const v2Json = stored ? null : localStorage.getItem(WORKSPACE_STORAGE_KEY);
+        const legacyJson = stored ? null : localStorage.getItem(LEGACY_STORAGE_KEY);
+        const fromLocal = stored ? null : resolveWorkspaceFromStorage(v2Json, legacyJson).workspace;
+        // localStorage'da veri var ama okunamıyorsa üzerine yazılmaz
+        if (!stored && !fromLocal && (v2Json || legacyJson)) {
+          const local: [string, unknown][] = [];
+          if (v2Json) local.push([WORKSPACE_STORAGE_KEY, v2Json]);
+          if (legacyJson) local.push([LEGACY_STORAGE_KEY, legacyJson]);
+          rawStore.current.records = new Map(local);
+          fail({ reason: 'local' });
+          return;
+        }
+        const resolved = stored ? normalizeWorkspace(stored.workspace) : fromLocal;
+        let initial: WorkspaceData;
+        if (resolved) {
+          // Ayın ilk açılışında otomatik baseline (plan kayması trendi için) ve
+          // haftalık sağlık fotoğrafı (sağlık modelinin eğitim verisi)
+          const withBaseline = ensureMonthlySnapshot(resolved) || resolved;
+          initial = ensureWeeklyHealthSnapshot(withBaseline) || withBaseline;
+        } else {
+          const sample = createSampleProject();
+          initial = { ...createEmptyWorkspace(), projects: [sample], activeProjectId: sample.id };
+        }
+        if (kv) {
+          // localStorage'daki veri ilk başarılı yazımdan sonra silinir (kotayı boşaltır, eski kopya kalmaz)
+          let migrate = !stored;
+          // Taban: depodaki hâlin normalize edilmiş biçimi (proje nesneleri aynı kalır; açılışta yeniden yazılmaz)
+          persister.current = new WorkspacePersister(kv, stored ? resolved : null, ok => {
+            setStorageFull(!ok);
+            if (ok) {
+              setStorageWarnClosed(false);
+              if (migrate) { migrate = false; try { localStorage.removeItem(WORKSPACE_STORAGE_KEY); localStorage.removeItem(LEGACY_STORAGE_KEY); } catch { /* yok */ } }
+            }
+          }, stored?.orphans);
+          requestPersistentStorage();
+        }
+        setWorkspace(initial);
+        setIsInitialized(true);
+      } catch (e) {
+        // Bozuk alanlı kayıt ya da engellenmiş depo: sonsuz yükleme yerine kurtarma ekranı (UI-KRC-08)
+        console.error('Çalışma alanı açılamadı', e);
+        persister.current = null;
+        fail({ reason: 'open', detail: message(e) });
       }
-      if (kv) {
-        // localStorage'daki veri ilk başarılı yazımdan sonra silinir (kotayı boşaltır, eski kopya kalmaz)
-        let migrate = !stored;
-        // Taban: depodaki hâlin normalize edilmiş biçimi (proje nesneleri aynı kalır; açılışta yeniden yazılmaz)
-        persister.current = new WorkspacePersister(kv, stored ? resolved : null, ok => {
-          setStorageFull(!ok);
-          if (ok) {
-            setStorageWarnClosed(false);
-            if (migrate) { migrate = false; try { localStorage.removeItem(WORKSPACE_STORAGE_KEY); localStorage.removeItem(LEGACY_STORAGE_KEY); } catch { /* yok */ } }
-          }
-        }, stored?.orphans);
-        requestPersistentStorage();
-      }
-      setWorkspace(initial);
-      setIsInitialized(true);
     })();
     return () => { cancelled = true; };
+  }, []);
+
+  const handleDownloadRawStore = useCallback(() => {
+    const records = rawStore.current.records;
+    if (!records || !records.size) return;
+    const blob = new Blob([rawStoreDump(records)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `planasistan-ham-depo-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, []);
+  // Yalnız kullanıcı açıkça onaylayınca: depoyu boşaltıp baştan açar
+  const handleRecoveryReset = useCallback(async () => {
+    try { await rawStore.current.kv?.clear(); } catch (e) { console.error('Tarayıcı deposu temizlenemedi', e); }
+    try { localStorage.removeItem(WORKSPACE_STORAGE_KEY); localStorage.removeItem(LEGACY_STORAGE_KEY); } catch { /* yok */ }
+    window.location.reload();
   }, []);
 
   const settings = workspace?.settings;
@@ -1908,6 +1963,18 @@ const App: React.FC = () => {
     workspace.people.forEach(p => items.push({ id: `k-${p.id}`, group: 'Kişiler', label: `${p.firstName} ${p.lastName}`.trim(), sublabel: `${p.departmentCode || ''} · kişi profili`, icon: 'fa-user', keywords: p.sicil || '', run: () => setViewingPersonId(p.id) }));
     return items;
   }, [workspace, visibleProjects, identity, handleOpenProject, activeProject, consoleMode, canAudit, canDataHealth, isModern, roleView]);
+
+  if (storeProblem) {
+    return (
+      <StoreRecovery
+        problem={storeProblem}
+        canDownload={!!rawStore.current.records?.size}
+        onDownload={handleDownloadRawStore}
+        onRetry={() => window.location.reload()}
+        onReset={handleRecoveryReset}
+      />
+    );
+  }
 
   return (
     <AssistantProvider enabled={isAIEnabled && !consoleMode} chat={aiPolicy.chat} embedded={aiPolicy.embedded} getWorkspace={getAssistantWorkspace} getView={getAssistantView} onNavigate={handleAssistantNavigate} onApplyAction={handleApplyAiAction}>

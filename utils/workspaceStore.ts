@@ -43,6 +43,30 @@ export const joinStored = (records: Map<string, unknown>): { workspace: Workspac
     return { workspace: { ...meta.workspace, projects } as WorkspaceData, orphans };
 };
 
+/**
+ * Açılışta deponun durumu. "Okunamayan" depo boş sayılmaz: içinde kullanıcının
+ * verisi vardır (daha yeni bir sürümün biçimi ya da bozuk bir kayıt). Üzerine
+ * örnek çalışma alanı yazılırsa veri geri dönülmez biçimde kaybolur (UI-KRC-01).
+ */
+export type StoredState =
+    | { kind: 'empty' }
+    | { kind: 'ok'; workspace: WorkspaceData; orphans: string[] }
+    | { kind: 'unreadable'; reason: 'format' | 'meta'; format?: unknown; keys: number };
+
+export const inspectStored = (records: Map<string, unknown>): StoredState => {
+    if (records.size === 0) return { kind: 'empty' };
+    const joined = joinStored(records);
+    if (joined) return { kind: 'ok', ...joined };
+    const meta = records.get(META);
+    const format = meta && typeof meta === 'object' ? (meta as { format?: unknown }).format : undefined;
+    const reason = format !== undefined && format !== STORE_FORMAT ? 'format' : 'meta';
+    return { kind: 'unreadable', reason, format, keys: records.size };
+};
+
+/** Okunamayan deponun ham kopyası: kullanıcı indirir, veri kaybolmaz */
+export const rawStoreDump = (records: Map<string, unknown>, now: Date = new Date()): string =>
+    JSON.stringify({ tur: 'planasistan-ham-depo', disaAktarim: now.toISOString(), kayitlar: Object.fromEntries(records) }, null, 1);
+
 const sameOrder = (a: Project[], b: Project[]) => a.length === b.length && a.every((p, i) => p.id === b[i].id);
 
 /** Son yazılandan bu yana değişen parçalar (nesne kimliğiyle); `prev` yoksa hepsi */

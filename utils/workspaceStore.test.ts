@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { WorkspaceData } from '../types';
 import { createEmptyWorkspace, createProject } from './workspace';
-import { joinStored, memoryStore, storageDiff, WorkspacePersister } from './workspaceStore';
+import { inspectStored, joinStored, memoryStore, rawStoreDump, storageDiff, WorkspacePersister } from './workspaceStore';
 
 const ws = (): WorkspaceData => {
     const a = createProject('A'), b = createProject('B');
@@ -80,5 +80,40 @@ describe('parçalı depo', () => {
         p.save(ws());
         await p.flush();
         expect(kv.data.size).toBe(0);
+    });
+});
+
+describe('inspectStored (UI-KRC-01: okunamayan depo boş sayılmaz)', () => {
+    it('boş depo: empty', () => {
+        expect(inspectStored(new Map())).toEqual({ kind: 'empty' });
+    });
+
+    it('tanınan biçim: ok', async () => {
+        const kv = memoryStore();
+        const p = createProject('A');
+        const ws = { ...createEmptyWorkspace(), projects: [p], activeProjectId: p.id };
+        await kv.write(storageDiff(null, ws).puts, []);
+        const s = inspectStored(await kv.readAll());
+        expect(s.kind).toBe('ok');
+        if (s.kind === 'ok') expect(s.workspace.projects.map(x => x.id)).toEqual([p.id]);
+    });
+
+    it('daha yeni biçim: unreadable (format), veri yerinde', () => {
+        const records = new Map<string, unknown>([['meta', { format: 2, workspace: {}, projectIds: ['p1'] }], ['project:p1', { id: 'p1' }]]);
+        expect(inspectStored(records)).toEqual({ kind: 'unreadable', reason: 'format', format: 2, keys: 2 });
+    });
+
+    it('meta yok ya da bozuk ama proje kayıtları var: unreadable (meta)', () => {
+        expect(inspectStored(new Map([['project:p1', { id: 'p1' }]]))).toMatchObject({ kind: 'unreadable', reason: 'meta' });
+        expect(inspectStored(new Map<string, unknown>([['meta', { format: 1, workspace: {}, projectIds: 'x' }]]))).toMatchObject({ kind: 'unreadable', reason: 'meta' });
+        expect(inspectStored(new Map<string, unknown>([['meta', null]]))).toMatchObject({ kind: 'unreadable', reason: 'meta' });
+    });
+
+    it('ham döküm tüm kayıtları taşır', () => {
+        const records = new Map<string, unknown>([['meta', { format: 2 }], ['project:p1', { id: 'p1', name: 'NEHİR' }]]);
+        const dump = JSON.parse(rawStoreDump(records, new Date('2026-11-06T10:00:00Z')));
+        expect(dump.tur).toBe('planasistan-ham-depo');
+        expect(dump.kayitlar['project:p1'].name).toBe('NEHİR');
+        expect(dump.kayitlar.meta.format).toBe(2);
     });
 });
