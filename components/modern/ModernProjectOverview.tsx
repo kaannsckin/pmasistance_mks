@@ -147,7 +147,7 @@ const ModernProjectOverview: React.FC<ModernProjectOverviewProps> = ({ workspace
         if (now < sprint.start) return { text: `${dayMonth(sprint.start)} başlıyor`, tone: 'm-tone-hold' };
         if (sprint.daysLeft < 0) return { text: `${-sprint.daysLeft} gün geride`, tone: 'm-tone-bad' };
         if (sprint.daysLeft === 0) return { text: 'Bugün bitiyor', tone: 'm-tone-warn' };
-        return { text: `${sprint.daysLeft} gün kaldı`, tone: sprint.daysLeft <= 3 ? 'm-tone-warn' : 'm-tone-accent' };
+        return { text: `${sprint.daysLeft} gün kaldı`, tone: sprint.daysLeft <= 3 ? 'm-tone-warn' : 'm-tone-hold' };
     })();
 
     const maxOpen = Math.max(1, ...team.members.map(m => m.open));

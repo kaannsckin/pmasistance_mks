@@ -23,7 +23,7 @@ const THEMES = [
   { id: 'classic', name: 'Gök Mavisi', color: '#2563eb' },
   { id: 'emerald', name: 'Zümrüt Ormanı', color: '#059669' },
   { id: 'purple', name: 'Gece Moru', color: '#7c3aed' },
-  { id: 'orange', name: 'Gün Batımı', color: '#ea580c' },
+  { id: 'orange', name: 'Gün Batımı', color: '#d99a00' },
 ];
 
 /** Seçim kartlarındaki küçük önizleme — iki arayüzün iskeleti */

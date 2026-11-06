@@ -16,7 +16,7 @@ const THEME_HEX: Record<string, string> = {
     classic: '2563EB',
     emerald: '059669',
     purple: '7C3AED',
-    orange: 'EA580C',
+    orange: '8A6100',
 };
 
 const GRAY = '6B7280';

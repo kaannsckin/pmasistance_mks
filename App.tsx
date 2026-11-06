@@ -136,7 +136,7 @@ const THEME_COLORS: Record<string, string> = {
   classic: '#2563eb',
   emerald: '#059669',
   purple: '#7c3aed',
-  orange: '#ea580c',
+  orange: '#8a6100',
 };
 
 // Denetim günlüğü RAG etiketleri ("Ne değişti?" akışı için)
