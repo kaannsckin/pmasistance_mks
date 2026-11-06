@@ -25,7 +25,7 @@ Açılışta verdiğin iki örnek doğrulandı: "modernde beyaz mod çalışmıy
 | Aday (tek ajan; çoğu Tur 2'de bulundu) | 1 | 4 | 10 | 5 | **20** |
 | Reddedildi | | | | | **0** |
 
-Önem dağılımı ajanların yazdığı hâliyledir. K4'ler çapraz doğrulamada bilerek atlandı. Uzlaşmada değişenler aşağıda işaretli.
+Önem dağılımı ajanların yazdığı hâliyledir. K4'ler çapraz doğrulamada bilerek atlandı. Uzlaşmadan sonra K1 sayısı 4'tür (UI-AKS-02 K2'den yükseldi); diğer önem değişiklikleri aşağıda.
 
 | Ajan | Tur 1 | Tur 2 yeni | Çapraz denetlediği | Sonuç |
 |---|---:|---:|---|---|
@@ -36,9 +36,11 @@ Açılışta verdiğin iki örnek doğrulandı: "modernde beyaz mod çalışmıy
 
 70 bulgu, aynı sorunu anlatanlar birleştirilerek kök nedene göre 8 bölümde **36 satırda** toplandı.
 
-## Karar bekleyenler
+## Önem kararları
 
-| Konu | Seçenekler | Koordinatörün önerisi |
+Ajanların uzlaşamadığı üç konuda kullanıcı 2026-11-06'da koordinatörün önerisini onayladı.
+
+| Konu | Seçenekler | Karar (kullanıcı onayladı) |
 |---|---|---|
 | **UI-AKS-02**: PY başka PY'nin projesine girip görev ekleyebiliyor. Tolga Tur 2'de kapsamı genişletti: tamamlama, silme ve öteki PY'nin 32 Günlük notunu okuma da açık; müdür de aynısını yapabiliyor. | K2 kalsın / K1 | **K1.** Yetkisiz silme veri kaybıdır. Müdürden gizlenen notlar başka PY'ye açık. |
 | **UI-AKS-04**: Aşırı tahsis sayısı ekrandan ekrana değişiyor (34 → 9 kişi → 37). Cem K1 adayı dedi. | K1 / K2 | **K2.** Tolga farkın iki şeyden geldiğini gösterdi: izin kayıtları (sabit 3 kişi-ay) ve "kişi" ile "kişi-ay" birim karışıklığı. Rakam yanlış değil, tutarsız. |
@@ -71,7 +73,7 @@ Tolga'nın şeridi; Deniz her birini iki temada doğruladı.
 
 | # | Önem | Durum | Sorun | Kök neden (öneri) |
 |---|---|---|---|---|
-| 2.1 | K2 → **K1?** | doğrulandı | **PY başka PY'nin projesinde görev ekleyip tamamlayıp silebiliyor ve onun Günlük notlarını okuyabiliyor.** Yol: Portföy › "Dikkat gerektirenler". Müdür de aynısını yapabiliyor; aynı sayfadaki durum kartı ise salt okunur (UI-AKS-02). Aynı kökten: Burak'ın "Dikkat gerektirenler" listesinin ilk maddeleri başkasının projeleri. "Kritik proje yok" kartının yanında "KALKAN kritik durumda" yazıyor (UI-AKS-03, K2). | `utils/todoItems.ts:23-168` liste `visibleProjectIds` ile sınırlanmıyor; "Yeni görev" yolunda `canEditProjectContent` denetimi yok |
+| 2.1 | **K1** | doğrulandı | **PY başka PY'nin projesinde görev ekleyip tamamlayıp silebiliyor ve onun Günlük notlarını okuyabiliyor.** Yol: Portföy › "Dikkat gerektirenler". Müdür de aynısını yapabiliyor; aynı sayfadaki durum kartı ise salt okunur (UI-AKS-02). Aynı kökten: Burak'ın "Dikkat gerektirenler" listesinin ilk maddeleri başkasının projeleri. "Kritik proje yok" kartının yanında "KALKAN kritik durumda" yazıyor (UI-AKS-03, K2). | `utils/todoItems.ts:23-168` liste `visibleProjectIds` ile sınırlanmıyor; "Yeni görev" yolunda `canEditProjectContent` denetimi yok |
 | 2.2 | K2 | aday | **Klasik Portföy'de PY, kendi projesinin sahipliğini onaysız devrediyor.** Tek ok tuşu ya da tek seçim yetiyor ve proje kendi listesinden kayboluyor; "Sahip atanmadı" da seçilebiliyor (UI-KRC-14). | `PortfolioView.tsx:141-144` |
 | 2.3 | K3 | aday | **Bölüm sorumlusu dokunmadan onaylayınca tarihçeye "düzenledi" kaydı düşüyor** (UI-KRC-16). | `utils/weeklyReport.ts:236, 318` |
 
@@ -82,7 +84,7 @@ Tolga'nın şeridi; Deniz her birini iki temada doğruladı.
 | # | Önem | Durum | Sorun | Kök neden (öneri) |
 |---|---|---|---|---|
 | 3.1 | K2 | doğrulandı | **Yeni görev varsayılan olarak geçmiş "Sürüm 1"e düşüyor.** Tek görev eklenince "Şu anki sürüm" kartı "Sürüm 13 · 17 Kas başlıyor"dan "Sürüm 1 · 287 gün geride"ye dönüyor. İki arayüzde de böyle (UI-AKS-01). | `TaskFormSheet.tsx:38`, `TaskFormModal.tsx:22, 79`, `utils/projectOverview.ts:63-68` |
-| 3.2 | K2 / K1? | doğrulandı | **Aşırı tahsis sayısı ekrandan ekrana değişiyor:** Portföy 34 kişi-ay, tıklanan ekran "9 kişi", Bölüm özeti ve Kapasite–talep 37 (UI-AKS-04). | `utils/todoItems.ts:128` izinleri saymıyor, `AllocationView.tsx:152` sayıyor; birimler karışık |
+| 3.2 | K2 | doğrulandı | **Aşırı tahsis sayısı ekrandan ekrana değişiyor:** Portföy 34 kişi-ay, tıklanan ekran "9 kişi", Bölüm özeti ve Kapasite–talep 37 (UI-AKS-04). | `utils/todoItems.ts:128` izinleri saymıyor, `AllocationView.tsx:152` sayıyor; birimler karışık |
 | 3.3 | K2 | doğrulandı | **Süre tahmininde ondalık kayboluyor:** "1,5" gün → 15 (Türkçe tarayıcıda 1), "0.5" → 0 (UI-KRC-05). | `TaskFormSheet.tsx:131-132` `parseInt` |
 | 3.4 | K3 | doğrulandı | **Müdür "Haftalık rapor"da 4 hafta önceki raporu "bu haftanın gelişmeleri" başlığıyla görüyor** (UI-AKS-07). | `ModernWeeklyReport.tsx:119-122` |
 
@@ -126,7 +128,7 @@ Verdiğin örneklerin karşılığı bu bölümde.
 
 | # | Önem | Durum | Sorun | Kök neden (öneri) |
 |---|---|---|---|---|
-| 6.1 | K2 / K3? | doğrulandı | **Kapalı çekmece Tab sırasında.** 1024 px altında kapalı çekmecedeki 19 düğmeye Tab ile gidiliyor ama odak görünmüyor (UI-ERS-02). Açık çekmeceye klavyeyle girilemiyor, Esc kapatmıyor (UI-ERS-08, K3). Telefonda çekmece Ayarlar penceresinin üstünü örtüyor (UI-ERS-12, K3). | `styles/modern.css:192` çekmece yalnız `transform` ile gizleniyor (`inert`/`visibility` yok) |
+| 6.1 | K2 | doğrulandı | **Kapalı çekmece Tab sırasında.** 1024 px altında kapalı çekmecedeki 19 düğmeye Tab ile gidiliyor ama odak görünmüyor (UI-ERS-02). Açık çekmeceye klavyeyle girilemiyor, Esc kapatmıyor (UI-ERS-08, K3). Telefonda çekmece Ayarlar penceresinin üstünü örtüyor (UI-ERS-12, K3). | `styles/modern.css:192` çekmece yalnız `transform` ile gizleniyor (`inert`/`visibility` yok) |
 | 6.2 | K3 | doğrulandı | **Yalnız yazıyı büyütünce (%200) içerik büyümüyor;** menü "Ekip v…", "Risk ra…" diye kesiliyor (UI-ERS-13). | Sabit px yazı boyutları (`text-[15px]` vb.) |
 | 6.3 | K3 | aday | **Telefonda işler:** doluluk tablosu bu aya kaydırınca kişi adları kayboluyor (UI-AKS-16). Rapor maddesi sığmıyor, "Maddeyi sil" kesik (UI-AKS-17). PY'nin projeleri 1,6 ekran aşağıda (UI-AKS-19, K4). | `ModernAllocation.tsx:266-268`; `ReportEditor.tsx:115-123` |
 
