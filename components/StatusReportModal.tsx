@@ -64,7 +64,7 @@ const StatusReportModal: React.FC<StatusReportModalProps> = ({ workspace, projec
       <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col border border-gray-100 dark:border-gray-700" onClick={e => e.stopPropagation()}>
         <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between flex-none">
           <div>
-            <h3 className="text-lg font-semibold text-gray-800 dark:text-white">Haftalık Durum Raporu</h3>
+            <h3 className="text-lg font-semibold text-gray-800 dark:text-white">Durum özeti</h3>
             <p className="text-xs text-gray-400">{report.projectName} · Hafta {report.week}/{report.year} · düzenleyip kopyalayabilirsiniz</p>
           </div>
           <button onClick={onClose} aria-label="Kapat" title="Kapat" className="w-9 h-9 rounded-xl text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"><i className="fa-solid fa-times" aria-hidden="true"></i></button>

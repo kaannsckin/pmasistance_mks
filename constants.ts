@@ -140,8 +140,13 @@ export const STATUS_STYLES: Record<TaskStatus, string> = {
     [TaskStatus.Done]: 'border-t-green-500',
 };
 
+/** Öncelik etiketleri (değerler İngilizce kalır; ekranda Türkçe) (UI-AKS-10) */
+export const PRIORITY_LABELS: Record<'Blocker' | 'High' | 'Medium' | 'Low', string> = {
+    Blocker: 'Engelleyici', High: 'Yüksek', Medium: 'Orta', Low: 'Düşük',
+};
+
 export const STATUS_LABELS: Record<TaskStatus, string> = {
-    [TaskStatus.Backlog]: 'Backlog',
+    [TaskStatus.Backlog]: 'Bekleyen',
     [TaskStatus.ToDo]: 'Yapılacak',
     [TaskStatus.InProgress]: 'Süreçte',
     [TaskStatus.Done]: 'Tamamlandı',

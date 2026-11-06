@@ -144,7 +144,8 @@ export const ModernChat: React.FC<{
         if (a.phase === 'unavailable') {
             return center('alert', 'Yapay zekâ henüz hazır değil', (
                 <>
-                    <p className="m-0 text-[15px] m-text-2">{a.status?.problem || 'AI sunucusu yapılandırılmamış.'}</p>
+                    <p className="m-0 text-[15px] m-text-2">Yapay zekâ bu ortamda henüz kurulmamış. Yöneticiniz Yönetici › AI bağlantısı ekranından kurabilir.</p>
+                    {a.status?.problem && <p className="m-0 text-[13px] m-text-3">Teknik ayrıntı: {a.status.problem}</p>}
                     <p className="m-0 text-[13px] m-text-3">Kurumsal AI anahtarı yalnızca sunucuda tutulur. Yönetici <code>AI_PROVIDER</code>, <code>AI_API_KEY</code>, <code>AI_MODEL</code> değişkenlerini tanımladığında asistan açılır.</p>
                     <button type="button" className="m-btn m-btn-primary" onClick={a.recheck}><Icon name="refresh" size={17} />Tekrar dene</button>
                 </>

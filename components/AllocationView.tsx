@@ -24,6 +24,8 @@ interface AllocationViewProps {
   projects: Project[];
   planLocks: PlanLock[];
   leaves: Leave[];
+  /** Bölüm adları: süzgeçte "U310 · Yazılım" (UI-AKS-09) */
+  departments?: { code: string; name?: string }[];
   titles: TitleDef[];
   currentRole: UserRole;
   identity: Identity;
@@ -74,7 +76,7 @@ const LOCK_STYLES: Record<PlanLockStatus, { label: string; cls: string; icon: st
   locked: { label: 'Kilitli', cls: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-300', icon: 'fa-lock' },
 };
 
-const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, projects, planLocks, leaves, titles, currentRole, identity, onSetCell, onAddAllocation, onDeleteAllocation, onLockAction, onApplySuggestions, onApplyBilledHours, control }) => {
+const AllocationView: React.FC<AllocationViewProps> = ({ departments: departmentInfo, allocations, people, projects, planLocks, leaves, titles, currentRole, identity, onSetCell, onAddAllocation, onDeleteAllocation, onLockAction, onApplySuggestions, onApplyBilledHours, control }) => {
   const wsLike = useMemo(() => ({ people, projects, allocations }), [people, projects, allocations]);
   // Kimlik kapsamına göre hücre/satır düzenlenebilirliği (RBAC)
   const canEnter = identity.role === 'py' || identity.role === 'bolum_sorumlu';
@@ -670,7 +672,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
           )}
           <select value={deptFilter} onChange={e => setDeptFilter(e.target.value)} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 text-[11px] text-gray-700 dark:text-gray-200 focus:outline-none">
             <option value="all">Tüm Bölümler</option>
-            {departments.map(d => <option key={d} value={d}>{d}</option>)}
+            {departments.map(d => { const n = departmentInfo?.find(x => x.code === d)?.name; return <option key={d} value={d}>{n ? `${d} · ${n}` : d}</option>; })}
           </select>
           {tab !== 'roles' && tab !== 'heatmap' && tab !== 'staffing' && tab !== 'forecast' && (
           <div className="bg-gray-50 dark:bg-gray-800 p-1 rounded-xl flex items-center border border-gray-100 dark:border-gray-700">

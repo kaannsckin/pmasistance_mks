@@ -371,10 +371,10 @@ const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSett
           <nav className="hidden md:flex min-w-0 overflow-x-auto items-center gap-1 bg-gray-100/60 dark:bg-gray-900/40 p-1 rounded-xl border border-gray-200/60 dark:border-gray-700/60">
             {canExecutive && <WorkspaceNavItem view={View.Executive} currentView={currentView} setCurrentView={setCurrentView} icon="fa-gauge-high" label="Yönetim" />}
             <WorkspaceNavItem view={View.Portfolio} currentView={currentView} setCurrentView={setCurrentView} icon="fa-table-cells-large" label="Portföy" />
-            <WorkspaceNavItem view={View.Allocations} currentView={currentView} setCurrentView={setCurrentView} icon="fa-people-arrows" label="Tahsis" />
+            <WorkspaceNavItem view={View.Allocations} currentView={currentView} setCurrentView={setCurrentView} icon="fa-people-arrows" label="Ekip ve tahsis" />
             <WorkspaceNavItem view={View.Calendar} currentView={currentView} setCurrentView={setCurrentView} icon="fa-calendar-days" label="Takvim" />
-            <WorkspaceNavItem view={View.RiskReport} currentView={currentView} setCurrentView={setCurrentView} icon="fa-shield-halved" label="Riskler" />
-            <WorkspaceNavItem view={View.WeeklyReport} currentView={currentView} setCurrentView={setCurrentView} icon="fa-file-lines" label="Haftalık Rapor" />
+            <WorkspaceNavItem view={View.RiskReport} currentView={currentView} setCurrentView={setCurrentView} icon="fa-shield-halved" label="Risk raporu" />
+            <WorkspaceNavItem view={View.WeeklyReport} currentView={currentView} setCurrentView={setCurrentView} icon="fa-file-lines" label="Haftalık rapor" />
             <WorkspaceNavItem view={View.Meetings} currentView={currentView} setCurrentView={setCurrentView} icon="fa-handshake" label="Görüşmeler" />
             <WorkspaceNavItem view={View.Expectations} currentView={currentView} setCurrentView={setCurrentView} icon="fa-flag" label="Beklentiler" />
             <WorkspaceNavItem view={View.DataPool} currentView={currentView} setCurrentView={setCurrentView} icon="fa-database" label="Veri Havuzu" />
@@ -476,7 +476,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSett
               title="Bu projenin haftalık durum raporu taslağını üret"
             >
               <i aria-hidden="true" className="fa-solid fa-file-lines text-[11px]"></i>
-              <span className="hidden lg:inline">Durum Raporu</span>
+              <span className="hidden lg:inline">Durum özeti</span>
             </button>
           </div>
         </div>

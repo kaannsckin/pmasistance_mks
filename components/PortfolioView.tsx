@@ -217,7 +217,7 @@ const ProjectCard: React.FC<{
         disabled={!canEditContent}
         onChange={(e) => setRagNote(e.target.value)}
         onBlur={() => { if (ragNote !== (project.ragNote || '')) onSetRag(project.rag, ragNote); }}
-        placeholder={canEditContent ? 'Haftalık durum notu (yönetim ekranında görünür)...' : 'Haftalık durum notu (salt-okunur)'}
+        placeholder={canEditContent ? 'Gidişat notu (yönetim ekranında görünür)...' : 'Gidişat notu (salt-okunur)'}
         className="w-full text-[11px] bg-gray-50 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-700 rounded-xl px-3 py-2 text-gray-600 dark:text-gray-300 placeholder-gray-300 dark:placeholder-gray-600 focus:outline-none focus:border-primary mb-4 disabled:opacity-70 disabled:cursor-not-allowed"
       />
 

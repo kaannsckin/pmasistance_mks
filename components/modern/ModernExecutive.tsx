@@ -76,7 +76,7 @@ const ScorePill: React.FC<{ row: ExecProjectRow }> = ({ row }) => (
 const COLUMNS: { key: ExecSortKey | null; label: string; align?: 'right' }[] = [
     { key: 'name', label: 'Proje' },
     { key: 'health', label: 'Sağlık' },
-    { key: null, label: 'Haftalık durum' },
+    { key: null, label: 'Gidişat' },
     { key: 'progress', label: 'İlerleme' },
     { key: 'spi', label: 'SPI', align: 'right' },
     { key: 'cpi', label: 'CPI', align: 'right' },

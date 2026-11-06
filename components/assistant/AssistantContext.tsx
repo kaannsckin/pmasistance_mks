@@ -315,7 +315,9 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, chat = tru
       setStatus(s);
       if (!s.configured) {
         setPhase('unavailable');
-        throw new AiError(s.problem || 'AI yapılandırılmamış.', 'config');
+        // Kullanıcıya teknik değişken adı ("AI_API_KEY tanımlı değil.") değil, durum söylenir (UI-AKS-18)
+        if (s.problem) console.warn('AI yapılandırması:', s.problem);
+        throw new AiError('Yapay zekâ bu ortamda henüz kurulmamış. Yöneticiniz Yönetici › AI bağlantısı ekranından kurabilir.', 'config');
       }
       if (!(await hasCredentials(s.authMode))) {
         setPhase(s.authMode === 'token' ? 'needs_token' : 'needs_login');

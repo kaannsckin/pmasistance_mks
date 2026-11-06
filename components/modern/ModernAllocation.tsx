@@ -22,6 +22,8 @@ interface ModernAllocationProps {
     projects: Project[];
     planLocks: PlanLock[];
     leaves: Leave[];
+    /** Bölüm adları: süzgeçte "U310 · Yazılım" (UI-AKS-09) */
+    departments?: { code: string; name?: string }[];
     titles: TitleDef[];
     currentRole: UserRole;
     identity: Identity;
@@ -237,7 +239,7 @@ const ModernAllocation: React.FC<ModernAllocationProps> = (props) => {
                 )}
                 <select aria-label="Birim" className={`m-pill ${ctl.deptFilter !== 'all' ? 'is-active' : ''}`} value={ctl.deptFilter} onChange={e => change({ deptFilter: e.target.value })}>
                     <option value="all">Tüm birimler</option>
-                    {departments.map(d => <option key={d} value={d}>{d}</option>)}
+                    {departments.map(d => { const n = props.departments?.find(x => x.code === d)?.name; return <option key={d} value={d}>{n ? `${d} · ${n}` : d}</option>; })}
                 </select>
             </div>
 

@@ -58,7 +58,7 @@ const R = {
     pano: /^(Pano|Genel bakış)$/i,
     gorevler: /^(Görevler|Liste)$/i,
     projeRiskleri: /^Riskler$/i,
-    durumRaporu: /^Durum Raporu$/i,
+    durumRaporu: /^(Durum Raporu|Durum özeti)$/i,
 };
 
 const escapeRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

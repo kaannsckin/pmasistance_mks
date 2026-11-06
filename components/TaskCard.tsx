@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Task, TaskStatus } from '../types';
-import { STATUS_LABELS } from '../constants';
+import { PRIORITY_LABELS, STATUS_LABELS } from '../constants';
 
 interface TaskCardProps {
   task: Task;
@@ -31,7 +31,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onView, onEdit, onNotify, onD
             <div className="p-4 flex flex-col flex-grow">
                 <div className="flex justify-between items-start mb-3">
                     <span className={`px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide rounded border ${PRIORITY_STYLES[task.priority]}`}>
-                        {task.priority}
+                        {PRIORITY_LABELS[task.priority] || task.priority}
                     </span>
                     {task.jiraId && (
                          <a 

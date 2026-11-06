@@ -223,10 +223,10 @@ const ModernProjectOverview: React.FC<ModernProjectOverviewProps> = ({ workspace
                     </Card>
                 )}
 
-                <Card title="Haftalık durum" labelledBy="po-rag" subtitle={canEdit ? 'Yönetim ekranında bu görünür' : undefined}>
+                <Card title="Gidişat" labelledBy="po-rag" subtitle={canEdit ? 'Yolunda / Riskli / Kritik; yönetim ekranında bu görünür' : undefined}>
                     {canEdit ? (
                         <form className="flex flex-col gap-3" onSubmit={e => { e.preventDefault(); onSetRag(project.id, rag, note.trim()); }}>
-                            <div className="m-segmented self-start" role="group" aria-label="Haftalık durum">
+                            <div className="m-segmented self-start" role="group" aria-label="Gidişat">
                                 {RAG_ORDER.map(r => (
                                     <button key={r} type="button" className="m-segment" aria-pressed={rag === r} onClick={() => setRag(rag === r ? undefined : r)}>
                                         <span aria-hidden="true" className="w-2.5 h-2.5 rounded-full" style={{ background: RAG_DOT[r] }}></span>

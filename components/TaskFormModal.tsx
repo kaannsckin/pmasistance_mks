@@ -5,6 +5,7 @@ import { AiButton, AiErrorNote, useAiRun } from './assistant/AiButton';
 import { Task, Resource, TaskStatus, Objective, Person, WorkPackage } from '../types';
 import { activeVersion } from '../utils/projectOverview';
 import DecimalInput from './DecimalInput';
+import { PRIORITY_LABELS, STATUS_LABELS } from '../constants';
 
 interface TaskFormModalProps {
   task: Task | null;
@@ -68,6 +69,7 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, people, 
         includeInSprints: task.includeInSprints ?? true,
         keyResultId: task.keyResultId,
         workPackageId: task.workPackageId,
+        dueDate: task.dueDate,
       });
 
       if (task.keyResultId) {
@@ -239,13 +241,13 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, people, 
              <div>
               <label htmlFor="priority" className="block text-sm font-medium text-black dark:text-white">Öncelik</label>
               <select name="priority" id="priority" value={formData.priority} onChange={handleChange} className={`mt-1 block w-full ${inputStyle}`}>
-                <option>Blocker</option><option>High</option><option>Medium</option><option>Low</option>
+                {(['Blocker', 'High', 'Medium', 'Low'] as const).map(p => <option key={p} value={p}>{PRIORITY_LABELS[p]}</option>)}
               </select>
             </div>
              <div>
               <label htmlFor="status" className="block text-sm font-medium text-black dark:text-white">Durum</label>
               <select name="status" id="status" value={formData.status} onChange={handleChange} className={`mt-1 block w-full ${inputStyle}`}>
-                {Object.values(TaskStatus).map(s => <option key={s} value={s}>{s}</option>)}
+                {Object.values(TaskStatus).map(s => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
               </select>
             </div>
           </div>
@@ -253,6 +255,11 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, people, 
              <div>
               <label htmlFor="version" className="block text-sm font-medium text-black dark:text-white">Sürüm</label>
               <input type="number" name="version" id="version" value={formData.version} onChange={handleChange} min="0" className={`mt-1 block w-full ${inputStyle}`} />
+            </div>
+            {/* Termin (UI-AKS-06): modern formda vardı, klasikte yoktu */}
+            <div>
+              <label htmlFor="dueDate" className="block text-sm font-medium text-black dark:text-white">Termin</label>
+              <input type="date" name="dueDate" id="dueDate" value={formData.dueDate || ''} onChange={e => setFormData(prev => ({ ...prev, dueDate: e.target.value || undefined }))} className={`mt-1 block w-full ${inputStyle}`} />
             </div>
              <div>
               <label htmlFor="predecessor" className="block text-sm font-medium text-black dark:text-white">Öncül Görev</label>

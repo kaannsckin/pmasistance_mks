@@ -174,7 +174,7 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
       {showBrief && <ExecBriefModal brief={brief} year={year} onClose={() => setShowBrief(false)} />}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
         <div>
-          <h2 className="text-2xl font-semibold text-gray-800 dark:text-white tracking-tight">Yönetim Ekranı</h2>
+          <h2 className="text-2xl font-semibold text-gray-800 dark:text-white tracking-tight">Yönetim</h2>
           <p className="text-gray-400 text-xs font-semibold tracking-[0.2em]">
             Portföy Durumu · Plan-Gerçekleşme · Kaynak Sağlığı — {ROLE_LABELS[currentRole]}
           </p>

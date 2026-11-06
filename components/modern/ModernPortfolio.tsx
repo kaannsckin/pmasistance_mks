@@ -104,8 +104,8 @@ const ProjectSheet: React.FC<{
                     {(Object.keys(PROJECT_STATUS_LABEL) as ProjectStatus[]).map(s => <option key={s} value={s}>{PROJECT_STATUS_LABEL[s]}</option>)}
                 </select>
             </Field>
-            <Field label="Haftalık durum" hint="Yönetim ekranında ve raporlarda görünür.">
-                <div className="m-segmented self-start" role="group" aria-label="Haftalık durum">
+            <Field label="Gidişat" hint="Yolunda / Riskli / Kritik; yönetim ekranında ve raporlarda görünür.">
+                <div className="m-segmented self-start" role="group" aria-label="Gidişat">
                     {([undefined, 'green', 'amber', 'red'] as (RagStatus | undefined)[]).map(r => (
                         <button key={r || 'none'} type="button" className="m-segment" aria-pressed={rag === r} disabled={readOnly} onClick={() => setRag(r)}>
                             {r && <span aria-hidden="true" className="w-2.5 h-2.5 rounded-full" style={{ background: RAG_DOT[r] }}></span>}
@@ -114,7 +114,7 @@ const ProjectSheet: React.FC<{
                     ))}
                 </div>
                 <textarea
-                    aria-label="Haftalık durum notu"
+                    aria-label="Gidişat notu"
                     className="m-input py-2.5 min-h-[72px]"
                     value={note}
                     disabled={readOnly}

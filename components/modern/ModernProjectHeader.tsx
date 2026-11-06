@@ -94,7 +94,7 @@ const ModernProjectHeader: React.FC<ModernProjectHeaderProps> = ({ project, owne
                     <div className="flex flex-wrap items-center gap-2.5">
                         <button type="button" className="m-btn m-btn-gray" onClick={onStatusReport}>
                             <Icon name="report" size={18} />
-                            Durum raporu
+                            Durum özeti
                         </button>
                         {onNewTask && (
                             <button type="button" className="m-btn m-btn-primary" onClick={onNewTask}>

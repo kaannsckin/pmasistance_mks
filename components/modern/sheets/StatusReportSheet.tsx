@@ -31,7 +31,7 @@ const StatusReportSheet: React.FC<{ workspace: WorkspaceData; projectId: string;
     return (
         <Sheet
             wide
-            title="Haftalık durum raporu"
+            title="Durum özeti"
             subtitle={`${report.projectName} · ${report.week}. hafta ${report.year} · düzenleyip paylaşabilirsiniz`}
             onClose={onClose}
             footer={<>

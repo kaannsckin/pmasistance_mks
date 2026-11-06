@@ -1596,6 +1596,7 @@ const App: React.FC = () => {
         <ModernAllocation
           allocations={workspace.allocations}
           people={workspace.people}
+          departments={workspace.departments}
           projects={workspace.projects}
           planLocks={workspace.planLocks}
           leaves={workspace.leaves || []}
@@ -1617,6 +1618,7 @@ const App: React.FC = () => {
         <AllocationView
           allocations={workspace.allocations}
           people={workspace.people}
+          departments={workspace.departments}
           projects={workspace.projects}
           planLocks={workspace.planLocks}
           leaves={workspace.leaves || []}
@@ -2053,7 +2055,7 @@ const App: React.FC = () => {
       return items;
     }
     items.push({ id: 'v-portfolio', group: 'Ekranlar', label: 'Portföy', icon: 'fa-table-cells-large', keywords: 'portfoy proje', run: go(View.Portfolio) });
-    items.push({ id: 'v-alloc', group: 'Ekranlar', label: 'İşgücü Tahsisi', icon: 'fa-people-arrows', keywords: 'tahsis aa doluluk isi', run: go(View.Allocations) });
+    items.push({ id: 'v-alloc', group: 'Ekranlar', label: 'Ekip ve tahsis', icon: 'fa-people-arrows', keywords: 'tahsis aa doluluk isi', run: go(View.Allocations) });
     items.push({ id: 'v-calendar', group: 'Ekranlar', label: 'Takvim', icon: 'fa-calendar-days', keywords: 'takvim zaman cizelge ekip is paketi', run: go(View.Calendar) });
     items.push({ id: 'v-risks', group: 'Ekranlar', label: 'Risk raporu', icon: 'fa-shield-halved', keywords: 'risk rapor matris yuksek', run: go(View.RiskReport) });
     items.push({ id: 'v-expect', group: 'Ekranlar', label: 'Yönetimden beklentiler', icon: 'fa-flag', keywords: 'beklenti yonetim karar onay talep eskalasyon', run: go(View.Expectations) });
@@ -2065,6 +2067,11 @@ const App: React.FC = () => {
     items.push({ id: 'a-profile', group: 'Aksiyonlar', label: 'Profil değiştir', icon: 'fa-user-gear', keywords: 'profil rol kimlik kisi degistir', run: () => setIsProfileOpen(true) });
     if (canDataHealth) items.push({ id: 'a-health', group: 'Aksiyonlar', label: 'Veri Sağlığı Denetimi', icon: 'fa-stethoscope', keywords: 'saglik hata yetim', run: () => setIsHealthModalOpen(true) });
     if (canAudit) items.push({ id: 'a-audit', group: 'Aksiyonlar', label: 'Denetim Günlüğü', icon: 'fa-clock-rotate-left', keywords: 'audit log gunluk kayit', run: () => setIsAuditModalOpen(true) });
+    if (activeProject && canNotes) {
+      items.push({ id: 'v-requests', group: 'Ekranlar', label: `Müşteri istekleri — ${activeProject.name}`, icon: 'fa-users-viewfinder', keywords: 'istek talep musteri request', run: go(View.Requests) });
+      items.push({ id: 'v-notes', group: 'Ekranlar', label: `Günlük — ${activeProject.name}`, icon: 'fa-pen-nib', keywords: 'gunluk not notlar toplanti', run: go(View.Notes) });
+    }
+    if (activeProject) items.push({ id: 'v-goals', group: 'Ekranlar', label: `Hedefler — ${activeProject.name}`, icon: 'fa-bullseye', keywords: 'hedef okr anahtar sonuc', run: go(View.Goals) });
     if (activeProject && isModern && roleView.projectSections.has('planning')) items.push({ id: 'v-planning', group: 'Ekranlar', label: `Planlama asistanı — ${activeProject.name}`, icon: 'fa-chart-area', keywords: 'planlama simulasyon monte carlo tahmin olasilik surum yeni kayit benzer', run: go(View.Planning) });
     if (activeProject) items.push({ id: 'a-wp', group: 'Aksiyonlar', label: `İş Paketleri — ${activeProject.name}`, icon: 'fa-briefcase', keywords: 'is paketi work package gorev', run: () => setIsWpManagerOpen(true) });
     items.push({ id: 'egg-rocket', group: 'Sürpriz', label: 'Roketi fırlat', icon: 'fa-rocket', keywords: 'roket rocket uzay', hidden: true, run: () => setEgg({ kind: 'hyper' }) });
