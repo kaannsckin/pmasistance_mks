@@ -130,14 +130,16 @@ export const buildTodoItems = (ws: WorkspaceData, now: Date = new Date()): TodoI
         }
     }
 
-    // 6) Aşırı tahsisler (bu yıl planı)
-    const overs = findOverAllocations(yearAllocations, ws.people, year, 'plan');
+    // 6) Aşırı tahsisler (bu yıl planı). İzinler kapasiteden düşülür: Tahsis, Bölüm özeti ve
+    // Kapasite–talep ekranlarıyla aynı sayı; kişi ve kişi-ay birlikte yazılır (UI-AKS-04)
+    const overs = findOverAllocations(yearAllocations, ws.people, year, 'plan', ws.leaves || []);
     if (overs.length > 0) {
+        const overPeople = new Set(overs.map(o => o.personId)).size;
         items.push({
             id: `over-${year}`,
             severity: 'warn',
             icon: 'fa-triangle-exclamation',
-            text: `${year} planında ${overs.length} aşırı tahsis (kişi-ay) var`,
+            text: `${year} planında ${overPeople} kişi kapasite üstü (${overs.length} kişi-ay)`,
             view: View.Allocations,
         });
     }

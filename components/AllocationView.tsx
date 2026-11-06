@@ -726,7 +726,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
       {overAllocations.length > 0 && (
         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl px-4 py-3">
           <p className="text-xs font-semibold text-red-600 dark:text-red-300 mb-1">
-            <i aria-hidden="true" className="fa-solid fa-triangle-exclamation mr-2"></i>{year} planında {overAllocations.length} aşırı tahsis
+            <i aria-hidden="true" className="fa-solid fa-triangle-exclamation mr-2"></i>{year} planında {new Set(overAllocations.map(o => o.personId)).size} kişi kapasite üstü ({overAllocations.length} kişi-ay)
           </p>
           <p className="text-[11px] text-red-700 dark:text-red-300">
             {overAllocations.slice(0, 4).map(o => `${o.personName} (${MONTHS_TR[o.month - 1]}: ${fmt(o.total)}/${fmt(o.capacity)})`).join(' · ')}

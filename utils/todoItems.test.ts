@@ -84,10 +84,19 @@ describe('buildTodoItems', () => {
         const ws = buildWs();
         ws.allocations.push({ id: 'a2', personId: 'k1', projectId: ws.projects[1].id, year: 2026, plan: { 2: 0.9 }, actual: {} });
         const items = buildTodoItems(ws, NOW);
-        expect(items.some(i => i.text.includes('aşırı tahsis'))).toBe(true);
+        expect(items.find(i => i.id === 'over-2026')?.text).toBe('2026 planında 1 kişi kapasite üstü (1 kişi-ay)');
         const overdue = items.find(i => i.id.startsWith('overdue-'))!;
         expect(overdue.projectId).toBe(ws.projects[0].id);
         expect(overdue.view).toBe(View.Tasks);
+    });
+
+    it('aşırı tahsis izinleri düşer: Tahsis ekranıyla aynı sayı (UI-AKS-04)', () => {
+        const ws = buildWs();
+        // Ocak planı 0,5; kişi Ocak'ta 0,6 AA izinli → efektif kapasite 0,4 → aşım
+        ws.leaves = [{ id: 'l1', personId: 'k1', year: 2026, month: 1, aa: 0.6 }];
+        const over = buildTodoItems(ws, NOW).find(i => i.id === 'over-2026');
+        expect(over?.text).toBe('2026 planında 1 kişi kapasite üstü (1 kişi-ay)');
+        expect(buildTodoItems({ ...ws, leaves: [] }, NOW).some(i => i.id === 'over-2026')).toBe(false);
     });
 
     it('todoBadgeCount info kalemlerini saymaz', () => {

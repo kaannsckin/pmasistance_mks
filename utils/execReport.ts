@@ -104,7 +104,8 @@ export const buildExecReport = (ws: WorkspaceData, year: number): ExecReport => 
         };
     }).sort((a, b) => b.planAA - a.planAA);
 
-    const overAllocations = findOverAllocations(yearAllocations, ws.people, year, 'plan');
+    // İzinler düşülmüş kapasiteyle: uygulamadaki ekranlarla aynı sayı (UI-AKS-04)
+    const overAllocations = findOverAllocations(yearAllocations, ws.people, year, 'plan', ws.leaves || []);
     const totalPlanAA = round2(monthlyPlan.reduce((a, b) => a + b, 0));
     const totalActualAA = round2(monthlyActual.reduce((a, b) => a + b, 0));
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Project, Task, TaskStatus } from '../types';
-import { currentSprint, deadlineLabel, overviewStats, teamLoad, upcomingDeadlines } from './projectOverview';
+import { activeVersion, currentSprint, deadlineLabel, overviewStats, teamLoad, upcomingDeadlines } from './projectOverview';
 import { createProject } from './workspace';
 
 const NOW = new Date(2026, 6, 15); // 15 Temmuz 2026, Çarşamba
@@ -112,5 +112,17 @@ describe('teamLoad', () => {
         expect(members[1]).toMatchObject({ open: 1, done: 3 });
         expect(members[2].open).toBe(0);
         expect(unassigned).toBe(3); // e, g, x
+    });
+});
+
+describe('activeVersion (UI-AKS-01: yeni görevin varsayılan sürümü)', () => {
+    const t = (id: string, version: number, status: TaskStatus) => ({ id, name: id, version, status, availability: true, priority: 'Medium' as const, predecessor: null, unit: '', resourceName: '', time: { best: 1, avg: 1, worst: 1 }, jiraId: '', notes: '' });
+    it('bitmemiş görevi olan en küçük sürüm; geçmiş sürümler bitmişse ileridekini seçer', () => {
+        expect(activeVersion([t('a', 1, TaskStatus.Done), t('b', 12, TaskStatus.Done), t('c', 13, TaskStatus.ToDo)])).toBe(13);
+    });
+    it('hepsi bitmişse son sürüm; sürümlü görev yoksa null (form 1 kullanır)', () => {
+        expect(activeVersion([t('a', 1, TaskStatus.Done), t('b', 4, TaskStatus.Done)])).toBe(4);
+        expect(activeVersion([t('a', 0, TaskStatus.ToDo)])).toBeNull();
+        expect(activeVersion([])).toBeNull();
     });
 });

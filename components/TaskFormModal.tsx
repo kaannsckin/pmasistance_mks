@@ -3,6 +3,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { EMBED_SYSTEM, parsePertEstimate, pertEstimatePrompt } from '../utils/ai/embedded';
 import { AiButton, AiErrorNote, useAiRun } from './assistant/AiButton';
 import { Task, Resource, TaskStatus, Objective, Person, WorkPackage } from '../types';
+import { activeVersion } from '../utils/projectOverview';
+import DecimalInput from './DecimalInput';
 
 interface TaskFormModalProps {
   task: Task | null;
@@ -19,7 +21,8 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, people, 
   const [formData, setFormData] = useState<Omit<Task, 'id' | 'availability'>>({
     name: '',
     priority: 'Medium',
-    version: 1,
+    // Varsayılan sürüm, proje kartının "Şu anki sürüm"üyle aynıdır (UI-AKS-01)
+    version: activeVersion(tasks) ?? 1,
     predecessor: null,
     unit: '',
     resourceName: '',
@@ -76,7 +79,7 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, people, 
 
     } else {
         setFormData({
-            name: '', priority: 'Medium', version: 1, predecessor: null,
+            name: '', priority: 'Medium', version: activeVersion(tasks) ?? 1, predecessor: null,
             unit: '', resourceName: resources.length > 0 ? resources[0].name : '', 
             time: { best: 0, avg: 0, worst: 0 }, jiraId: '', notes: '', status: TaskStatus.ToDo,
             labels: [],
@@ -123,16 +126,8 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, people, 
     setFormData(prev => ({ ...prev, [name]: value }));
   };
   
-  const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-        ...prev,
-        time: {
-            ...prev.time,
-            [name]: parseInt(value, 10) || 0
-        }
-    }));
-  };
+  // Ondalık süre: "1,5" ve "1.5" (UI-KRC-05)
+  const setTime = (key: keyof Task['time']) => (n: number) => setFormData(prev => ({ ...prev, time: { ...prev.time, [key]: n } }));
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -276,9 +271,9 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, people, 
               )}
             </div>
             <div className="grid grid-cols-3 gap-4 mt-1">
-                <input type="number" name="best" value={formData.time.best} onChange={handleTimeChange} placeholder="En İyi" className={`w-full ${inputStyle}`} />
-                <input type="number" name="avg" value={formData.time.avg} onChange={handleTimeChange} placeholder="Ortalama" className={`w-full ${inputStyle}`} />
-                <input type="number" name="worst" value={formData.time.worst} onChange={handleTimeChange} placeholder="En Kötü" className={`w-full ${inputStyle}`} />
+                <DecimalInput name="best" aria-label="En iyi (gün)" value={formData.time.best} onValue={setTime('best')} placeholder="En İyi" className={`w-full ${inputStyle}`} />
+                <DecimalInput name="avg" aria-label="Ortalama (gün)" value={formData.time.avg} onValue={setTime('avg')} placeholder="Ortalama" className={`w-full ${inputStyle}`} />
+                <DecimalInput name="worst" aria-label="En kötü (gün)" value={formData.time.worst} onValue={setTime('worst')} placeholder="En Kötü" className={`w-full ${inputStyle}`} />
             </div>
             {aiRationale && <p className="mt-1.5 text-[11px] text-indigo-600 dark:text-indigo-300"><i aria-hidden="true" className="fa-solid fa-wand-magic-sparkles mr-1"></i>{aiRationale} <span className="text-gray-400">(değerleri değiştirebilirsiniz)</span></p>}
             <div className="mt-1.5"><AiErrorNote message={ai.error} onClose={() => ai.setError(null)} /></div>

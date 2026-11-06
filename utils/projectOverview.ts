@@ -60,12 +60,23 @@ export interface CurrentSprint {
  * Aktif sürüm: bitmemiş görevi olan en küçük sürüm (Havuz hariç). Hepsi
  * bitmişse son sürüm. Tarihler panodaki takvimle aynı kurallarla hesaplanır.
  */
-export const currentSprint = (project: Project, now: Date = new Date()): CurrentSprint | null => {
-    const tasks = (project.tasks || []).filter(t => (t.version || 0) > 0 && t.includeInSprints !== false);
+/**
+ * Aktif sürüm numarası: bitmemiş görevi olan en küçük sürüm (Havuz hariç); hepsi bitmişse son
+ * sürüm; sürümlü görev yoksa null. Yeni görev formu da varsayılan olarak bunu kullanır: aksi
+ * hâlde geçmiş bir sürüme eklenen açık görev "Şu anki sürüm"ü geriye kaydırır (UI-AKS-01).
+ */
+export const activeVersion = (allTasks: Task[]): number | null => {
+    const tasks = (allTasks || []).filter(t => (t.version || 0) > 0 && t.includeInSprints !== false);
     if (tasks.length === 0) return null;
     const versions = [...new Set(tasks.map(t => t.version))].sort((a, b) => a - b);
     const open = versions.find(v => tasks.some(t => t.version === v && t.status !== TaskStatus.Done));
-    const version = open ?? versions[versions.length - 1];
+    return open ?? versions[versions.length - 1];
+};
+
+export const currentSprint = (project: Project, now: Date = new Date()): CurrentSprint | null => {
+    const tasks = (project.tasks || []).filter(t => (t.version || 0) > 0 && t.includeInSprints !== false);
+    const version = activeVersion(tasks);
+    if (version === null) return null;
     const inSprint = tasks.filter(t => t.version === version);
     const done = inSprint.filter(t => t.status === TaskStatus.Done).length;
     const window = buildSprintWindows(project, version)[version - 1];

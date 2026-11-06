@@ -6,6 +6,8 @@ import { ISSUE_TYPE_LABELS } from '../../utils/planning/lifecycle';
 import { estimateFromHistory } from '../../utils/planning/referenceClass';
 import { calculatePertFuzzyPert } from '../../utils/timeline';
 import { useAiRun } from '../assistant/AiButton';
+import { activeVersion } from '../../utils/projectOverview';
+import DecimalInput from '../DecimalInput';
 import { Icon } from './icons';
 import { PRIORITY_META, sprintLabel, TASK_STATUS_LABELS, uniq } from './taskMeta';
 import { Field, Sheet } from './ui';
@@ -34,8 +36,9 @@ type Draft = Omit<Task, 'id' | 'availability'>;
 const STATUSES: TaskStatus[] = [TaskStatus.Backlog, TaskStatus.ToDo, TaskStatus.InProgress, TaskStatus.Done];
 const PRIORITIES: Task['priority'][] = ['Blocker', 'High', 'Medium', 'Low'];
 
-const emptyDraft = (resources: Resource[]): Draft => ({
-    name: '', priority: 'Medium', version: 1, predecessor: null, unit: resources[0]?.unit || '', resourceName: resources[0]?.name || '',
+// Varsayılan sürüm, proje kartının "Şu anki sürüm"üyle aynıdır (UI-AKS-01)
+const emptyDraft = (resources: Resource[], tasks: Task[]): Draft => ({
+    name: '', priority: 'Medium', version: activeVersion(tasks) ?? 1, predecessor: null, unit: resources[0]?.unit || '', resourceName: resources[0]?.name || '',
     time: { best: 0, avg: 0, worst: 0 }, jiraId: '', notes: '', status: TaskStatus.ToDo, labels: [], includeInSprints: true,
     issueType: undefined, estimateSource: undefined,
 });
@@ -57,7 +60,7 @@ const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title
 const TaskFormSheet: React.FC<TaskFormSheetProps> = ({ task, tasks, resources, people, workPackages, objectives, sprintNames, history, onClose, onSave }) => {
     // Müşteri isteğinden açılan taslak listede yoktur → "yeni görev" sayılır
     const isNew = !task || !tasks.some(t => t.id === task.id);
-    const [d, setD] = useState<Draft>(() => (task ? fromTask(task) : emptyDraft(resources)));
+    const [d, setD] = useState<Draft>(() => (task ? fromTask(task) : emptyDraft(resources, tasks)));
     const [objectiveId, setObjectiveId] = useState(() => (task?.keyResultId ? objectives.find(o => o.keyResults.some(kr => kr.id === task.keyResultId))?.id || '' : ''));
     const [labelText, setLabelText] = useState(() => (task?.labels || []).join(', '));
     const [touched, setTouched] = useState(false);
@@ -128,8 +131,8 @@ const TaskFormSheet: React.FC<TaskFormSheetProps> = ({ task, tasks, resources, p
     const num = (key: keyof Task['time'], label: string) => (
         <label className="flex flex-col gap-1.5 min-w-0">
             <span className="text-[13px] font-semibold m-text-2">{label}</span>
-            <input type="number" min={0} inputMode="numeric" className="m-input m-tabular" value={d.time[key] || ''} placeholder="0"
-                onChange={e => set({ time: { ...d.time, [key]: Math.max(0, parseInt(e.target.value, 10) || 0) }, estimateSource: 'user' })} />
+            <DecimalInput className="m-input m-tabular" value={d.time[key]} placeholder="0"
+                onValue={n => set({ time: { ...d.time, [key]: n }, estimateSource: 'user' })} />
         </label>
     );
 

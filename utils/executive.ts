@@ -159,7 +159,7 @@ export const executiveSummary = (ws: WorkspaceData, year: number, now: Date = ne
     if (ragBits.length) parts.push(`${ragBits.join(', ')}.`);
     parts.push(`Portföy sağlığı %${health.orgScore}.`);
     parts.push(`Plan ${planAA} AA, gerçekleşen ${actualAA} AA.`);
-    if (over > 0) parts.push(`${over} aşırı tahsis var.`);
+    if (over > 0) parts.push(`${over} kişi-ay aşırı tahsis var.`);
     if (highRisk > 0) parts.push(`${highRisk} yüksek risk izleniyor.`);
     return parts.join(' ');
 };
