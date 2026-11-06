@@ -106,7 +106,7 @@ const ToolsMenu: React.FC<Pick<ModernSidebarProps, 'onSwitchToClassic' | 'onSave
     // Menü klavyesi (UI-ERS-10): açılınca ilk öğe odaklanır; ↑/↓, Home/End öğeler arasında gezer;
     // Esc ve Tab menüyü kapatır, odak "Diğer araçlar"a döner
     const menuRef = useRef<HTMLDivElement>(null);
-    useEffect(() => { menuRef.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus(); }, []);
+    useEffect(() => { menuRef.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus({ preventScroll: true }); }, []);
     const onMenuKey = (e: React.KeyboardEvent) => {
         const items = [...(menuRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') || [])];
         const i = items.indexOf(document.activeElement as HTMLElement);
@@ -120,10 +120,13 @@ const ToolsMenu: React.FC<Pick<ModernSidebarProps, 'onSwitchToClassic' | 'onSave
             p.onDone(true);
         }
     };
-    const item = (icon: IconName, label: string, run: () => void, trailing?: React.ReactNode) => (
+    const item = (icon: IconName, label: string, run: () => void, trailing?: React.ReactNode, sub?: string) => (
         <button type="button" role="menuitem" tabIndex={-1} onClick={() => { run(); p.onDone(); }} className="m-row-link w-full flex items-center gap-3 min-h-[44px] px-3.5 text-[15px]">
             <span className="m-text-3"><Icon name={icon} size={18} /></span>
-            <span className="flex-1 min-w-0 truncate">{label}</span>
+            <span className="flex-1 min-w-0 flex flex-col leading-tight py-1.5">
+                <span className="truncate">{label}</span>
+                {sub && <span className="text-[13px] m-text-3">{sub}</span>}
+            </span>
             {trailing}
         </button>
     );
@@ -134,7 +137,7 @@ const ToolsMenu: React.FC<Pick<ModernSidebarProps, 'onSwitchToClassic' | 'onSave
             {p.onSaveBackup && item('download', 'Yedeği indir', p.onSaveBackup)}
             {p.onLoadBackup && item('upload', 'Yedekten yükle', () => fileRef.current?.click())}
             {/* Yerel modda yedek yalnız Yönetici yetkisiyle: düğme gizlenmesin, yolu göstersin */}
-            {!p.onSaveBackup && !p.onLoadBackup && !p.cloudLinked && item('upload', 'Yedek al / yükle', p.onOpenProfile, <span className="text-[13px] m-text-3">Admin kimliğiyle</span>)}
+            {!p.onSaveBackup && !p.onLoadBackup && !p.cloudLinked && item('upload', 'Yedek al / yükle', p.onOpenProfile, undefined, 'Yönetici (admin) kimliğiyle')}
             {item('cloud', 'Bulut eşitleme', p.onOpenCloud, p.cloudLinked ? <span className="text-[13px] m-ink-ok font-semibold">Bağlı</span> : undefined)}
             {p.onOpenHealth && item('activity', 'Veri sağlığı', p.onOpenHealth, p.healthAlerts > 0 ? <span className="text-[13px] font-semibold m-ink-warn">{p.healthAlerts}</span> : undefined)}
             {p.onOpenAudit && item('history', 'Denetim günlüğü', p.onOpenAudit)}
@@ -252,7 +255,9 @@ const ModernSidebar: React.FC<ModernSidebarProps> = (props) => {
                 </div>
                 </>}
 
-                <div className="mt-auto flex flex-col gap-1.5">
+                {/* Alt bölüm yapışkan (UI-GRS-17): kenar çubuğu ekrandan uzunsa "Diğer araçlar" ya da Ayarlar'a
+                    basınca tarayıcı düğmeyi görünür kılmak için listeyi kaydırıyor, logo görünümden çıkıyordu */}
+                <div className="mt-auto sticky -bottom-4 -mb-4 pb-4 -mx-3 px-3 m-surface flex flex-col gap-1.5">
                     {assistant?.chatEnabled && !consoleMode && (
                         <button type="button" onClick={() => { assistant.setOpen(true); onClose(); }} className="m-row-link w-full flex items-center gap-3 min-h-[44px] px-2.5 rounded-[10px] text-[15px] font-medium">
                             <span className="m-text-3"><Icon name="message" /></span>

@@ -62,7 +62,7 @@ export const CATEGORY_META: Record<ReportCategory, { label: string; hint: string
     invoice: { label: 'Kesilen faturalar, hakedişler', hint: 'Müşteri, tutar, tarih', needsFigure: true },
     milestone: { label: 'Tamamlanan aşamalar / kabuller', hint: 'Aşama adı, kabul tarihi, onaylayan', needsFigure: true },
     delivery: { label: 'Müşteriye yapılan teslimatlar', hint: 'Ne, kime, hangi tarihte', needsFigure: true },
-    meeting: { label: 'Toplantı, sunum, tanıtım (İG / müşteri)', hint: 'Zaman, yer, katılımcılar, gündem, kararlar' },
+    meeting: { label: 'Toplantı, sunum, tanıtım (iş geliştirme / müşteri)', hint: 'Zaman, yer, katılımcılar, gündem, kararlar' },
     schedule_budget: { label: 'Takvim ve bütçeyi etkileyen gelişmeler', hint: 'Etkisi: kaç gün / ne kadar tutar' },
     event: { label: 'Fuar, konferans, etkinlik katılımı', hint: 'Etkinlik, tarih, yer, katılım şekli' },
     customer_feature: { label: 'Müşteriyi etkileyen önemli geliştirmeler', hint: 'Müşteriye faydası; ör. sahadan gelen sorun giderildi' },

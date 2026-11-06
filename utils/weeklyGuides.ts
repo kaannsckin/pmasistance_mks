@@ -14,7 +14,7 @@ export const WEEKLY_PY: Guide = {
     steps: [
         {
             id: 'welcome', icon: 'report', title: 'Haftalık rapor nedir?',
-            summary: 'Her hafta projenizde neler olduğunu müdürlere kısaca anlatan yazıdır. Siz yazarsınız, bölüm sorumlunuz okur ve onaylar, PYB destek biçimine bakar, sonra müdürlere gider.',
+            summary: 'Her hafta projenizde neler olduğunu müdürlere kısaca anlatan yazıdır. Siz yazarsınız, bölüm sorumlunuz okur ve onaylar, PYB (Proje Yönetim Birimi) destek biçimine bakar, sonra müdürlere gider.',
             how: [
                 'Bu sayfada yöneticisi olduğunuz projeler alt alta listelenir.',
                 'Bir projenin satırına dokunun: o haftanın raporu açılır. Rapor yoksa yenisi açılır.',

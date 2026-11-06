@@ -1454,7 +1454,7 @@ const App: React.FC = () => {
           onOpenProfile={() => setIsProfileOpen(true)}
         />
       );
-      return isModern ? page : <div className="ui-modern rounded-3xl p-4 sm:p-6">{page}</div>;
+      return isModern ? page : <div className="ui-modern ui-modern-hosted rounded-3xl p-4 sm:p-6">{page}</div>;
     }
 
     if (currentView === View.Executive || notesBlocked) {
@@ -1505,7 +1505,7 @@ const App: React.FC = () => {
           onSetStatus={handleSetExpectationStatus}
         />
       );
-      return isModern ? page : <div className="ui-modern rounded-3xl p-4 sm:p-6">{page}</div>;
+      return isModern ? page : <div className="ui-modern ui-modern-hosted rounded-3xl p-4 sm:p-6">{page}</div>;
     }
 
     // Haftalık rapor ve müşteri görüşmeleri (aktif proje gerektirmez)
@@ -1551,7 +1551,7 @@ const App: React.FC = () => {
           onDelete={handleDeleteMeeting}
         />
       );
-      return isModern ? page : <div className="ui-modern rounded-3xl p-4 sm:p-6">{page}</div>;
+      return isModern ? page : <div className="ui-modern ui-modern-hosted rounded-3xl p-4 sm:p-6">{page}</div>;
     }
 
     // Çalışma alanı seviyesi ekranlar (aktif proje gerektirmez)

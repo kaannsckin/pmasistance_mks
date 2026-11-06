@@ -54,10 +54,10 @@
 }
 
 /* Tema rengi seçimi modern arayüzde erişilebilir tonlara eşlenir */
-.ui-modern.theme-emerald { --m-accent: #0F766E; --m-accent-ink: #0B5C56; --m-accent-tint: #E0F2EF; --app-ring: rgba(15, 118, 110, 0.2); }
-.ui-modern.theme-purple  { --m-accent: #5B3FD0; --m-accent-ink: #47309F; --m-accent-tint: #EEEAFB; --app-ring: rgba(91, 63, 208, 0.2); }
+:is(.ui-modern.theme-emerald, .theme-emerald .ui-modern-hosted) { --m-accent: #0F766E; --m-accent-ink: #0B5C56; --m-accent-tint: #E0F2EF; --app-ring: rgba(15, 118, 110, 0.2); }
+:is(.ui-modern.theme-purple, .theme-purple .ui-modern-hosted)  { --m-accent: #5B3FD0; --m-accent-ink: #47309F; --m-accent-tint: #EEEAFB; --app-ring: rgba(91, 63, 208, 0.2); }
 /* Gün Batımı kehribar (UI-GRS-09): uyarı turuncusundan (--m-warn) ayrışsın diye sarıya kaydırıldı */
-.ui-modern.theme-orange  { --m-accent: #8A6100; --m-accent-ink: #6B4B00; --m-accent-tint: #FAF0C0; --app-ring: rgba(138, 97, 0, 0.2); }
+:is(.ui-modern.theme-orange, .theme-orange .ui-modern-hosted)  { --m-accent: #8A6100; --m-accent-ink: #6B4B00; --m-accent-tint: #FAF0C0; --app-ring: rgba(138, 97, 0, 0.2); }
 
 /* Koyu görünüm: html.dark'a bağlı (UI-GRS-01). Sınıfı uygulama koyar: Ayarlar › Görünüm
    "Sistem"de işletim sistemini izler, "Gündüz"/"Gece"de zorlar. Tailwind'in dark: sınıfları da
@@ -90,9 +90,27 @@ html.dark .ui-modern.ui-modern {
   --m-heat-over-bg: #FF453A;  --m-heat-over-ink: #1C0000;
   --m-heat-leave-bg: rgba(255, 159, 10, 0.18); --m-heat-leave-ink: #FFC56B;
 }
-html.dark .ui-modern.theme-emerald { --m-accent: #3CCFB4; --m-accent-ink: #7ADFCB; --m-accent-tint: rgba(60, 207, 180, 0.16); }
-html.dark .ui-modern.theme-purple  { --m-accent: #A48BFF; --m-accent-ink: #C2B2FF; --m-accent-tint: rgba(164, 139, 255, 0.18); }
-html.dark .ui-modern.theme-orange  { --m-accent: #FFD43B; --m-accent-ink: #FFE38A; --m-accent-tint: rgba(255, 212, 59, 0.16); }
+html.dark :is(.ui-modern.theme-emerald, .theme-emerald .ui-modern-hosted) { --m-accent: #3CCFB4; --m-accent-ink: #7ADFCB; --m-accent-tint: rgba(60, 207, 180, 0.16); }
+html.dark :is(.ui-modern.theme-purple, .theme-purple .ui-modern-hosted)  { --m-accent: #A48BFF; --m-accent-ink: #C2B2FF; --m-accent-tint: rgba(164, 139, 255, 0.18); }
+html.dark :is(.ui-modern.theme-orange, .theme-orange .ui-modern-hosted)  { --m-accent: #FFD43B; --m-accent-ink: #FFE38A; --m-accent-tint: rgba(255, 212, 59, 0.16); }
+
+/* Klasik arayüzde açılan modern ekranlar (Risk raporu, Haftalık rapor, Beklentiler; UI-GRS-12):
+   klasik sayfanın ortasında ayrı bir "siyah ada" olmasın diye zemin, yüzey ve yazı tipi klasikten
+   gelir; tema rengi yukarıdaki :is(...) kurallarıyla klasikteki seçimi izler. */
+.ui-modern.ui-modern-hosted {
+  --m-bg: #F9FAFB;
+  --m-surface: #FFFFFF;
+  font-family: inherit;
+  background: transparent;
+}
+html.dark .ui-modern.ui-modern.ui-modern-hosted {
+  --m-bg: #111827;
+  --m-surface: #1F2937;
+  --m-fill: #374151;
+  --m-fill-2: #2B3544;
+  --m-sep: #374151;
+  --m-heat-low-bg: #2B3544;
+}
 
 /* 2. Yardımcı sınıflar ---------------------------------------------------- */
 .ui-modern .m-bg { background-color: var(--m-bg); }

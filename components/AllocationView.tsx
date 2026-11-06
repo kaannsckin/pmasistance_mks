@@ -365,7 +365,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ departments: department
               <table className="w-full min-w-[1100px]">
                 <thead>
                   <tr className="bg-gray-50/80 dark:bg-gray-800/80">
-                    <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-400 sticky left-0 bg-gray-50 dark:bg-gray-800 min-w-[190px]">Personel / İP / Rol</th>
+                    <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-400 sticky left-0 bg-gray-50 dark:bg-gray-800 min-w-[190px]">Personel / İş paketi / Rol</th>
                     {MONTHS_TR.map(m => <th key={m} className="px-1 py-2 text-center text-[11px] font-semibold text-gray-400">{m}</th>)}
                     <th className="px-2 py-2 text-center text-[11px] font-semibold text-gray-400">Yıllık</th>
                     {canEnter && <th className="px-1 py-2 w-8"></th>}
@@ -731,7 +731,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ departments: department
             <i aria-hidden="true" className="fa-solid fa-triangle-exclamation mr-2"></i>{year} planında {new Set(overAllocations.map(o => o.personId)).size} kişi kapasite üstü ({overAllocations.length} kişi-ay)
           </p>
           <p className="text-[11px] text-red-700 dark:text-red-300">
-            {overAllocations.slice(0, 4).map(o => `${o.personName} (${MONTHS_TR[o.month - 1]}: ${fmt(o.total)}/${fmt(o.capacity)})`).join(' · ')}
+            {overAllocations.slice(0, 4).map(o => `${o.personName} (${MONTHS_TR[o.month - 1]}: ${fmt(o.total)} AA tahsis, kapasite ${fmt(o.capacity)})`).join(' · ')}
             {overAllocations.length > 4 && ` · +${overAllocations.length - 4} diğer`}
           </p>
         </div>

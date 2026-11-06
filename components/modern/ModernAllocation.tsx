@@ -168,7 +168,7 @@ const ModernAllocation: React.FC<ModernAllocationProps> = (props) => {
         <div className="flex flex-col gap-6">
             <header className="flex flex-wrap items-end justify-between gap-4">
                 <div>
-                    <p className="m-0 text-[15px] m-text-3">Adam/ay planı · {util.rows.length} kişi · {ctl.year}</p>
+                    <p className="m-0 text-[15px] m-text-3">Adam-ay (AA) planı · {util.rows.length} kişi · {ctl.year}</p>
                     <h1 className="m-0 mt-0.5 text-[34px] leading-tight font-bold tracking-[-0.02em] m-text">Ekip ve tahsis</h1>
                 </div>
                 <div className="flex flex-wrap items-center gap-2.5">

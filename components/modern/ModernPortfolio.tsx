@@ -145,6 +145,14 @@ const ModernPortfolio: React.FC<ModernPortfolioProps> = (props) => {
     const today = todayIso();
 
     useEffect(() => { if (createRequest > 0 && canCreate) setCreating(true); }, [createRequest, canCreate]);
+    const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && !!window.matchMedia?.('(max-width: 639px)').matches);
+    useEffect(() => {
+        const mq = window.matchMedia?.('(max-width: 639px)');
+        if (!mq) return;
+        const on = () => setNarrow(mq.matches);
+        mq.addEventListener('change', on);
+        return () => mq.removeEventListener('change', on);
+    }, []);
 
     const rows = useMemo(() => projects.map(p => {
         const total = p.tasks.length;
@@ -193,6 +201,97 @@ const ModernPortfolio: React.FC<ModernPortfolioProps> = (props) => {
     const greeting = timeGreeting(now);
     const sheetRow = rows.find(r => r.project.id === sheetId);
 
+    // Telefonda iş önce gelir (UI-AKS-19): proje listesi özet kartlarının ve uyarıların üstünde.
+    // Görsel sıra CSS order ile değil DOM'da değişir; ekran okuyucu ve klavye aynı sırayı izler.
+    const summarySection = (
+        <section aria-label="Özet" className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))' }}>
+            {stats.map(s => (
+                <div key={s.label} className="m-surface rounded-2xl px-5 py-4 flex flex-col gap-1">
+                    <span className="text-[15px] m-text-3">{s.label}</span>
+                    <span className="text-[32px] leading-tight font-bold tracking-[-0.02em] m-tabular m-text">{s.value}</span>
+                    <span className={`text-[14px] ${s.tone}`}>{s.note}</span>
+                </div>
+            ))}
+        </section>
+    );
+    const attentionSection = (
+        <section className="flex flex-col gap-3" aria-labelledby="mp-attn">
+            <div className="flex items-center justify-between gap-3">
+                <h2 id="mp-attn" className="m-0 text-[22px] font-bold tracking-[-0.01em] m-text">Dikkat gerektirenler</h2>
+                {todoItems.length > 5 && (
+                    <button type="button" className="m-btn m-btn-plain" onClick={() => setShowAllTodos(v => !v)}>
+                        {showAllTodos ? 'Daha az göster' : `Tümünü göster (${todoItems.length})`}
+                    </button>
+                )}
+            </div>
+            <div className="m-surface rounded-2xl overflow-hidden">
+                {todos.length === 0 && (
+                    <div className="flex items-center gap-3.5 px-4 min-h-[64px]">
+                        <span className="w-9 h-9 rounded-[10px] m-tone-ok flex items-center justify-center flex-none"><Icon name="check" strokeWidth={2.2} /></span>
+                        <span className="text-[16px] font-semibold m-text">Her şey yolunda; bekleyen uyarı yok.</span>
+                    </div>
+                )}
+                {todos.map((t, i) => (
+                    <button key={t.id} type="button" onClick={() => onTodoNavigate(t)} className="m-row-link flex items-center gap-3.5 px-4">
+                        <span className={`w-9 h-9 rounded-[10px] flex items-center justify-center flex-none ${SEVERITY[t.severity].tone}`}><Icon name={SEVERITY[t.severity].icon} strokeWidth={2} /></span>
+                        <span className={`flex-1 min-w-0 py-3.5 text-[16px] m-text ${i > 0 ? 'border-t m-sep' : ''}`}>{t.text}</span>
+                        <span className="m-text-3" style={{ color: 'var(--m-chevron)' }}><Icon name="chevronRight" size={18} strokeWidth={2} /></span>
+                    </button>
+                ))}
+            </div>
+        </section>
+    );
+    const projectsSection = (
+        <section className="flex flex-col gap-3" aria-labelledby="mp-projects">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="min-w-0">
+                    <h2 id="mp-projects" className="m-0 text-[22px] font-bold tracking-[-0.01em] m-text">Projeler</h2>
+                    {sortKey && <p className="m-0 mt-0.5 text-[13px] m-text-3">Sıralama: {PROJECT_SORT_LABELS[sortKey].toLocaleLowerCase('tr-TR')}</p>}
+                </div>
+                <div className="m-segmented" role="group" aria-label="Duruma göre süz">
+                    {FILTERS.map(f => (
+                        <button key={f.id} type="button" className="m-segment" aria-pressed={filter === f.id} onClick={() => setFilter(f.id)}>{f.label}</button>
+                    ))}
+                </div>
+            </div>
+            <div className="m-surface rounded-2xl overflow-hidden">
+                {filtered.length === 0 && (
+                    <p className="m-0 px-5 py-6 text-[15px] m-text-3">
+                        {projects.length === 0 ? (canCreate ? 'Henüz proje yok. "Yeni proje" ile başlayın.' : 'Kapsamınızda görüntülenecek proje yok.') : 'Bu filtrede proje yok.'}
+                    </p>
+                )}
+                {filtered.map((r, i) => {
+                    const p = r.project;
+                    const pill = p.rag ? RAG_TONE[p.rag] : { label: PROJECT_STATUS_LABEL[p.status], tone: p.status === 'tamamlandi' ? 'm-tone-ok' : p.status === 'devam' ? 'm-tone-accent' : 'm-tone-hold' };
+                    return (
+                        <div key={p.id} className={`flex items-center gap-2 pr-2 ${i > 0 ? 'border-t m-sep' : ''}`}>
+                            <button type="button" onClick={() => onOpenProject(p.id)} className="m-row-link flex-1 min-w-0 flex flex-wrap items-center gap-x-7 gap-y-3 px-5 py-3.5 min-h-[76px]">
+                                <span className="flex items-center gap-3.5 min-w-0" style={{ flex: '1 1 260px' }}>
+                                    <span aria-hidden="true" className="w-2.5 h-2.5 rounded-full flex-none" style={{ background: RAG_DOT[p.rag || 'none'] }}></span>
+                                    <span className="min-w-0 flex flex-col gap-0.5">
+                                        <span className="text-[17px] font-semibold m-text truncate">{p.name}</span>
+                                        <span className="text-[14px] m-text-3">
+                                            {r.owner || 'Sahip atanmadı'} · {r.total} görev
+                                            {r.overdue > 0 && <span className="m-ink-bad font-semibold"> · {r.overdue} gecikmiş</span>}
+                                        </span>
+                                    </span>
+                                </span>
+                                <span className="flex items-center gap-2.5" style={{ flex: '0 1 200px' }} aria-label={`İlerleme yüzde ${r.pct}`}>
+                                    <span aria-hidden="true" className="flex-1 h-1.5 rounded-full m-fill overflow-hidden"><span className="block h-full rounded-full" style={{ width: `${r.pct}%`, background: 'var(--m-accent)' }}></span></span>
+                                    <span className="w-11 text-right text-[14px] m-tabular m-text">%{r.pct}</span>
+                                </span>
+                                <span className="flex-none min-w-[124px]">
+                                    <span className={`inline-flex items-center h-7 px-3 rounded-full text-[13px] font-semibold whitespace-nowrap ${pill.tone}`}>{pill.label}</span>
+                                </span>
+                            </button>
+                            <button type="button" className="m-icon-btn" aria-label={`${p.name}: proje bilgileri`} onClick={() => setSheetId(p.id)}><Icon name="more" /></button>
+                        </div>
+                    );
+                })}
+            </div>
+        </section>
+    );
+
     const create = () => {
         const name = newName.trim();
         if (!name) return;
@@ -225,90 +324,7 @@ const ModernPortfolio: React.FC<ModernPortfolioProps> = (props) => {
                 </div>
             )}
 
-            <section aria-label="Özet" className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))' }}>
-                {stats.map(s => (
-                    <div key={s.label} className="m-surface rounded-2xl px-5 py-4 flex flex-col gap-1">
-                        <span className="text-[15px] m-text-3">{s.label}</span>
-                        <span className="text-[32px] leading-tight font-bold tracking-[-0.02em] m-tabular m-text">{s.value}</span>
-                        <span className={`text-[14px] ${s.tone}`}>{s.note}</span>
-                    </div>
-                ))}
-            </section>
-
-            <section className="flex flex-col gap-3" aria-labelledby="mp-attn">
-                <div className="flex items-center justify-between gap-3">
-                    <h2 id="mp-attn" className="m-0 text-[22px] font-bold tracking-[-0.01em] m-text">Dikkat gerektirenler</h2>
-                    {todoItems.length > 5 && (
-                        <button type="button" className="m-btn m-btn-plain" onClick={() => setShowAllTodos(v => !v)}>
-                            {showAllTodos ? 'Daha az göster' : `Tümünü göster (${todoItems.length})`}
-                        </button>
-                    )}
-                </div>
-                <div className="m-surface rounded-2xl overflow-hidden">
-                    {todos.length === 0 && (
-                        <div className="flex items-center gap-3.5 px-4 min-h-[64px]">
-                            <span className="w-9 h-9 rounded-[10px] m-tone-ok flex items-center justify-center flex-none"><Icon name="check" strokeWidth={2.2} /></span>
-                            <span className="text-[16px] font-semibold m-text">Her şey yolunda; bekleyen uyarı yok.</span>
-                        </div>
-                    )}
-                    {todos.map((t, i) => (
-                        <button key={t.id} type="button" onClick={() => onTodoNavigate(t)} className="m-row-link flex items-center gap-3.5 px-4">
-                            <span className={`w-9 h-9 rounded-[10px] flex items-center justify-center flex-none ${SEVERITY[t.severity].tone}`}><Icon name={SEVERITY[t.severity].icon} strokeWidth={2} /></span>
-                            <span className={`flex-1 min-w-0 py-3.5 text-[16px] m-text ${i > 0 ? 'border-t m-sep' : ''}`}>{t.text}</span>
-                            <span className="m-text-3" style={{ color: 'var(--m-chevron)' }}><Icon name="chevronRight" size={18} strokeWidth={2} /></span>
-                        </button>
-                    ))}
-                </div>
-            </section>
-
-            <section className="flex flex-col gap-3" aria-labelledby="mp-projects">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="min-w-0">
-                        <h2 id="mp-projects" className="m-0 text-[22px] font-bold tracking-[-0.01em] m-text">Projeler</h2>
-                        {sortKey && <p className="m-0 mt-0.5 text-[13px] m-text-3">Sıralama: {PROJECT_SORT_LABELS[sortKey].toLocaleLowerCase('tr-TR')}</p>}
-                    </div>
-                    <div className="m-segmented" role="group" aria-label="Duruma göre süz">
-                        {FILTERS.map(f => (
-                            <button key={f.id} type="button" className="m-segment" aria-pressed={filter === f.id} onClick={() => setFilter(f.id)}>{f.label}</button>
-                        ))}
-                    </div>
-                </div>
-                <div className="m-surface rounded-2xl overflow-hidden">
-                    {filtered.length === 0 && (
-                        <p className="m-0 px-5 py-6 text-[15px] m-text-3">
-                            {projects.length === 0 ? (canCreate ? 'Henüz proje yok. "Yeni proje" ile başlayın.' : 'Kapsamınızda görüntülenecek proje yok.') : 'Bu filtrede proje yok.'}
-                        </p>
-                    )}
-                    {filtered.map((r, i) => {
-                        const p = r.project;
-                        const pill = p.rag ? RAG_TONE[p.rag] : { label: PROJECT_STATUS_LABEL[p.status], tone: p.status === 'tamamlandi' ? 'm-tone-ok' : p.status === 'devam' ? 'm-tone-accent' : 'm-tone-hold' };
-                        return (
-                            <div key={p.id} className={`flex items-center gap-2 pr-2 ${i > 0 ? 'border-t m-sep' : ''}`}>
-                                <button type="button" onClick={() => onOpenProject(p.id)} className="m-row-link flex-1 min-w-0 flex flex-wrap items-center gap-x-7 gap-y-3 px-5 py-3.5 min-h-[76px]">
-                                    <span className="flex items-center gap-3.5 min-w-0" style={{ flex: '1 1 260px' }}>
-                                        <span aria-hidden="true" className="w-2.5 h-2.5 rounded-full flex-none" style={{ background: RAG_DOT[p.rag || 'none'] }}></span>
-                                        <span className="min-w-0 flex flex-col gap-0.5">
-                                            <span className="text-[17px] font-semibold m-text truncate">{p.name}</span>
-                                            <span className="text-[14px] m-text-3">
-                                                {r.owner || 'Sahip atanmadı'} · {r.total} görev
-                                                {r.overdue > 0 && <span className="m-ink-bad font-semibold"> · {r.overdue} gecikmiş</span>}
-                                            </span>
-                                        </span>
-                                    </span>
-                                    <span className="flex items-center gap-2.5" style={{ flex: '0 1 200px' }} aria-label={`İlerleme yüzde ${r.pct}`}>
-                                        <span aria-hidden="true" className="flex-1 h-1.5 rounded-full m-fill overflow-hidden"><span className="block h-full rounded-full" style={{ width: `${r.pct}%`, background: 'var(--m-accent)' }}></span></span>
-                                        <span className="w-11 text-right text-[14px] m-tabular m-text">%{r.pct}</span>
-                                    </span>
-                                    <span className="flex-none min-w-[124px]">
-                                        <span className={`inline-flex items-center h-7 px-3 rounded-full text-[13px] font-semibold whitespace-nowrap ${pill.tone}`}>{pill.label}</span>
-                                    </span>
-                                </button>
-                                <button type="button" className="m-icon-btn" aria-label={`${p.name}: proje bilgileri`} onClick={() => setSheetId(p.id)}><Icon name="more" /></button>
-                            </div>
-                        );
-                    })}
-                </div>
-            </section>
+            {narrow ? <>{projectsSection}{attentionSection}{summarySection}</> : <>{summarySection}{attentionSection}{projectsSection}</>}
 
             {creating && (
                 <Sheet

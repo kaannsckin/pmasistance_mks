@@ -120,7 +120,7 @@ describe('evaluateProjectHealth', () => {
         expect(h.confidence).toBe('high');
         expect(h.score).toBe(80); // 100 × .605 / .76
         expect(f(h, 'spi').points).toBe(11.8); // 100 × .18 × (1 − .5) / .76
-        expect(h.reasons.slice(0, 2)).toEqual(['Takvim hafif geride (SPI 0,9)', 'Bütçe hafif aşımda (CPI 0,9)']);
+        expect(h.reasons.slice(0, 2)).toEqual(['Takvim hafif geride: plana göre %90 ilerleme (SPI 0,9)', 'Bütçe hafif aşımda: maliyet verimi %90 (CPI 0,9)']);
         // Kayıpların toplamı 100 − skor
         expect(h.factors.reduce((s, x) => s + x.points, 0)).toBeCloseTo(100 - h.score, 0);
     });

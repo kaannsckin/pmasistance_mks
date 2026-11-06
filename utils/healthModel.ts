@@ -378,9 +378,10 @@ const weightedMean = (factors: HealthFactor[]): { mean: number; coverage: number
 
 const reasonFor = (f: HealthFactor, raw: RawInputs, project: Project): string => {
     switch (f.key) {
-        case 'rag': return project.rag === 'red' ? 'Kritik RAG' : 'Riskli RAG';
-        case 'spi': return (raw.evm.spi ?? 1) < 0.9 ? `Takvim gerisinde (SPI ${fmt(raw.evm.spi!)})` : `Takvim hafif geride (SPI ${fmt(raw.evm.spi!)})`;
-        case 'cpi': return (raw.evm.cpi ?? 1) < 0.9 ? `Bütçe aşımı (CPI ${fmt(raw.evm.cpi!)})` : `Bütçe hafif aşımda (CPI ${fmt(raw.evm.cpi!)})`;
+        case 'rag': return project.rag === 'red' ? 'Gidişat: Kritik' : 'Gidişat: Riskli';
+        // Kısaltma tek başına bırakılmaz (UI-AKS-14): önce düz anlamı, sonra gösterge
+        case 'spi': return `${(raw.evm.spi ?? 1) < 0.9 ? 'Takvim gerisinde' : 'Takvim hafif geride'}: plana göre %${Math.round((raw.evm.spi ?? 1) * 100)} ilerleme (SPI ${fmt(raw.evm.spi!)})`;
+        case 'cpi': return `${(raw.evm.cpi ?? 1) < 0.9 ? 'Bütçe aşımı' : 'Bütçe hafif aşımda'}: maliyet verimi %${Math.round((raw.evm.cpi ?? 1) * 100)} (CPI ${fmt(raw.evm.cpi!)})`;
         case 'overdue': return `${raw.overdue} geciken görev`;
         case 'risk': return raw.highRisks ? `${raw.highRisks} yüksek risk` : `${raw.mediumRisks} orta risk`;
         case 'pm': return `PY puanı ${raw.pmScore}/10`;

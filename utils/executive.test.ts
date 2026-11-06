@@ -34,7 +34,7 @@ describe('projectHealth', () => {
         // 100 × (0 + .078 + 0 + .05) / .39 = 33
         expect(red.score).toBe(33);
         expect(red.band).toBe('bad');
-        expect(red.reasons).toContain('Kritik RAG');
+        expect(red.reasons).toContain('Gidişat: Kritik');
         expect(red.reasons[0]).toBe('1 geciken görev'); // en büyük kayıp başta
         expect(red.highRisks).toBe(1);
         expect(red.coverage).toBe(0.39);
