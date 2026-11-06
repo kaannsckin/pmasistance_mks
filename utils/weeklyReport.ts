@@ -315,7 +315,12 @@ export const saveReport = (
     // Geçen haftanın planı rapor içeriğidir (aşamanın sahibi düzeltebilir); AI değerlendirmesi buradan yazılmaz
     const planReview = draft.kind === 'project' ? cleanPlanReview(draft.planReview) : undefined;
     const content = { thisWeek: draft.thisWeek, nextWeek: draft.nextWeek, abbreviations: draft.abbreviations, worklog: draft.worklog, aiDraft: draft.aiDraft, pmScore, pmScoreNote, planReview };
-    let r: WeeklyReport = existing ? editReport(existing, content, actor, now) : { ...createReport({ kind: draft.kind, projectId: draft.projectId, departmentCode: draft.departmentCode, year: draft.year, week: draft.week }, actor, now), ...content, id: draft.id };
+    // İçerik değişmediyse (ör. bölüm sorumlusu dokunmadan onaylıyor) "düzenledi" kaydı düşülmez (UI-KRC-16)
+    const unchanged = !!existing && JSON.stringify(content) === JSON.stringify({
+        thisWeek: existing.thisWeek, nextWeek: existing.nextWeek, abbreviations: existing.abbreviations, worklog: existing.worklog,
+        aiDraft: existing.aiDraft, pmScore: existing.pmScore, pmScoreNote: existing.pmScoreNote, planReview: existing.planReview,
+    });
+    let r: WeeklyReport = existing ? (unchanged ? existing : editReport(existing, content, actor, now)) : { ...createReport({ kind: draft.kind, projectId: draft.projectId, departmentCode: draft.departmentCode, year: draft.year, week: draft.week }, actor, now), ...content, id: draft.id };
     if (o.advance) {
         const flow = reportFlowOf(ws);
         if (lintCounts(lintReport(r, o.dictionary)).errors > 0 || !nextStage(r, flow)) return null;

@@ -13,7 +13,8 @@ interface TaskGalleryProps {
   onEditTask: (task: Task) => void;
   onViewTask: (task: Task) => void;
   onNotifyTask: (task: Task) => void;
-  onNewTask: () => void;
+  /** Yoksa (yazma yetkisi yok) ekleme ve içe aktarma düğmeleri gösterilmez */
+  onNewTask?: () => void;
   onDeleteTask: (taskId: string) => void;
   onDataImport: (tasks: Task[], resources: Resource[]) => void;
   onTaskStatusChange: (taskId: string, newStatus: TaskStatus) => void;
@@ -230,6 +231,7 @@ const TaskGallery: React.FC<TaskGalleryProps> = ({ tasks, resources, onEditTask,
                 {isLoading ? <i aria-hidden="true" className="fa-solid fa-spinner fa-spin"></i> : <i aria-hidden="true" className="fa-solid fa-file-csv"></i>}
                 <span>{isLoading ? 'Yükleniyor...' : "CSV'den Aktar"}</span>
             </button>
+             {onNewTask && (<>
              <button
                 onClick={handleJiraImportClick}
                 disabled={isLoading}
@@ -246,6 +248,7 @@ const TaskGallery: React.FC<TaskGalleryProps> = ({ tasks, resources, onEditTask,
                 {isLoading ? <i aria-hidden="true" className="fa-solid fa-spinner fa-spin"></i> : <i aria-hidden="true" className="fa-solid fa-file-excel"></i>}
                 <span>{isLoading ? 'Yükleniyor...' : "Excel'den Aktar"}</span>
             </button>
+             </>)}
             <div className="relative" ref={exportMenuRef}>
                 <button
                     onClick={() => setIsExportMenuOpen(prev => !prev)}
@@ -286,6 +289,7 @@ const TaskGallery: React.FC<TaskGalleryProps> = ({ tasks, resources, onEditTask,
                     </div>
                 )}
             </div>
+            {onNewTask && (
             <button
                 onClick={onNewTask}
                 className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-md hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
@@ -293,6 +297,7 @@ const TaskGallery: React.FC<TaskGalleryProps> = ({ tasks, resources, onEditTask,
                 <i aria-hidden="true" className="fa-solid fa-plus"></i>
                 <span>Yeni Görev</span>
             </button>
+            )}
         </div>
       </div>
 

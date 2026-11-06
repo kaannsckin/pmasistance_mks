@@ -72,6 +72,8 @@ const TaskFormSheet: React.FC<TaskFormSheetProps> = ({ task, tasks, resources, p
     };
     const [objectiveId, setObjectiveId] = useState(() => (task?.keyResultId ? objectives.find(o => o.keyResults.some(kr => kr.id === task.keyResultId))?.id || '' : ''));
     const [labelText, setLabelText] = useState(() => (task?.labels || []).join(', '));
+    // Ad uyarısı yalnız kaydetme denenince: alandan çıkınca çıkan satır formu itiyor, sonraki tıklama
+    // (Öncelik, Durum) boşa düşüyordu (UI-AKS-15)
     const [touched, setTouched] = useState(false);
     const ai = useAiRun();
     const [aiNote, setAiNote] = useState<string | null>(null);
@@ -159,7 +161,7 @@ const TaskFormSheet: React.FC<TaskFormSheetProps> = ({ task, tasks, resources, p
             <form className="flex flex-col gap-6" onSubmit={e => { e.preventDefault(); save(); }}>
                 <Field label="Görev adı" htmlFor="tf-name">
                     <input id="tf-name" className="m-input" autoFocus={isNew} value={d.name} aria-invalid={!!nameError} placeholder="Ör. Kimlik doğrulama servisini yaz"
-                        onChange={e => set({ name: e.target.value })} onBlur={() => setTouched(true)} />
+                        onChange={e => set({ name: e.target.value })} />
                     {nameError && <span role="alert" className="text-[13px] m-ink-bad">{nameError}</span>}
                 </Field>
 

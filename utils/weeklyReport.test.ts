@@ -352,3 +352,16 @@ describe('akış işlemleri (yetki işlem anında)', () => {
         expect(glossaryFor([report as WeeklyReport], base).some(g => g.abbr === 'NEHİR')).toBe(false);
     });
 });
+
+describe('denetim izi (UI-KRC-16)', () => {
+    it('bölüm sorumlusu içeriğe dokunmadan kaydederse "düzenledi" kaydı düşülmez; değiştirirse düşülür', () => {
+        const base = { ...createReport({ kind: 'project', projectId: 'a', departmentCode: 'U310', year: 2026, week: 41 }, py, NOW), stage: 'bs_review' as const, thisWeek: [newItem('delivery', '3 Ekim 2026 tarihinde sürüm 2 teslim edildi.')] };
+        const ws = { ...buildWs(), weeklyReports: [base] };
+        const id = { role: 'bolum_sorumlu' as const, personId: 'bs1' };
+        const same = saveReport(ws, id, { ...base }, bs, { now: NOW });
+        expect(same).not.toBeNull();
+        expect(same!.report.history.map(h => h.action)).not.toContain('edit');
+        const changed = saveReport(ws, id, { ...base, thisWeek: [newItem('delivery', '3 Ekim 2026 tarihinde sürüm 2 teslim edildi; kabul alındı.')] }, bs, { now: NOW });
+        expect(changed!.report.history.map(h => h.action)).toContain('edit');
+    });
+});

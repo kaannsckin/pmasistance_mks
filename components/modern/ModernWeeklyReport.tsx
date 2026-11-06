@@ -261,7 +261,10 @@ const ModernWeeklyReport: React.FC<ModernWeeklyReportProps> = ({
                 <div className="max-w-[70ch]">
                     <h1 className="m-0 text-[34px] leading-tight font-bold tracking-[-0.02em] m-text">Haftalık rapor</h1>
                     <p className="m-0 mt-1 text-[15px] m-text-3">
-                        {exec ? 'Enstitü genelinde bu haftanın gelişmeleri ve gelecek hafta planları, bölüm bazında.'
+                        {exec ? (wk.year === current.year && wk.week === current.week
+                            ? 'Enstitü genelinde bu haftanın gelişmeleri ve gelecek hafta planları, bölüm bazında.'
+                            // Müdür yayınlanan son haftayla açar: başlık o haftayı söyler, "bu hafta" demez (UI-AKS-07)
+                            : `Enstitü genelinde ${wk.week}. haftanın (yayınlanan son hafta) gelişmeleri ve planları, bölüm bazında.`)
                             : steward ? 'Bölüm sorumlularının onayladığı raporları formata göre denetleyin, haftayı yayınlayın ve müdürlere gönderin.'
                                 : bs ? 'Bölümünüzün proje raporlarını düzenleyip onaylayın; bölüm genel gelişmelerini ekleyin.'
                                     : 'Projelerinizin haftalık raporunu yazın; AI önerisi notlarınızdan, worklog ve görüşmelerden taslak çıkarır.'}

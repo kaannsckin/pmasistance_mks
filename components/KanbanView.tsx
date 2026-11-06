@@ -26,7 +26,8 @@ interface KanbanViewProps {
   onDeleteSprint: (sprintNumber: number) => void;
   onOpenSettings: () => void;
   onViewTaskDetails: (taskId: string) => void;
-  onNewTask: () => void;
+  /** Yoksa (yazma yetkisi yok) "Yeni görev" gösterilmez */
+  onNewTask?: () => void;
 }
 
 const getFirstWorkday = (date: Date): Date => {
@@ -235,9 +236,9 @@ const KanbanView: React.FC<KanbanViewProps> = ({ tasks, resources, sprintDuratio
              </div>
           </div>
           <div className="flex items-center space-x-2">
-            <button onClick={onNewTask} className="bg-primary hover:opacity-90 text-white h-9 px-4 rounded-xl shadow-md transition-all font-black text-[10px] uppercase tracking-widest flex items-center" style={{ backgroundColor: 'var(--app-primary)' }}>
+            {onNewTask && <button onClick={onNewTask} className="bg-primary hover:opacity-90 text-white h-9 px-4 rounded-xl shadow-md transition-all font-black text-[10px] uppercase tracking-widest flex items-center" style={{ backgroundColor: 'var(--app-primary)' }}>
                 <i aria-hidden="true" className="fa-solid fa-plus mr-2"></i> YENİ GÖREV
-            </button>
+            </button>}
             <div className="bg-gray-50 dark:bg-gray-800 p-1 rounded-xl flex items-center border border-gray-100 dark:border-gray-700">
                 <button onClick={() => setIsCompact(true)} className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${isCompact ? 'bg-white dark:bg-gray-700 text-primary shadow-sm border border-gray-100 dark:border-gray-600' : 'text-gray-400 hover:text-gray-600'}`} style={isCompact ? { color: 'var(--app-primary)' } : {}}>Kompakt</button>
                 <button onClick={() => setIsCompact(false)} className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${!isCompact ? 'bg-white dark:bg-gray-700 text-primary shadow-sm border border-gray-100 dark:border-gray-600' : 'text-gray-400 hover:text-gray-600'}`} style={!isCompact ? { color: 'var(--app-primary)' } : {}}>Detaylı</button>

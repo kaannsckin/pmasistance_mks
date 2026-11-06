@@ -6,7 +6,8 @@ interface RoadmapViewProps {
   tasks: Task[];
   resources: Resource[];
   onTaskStatusChange: (taskId: string, newStatus: TaskStatus) => void;
-  onNewTask: () => void;
+  /** Yoksa (yazma yetkisi yok) ekleme düğmeleri gösterilmez */
+  onNewTask?: () => void;
   onViewTask: (task: Task) => void;
   onEditTask: (task: Task) => void;
   onDeleteTask: (taskId: string) => void;
@@ -167,9 +168,9 @@ const RoadmapView: React.FC<RoadmapViewProps> = ({ tasks, resources, onTaskStatu
                     <span className="font-bold text-gray-600 dark:text-gray-300">{col.label}</span>
                     <span className="text-xs font-mono bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 px-2 py-0.5 rounded-full">{tasksInCol.length}</span>
                   </div>
-                  <button aria-label="Yeni görev" onClick={onNewTask} className="text-gray-400 hover:text-primary dark:hover:text-primary p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
+                  {onNewTask && <button aria-label="Yeni görev" onClick={onNewTask} className="text-gray-400 hover:text-primary dark:hover:text-primary p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
                     <i aria-hidden="true" className="fa-solid fa-plus text-sm"></i>
-                  </button>
+                  </button>}
                 </div>
 
                 <div className="flex-grow space-y-3 overflow-y-auto pr-2 pb-20">
@@ -182,9 +183,9 @@ const RoadmapView: React.FC<RoadmapViewProps> = ({ tasks, resources, onTaskStatu
                             onDeleteTask={onDeleteTask}
                         />
                     ))}
-                    <button onClick={onNewTask} className="w-full text-sm p-3 rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
+                    {onNewTask && <button onClick={onNewTask} className="w-full text-sm p-3 rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
                         <i aria-hidden="true" className="fa-solid fa-plus mr-2"></i> Yeni Görev Ekle
-                    </button>
+                    </button>}
                 </div>
               </div>
             );

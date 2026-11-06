@@ -154,9 +154,19 @@ const MODERN_PROJECT_VIEWS: View[] = [View.Overview, View.Roadmap, View.Tasks, V
 
 /** Görünüm tercihinin index.html'deki erken betik için kopyası */
 const COLOR_SCHEME_KEY = 'planasistan-gorunum';
+/** Açık ekranın sekme oturumundaki kopyası (yenilemede konum korunur) */
+const VIEW_KEY = 'planasistan-ekran';
 
 const App: React.FC = () => {
-  const [currentView, setCurrentViewState] = useState<View>(View.Portfolio);
+  // Açık ekran sekme oturumunda hatırlanır: yenileme kullanıcıyı Portföy'e atmasın (UI-AKS-13).
+  // Açık proje zaten çalışma alanında saklı; yetkisiz ekrana dönülürse mevcut yönlendirmeler düzeltir.
+  const [currentView, setCurrentViewState] = useState<View>(() => {
+    try {
+      const n = Number(sessionStorage.getItem(VIEW_KEY));
+      return sessionStorage.getItem(VIEW_KEY) !== null && Number.isInteger(n) && View[n] !== undefined ? (n as View) : View.Portfolio;
+    } catch { return View.Portfolio; }
+  });
+  useEffect(() => { try { sessionStorage.setItem(VIEW_KEY, String(currentView)); } catch { /* depo kapalı */ } }, [currentView]);
   // Ekran değişikliği kaydedilmemiş işi (haftalık rapor taslağı, görev formu) sormadan atmaz (UI-KRC-04)
   const setCurrentView = useCallback((v: React.SetStateAction<View>) => {
     if (!confirmLeave()) return;
@@ -490,12 +500,27 @@ const App: React.FC = () => {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  // Bildirim (UI-AKS-05, UI-ERS-09): kayıt sonrası görünür kısa bildirim; ekran okuyucuya her zaman
+  // var olan bir canlı bölgeden duyurulur (canlı bölge sonradan eklenirse okunmaz)
+  const [notice, setNotice] = useState<string | null>(null);
+  const [liveText, setLiveText] = useState('');
+  const noticeTimer = useRef<number | undefined>(undefined);
+  const announce = useCallback((message: string, visual = true) => {
+    setLiveText('');
+    window.setTimeout(() => setLiveText(message), 50);
+    if (!visual) return;
+    window.clearTimeout(noticeTimer.current);
+    setNotice(message);
+    noticeTimer.current = window.setTimeout(() => setNotice(null), 4000);
+  }, []);
+
   // Geri-al bildirimi (silme gibi yıkıcı aksiyonlar için)
   const showUndo = useCallback((message: string, snapshot: WorkspaceData) => {
+    announce(message, false);
     window.clearTimeout(undoTimer.current);
     setUndo({ message, snapshot });
     undoTimer.current = window.setTimeout(() => setUndo(null), 7000);
-  }, []);
+  }, [announce]);
   const handleUndo = useCallback(() => {
     if (undo) setWorkspace(undo.snapshot);
     setUndo(null);
@@ -1348,6 +1373,7 @@ const App: React.FC = () => {
 
   const saveTaskFromForm = (t: Task) => {
     const requestId = convertingRequestId;
+    const isNewTask = !activeProject?.tasks.some(x => x.id === t.id);
     updateActiveProject(p => {
       // Formda olmayan alanlar (yaşam döngüsü damgaları, Jira alanları) korunur
       const tasks = p.tasks.some(x => x.id === t.id) ? p.tasks.map(x => x.id === t.id ? { ...x, ...t } : x) : [...p.tasks, t];
@@ -1370,6 +1396,8 @@ const App: React.FC = () => {
     });
     setConvertingRequestId(null);
     setIsFormModalOpen(false);
+    // Kayıt yalnız yazma yetkisiyle yapılır (updateProjectById); bildirim de yalnız o zaman
+    if (canWriteActive) announce(isNewTask ? `"${t.name}" görevi eklendi` : `"${t.name}" görevi kaydedildi`);
   };
   const closeTaskForm = () => { setConvertingRequestId(null); setIsFormModalOpen(false); };
   // Ayrıntı penceresi canlı görevi gösterir (yorum/durum değişikliği hemen görünür)
@@ -1867,7 +1895,7 @@ const App: React.FC = () => {
           <TaskGallery
             tasks={tasks} resources={resources}
             onEditTask={(t) => { setEditingTask(t); setIsFormModalOpen(true); }} onViewTask={(t) => { setViewingTask(t); setIsDetailModalOpen(true); }}
-            onNotifyTask={(t) => { setTeamsTask(t); setIsTeamsModalOpen(true); }} onNewTask={() => { setEditingTask(null); setIsFormModalOpen(true); }}
+            onNotifyTask={(t) => { setTeamsTask(t); setIsTeamsModalOpen(true); }} onNewTask={canWriteActive ? () => { setEditingTask(null); setIsFormModalOpen(true); } : undefined}
             onDeleteTask={deleteTask}
             onDataImport={(nt, nr) => { setTasks(prev => [...prev, ...nt]); setResources(prev => [...prev, ...nr]); }}
             onTaskStatusChange={(id, s) => setTasks(prev => prev.map(t => t.id === id ? { ...t, status: s } : t))}
@@ -1896,7 +1924,7 @@ const App: React.FC = () => {
             onInsertSprint={insertSprint}
             onDeleteSprint={deleteSprint}
             onOpenSettings={() => setIsSettingsModalOpen(true)}
-            onNewTask={() => { setEditingTask(null); setIsFormModalOpen(true); }}
+            onNewTask={canWriteActive ? () => { setEditingTask(null); setIsFormModalOpen(true); } : undefined}
             onViewTaskDetails={(taskId) => { const t = tasks.find(x => x.id === taskId); if(t) { setViewingTask(t); setIsDetailModalOpen(true); } }}
           />
         );
@@ -1907,7 +1935,7 @@ const App: React.FC = () => {
             tasks={tasks}
             resources={resources}
             onTaskStatusChange={(id, s) => setTasks(prev => prev.map(t => t.id === id ? { ...t, status: s } : t))}
-            onNewTask={() => { setEditingTask(null); setIsFormModalOpen(true); }}
+            onNewTask={canWriteActive ? () => { setEditingTask(null); setIsFormModalOpen(true); } : undefined}
             onViewTask={(t) => { setViewingTask(t); setIsDetailModalOpen(true); }}
             onEditTask={(t) => { setEditingTask(t); setIsFormModalOpen(true); }}
             onDeleteTask={deleteTask}
@@ -2308,6 +2336,12 @@ const App: React.FC = () => {
           <i className="fa-solid fa-triangle-exclamation mt-0.5" aria-hidden="true"></i>
           <span className="text-sm flex-1">Tarayıcı depolaması dolu: son değişiklikler bu tarayıcıya kaydedilemedi. Sayfayı kapatmadan önce bulut eşitlemesini kullanın ya da "Yedeği indir" ile yedek alın.</span>
           <button type="button" onClick={() => setStorageWarnClosed(true)} className="opacity-70 hover:opacity-100" aria-label="Uyarıyı kapat"><i aria-hidden="true" className="fa-solid fa-xmark text-sm"></i></button>
+        </div>
+      )}
+      <div role="status" aria-live="polite" className="sr-only">{liveText}</div>
+      {notice && (
+        <div aria-hidden="true" className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[250] flex items-center gap-2 bg-gray-900 text-white rounded-xl shadow-2xl px-4 py-2.5 border border-gray-700 text-sm font-semibold">
+          <i className="fa-solid fa-circle-check text-emerald-300"></i>{notice}
         </div>
       )}
       {undo && (
