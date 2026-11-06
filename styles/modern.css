@@ -190,8 +190,10 @@ html.dark .ui-modern .m-segment[aria-selected="true"] :is(.m-text-2, .m-text-3) 
 /* Kenar çubuğu (dar ekranda çekmece) */
 .ui-modern .m-sidebar { width: 264px; flex: none; }
 @media (max-width: 1023px) {
-  .ui-modern .m-sidebar { position: fixed; inset: 0 auto 0 0; z-index: 70; transform: translateX(-105%); transition: transform 0.25s ease; }
-  .ui-modern .m-sidebar.is-open { transform: none; box-shadow: var(--m-pop-shadow); }
+  /* Kapalı çekmece görünmez: Tab sırasında ve erişilebilirlik ağacında kalmaz (UI-ERS-02); kayma
+     bitince gizlenir, açılırken hemen görünür */
+  .ui-modern .m-sidebar { position: fixed; inset: 0 auto 0 0; z-index: 70; transform: translateX(-105%); visibility: hidden; transition: transform 0.25s ease, visibility 0s linear 0.25s; }
+  .ui-modern .m-sidebar.is-open { transform: none; visibility: visible; box-shadow: var(--m-pop-shadow); transition: transform 0.25s ease, visibility 0s; }
 }
 
 /* AI yanıtlarındaki markdown (ortak Markdown bileşeni) modern renklerle */
@@ -233,6 +235,28 @@ html.dark .ui-modern .m-legacy :is(.text-blue-500, .text-blue-600, .text-blue-70
 /* Vurgu rengi zeminli eski düğmeler: beyaz yazı koyu modda açık vurgu üstünde okunmuyordu
    (UI-GRS-02: "Değişiklikleri Uygula" 1,95–2,72:1). Modern palette vurgu üstü yazı rengi kullanılır */
 .ui-modern :is(.bg-primary, [style*="var(--app-primary)"]).text-white { color: var(--m-on-accent); }
+
+/* Koyu modda açılır pencereler sayfa zemininden ayrılsın (UI-GRS-05: zemin ile aynı siyah, 1,0:1) */
+html.dark .ui-modern .m-dialog { box-shadow: 0 0 0 1px #545458, var(--m-pop-shadow); }
+/* Pencerenin kendisi odak alır (ekran okuyucu başlığı okusun) ama etkileşimli değildir: halka yok */
+[role="dialog"][tabindex="-1"]:focus-visible { outline: none; }
+
+/* Yüksek karşıtlık (Windows "forced colors") (UI-ERS-04, UI-ERS-03): tarayıcı zemin renklerini
+   sildiği için zeminle anlatılan seçim, sınır ve veri kayboluyordu */
+@media (forced-colors: active) {
+  .ui-modern :is(.m-segment[aria-pressed="true"], .m-segment[aria-current="page"], .m-segment[aria-selected="true"], .m-pill.is-active, [aria-current="page"], [aria-pressed="true"]) {
+    outline: 2px solid Highlight; outline-offset: -2px;
+  }
+  .ui-modern :is(.m-surface, .m-pop, [role="menu"]) { border: 1px solid CanvasText; }
+  [role="dialog"] { border: 1px solid CanvasText; }
+  /* Veri renkleri korunur: ilerleme çubukları, risk matrisi, ısı haritası, durum noktaları ve rozetler */
+  .ui-modern :is([style*="background"], .m-tone-ok, .m-tone-warn, .m-tone-bad, .m-tone-hold, .m-tone-accent) { forced-color-adjust: none; }
+  /* Anahtarlar: iz ve topuz görünür, açık durum sistem vurgusuyla */
+  [role="switch"] { border: 1px solid ButtonText; forced-color-adjust: none; background: Canvas !important; }
+  [role="switch"] > span { background: ButtonText !important; }
+  [role="switch"][aria-checked="true"] { background: Highlight !important; }
+  [role="switch"][aria-checked="true"] > span { background: HighlightText !important; }
+}
 
 /* 4. Animasyonlar ---------------------------------------------------------- */
 .ui-modern .m-rocket { transition: transform 0.25s ease; }

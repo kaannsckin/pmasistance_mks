@@ -73,7 +73,7 @@ Dört ajan aynı biçimi kullanır ki bulgular birleştirilebilsin ve çapraz do
 ### UI-<AJAN>-<NN> · <kısa başlık>
 - Önem: K1 | K2 | K3 | K4
 - Ekran: <ekran / bileşen>          Arayüz: modern | klasik
-- Koşul: sistem teması=<açık|koyu> · uygulama ayarı=<Gündüz|Gece> · renk teması=<classic|emerald|purple|orange>
+- Koşul: sistem teması=<açık|koyu> · görünüm ayarı=<Sistem|Gündüz|Gece> · renk teması=<classic|emerald|purple|orange>
          ekran=<1440×900 | 375×812 | …> · rol=<py|bolum_sorumlu|pyb_destek|mudur> · veri=<pilot|boş|aşırı>
 - Adımlar: 1. … 2. … 3. …
 - Beklenen: …
@@ -110,7 +110,7 @@ Dört ajan aynı biçimi kullanır ki bulgular birleştirilebilsin ve çapraz do
   | Ece | 4184 |
 
 - **Tarayıcı:** `playwright-core` + Chromium (`PW_CHROMIUM` ya da `/opt/pw-browsers/chromium`). Vekil sunucu arkasında `--proxy-server` ve `--proxy-bypass-list=127.0.0.1;localhost` bayrakları. Yerel ayar `tr-TR`, saat dilimi `Europe/Istanbul`.
-- **Veri yükleme:** çalışma alanı uygulamanın IndexedDB deposuna (`planasistan` → `workspace`) yazılır, sayfa yenilenir. Rol `currentRole` + `currentPersonId`, arayüz `settings.uiStyle` (`classic` | `modern`), renk teması `settings.theme`, Gece/Gündüz modu `settings.isDarkMode` ile seçilir. Hazır yardımcılar ve persona tanımları: [`scripts/demo-yolu.mjs`](../scripts/demo-yolu.mjs) (`seed`, `startServer`, `proxyArgs`, `clickFirst`).
+- **Veri yükleme:** çalışma alanı uygulamanın IndexedDB deposuna (`planasistan` → `workspace`) yazılır, sayfa yenilenir. Rol `currentRole` + `currentPersonId`, arayüz `settings.uiStyle` (`classic` | `modern`), renk teması `settings.theme`, görünüm (Sistem/Gündüz/Gece) `settings.colorScheme` ile seçilir (`oturum({ gorunum })`). Hazır yardımcılar ve persona tanımları: [`scripts/demo-yolu.mjs`](../scripts/demo-yolu.mjs) (`seed`, `startServer`, `proxyArgs`, `clickFirst`).
 - **Veri setleri:**
   - `pilot` — gerçekçi: `npm run build:pilot && npm run -s pilot -- baslat --dosya --dizin <dizin>` → `<dizin>/workspace.json` (5 bölüm, 24 kişi, 5 proje).
   - `boş` — hiç proje olmayan çalışma alanı.

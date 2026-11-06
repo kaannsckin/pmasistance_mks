@@ -1,4 +1,5 @@
-import React, { useEffect } from 'react';
+import React, { useRef } from 'react';
+import { useModalFocus } from '../useModalFocus';
 import { HealthBand } from '../../utils/executive';
 import { Icon } from './icons';
 
@@ -35,16 +36,16 @@ export const BAND_META: Record<HealthBand, { label: string; dot: string; tone: s
     good: { label: 'Sağlıklı', dot: 'var(--m-ok)', tone: 'm-tone-ok', ink: 'm-ink-ok' },
 };
 
-/** Alt sayfa (dar ekranda alttan, genişte ortada) — Esc ile kapanır */
+/**
+ * Alt sayfa (dar ekranda alttan, genişte ortada). Açılınca odak içeri girer, Tab içeride döner,
+ * Esc kapatır, kapanınca odak açan öğeye döner (useModalFocus).
+ */
 export const Sheet: React.FC<{ title: string; onClose: () => void; children: React.ReactNode; footer?: React.ReactNode; wide?: boolean; xl?: boolean; subtitle?: string; headerAction?: React.ReactNode }> = ({ title, onClose, children, footer, wide, xl, subtitle, headerAction }) => {
-    useEffect(() => {
-        const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-        window.addEventListener('keydown', onKey);
-        return () => window.removeEventListener('keydown', onKey);
-    }, [onClose]);
+    const dialogRef = useRef<HTMLDivElement>(null);
+    useModalFocus(dialogRef, onClose);
     return (
         <div className="fixed inset-0 z-[80] bg-black/40 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
-            <div role="dialog" aria-modal="true" aria-label={title} className={`m-bg w-full ${xl ? 'sm:max-w-4xl' : wide ? 'sm:max-w-2xl' : 'sm:max-w-lg'} rounded-t-2xl sm:rounded-2xl m-pop max-h-[92vh] flex flex-col`} onClick={e => e.stopPropagation()}>
+            <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label={title} className={`m-dialog m-bg w-full ${xl ? 'sm:max-w-4xl' : wide ? 'sm:max-w-2xl' : 'sm:max-w-lg'} rounded-t-2xl sm:rounded-2xl m-pop max-h-[92vh] flex flex-col`} onClick={e => e.stopPropagation()}>
                 <div className="flex items-start justify-between gap-3 px-5 pt-4 pb-2">
                     <div className="min-w-0">
                         <h2 className="m-0 text-[20px] font-bold m-text">{title}</h2>

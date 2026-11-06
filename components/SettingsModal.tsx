@@ -1,5 +1,6 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useModalFocus } from './useModalFocus';
 import { ColorSchemePref, UiStyle } from '../types';
 
 interface SettingsModalProps {
@@ -98,12 +99,15 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   const handleSave = () => {
     onSave(duration, startDate, persistenceEnabled, aiEnabled, theme, scheme);
   };
+  // Pencere davranışı (UI-ERS-01): odak içeri girer, Tab içeride döner, Esc kapatır, kapanınca odak geri döner
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useModalFocus(dialogRef, onClose);
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex justify-center items-center p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-fade-in-up">
+      <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="settings-title" className="m-dialog bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-fade-in-up border border-transparent dark:border-gray-700">
         <div className="flex justify-between items-center p-5 border-b dark:border-gray-700">
-          <h2 className="text-lg font-bold flex items-center text-gray-800 dark:text-white">
+          <h2 id="settings-title" className="text-lg font-bold flex items-center text-gray-800 dark:text-white">
             <i aria-hidden="true" className="fa-solid fa-sliders mr-3 text-primary"></i>
             Uygulama Ayarları
           </h2>
@@ -208,9 +212,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     <span className="text-sm font-bold text-gray-800 dark:text-white">Yapay Zeka Asistanı</span>
                     <span className="text-[10px] text-gray-500 dark:text-gray-400">Akıllı analiz asistanı.</span>
                 </div>
-                <button 
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={aiEnabled}
+                  aria-label="Yapay Zeka Asistanı"
                   onClick={() => setAiEnabled(!aiEnabled)}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${aiEnabled ? 'bg-primary' : 'bg-gray-300 dark:bg-gray-600'}`}
+                  className={`app-switch relative inline-flex h-6 w-11 flex-none items-center rounded-full border border-transparent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-600 dark:focus-visible:ring-offset-gray-800 ${aiEnabled ? 'bg-primary' : 'bg-gray-500 dark:bg-gray-500'}`}
                   style={aiEnabled ? { backgroundColor: 'var(--app-primary)' } : {}}
                 >
                   <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${aiEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
@@ -222,9 +230,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     <span className="text-sm font-bold text-gray-800 dark:text-white">Yerel Kayıt</span>
                     <span className="text-[10px] text-gray-500 dark:text-gray-400">Verileri tarayıcıda sakla.</span>
                 </div>
-                <button 
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={persistenceEnabled}
+                  aria-label="Yerel Kayıt"
                   onClick={() => setPersistenceEnabled(!persistenceEnabled)}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${persistenceEnabled ? 'bg-primary' : 'bg-gray-300 dark:bg-gray-600'}`}
+                  className={`app-switch relative inline-flex h-6 w-11 flex-none items-center rounded-full border border-transparent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-600 dark:focus-visible:ring-offset-gray-800 ${persistenceEnabled ? 'bg-primary' : 'bg-gray-500 dark:bg-gray-500'}`}
                   style={persistenceEnabled ? { backgroundColor: 'var(--app-primary)' } : {}}
                 >
                   <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${persistenceEnabled ? 'translate-x-6' : 'translate-x-1'}`} />

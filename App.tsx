@@ -2107,7 +2107,7 @@ const App: React.FC = () => {
           />
           <div className="flex-1 min-w-0 flex flex-col">
             <div className="lg:hidden sticky top-0 z-30 m-surface border-b m-sep flex items-center gap-1 px-1.5 h-14">
-              <button type="button" className="m-icon-btn" aria-label="Menüyü aç" onClick={() => setIsSidebarOpen(true)}><Icon name="menu" /></button>
+              <button type="button" className="m-icon-btn" aria-label="Menüyü aç" aria-expanded={isSidebarOpen} aria-controls="ana-menu" onClick={() => setIsSidebarOpen(true)}><Icon name="menu" /></button>
               <span className="flex-1 min-w-0 truncate text-[17px] font-semibold m-text">{inProjectView && activeProject ? activeProject.name : consoleMode ? 'Yönetici konsolu' : 'PlanAsistan'}</span>
               {!consoleMode && <button type="button" className="m-icon-btn" aria-label="Ara" onClick={() => setIsPaletteOpen(true)}><Icon name="search" /></button>}
               <button type="button" className="m-icon-btn" aria-label={`Profil: ${currentActorName}. Profil değiştir`} title="Profil değiştir" onClick={() => setIsProfileOpen(true)}>

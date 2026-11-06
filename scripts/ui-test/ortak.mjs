@@ -187,7 +187,8 @@ export const ciktiDizini = (ajan, g = gun()) => {
  *   veri      'pilot' | 'bos' | 'asiri' | dosya yolu | çalışma alanı nesnesi  (varsayılan 'pilot')
  *   arayuz    'modern' | 'classic'                    (settings.uiStyle)
  *   sistem    'light' | 'dark'                        (işletim sistemi tercihi, prefers-color-scheme)
- *   gece      true | false                            (uygulamanın Gece/Gündüz ayarı, settings.isDarkMode)
+ *   gorunum   'system' | 'light' | 'dark'             (Ayarlar › Görünüm: Sistem / Gündüz / Gece, settings.colorScheme)
+ *   gece      true | false                            (kısayol: true → gorunum 'dark', false → 'light')
  *   renk      'classic' | 'emerald' | 'purple' | 'orange'  (settings.theme)
  *   persona   'ahmet' | 'elif' | 'burak' | 'selin' | 'mert'
  *   proje     proje kimliği ya da ad/kod başı ('NEHİR', 'prj-nehir') → activeProjectId; modern arayüzde
@@ -235,7 +236,7 @@ export const baslat = async (ajan, { port } = {}) => {
                 ...(ws0.settings || {}),
                 uiStyle: k.arayuz === 'classic' ? 'classic' : 'modern',
                 ...(k.renk ? { theme: k.renk } : {}),
-                ...(k.gece !== undefined ? { isDarkMode: !!k.gece } : {}),
+                ...(k.gorunum ? { colorScheme: k.gorunum } : k.gece !== undefined ? { colorScheme: k.gece ? 'dark' : 'light' } : {}),
                 ...(k.ayarlar || {}),
             },
         };

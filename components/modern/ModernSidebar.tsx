@@ -1,4 +1,5 @@
 import React, { useRef, useState } from 'react';
+import { useModalFocus } from '../useModalFocus';
 import { RagStatus, UserRole, View } from '../../types';
 import { ROLE_LABELS } from '../../utils/allocations';
 import { useAssistantOptional } from '../assistant/AssistantContext';
@@ -141,6 +142,11 @@ const ModernSidebar: React.FC<ModernSidebarProps> = (props) => {
     const { isOpen, onClose, currentView, hasActiveProject, onNavigate, exec, canAdmin, onOpenProfile, expectationBadge, reportBadge, meetingBadge, projects, activeProjectId, onOpenProject, canCreateProject, onNewProject, onOpenSearch, currentRole, currentPersonId, people, needsPerson, onOpenSettings, onLogoLaunch, onHyperdrive } = props;
     const [menuOpen, setMenuOpen] = useState(false);
     const assistant = useAssistantOptional();
+    // Dar ekranda açık çekmece pencere gibi davranır (UI-ERS-08): odak içeri girer, Tab içeride döner,
+    // Esc kapatır, kapanınca odak "Menüyü aç"a döner. Geniş ekranda kenar çubuğu sayfanın parçasıdır.
+    const navRef = useRef<HTMLElement>(null);
+    const drawerMode = isOpen && typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches;
+    useModalFocus(navRef, onClose, drawerMode);
     const person = people.find(p => p.id === currentPersonId);
     const go = (view: View) => { onNavigate(view); onClose(); };
     // Proje içindeyken üst menüde hiçbir genel ekran seçili görünmez
@@ -150,6 +156,8 @@ const ModernSidebar: React.FC<ModernSidebarProps> = (props) => {
         <>
             {isOpen && <div className="lg:hidden fixed inset-0 z-[65] bg-black/30" onClick={onClose} aria-hidden="true"></div>}
             <nav
+                ref={navRef}
+                id="ana-menu"
                 aria-label="Ana menü"
                 className={`m-sidebar m-surface border-r m-sep h-screen lg:sticky top-0 flex flex-col gap-5 px-3 py-4 overflow-y-auto ${isOpen ? 'is-open' : ''}`}
             >
@@ -252,7 +260,7 @@ const ModernSidebar: React.FC<ModernSidebarProps> = (props) => {
                             </span>
                         </button>
                         <button type="button" className="m-icon-btn" aria-label="Diğer araçlar" aria-haspopup="menu" aria-expanded={menuOpen} onClick={() => setMenuOpen(o => !o)}><Icon name="more" /></button>
-                        <button type="button" className="m-icon-btn" aria-label="Ayarlar" onClick={onOpenSettings}><Icon name="sliders" /></button>
+                        <button type="button" className="m-icon-btn" aria-label="Ayarlar" onClick={() => { onOpenSettings(); onClose(); }}><Icon name="sliders" /></button>
                         {menuOpen && (
                             <>
                                 <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} aria-hidden="true"></div>
