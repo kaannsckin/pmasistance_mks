@@ -657,7 +657,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ departments: department
       {!control && (
       <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
         <div>
-          <h2 className="text-2xl font-semibold text-gray-800 dark:text-white tracking-tight">İşgücü Tahsisi</h2>
+          <h2 className="text-2xl font-semibold text-gray-800 dark:text-white tracking-tight">Ekip ve tahsis</h2>
           <p className="text-gray-400 text-xs font-semibold tracking-[0.2em]">Adam/Ay Planı · Gerçekleşme · Koordinasyon</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

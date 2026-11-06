@@ -27,7 +27,24 @@ K2'lerle birlikte kapanan K3'ler: UI-KRC-08, UI-KRC-09, UI-ERS-06, UI-ERS-07 (K4
 
 Doğrulama koordinatörün yeniden ürettiği senaryolarla yapıldı; demo yolu testi her iki turdan sonra 28/28 geçti. Ölçülen K2 sonuçlarından: eşik altı metin Ayrıntılı analiz koyu 78 → 1, açık 42 → 0; Kapasite–talep koyu 207 → 2; Portföy klasik açık 24 → 0. Bağımsız doğrulama bir sonraki çarpışma koşusunun işi.
 
-Açık kalanlar: klasik koyu temada Portföy'de 4 küçük metin (yüzde göstergeleri 2,84:1, "Asistan" 2,9:1); klasik arayüzde müdür "Yeni Görev"i görüyor (kaydetse de yazılmıyor); UI-ERS-10 "Diğer araçlar" menüsünde ok tuşu; UI-AKS-13 yenilemede konum kaybı.
+K2'den sonra açık kalan dört konu (klasik koyu Portföy'de 4 küçük metin, klasikte müdürün "Yeni Görev"i görmesi, UI-ERS-10, UI-AKS-13) K3 turunda kapandı.
+
+| **K3** (39 bulgunun 38'i; 8'i K2'lerle birlikte kapanmıştı) | Durum | Commit |
+|---|---|---|
+| 8.1 kayıt bildirimi ve canlı bölge (UI-AKS-05, UI-ERS-09) · 1.3 yenilemede konum (UI-AKS-13) · 8.2 ilk tıklama (UI-AKS-15) · 2.3 denetim izi (UI-KRC-16) · 3.4 hafta başlığı (UI-AKS-07) · klasikte müdüre "Yeni Görev" | Düzeltildi | `8c90f9b` |
+| 5.4 "Diğer araçlar" menüsü (UI-ERS-10), komut paleti (UI-ERS-14), "Aç" düğmeleri (UI-ERS-16), ısı haritası 288 durak → 1 (UI-ERS-11) · 7.2 risk matrisinde D/O/Y harfleri (UI-ERS-05, UI-GRS-08) · 6.2 yazı büyütme (UI-ERS-13) | Düzeltildi | `955cb06` |
+| 8.3 taşmalar (UI-KRC-10, -11, -12, -17, UI-GRS-13, -16) · 6.3 telefonda tablo ve rapor maddesi (UI-AKS-16, -17) · 5.5 pencere düzeni (UI-GRS-10, -15) · 4.7 koyu menüler (UI-GRS-06) · klasik koyu Portföy 4 → 0 | Düzeltildi | `a7add43` |
+| 8.4 adlar ve dil (UI-AKS-06, -08, -09, -10, -11, -12, -18) | Düzeltildi | `9a87299`; AI asistanın ekran adları ve klasik tahsis başlığı bu rapor güncellemesiyle aynı commit'te |
+
+Yeni adlar (UI-AKS-08): resmî akış **Haftalık rapor**; Teams/e-posta için üretilen metin **Durum özeti** (eski "Durum raporu"); Yolunda/Riskli/Kritik alanı **Gidişat** (eski "Haftalık durum"). Klasik ve modern gezinme aynı adları kullanıyor (**Ekip ve tahsis**, **Risk raporu**, **Yönetim**).
+
+Doğrulama: her grup sonrası tarayıcıda bulgunun senaryosu yeniden üretildi, birim testleri 930/930, demo yolu 28/28. Ölçülenlerden: süzgeç taşması Liste 1526, Pano 1687, Tahsis 1835 px → üçü de 1440/1440; "Tahsisi düzenle"ye 311 → 22 Tab; Durum özeti metin kutusu 45 → 340 px.
+
+Açık kalanlar:
+
+- **UI-GRS-09** (K3): Gün Batımı temasında vurgu turuncusu uyarı turuncusuyla aynı. Vurgu rengini değiştirmek marka kararı olduğu için bekliyor.
+- K4'ler: UI-AKS-14 açıklanmamış kısaltmalar, UI-AKS-19 telefonda Portföy sırası, UI-GRS-12 klasikte modern "ada" ekranlar, UI-GRS-17 kenar çubuğu alt menüsü. UI-GRS-18 hata ekranı K2'de kapandı.
+- Bağımsız doğrulama: bu düzeltmeleri ajanlar değil koordinatör doğruladı; bir sonraki çarpışma koşusu bunu yapmalı.
 
 | | |
 |---|---|
