@@ -36,6 +36,8 @@ import { buildTodoItems, TodoItem } from './utils/todoItems';
 import { loadCloudConfig, scheduleAutoPush } from './utils/cloudSync';
 import { inspectStored, KvStore, openIndexedDbStore, rawStoreDump, requestPersistentStorage, WorkspacePersister } from './utils/workspaceStore';
 import StoreRecovery, { StoreProblem } from './components/StoreRecovery';
+import OtherTabNotice from './components/OtherTabNotice';
+import { createTabLock, TabLock, TabRole } from './utils/tabLock';
 import CloudSyncModal from './components/CloudSyncModal';
 import Header from './components/Header';
 import TaskGallery from './components/TaskGallery';
@@ -264,6 +266,21 @@ const App: React.FC = () => {
     return () => { cancelled = true; };
   }, []);
 
+  // ---- Tek etkin sekme (UI-KRC-02, UI-KRC-13): yalnız kilidi tutan sekme depoya yazar ----
+  const [tabRole, setTabRole] = useState<TabRole>('checking');
+  const tabLock = useRef<TabLock | null>(null);
+  useEffect(() => {
+    // Sayfa ömründe bir kez: StrictMode'un deneme amaçlı söküp yeniden kurması kilidi bırakıp
+    // sekmeyi yanlışlıkla edilgen yapmasın. Sayfa kapanınca tarayıcı kilidi kendisi bırakır.
+    if (tabLock.current) return;
+    tabLock.current = createTabLock({
+      onRole: setTabRole,
+      // Devirden önce bekleyen yazımlar biter; bu sekme bir daha yazmaz
+      beforeRelease: async () => { await persister.current?.pause(); },
+    });
+    tabLock.current.start();
+  }, []);
+
   const handleDownloadRawStore = useCallback(() => {
     const records = rawStore.current.records;
     if (!records || !records.size) return;
@@ -379,7 +396,8 @@ const App: React.FC = () => {
 
   // ---- Kalıcılık ----
   useEffect(() => {
-    if (!isInitialized || !workspace) return;
+    // Yalnız etkin sekme yazar; kilit durumu belli olana kadar ve devirden sonra yazılmaz
+    if (!isInitialized || !workspace || tabRole !== 'active') return;
     const toPersist = workspace.settings.isLocalPersistenceEnabled !== false
       ? workspace
       : { ...workspace, projects: [], activeProjectId: null };
@@ -399,7 +417,7 @@ const App: React.FC = () => {
     }
     // Bulut bağlıysa değişiklikleri gecikmeli gönder (yerel-öncelikli senkron)
     scheduleAutoPush(workspace);
-  }, [workspace, isInitialized]);
+  }, [workspace, isInitialized, tabRole]);
 
   // ---- Merkezi güncelleme yardımcıları ----
   const updateWorkspace = useCallback((updater: (ws: WorkspaceData) => WorkspaceData) => {
@@ -1964,6 +1982,11 @@ const App: React.FC = () => {
     return items;
   }, [workspace, visibleProjects, identity, handleOpenProject, activeProject, consoleMode, canAudit, canDataHealth, isModern, roleView]);
 
+  // Başka sekme etkinken bu sekme hiçbir şey göstermez ve yazmaz; kurtarma ekranı da açılmaz
+  // (oradaki "baştan başla" etkin sekmenin verisini silerdi)
+  if (tabRole === 'passive' || tabRole === 'released') {
+    return <OtherTabNotice role={tabRole} onTakeOver={() => tabLock.current?.takeOver()} />;
+  }
   if (storeProblem) {
     return (
       <StoreRecovery

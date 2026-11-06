@@ -116,6 +116,13 @@ export class WorkspacePersister {
         while (this.running) await this.running;
     }
 
+    /** Bekleyen yazımları bitirir ve sonraki kayıtları durdurur (sekme devri: başka sekme yazacak) */
+    async pause(): Promise<void> {
+        await this.flush();
+        this.stopped = true;
+        this.pending = null;
+    }
+
     /** Depoyu boşaltır ve sonraki kayıtları durdurur (verileri sıfırlama) */
     async clear(): Promise<void> {
         this.stopped = true;
