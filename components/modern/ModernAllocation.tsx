@@ -266,7 +266,7 @@ const ModernAllocation: React.FC<ModernAllocationProps> = (props) => {
                             <div className="m-surface rounded-2xl overflow-x-auto">
                                 <div style={{ minWidth: 960 }}>
                                     <div aria-hidden="true" className="grid items-center gap-1.5 px-4 pt-3 pb-2 text-[13px] m-text-3" style={{ gridTemplateColumns: 'minmax(200px, 1.6fr) repeat(12, minmax(52px, 1fr)) 72px' }}>
-                                        <span>Kişi</span>
+                                        <span className="m-sticky-col">Kişi</span>
                                         {MONTHS_TR.map(m => <span key={m} className="text-center">{m}</span>)}
                                         <span className="text-right">Yıllık</span>
                                     </div>
@@ -278,7 +278,7 @@ const ModernAllocation: React.FC<ModernAllocationProps> = (props) => {
                                         const planRow = planUtil?.rows.find(x => x.personId === r.personId);
                                         return (
                                             <div key={r.personId} className="grid items-center gap-1.5 px-4 py-1.5 min-h-[60px] border-t m-sep" style={{ gridTemplateColumns: 'minmax(200px, 1.6fr) repeat(12, minmax(52px, 1fr)) 72px' }}>
-                                                <button type="button" onClick={() => person && onViewPerson?.(person.id)} className="flex items-center gap-2.5 min-w-0 text-left bg-transparent border-0 p-0 cursor-pointer" style={{ font: 'inherit' }} aria-label={`${r.name}: kişi profili`}>
+                                                <button type="button" onClick={() => person && onViewPerson?.(person.id)} className="m-sticky-col flex items-center gap-2.5 min-w-0 text-left bg-transparent border-0 p-0 cursor-pointer" style={{ font: 'inherit' }} aria-label={`${r.name}: kişi profili`}>
                                                     <span aria-hidden="true" className="w-8 h-8 rounded-full m-fill flex items-center justify-center text-[12px] font-bold flex-none m-text">{person ? initials(person) : '?'}</span>
                                                     <span className="min-w-0 flex flex-col leading-tight">
                                                         <span className="text-[15px] font-semibold m-text truncate">{r.name}</span>

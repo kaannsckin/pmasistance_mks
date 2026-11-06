@@ -187,6 +187,17 @@ html.dark .ui-modern .m-segment[aria-selected="true"] :is(.m-text-2, .m-text-3) 
 /* .m-icon-btn gibi display veren sınıflar Tailwind'in lg:hidden'ını ezmesin */
 @media (min-width: 1024px) { .ui-modern .lg\:hidden { display: none !important; } }
 
+/* Uzun kişi/proje adları süzgeç listesini sayfadan geniş yapıp yatay kaydırma açıyordu (UI-KRC-10, UI-GRS-13) */
+.ui-modern select.m-pill, .ui-modern .m-legacy select { max-width: min(18rem, 100%); text-overflow: ellipsis; }
+/* Ana içerik daralabilsin; sayfa yatay taşarsa kenar çubuğu kaymasın, koyu modda lacivert gövde görünmesin */
+.ui-modern main { min-width: 0; }
+body:has(.ui-modern) { background-color: #F2F2F7; }
+html.dark body:has(.ui-modern) { background-color: #000000; }
+/* Telefonda yatay kaydırılan tabloda kişi adı sütunu sabit (UI-AKS-16) */
+.ui-modern .m-sticky-col { position: sticky; left: 0; z-index: 1; background-color: var(--m-surface); }
+/* Koyu modda açılır menüler altlarındaki kartla aynı renkteydi (UI-GRS-06): bir kat açık zemin ve kenar */
+html.dark .ui-modern .m-surface.m-pop { background-color: var(--m-fill); box-shadow: 0 0 0 1px #545458, var(--m-pop-shadow); }
+
 /* Kenar çubuğu (dar ekranda çekmece) */
 .ui-modern .m-sidebar { width: 16.5rem; flex: none; } /* yazı büyüyünce kenar çubuğu da genişler (UI-ERS-13) */
 @media (max-width: 1023px) {

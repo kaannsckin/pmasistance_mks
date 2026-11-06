@@ -110,7 +110,7 @@ const ItemEditor: React.FC<{
     const src = item.source ? SOURCE_LABEL[item.source] : '';
     return (
         <div id={`ri-${item.id}`} className="rounded-xl m-fill-2 p-3 flex flex-col gap-2.5" style={issues.some(i => i.level === 'error') ? { boxShadow: 'inset 0 0 0 1.5px var(--m-bad)' } : undefined}>
-            <div className="flex items-center gap-1.5">
+            <div className="flex flex-wrap items-center gap-1.5">
                 <span className="text-[13px] font-semibold m-text-3 m-tabular w-5 text-right">{index + 1}.</span>
                 {list === 'thisWeek' ? (
                     <select aria-label="Madde türü" className="m-input !min-h-[36px] !w-auto max-w-[70%] text-[14px]" value={item.category} onChange={e => setCategory(e.target.value as ReportCategory)}>
@@ -131,7 +131,7 @@ const ItemEditor: React.FC<{
             )}
             <textarea
                 aria-label={item.category === 'meeting' && item.meeting ? 'Ek açıklama' : 'Madde metni'}
-                className="m-input py-2.5"
+                className={`m-input !py-2.5 ${item.category === 'meeting' && item.meeting ? '' : '!min-h-[4.5rem]'}`}
                 rows={item.category === 'meeting' && item.meeting ? 1 : 2}
                 value={item.text}
                 placeholder={item.category === 'meeting' && item.meeting ? 'Ek açıklama (isteğe bağlı)' : meta.hint}

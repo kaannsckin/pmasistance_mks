@@ -331,7 +331,10 @@ export const suzgec = (page, tur, { piksel = 6 } = {}) => page.evaluate(({ tur, 
 
 // Sayfa içinde eval edilen ortak yardımcılar: renk ayrıştırma, göreli parlaklık, etkin zemin
 const SAYFA_YARDIMCI = `(() => {
-  const parse = s => { const m = String(s).match(/[\\d.]+/g); if (!m) return null; const [r,g,b,a] = m.map(Number); return { r, g, b, a: a === undefined ? 1 : a }; };
+  // Her CSS renk biçimi (rgb, color(srgb …), oklab, color-mix sonucu) tuvalle sRGB'ye çevrilir
+  const cv = document.createElement('canvas'); cv.width = cv.height = 1;
+  const cx = cv.getContext('2d', { willReadFrequently: true });
+  const parse = s => { const t = String(s || ''); if (!t || t === 'transparent') return { r: 0, g: 0, b: 0, a: 0 }; cx.clearRect(0, 0, 1, 1); cx.fillStyle = '#000'; cx.fillStyle = t; cx.fillRect(0, 0, 1, 1); const d = cx.getImageData(0, 0, 1, 1).data; return { r: d[0], g: d[1], b: d[2], a: d[3] / 255 }; };
   const lin = c => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
   const lum = c => 0.2126 * lin(c.r) + 0.7152 * lin(c.g) + 0.0722 * lin(c.b);
   const ratio = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };

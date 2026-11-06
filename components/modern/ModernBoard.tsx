@@ -61,7 +61,7 @@ const ModernBoard: React.FC<ModernBoardProps> = ({ tasks, sprintNames, onStatusC
     return (
         <div className="flex flex-col gap-5">
             <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-3">
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2 min-w-0 max-w-full">
                     <select aria-label="Sürüm" className={`m-pill ${sprint !== 'all' ? 'is-active' : ''}`} value={sprint} onChange={e => setSprint(e.target.value)}>
                         <option value="all">Tüm sürümler</option>
                         {versions.map(v => <option key={v} value={String(v)}>{sprintLabel(v, sprintNames)}</option>)}
@@ -121,7 +121,7 @@ const ModernBoard: React.FC<ModernBoardProps> = ({ tasks, sprintNames, onStatusC
                                                 {late > 0 && <span className="inline-flex items-center h-6 px-2.5 rounded-full text-[12px] font-semibold m-tone-bad">{late} gün gecikti</span>}
                                                 {late === 0 && noEstimate && <span className="inline-flex items-center h-6 px-2.5 rounded-full text-[12px] font-semibold m-tone-warn">Süre tahmini yok</span>}
                                             </span>
-                                            <span className={`text-[15px] leading-snug font-semibold ${isDone ? 'm-text-2' : 'm-text'}`}>{t.name}</span>
+                                            <span className={`text-[15px] leading-snug font-semibold [overflow-wrap:anywhere] ${isDone ? 'm-text-2' : 'm-text'}`}>{t.name}</span>
                                             <span className="flex items-center gap-2.5 text-[13px] w-full">
                                                 <span className={`inline-flex items-center gap-1 font-semibold ${prio.ink}`}><Icon name="flag" size={14} strokeWidth={2.2} />{prio.label}</span>
                                                 {t.unit && <span className="m-text-3 truncate">{t.unit}</span>}

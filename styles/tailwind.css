@@ -26,3 +26,14 @@ html:not(.dark) .ui-modern :is(.text-red-400, .text-red-500, .text-red-600) { co
 html:not(.dark) .ui-modern :is(.text-amber-400, .text-amber-500, .text-amber-600, .text-yellow-500, .text-yellow-600, .text-orange-400, .text-orange-500) { color: var(--m-warn-ink); }
 html:not(.dark) .ui-modern :is(.text-emerald-500, .text-emerald-600, .text-green-500, .text-green-600) { color: var(--m-ok-ink); }
 html:not(.dark) .ui-modern .m-legacy .text-gray-500 { color: var(--m-label-3); }
+
+/* Tema rengiyle yazı: koyu zeminde tema renginin kendisi okunmuyordu (klasik koyu 2,84:1) */
+.app-primary-ink { color: var(--app-primary); }
+html.dark .app-primary-ink { color: color-mix(in srgb, var(--app-primary) 50%, white); }
+
+/* Geniş tablolarda kararın dayandığı "Toplam" sütunu yatay kaydırmada sağda sabit (UI-KRC-17) */
+table.m-sticky-total { --sticky-bg: #FFFFFF; }
+html.dark table.m-sticky-total { --sticky-bg: #1F2937; }
+.ui-modern table.m-sticky-total { --sticky-bg: var(--m-surface); }
+html.dark .ui-modern table.m-sticky-total { --sticky-bg: var(--m-surface); }
+table.m-sticky-total :is(th, td):last-child { position: sticky; right: 0; z-index: 1; background-color: var(--sticky-bg); box-shadow: -1px 0 0 rgba(127, 127, 127, 0.25); }

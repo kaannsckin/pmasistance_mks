@@ -54,7 +54,7 @@ const StatusReportSheet: React.FC<{ workspace: WorkspaceData; projectId: string;
             {!report.hasContent && (
                 <div role="status" className="rounded-xl m-tone-warn px-4 py-2.5 text-[14px]">Bu proje için henüz yeterli veri yok (görev, not, tahsis ya da risk girin). Taslak yine de kopyalanabilir.</div>
             )}
-            <textarea id="sr-text" aria-label="Rapor metni" className="m-input py-3 font-mono text-[14px] leading-relaxed min-h-[340px]" spellCheck={false} value={text} onChange={e => setText(e.target.value)} />
+            <textarea id="sr-text" aria-label="Rapor metni" className="m-input !py-3 font-mono text-[14px] leading-relaxed !min-h-[340px]" spellCheck={false} value={text} onChange={e => setText(e.target.value)} />
         </Sheet>
     );
 };

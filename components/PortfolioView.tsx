@@ -162,7 +162,7 @@ const ProjectCard: React.FC<{
       <div className="mb-4">
         <div className="flex items-center justify-between mb-1.5">
           <span className="text-[11px] font-semibold text-gray-400">İlerleme</span>
-          <span className="text-xs font-semibold" style={{ color: 'var(--app-primary)' }}>%{progress}</span>
+          <span className="text-xs font-semibold app-primary-ink">%{progress}</span>
         </div>
         <div className="w-full h-1.5 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
           <div className="h-full rounded-full transition-all duration-700" style={{ width: `${progress}%`, backgroundColor: 'var(--app-primary)' }}></div>

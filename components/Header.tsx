@@ -259,7 +259,7 @@ const IdentitySwitcher: React.FC<{
       <i aria-hidden="true" className={`fa-solid ${ROLE_ICONS[currentRole]} text-[11px]`} style={{ color: 'var(--app-primary)' }}></i>
       <span className="hidden xl:flex flex-col items-start leading-none">
         <span className="text-xs font-medium">{ROLE_LABELS[currentRole]}</span>
-        {(scoped || activePerson) && <span className="text-[9px] text-gray-400 mt-0.5">{activePerson ? `${activePerson.name}` : 'kişi seçilmedi'}</span>}
+        {(scoped || activePerson) && <span className="text-[9px] text-gray-400 dark:text-gray-300 mt-0.5">{activePerson ? `${activePerson.name}` : 'kişi seçilmedi'}</span>}
       </span>
       {needsPerson && <i aria-hidden="true" className="fa-solid fa-triangle-exclamation text-[10px] text-amber-500"></i>}
       <i aria-hidden="true" className="fa-solid fa-arrow-right-arrow-left text-[9px] text-gray-400"></i>
@@ -360,7 +360,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSett
             </div>
             <div className="ml-3.5 hidden sm:flex flex-col justify-center">
               <h1 className="text-lg font-bold tracking-tight leading-none text-gray-800 dark:text-white">
-                Plan<span style={{ color: 'var(--app-primary)' }}>Asistan</span>
+                Plan<span className="app-primary-ink">Asistan</span>
               </h1>
               <span className={`text-[10px] font-medium tracking-[0.3em] leading-none mt-1 transition-colors ${status !== 'idle' ? '' : 'text-gray-400'}`} style={status !== 'idle' ? { color: 'var(--app-primary)' } : {}}>
                 {status === 'igniting' ? 'ATEŞLENİYOR…' : status === 'launching' ? 'MAKS HIZ' : 'MKS'}
@@ -368,7 +368,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSett
             </div>
           </div>
 
-          <nav className="hidden md:flex items-center gap-1 bg-gray-100/60 dark:bg-gray-900/40 p-1 rounded-xl border border-gray-200/60 dark:border-gray-700/60">
+          <nav className="hidden md:flex min-w-0 overflow-x-auto items-center gap-1 bg-gray-100/60 dark:bg-gray-900/40 p-1 rounded-xl border border-gray-200/60 dark:border-gray-700/60">
             {canExecutive && <WorkspaceNavItem view={View.Executive} currentView={currentView} setCurrentView={setCurrentView} icon="fa-gauge-high" label="Yönetim" />}
             <WorkspaceNavItem view={View.Portfolio} currentView={currentView} setCurrentView={setCurrentView} icon="fa-table-cells-large" label="Portföy" />
             <WorkspaceNavItem view={View.Allocations} currentView={currentView} setCurrentView={setCurrentView} icon="fa-people-arrows" label="Tahsis" />
@@ -447,7 +447,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSett
               onGoPortfolio={() => setCurrentView(View.Portfolio)}
             />
             <div className="w-px h-5 bg-gray-200 dark:bg-gray-700 flex-none"></div>
-            <nav className="flex items-center gap-0.5 overflow-x-auto">
+            <nav className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto">
               <ProjectTab view={View.Kanban} currentView={currentView} setCurrentView={setCurrentView} icon="fa-columns" label="Pano" />
               <ProjectTab view={View.Roadmap} currentView={currentView} setCurrentView={setCurrentView} icon="fa-map" label="Yol Haritası" />
               <ProjectTab view={View.Goals} currentView={currentView} setCurrentView={setCurrentView} icon="fa-bullseye" label="Hedefler" />

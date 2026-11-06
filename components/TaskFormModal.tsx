@@ -142,7 +142,7 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, people, 
   const predecessorOptions = tasks.filter(t => t.id !== (task?.id || ''));
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-40 flex justify-center items-center p-4">
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-[60] flex justify-center items-center p-4">
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
         <div className="flex justify-between items-center p-4 border-b dark:border-gray-700">
           <h2 className="text-xl font-bold text-black dark:text-white">{task ? 'Görevi Düzenle' : 'Yeni Görev Ekle'}</h2>

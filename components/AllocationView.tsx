@@ -437,7 +437,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
 
   const renderSummary = (rows: ReturnType<typeof summarizeByPerson>, showCapacity: boolean) => (
     <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm overflow-x-auto">
-      <table className="w-full min-w-[1000px]">
+      <table className="m-sticky-total w-full min-w-[1000px]">
         <thead>
           <tr className="bg-gray-50/80 dark:bg-gray-800/80">
             <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-400 sticky left-0 bg-gray-50 dark:bg-gray-800 min-w-[170px]">
@@ -603,7 +603,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
 
         {rows.length > 0 && (
           <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm overflow-x-auto">
-            <table className="w-full min-w-[1150px]">
+            <table className="m-sticky-total w-full min-w-[1150px]">
               <thead>
                 <tr className="bg-gray-50/80 dark:bg-gray-800/80">
                   <th className="px-4 py-2.5 text-left text-[11px] font-semibold text-gray-400 sticky left-0 bg-gray-50 dark:bg-gray-800 min-w-[230px]">Bölüm / Rol / Efor Türü</th>
