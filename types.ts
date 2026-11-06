@@ -530,11 +530,17 @@ export interface ProjectAiProfile {
 /** Arayüz tercihi: klasik (mevcut) ya da modern (sade, iOS tarzı) */
 export type UiStyle = 'classic' | 'modern';
 
+/** Görünüm: işletim sistemini izle, her zaman açık ya da her zaman koyu (UI-GRS-01) */
+export type ColorSchemePref = 'system' | 'light' | 'dark';
+
 export interface WorkspaceSettings {
   isLocalPersistenceEnabled?: boolean;
   isAIEnabled?: boolean;
   theme?: string;
+  /** Eski Gece modu anahtarı: ekrana hiç uygulanmadı, yerini colorScheme aldı */
   isDarkMode?: boolean;
+  /** Görünüm; yoksa 'system' */
+  colorScheme?: ColorSchemePref;
   uiStyle?: UiStyle;
 }
 

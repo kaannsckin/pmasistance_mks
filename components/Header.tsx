@@ -70,7 +70,7 @@ const TodoBell: React.FC<{ items: TodoItem[]; onNavigate: (item: TodoItem) => vo
       >
         <i aria-hidden="true" className="fa-solid fa-bell text-[13px] text-gray-400"></i>
         {badge > 0 && (
-          <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center border border-white dark:border-gray-700">
+          <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-white text-[10px] font-bold flex items-center justify-center border border-white dark:border-gray-700">
             {badge > 9 ? '9+' : badge}
           </span>
         )}
@@ -170,7 +170,7 @@ const ProjectTab: React.FC<{
       onClick={() => setCurrentView(view)}
       className={`flex items-center gap-1.5 px-3 h-8 rounded-md text-xs font-medium whitespace-nowrap transition-colors border-b-2 ${
         active
-          ? 'border-current bg-white dark:bg-gray-800 shadow-sm'
+          ? 'app-tab-active border-current bg-white dark:bg-gray-800 shadow-sm'
           : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-white/60 dark:hover:bg-gray-800/60'
       }`}
       style={active ? { color: 'var(--app-primary)' } : {}}
@@ -413,7 +413,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSett
             )}
             <button onClick={onOpenCommandPalette} className="hidden md:flex items-center gap-2 h-10 px-3 bg-white dark:bg-gray-700 text-gray-400 rounded-lg border border-gray-200 dark:border-gray-600 hover:text-primary transition-colors" title="Hızlı git — projeye, kişiye ya da ekrana (⌘K / Ctrl+K)">
               <i aria-hidden="true" className="fa-solid fa-magnifying-glass text-[13px]"></i>
-              <kbd className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-400">⌘K</kbd>
+              <kbd className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300">⌘K</kbd>
             </button>
             {onOpenDataHealth && <button onClick={onOpenDataHealth} className="relative w-10 h-10 flex items-center justify-center bg-white dark:bg-gray-700 text-gray-400 rounded-lg border border-gray-200 dark:border-gray-600 hover:text-primary transition-colors" title="Veri sağlığı denetimi (yetim tahsis, eşleşmeyen atama, mükerrer, eksik alan)">
               <i aria-hidden="true" className="fa-solid fa-stethoscope text-[13px]"></i>

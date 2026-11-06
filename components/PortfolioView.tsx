@@ -38,6 +38,9 @@ const RAG_COLORS: Record<RagStatus, string> = {
   red: '#ef4444',
 };
 
+// Beyaz yazılı rozet zemini: açık tonlar beyazla 2,1:1 kalıyordu (UI-GRS-14)
+const RAG_SOLID: Record<RagStatus, string> = { green: '#047857', amber: '#B45309', red: '#B91C1C' };
+
 const RAG_LABELS: Record<RagStatus, string> = {
   green: 'Yolunda',
   amber: 'Riskli',
@@ -117,7 +120,7 @@ const ProjectCard: React.FC<{
               {STATUS_LABELS[project.status]}
             </span>
             {project.rag && (
-              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-lg text-white" style={{ backgroundColor: RAG_COLORS[project.rag] }}>
+              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-lg text-white" style={{ backgroundColor: RAG_SOLID[project.rag] }}>
                 {RAG_LABELS[project.rag]}
               </span>
             )}
@@ -219,7 +222,7 @@ const ProjectCard: React.FC<{
       />
 
       <div className="mt-auto flex items-center justify-between">
-        <span className="text-[11px] font-semibold text-gray-300 dark:text-gray-600">
+        <span className="text-[11px] font-semibold text-gray-500 dark:text-gray-400">
           <i aria-hidden="true" className="fa-solid fa-clock-rotate-left mr-1"></i>
           {new Date(project.updatedAt).toLocaleDateString('tr-TR')}
         </span>
@@ -267,7 +270,7 @@ const PortfolioView: React.FC<PortfolioViewProps> = ({ projects, activeProjectId
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-semibold text-gray-800 dark:text-white tracking-tight">Proje Portföyü</h2>
-          <p className="text-gray-400 text-xs font-semibold tracking-[0.2em]">Çoklu Proje & Program Yönetimi</p>
+          <p className="text-gray-500 dark:text-gray-400 text-xs font-semibold tracking-[0.2em]">Çoklu Proje & Program Yönetimi</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <StatChip icon="fa-folder-open" label="Proje" value={String(stats.projectCount)} />

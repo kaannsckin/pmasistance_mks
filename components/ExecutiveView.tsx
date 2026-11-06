@@ -5,7 +5,7 @@ import { buildExecReport, exportExecReportToExcel } from '../utils/execReport';
 import { exportExecReportToPpt } from '../utils/pptExport';
 import { baselinePlanFor, snapshotsForYear } from '../utils/snapshots';
 import { costPeriodLabel, fmtTL } from '../utils/costing';
-import { RISK_BAND_HEX, RISK_BAND_LABELS, summarizeRisks, topPortfolioRisks } from '../utils/risks';
+import { RISK_BAND_LABELS, RISK_BAND_SOLID, summarizeRisks, topPortfolioRisks } from '../utils/risks';
 import { AttentionCategory, attentionItems, executiveSummary, HealthBand, portfolioHealth } from '../utils/executive';
 import { orgCapacity } from '../utils/deptScorecard';
 import { buildExecutiveBrief } from '../utils/execBrief';
@@ -26,7 +26,8 @@ interface ExecutiveViewProps {
 const STATUS_TR: Record<ProjectStatus, string> = {
   devam: 'Devam Eden', teklif: 'Teklif', beklemede: 'Beklemede', tamamlandi: 'Tamamlandı',
 };
-const RAG_COLORS: Record<RagStatus, string> = { green: '#10b981', amber: '#f59e0b', red: '#ef4444' };
+// Beyaz yazılı rozet zeminleri: açık tonlar beyazla 2,1–2,5:1 kalıyordu; bunlar ≥ 5:1 (UI-GRS-03)
+const RAG_COLORS: Record<RagStatus, string> = { green: '#047857', amber: '#B45309', red: '#B91C1C' };
 const RAG_TR: Record<RagStatus, string> = { green: 'Yolunda', amber: 'Riskli', red: 'Kritik' };
 const LOCK_TR: Record<PlanLockStatus, { label: string; cls: string }> = {
   draft: { label: 'Taslak', cls: 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400' },
@@ -43,6 +44,8 @@ const YEAR_RANGE = (() => {
 
 const HEALTH_HEX: Record<HealthBand, string> = { good: '#10b981', warn: '#f59e0b', bad: '#ef4444' };
 const HEALTH_LABEL: Record<HealthBand, string> = { good: 'Sağlıklı', warn: 'İzlemede', bad: 'Kritik' };
+// Yazı olarak kullanılan durum renkleri: iki temada okunur (styles/tailwind.css --status-*-ink)
+const HEALTH_INK: Record<HealthBand, string> = { good: 'var(--status-ok-ink)', warn: 'var(--status-warn-ink)', bad: 'var(--status-bad-ink)' };
 const ATTN_ICON: Record<AttentionCategory, string> = {
   rag: 'fa-heart-pulse', approval: 'fa-hourglass-half', budget: 'fa-coins', schedule: 'fa-calendar-xmark',
   risk: 'fa-shield-halved', overdue: 'fa-clock', overalloc: 'fa-users-slash', data: 'fa-triangle-exclamation',
@@ -52,7 +55,7 @@ const ATTN_ICON: Record<AttentionCategory, string> = {
 const HealthRing: React.FC<{ score: number; band: HealthBand; size?: number }> = ({ score, band, size = 68 }) => (
   <div className="rounded-full flex items-center justify-center flex-none" style={{ width: size, height: size, background: `conic-gradient(${HEALTH_HEX[band]} ${score * 3.6}deg, var(--tw-ring-color, #e5e7eb) 0deg)` }}>
     <div className="rounded-full bg-white dark:bg-gray-800 flex flex-col items-center justify-center" style={{ width: size - 14, height: size - 14 }}>
-      <span className="text-sm font-bold" style={{ color: HEALTH_HEX[band] }}>%{score}</span>
+      <span className="text-sm font-bold" style={{ color: HEALTH_INK[band] }}>%{score}</span>
     </div>
   </div>
 );
@@ -65,7 +68,7 @@ const KpiCard: React.FC<{ icon: string; label: string; value: string; sub?: stri
       className={`bg-white dark:bg-gray-800 rounded-2xl border shadow-sm px-4 py-3.5 flex items-center space-x-3 min-w-[150px] text-left w-full transition-all ${onClick ? 'hover:shadow-md hover:border-primary/40 cursor-pointer' : ''} ${active ? 'border-primary ring-2' : 'border-gray-100 dark:border-gray-700'}`}
       style={active ? { borderColor: 'var(--app-primary)', ['--tw-ring-color' as string]: 'var(--app-ring)' } : {}}
     >
-      <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white flex-none ${tone === 'red' ? 'bg-red-500' : tone === 'green' ? 'bg-emerald-500' : ''}`}
+      <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white flex-none ${tone === 'red' ? 'bg-red-700' : tone === 'green' ? 'bg-emerald-700' : ''}`}
            style={tone === 'default' ? { backgroundColor: 'var(--app-primary)' } : {}}>
         <i aria-hidden="true" className={`fa-solid ${icon} text-sm`}></i>
       </div>
@@ -205,7 +208,7 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
           <button
             onClick={handlePptExport}
             disabled={isPptBusy}
-            className="text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-md hover:opacity-90 transition-all flex items-center disabled:opacity-50 bg-orange-500"
+            className="text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-md hover:opacity-90 transition-all flex items-center disabled:opacity-50 bg-orange-700"
             title="Kapak, KPI panosu, plan-gerçekleşen grafiği, portföy tablosu, bölüm dağılımı ve kaynak sağlığı slaytlarını içeren PowerPoint indirir"
           >
             {isPptBusy ? <i aria-hidden="true" className="fa-solid fa-spinner fa-spin mr-2"></i> : <i aria-hidden="true" className="fa-solid fa-file-powerpoint mr-2"></i>}
@@ -220,7 +223,7 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
           <HealthRing score={health.orgScore} band={health.orgBand} />
           <div>
             <p className="text-[11px] font-semibold text-gray-400">Portföy Sağlığı</p>
-            <p className="text-sm font-semibold" style={{ color: HEALTH_HEX[health.orgBand] }}>{HEALTH_LABEL[health.orgBand]}</p>
+            <p className="text-sm font-semibold" style={{ color: HEALTH_INK[health.orgBand] }}>{HEALTH_LABEL[health.orgBand]}</p>
           </div>
         </div>
         <div className="w-px h-12 bg-gray-100 dark:bg-gray-700 hidden sm:block"></div>
@@ -348,7 +351,7 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
                   <p className="text-[10px] text-gray-400 mt-0.5">
                     {ph.rag ? `${RAG_TR[ph.rag]} · ` : ''}{ph.cpi !== null ? `CPI ${ph.cpi.toLocaleString('tr-TR')} · ` : ''}{ph.spi !== null ? `SPI ${ph.spi.toLocaleString('tr-TR')} · ` : ''}{ph.highRisks > 0 ? `${ph.highRisks} yüksek risk` : 'risk yok'}
                   </p>
-                  {ph.reasons.length > 0 && <p className="text-[10px] text-amber-500 mt-0.5 truncate" title={ph.reasons.join(', ')}>{ph.reasons.join(', ')}</p>}
+                  {ph.reasons.length > 0 && <p className="text-[10px] text-amber-700 dark:text-amber-300 mt-0.5 truncate" title={ph.reasons.join(', ')}>{ph.reasons.join(', ')}</p>}
                 </div>
                 <button onClick={() => onOpenProject(ph.projectId)} className="text-[11px] font-semibold px-2.5 py-1 rounded-lg flex-none text-white hover:opacity-90" style={{ backgroundColor: 'var(--app-primary)' }}>Aç</button>
               </div>
@@ -384,7 +387,7 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
                   <div className="mt-2">
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-[10px] text-gray-400">Doluluk</span>
-                      <span className="text-[10px] font-bold" style={{ color: HEALTH_HEX[d.band] }}>{uPct === null ? '—' : `%${uPct}`}</span>
+                      <span className="text-[10px] font-bold" style={{ color: HEALTH_INK[d.band] }}>{uPct === null ? '—' : `%${uPct}`}</span>
                     </div>
                     <div className="w-full h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
                       <div className="h-full rounded-full" style={{ width: `${Math.min(100, uPct ?? 0)}%`, backgroundColor: HEALTH_HEX[d.band] }}></div>
@@ -394,9 +397,9 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
                     <span>Kapasite <b className="text-gray-600 dark:text-gray-300">{fmt(d.capacityAA)}</b> AA</span>
                     <span>Plan <b className="text-gray-600 dark:text-gray-300">{fmt(d.plannedAA)}</b> AA</span>
                     <span>{d.projectCount} proje</span>
-                    {d.overAllocatedPeople > 0 && <span className="text-red-500 font-semibold"><i aria-hidden="true" className="fa-solid fa-users-slash mr-1"></i>{d.overAllocatedPeople} aşırı</span>}
+                    {d.overAllocatedPeople > 0 && <span className="text-red-700 dark:text-red-300 font-semibold"><i aria-hidden="true" className="fa-solid fa-users-slash mr-1"></i>{d.overAllocatedPeople} aşırı</span>}
                   </div>
-                  {d.reasons.length > 0 && <p className="text-[10px] text-amber-500 mt-1 truncate" title={d.reasons.join(', ')}>{d.reasons.join(' · ')}</p>}
+                  {d.reasons.length > 0 && <p className="text-[10px] text-amber-700 dark:text-amber-300 mt-1 truncate" title={d.reasons.join(', ')}>{d.reasons.join(' · ')}</p>}
                   {isOpen && (
                     <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700 space-y-1.5">
                       {d.people.map(pp => {
@@ -406,7 +409,7 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
                             <span className="text-[11px] text-gray-600 dark:text-gray-300 truncate flex-1">{pp.name}</span>
                             {pp.over && <span className="text-[9px] font-bold text-red-500 flex-none" title="Bazı aylarda kapasite üstü"><i aria-hidden="true" className="fa-solid fa-triangle-exclamation"></i></span>}
                             <span className="text-[10px] text-gray-400 flex-none">{fmt(pp.plannedAA)}/{fmt(pp.capacityAA)} AA</span>
-                            <span className="text-[10px] font-bold flex-none w-9 text-right" style={{ color: pu !== null && pu > 105 ? '#ef4444' : 'var(--app-primary)' }}>{pu === null ? '—' : `%${pu}`}</span>
+                            <span className="text-[10px] font-bold flex-none w-9 text-right" style={{ color: pu !== null && pu > 105 ? 'var(--status-bad-ink)' : 'var(--app-primary)' }}>{pu === null ? '—' : `%${pu}`}</span>
                           </div>
                         );
                       })}
@@ -508,7 +511,7 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
             </h3>
             <div className="flex items-center gap-2">
               {(['high', 'medium', 'low'] as const).map(b => (
-                <span key={b} className="text-[11px] font-semibold px-2 py-1 rounded-lg text-white" style={{ backgroundColor: RISK_BAND_HEX[b] }}>
+                <span key={b} className="text-[11px] font-semibold px-2 py-1 rounded-lg text-white" style={{ backgroundColor: RISK_BAND_SOLID[b] }}>
                   {RISK_BAND_LABELS[b]}: {b === 'high' ? riskSummary.high : b === 'medium' ? riskSummary.medium : riskSummary.low}
                 </span>
               ))}
@@ -517,7 +520,7 @@ const ExecutiveView: React.FC<ExecutiveViewProps> = ({ workspace, currentRole, o
           <div className="space-y-1.5">
             {topRisks.map(r => (
               <button key={r.id} onClick={() => onOpenProject(r.projectId)} className="w-full flex items-center gap-3 bg-gray-50 dark:bg-gray-800/60 rounded-lg px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700/60 transition-colors text-left" title="Projeyi aç">
-                <span className="text-xs font-bold px-2 py-1 rounded-lg text-white flex-none" style={{ backgroundColor: RISK_BAND_HEX[r.band] }}>{r.score}</span>
+                <span className="text-xs font-bold px-2 py-1 rounded-lg text-white flex-none" style={{ backgroundColor: RISK_BAND_SOLID[r.band] }}>{r.score}</span>
                 <span className="flex-1 text-xs text-gray-700 dark:text-gray-200 truncate" title={r.title}>{r.title}</span>
                 <span className="text-[11px] text-gray-400 flex-none">{r.projectName}</span>
                 {r.owner && <span className="text-[11px] text-gray-400 flex-none hidden md:inline">· {r.owner}</span>}

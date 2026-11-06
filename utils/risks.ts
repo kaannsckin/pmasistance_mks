@@ -19,6 +19,11 @@ export const RISK_BAND_HEX: Record<RiskBand, string> = {
     low: '#10b981', medium: '#f59e0b', high: '#ef4444',
 };
 
+/** Beyaz yazılı rozet zeminleri: RISK_BAND_HEX beyazla 2,1–3,8:1 kalıyordu; bunlar ≥ 5:1 (UI-GRS-03) */
+export const RISK_BAND_SOLID: Record<RiskBand, string> = {
+    low: '#047857', medium: '#B45309', high: '#B91C1C',
+};
+
 export const RISK_STATUS_LABELS: Record<RiskStatus, string> = {
     open: 'Açık', monitoring: 'İzleniyor', closed: 'Kapandı',
 };

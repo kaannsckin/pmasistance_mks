@@ -1,3 +1,28 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Yazı olarak kullanılan durum renkleri (iyi / uyarı / kötü): açık zeminde ve koyu zeminde ≥ 4,5:1.
+   Modern arayüzde modern paletin karşılıkları kullanılır (UI-GRS-03) */
+:root { --status-ok-ink: #047857; --status-warn-ink: #B45309; --status-bad-ink: #B91C1C; }
+html.dark { --status-ok-ink: #6EE7B7; --status-warn-ink: #FCD34D; --status-bad-ink: #FCA5A5; }
+.ui-modern { --status-ok-ink: var(--m-ok-ink); --status-warn-ink: var(--m-warn-ink); --status-bad-ink: var(--m-bad-ink); }
+
+/* Klasik seçili alt sekme: koyu zeminde tema renginin kendisi okunmuyordu (2,84:1); koyu modda
+   tema renginin açılmış tonu kullanılır, tema seçimi korunur (UI-GRS-14) */
+html.dark .app-tab-active { color: color-mix(in srgb, var(--app-primary) 50%, white) !important; }
+
+/* Açık temada okunmayan yazı tonları (UI-GRS-03, UI-GRS-14): Tailwind'in 400–500 tonlu gri ve durum
+   renkleri beyaz zeminde 2,1–3,8:1 kalıyordu. Yazı olarak kullanıldıklarında aynı ailenin ≥ 4,5:1
+   veren tonuna çekilir; nokta, çubuk ve zemin renklerine dokunulmaz. Koyu tema etkilenmez. */
+html:not(.dark) .text-gray-400 { color: #6B7280; }
+html:not(.dark) :is(.text-red-400, .text-red-500) { color: #DC2626; }
+html:not(.dark) :is(.text-amber-400, .text-amber-500, .text-amber-600) { color: #B45309; }
+html:not(.dark) :is(.text-yellow-500, .text-yellow-600) { color: #A16207; }
+html:not(.dark) :is(.text-orange-400, .text-orange-500) { color: #C2410C; }
+html:not(.dark) :is(.text-emerald-500, .text-emerald-600, .text-green-500, .text-green-600) { color: #047857; }
+/* Modern arayüzde eski ekranların durum yazıları modern paletin koyu mürekkepleriyle */
+html:not(.dark) .ui-modern :is(.text-red-400, .text-red-500, .text-red-600) { color: var(--m-bad-ink); }
+html:not(.dark) .ui-modern :is(.text-amber-400, .text-amber-500, .text-amber-600, .text-yellow-500, .text-yellow-600, .text-orange-400, .text-orange-500) { color: var(--m-warn-ink); }
+html:not(.dark) .ui-modern :is(.text-emerald-500, .text-emerald-600, .text-green-500, .text-green-600) { color: var(--m-ok-ink); }
+html:not(.dark) .ui-modern .m-legacy .text-gray-500 { color: var(--m-label-3); }

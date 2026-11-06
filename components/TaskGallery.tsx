@@ -241,7 +241,7 @@ const TaskGallery: React.FC<TaskGalleryProps> = ({ tasks, resources, onEditTask,
             <button
                 onClick={handleImportClick}
                 disabled={isLoading}
-                className="flex items-center space-x-2 bg-green-600 text-white px-4 py-2 rounded-lg shadow-md hover:bg-green-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:bg-gray-400"
+                className="flex items-center space-x-2 bg-green-700 text-white px-4 py-2 rounded-lg shadow-md hover:bg-green-800 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:bg-gray-400"
             >
                 {isLoading ? <i aria-hidden="true" className="fa-solid fa-spinner fa-spin"></i> : <i aria-hidden="true" className="fa-solid fa-file-excel"></i>}
                 <span>{isLoading ? 'Yükleniyor...' : "Excel'den Aktar"}</span>
@@ -249,7 +249,7 @@ const TaskGallery: React.FC<TaskGalleryProps> = ({ tasks, resources, onEditTask,
             <div className="relative" ref={exportMenuRef}>
                 <button
                     onClick={() => setIsExportMenuOpen(prev => !prev)}
-                    className="flex items-center space-x-2 bg-yellow-500 text-white px-4 py-2 rounded-lg shadow-md hover:bg-yellow-600 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-400"
+                    className="flex items-center space-x-2 bg-amber-700 text-white px-4 py-2 rounded-lg shadow-md hover:bg-amber-800 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-400"
                 >
                     <i aria-hidden="true" className="fa-solid fa-file-export"></i>
                     <span>Dışa Aktar</span>

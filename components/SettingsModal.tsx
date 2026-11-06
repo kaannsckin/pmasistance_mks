@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { UiStyle } from '../types';
+import { ColorSchemePref, UiStyle } from '../types';
 
 interface SettingsModalProps {
   sprintDuration: number;
@@ -8,11 +8,12 @@ interface SettingsModalProps {
   isLocalPersistenceEnabled: boolean;
   isAIEnabled: boolean;
   currentTheme: string;
-  isDarkMode: boolean;
+  /** Görünüm: Sistem / Gündüz / Gece (UI-GRS-01) */
+  colorScheme: ColorSchemePref;
   /** Arayüz tercihi — kartlara tıklanınca hemen uygulanır (kaydet beklenmez) */
   currentUiStyle: UiStyle;
   onChangeUiStyle: (style: UiStyle) => void;
-  onSave: (duration: number, date: string, enabled: boolean, aiEnabled: boolean, theme: string, isDarkMode: boolean) => void;
+  onSave: (duration: number, date: string, enabled: boolean, aiEnabled: boolean, theme: string, colorScheme: ColorSchemePref) => void;
   onClose: () => void;
   onResetData?: () => void;
 }
@@ -71,7 +72,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   isLocalPersistenceEnabled,
   isAIEnabled,
   currentTheme,
-  isDarkMode,
+  colorScheme,
   currentUiStyle,
   onChangeUiStyle,
   onSave,
@@ -83,7 +84,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   const [persistenceEnabled, setPersistenceEnabled] = useState(isLocalPersistenceEnabled);
   const [aiEnabled, setAiEnabled] = useState(isAIEnabled);
   const [theme, setTheme] = useState(currentTheme || 'classic');
-  const [dark, setDark] = useState(isDarkMode);
+  const [scheme, setScheme] = useState<ColorSchemePref>(colorScheme);
 
   useEffect(() => {
     setDuration(sprintDuration);
@@ -91,11 +92,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     setPersistenceEnabled(isLocalPersistenceEnabled);
     setAiEnabled(isAIEnabled);
     setTheme(currentTheme || 'classic');
-    setDark(isDarkMode);
-  }, [sprintDuration, projectStartDate, isLocalPersistenceEnabled, isAIEnabled, currentTheme, isDarkMode]);
+    setScheme(colorScheme);
+  }, [sprintDuration, projectStartDate, isLocalPersistenceEnabled, isAIEnabled, currentTheme, colorScheme]);
 
   const handleSave = () => {
-    onSave(duration, startDate, persistenceEnabled, aiEnabled, theme, dark);
+    onSave(duration, startDate, persistenceEnabled, aiEnabled, theme, scheme);
   };
 
   return (
@@ -141,15 +142,24 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
           </section>
 
           <section className="space-y-4 pt-6 border-t dark:border-gray-700">
-              <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest">Görünüm & Temalar</h3>
-                  <button 
-                    onClick={() => setDark(!dark)}
-                    className={`flex items-center space-x-2 px-3 py-1.5 rounded-xl border transition-all ${dark ? 'bg-gray-700 border-gray-600 text-amber-400' : 'bg-amber-50 border-amber-100 text-amber-600'}`}
-                  >
-                      <i aria-hidden="true" className={`fa-solid ${dark ? 'fa-moon' : 'fa-sun'} text-xs`}></i>
-                      <span className="text-[10px] font-black uppercase tracking-tighter">{dark ? 'GECE MODU' : 'GÜNDÜZ MODU'}</span>
-                  </button>
+              <div className="flex flex-wrap justify-between items-center gap-3 mb-4">
+                  <h3 id="settings-appearance" className="text-xs font-black text-gray-600 dark:text-gray-300 uppercase tracking-widest">Görünüm & Temalar</h3>
+                  {/* Üç durum (UI-GRS-01): seçili olan ekranda gerçekten uygulanır; "Sistem" işletim sistemini izler */}
+                  <div role="radiogroup" aria-labelledby="settings-appearance" className="inline-flex rounded-xl border border-gray-200 dark:border-gray-600 p-0.5 bg-gray-50 dark:bg-gray-900">
+                      {([['system', 'Sistem', 'fa-circle-half-stroke'], ['light', 'Gündüz', 'fa-sun'], ['dark', 'Gece', 'fa-moon']] as [ColorSchemePref, string, string][]).map(([value, label, icon]) => (
+                          <button
+                            key={value}
+                            type="button"
+                            role="radio"
+                            aria-checked={scheme === value}
+                            onClick={() => setScheme(value)}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${scheme === value ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm ring-1 ring-gray-300 dark:ring-gray-500' : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'}`}
+                          >
+                              <i aria-hidden="true" className={`fa-solid ${icon}`}></i>
+                              {label}
+                          </button>
+                      ))}
+                  </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                   {THEMES.map(t => (

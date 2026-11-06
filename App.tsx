@@ -1,6 +1,6 @@
 
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { View, Task, Resource, TaskStatus, Note, CustomerRequest, Objective, Project, Person, WorkspaceData, RagStatus, ProjectStatus, UserRole, PlanLockStatus, WorkPackage, UiStyle, PermissionKey, EstimateLogEntry, ReleasePlan, GoldenItem, EvalRun, ModelEvalRun } from './types';
+import { View, Task, Resource, TaskStatus, Note, CustomerRequest, Objective, Project, Person, WorkspaceData, RagStatus, ProjectStatus, UserRole, PlanLockStatus, WorkPackage, UiStyle, PermissionKey, EstimateLogEntry, ReleasePlan, GoldenItem, EvalRun, ModelEvalRun, ColorSchemePref } from './types';
 import { INITIAL_TASKS, INITIAL_RESOURCES, INITIAL_OBJECTIVES } from './constants';
 import {
   WORKSPACE_STORAGE_KEY,
@@ -151,6 +151,9 @@ const createSampleProject = (): Project =>
 
 /** Modern arayüzde proje başlığının gösterildiği ekranlar */
 const MODERN_PROJECT_VIEWS: View[] = [View.Overview, View.Roadmap, View.Tasks, View.Kanban, View.Planning, View.Risks, View.Resources, View.Goals, View.Requests, View.Notes, View.AI];
+
+/** Görünüm tercihinin index.html'deki erken betik için kopyası */
+const COLOR_SCHEME_KEY = 'planasistan-gorunum';
 
 const App: React.FC = () => {
   const [currentView, setCurrentViewState] = useState<View>(View.Portfolio);
@@ -396,16 +399,28 @@ const App: React.FC = () => {
     setCurrentView(item.view);
   }, []);
 
-  // ---- Tema / gece modu ----
+  // ---- Görünüm: Sistem / Gündüz / Gece (UI-GRS-01) ----
+  // Tüm koyu stiller (Tailwind dark:, modern palet) html.dark'a bağlıdır. "Sistem"de işletim
+  // sistemi tercihi izlenir ve değişince ekran güncellenir. Tercih localStorage'a da yazılır:
+  // index.html'deki betik ilk çizimden önce uygular (açılışta tema yanıp sönmesin).
+  const colorScheme: ColorSchemePref = settings?.colorScheme || 'system';
+  const settingsLoaded = !!settings;
   useEffect(() => {
-    if (settings?.isDarkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-    const themeColor = getComputedStyle(document.documentElement).getPropertyValue('--app-primary').trim();
-    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', themeColor);
-  }, [settings?.isDarkMode, settings?.theme]);
+    if (!settingsLoaded) return;
+    const mq = typeof window.matchMedia === 'function' ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+    const apply = () => {
+      const dark = colorScheme === 'dark' || (colorScheme === 'system' && !!mq?.matches);
+      document.documentElement.classList.toggle('dark', dark);
+      document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+      const themeColor = getComputedStyle(document.documentElement).getPropertyValue('--app-primary').trim();
+      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', themeColor);
+    };
+    apply();
+    try { localStorage.setItem(COLOR_SCHEME_KEY, colorScheme); } catch { /* depo kapalı */ }
+    if (colorScheme !== 'system' || !mq) return;
+    mq.addEventListener('change', apply);
+    return () => mq.removeEventListener('change', apply);
+  }, [settingsLoaded, colorScheme, settings?.theme]);
 
   // ---- Kalıcılık ----
   useEffect(() => {
@@ -1274,7 +1289,7 @@ const App: React.FC = () => {
     if (uiStyle === 'classic') setCurrentView(v => (v === View.Overview ? View.Roadmap : v));
   }, [updateWorkspace]);
 
-  const handleSaveSettings = (newDuration: number, newDate: string, enabled: boolean, aiEnabled: boolean, newTheme: string, dark: boolean) => {
+  const handleSaveSettings = (newDuration: number, newDate: string, enabled: boolean, aiEnabled: boolean, newTheme: string, scheme: ColorSchemePref) => {
     updateWorkspace(ws => ({
       ...ws,
       settings: {
@@ -1282,7 +1297,7 @@ const App: React.FC = () => {
         isLocalPersistenceEnabled: enabled,
         isAIEnabled: aiEnabled,
         theme: newTheme,
-        isDarkMode: dark,
+        colorScheme: scheme,
       },
     }));
     if (activeProject) {
@@ -2211,7 +2226,7 @@ const App: React.FC = () => {
           isLocalPersistenceEnabled={settings?.isLocalPersistenceEnabled !== false}
           isAIEnabled={settings?.isAIEnabled !== false}
           currentTheme={settings?.theme || 'classic'}
-          isDarkMode={settings?.isDarkMode || false}
+          colorScheme={colorScheme}
           currentUiStyle={settings?.uiStyle || 'classic'}
           onChangeUiStyle={handleSetUiStyle}
           onSave={handleSaveSettings} onClose={() => setIsSettingsModalOpen(false)} onResetData={handleResetData}

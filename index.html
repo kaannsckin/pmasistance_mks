@@ -12,6 +12,18 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" />
     <title>Proje Planlama Asistanı | Akıllı Web Aracı</title>
+    <script>
+      // Görünüm tercihi (Sistem / Gündüz / Gece) ilk çizimden önce uygulanır; uygulama yüklenince
+      // aynı tercihi depodan okur (UI-GRS-01). Anahtar: App.tsx COLOR_SCHEME_KEY
+      (function () {
+        try {
+          var m = localStorage.getItem('planasistan-gorunum') || 'system';
+          var d = m === 'dark' || (m === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          if (d) document.documentElement.classList.add('dark');
+          document.documentElement.style.colorScheme = d ? 'dark' : 'light';
+        } catch (e) { /* depo kapalı: tercih uygulama yüklenince uygulanır */ }
+      })();
+    </script>
 <style>
   /* --- THEME SYSTEM --- */
   :root {
