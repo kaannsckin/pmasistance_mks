@@ -9,6 +9,7 @@ import { parsePoolWorkbook, PoolImportResult } from '../../utils/poolImporter';
 import { Icon } from './icons';
 import { initialsOf } from './taskMeta';
 import { Field, rowSep, Sheet } from './ui';
+import DecimalInput from '../DecimalInput';
 
 /**
  * Modern Veri havuzu: personel, bölümler, rol kataloğu ve ünvanlar.
@@ -85,7 +86,7 @@ const PersonSheet: React.FC<{
                     </select>
                 </Field>
                 <Field label="Kullanılabilir AA / ay" htmlFor="dp-aa" hint="1 = tam zamanlı, 0,5 = yarı zamanlı">
-                    <input id="dp-aa" type="number" min={0} max={1.5} step={0.05} className="m-input" disabled={ro} value={d.availableAA} onChange={e => set({ availableAA: parseFloat(e.target.value) || 0 })} />
+                    <DecimalInput id="dp-aa" max={1.5} className="m-input" disabled={ro} value={d.availableAA} onValue={n => set({ availableAA: n })} />
                 </Field>
             </div>
             <Field label="Roller" hint="Kapasite–talep analizinde kullanılır">

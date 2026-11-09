@@ -10,6 +10,7 @@ import { Icon } from '../icons';
 import { RiskScorePill } from '../RiskParts';
 import { initialsOf } from '../taskMeta';
 import { rowSep, Sheet } from '../ui';
+import DecimalInput from '../../DecimalInput';
 
 /**
  * Kişi profili: yıllık plan / gerçekleşen doluluğu (efektif kapasiteyle),
@@ -181,9 +182,9 @@ const PersonProfileSheet: React.FC<{
                             <div key={mo} className={`rounded-xl px-1 py-1.5 text-center flex flex-col gap-0.5 ${lv > 0.049 ? 'm-tone-warn' : 'm-fill-2'}`}>
                                 <span className="text-[12px] font-semibold m-text-3">{MONTHS_TR[i]}</span>
                                 {editLeave && canEditLeave ? (
-                                    <input type="number" min={0} max={1} step={0.25} aria-label={`${MONTHS_TR[i]} izin AA`} value={lv || ''} placeholder="0"
+                                    <DecimalInput max={1} aria-label={`${MONTHS_TR[i]} izin AA`} value={lv || 0} placeholder="0"
                                         className="w-full text-center text-[13px] rounded-md border m-sep m-surface m-text px-0.5 py-0.5" style={{ borderStyle: 'solid', borderWidth: 1 }}
-                                        onChange={e => onSetLeave(person.id, year, mo, Math.max(0, Math.min(1, parseFloat(e.target.value) || 0)))} />
+                                        onValue={n => onSetLeave(person.id, year, mo, n)} />
                                 ) : <span className="text-[13px] font-semibold m-tabular">{lv > 0.049 ? `−${fmt(lv)}` : '—'}</span>}
                                 <span className="text-[11.5px] m-text-3 m-tabular" title="Efektif kapasite">{fmt(monthlyCapacity[i])}</span>
                             </div>

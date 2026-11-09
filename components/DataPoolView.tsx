@@ -2,6 +2,7 @@ import React, { useMemo, useRef, useState } from 'react';
 import { Department, Person, RoleCatalogEntry, TitleDef, UserRole } from '../types';
 import { canEditPool, ROLE_LABELS } from '../utils/allocations';
 import { parsePoolWorkbook, PoolImportResult } from '../utils/poolImporter';
+import DecimalInput from './DecimalInput';
 
 interface DataPoolViewProps {
   people: Person[];
@@ -244,7 +245,7 @@ const DataPoolView: React.FC<DataPoolViewProps> = ({ people, departments, roleCa
               </select>
             </Field>
             <Field label="Kullanılabilir AA / ay" hint="1 = tam zamanlı, 0,5 = yarı zamanlı">
-              <input type="number" min={0} max={1.5} step={0.05} className={cardInputCls} value={newPerson.availableAA} onChange={e => setNewPerson({ ...newPerson, availableAA: parseFloat(e.target.value) || 0 })} />
+              <DecimalInput max={1.5} className={cardInputCls} value={newPerson.availableAA} onValue={n => setNewPerson({ ...newPerson, availableAA: n })} />
             </Field>
             <Field label="Roller" className="sm:col-span-2 md:col-span-3" hint="Kişinin üstlenebileceği roller — kapasite-talep analizinde kullanılır">
               <div className="space-y-2">
@@ -313,7 +314,7 @@ const DataPoolView: React.FC<DataPoolViewProps> = ({ people, departments, roleCa
                     {titles.map(t => <option key={t.code} value={t.code}>{t.code} — {t.name}</option>)}
                   </select>
                 </td>
-                <td className={tdCls}><input disabled={!editable} type="number" min={0} max={1.5} step={0.05} className={`${inputCls} w-20`} value={p.availableAA} onChange={e => updatePerson(p.id, { availableAA: parseFloat(e.target.value) || 0 })} /></td>
+                <td className={tdCls}><DecimalInput disabled={!editable} max={1.5} aria-label={`${p.firstName} ${p.lastName}: kapasite (AA)`} className={`${inputCls} w-20`} value={p.availableAA} onValue={n => updatePerson(p.id, { availableAA: n })} /></td>
                 <td className={tdCls}><input disabled={!editable} className={inputCls} value={p.roles.join(', ')} onChange={e => updatePerson(p.id, { roles: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })} /></td>
                 <td className={tdCls}>
                   <div className="flex items-center gap-1">

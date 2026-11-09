@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Allocation, Person, Project, WorkspaceData } from '../types';
 import { MONTHS_TR } from '../utils/allocations';
 import { buildScenario, departmentRolePairs, proposalProjects, ScenarioHire } from '../utils/scenario';
+import DecimalInput from './DecimalInput';
 
 interface ScenarioViewProps {
   people: Person[];
@@ -75,7 +76,7 @@ const ScenarioView: React.FC<ScenarioViewProps> = ({ people, projects, allocatio
               {pairs.map((p, i) => <option key={i} value={i}>{p.departmentCode} · {p.role}</option>)}
             </select>
             <div className="flex items-center gap-2">
-              <input type="number" min={0} max={5} step={0.25} value={newHire.aa} onChange={e => setNewHire({ ...newHire, aa: parseFloat(e.target.value) || 0 })} className="w-20 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1.5 text-[11px] text-gray-700 dark:text-gray-200 focus:outline-none" title="Aylık AA (kişi eşdeğeri)" />
+              <DecimalInput max={5} aria-label="Yeni kişi AA/ay" value={newHire.aa} onValue={n => setNewHire({ ...newHire, aa: n })} className="w-20 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1.5 text-[11px] text-gray-700 dark:text-gray-200 focus:outline-none" title="Aylık AA (kişi eşdeğeri)" />
               <span className="text-[10px] text-gray-400">AA/ay</span>
               <button onClick={addHire} disabled={newHire.pairIndex === ''} className="ml-auto text-white text-[11px] font-semibold px-3 py-1.5 rounded-lg disabled:opacity-40" style={{ backgroundColor: 'var(--app-primary)' }}>Ekle</button>
             </div>

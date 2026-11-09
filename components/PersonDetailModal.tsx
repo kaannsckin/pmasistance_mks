@@ -7,6 +7,7 @@ import { DayRange, formatRange } from '../utils/calendarRange';
 import { buildPersonProfile } from '../utils/personProfile';
 import { DateRangeField } from './modern/DateRangePicker';
 import { RISK_BAND_HEX, RISK_STATUS_LABELS } from '../utils/risks';
+import DecimalInput from './DecimalInput';
 
 interface PersonDetailModalProps {
   workspace: WorkspaceData;
@@ -151,11 +152,12 @@ const PersonDetailModal: React.FC<PersonDetailModalProps> = ({ workspace, person
                   <div key={mo} className={`rounded-lg px-1 py-1.5 text-center ${hasLeave ? 'bg-amber-50 dark:bg-amber-900/25 border border-amber-200 dark:border-amber-800' : 'bg-gray-50 dark:bg-gray-800/60 border border-transparent'}`}>
                     <div className="text-[9px] font-semibold text-gray-400">{MONTHS_TR[i]}</div>
                     {showLeave && canEditLeave && onSetLeave ? (
-                      <input
-                        type="number" min={0} max={1} step={0.5}
-                        value={leaveAA || ''}
+                      <DecimalInput
+                        max={1}
+                        value={leaveAA || 0}
                         placeholder="0"
-                        onChange={e => onSetLeave(person.id, year, mo, parseFloat(e.target.value) || 0)}
+                        aria-label={`${MONTHS_TR[i]} izin AA`}
+                        onValue={n => onSetLeave(person.id, year, mo, n)}
                         className="w-full mt-0.5 text-center text-[11px] bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded px-0.5 py-0.5 focus:outline-none focus:border-primary"
                         title={`${MONTHS_TR[i]} izin AA (1 = tam ay)`}
                       />

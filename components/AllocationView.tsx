@@ -17,6 +17,7 @@ import ForecastView from './ForecastView';
 import UtilizationHeatmap from './UtilizationHeatmap';
 import BilledHoursImportModal from './BilledHoursImportModal';
 import { BilledApplyMode, BilledHoursOptions, BilledHoursRecord } from '../utils/billedHours';
+import DecimalInput from './DecimalInput';
 
 interface AllocationViewProps {
   allocations: Allocation[];
@@ -198,17 +199,13 @@ const AllocationView: React.FC<AllocationViewProps> = ({ departments: department
     const person = personMap.get(a.personId);
     const isOver = field === 'plan' && person && overSet.has(`${person.id}:${month}`) && (value || 0) > 0;
     return (
-      <input
-        type="number"
-        min={0}
+      <DecimalInput
         max={1.5}
-        step={0.05}
-        value={value ?? ''}
+        value={value}
         disabled={!editableCell}
-        onChange={e => {
-          const raw = e.target.value;
-          onSetCell(a.id, field, month, raw === '' ? undefined : parseFloat(raw));
-        }}
+        aria-label={`${personName(a.personId)}, ${MONTHS_TR[month - 1]}, ${field === 'plan' ? 'plan' : 'gerçekleşen'} (AA)`}
+        onValue={n => onSetCell(a.id, field, month, n)}
+        onEmpty={() => onSetCell(a.id, field, month, undefined)}
         title={isOver && person ? `Aşırı tahsis: ${personName(person.id)} ${MONTHS_TR[month - 1]} toplamı ${fmt(personMonthTotal(yearAllocations, person.id, year, month, 'plan'))} / kapasite ${fmt(person.availableAA)}` : undefined}
         className={`w-14 text-center text-xs rounded-md border px-1 py-1 focus:outline-none transition-colors
           ${isOver
@@ -506,7 +503,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ departments: department
             </span>
           </div>
           <label className="text-[11px] font-semibold text-gray-500 dark:text-gray-300">Gerekli AA/ay
-            <input type="number" min={0.05} max={1} step={0.05} value={staff.aa} onChange={e => setStaff({ ...staff, aa: parseFloat(e.target.value) || 0 })} className="mt-1 block w-24 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1.5 text-[11px] focus:outline-none" />
+            <DecimalInput max={1} value={staff.aa} onValue={n => setStaff({ ...staff, aa: n })} className="mt-1 block w-24 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1.5 text-[11px] focus:outline-none" />
           </label>
           <div className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold ${fitCount > 0 ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-300' : 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-300'}`}>
             <i aria-hidden="true" className={`fa-solid ${fitCount > 0 ? 'fa-user-check' : 'fa-user-xmark'}`}></i>
