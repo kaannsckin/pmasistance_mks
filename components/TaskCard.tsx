@@ -10,6 +10,8 @@ interface TaskCardProps {
   onNotify: (task: Task) => void;
   onDelete: (taskId: string) => void;
   onStatusChange: (taskId: string, newStatus: TaskStatus) => void;
+  /** Yazma yetkisi yoksa (müdür, PYB destek) düzenle/sil gizli, durum yalnız okunur (UI-AKS-22) */
+  readOnly?: boolean;
 }
 
 const PRIORITY_STYLES = {
@@ -19,7 +21,7 @@ const PRIORITY_STYLES = {
   Low: 'bg-gray-50 text-gray-700 border-gray-200',
 };
 
-const TaskCard: React.FC<TaskCardProps> = ({ task, onView, onEdit, onNotify, onDelete, onStatusChange }) => {
+const TaskCard: React.FC<TaskCardProps> = ({ task, onView, onEdit, onNotify, onDelete, onStatusChange, readOnly = false }) => {
     const isDataMissing = task.time.avg === 0;
     const jiraUrl = task.jiraId ? `https://jira.bilgem.tubitak.gov.tr/browse/${task.jiraId}` : '#';
 
@@ -82,8 +84,12 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onView, onEdit, onNotify, onD
 
             {/* Action Footer */}
             <div className="bg-gray-50 dark:bg-gray-800/80 px-4 py-2 border-t border-gray-100 dark:border-gray-700 rounded-b-xl flex justify-between items-center opacity-80 group-hover:opacity-100 transition-opacity">
+                 {readOnly ? (
+                    <span className="text-xs text-gray-600 dark:text-gray-300 font-medium">{STATUS_LABELS[task.status] || task.status}</span>
+                 ) : (
                  <select
                     value={task.status}
+                    aria-label={`Durum: ${task.name}`}
                     onChange={(e) => onStatusChange(task.id, e.target.value as TaskStatus)}
                     className="text-xs bg-transparent border-none p-0 pr-6 text-gray-600 dark:text-gray-300 font-medium focus:ring-0 cursor-pointer"
                 >
@@ -91,6 +97,7 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onView, onEdit, onNotify, onD
                         <option key={key} value={key}>{label}</option>
                     ))}
                 </select>
+                 )}
                 
                 <div className="flex items-center space-x-1">
                     {isDataMissing && (
@@ -101,12 +108,14 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onView, onEdit, onNotify, onD
                     <button aria-label="Detay" onClick={() => onView(task)} title="Detay" className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-accent text-gray-500 hover:text-primary transition-colors">
                         <i aria-hidden="true" className="fa-solid fa-eye text-xs"></i>
                     </button>
-                    <button aria-label="Düzenle" onClick={() => onEdit(task)} title="Düzenle" className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-green-100 text-gray-500 hover:text-green-600 transition-colors">
+                    {!readOnly && <>
+                    <button aria-label={`Düzenle: ${task.name}`} onClick={() => onEdit(task)} title="Düzenle" className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-green-100 text-gray-500 hover:text-green-600 transition-colors">
                         <i aria-hidden="true" className="fa-solid fa-pencil text-xs"></i>
                     </button>
-                    <button aria-label="Sil" onClick={() => onDelete(task.id)} title="Sil" className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-red-100 text-gray-500 hover:text-red-600 transition-colors">
+                    <button aria-label={`Sil: ${task.name}`} onClick={() => onDelete(task.id)} title="Sil" className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-red-100 text-gray-500 hover:text-red-600 transition-colors">
                         <i aria-hidden="true" className="fa-solid fa-trash-can text-xs"></i>
                     </button>
+                    </>}
                 </div>
             </div>
         </div>

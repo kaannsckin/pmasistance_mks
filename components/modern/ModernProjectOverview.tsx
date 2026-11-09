@@ -192,8 +192,9 @@ const ModernProjectOverview: React.FC<ModernProjectOverviewProps> = ({ workspace
                     <Card title="Başlayalım" labelledBy="po-start" subtitle="Projede henüz görev yok">
                         <div className="flex flex-wrap gap-2.5">
                             {onNewTask && <button type="button" className="m-btn m-btn-primary" onClick={onNewTask}><Icon name="plus" size={18} strokeWidth={2.2} />Yeni görev</button>}
-                            {linkable(View.Tasks) && <button type="button" className="m-btn m-btn-gray" onClick={() => onNavigate(View.Tasks)}><Icon name="upload" size={18} />Excel'den aktar</button>}
-                            {linkable(View.Resources) && <button type="button" className="m-btn m-btn-gray" onClick={() => onNavigate(View.Resources)}><Icon name="users" size={18} />Ekibi tanımla</button>}
+                            {canEdit && linkable(View.Tasks) && <button type="button" className="m-btn m-btn-gray" onClick={() => onNavigate(View.Tasks)}><Icon name="upload" size={18} />Excel'den aktar</button>}
+                            {canEdit && linkable(View.Resources) && <button type="button" className="m-btn m-btn-gray" onClick={() => onNavigate(View.Resources)}><Icon name="users" size={18} />Ekibi tanımla</button>}
+                            {!canEdit && <p className="m-0 text-[15px] m-text-3">Bu projede görev ekleme yetkiniz yok; proje yöneticisi ekleyince burada görünür.</p>}
                         </div>
                     </Card>
                 ) : (

@@ -88,6 +88,8 @@ const ModernProjectHeader: React.FC<ModernProjectHeaderProps> = ({ project, owne
                             <h1 className="m-0 text-[34px] leading-tight font-bold tracking-[-0.02em] m-text">{project.name}</h1>
                             {rag && <span className={`inline-flex items-center h-7 px-3 rounded-full text-[13px] font-semibold ${rag.tone}`}>{rag.label}</span>}
                             {!rag && <span className="inline-flex items-center h-7 px-3 rounded-full text-[13px] font-semibold m-tone-hold">{PROJECT_STATUS_LABEL[project.status]}</span>}
+                            {/* Yazma yetkisi yoksa bunu ekranda söyler (UI-AKS-23): düğmelerin neden olmadığı anlaşılsın */}
+                            {!onNewTask && <span className="inline-flex items-center gap-1.5 h-7 px-3 rounded-full text-[13px] font-semibold m-tone-hold" title="Bu projede görüntüleyebilir, değiştiremezsiniz"><Icon name="eye" size={14} />Salt okunur</span>}
                         </div>
                         <p className="m-0 text-[15px] m-text-3">{meta}</p>
                     </div>

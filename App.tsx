@@ -1768,12 +1768,16 @@ const App: React.FC = () => {
     const ps = activeProject.settings;
     const changeTaskStatus = (id: string, s: TaskStatus) => setTasks(prev => prev.map(t => t.id === id ? { ...t, status: s } : t));
     const viewTask = (t: Task) => { setViewingTask(t); setIsDetailModalOpen(true); };
-    const editTask = (t: Task) => { setEditingTask(t); setIsFormModalOpen(true); };
+    // Salt okunur kullanıcıda düzenleme formu açılmaz, görev görüntülenir (UI-AKS-22, UI-KRC-23):
+    // form açılıp kaydediliyor, değişiklik sessizce atılıyordu
+    const editTask = (t: Task) => { if (!canWriteActive) { viewTask(t); return; } setEditingTask(t); setIsFormModalOpen(true); };
     // Görev silme: onay hangi görevin silineceğini yazar, çift tıkın ikinci tıkı yok sayılır,
     // silme geri alınabilir (UI-KRC-03)
     const deleteTask = (taskId: string) => {
       const target = tasks.find(t => t.id === taskId);
-      if (!target || !confirmDestructive(`"${target.name}" görevi silinecek. Emin misiniz?`)) return;
+      // Salt okunurda silme sorulmaz ve "silindi" denmez (UI-AKS-22): görev silinmiyordu
+      if (!target || !canWriteActive) return;
+      if (!confirmDestructive(`"${target.name}" görevi silinecek. Emin misiniz?`)) return;
       const projectId = activeProject.id;
       const index = tasks.findIndex(t => t.id === taskId);
       setTasks(prev => prev.filter(t => t.id !== taskId));
@@ -1804,7 +1808,7 @@ const App: React.FC = () => {
         <ModernTimeline
           // Salt okunur zaman çizelgesi admin'in öncelik süzgecini izler; düzenlenebilirde tüm görevler (otomatik plan gizlileri kaybetmesin)
           project={isManagementRole(identity.role) && roleView.minTaskPriority !== 'Low' ? { ...activeProject, tasks: activeProject.tasks.filter(t => taskPassesView(roleView, t)) } : activeProject}
-          canEdit={!isManagementRole(identity.role)}
+          canEdit={canWriteActive}
           onMoveTask={(id: string, v: number) => setTasks(prev => prev.map(t => t.id === id ? { ...t, version: v } : t))}
           onPlanGenerated={setTasks}
           onInsertSprint={insertSprint}
@@ -1849,7 +1853,7 @@ const App: React.FC = () => {
           resources={resources}
           tasks={tasks}
           people={workspace.people}
-          canEdit={!isManagementRole(identity.role)}
+          canEdit={canWriteActive}
           onUpdate={(rs: Resource[], ts?: Task[]) => updateActiveProject(p => ({ ...p, resources: rs, tasks: ts ?? p.tasks }))}
           setResources={setResources}
           titleCosts={ps.titleCosts || {}}
@@ -1863,7 +1867,7 @@ const App: React.FC = () => {
         <ModernGoals
           objectives={objectives}
           tasks={tasks}
-          canEdit={!isManagementRole(identity.role)}
+          canEdit={canWriteActive}
           onUpdateObjectives={setObjectives}
           onViewTask={viewTask}
           onNavigate={setCurrentView}
@@ -1978,7 +1982,7 @@ const App: React.FC = () => {
         return (
           <TaskGallery
             tasks={tasks} resources={resources}
-            onEditTask={(t) => { setEditingTask(t); setIsFormModalOpen(true); }} onViewTask={(t) => { setViewingTask(t); setIsDetailModalOpen(true); }}
+            onEditTask={editTask} onViewTask={viewTask}
             onNotifyTask={(t) => { setTeamsTask(t); setIsTeamsModalOpen(true); }} onNewTask={canWriteActive ? () => { setEditingTask(null); setIsFormModalOpen(true); } : undefined}
             onDeleteTask={deleteTask}
             onDataImport={handleDataImport}
@@ -2021,8 +2025,8 @@ const App: React.FC = () => {
             onTaskStatusChange={(id, s) => setTasks(prev => prev.map(t => t.id === id ? { ...t, status: s } : t))}
             onNewTask={canWriteActive ? () => { setEditingTask(null); setIsFormModalOpen(true); } : undefined}
             onViewTask={(t) => { setViewingTask(t); setIsDetailModalOpen(true); }}
-            onEditTask={(t) => { setEditingTask(t); setIsFormModalOpen(true); }}
-            onDeleteTask={deleteTask}
+            onEditTask={editTask}
+            onDeleteTask={canWriteActive ? deleteTask : undefined}
           />
         );
       case View.Goals:

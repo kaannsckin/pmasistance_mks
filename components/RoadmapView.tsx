@@ -10,7 +10,7 @@ interface RoadmapViewProps {
   onNewTask?: () => void;
   onViewTask: (task: Task) => void;
   onEditTask: (task: Task) => void;
-  onDeleteTask: (taskId: string) => void;
+  onDeleteTask?: (taskId: string) => void;
 }
 
 const columnConfig: { id: TaskStatus, label: string, icon: string, iconColor: string }[] = [
@@ -32,7 +32,8 @@ const RoadmapCard: React.FC<{
     task: Task;
     onViewTask: (task: Task) => void;
     onEditTask: (task: Task) => void;
-    onDeleteTask: (taskId: string) => void;
+    /** Yoksa (salt okunur) menüde "Sil" çıkmaz ve "Düzenle" yerine "Görüntüle" */
+    onDeleteTask?: (taskId: string) => void;
 }> = React.memo(({ task, onViewTask, onEditTask, onDeleteTask }) => {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
@@ -92,8 +93,8 @@ const RoadmapCard: React.FC<{
                 </button>
                 {isMenuOpen && (
                     <div className="absolute right-0 mt-1 w-36 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-lg shadow-2xl z-10 animate-fade-in-up">
-                        <button onClick={(e) => { e.stopPropagation(); onEditTask(task); setIsMenuOpen(false); }} className="w-full text-left text-xs px-3 py-2 flex items-center space-x-2 hover:bg-gray-50 dark:hover:bg-gray-700"><i aria-hidden="true" className="fa-solid fa-pencil text-gray-400"></i><span>Düzenle</span></button>
-                        <button onClick={(e) => { e.stopPropagation(); onDeleteTask(task.id); setIsMenuOpen(false); }} className="w-full text-left text-xs px-3 py-2 flex items-center space-x-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30"><i aria-hidden="true" className="fa-solid fa-trash-can"></i><span>Sil</span></button>
+                        <button onClick={(e) => { e.stopPropagation(); onEditTask(task); setIsMenuOpen(false); }} className="w-full text-left text-xs px-3 py-2 flex items-center space-x-2 hover:bg-gray-50 dark:hover:bg-gray-700"><i aria-hidden="true" className="fa-solid fa-pencil text-gray-400"></i><span>{onDeleteTask ? 'Düzenle' : 'Görüntüle'}</span></button>
+                        {onDeleteTask && <button onClick={(e) => { e.stopPropagation(); onDeleteTask(task.id); setIsMenuOpen(false); }} className="w-full text-left text-xs px-3 py-2 flex items-center space-x-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30"><i aria-hidden="true" className="fa-solid fa-trash-can"></i><span>Sil</span></button>}
                     </div>
                 )}
             </div>

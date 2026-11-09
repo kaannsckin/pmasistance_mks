@@ -226,6 +226,7 @@ const TaskGallery: React.FC<TaskGalleryProps> = ({ tasks, resources, onEditTask,
                 onChange={handleCsvFileChange}
                 accept=".csv"
             />
+             {onNewTask && (<>
              <button
                 onClick={handleCsvImportClick}
                 disabled={isLoading}
@@ -234,7 +235,6 @@ const TaskGallery: React.FC<TaskGalleryProps> = ({ tasks, resources, onEditTask,
                 {isLoading ? <i aria-hidden="true" className="fa-solid fa-spinner fa-spin"></i> : <i aria-hidden="true" className="fa-solid fa-file-csv"></i>}
                 <span>{isLoading ? 'Yükleniyor...' : "CSV'den Aktar"}</span>
             </button>
-             {onNewTask && (<>
              <button
                 onClick={handleJiraImportClick}
                 disabled={isLoading}
@@ -315,6 +315,7 @@ const TaskGallery: React.FC<TaskGalleryProps> = ({ tasks, resources, onEditTask,
               onNotify={onNotifyTask}
               onDelete={onDeleteTask}
               onStatusChange={onTaskStatusChange}
+              readOnly={!onNewTask}
             />
           ))}
         </div>
