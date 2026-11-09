@@ -21,6 +21,10 @@ html:not(.dark) :is(.text-amber-400, .text-amber-500, .text-amber-600) { color: 
 html:not(.dark) :is(.text-yellow-500, .text-yellow-600) { color: #A16207; }
 html:not(.dark) :is(.text-orange-400, .text-orange-500) { color: #C2410C; }
 html:not(.dark) :is(.text-emerald-500, .text-emerald-600, .text-green-500, .text-green-600) { color: #047857; }
+/* Klasik koyu temada koyu karşılığı verilmemiş gri ve kırmızı yazılar (Yönetim, EVM: 3,0:1). Yalnız
+   sınıfında dark:text-… olmayan öğeler; tasarımcının seçtiği koyu tonlara dokunulmaz (UI-GRS-19). */
+html.dark .text-gray-500:not([class*="dark:text-"]):not(.ui-modern *) { color: #9CA3AF; }
+html.dark :is(.text-red-500, .text-red-600):not([class*="dark:text-"]):not(.ui-modern *) { color: #F87171; }
 /* Modern arayüzde eski ekranların durum yazıları modern paletin koyu mürekkepleriyle */
 html:not(.dark) .ui-modern :is(.text-red-400, .text-red-500, .text-red-600) { color: var(--m-bad-ink); }
 html:not(.dark) .ui-modern :is(.text-amber-400, .text-amber-500, .text-amber-600, .text-yellow-500, .text-yellow-600, .text-orange-400, .text-orange-500) { color: var(--m-warn-ink); }
@@ -29,6 +33,14 @@ html:not(.dark) .ui-modern .m-legacy .text-gray-500 { color: var(--m-label-3); }
 
 /* Tema rengiyle yazı: koyu zeminde tema renginin kendisi okunmuyordu (klasik koyu 2,84:1) */
 .app-primary-ink { color: var(--app-primary); }
+/* Klasik koyu temada birincil renkli yazı (yüzdeler, rakamlar, bağlantılar) koyu zeminde 2,6–2,8:1
+   kalıyordu (UI-GRS-19, UI-GRS-30). Yazıda açık ton kullanılır; zemin olarak kullanılan birincil renk
+   (beyaz yazılı düğmeler) değişmez. Modern arayüzün kendi paleti var, ona dokunulmaz. */
+/* Klasikte açık vurgu zemini (.bg-accent) koyu modda da açık kalıyor, üstündeki yazı okunmuyordu */
+html.dark .bg-accent:not(.ui-modern *) { background-color: color-mix(in srgb, var(--app-primary) 24%, #111827); }
+html.dark :is(.text-primary, [style^="color: var(--app-primary)"], [style*="; color: var(--app-primary)"]):not(.ui-modern *):not(.text-white) {
+  color: color-mix(in srgb, var(--app-primary) 50%, white) !important;
+}
 html.dark .app-primary-ink { color: color-mix(in srgb, var(--app-primary) 50%, white); }
 
 /* Geniş tablolarda kararın dayandığı "Toplam" sütunu yatay kaydırmada sağda sabit (UI-KRC-17) */

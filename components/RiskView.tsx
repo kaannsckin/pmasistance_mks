@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Person, PestelItem, Project, Risk, RiskLevel, RiskStatus, SwotItem } from '../types';
 import { EMBED_SYSTEM, parseRiskSuggestions, riskSuggestionPrompt, RiskSuggestion } from '../utils/ai/embedded';
 import { AiButton, AiErrorNote, useAiRun } from './assistant/AiButton';
-import { createRisk, riskBand, RISK_BAND_HEX, RISK_BAND_LABELS, riskScore, RISK_STATUS_LABELS } from '../utils/risks';
+import { createRisk, riskBand, RISK_BAND_LABELS, RISK_BAND_SOLID, riskScore, RISK_STATUS_LABELS } from '../utils/risks';
 import { riskDraftFromPestel, summarizePestel } from '../utils/pestel';
 import { summarizeSwot } from '../utils/swot';
 import PestelModal from './PestelModal';
@@ -153,7 +153,7 @@ const RiskView: React.FC<RiskViewProps> = ({ projectName, risks, people, canEdit
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-2">
                     <span className="text-xs font-bold text-gray-800 dark:text-gray-100">{r.title}</span>
-                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded text-white" style={{ backgroundColor: RISK_BAND_HEX[riskBand(r.probability * r.impact)] }}>{r.probability}×{r.impact}={r.probability * r.impact}</span>
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded text-white" style={{ backgroundColor: RISK_BAND_SOLID[riskBand(r.probability * r.impact)] }}>{r.probability}×{r.impact}={r.probability * r.impact}</span>
                   </span>
                   {r.description && <span className="block text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">{r.description}</span>}
                   {r.mitigation && <span className="block text-[11px] text-gray-500 dark:text-gray-400 mt-0.5"><b>Aksiyon:</b> {r.mitigation}</span>}
@@ -218,7 +218,7 @@ const RiskView: React.FC<RiskViewProps> = ({ projectName, risks, people, canEdit
                           <td key={impact} className="p-0.5">
                             <div
                               className="aspect-square rounded flex items-center justify-center text-xs font-bold transition-transform hover:scale-105"
-                              style={{ backgroundColor: RISK_BAND_HEX[band], opacity: count > 0 ? 1 : 0.18, color: '#fff' }}
+                              style={{ backgroundColor: RISK_BAND_SOLID[band], opacity: count > 0 ? 1 : 0.18, color: '#fff' }}
                               title={`Olasılık ${prob} × Etki ${impact} = ${score} (${RISK_BAND_LABELS[band]})${count > 0 ? ` — ${count} risk` : ''}`}
                             >
                               {count > 0 ? count : ''}
@@ -240,7 +240,7 @@ const RiskView: React.FC<RiskViewProps> = ({ projectName, risks, people, canEdit
           <div className="flex items-center gap-4 mt-3 justify-center">
             {(['low', 'medium', 'high'] as const).map(b => (
               <span key={b} className="flex items-center gap-1.5 text-[11px] text-gray-500">
-                <span className="w-3 h-3 rounded-sm inline-block" style={{ backgroundColor: RISK_BAND_HEX[b] }}></span>{RISK_BAND_LABELS[b]}
+                <span className="w-3 h-3 rounded-sm inline-block" style={{ backgroundColor: RISK_BAND_SOLID[b] }}></span>{RISK_BAND_LABELS[b]}
               </span>
             ))}
           </div>
@@ -269,7 +269,7 @@ const RiskView: React.FC<RiskViewProps> = ({ projectName, risks, people, canEdit
             </select>
             <input className={inputCls} placeholder="Azaltıcı aksiyon (opsiyonel)" value={newRisk.mitigation} onChange={e => setNewRisk({ ...newRisk, mitigation: e.target.value })} />
             <div className="flex items-center justify-between">
-              <span className="text-[11px] text-gray-400">Skor: <b style={{ color: RISK_BAND_HEX[riskBand(newRisk.probability * newRisk.impact)] }}>{newRisk.probability * newRisk.impact} · {RISK_BAND_LABELS[riskBand(newRisk.probability * newRisk.impact)]}</b></span>
+              <span className="text-[11px] text-gray-400">Skor: <b className="text-white px-1.5 py-0.5 rounded" style={{ backgroundColor: RISK_BAND_SOLID[riskBand(newRisk.probability * newRisk.impact)] }}>{newRisk.probability * newRisk.impact} · {RISK_BAND_LABELS[riskBand(newRisk.probability * newRisk.impact)]}</b></span>
               <button onClick={addRisk} disabled={!newRisk.title.trim()} className="text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-sm hover:opacity-90 disabled:opacity-40" style={{ backgroundColor: 'var(--app-primary)' }}>
                 <i aria-hidden="true" className="fa-solid fa-plus mr-1"></i>Ekle
               </button>
@@ -314,7 +314,7 @@ const RiskView: React.FC<RiskViewProps> = ({ projectName, risks, people, canEdit
                     </select>
                   </td>
                   <td className="px-3 py-2">
-                    <span className="text-xs font-bold px-2 py-1 rounded-lg text-white" style={{ backgroundColor: RISK_BAND_HEX[band] }}>{score}</span>
+                    <span className="text-xs font-bold px-2 py-1 rounded-lg text-white" style={{ backgroundColor: RISK_BAND_SOLID[band] }}>{score}</span>
                   </td>
                   <td className="px-3 py-2 min-w-[140px]">
                     {editable ? (

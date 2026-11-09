@@ -104,9 +104,9 @@ const EvmPanel: React.FC<EvmPanelProps> = ({ workspace, year, projectIds }) => {
                 {evm.projects.map((p: ProjectEVM) => (
                   <tr key={p.projectId} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/40">
                     <td className="px-3 py-2 text-[11px] font-semibold text-gray-700 dark:text-gray-200 max-w-[180px] truncate" title={p.projectName}>{p.projectName}</td>
-                    <td className="px-3 py-2 text-[11px] text-gray-500">%{Math.round(p.percentComplete * 100)}</td>
+                    <td className="px-3 py-2 text-[11px] text-gray-500 dark:text-gray-400">%{Math.round(p.percentComplete * 100)}</td>
                     <td className="px-3 py-2 text-[11px] text-gray-600 dark:text-gray-300 whitespace-nowrap">{fmtTL(p.bac)}</td>
-                    <td className="px-3 py-2 text-[11px] text-gray-500 whitespace-nowrap">{fmtTL(p.pv)}</td>
+                    <td className="px-3 py-2 text-[11px] text-gray-500 dark:text-gray-400 whitespace-nowrap">{fmtTL(p.pv)}</td>
                     <td className="px-3 py-2 text-[11px] text-gray-600 dark:text-gray-300 whitespace-nowrap">{fmtTL(p.ev)}</td>
                     <td className="px-3 py-2 text-[11px] text-gray-600 dark:text-gray-300 whitespace-nowrap">{fmtTL(p.ac)}</td>
                     <td className={`px-3 py-2 text-[11px] font-semibold ${idxColor(p.spi)}`}>{idxLabel(p.spi)}</td>
@@ -135,9 +135,9 @@ const EvmPanel: React.FC<EvmPanelProps> = ({ workspace, year, projectIds }) => {
                   {estimates.map(e => (
                     <tr key={e.id}>
                       <td className="px-3 py-2 text-[11px] font-semibold text-gray-700 dark:text-gray-200 max-w-[180px] truncate" title={e.name}>{e.name}</td>
-                      <td className="px-3 py-2 text-[11px] text-gray-500" title={`Son kayıt ${e.lastDate}`}>{e.coveredDays.toLocaleString('tr-TR')}</td>
+                      <td className="px-3 py-2 text-[11px] text-gray-500 dark:text-gray-400" title={`Son kayıt ${e.lastDate}`}>{e.coveredDays.toLocaleString('tr-TR')}</td>
                       <td className="px-3 py-2 text-[11px] text-gray-600 dark:text-gray-300">{e.estimatedAA.toLocaleString('tr-TR')} AA</td>
-                      <td className="px-3 py-2 text-[11px] text-gray-500">{e.planToDateAA.toLocaleString('tr-TR')} AA</td>
+                      <td className="px-3 py-2 text-[11px] text-gray-500 dark:text-gray-400">{e.planToDateAA.toLocaleString('tr-TR')} AA</td>
                       <td className={`px-3 py-2 text-[11px] font-semibold ${e.ratio === null ? 'text-gray-400' : e.ratio > 1.1 ? 'text-red-500' : e.ratio < 0.9 ? 'text-amber-600 dark:text-amber-300' : 'text-emerald-600 dark:text-emerald-300'}`}>{e.ratio === null ? '—' : `%${Math.round(e.ratio * 100)}`}</td>
                     </tr>
                   ))}

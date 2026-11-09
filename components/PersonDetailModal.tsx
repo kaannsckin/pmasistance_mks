@@ -6,7 +6,7 @@ import { addLeaveRange } from '../utils/availability';
 import { DayRange, formatRange } from '../utils/calendarRange';
 import { buildPersonProfile } from '../utils/personProfile';
 import { DateRangeField } from './modern/DateRangePicker';
-import { RISK_BAND_HEX, RISK_STATUS_LABELS } from '../utils/risks';
+import { RISK_BAND_SOLID, RISK_STATUS_LABELS } from '../utils/risks';
 import DecimalInput from './DecimalInput';
 
 interface PersonDetailModalProps {
@@ -272,7 +272,7 @@ const PersonDetailModal: React.FC<PersonDetailModalProps> = ({ workspace, person
               <div className="space-y-1.5">
                 {risks.map(r => (
                   <div key={`${r.projectId}-${r.riskId}`} className={`flex items-center gap-3 bg-gray-50 dark:bg-gray-800/60 rounded-lg px-3 py-2 ${r.status === 'closed' ? 'opacity-50' : ''}`}>
-                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-md text-white flex-none" style={{ backgroundColor: RISK_BAND_HEX[r.band] }} title="Risk skoru (olasılık × etki)">{r.score}</span>
+                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-md text-white flex-none" style={{ backgroundColor: RISK_BAND_SOLID[r.band] }} title="Risk skoru (olasılık × etki)">{r.score}</span>
                     <span className="flex-1 text-xs text-gray-700 dark:text-gray-200 truncate" title={r.title}>{r.title}</span>
                     <span className="text-[11px] text-gray-400 flex-none">{r.projectName}</span>
                     <span className="text-[11px] font-semibold text-gray-400 flex-none">{RISK_STATUS_LABELS[r.status]}</span>

@@ -153,7 +153,7 @@ const ProjectCard: React.FC<{
             {sortedPeople.map(p => <option key={p.id} value={p.id}>{p.firstName} {p.lastName}{p.departmentCode ? ` (${p.departmentCode})` : ''}</option>)}
           </select>
         ) : (
-          <span className={`text-[11px] font-semibold truncate ${ownerName ? 'text-gray-600 dark:text-gray-300' : 'text-gray-300 dark:text-gray-600'}`}>
+          <span className={`text-[11px] font-semibold truncate ${ownerName ? 'text-gray-600 dark:text-gray-300' : /* sahipsiz proje müdür için önemli: silik değil (UI-GRS-29) */ 'text-amber-800 dark:text-amber-300'}`}>
             {ownerName || 'Sahip atanmadı'}
           </span>
         )}

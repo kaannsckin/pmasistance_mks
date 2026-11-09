@@ -126,6 +126,9 @@ const ROLE_ICONS: Record<UserRole, string> = {
 // Üst katman: çalışma alanı sekmeleri
 // ---------------------------------------------------------------------------
 
+/** Üst menüdeki çalışma alanı ekranları (telefondaki seçici de bunları listeler) */
+const WORKSPACE_VIEWS: View[] = [View.Executive, View.Portfolio, View.Allocations, View.Calendar, View.RiskReport, View.WeeklyReport, View.Meetings, View.Expectations, View.DataPool];
+
 const WorkspaceNavItem: React.FC<{
   view: View;
   currentView: View;
@@ -212,8 +215,8 @@ const ProjectSwitcher: React.FC<{
               <button
                 key={p.id}
                 onClick={() => { onSelectProject(p.id); setIsOpen(false); }}
-                className="w-full flex items-center gap-2.5 px-3.5 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-                style={p.id === activeProjectId ? { backgroundColor: 'var(--app-accent-light)' } : {}}
+                className={`w-full flex items-center gap-2.5 px-3.5 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${p.id === activeProjectId ? 'bg-accent' : ''}`}
+                aria-current={p.id === activeProjectId ? 'true' : undefined}
               >
                 <span className="w-2 h-2 rounded-full flex-none" style={{ backgroundColor: p.rag ? RAG_DOT[p.rag] : '#cbd5e1' }}></span>
                 <span className="text-sm text-gray-700 dark:text-gray-200 truncate">{p.name}</span>
@@ -325,7 +328,9 @@ const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSett
 
       {/* ---- Üst satır: logo · çalışma alanı sekmeleri · genel eylemler ---- */}
       <div className="container mx-auto px-4 lg:px-6">
-        <div className="flex items-center justify-between h-16 gap-3">
+        {/* Menü 1536 px altında kendi satırına iner ve sığmazsa sarar (UI-AKS-24, UI-GRS-22): 1440 px'te
+            son üç öğe kesiliyor, kaydırma ipucu da yoktu */}
+        <div className="flex flex-wrap items-center justify-between min-h-16 py-2 gap-x-3 gap-y-2">
 
           <div
             className="flex items-center group cursor-pointer select-none relative flex-none"
@@ -368,7 +373,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSett
             </div>
           </div>
 
-          <nav className="hidden md:flex min-w-0 overflow-x-auto items-center gap-1 bg-gray-100/60 dark:bg-gray-900/40 p-1 rounded-xl border border-gray-200/60 dark:border-gray-700/60">
+          <nav aria-label="Ekranlar" className="hidden md:flex order-last basis-full 2xl:order-none 2xl:basis-auto min-w-0 flex-wrap items-center gap-1 bg-gray-100/60 dark:bg-gray-900/40 p-1 rounded-xl border border-gray-200/60 dark:border-gray-700/60">
             {canExecutive && <WorkspaceNavItem view={View.Executive} currentView={currentView} setCurrentView={setCurrentView} icon="fa-gauge-high" label="Yönetim" />}
             <WorkspaceNavItem view={View.Portfolio} currentView={currentView} setCurrentView={setCurrentView} icon="fa-table-cells-large" label="Portföy" />
             <WorkspaceNavItem view={View.Allocations} currentView={currentView} setCurrentView={setCurrentView} icon="fa-people-arrows" label="Ekip ve tahsis" />
@@ -379,6 +384,27 @@ const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSett
             <WorkspaceNavItem view={View.Expectations} currentView={currentView} setCurrentView={setCurrentView} icon="fa-flag" label="Beklentiler" />
             <WorkspaceNavItem view={View.DataPool} currentView={currentView} setCurrentView={setCurrentView} icon="fa-database" label="Veri Havuzu" />
           </nav>
+          {/* Telefonda ve %200 yakınlaştırmada da ekranlara ulaşılsın (UI-ERS-27): üst menü 768 px altında
+              gizliydi ve yerine hiçbir şey yoktu */}
+          <label className="md:hidden order-last basis-full flex items-center gap-2 text-xs font-semibold text-gray-600 dark:text-gray-300">
+            <span>Ekran</span>
+            <select
+              value={WORKSPACE_VIEWS.includes(currentView) ? currentView : ''}
+              onChange={e => { if (e.target.value !== '') setCurrentView(Number(e.target.value) as View); }}
+              className="flex-1 min-h-[44px] rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-800 dark:text-gray-100 px-3"
+            >
+              {!WORKSPACE_VIEWS.includes(currentView) && <option value="">Proje ekranı</option>}
+              {canExecutive && <option value={View.Executive}>Yönetim</option>}
+              <option value={View.Portfolio}>Portföy</option>
+              <option value={View.Allocations}>Ekip ve tahsis</option>
+              <option value={View.Calendar}>Takvim</option>
+              <option value={View.RiskReport}>Risk raporu</option>
+              <option value={View.WeeklyReport}>Haftalık rapor</option>
+              <option value={View.Meetings}>Görüşmeler</option>
+              <option value={View.Expectations}>Beklentiler</option>
+              <option value={View.DataPool}>Veri Havuzu</option>
+            </select>
+          </label>
 
           <div className="flex items-center gap-1.5 flex-none">
             <TodoBell items={todoItems} onNavigate={onTodoNavigate} />

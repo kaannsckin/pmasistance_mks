@@ -135,7 +135,7 @@ import { mergeImport } from './utils/importMerge';
 
 const THEME_COLORS: Record<string, string> = {
   classic: '#2563eb',
-  emerald: '#059669',
+  emerald: '#047857',
   purple: '#7c3aed',
   orange: '#8a6100',
 };

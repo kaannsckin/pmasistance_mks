@@ -14,7 +14,7 @@ import { RISK_BAND_LABELS, RISK_STATUS_LABELS } from './risks';
 
 const THEME_HEX: Record<string, string> = {
     classic: '2563EB',
-    emerald: '059669',
+    emerald: '047857',
     purple: '7C3AED',
     orange: '8A6100',
 };
