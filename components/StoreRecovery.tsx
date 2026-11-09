@@ -57,7 +57,7 @@ const StoreRecovery: React.FC<Props> = ({ problem, canDownload, onDownload, onRe
                     </button>
                 </div>
                 <p className="m-0 text-sm text-gray-600 dark:text-gray-400">
-                    İndirdiğiniz dosyayı yöneticinize ya da destek ekibine iletin; veri bu dosyadan geri kazanılabilir.
+                    Veriyi silip baştan başlarsanız, indirdiğiniz dosyayı Diğer araçlar › Yedekten yükle ile (Yönetici kimliğiyle) geri yükleyebilirsiniz. Dosyayı destek ekibine de iletebilirsiniz.
                 </p>
                 <div className="border-t border-gray-200 dark:border-gray-700 pt-4 flex flex-col gap-3">
                     <h2 className="m-0 text-base font-semibold">Baştan başlamak</h2>

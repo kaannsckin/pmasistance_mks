@@ -10,6 +10,7 @@ import {
     WORKSPACE_SCHEMA_VERSION,
 } from './workspace';
 import { ProjectData, TaskStatus } from '../types';
+import { rawStoreDump, storageDiff } from './workspaceStore';
 
 const legacySample = (): ProjectData => ({
     tasks: [{
@@ -112,6 +113,39 @@ describe('parseImportedJson', () => {
             expect(res.project.name).toBe('Aktarılan');
             expect(res.project.tasks).toHaveLength(1);
         }
+    });
+
+    it('kurtarma ekranının ham veri dosyasını geri yükler; bozuk alanları söyler (UI-KRC-20, UI-KRC-08)', () => {
+        const ws = { ...migrateLegacyWorkspace(legacySample()), people: [{ id: 'k1', firstName: 'Ayşe', lastName: 'Y', departmentCode: 'U310', availableAA: 1, roles: [] }] };
+        const records = new Map<string, unknown>(storageDiff(null, ws).puts);
+        // Açılışı kilitleyen bozuk alan: tahsisler metin
+        const meta = records.get('meta') as { workspace: Record<string, unknown> };
+        records.set('meta', { ...meta, workspace: { ...meta.workspace, allocations: 'metin' } });
+        const res = parseImportedJson(rawStoreDump(records));
+        expect(res.kind).toBe('workspace');
+        if (res.kind !== 'workspace') return;
+        expect(res.workspace.projects.map(p => p.name)).toEqual(ws.projects.map(p => p.name));
+        expect(res.workspace.people).toHaveLength(1);
+        expect(res.workspace.allocations).toEqual([]);
+        expect(res.warnings).toEqual(['"allocations" alanı okunamadı, boş alındı.']);
+    });
+
+    it('daha yeni sürümün ham verisi ve meta olmadan ham veri anlaşılır hatayla reddedilir', () => {
+        const yeni = parseImportedJson(rawStoreDump(new Map<string, unknown>([['meta', { format: 2, workspace: {}, projectIds: [] }]])));
+        expect(yeni).toMatchObject({ kind: 'invalid' });
+        if (yeni.kind === 'invalid') expect(yeni.error).toMatch(/daha yeni bir sürüm/);
+        const metasiz = parseImportedJson(rawStoreDump(new Map<string, unknown>([['project:p1', { id: 'p1' }]])));
+        if (metasiz.kind === 'invalid') expect(metasiz.error).toMatch(/meta/); else throw new Error('reddedilmeliydi');
+    });
+
+    it('yedekte bozuk proje ve dizi olmayan alan yüklemeyi durdurmaz, uyarıyla alınmaz', () => {
+        const ws = migrateLegacyWorkspace(legacySample());
+        const res = parseImportedJson(JSON.stringify({ ...ws, people: null, titles: 'x', projects: [...ws.projects, 'bozuk'] }));
+        expect(res.kind).toBe('workspace');
+        if (res.kind !== 'workspace') return;
+        expect(res.workspace.projects).toHaveLength(1);
+        expect(res.workspace.people).toEqual([]);
+        expect(res.warnings).toEqual(['"Adsız" projesinin kaydı okunamadı, alınmadı.', '"titles" alanı okunamadı, boş alındı.']);
     });
 
     it('geçersiz JSON’da anlamlı hata döner', () => {

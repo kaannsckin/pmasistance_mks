@@ -1,5 +1,6 @@
 import { Project, ProjectData, ProjectSettings, Task, TaskStatus, WorkspaceData } from '../types';
 import { migrateRolePermissions, PERMISSIONS_REV } from './permissions';
+import { inspectStored, isReadableProject } from './workspaceStore';
 
 export const APP_VERSION = '2.2.0';
 export const WORKSPACE_SCHEMA_VERSION = 3; // 3: veri havuzu + tahsis + plan kilidi
@@ -177,8 +178,24 @@ export const normalizeWorkspace = (raw: Partial<WorkspaceData>): WorkspaceData =
     };
 };
 
+/**
+ * Yedekten ya da ham veriden gelen çalışma alanında dizi olması gereken alan dizi değilse (bozuk kayıt)
+ * boş alınır ve kullanıcıya söylenir; yükleme yarıda kalıp "mesajsız" başarısız olmaz (UI-KRC-08).
+ */
+const sanitizeLists = (raw: Record<string, unknown>, warnings: string[]): Partial<WorkspaceData> => {
+    const out = { ...raw };
+    const empty = createEmptyWorkspace() as unknown as Record<string, unknown>;
+    Object.keys(empty).forEach(k => {
+        if (Array.isArray(empty[k]) && out[k] !== undefined && out[k] !== null && !Array.isArray(out[k])) {
+            warnings.push(`"${k}" alanı okunamadı, boş alındı.`);
+            out[k] = [];
+        }
+    });
+    return out as Partial<WorkspaceData>;
+};
+
 export type ImportResult =
-    | { kind: 'workspace'; workspace: WorkspaceData }
+    | { kind: 'workspace'; workspace: WorkspaceData; warnings?: string[] }
     | { kind: 'legacyProject'; project: Project }
     | { kind: 'invalid'; error: string };
 
@@ -198,8 +215,28 @@ export const parseImportedJson = (text: string, legacyName = 'İçe Aktarılan P
     }
     const obj = parsed as Record<string, unknown>;
 
+    // Kurtarma ekranının "Ham veriyi indir" dosyası (UI-KRC-20): ekran "veri bu dosyadan geri kazanılabilir"
+    // diyor; yedekten yükleme bu dosyayı tanımıyordu, talimata uyup veriyi silen kullanıcı geri dönemiyordu
+    if (obj.tur === 'planasistan-ham-depo' && obj.kayitlar && typeof obj.kayitlar === 'object') {
+        const state = inspectStored(new Map(Object.entries(obj.kayitlar as Record<string, unknown>)));
+        if (state.kind === 'empty') return { kind: 'invalid', error: 'Ham veri dosyası boş.' };
+        if (state.kind === 'unreadable') {
+            return { kind: 'invalid', error: state.reason === 'format'
+                ? `Bu ham veri PlanAsistan'ın daha yeni bir sürümüne ait (kayıt biçimi ${String(state.format)}). Bu sürüm onu okuyamaz; uygulama güncellenince yeniden deneyin. Dosyayı saklayın.`
+                : 'Ham veri dosyasında çalışma alanı kaydı (meta) yok ya da bozuk; otomatik geri yüklenemez. Dosyayı saklayıp destek ekibine iletin.' };
+        }
+        const warnings = state.damaged.map(d => `"${d.name}" projesinin kaydı okunamadı, alınmadı.`);
+        return { kind: 'workspace', workspace: normalizeWorkspace(sanitizeLists(state.workspace as unknown as Record<string, unknown>, warnings)), warnings };
+    }
+
     if (Array.isArray(obj.projects) && typeof obj.schemaVersion === 'number') {
-        return { kind: 'workspace', workspace: normalizeWorkspace(obj as Partial<WorkspaceData>) };
+        const warnings: string[] = [];
+        const projects = obj.projects.filter(p => {
+            if (isReadableProject(p)) return true;
+            warnings.push(`"${(p as { name?: string } | null)?.name || 'Adsız'}" projesinin kaydı okunamadı, alınmadı.`);
+            return false;
+        });
+        return { kind: 'workspace', workspace: normalizeWorkspace(sanitizeLists({ ...obj, projects }, warnings)), warnings };
     }
     if (Array.isArray(obj.tasks) || Array.isArray(obj.resources)) {
         return { kind: 'legacyProject', project: legacyToProject(obj as unknown as ProjectData, legacyName) };

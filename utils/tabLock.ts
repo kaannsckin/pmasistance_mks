@@ -40,6 +40,10 @@ export interface TabLockDeps {
     beforeRelease: () => Promise<void>;
     /** Devralan sekmenin taze veriyle açılması */
     reload?: () => void;
+    /** Bu sekmede kaydedilmemiş iş varsa kısa açıklaması (UI-KRC-19): devralmak isteyen sekme sorar */
+    unsaved?: () => string | null;
+    /** Kaydedilmemiş iş sorusuna yanıt beklenen süre */
+    askTimeoutMs?: number;
     locks?: LockManagerLike | null;
     makeChannel?: (name: string) => ChannelLike;
     takeoverTimeoutMs?: number;
@@ -49,6 +53,8 @@ export interface TabLock {
     start(): void;
     /** Bu sekmeyi etkin yapar (öteki sekme bırakınca ya da zaman aşımında) ve yeniden yükler */
     takeOver(): Promise<void>;
+    /** Etkin sekmede kaydedilmemiş iş var mı (varsa açıklaması); yanıt gelmezse null */
+    askUnsaved(): Promise<string | null>;
     dispose(): void;
 }
 
@@ -67,7 +73,7 @@ export const createTabLock = (deps: TabLockDeps): TabLock => {
     const timeoutMs = deps.takeoverTimeoutMs ?? TAKEOVER_TIMEOUT_MS;
 
     if (!locks || !channel) {
-        return { start: () => onRole('active'), takeOver: async () => {}, dispose: () => channel?.close() };
+        return { start: () => onRole('active'), takeOver: async () => {}, askUnsaved: async () => null, dispose: () => channel?.close() };
     }
 
     let release: (() => void) | null = null;
@@ -84,9 +90,13 @@ export const createTabLock = (deps: TabLockDeps): TabLock => {
         r?.();
     };
 
+    let answer: ((v: string | null) => void) | null = null;
     channel.onmessage = event => {
-        const data = event.data as { tur?: string } | null;
+        const data = event.data as { tur?: string; kirli?: string | null } | null;
         if (data?.tur === 'devral' && release) void stepDown();
+        // Devralmak isteyen sekme sorar: yalnız etkin sekme yanıtlar
+        if (data?.tur === 'durum-sor' && release) channel.postMessage({ tur: 'durum', kirli: deps.unsaved?.() ?? null });
+        if (data?.tur === 'durum' && answer) { answer(data.kirli ?? null); answer = null; }
     };
 
     return {
@@ -111,6 +121,13 @@ export const createTabLock = (deps: TabLockDeps): TabLock => {
             if (timer) clearTimeout(timer);
             if (!ok) await locks.request(TAB_LOCK_NAME, { steal: true }, async () => {});
             reload();
+        },
+        askUnsaved() {
+            return new Promise<string | null>(resolve => {
+                const timer = setTimeout(() => { answer = null; resolve(null); }, deps.askTimeoutMs ?? 800);
+                answer = v => { clearTimeout(timer); resolve(v); };
+                channel.postMessage({ tur: 'durum-sor' });
+            });
         },
         dispose() {
             disposed = true;

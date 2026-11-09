@@ -44,7 +44,7 @@ const bus = () => {
 
 const tick = (ms = 0) => new Promise(r => setTimeout(r, ms));
 
-const tab = (locks: LockManagerLike, makeChannel: () => ChannelLike, opts: { slowRelease?: boolean; deaf?: boolean } = {}) => {
+const tab = (locks: LockManagerLike, makeChannel: () => ChannelLike, opts: { slowRelease?: boolean; deaf?: boolean; unsaved?: string } = {}) => {
     const roles: TabRole[] = [];
     let released = 0;
     let reloaded = 0;
@@ -52,6 +52,8 @@ const tab = (locks: LockManagerLike, makeChannel: () => ChannelLike, opts: { slo
         onRole: r => roles.push(r),
         beforeRelease: async () => { released++; if (opts.slowRelease) await tick(5); },
         reload: () => { reloaded++; },
+        unsaved: () => opts.unsaved ?? null,
+        askTimeoutMs: 30,
         locks,
         makeChannel: () => {
             const ch = makeChannel();
@@ -87,6 +89,21 @@ describe('tek etkin sekme (UI-KRC-02, UI-KRC-13)', () => {
         expect(a.released).toBe(1);
         expect(a.roles).toEqual(['active', 'released']);
         expect(b.reloaded).toBe(1);
+    });
+
+    it('devralmadan önce etkin sekmedeki kaydedilmemiş iş sorulur (UI-KRC-19)', async () => {
+        const locks = new FakeLocks();
+        const ch = bus();
+        const a = tab(locks, ch, { unsaved: 'Haftalık rapor taslağında kaydedilmemiş değişiklikler var.' }); a.lock.start();
+        await tick();
+        const b = tab(locks, ch); b.lock.start();
+        await tick();
+        expect(await b.lock.askUnsaved()).toBe('Haftalık rapor taslağında kaydedilmemiş değişiklikler var.');
+        // Soru devretmez: A hâlâ etkin
+        expect(a.roles).toEqual(['active']);
+        // Etkin sekme yoksa yanıt gelmez: null
+        const c = tab(new FakeLocks(), bus()); c.lock.start(); await tick();
+        expect(await c.lock.askUnsaved()).toBeNull();
     });
 
     it('yeniden yüklenen sekme kilidi alır; devreden sekme artık edilgen kalır', async () => {

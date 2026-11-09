@@ -25,6 +25,11 @@ const sync = () => {
 export const markUnsaved = (key: string, message: string = DEFAULT_MESSAGE): void => { dirty.set(key, message); sync(); };
 export const clearUnsaved = (key: string): void => { if (dirty.delete(key)) sync(); };
 export const hasUnsaved = (): boolean => dirty.size > 0;
+/** İlk kaydedilmemiş işin açıklaması, soru kısmı olmadan ("…var." ); yoksa null */
+export const unsavedSummary = (): string | null => {
+    if (!dirty.size) return null;
+    return [...dirty.values()][0].replace(/\s*[^.?!]*\?\s*$/, '').trim() || 'Kaydedilmemiş değişiklikler var.';
+};
 
 /**
  * Kaydedilmemiş iş varsa kullanıcıya sorar. Ayrılmak uygunsa true döner ve kayıtları temizler

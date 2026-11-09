@@ -38,7 +38,7 @@ import { inspectStored, KvStore, openIndexedDbStore, rawStoreDump, requestPersis
 import StoreRecovery, { StoreProblem } from './components/StoreRecovery';
 import OtherTabNotice from './components/OtherTabNotice';
 import { createTabLock, TabLock, TabRole } from './utils/tabLock';
-import { confirmLeave } from './utils/unsavedGuard';
+import { confirmLeave, unsavedSummary } from './utils/unsavedGuard';
 import { confirmDestructive } from './utils/confirmOnce';
 import CloudSyncModal from './components/CloudSyncModal';
 import Header from './components/Header';
@@ -298,14 +298,17 @@ const App: React.FC = () => {
   // ---- Tek etkin sekme (UI-KRC-02, UI-KRC-13): yalnız kilidi tutan sekme depoya yazar ----
   const [tabRole, setTabRole] = useState<TabRole>('checking');
   const tabLock = useRef<TabLock | null>(null);
+  const releasedUnsaved = useRef<string | null>(null);
   useEffect(() => {
     // Sayfa ömründe bir kez: StrictMode'un deneme amaçlı söküp yeniden kurması kilidi bırakıp
     // sekmeyi yanlışlıkla edilgen yapmasın. Sayfa kapanınca tarayıcı kilidi kendisi bırakır.
     if (tabLock.current) return;
     tabLock.current = createTabLock({
       onRole: setTabRole,
-      // Devirden önce bekleyen yazımlar biter; bu sekme bir daha yazmaz
-      beforeRelease: async () => { await persister.current?.pause(); },
+      // Devirden önce bekleyen yazımlar biter; bu sekme bir daha yazmaz. Kaydedilmemiş iş (form,
+      // rapor taslağı) depoya hiç girmemiştir: devreden sekme bunu "kaydedildi" diye geçmez (UI-KRC-19)
+      beforeRelease: async () => { releasedUnsaved.current = unsavedSummary(); await persister.current?.pause(); },
+      unsaved: unsavedSummary,
     });
     tabLock.current.start();
   }, []);
@@ -918,8 +921,9 @@ const App: React.FC = () => {
       }
       if (result.kind === 'workspace') {
         const incoming = result.workspace;
+        const notes = result.warnings?.length ? `\n\nUyarılar:\n${result.warnings.slice(0, 6).join('\n')}` : '';
         const ok = window.confirm(
-          `Bu dosya ${incoming.projects.length} proje içeren bir çalışma alanı yedeği. Mevcut çalışma alanının TAMAMI bu yedekle değiştirilecek. Devam edilsin mi?`
+          `Bu dosya ${incoming.projects.length} proje ve ${incoming.people.length} kişi içeren bir çalışma alanı. Mevcut çalışma alanının TAMAMI bununla değiştirilecek. Devam edilsin mi?${notes}`
         );
         if (!ok) return;
         setWorkspace(incoming);
@@ -2143,7 +2147,13 @@ const App: React.FC = () => {
   // Başka sekme etkinken bu sekme hiçbir şey göstermez ve yazmaz; kurtarma ekranı da açılmaz
   // (oradaki "baştan başla" etkin sekmenin verisini silerdi)
   if (tabRole === 'passive' || tabRole === 'released') {
-    return <OtherTabNotice role={tabRole} onTakeOver={() => tabLock.current?.takeOver()} />;
+    return <OtherTabNotice role={tabRole} lostUnsaved={tabRole === 'released' ? releasedUnsaved.current : null} onTakeOver={async () => {
+      // Öteki sekmede kaydedilmemiş iş varsa devralmadan önce sorulur (UI-KRC-19)
+      const dirty = await tabLock.current?.askUnsaved();
+      if (dirty && !window.confirm(`Öteki sekmede kaydedilmemiş iş var: ${dirty}\n\nBurada açarsanız o iş kaybolur. Önce öteki sekmeye dönüp kaydetmeniz önerilir.\n\nYine de bu sekmede açılsın mı?`)) return false;
+      await tabLock.current?.takeOver();
+      return true;
+    }} />;
   }
   if (storeProblem) {
     return (

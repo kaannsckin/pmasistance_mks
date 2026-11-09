@@ -1,7 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { Department, Person, RoleCatalogEntry, TitleDef, UserRole } from '../types';
 import { canEditPool, ROLE_LABELS } from '../utils/allocations';
-import { parsePoolWorkbook, PoolImportResult } from '../utils/poolImporter';
+import { parsePoolWorkbook, POOL_FORMAT_HINT, poolImportSummary, PoolImportResult } from '../utils/poolImporter';
 import DecimalInput from './DecimalInput';
 
 interface DataPoolViewProps {
@@ -112,6 +112,10 @@ const DataPoolView: React.FC<DataPoolViewProps> = ({ people, departments, roleCa
     setIsImporting(true);
     try {
       const imported = await parsePoolWorkbook(file);
+      if (!poolImportSummary(imported)) {
+        alert(`Dosyada içe aktarılacak satır bulunamadı. ${imported.warnings.slice(0, 2).join(' ')} ${POOL_FORMAT_HINT}`);
+        return;
+      }
       onApplyImport(imported);
     } catch (err) {
       alert(`Excel okunamadı: ${err instanceof Error ? err.message : String(err)}`);

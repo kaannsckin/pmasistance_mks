@@ -37,6 +37,10 @@ export interface PoolImportResult {
     warnings: string[];
 }
 
+/** Tanınan sayfalar ve beklenen biçim (kullanıcıya gösterilir) */
+export const POOL_SHEETS = ['Personel Listesi', 'Bölümler', 'Roller', 'Diğer Tablolar', 'Projeler', 'İş Paketleri', 'Veri Girişi'];
+export const POOL_FORMAT_HINT = 'Beklenen: U310 İşgücü Tahsisi şablonu. "Personel Listesi" sayfasında SİCİL, AD, SOYAD, BÖLÜM, UNVAN, EMY, "Kullanılabilir AA" ve Rol-01, Rol-02… sütunları; ayrıca isteğe bağlı "Bölümler", "Roller", "Projeler", "İş Paketleri", "Veri Girişi" sayfaları.';
+
 const MONTH_HEADERS = ['OCAK', 'ŞUBAT', 'MART', 'NİSAN', 'MAYIS', 'HAZİRAN', 'TEMMUZ', 'AĞUSTOS', 'EYLÜL', 'EKİM', 'KASIM', 'ARALIK'];
 
 const cell = (row: SheetMatrix[number] | undefined, idx: number): string => {
@@ -89,8 +93,15 @@ export const parsePoolSheets = (sheets: PoolSheets): PoolImportResult => {
         return partial ? sheets[partial] : null;
     };
 
+    // Tanınan sayfa yoksa içe aktarılacak bir şey yok: "başarılı" denmez, beklenen biçim söylenir (UI-AKS-25)
+    const known = POOL_SHEETS.filter(n => getSheet(n));
+    if (!known.length) {
+        throw new Error(`Dosyada tanınan sayfa yok (dosyadaki sayfalar: ${Object.keys(sheets).join(', ') || 'yok'}). ${POOL_FORMAT_HINT}`);
+    }
+
     // ---- Personel Listesi ----
     const personnel = getSheet('Personel Listesi');
+    if (!personnel) warnings.push('"Personel Listesi" sayfası yok: personel güncellenmedi.');
     if (personnel) {
         const hIdx = findHeaderRow(personnel, ['SİCİL', 'BÖLÜM']);
         if (hIdx === -1) {
@@ -458,6 +469,19 @@ export const applyPoolImport = (ws: WorkspaceData, imported: PoolImportResult): 
 };
 
 /** Tarayıcıda: File → sayfa matrisleri → parsePoolSheets */
+/** İçe aktarılacakların kısa özeti; boşsa null (kullanıcıya "içe aktarıldı" denmez) */
+export const poolImportSummary = (r: PoolImportResult): string | null => {
+    const parts = [
+        r.people.length && `${r.people.length} kişi`,
+        r.departments.length && `${r.departments.length} bölüm`,
+        r.roleCatalog.length && `${r.roleCatalog.length} rol`,
+        r.titles.length && `${r.titles.length} ünvan`,
+        r.projects.length && `${r.projects.length} proje`,
+        r.allocationRows.length && `${r.allocationRows.length} tahsis satırı`,
+    ].filter(Boolean);
+    return parts.length ? parts.join(', ') : null;
+};
+
 export const parsePoolWorkbook = (file: File): Promise<PoolImportResult> =>
     new Promise((resolve, reject) => {
         const reader = new FileReader();

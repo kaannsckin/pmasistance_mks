@@ -10,10 +10,13 @@ import React, { useState } from 'react';
 interface Props {
     /** passive: başka sekme etkin; released: bu sekme devretti */
     role: 'passive' | 'released';
-    onTakeOver: () => Promise<void> | void;
+    /** false dönerse devir vazgeçildi */
+    onTakeOver: () => Promise<boolean | void> | boolean | void;
+    /** Devrederken bu sekmede kaydedilmemiş iş vardıysa açıklaması (UI-KRC-19) */
+    lostUnsaved?: string | null;
 }
 
-const OtherTabNotice: React.FC<Props> = ({ role, onTakeOver }) => {
+const OtherTabNotice: React.FC<Props> = ({ role, onTakeOver, lostUnsaved }) => {
     const [busy, setBusy] = useState(false);
     return (
         <main className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 flex items-center justify-center p-4">
@@ -23,7 +26,9 @@ const OtherTabNotice: React.FC<Props> = ({ role, onTakeOver }) => {
                 </h1>
                 <p className="m-0 text-gray-700 dark:text-gray-300">
                     {role === 'released'
-                        ? 'Çalışmanız kaydedildi ve uygulama başka bir sekmede açıldı. Bu sekmede yapılan değişiklikler artık kaydedilmez.'
+                        ? lostUnsaved
+                            ? `Uygulama başka bir sekmede açıldı. Bu sekmede kaydedilmemiş iş vardı ve kaydedilmedi: ${lostUnsaved} Kaydedilmiş olan her şey öteki sekmede.`
+                            : 'Çalışmanız kaydedildi ve uygulama başka bir sekmede açıldı. Bu sekmede yapılan değişiklikler artık kaydedilmez.'
                         : 'Aynı çalışma alanı iki sekmede birden değiştirilirse bir sekmenin işi ötekinin üzerine yazılır. Bu yüzden uygulama tek sekmede çalışır.'}
                 </p>
                 <div>
@@ -31,7 +36,7 @@ const OtherTabNotice: React.FC<Props> = ({ role, onTakeOver }) => {
                         type="button"
                         autoFocus
                         disabled={busy}
-                        onClick={async () => { setBusy(true); await onTakeOver(); }}
+                        onClick={async () => { setBusy(true); if ((await onTakeOver()) === false) setBusy(false); }}
                         className="min-h-[44px] px-4 rounded-xl bg-blue-700 hover:bg-blue-800 text-white font-semibold disabled:opacity-60"
                     >
                         {busy ? 'Öteki sekme kaydediyor…' : 'Burada kullan'}

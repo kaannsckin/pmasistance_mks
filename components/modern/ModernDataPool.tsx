@@ -5,7 +5,7 @@ import {
     draftToPerson, emptyPersonDraft, filterPeople, fullName, issueCounts, PERSON_ISSUE_LABELS, PersonDraft, PersonIssue, personIssues, personToDraft,
     rolesByDepartment, trUpper, validateDepartmentCode, validatePerson, validateRole, validateTitleCode,
 } from '../../utils/dataPool';
-import { parsePoolWorkbook, PoolImportResult } from '../../utils/poolImporter';
+import { parsePoolWorkbook, POOL_FORMAT_HINT, poolImportSummary, PoolImportResult } from '../../utils/poolImporter';
 import { Icon } from './icons';
 import { initialsOf } from './taskMeta';
 import { Field, rowSep, Sheet } from './ui';
@@ -252,8 +252,14 @@ const ModernDataPool: React.FC<ModernDataPoolProps> = ({
         setImporting(true);
         setNotice(null);
         try {
-            onApplyImport(await parsePoolWorkbook(file));
-            ok('Excel içe aktarıldı.');
+            const r = await parsePoolWorkbook(file);
+            const summary = poolImportSummary(r);
+            if (!summary) {
+                setNotice({ kind: 'error', text: `Dosyada içe aktarılacak satır bulunamadı. ${r.warnings.slice(0, 2).join(' ')} ${POOL_FORMAT_HINT}` });
+                return;
+            }
+            onApplyImport(r);
+            ok(`Excel'den okundu: ${summary}.${r.warnings.length ? ` ${r.warnings.length} uyarı var.` : ''}`);
         } catch (e) {
             setNotice({ kind: 'error', text: `Excel okunamadı: ${e instanceof Error ? e.message : String(e)}` });
         } finally {
@@ -315,6 +321,12 @@ const ModernDataPool: React.FC<ModernDataPoolProps> = ({
                 <div className="max-w-[70ch]">
                     <h1 className="m-0 text-[34px] leading-tight font-bold tracking-[-0.02em] m-text">Veri havuzu</h1>
                     <p className="m-0 mt-1 text-[15px] m-text-3">Personel, bölüm, rol ve ünvan ana verisi; tahsis, maliyet ve yetkilendirme bu veriye dayanır.</p>
+                    {editable && (
+                        <details className="mt-2 text-[14px] m-text-3">
+                            <summary className="cursor-pointer m-text-2">Excel içe aktarma hangi biçimi bekliyor?</summary>
+                            <p className="m-0 mt-1">{POOL_FORMAT_HINT} Var olan kişi sicille (yoksa ad soyadla) eşlenir; dosyada boş olan alanlar değiştirilmez.</p>
+                        </details>
+                    )}
                 </div>
                 {editable && (
                     <div className="flex flex-wrap gap-2">
