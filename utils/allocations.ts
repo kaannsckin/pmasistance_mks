@@ -52,18 +52,23 @@ export const upsertPlanLock = (
     projectId: string,
     year: number,
     status: PlanLockStatus,
-    role: UserRole | undefined
+    role: UserRole | undefined,
+    decision: { by?: string; reason?: string } = {}
 ): PlanLock[] => {
     const now = new Date().toISOString();
     const existing = getPlanLock(locks, projectId, year);
+    const decided = status === 'locked' || status === 'draft';
     const next: PlanLock = {
         projectId,
         year,
         status,
         submittedAt: status === 'submitted' ? now : existing?.submittedAt,
         submittedByRole: status === 'submitted' ? role : existing?.submittedByRole,
-        decidedAt: status === 'locked' || status === 'draft' ? now : existing?.decidedAt,
-        decidedByRole: status === 'locked' || status === 'draft' ? role : existing?.decidedByRole,
+        decidedAt: decided ? now : existing?.decidedAt,
+        decidedByRole: decided ? role : existing?.decidedByRole,
+        decidedBy: decided ? decision.by : existing?.decidedBy,
+        // Ret gerekçesi yalnız onaydaki plan taslağa döndürülürken yazılır; gönderim ve kilit siler
+        ...(status === 'draft' && existing?.status === 'submitted' && decision.reason ? { rejectReason: decision.reason } : {}),
     };
     const rest = locks.filter(l => !(l.projectId === projectId && l.year === year));
     return [...rest, next];

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Allocation, Leave, Person, PlanLock, PlanLockStatus, Project, TitleDef, UserRole } from '../types';
 import {
   canApprovePlan, EffortField, findOverAllocations,
-  getPlanLockStatus,
+  getPlanLock, getPlanLockStatus,
   MONTH_INDEXES, MONTHS_TR, personMonthTotal, ROLE_LABELS, rowTotal,
   summarizeByDepartment, summarizeByPerson, summarizeByProject,
 } from '../utils/allocations';
@@ -33,7 +33,7 @@ interface AllocationViewProps {
   onSetCell: (allocationId: string, field: EffortField, month: number, value: number | undefined) => void;
   onAddAllocation: (personId: string, projectId: string, year: number, workPackageId?: string, role?: string) => void;
   onDeleteAllocation: (allocationId: string) => void;
-  onLockAction: (projectId: string, year: number, status: PlanLockStatus) => void;
+  onLockAction: (projectId: string, year: number, status: PlanLockStatus, reason?: string) => void;
   onApplySuggestions: (projectId: string, year: number, suggestions: AllocationSuggestion[], mode: ApplyMode) => void;
   onApplyBilledHours: (records: BilledHoursRecord[], options: BilledHoursOptions, mode: BilledApplyMode, autoCreate: boolean) => void;
   /** Modern arayüz: başlık, süzgeçler ve sekmeler dışarıda; durum dışarıdan yönetilir */
@@ -172,9 +172,10 @@ const AllocationView: React.FC<AllocationViewProps> = ({ departments: department
   }, [selectedPerson, yearAllocations, year, leaves]);
 
   // Kapsam: PY yalnız sahip olduğu projeye; bölüm sorumlusu yalnız bölümü kişisine ekler
+  // Onaydaki ya da kilitli plana satır eklenmez (UI-KRC-28)
   const addableProjects = useMemo(
-    () => projects.filter(p => canAddAllocationToProject(wsLike, identity, p.id)),
-    [projects, wsLike, identity],
+    () => projects.filter(p => canAddAllocationToProject(wsLike, identity, p.id) && getPlanLockStatus(planLocks, p.id, year) === 'draft'),
+    [projects, wsLike, identity, planLocks, year],
   );
   const addablePersonIds = useMemo(() => visiblePersonIds(wsLike, identity), [wsLike, identity]);
   const addablePeople = useMemo(
@@ -237,8 +238,25 @@ const AllocationView: React.FC<AllocationViewProps> = ({ departments: department
   const lockActions = (projectId: string, canManage: boolean) => {
     const status = getPlanLockStatus(planLocks, projectId, year);
     const s = LOCK_STYLES[status];
+    const lock = getPlanLock(planLocks, projectId, year);
+    const name = projectNames.get(projectId) || 'Proje';
+    // Onay geri dönüşü zor bir işlem: sorulur. Ret gerekçesiz olmaz; gerekçe PY'ye gösterilir (UI-AKS-21)
+    const approve = () => {
+      if (window.confirm(`${name} · ${year} planı onaylanıp kilitlenecek. Plan hücreleri bundan sonra düzenlenemez. Onaylansın mı?`)) onLockAction(projectId, year, 'locked');
+    };
+    const reject = () => {
+      const reason = window.prompt(`${name} · ${year} planını neden reddediyorsunuz? Gerekçe proje yöneticisine gösterilir.`);
+      if (reason === null) return;
+      if (!reason.trim()) { alert('Gerekçe yazmadan plan reddedilemez.'); return; }
+      onLockAction(projectId, year, 'draft', reason.trim());
+    };
     return (
-      <div className="flex items-center space-x-2">
+      <div className="flex flex-wrap items-center gap-2">
+        {status === 'draft' && lock?.rejectReason && (
+          <span role="note" className="text-[11px] font-semibold px-2 py-1 rounded-lg bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-200 max-w-[420px]">
+            <i aria-hidden="true" className="fa-solid fa-circle-xmark mr-1"></i>Reddedildi{lock.decidedBy ? ` (${lock.decidedBy})` : ''}: {lock.rejectReason}
+          </span>
+        )}
         <span className={`text-[11px] font-semibold px-2 py-1 rounded-lg ${s.cls}`}>
           <i aria-hidden="true" className={`fa-solid ${s.icon} mr-1`}></i>{s.label}
         </span>
@@ -249,10 +267,10 @@ const AllocationView: React.FC<AllocationViewProps> = ({ departments: department
         )}
         {status === 'submitted' && canApprovePlan(identity) && (
           <>
-            <button onClick={() => onLockAction(projectId, year, 'locked')} className="text-[11px] font-semibold px-2.5 py-1 rounded-lg text-white bg-emerald-500 hover:bg-emerald-600">
+            <button onClick={approve} className="text-[11px] font-semibold px-2.5 py-1 rounded-lg text-white bg-emerald-700 hover:bg-emerald-800">
               <i aria-hidden="true" className="fa-solid fa-check mr-1"></i>Onayla & Kilitle
             </button>
-            <button onClick={() => onLockAction(projectId, year, 'draft')} className="text-[11px] font-semibold px-2.5 py-1 rounded-lg text-white bg-red-400 hover:bg-red-500">
+            <button onClick={reject} className="text-[11px] font-semibold px-2.5 py-1 rounded-lg text-white bg-red-700 hover:bg-red-800">
               <i aria-hidden="true" className="fa-solid fa-rotate-left mr-1"></i>Reddet
             </button>
           </>
@@ -335,6 +353,8 @@ const AllocationView: React.FC<AllocationViewProps> = ({ departments: department
       {groupedByProject.map(([projectId, list]) => {
         const draft = getPlanLockStatus(planLocks, projectId, year) === 'draft';
         const canManageProject = canAddAllocationToProject(wsLike, identity, projectId);
+        // Silinmiş projeden kalan satırlar (UI-KRC-29): kimse düzenleyemiyor ama silinebilmeli
+        const orphan = !projectNames.has(projectId);
         const planTotals = monthTotalsFor(list, 'plan');
         const actualTotals = monthTotalsFor(list, 'actual');
         return (
@@ -342,7 +362,8 @@ const AllocationView: React.FC<AllocationViewProps> = ({ departments: department
             <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-gray-50 dark:border-gray-700/60 bg-gray-50/60 dark:bg-gray-800">
               <div className="flex items-center space-x-2">
                 <i aria-hidden="true" className="fa-solid fa-folder-open text-xs" style={{ color: 'var(--app-primary)' }}></i>
-                <span className="text-[12px] font-semibold text-gray-800 dark:text-white">{projectNames.get(projectId) || 'Bilinmeyen Proje'}</span>
+                <span className="text-[12px] font-semibold text-gray-800 dark:text-white">{projectNames.get(projectId) || 'Silinmiş proje'}</span>
+                {orphan && <span className="text-[11px] text-gray-500 dark:text-gray-400">Proje silinmiş; bu satırlar doluluğa sayılıyor, silebilirsiniz.</span>}
                 <span className="text-xs text-gray-400 font-bold">{list.length} satır · Plan Σ {fmt(planTotals.reduce((a, b) => a + b, 0))} AA · Gerç. Σ {fmt(actualTotals.reduce((a, b) => a + b, 0))} AA</span>
               </div>
               <div className="flex items-center gap-2">
@@ -358,13 +379,14 @@ const AllocationView: React.FC<AllocationViewProps> = ({ departments: department
                 {lockActions(projectId, canManageProject)}
               </div>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[1100px]">
+            {/* Kaydırma payı sabit kişi sütunu kadar (UI-ERS-18): geri Tab'la gelinen hücre sütunun altında kalmaz */}
+            <div className="overflow-x-auto" style={{ scrollPaddingLeft: 210 }}>
+              <table className="w-full min-w-[1100px]" aria-label={`${projectNames.get(projectId) || 'Silinmiş proje'} · ${year} ${mode === 'actual' ? 'gerçekleşen' : 'plan'} tahsisi`}>
                 <thead>
                   <tr className="bg-gray-50/80 dark:bg-gray-800/80">
-                    <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-400 sticky left-0 bg-gray-50 dark:bg-gray-800 min-w-[190px]">Personel / İş paketi / Rol</th>
-                    {MONTHS_TR.map(m => <th key={m} className="px-1 py-2 text-center text-[11px] font-semibold text-gray-400">{m}</th>)}
-                    <th className="px-2 py-2 text-center text-[11px] font-semibold text-gray-400">Yıllık</th>
+                    <th scope="col" className="px-3 py-2 text-left text-[11px] font-semibold text-gray-400 sticky left-0 bg-gray-50 dark:bg-gray-800 min-w-[190px]">Personel / İş paketi / Rol</th>
+                    {MONTHS_TR.map(m => <th scope="col" key={m} className="px-1 py-2 text-center text-[11px] font-semibold text-gray-400">{m}</th>)}
+                    <th scope="col" className="px-2 py-2 text-center text-[11px] font-semibold text-gray-400">Yıllık</th>
                     {canEnter && <th className="px-1 py-2 w-8"></th>}
                   </tr>
                 </thead>
@@ -376,12 +398,12 @@ const AllocationView: React.FC<AllocationViewProps> = ({ departments: department
                     const actualEditable = canEditActualCell(wsLike, identity, a.projectId, a.personId);
                     return (
                       <tr key={a.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/40">
-                        <td className="px-3 py-1.5 sticky left-0 bg-white dark:bg-gray-800">
+                        <th scope="row" className="px-3 py-1.5 sticky left-0 bg-white dark:bg-gray-800 text-left font-normal">
                           <div className="text-[11px] font-bold text-gray-700 dark:text-gray-200 leading-tight">{personName(a.personId)}</div>
                           <div className="text-[11px] text-gray-400 font-semibold leading-tight">
                             {person?.departmentCode}{wpName ? ` · ${wpName}` : ''}{a.role ? ` · ${a.role}` : ''}
                           </div>
-                        </td>
+                        </th>
                         {MONTH_INDEXES.map(m => (
                           <td key={m} className="px-1 py-1 text-center">
                             {mode === 'plan' && cellInput(a, 'plan', m, planEditable)}
@@ -397,11 +419,11 @@ const AllocationView: React.FC<AllocationViewProps> = ({ departments: department
                         </td>
                         {canEnter && (
                           <td className="px-1 py-1 text-center">
-                            <button aria-label={planEditable ? 'Satırı sil' : 'Yetkiniz yok veya plan kilitli'}
+                            <button aria-label={planEditable || orphan ? `Satırı sil: ${personName(a.personId)}` : 'Yetkiniz yok veya plan kilitli'}
                               onClick={() => { if (window.confirm('Bu tahsis satırı silinsin mi?')) onDeleteAllocation(a.id); }}
-                              disabled={!planEditable}
+                              disabled={!planEditable && !orphan}
                               className="w-6 h-6 rounded-md text-gray-300 hover:text-red-500 disabled:opacity-30 disabled:cursor-not-allowed"
-                              title={planEditable ? 'Satırı sil' : 'Yetkiniz yok veya plan kilitli'}
+                              title={planEditable || orphan ? 'Satırı sil' : 'Yetkiniz yok veya plan kilitli'}
                             >
                               <i aria-hidden="true" className="fa-solid fa-trash text-xs"></i>
                             </button>

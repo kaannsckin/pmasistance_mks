@@ -185,19 +185,24 @@ export const applyAllocationSuggestions = (
     year: number,
     suggestions: AllocationSuggestion[],
     mode: ApplyMode
-): { workspace: WorkspaceData; applied: number; skippedCells: number } => {
+): { workspace: WorkspaceData; applied: number; skippedCells: number; changedCells: number; addedRows: number } => {
     const allocations = ws.allocations.map(a => ({ ...a, plan: { ...a.plan }, actual: { ...a.actual } }));
     let applied = 0;
     let skippedCells = 0;
+    let changedCells = 0;
+    let addedRows = 0;
 
     suggestions.filter(s => s.matched && s.personId).forEach(s => {
-        let row = allocations.find(a =>
-            a.personId === s.personId && a.projectId === projectId && a.year === year &&
-            !a.workPackageId && !a.role
-        );
+        // Kişinin bu projedeki var olan satırı kullanılır (UI-KRC-31): yalnız rolsüz/İP'siz satır aranınca
+        // pilottaki rollü satırların yanına ikinci satır açılıyor, kişinin yükü ikiye katlanıyordu.
+        // Önce rolsüz ve İP'siz satır, yoksa kişinin bu projedeki en yüklü satırı; hiç yoksa yeni satır.
+        const own = allocations.filter(a => a.personId === s.personId && a.projectId === projectId && a.year === year);
+        const total = (a: { plan: Record<number, number> }) => Object.values(a.plan).reduce((x, v) => x + (v || 0), 0);
+        let row = own.find(a => !a.workPackageId && !a.role) || [...own].sort((a, b) => total(b) - total(a))[0];
         if (!row) {
             row = { id: createAllocationId(), personId: s.personId!, projectId, year, plan: {}, actual: {} };
             allocations.push(row);
+            addedRows++;
         }
         Object.entries(s.months).forEach(([mStr, aa]) => {
             const m = Number(mStr);
@@ -206,10 +211,11 @@ export const applyAllocationSuggestions = (
                 skippedCells++;
                 return;
             }
+            if (existing !== aa) changedCells++;
             row!.plan[m] = aa;
         });
         applied++;
     });
 
-    return { workspace: { ...ws, allocations }, applied, skippedCells };
+    return { workspace: { ...ws, allocations }, applied, skippedCells, changedCells, addedRows };
 };

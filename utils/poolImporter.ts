@@ -1,5 +1,5 @@
 import { Allocation, Department, Person, Project, RoleCatalogEntry, TitleDef, WorkspaceData } from '../types';
-import { createAllocationId } from './allocations';
+import { createAllocationId, getPlanLockStatus } from './allocations';
 import { createProject } from './workspace';
 
 // XLSX, index.html'de CDN'den yüklenir (mevcut importer ile aynı yaklaşım)
@@ -40,6 +40,9 @@ export interface PoolImportResult {
 /** Tanınan sayfalar ve beklenen biçim (kullanıcıya gösterilir) */
 export const POOL_SHEETS = ['Personel Listesi', 'Bölümler', 'Roller', 'Diğer Tablolar', 'Projeler', 'İş Paketleri', 'Veri Girişi'];
 export const POOL_FORMAT_HINT = 'Beklenen: U310 İşgücü Tahsisi şablonu. "Personel Listesi" sayfasında SİCİL, AD, SOYAD, BÖLÜM, UNVAN, EMY, "Kullanılabilir AA" ve Rol-01, Rol-02… sütunları; ayrıca isteğe bağlı "Bölümler", "Roller", "Projeler", "İş Paketleri", "Veri Girişi" sayfaları.';
+
+/** Bir kişinin bir projede bir ayda alabileceği en yüksek tahsis (tablodaki sınırla aynı) */
+const MAX_MONTH_AA = 1.5;
 
 const MONTH_HEADERS = ['OCAK', 'ŞUBAT', 'MART', 'NİSAN', 'MAYIS', 'HAZİRAN', 'TEMMUZ', 'AĞUSTOS', 'EYLÜL', 'EKİM', 'KASIM', 'ARALIK'];
 
@@ -420,6 +423,8 @@ export const applyPoolImport = (ws: WorkspaceData, imported: PoolImportResult): 
     });
 
     // ---- Tahsisler ----
+    const lockedSkips = new Map<string, number>();
+    let tooBig = 0;
     const allocations: Allocation[] = ws.allocations.map(a => ({ ...a, plan: { ...a.plan }, actual: { ...a.actual } }));
     imported.allocationRows.forEach(rowData => {
         const pi = findIndex({ id: '', firstName: rowData.personName, lastName: '', sicil: rowData.sicil || undefined });
@@ -439,13 +444,28 @@ export const applyPoolImport = (ws: WorkspaceData, imported: PoolImportResult): 
         const wp = rowData.workPackageName
             ? project.workPackages.find(w => trLower(w.name) === trLower(rowData.workPackageName!))
             : undefined;
+        // Bir ayda 1,5 AA'nın üstü giriş hatasıdır; değer alınmaz (UI-KRC-28)
+        const capped = (vals: Record<number, number>) => Object.fromEntries(Object.entries(vals).filter(([, v]) => {
+            if (v > MAX_MONTH_AA) { tooBig++; return false; }
+            return true;
+        })) as Record<number, number>;
+        const plan = capped(rowData.plan);
+        const actual = capped(rowData.actual);
         const existing = allocations.find(a =>
             a.personId === person.id && a.projectId === project.id && a.year === rowData.year &&
             (a.workPackageId || '') === (wp?.id || '') && (a.role || '') === (rowData.role || '')
         );
+        // Onaydaki ya da kilitli plan içe aktarmayla değişmez (UI-KRC-28): yalnız gerçekleşen alınır
+        const lock = getPlanLockStatus(ws.planLocks || [], project.id, rowData.year);
+        if (lock !== 'draft') {
+            const key = `"${project.name}" ${rowData.year} planı ${lock === 'locked' ? 'kilitli' : 'onay bekliyor'}`;
+            lockedSkips.set(key, (lockedSkips.get(key) || 0) + 1);
+            if (existing && Object.keys(actual).length) { existing.actual = { ...existing.actual, ...actual }; summary.allocationsUpdated++; }
+            return;
+        }
         if (existing) {
-            existing.plan = { ...existing.plan, ...rowData.plan };
-            existing.actual = { ...existing.actual, ...rowData.actual };
+            existing.plan = { ...existing.plan, ...plan };
+            existing.actual = { ...existing.actual, ...actual };
             summary.allocationsUpdated++;
         } else {
             allocations.push({
@@ -455,12 +475,14 @@ export const applyPoolImport = (ws: WorkspaceData, imported: PoolImportResult): 
                 workPackageId: wp?.id,
                 role: rowData.role,
                 year: rowData.year,
-                plan: rowData.plan,
-                actual: rowData.actual,
+                plan,
+                actual,
             });
             summary.allocationsAdded++;
         }
     });
+    lockedSkips.forEach((n, key) => summary.warnings.push(`${key}: ${n} satırın plan değerleri alınmadı (yalnız gerçekleşen).`));
+    if (tooBig) summary.warnings.push(`${tooBig} hücre ${MAX_MONTH_AA} AA'dan büyük olduğu için alınmadı.`);
 
     return {
         workspace: { ...ws, people, departments, roleCatalog, titles, projects, allocations },

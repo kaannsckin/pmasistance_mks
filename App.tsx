@@ -712,9 +712,13 @@ const App: React.FC = () => {
     updateWorkspace(ws => {
       if (!canAssignProjectOwner(ws, identityOf(ws), projectId)) return ws;
       const projects = ws.projects.filter(p => p.id !== projectId);
+      // Projenin tahsis satırları ve plan kilidi de gider (UI-KRC-29): kalınca "Bilinmeyen Proje" olarak
+      // kişilerin doluluğuna ve aşım sayısına girmeye devam ediyor, hiçbir rolde silinemiyordu
       const next = {
         ...ws,
         projects,
+        allocations: ws.allocations.filter(a => a.projectId !== projectId),
+        planLocks: ws.planLocks.filter(l => l.projectId !== projectId),
         activeProjectId: ws.activeProjectId === projectId ? (projects[0]?.id ?? null) : ws.activeProjectId,
       };
       return appendAudit(next, 'project.delete', `"${removed?.name || projectId}" projesi silindi`);
@@ -726,7 +730,9 @@ const App: React.FC = () => {
         if (ws.projects.some(p => p.id === projectId)) return ws;
         const projects = [...ws.projects];
         projects.splice(Math.min(index, projects.length), 0, removed);
-        return appendAudit({ ...ws, projects, activeProjectId: wasActive ? projectId : ws.activeProjectId }, 'project.delete', `"${removed.name}" projesinin silinmesi geri alındı`);
+        const allocs = snapshot.allocations.filter(a => a.projectId === projectId && !ws.allocations.some(x => x.id === a.id));
+        const locks = snapshot.planLocks.filter(l => l.projectId === projectId);
+        return appendAudit({ ...ws, projects, allocations: [...ws.allocations, ...allocs], planLocks: [...ws.planLocks.filter(l => l.projectId !== projectId), ...locks], activeProjectId: wasActive ? projectId : ws.activeProjectId }, 'project.delete', `"${removed.name}" projesinin silinmesi geri alındı`);
       });
     }
   }, [updateWorkspace, showUndo]);
@@ -783,7 +789,15 @@ const App: React.FC = () => {
   }, [updateWorkspace]);
 
   const handleAddAllocation = useCallback((personId: string, projectId: string, year: number, workPackageId?: string, role?: string) => {
+    const ws0 = workspaceRef.current;
+    const lockNow = ws0 ? getPlanLockStatus(ws0.planLocks, projectId, year) : 'draft';
+    if (lockNow !== 'draft') {
+      // Onaydaki ya da kilitli plana satır eklenmez (UI-KRC-28): ekleyen bile silemiyordu
+      alert(`Bu projenin ${year} planı ${lockNow === 'locked' ? 'onaylanıp kilitlendi' : 'onay bekliyor'}; yeni satır eklenemez.`);
+      return;
+    }
     updateWorkspace(ws => {
+      if (getPlanLockStatus(ws.planLocks, projectId, year) !== 'draft') return ws;
       const created = createAllocation(ws.allocations, personId, projectId, year, workPackageId, role);
       if (!created) {
         alert('Bu kişi + proje + iş paketi + rol kombinasyonu için bu yılda zaten bir satır var.');
@@ -797,11 +811,12 @@ const App: React.FC = () => {
     updateWorkspace(ws => ({ ...ws, allocations: ws.allocations.filter(a => a.id !== allocationId) }));
   }, [updateWorkspace]);
 
-  const handleLockAction = useCallback((projectId: string, year: number, status: PlanLockStatus) => {
+  const handleLockAction = useCallback((projectId: string, year: number, status: PlanLockStatus, reason?: string) => {
     updateWorkspace(ws => {
       const projectName = ws.projects.find(p => p.id === projectId)?.name || 'Proje';
       const prev = getPlanLockStatus(ws.planLocks, projectId, year);
-      let next = { ...ws, planLocks: upsertPlanLock(ws.planLocks, projectId, year, status, ws.currentRole) };
+      // Ret gerekçesi plan kaydında kalır; PY'nin yapılacaklarında ve tabloda görünür (UI-AKS-21)
+      let next = { ...ws, planLocks: upsertPlanLock(ws.planLocks, projectId, year, status, ws.currentRole, { by: actorOf(ws).name, reason }) };
       if (status === 'locked') {
         // Onaylanan plan = baseline: kilit anında otomatik anlık görüntü al
         next = addSnapshot(next, buildSnapshot(next, year, `Onaylı plan — ${projectName}`, 'lock'));
@@ -811,17 +826,22 @@ const App: React.FC = () => {
         : status === 'locked' ? 'plan.approve'
         : prev === 'submitted' ? 'plan.reject' // submitted → draft = ret
         : 'plan.unlock'; // locked → draft = kilit açma
-      return appendAudit(next, action, `${projectName} · ${year} planı — ${AUDIT_ACTION_LABELS[action]}`, projectId);
+      return appendAudit(next, action, `${projectName} · ${year} planı — ${AUDIT_ACTION_LABELS[action]}${reason ? `: ${reason}` : ''}`, projectId);
     });
-  }, [updateWorkspace]);
+    announce(status === 'submitted' ? `${year} planı onaya gönderildi` : status === 'locked' ? `${year} planı onaylandı ve kilitlendi` : `${year} planı taslağa döndü`);
+  }, [updateWorkspace, announce]);
 
   const handleApplySuggestions = useCallback((projectId: string, year: number, suggestions: AllocationSuggestion[], mode: ApplyMode) => {
-    updateWorkspace(ws => {
-      const { workspace: next, applied, skippedCells } = applyAllocationSuggestions(ws, projectId, year, suggestions, mode);
-      alert(`Görev planından tahsis uygulandı: ${applied} kişi güncellendi${skippedCells > 0 ? `, ${skippedCells} dolu ay korundu` : ''}.`);
-      return next;
-    });
-  }, [updateWorkspace]);
+    const ws = workspaceRef.current;
+    if (!ws || getPlanLockStatus(ws.planLocks, projectId, year) !== 'draft') return;
+    // Mesaj gerçekte ne değiştiğini söyler (UI-KRC-31): kaç hücre, kaç dolu ay korundu, kaç yeni satır
+    const { workspace: next, changedCells, skippedCells, addedRows } = applyAllocationSuggestions(ws, projectId, year, suggestions, mode);
+    workspaceRef.current = next;
+    setWorkspace(next);
+    const parts = [`${changedCells} hücre değişti`, skippedCells ? `${skippedCells} dolu ay korundu` : '', addedRows ? `${addedRows} kişiye yeni satır açıldı` : ''].filter(Boolean).join(', ');
+    const before = ws.allocations;
+    showUndo(`Görev planından tahsis: ${parts}`, cur => (cur.allocations === next.allocations ? { ...cur, allocations: before } : null));
+  }, [showUndo]);
 
   const handleApplyBilledHours = useCallback((records: BilledHoursRecord[], options: BilledHoursOptions, mode: BilledApplyMode, autoCreate: boolean) => {
     updateWorkspace(ws => {

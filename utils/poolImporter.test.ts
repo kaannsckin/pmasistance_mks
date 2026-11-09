@@ -150,6 +150,23 @@ describe('applyPoolImport', () => {
         expect(second.summary.warnings.some(w => /farklı sicilli/.test(w))).toBe(true);
     });
 
+    it('kilitli ya da onaydaki planın plan değerleri içe aktarmayla değişmez; 1,5 AA üstü alınmaz (UI-KRC-28)', () => {
+        const first = applyPoolImport(createEmptyWorkspace(), parsePoolSheets(sampleSheets()));
+        const proje = first.workspace.projects.find(p => p.name === 'Proje 1')!;
+        const kilitli = { ...first.workspace, planLocks: [{ projectId: proje.id, year: 2026, status: 'locked' as const }] };
+        const sheets = sampleSheets();
+        (sheets['Veri Girişi'][1] as unknown[])[9] = 1.4; // OCAK plan 0,35 → 1,4
+        const second = applyPoolImport(kilitli, parsePoolSheets(sheets));
+        const row = second.workspace.allocations.find(a => a.projectId === proje.id)!;
+        expect(row.plan[1]).toBe(0.35);
+        expect(second.summary.warnings.some(w => /Proje 1" 2026 planı kilitli/.test(w))).toBe(true);
+        // Taslakta 1,5 üstü değer alınmaz
+        (sheets['Veri Girişi'][1] as unknown[])[9] = 50;
+        const third = applyPoolImport(first.workspace, parsePoolSheets(sheets));
+        expect(third.workspace.allocations.find(a => a.projectId === proje.id)!.plan[1]).toBe(0.35);
+        expect(third.summary.warnings.some(w => /1.5 AA'dan büyük/.test(w))).toBe(true);
+    });
+
     it('ikinci içe aktarma kişi/tahsisi çoğaltmaz, günceller', () => {
         const first = applyPoolImport(createEmptyWorkspace(), parsePoolSheets(sampleSheets()));
         const second = applyPoolImport(first.workspace, parsePoolSheets(sampleSheets()));

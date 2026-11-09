@@ -265,7 +265,7 @@ const ModernAllocation: React.FC<ModernAllocationProps> = (props) => {
 
                     <div className="flex flex-wrap items-start gap-5">
                         <section aria-label="Aylık doluluk; hücreler arasında ok tuşlarıyla gezin" className="flex flex-col gap-3 min-w-0" style={{ flex: '999 1 980px' }}>
-                            <div className="m-surface rounded-2xl overflow-x-auto">
+                            <div className="m-surface rounded-2xl overflow-x-auto" style={{ scrollPaddingLeft: 220 }}>
                                 <div style={{ minWidth: 960 }}>
                                     <div aria-hidden="true" className="grid items-center gap-1.5 px-4 pt-3 pb-2 text-[13px] m-text-3" style={{ gridTemplateColumns: 'minmax(200px, 1.6fr) repeat(12, minmax(52px, 1fr)) 72px' }}>
                                         <span className="m-sticky-col">Kişi</span>

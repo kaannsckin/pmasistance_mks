@@ -613,6 +613,10 @@ export interface PlanLock {
   submittedByRole?: UserRole;
   decidedAt?: string;
   decidedByRole?: UserRole;
+  /** Kararı veren kişinin adı */
+  decidedBy?: string;
+  /** Onaya gönderilen plan reddedildiyse gerekçesi (UI-AKS-21); yeniden gönderilince silinir */
+  rejectReason?: string;
 }
 
 /**

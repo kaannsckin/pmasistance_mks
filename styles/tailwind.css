@@ -36,4 +36,6 @@ table.m-sticky-total { --sticky-bg: #FFFFFF; }
 html.dark table.m-sticky-total { --sticky-bg: #1F2937; }
 .ui-modern table.m-sticky-total { --sticky-bg: var(--m-surface); }
 html.dark .ui-modern table.m-sticky-total { --sticky-bg: var(--m-surface); }
+/* Sağda sabit "Toplam" sütunu, klavyeyle gelinen hücreyi örtmesin (UI-ERS-18, UI-GRS-31) */
+:has(> table.m-sticky-total) { scroll-padding-right: 104px; }
 table.m-sticky-total :is(th, td):last-child { position: sticky; right: 0; z-index: 1; background-color: var(--sticky-bg); box-shadow: -1px 0 0 rgba(127, 127, 127, 0.25); }

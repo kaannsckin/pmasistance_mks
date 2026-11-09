@@ -70,15 +70,26 @@ export const buildTodoItems = (ws: WorkspaceData, now: Date = new Date()): TodoI
 
         // 3) Onaya gönderilmemiş taslak planlar (plan verisi olan projeler)
         projectsWithPlan.forEach(pid => {
-            if (scope.has(pid) && getPlanLockStatus(ws.planLocks, pid, year) === 'draft') {
+            if (!scope.has(pid) || getPlanLockStatus(ws.planLocks, pid, year) !== 'draft') return;
+            // Reddedilen plan "henüz gönderilmedi" diye görünmez; ret ve gerekçesi söylenir (UI-AKS-21)
+            const lock = (ws.planLocks || []).find(l => l.projectId === pid && l.year === year);
+            if (lock?.rejectReason) {
                 items.push({
-                    id: `draft-${pid}-${year}`,
-                    severity: 'info',
-                    icon: 'fa-paper-plane',
-                    text: `${projectName.get(pid) || 'Proje'} — ${year} planı henüz onaya gönderilmedi`,
+                    id: `rejected-${pid}-${year}`,
+                    severity: 'warn',
+                    icon: 'fa-circle-xmark',
+                    text: `${projectName.get(pid) || 'Proje'} — ${year} planı reddedildi${lock.decidedBy ? ` (${lock.decidedBy})` : ''}: ${lock.rejectReason}`,
                     view: View.Allocations,
                 });
+                return;
             }
+            items.push({
+                id: `draft-${pid}-${year}`,
+                severity: 'info',
+                icon: 'fa-paper-plane',
+                text: `${projectName.get(pid) || 'Proje'} — ${year} planı henüz onaya gönderilmedi`,
+                view: View.Allocations,
+            });
         });
     }
 

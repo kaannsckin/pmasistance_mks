@@ -128,6 +128,18 @@ describe('applyAllocationSuggestions', () => {
         expect(row.plan[2]).toBe(0.4);
     });
 
+    it('kişinin rollü satırı varsa ona yazar, ikinci satır açmaz (UI-KRC-31)', () => {
+        const { p, ws } = setup();
+        ws.allocations = [{ id: 'a1', personId: 'p1', projectId: p.id, year: 2026, role: 'Yazılım Geliştirme Mühendisi', plan: { 1: 0.3 }, actual: {} }];
+        const fill = applyAllocationSuggestions(ws, p.id, 2026, suggestion(p), 'fill');
+        expect(fill.workspace.allocations).toHaveLength(1);
+        expect(fill.workspace.allocations[0].plan).toEqual({ 1: 0.3, 2: 0.4 });
+        expect(fill).toMatchObject({ changedCells: 1, skippedCells: 1, addedRows: 0 });
+        const over = applyAllocationSuggestions(ws, p.id, 2026, suggestion(p), 'overwrite');
+        expect(over.workspace.allocations[0].plan).toEqual({ 1: 0.5, 2: 0.4 });
+        expect(over).toMatchObject({ changedCells: 2, skippedCells: 0, addedRows: 0 });
+    });
+
     it('satır yoksa köprü satırı oluşturur; eşleşmeyen öneri uygulanmaz', () => {
         const { p, ws } = setup();
         ws.allocations = [];

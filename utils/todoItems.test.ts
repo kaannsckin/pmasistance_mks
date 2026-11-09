@@ -46,6 +46,17 @@ describe('buildTodoItems', () => {
         expect(mudur).toContain('Proje B — 1 görev terminini aştı');
     });
 
+    it('reddedilen plan "henüz gönderilmedi" değil, gerekçesiyle "reddedildi" görünür (UI-AKS-21)', () => {
+        const ws = buildWs();
+        const pid = ws.projects[0].id;
+        ws.planLocks = [{ projectId: pid, year: 2026, status: 'draft', decidedBy: 'Ahmet Şahin', rejectReason: 'Mart yükü kapasiteyi aşıyor' }];
+        const items = buildTodoItems(ws, NOW);
+        const texts = items.map(i => i.text).join(' | ');
+        expect(texts).toContain('Proje A — 2026 planı reddedildi (Ahmet Şahin): Mart yükü kapasiteyi aşıyor');
+        expect(texts).not.toContain('henüz onaya gönderilmedi');
+        expect(items.find(i => i.id.startsWith('rejected-'))?.severity).toBe('warn');
+    });
+
     it('PY: eksik gerçekleşen ayı, taslak planı, geciken görevi ve kritik projeyi listeler', () => {
         const items = buildTodoItems(buildWs(), NOW);
         const texts = items.map(i => i.text).join(' | ');
