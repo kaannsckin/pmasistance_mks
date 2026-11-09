@@ -24,6 +24,18 @@ En çok bulgu tahsis tablosunda ve içe aktarma yollarında toplanıyor. Klasik 
 
 Birim testleri 938/938 (yeni: içe aktarma birleştirme 4, depo koruması 1, havuz 2), demo yolu hatasız. Bağımsız doğrulama: bir sonraki kısa koşu (veri yolları).
 
+**K2** (24 bulgunun 24'ü; ikisi K1'lerle birlikte kapanmıştı: UI-ERS-22 = UI-KRC-30, UI-KRC-22)
+
+| Grup | Bulgular | Doğrulama (tarayıcıda) | Commit |
+|---|---|---|---|
+| Veri ve kurtarma | UI-KRC-19 sekme devri · UI-KRC-20 ham veriden geri yükleme · UI-AKS-25 havuz içe aktarma | Devralan sekme "öteki sekmede kaydedilmemiş iş var: Görev kaydedilmedi" diye soruyor; vazgeçince öteki sekme ve formu yerinde. Devreden sekme "kaydedildi" demiyor. Tanınmayan Excel: "Dosyada tanınan sayfa yok … Beklenen: …", kişi sayısı 24 → 24. Ham veri geri yükleme birim testiyle (tarayıcıda denenmedi). | `8a1a457` |
+| Tahsis ve plan | UI-AKS-21 ret gerekçesi · UI-KRC-28 kilitli plan · UI-KRC-29 silinen proje · UI-KRC-31 görevlerden öneri · UI-ERS-18 sabit sütun · UI-ERS-19 başlıklar | Ret gerekçe istiyor; tabloda "Reddedildi (Ahmet Şahin): …", PY'nin listesinde "planı reddedildi (Ahmet Şahin): …". "Yeni Satır"da kilitli ATLAS ve onaydaki PUSULA yok. NEHİR silinince 7 tahsis satırı → 0. Öneri: 7 → 7 satır, "0 hücre değişti, 20 dolu ay korundu". 84 hücrede geri Tab'la örtülen 0; sütun ve satır başlıkları erişilebilirlik ağacında. | `a97eb80`, `8d35de1` |
+| Rol görünürlüğü | UI-AKS-22 = UI-KRC-23 · UI-AKS-23 | Klasik müdür: 100 kartta Sil 0, Düzenle 0, durum seçici 0, "CSV'den Aktar" yok. Mert: "Salt okunur" etiketi var, "Kişi ekle" 0. | `ddbe7dd` |
+| Klasik görünüm | UI-GRS-19 (+30) · UI-GRS-20 · UI-GRS-29 · UI-AKS-24 = UI-GRS-22 · UI-ERS-27 | Dört temada koyu Hedefler, Riskler, Yönetim, Portföy ve açık Zümrüt Portföy: eşik altı metin 0 (Yönetim 28 → 0). 1440 ve 1280 px'te üst menünün dokuz öğesinden kesilen 0. Telefonda "Ekran" seçicisi dokuz ekranı listeliyor, Haftalık rapor açılıyor. | `5cfb08c` |
+| Pencereler | UI-ERS-28 · UI-ERS-20 · UI-ERS-17 | Klasik görev formu, İş Paketi, Hakkında, Bulut: odak içeride, Tab dışarı kaçmıyor, Esc kapatıyor; doldurulmuş formda Esc soruyor. Telefonda rapor şeridinin altında kalan rapor öğesi 0 (29 durak). | `8d35de1` |
+
+Birim testleri 945/945, demo yolu hatasız. Açık kalan: K3 (32) ve K4 (2). Doğrulamayı koordinatör yaptı; bağımsız doğrulama bir sonraki koşunun işi.
+
 | | |
 |---|---|
 | Kod | `claude/zealous-tesla-hidbc9` @ `8fb563d` |
