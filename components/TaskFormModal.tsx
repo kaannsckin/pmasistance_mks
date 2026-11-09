@@ -1,5 +1,7 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useModalFocus } from './useModalFocus';
+import { useUnsavedGuard } from './useUnsavedGuard';
 import { EMBED_SYSTEM, parsePertEstimate, pertEstimatePrompt } from '../utils/ai/embedded';
 import { AiButton, AiErrorNote, useAiRun } from './assistant/AiButton';
 import { Task, Resource, TaskStatus, Objective, Person, WorkPackage } from '../types';
@@ -52,9 +54,13 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, people, 
   const inputStyle = "bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-50 sm:text-sm rounded-md focus:ring-primary focus:border-primary focus:outline-none py-2 px-3";
 
 
+  // Açılıştaki hâl: kaydedilmemiş değişiklik bununla karşılaştırılır (UI-ERS-28, UI-KRC-09)
+  const baseline = useRef<string>('');
+  // Birim kaynaktan otomatik doldurulur: kullanıcı değişikliği sayılmaz
+  const formSnapshot = (f: object) => JSON.stringify({ ...f, unit: undefined });
   useEffect(() => {
     if (task) {
-      setFormData({
+      const init = {
         name: task.name,
         priority: task.priority,
         version: task.version,
@@ -70,7 +76,9 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, people, 
         keyResultId: task.keyResultId,
         workPackageId: task.workPackageId,
         dueDate: task.dueDate,
-      });
+      };
+      setFormData(init);
+      baseline.current = formSnapshot(init);
 
       if (task.keyResultId) {
         const parentObjective = objectives.find(obj => obj.keyResults.some(kr => kr.id === task.keyResultId));
@@ -80,14 +88,16 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, people, 
       }
 
     } else {
-        setFormData({
-            name: '', priority: 'Medium', version: activeVersion(tasks) ?? 1, predecessor: null,
+        const init = {
+            name: '', priority: 'Medium' as const, version: activeVersion(tasks) ?? 1, predecessor: null,
             unit: '', resourceName: resources.length > 0 ? resources[0].name : '', 
             time: { best: 0, avg: 0, worst: 0 }, jiraId: '', notes: '', status: TaskStatus.ToDo,
             labels: [],
             includeInSprints: true,
             keyResultId: undefined,
-        });
+        };
+        setFormData(init);
+        baseline.current = formSnapshot(init);
         setSelectedObjectiveId('');
     }
   }, [task, resources, objectives]);
@@ -143,12 +153,22 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, people, 
 
   const predecessorOptions = tasks.filter(t => t.id !== (task?.id || ''));
 
+  // Pencere: odak içeri girer, Tab içeride döner, Esc kapatır (UI-ERS-28). Kaydedilmemiş iş sorulur.
+  const dirty = !!baseline.current && formSnapshot(formData) !== baseline.current;
+  useUnsavedGuard('gorev-formu-klasik', dirty, 'Görev kaydedilmedi. Yazdıklarınız silinsin mi?');
+  const requestClose = () => {
+    if (dirty && !window.confirm('Görev kaydedilmedi. Yazdıklarınız silinsin mi?')) return;
+    onClose();
+  };
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useModalFocus(dialogRef, requestClose);
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-[60] flex justify-center items-center p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="task-form-title" className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
         <div className="flex justify-between items-center p-4 border-b dark:border-gray-700">
-          <h2 className="text-xl font-bold text-black dark:text-white">{task ? 'Görevi Düzenle' : 'Yeni Görev Ekle'}</h2>
-          <button aria-label="Kapat" onClick={onClose} className="text-gray-400 bg-transparent hover:bg-gray-200 hover:text-gray-900 dark:hover:bg-gray-600 dark:hover:text-white rounded-lg text-sm p-1.5 ml-auto inline-flex items-center">
+          <h2 id="task-form-title" className="text-xl font-bold text-black dark:text-white">{task ? 'Görevi Düzenle' : 'Yeni Görev Ekle'}</h2>
+          <button aria-label="Kapat" onClick={requestClose} className="text-gray-400 bg-transparent hover:bg-gray-200 hover:text-gray-900 dark:hover:bg-gray-600 dark:hover:text-white rounded-lg text-sm p-1.5 ml-auto inline-flex items-center">
              <i aria-hidden="true" className="fa-solid fa-times w-5 h-5"></i>
           </button>
         </div>
@@ -321,7 +341,7 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, people, 
 
         </form>
         <div className="flex justify-end items-center p-4 border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
-          <button type="button" onClick={onClose} className="px-4 py-2 rounded-md border dark:border-gray-600 mr-2 hover:bg-gray-100 dark:hover:bg-gray-700">İptal</button>
+          <button type="button" onClick={requestClose} className="px-4 py-2 rounded-md border dark:border-gray-600 mr-2 hover:bg-gray-100 dark:hover:bg-gray-700">İptal</button>
           <button type="submit" onClick={handleSubmit} className="px-4 py-2 rounded-md bg-primary text-white hover:opacity-90">Kaydet</button>
         </div>
       </div>

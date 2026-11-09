@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Abbreviation, CustomerMeeting, MeetingDetails, ProjectAiProfile, ReportAiLogEntry, ReportCategory, ReportItem, WeeklyReport, WorklogEntry, WorkspaceData } from '../../../types';
 import { cleanProjectProfile, PROFILE_LIMITS } from '../../../utils/ai/projectProfile';
 import { useUnsavedGuard } from '../../useUnsavedGuard';
@@ -323,6 +323,20 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
     const next = nextStage(report, flow);
     const returnTo = returnStage(report, flow);
     const canReturn = editable && report.stage !== 'draft' && !!returnTo;
+    // Yapışkan alt şerit kadar kaydırma payı (UI-ERS-17): telefonda ve %200'de Tab'la gelinen düğme ve
+    // yeni açılan madde kutusu şeridin altında kalıyordu; tarayıcı odaklananı şeridin üstüne kaydırır
+    const barRef = useRef<HTMLDivElement>(null);
+    const hasBar = editable || canReturn;
+    useEffect(() => {
+        const bar = barRef.current;
+        if (!hasBar || !bar) return;
+        const root = document.documentElement;
+        const set = () => { root.style.scrollPaddingBottom = `${Math.ceil(bar.getBoundingClientRect().height) + 24}px`; };
+        set();
+        const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(set) : null;
+        ro?.observe(bar);
+        return () => { ro?.disconnect(); root.style.scrollPaddingBottom = ''; };
+    }, [hasBar]);
     const defaultDate = isoDay(weekStart(year, week));
 
     const lintDict = useMemo(() => lintDictionary(dictionary, workspace.projects), [dictionary, workspace.projects]);
@@ -904,7 +918,7 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
             </div>
 
             {(editable || canReturn) && (
-                <div className="sticky bottom-3 z-30 m-surface m-pop rounded-2xl">
+                <div ref={barRef} className="sticky bottom-3 z-30 m-surface m-pop rounded-2xl">
                     <div className="px-4 py-3 flex flex-wrap items-center gap-2">
                         <span className="text-[14px] m-text-3 flex-1 min-w-[180px]">
                             {(counts.errors > 0 || blockers.length > 0) && next

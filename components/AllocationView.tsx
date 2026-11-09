@@ -195,6 +195,18 @@ const AllocationView: React.FC<AllocationViewProps> = ({ departments: department
 
   // ---------------- Hücreler ----------------
 
+  // Odaklanan hücre sabit kişi sütununun altında kalmasın (UI-ERS-18): tarayıcının kendi kaydırması
+  // bittikten sonra hücre sütunun solunda kaldıysa kap sağa doğru kaydırılır
+  const keepClearOfStickyColumn = (el: HTMLElement) => {
+    const container = el.closest('.overflow-x-auto') as HTMLElement | null;
+    const sticky = el.closest('tr')?.querySelector('th[scope="row"]') as HTMLElement | null;
+    if (!container || !sticky) return;
+    requestAnimationFrame(() => {
+      const gap = sticky.getBoundingClientRect().right + 8 - el.getBoundingClientRect().left;
+      if (gap > 0) container.scrollLeft -= gap;
+    });
+  };
+
   const cellInput = (a: Allocation, field: EffortField, month: number, editableCell: boolean) => {
     const value = a[field][month];
     const person = personMap.get(a.personId);
@@ -207,6 +219,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ departments: department
         aria-label={`${personName(a.personId)}, ${MONTHS_TR[month - 1]}, ${field === 'plan' ? 'plan' : 'gerçekleşen'} (AA)`}
         onValue={n => onSetCell(a.id, field, month, n)}
         onEmpty={() => onSetCell(a.id, field, month, undefined)}
+        onFocus={e => keepClearOfStickyColumn(e.currentTarget)}
         title={isOver && person ? `Aşırı tahsis: ${personName(person.id)} ${MONTHS_TR[month - 1]} toplamı ${fmt(personMonthTotal(yearAllocations, person.id, year, month, 'plan'))} / kapasite ${fmt(person.availableAA)}` : undefined}
         className={`w-14 text-center text-xs rounded-md border px-1 py-1 focus:outline-none transition-colors
           ${isOver

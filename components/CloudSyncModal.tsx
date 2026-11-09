@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { useModalFocus } from './useModalFocus';
 import { UserRole, WorkspaceData } from '../types';
 import { ROLE_LABELS } from '../utils/allocations';
 import {
@@ -25,6 +26,9 @@ const SectionTitle: React.FC<{ step: string; title: string }> = ({ step, title }
 );
 
 const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ workspace, onReplaceWorkspace, onClose }) => {
+  // Pencere gibi davranır (UI-ERS-20): odak içeri girer, Tab içeride döner, Esc kapatır
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useModalFocus(dialogRef, onClose);
   const existing = loadCloudConfig();
   const [url, setUrl] = useState(existing?.url || '');
   const [anonKey, setAnonKey] = useState(existing?.anonKey || '');
@@ -148,10 +152,10 @@ const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ workspace, onReplaceWor
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={onClose}>
-      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto border border-gray-100 dark:border-gray-700" onClick={e => e.stopPropagation()}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="cloud-sync-title" className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto border border-gray-100 dark:border-gray-700" onClick={e => e.stopPropagation()}>
         <div className="sticky top-0 bg-white dark:bg-gray-900 px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between z-10">
           <div>
-            <h3 className="text-lg font-semibold text-gray-800 dark:text-white">Bulut Senkronizasyonu</h3>
+            <h3 id="cloud-sync-title" className="text-lg font-semibold text-gray-800 dark:text-white">Bulut Senkronizasyonu</h3>
             <p className="text-xs font-semibold text-gray-400">Supabase · Yerel-Öncelikli · Ücretsiz Katman</p>
           </div>
           <button aria-label="Kapat" onClick={onClose} className="w-9 h-9 rounded-xl text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"><i aria-hidden="true" className="fa-solid fa-times"></i></button>

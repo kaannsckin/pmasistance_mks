@@ -1,14 +1,18 @@
 
-import React from 'react';
+import React, { useRef } from 'react';
+import { useModalFocus } from './useModalFocus';
 
 interface AboutModalProps {
   onClose: () => void;
 }
 
 const AboutModal: React.FC<AboutModalProps> = ({ onClose }) => {
+  // Pencere gibi davranır (UI-ERS-20): odak içeri girer, Tab içeride döner, Esc kapatır
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useModalFocus(dialogRef, onClose);
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex justify-center items-center p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden animate-fade-in-up flex flex-col max-h-[85vh]">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="about-title" className="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden animate-fade-in-up flex flex-col max-h-[85vh]">
         {/* Header */}
         <div className="flex justify-between items-center p-6 border-b dark:border-gray-700 bg-primary text-white">
           <div className="flex items-center space-x-3">
@@ -16,7 +20,7 @@ const AboutModal: React.FC<AboutModalProps> = ({ onClose }) => {
                 <i aria-hidden="true" className="fa-solid fa-rocket text-xl"></i>
              </div>
              <div>
-                <h2 className="text-xl font-black">PlanAsistan Hakkında</h2>
+                <h2 id="about-title" className="text-xl font-black">PlanAsistan Hakkında</h2>
                 <p className="text-[10px] font-bold opacity-80 uppercase tracking-widest">Akıllı Proje Planlama & GitHub Pages Rehberi</p>
              </div>
           </div>

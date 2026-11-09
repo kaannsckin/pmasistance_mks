@@ -1,5 +1,6 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useModalFocus } from './useModalFocus';
 import { Task, WorkPackage } from '../types';
 import { summarizeWorkPackages } from '../utils/workPackages';
 
@@ -12,6 +13,9 @@ interface WorkPackageManagerProps {
 }
 
 const WorkPackageManager: React.FC<WorkPackageManagerProps> = ({ isOpen, onClose, workPackages, tasks, setWorkPackages }) => {
+  // Pencere gibi davranır (UI-ERS-28): odak içeri girer, Tab içeride döner, Esc kapatır
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useModalFocus(dialogRef, onClose, isOpen);
   const summaryById = useMemo(() => {
     const rows = summarizeWorkPackages(workPackages, tasks);
     return { map: new Map(rows.map(r => [r.id, r])), unassigned: rows.find(r => r.id === '') };
@@ -69,9 +73,9 @@ const WorkPackageManager: React.FC<WorkPackageManagerProps> = ({ isOpen, onClose
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex justify-center items-center p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[80vh] flex flex-col animate-fade-in-up">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="wp-manager-title" className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[80vh] flex flex-col animate-fade-in-up">
         <div className="flex justify-between items-center p-5 border-b dark:border-gray-700">
-            <h2 className="text-lg font-bold flex items-center text-gray-800 dark:text-white">
+            <h2 id="wp-manager-title" className="text-lg font-bold flex items-center text-gray-800 dark:text-white">
                 <i aria-hidden="true" className="fa-solid fa-briefcase mr-3 text-primary"></i>
                 İş Paketi Yönetimi
             </h2>
