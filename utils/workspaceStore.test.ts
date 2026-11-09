@@ -109,7 +109,34 @@ describe('inspectStored (UI-KRC-01: okunamayan depo boş sayılmaz)', () => {
         expect(inspectStored(new Map<string, unknown>([['meta', null]]))).toMatchObject({ kind: 'unreadable', reason: 'meta' });
     });
 
-    it('ham döküm tüm kayıtları taşır', () => {
+    it('okunamayan proje kaydı açılmaz ama depoda korunur; sonraki yazımlar silmez (UI-KRC-21, UI-KRC-22)', async () => {
+        const kv = memoryStore();
+        const w0 = ws();
+        const [a, b] = w0.projects;
+        await kv.write(storageDiff(null, w0).puts, []);
+        // A yarım JSON metni; B'nin risk listesi metin
+        const yarim = '{"id":"' + a.id + '","name":"PUSULA Saha","tasks":[{"id":"t1"';
+        kv.data.set(`project:${a.id}`, yarim);
+        kv.data.set(`project:${b.id}`, { ...b, risks: 'metin' });
+        const s = inspectStored(await kv.readAll());
+        expect(s.kind).toBe('ok');
+        if (s.kind !== 'ok') return;
+        expect(s.workspace.projects).toEqual([]);
+        expect(s.damaged).toEqual([{ id: a.id, name: 'PUSULA Saha' }, { id: b.id, name: 'B' }]);
+        expect(s.orphans).toEqual([]);
+        // Kullanıcı yeni bir proje ekleyip kaydeder: bozuk kayıtlar yerinde, meta onları listeler
+        const c = createProject('C');
+        const p = new WorkspacePersister(kv, s.workspace, undefined, s.orphans, s.damaged.map(d => d.id));
+        p.save({ ...s.workspace, projects: [c], activeProjectId: c.id });
+        await p.flush();
+        expect(kv.data.get(`project:${a.id}`)).toBe(yarim);
+        expect((kv.data.get(`project:${b.id}`) as { risks: unknown }).risks).toBe('metin');
+        expect((kv.data.get('meta') as { projectIds: string[] }).projectIds).toEqual([c.id, a.id, b.id]);
+        // Yeniden açılışta da yetim sayılmaz
+        expect((inspectStored(await kv.readAll()) as { orphans: string[] }).orphans).toEqual([]);
+    });
+
+        it('ham döküm tüm kayıtları taşır', () => {
         const records = new Map<string, unknown>([['meta', { format: 2 }], ['project:p1', { id: 'p1', name: 'NEHİR' }]]);
         const dump = JSON.parse(rawStoreDump(records, new Date('2026-11-06T10:00:00Z')));
         expect(dump.tur).toBe('planasistan-ham-depo');

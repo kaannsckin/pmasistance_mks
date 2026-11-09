@@ -126,6 +126,30 @@ describe('applyPoolImport', () => {
         expect(a.role).toBe('Proje Yönetici Yardımcısı');
     });
 
+    it('eksik sütunlu satır var olan kişinin ünvanını, rollerini, kapasitesini silmez (UI-KRC-27)', () => {
+        const first = applyPoolImport(createEmptyWorkspace(), parsePoolSheets(sampleSheets()));
+        const before = first.workspace.people.find(p => p.sicil === '5678')!;
+        // Yalnız SİCİL, AD, SOYAD, BÖLÜM sütunları; Ayşe'nin bölümü değişiyor
+        const kismi: PoolSheets = { 'Personel Listesi': [['SİCİL', 'AD', 'SOYAD', 'BÖLÜM'], ['5678', 'AYŞE', 'YILMAZ', 'B700']] };
+        const second = applyPoolImport(first.workspace, parsePoolSheets(kismi));
+        const after = second.workspace.people.find(p => p.sicil === '5678')!;
+        expect(second.summary.peopleUpdated).toBe(1);
+        expect(after).toMatchObject({ id: before.id, departmentCode: 'B700', titleCode: 'UAR', emy: 'U300', availableAA: 0.5 });
+        expect(after.roles).toEqual(before.roles);
+        // Önceki çalışma alanındaki kişi nesnesi yerinde değiştirilmedi
+        expect(first.workspace.people.find(p => p.sicil === '5678')!.departmentCode).toBe('U310');
+    });
+
+    it('aynı adlı ama farklı sicilli satır var olan kişiyi değiştirmez, ayrı kişi ekler (UI-KRC-27)', () => {
+        const first = applyPoolImport(createEmptyWorkspace(), parsePoolSheets(sampleSheets()));
+        const baska: PoolSheets = { 'Personel Listesi': [['SİCİL', 'AD', 'SOYAD', 'BÖLÜM'], ['9999', 'AYŞE', 'YILMAZ', 'B700']] };
+        const second = applyPoolImport(first.workspace, parsePoolSheets(baska));
+        expect(second.summary.peopleAdded).toBe(1);
+        expect(second.workspace.people.find(p => p.sicil === '5678')!.departmentCode).toBe('U310');
+        expect(second.workspace.people.find(p => p.sicil === '9999')).toMatchObject({ departmentCode: 'B700', availableAA: 1, roles: [] });
+        expect(second.summary.warnings.some(w => /farklı sicilli/.test(w))).toBe(true);
+    });
+
     it('ikinci içe aktarma kişi/tahsisi çoğaltmaz, günceller', () => {
         const first = applyPoolImport(createEmptyWorkspace(), parsePoolSheets(sampleSheets()));
         const second = applyPoolImport(first.workspace, parsePoolSheets(sampleSheets()));

@@ -19,8 +19,15 @@ export interface ImportedAllocationRow {
     actual: Record<number, number>;
 }
 
+/**
+ * Dosyadan okunan kişi: yalnız dosyada gerçekten dolu olan alanlar taşınır (UI-KRC-27). Eksik sütun ya
+ * da boş hücre "bilinmiyor" demektir; var olan kişinin ünvanını, rollerini, kapasitesini silmez.
+ * Yeni kişide varsayılanlar (bölüm "Tanımsız", 1 AA, rol yok) birleştirmede verilir.
+ */
+export type ImportedPerson = Pick<Person, 'id' | 'firstName' | 'lastName'> & Partial<Omit<Person, 'id' | 'firstName' | 'lastName'>>;
+
 export interface PoolImportResult {
-    people: Person[];
+    people: ImportedPerson[];
     departments: Department[];
     roleCatalog: RoleCatalogEntry[];
     titles: TitleDef[];
@@ -118,17 +125,17 @@ export const parsePoolSheets = (sheets: PoolSheets): PoolImportResult => {
                         }
                     }
                 }
-                const aaRaw = col.aa > -1 ? num(row, col.aa) : 1;
+                const aaRaw = col.aa > -1 ? num(row, col.aa) : 0;
                 result.people.push({
                     id: createPersonId(),
                     sicil: cell(row, col.sicil) || undefined,
                     firstName: ad,
                     lastName: soyad,
                     emy: cell(row, col.emy) || undefined,
-                    departmentCode: cell(row, col.bolum) || 'Tanımsız',
+                    departmentCode: cell(row, col.bolum) || undefined,
                     titleCode: cell(row, col.unvan) || undefined,
-                    availableAA: aaRaw > 0 ? aaRaw : 1,
-                    roles,
+                    availableAA: aaRaw > 0 ? aaRaw : undefined,
+                    roles: roles.length ? roles : undefined,
                 });
             }
         }
@@ -307,20 +314,30 @@ export const applyPoolImport = (ws: WorkspaceData, imported: PoolImportResult): 
     };
 
     // ---- Kişiler (sicil > ad-soyad eşleşmesi) ----
+    // Var olan kişide yalnız dosyada dolu olan alanlar güncellenir; boş/eksik alan silmez (UI-KRC-27).
+    // Aynı adlı ama farklı sicilli satır başka bir kişidir: var olanın sicili ve bölümü değişmez.
+    // Var olan kişi nesnesi yerinde değiştirilmez (önceki hâl geri alma için korunur).
     const people = [...ws.people];
-    const findPerson = (sicil: string | undefined, fullName: string): Person | undefined => {
-        const bySicil = sicil ? people.find(p => p.sicil && p.sicil === sicil) : undefined;
-        if (bySicil) return bySicil;
-        const key = trLower(fullName).replace(/\s+/g, ' ');
-        return people.find(p => trLower(`${p.firstName} ${p.lastName}`).replace(/\s+/g, ' ') === key);
+    const findIndex = (np: ImportedPerson): number => {
+        if (np.sicil) {
+            const bySicil = people.findIndex(p => p.sicil === np.sicil);
+            if (bySicil > -1) return bySicil;
+        }
+        const nameKey = (f: string, l: string) => trLower(`${f} ${l}`).replace(/\s+/g, ' ').trim();
+        const key = nameKey(np.firstName, np.lastName);
+        return people.findIndex(p => nameKey(p.firstName, p.lastName) === key
+            && !(np.sicil && p.sicil && p.sicil !== np.sicil));
     };
     imported.people.forEach(np => {
-        const existing = findPerson(np.sicil, `${np.firstName} ${np.lastName}`);
-        if (existing) {
-            Object.assign(existing, { ...np, id: existing.id });
+        const i = findIndex(np);
+        if (i > -1) {
+            const filled = Object.fromEntries(Object.entries(np).filter(([k, v]) => k !== 'id' && v !== undefined && v !== '')) as Partial<Person>;
+            people[i] = { ...people[i], ...filled };
             summary.peopleUpdated++;
         } else {
-            people.push(np);
+            const sameName = people.some(p => trLower(`${p.firstName} ${p.lastName}`) === trLower(`${np.firstName} ${np.lastName}`));
+            if (sameName) summary.warnings.push(`${np.firstName} ${np.lastName}: aynı adlı ama farklı sicilli (${np.sicil}) kişi ayrı kişi olarak eklendi.`);
+            people.push({ ...np, departmentCode: np.departmentCode || 'Tanımsız', availableAA: np.availableAA ?? 1, roles: np.roles ?? [] });
             summary.peopleAdded++;
         }
     });
@@ -394,7 +411,8 @@ export const applyPoolImport = (ws: WorkspaceData, imported: PoolImportResult): 
     // ---- Tahsisler ----
     const allocations: Allocation[] = ws.allocations.map(a => ({ ...a, plan: { ...a.plan }, actual: { ...a.actual } }));
     imported.allocationRows.forEach(rowData => {
-        const person = findPerson(rowData.sicil, rowData.personName);
+        const pi = findIndex({ id: '', firstName: rowData.personName, lastName: '', sicil: rowData.sicil || undefined });
+        const person = pi > -1 ? people[pi] : undefined;
         if (!person) {
             summary.warnings.push(`Veri Girişi: "${rowData.personName}" personel havuzunda bulunamadı, satır atlandı.`);
             return;

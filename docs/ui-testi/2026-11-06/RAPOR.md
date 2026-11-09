@@ -11,6 +11,19 @@
 
 En çok bulgu tahsis tablosunda ve içe aktarma yollarında toplanıyor. Klasik arayüz, düzeltmelerin çoğu modern arayüze yapıldığı için geride kalmış.
 
+### Düzeltme durumu (9 Kasım)
+
+| Bulgu | Durum | Doğrulama (tarayıcıda) |
+|---|---|---|
+| UI-AKS-20 tahsiste ondalık virgül | Düzeltildi: tahsis, kapasite, izin ve senaryo alanları ortak ondalık alana geçti; 1,5 AA'nın üstü kaydedilmiyor, alan bırakılınca önceki değere dönüyor. Ok tuşu ve tekerlek değeri değiştirmiyor (UI-ERS-22 = UI-KRC-30 da kapandı); hücrelerin adı var ("Burak Demir, Oca, plan (AA)"). | "0,5" → 0,5 · "1,25" → 1,25 · "125" geçersiz, 0,4'e döndü · ok/tekerlek sonrası değer aynı |
+| UI-KRC-18 Excel'den görev kopyası | Düzeltildi: projede zaten olan görev (Jira numarası, yoksa ad) eklenmiyor ve değiştirilmiyor; özet ne olduğunu söylüyor. Jira CSV ve CSV de aynı yoldan (UI-KRC-25 de kapandı). | Kendi dışa aktarımı iki kez geri yüklendi: 100 → 100 → 100, "dosyadaki 100 görev bu projede zaten var" |
+| UI-AKS-31 Yerel Kayıt | Düzeltildi (önerilen davranış): kapatmak kayıtlı veriyi silmiyor, yalnız yeni değişiklikleri yazmayı durduruyor. Açıklama metni bunu söylüyor; kapalıyken ekranda kalıcı uyarı ve "Kaydı aç"; kaydedilmemiş değişiklikle sayfa kapanırken tarayıcı soruyor. | Kapatınca ve yenileyince depoda 5 proje; ayar kalıcı; "Kaydı aç" çalışıyor |
+| UI-KRC-21 bozuk proje kaydı | Düzeltildi: okunamayan proje kaydı (yarım metin, dizi olmayan liste alanı) açılmıyor ama depoda olduğu gibi korunuyor; uyarı projeyi adıyla söylüyor ve ham veriyi indirtiyor. Tek bozuk alanın uygulamayı hata ekranına kilitlemesi (UI-KRC-22) de kapandı. | İki bozulma türünde: uyarı var, hata ekranı yok, başka projeye görev eklenince ve yenileyince bozuk kayıt yerinde |
+| UI-KRC-26 Geri al | Düzeltildi: geri al yalnız kendi işlemini çeviriyor (silinen görev ya da proje yerine dönüyor). AI önerisi yalnız arada başka değişiklik yoksa geri alınıyor; varsa bunu söylüyor. | Modern ve klasikte: silinen görev geri geldi, aradaki "tamamlandı" değişikliği yerinde kaldı |
+| UI-KRC-27 veri havuzu içe aktarma | Düzeltildi: yalnız dosyada dolu alanlar güncelleniyor; aynı ad farklı sicil ayrı kişi (uyarıyla); var olan kişi nesnesi yerinde değiştirilmiyor. | Eksik sütunlu dosyadan sonra ünvan, roller, kapasite, bölüm aynı; 77777 sicilli satır ayrı kişi |
+
+Birim testleri 938/938 (yeni: içe aktarma birleştirme 4, depo koruması 1, havuz 2), demo yolu hatasız. Bağımsız doğrulama: bir sonraki kısa koşu (veri yolları).
+
 | | |
 |---|---|
 | Kod | `claude/zealous-tesla-hidbc9` @ `8fb563d` |

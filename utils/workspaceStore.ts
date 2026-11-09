@@ -28,19 +28,50 @@ export interface KvStore {
     clear(): Promise<void>;
 }
 
-export const metaOf = (ws: WorkspaceData): StoredMeta => {
+/** @param keep okunamayan ama depoda korunan proje kimlikleri (UI-KRC-21): meta onları listeden düşürmez */
+export const metaOf = (ws: WorkspaceData, keep: string[] = []): StoredMeta => {
     const { projects, ...workspace } = ws;
-    return { format: STORE_FORMAT, workspace, projectIds: projects.map(p => p.id) };
+    const ids = projects.map(p => p.id);
+    return { format: STORE_FORMAT, workspace, projectIds: [...ids, ...keep.filter(id => !ids.includes(id))] };
 };
 
-/** Depodaki kayıtlardan çalışma alanı; biçim tanınmıyorsa null. Yetim proje kayıtları da döner (temizlik için). */
-export const joinStored = (records: Map<string, unknown>): { workspace: WorkspaceData; orphans: string[] } | null => {
+/** Proje dizisi olması gereken alanlar: biri dizi değilse kayıt açılmaz, ekranlar çökerdi (UI-KRC-22) */
+const PROJECT_LISTS = ['tasks', 'resources', 'risks', 'notes', 'customerRequests', 'objectives', 'workPackages', 'pestelItems', 'swotItems', 'releasePlans'];
+
+/** Proje kaydı okunabilir mi: nesne, kimliği var, liste alanları dizi */
+export const isReadableProject = (v: unknown): v is Project => {
+    if (!v || typeof v !== 'object' || Array.isArray(v)) return false;
+    const r = v as Record<string, unknown>;
+    if (typeof r.id !== 'string' || !r.id) return false;
+    return PROJECT_LISTS.every(k => r[k] === undefined || r[k] === null || Array.isArray(r[k]));
+};
+
+/** Okunamayan proje kaydından kullanıcıya gösterilecek ad (yarım JSON metninde de aranır) */
+export const damagedProjectName = (v: unknown, id: string): string => {
+    if (v && typeof v === 'object' && typeof (v as { name?: unknown }).name === 'string') return (v as { name: string }).name;
+    if (typeof v === 'string') { const m = v.match(/"name"\s*:\s*"([^"]{1,120})"/); if (m) return m[1]; }
+    return id;
+};
+
+/**
+ * Depodaki kayıtlardan çalışma alanı; biçim tanınmıyorsa null. Yetim proje kayıtları da döner (temizlik için).
+ * Okunamayan proje kayıtları (bozuk metin, dizi olmayan liste alanı) açılmaz ama silinmez (UI-KRC-21):
+ * `damaged` listesi döner, kaydedici bu kimlikleri meta'da tutar; kayıt depoda olduğu gibi kalır.
+ */
+export const joinStored = (records: Map<string, unknown>): { workspace: WorkspaceData; orphans: string[]; damaged: { id: string; name: string }[] } | null => {
     const meta = records.get(META) as StoredMeta | undefined;
     if (!meta || meta.format !== STORE_FORMAT || !Array.isArray(meta.projectIds)) return null;
-    const projects = meta.projectIds.map(id => records.get(PROJECT + id) as Project | undefined).filter((p): p is Project => !!p);
+    const projects: Project[] = [];
+    const damaged: { id: string; name: string }[] = [];
+    meta.projectIds.forEach(id => {
+        if (!records.has(PROJECT + id)) return; // kaydı hiç olmayan kimlik: korunacak veri yok
+        const v = records.get(PROJECT + id);
+        if (isReadableProject(v) && v.id === id) projects.push(v);
+        else damaged.push({ id, name: damagedProjectName(v, id) });
+    });
     const known = new Set(meta.projectIds.map(id => PROJECT + id));
     const orphans = [...records.keys()].filter(k => k.startsWith(PROJECT) && !known.has(k));
-    return { workspace: { ...meta.workspace, projects } as WorkspaceData, orphans };
+    return { workspace: { ...meta.workspace, projects } as WorkspaceData, orphans, damaged };
 };
 
 /**
@@ -50,7 +81,7 @@ export const joinStored = (records: Map<string, unknown>): { workspace: Workspac
  */
 export type StoredState =
     | { kind: 'empty' }
-    | { kind: 'ok'; workspace: WorkspaceData; orphans: string[] }
+    | { kind: 'ok'; workspace: WorkspaceData; orphans: string[]; damaged: { id: string; name: string }[] }
     | { kind: 'unreadable'; reason: 'format' | 'meta'; format?: unknown; keys: number };
 
 export const inspectStored = (records: Map<string, unknown>): StoredState => {
@@ -70,7 +101,7 @@ export const rawStoreDump = (records: Map<string, unknown>, now: Date = new Date
 const sameOrder = (a: Project[], b: Project[]) => a.length === b.length && a.every((p, i) => p.id === b[i].id);
 
 /** Son yazılandan bu yana değişen parçalar (nesne kimliğiyle); `prev` yoksa hepsi */
-export const storageDiff = (prev: WorkspaceData | null, next: WorkspaceData): { puts: [string, unknown][]; deletes: string[] } => {
+export const storageDiff = (prev: WorkspaceData | null, next: WorkspaceData, keep: string[] = []): { puts: [string, unknown][]; deletes: string[] } => {
     const puts: [string, unknown][] = [];
     const deletes: string[] = [];
     const before = new Map((prev?.projects || []).map(p => [p.id, p]));
@@ -80,7 +111,7 @@ export const storageDiff = (prev: WorkspaceData | null, next: WorkspaceData): { 
     const keys = new Set([...Object.keys(prev || {}), ...Object.keys(next)]);
     const metaChanged = !prev || !sameOrder(prev.projects, next.projects)
         || [...keys].some(k => k !== 'projects' && (prev as unknown as Record<string, unknown>)[k] !== (next as unknown as Record<string, unknown>)[k]);
-    if (metaChanged) puts.push([META, metaOf(next)]);
+    if (metaChanged) puts.push([META, metaOf(next, keep)]);
     return { puts, deletes };
 };
 
@@ -97,12 +128,14 @@ export class WorkspacePersister {
     /**
      * @param saved depodaki hâl (yüklenen çalışma alanı); yoksa ilk kayıt her şeyi yazar
      * @param extraDeletes ilk yazımda silinecek yetim kayıtlar
+     * @param keepProjectIds okunamayan, depoda olduğu gibi korunan proje kayıtları (UI-KRC-21)
      */
     constructor(
         private readonly kv: KvStore,
         private saved: WorkspaceData | null,
         private readonly onResult: (ok: boolean, error?: unknown) => void = () => {},
         private extraDeletes: string[] = [],
+        private readonly keepProjectIds: string[] = [],
     ) {}
 
     save(ws: WorkspaceData): void {
@@ -135,7 +168,7 @@ export class WorkspacePersister {
         while (this.pending) {
             const ws = this.pending;
             this.pending = null;
-            const { puts, deletes } = storageDiff(this.saved, ws);
+            const { puts, deletes } = storageDiff(this.saved, ws, this.keepProjectIds);
             const dels = [...deletes, ...this.extraDeletes];
             if (!puts.length && !dels.length) continue;
             try {

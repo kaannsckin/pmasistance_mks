@@ -131,6 +131,7 @@ import {
 import { reportAttention } from './utils/reportAttention';
 import { Icon } from './components/modern/icons';
 import { createSequenceDetector } from './utils/easterEggs';
+import { mergeImport } from './utils/importMerge';
 
 const THEME_COLORS: Record<string, string> = {
   classic: '#2563eb',
@@ -196,8 +197,13 @@ const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [newProjectRequest, setNewProjectRequest] = useState(0);
   const [egg, setEgg] = useState<EggEvent | null>(null);
-  const [undo, setUndo] = useState<{ message: string; snapshot: WorkspaceData } | null>(null);
+  // Geri al yalnız kendi işlemini geri çevirir (UI-KRC-26): eskiden tüm çalışma alanının anlık görüntüsü
+  // geri yazılıyor, aradaki 7 sn içinde yapılan başka değişiklikler sessizce siliniyordu.
+  // revert null dönerse geri alma güvenli değildir (ör. AI önerisinden sonra başka değişiklik yapıldı).
+  const [undo, setUndo] = useState<{ message: string; revert: (ws: WorkspaceData) => WorkspaceData | null } | null>(null);
   const [storageFull, setStorageFull] = useState(false);
+  // Yerel kayıt kapalıyken depoya yazılan son hâl (UI-AKS-31)
+  const lastPersisted = useRef<WorkspaceData | null>(null);
   const [storageWarnClosed, setStorageWarnClosed] = useState(false);
   const undoTimer = useRef<number | undefined>(undefined);
   const workspaceRef = useRef<WorkspaceData | null>(null);
@@ -210,6 +216,8 @@ const App: React.FC = () => {
   // Açılamayan depo: uygulama hiçbir şey yazmaz, kurtarma ekranı gösterilir (UI-KRC-01).
   // Okunamayan veri "boş" sayılıp üzerine örnek çalışma alanı yazılırsa geri dönülmez biçimde kaybolur.
   const [storeProblem, setStoreProblem] = useState<StoreProblem | null>(null);
+  // Okunamayan, açılmayan ama depoda korunan proje kayıtları (UI-KRC-21)
+  const [damagedProjects, setDamagedProjects] = useState<{ id: string; name: string }[]>([]);
   const rawStore = useRef<{ kv: KvStore | null; records: Map<string, unknown> | null }>({ kv: null, records: null });
   useEffect(() => {
     let cancelled = false;
@@ -218,7 +226,7 @@ const App: React.FC = () => {
     (async () => {
       const kv = await openIndexedDbStore();
       rawStore.current.kv = kv;
-      let stored: { workspace: WorkspaceData; orphans: string[] } | null = null;
+      let stored: { workspace: WorkspaceData; orphans: string[]; damaged: { id: string; name: string }[] } | null = null;
       if (kv) {
         let records: Map<string, unknown>;
         try { records = await kv.readAll(); } catch (e) {
@@ -271,9 +279,10 @@ const App: React.FC = () => {
               setStorageWarnClosed(false);
               if (migrate) { migrate = false; try { localStorage.removeItem(WORKSPACE_STORAGE_KEY); localStorage.removeItem(LEGACY_STORAGE_KEY); } catch { /* yok */ } }
             }
-          }, stored?.orphans);
+          }, stored?.orphans, stored?.damaged.map(d => d.id));
           requestPersistentStorage();
         }
+        if (stored?.damaged.length) setDamagedProjects(stored.damaged);
         setWorkspace(initial);
         setIsInitialized(true);
       } catch (e) {
@@ -432,13 +441,30 @@ const App: React.FC = () => {
     return () => mq.removeEventListener('change', apply);
   }, [settingsLoaded, colorScheme, settings?.theme]);
 
+  // Yerel kayıt kapalıyken kaydedilmemiş değişiklik varsa sayfa kapanırken tarayıcı sorar (UI-AKS-31)
+  const persistenceOffDirty = !!workspace && workspace.settings.isLocalPersistenceEnabled === false && !!lastPersisted.current
+    && Object.keys(workspace).some(k => k !== 'settings' && (workspace as unknown as Record<string, unknown>)[k] !== (lastPersisted.current as unknown as Record<string, unknown>)[k]);
+  useEffect(() => {
+    if (!persistenceOffDirty) return;
+    const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [persistenceOffDirty]);
+
   // ---- Kalıcılık ----
   useEffect(() => {
     // Yalnız etkin sekme yazar; kilit durumu belli olana kadar ve devirden sonra yazılmaz
     if (!isInitialized || !workspace || tabRole !== 'active') return;
-    const toPersist = workspace.settings.isLocalPersistenceEnabled !== false
-      ? workspace
-      : { ...workspace, projects: [], activeProjectId: null };
+    // Yerel kayıt kapalıyken (UI-AKS-31) depodaki veri silinmez, yalnız yeni değişiklikler yazılmaz:
+    // eskiden boş proje listesi yazılıyor, kayıtlı bütün projeler uyarısız siliniyordu. Ayar
+    // değişikliği (kaydın kapalı olduğu bilgisi) yine yazılır; açılınca güncel hâl yazılır.
+    let toPersist = workspace;
+    if (workspace.settings.isLocalPersistenceEnabled === false) {
+      if (!lastPersisted.current) lastPersisted.current = workspace;
+      toPersist = { ...lastPersisted.current, settings: workspace.settings };
+    } else {
+      lastPersisted.current = workspace;
+    }
     if (persister.current) {
       // Yalnız değişen projeler ve meta yazılır; hata (kota) sonucu geri bildirimle gelir
       persister.current.save(toPersist);
@@ -515,16 +541,22 @@ const App: React.FC = () => {
   }, []);
 
   // Geri-al bildirimi (silme gibi yıkıcı aksiyonlar için)
-  const showUndo = useCallback((message: string, snapshot: WorkspaceData) => {
+  const showUndo = useCallback((message: string, revert: (ws: WorkspaceData) => WorkspaceData | null) => {
     announce(message, false);
     window.clearTimeout(undoTimer.current);
-    setUndo({ message, snapshot });
+    setUndo({ message, revert });
     undoTimer.current = window.setTimeout(() => setUndo(null), 7000);
   }, [announce]);
   const handleUndo = useCallback(() => {
-    if (undo) setWorkspace(undo.snapshot);
+    if (!undo) return;
     setUndo(null);
-  }, [undo]);
+    const current = workspaceRef.current;
+    const next = current ? undo.revert(current) : null;
+    if (!next) { announce('Geri alınamadı: bu işlemden sonra başka değişiklik yapıldı.'); return; }
+    workspaceRef.current = next;
+    setWorkspace(next);
+    announce('Geri alındı.');
+  }, [undo, announce]);
 
   // Belirli bir projeyi günceller (null → etkin proje)
   const updateProjectById = useCallback((id: string | null, updater: (p: Project) => Project) => {
@@ -584,6 +616,14 @@ const App: React.FC = () => {
 
   const setTasks = makeListSetter<Task>('tasks');
   const setResources = makeListSetter<Resource>('resources');
+  // İçe aktarma: projede zaten olan görev yeniden eklenmez (UI-KRC-18); sonuç arayüzde özetlenir
+  const handleDataImport = (nt: Task[], nr: Resource[]): { added: number; skipped: number } => {
+    if (!activeProject || !canWriteActive) return { added: 0, skipped: nt.length };
+    const m = mergeImport(activeProject.tasks, activeProject.resources || [], nt, nr);
+    if (m.tasks.length) setTasks(prev => [...prev, ...m.tasks]);
+    if (m.resources.length) setResources(prev => [...prev, ...m.resources]);
+    return { added: m.tasks.length, skipped: m.skipped };
+  };
   const setNotes = makeListSetter<Note>('notes');
   const setCustomerRequests = makeListSetter<CustomerRequest>('customerRequests');
   const setObjectives = makeListSetter<Objective>('objectives');
@@ -676,7 +716,16 @@ const App: React.FC = () => {
       };
       return appendAudit(next, 'project.delete', `"${removed?.name || projectId}" projesi silindi`);
     });
-    showUndo(`"${removed?.name || 'Proje'}" silindi`, snapshot);
+    if (removed) {
+      const index = snapshot.projects.findIndex(p => p.id === projectId);
+      const wasActive = snapshot.activeProjectId === projectId;
+      showUndo(`"${removed.name}" silindi`, ws => {
+        if (ws.projects.some(p => p.id === projectId)) return ws;
+        const projects = [...ws.projects];
+        projects.splice(Math.min(index, projects.length), 0, removed);
+        return appendAudit({ ...ws, projects, activeProjectId: wasActive ? projectId : ws.activeProjectId }, 'project.delete', `"${removed.name}" projesinin silinmesi geri alındı`);
+      });
+    }
   }, [updateWorkspace, showUndo]);
 
   const handleRenameProject = useCallback((projectId: string, name: string) => {
@@ -1701,9 +1750,18 @@ const App: React.FC = () => {
     const deleteTask = (taskId: string) => {
       const target = tasks.find(t => t.id === taskId);
       if (!target || !confirmDestructive(`"${target.name}" görevi silinecek. Emin misiniz?`)) return;
-      const snapshot = workspaceRef.current;
+      const projectId = activeProject.id;
+      const index = tasks.findIndex(t => t.id === taskId);
       setTasks(prev => prev.filter(t => t.id !== taskId));
-      if (snapshot) showUndo(`"${target.name}" silindi`, snapshot);
+      showUndo(`"${target.name}" silindi`, ws => ({
+        ...ws,
+        projects: ws.projects.map(p => {
+          if (p.id !== projectId || p.tasks.some(t => t.id === taskId)) return p;
+          const list = [...p.tasks];
+          list.splice(Math.min(index, list.length), 0, target);
+          return { ...p, tasks: list, updatedAt: new Date().toISOString() };
+        }),
+      }));
     };
     const notifyTask = (t: Task) => { setTeamsTask(t); setIsTeamsModalOpen(true); };
     const newTask = () => { if (canWriteActive) { setEditingTask(null); setIsFormModalOpen(true); } };
@@ -1881,7 +1939,7 @@ const App: React.FC = () => {
           onEditTask={editTask}
           onDeleteTask={deleteTask}
           onNotifyTask={notifyTask}
-          onDataImport={(nt: Task[], nr: Resource[]) => { setTasks(prev => [...prev, ...nt]); setResources(prev => [...prev, ...nr]); }}
+          onDataImport={handleDataImport}
           onCelebrate={celebrate}
           readOnly={!canWriteActive}
           minPriority={roleView.minTaskPriority}
@@ -1899,7 +1957,7 @@ const App: React.FC = () => {
             onEditTask={(t) => { setEditingTask(t); setIsFormModalOpen(true); }} onViewTask={(t) => { setViewingTask(t); setIsDetailModalOpen(true); }}
             onNotifyTask={(t) => { setTeamsTask(t); setIsTeamsModalOpen(true); }} onNewTask={canWriteActive ? () => { setEditingTask(null); setIsFormModalOpen(true); } : undefined}
             onDeleteTask={deleteTask}
-            onDataImport={(nt, nr) => { setTasks(prev => [...prev, ...nt]); setResources(prev => [...prev, ...nr]); }}
+            onDataImport={handleDataImport}
             onTaskStatusChange={(id, s) => setTasks(prev => prev.map(t => t.id === id ? { ...t, status: s } : t))}
           />
         );
@@ -2010,7 +2068,9 @@ const App: React.FC = () => {
     } catch (e) {
       return { ok: false, message: (e as Error).message || 'Uygulanamadı.' };
     }
-    showUndo(`AI önerisi uygulandı: ${summary}`, current);
+    const applied = workspaceRef.current;
+    // AI önerisi birden çok yeri değiştirebilir: yalnız arada başka değişiklik yoksa geri alınır
+    showUndo(`AI önerisi uygulandı: ${summary}`, ws => (ws === applied ? current : null));
     return { ok: true, message: `${summary} (Geri almak için alttaki "Geri Al").` };
   }, [showUndo]);
 
@@ -2343,6 +2403,23 @@ const App: React.FC = () => {
           <i className="fa-solid fa-triangle-exclamation mt-0.5" aria-hidden="true"></i>
           <span className="text-sm flex-1">Tarayıcı depolaması dolu: son değişiklikler bu tarayıcıya kaydedilemedi. Sayfayı kapatmadan önce bulut eşitlemesini kullanın ya da "Yedeği indir" ile yedek alın.</span>
           <button type="button" onClick={() => setStorageWarnClosed(true)} className="opacity-70 hover:opacity-100" aria-label="Uyarıyı kapat"><i aria-hidden="true" className="fa-solid fa-xmark text-sm"></i></button>
+        </div>
+      )}
+      {damagedProjects.length > 0 && (
+        <div role="alert" className="fixed top-3 left-1/2 -translate-x-1/2 z-[260] w-[min(640px,calc(100vw-32px))] flex items-start gap-3 bg-amber-50 dark:bg-amber-950 text-amber-900 dark:text-amber-100 border border-amber-300 dark:border-amber-800 rounded-xl shadow-2xl px-4 py-3">
+          <i className="fa-solid fa-triangle-exclamation mt-0.5" aria-hidden="true"></i>
+          <span className="text-sm flex-1">
+            {damagedProjects.length === 1 ? `"${damagedProjects[0].name}" projesinin kaydı okunamadı` : `${damagedProjects.length} projenin kaydı okunamadı (${damagedProjects.map(d => d.name).join(', ')})`}; açılmadı. Kayıt silinmedi, bu tarayıcıda olduğu gibi duruyor. Ham veriyi indirip destek ekibine iletebilirsiniz.
+          </span>
+          <button type="button" onClick={handleDownloadRawStore} className="text-sm font-semibold underline underline-offset-2 whitespace-nowrap">Ham veriyi indir</button>
+          <button type="button" onClick={() => setDamagedProjects([])} className="opacity-70 hover:opacity-100" aria-label="Uyarıyı kapat"><i aria-hidden="true" className="fa-solid fa-xmark text-sm"></i></button>
+        </div>
+      )}
+      {isInitialized && settings && settings.isLocalPersistenceEnabled === false && (
+        <div role="status" className="fixed bottom-3 left-3 z-[240] max-w-[min(420px,calc(100vw-24px))] flex items-start gap-3 bg-amber-50 dark:bg-amber-950 text-amber-900 dark:text-amber-100 border border-amber-300 dark:border-amber-800 rounded-xl shadow-xl px-4 py-3">
+          <i className="fa-solid fa-floppy-disk mt-0.5" aria-hidden="true"></i>
+          <span className="text-sm flex-1">Yerel kayıt kapalı: değişiklikler bu tarayıcıya kaydedilmiyor. Sayfa yenilenince son kaydedilen hâl açılır.</span>
+          <button type="button" onClick={() => updateWorkspace(ws => ({ ...ws, settings: { ...ws.settings, isLocalPersistenceEnabled: true } }))} className="text-sm font-semibold underline underline-offset-2 whitespace-nowrap">Kaydı aç</button>
         </div>
       )}
       <div role="status" aria-live="polite" className="sr-only">{liveText}</div>

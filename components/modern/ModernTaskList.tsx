@@ -7,6 +7,7 @@ import { ViewFilterNote } from './ui';
 import TaskActionsMenu from './TaskActionsMenu';
 import { MIN_PRIORITY_OPTIONS, taskComparator, TaskPriority, taskPassesView } from '../../utils/viewConfig';
 import { BoardColumn, celebrationFor, COLUMN_META, columnOf, daysLate, initialsOf, missingEstimate, PRIORITY_META, shortDate, sprintLabel, uniq } from './taskMeta';
+import { importSummary } from '../../utils/importMerge';
 
 interface ModernTaskListProps {
     tasks: Task[];
@@ -17,7 +18,7 @@ interface ModernTaskListProps {
     onEditTask: (task: Task) => void;
     onDeleteTask: (id: string) => void;
     onNotifyTask?: (task: Task) => void;
-    onDataImport: (tasks: Task[], resources: Resource[]) => void;
+    onDataImport: (tasks: Task[], resources: Resource[]) => { added: number; skipped: number };
     /** Salt okunur (yetki yok): içe aktarma, durum değişikliği ve görev işlemleri gizlenir */
     readOnly?: boolean;
     onCelebrate?: (message: string) => void;
@@ -40,7 +41,7 @@ const ModernTaskList: React.FC<ModernTaskListProps> = ({ tasks, resources, sprin
     const [unit, setUnit] = useState<string>('all');
     const [ioOpen, setIoOpen] = useState(false);
     const [showDone, setShowDone] = useState(false);
-    const [notice, setNotice] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
+    const [notice, setNotice] = useState<{ kind: 'ok' | 'info' | 'error'; text: string } | null>(null);
     const [busy, setBusy] = useState(false);
     const fileRef = useRef<HTMLInputElement>(null);
     const importKind = useRef<ImportKind>('excel');
@@ -92,8 +93,8 @@ const ModernTaskList: React.FC<ModernTaskListProps> = ({ tasks, resources, sprin
                 : importKind.current === 'jira'
                     ? parseJiraCsv(await file.text())
                     : parseCustomCsv(await file.text());
-            onDataImport(result.tasks, result.resources);
-            setNotice({ kind: 'ok', text: `${result.tasks.length} görev içe aktarıldı.` });
+            const r = onDataImport(result.tasks, result.resources);
+            setNotice({ kind: r.added ? 'ok' : 'info', text: importSummary(r.added, r.skipped) });
         } catch (e) {
             setNotice({ kind: 'error', text: e instanceof Error ? e.message : 'Dosya okunamadı.' });
         } finally {
@@ -168,8 +169,8 @@ const ModernTaskList: React.FC<ModernTaskListProps> = ({ tasks, resources, sprin
             </div>
 
             {notice && (
-                <div role={notice.kind === 'error' ? 'alert' : 'status'} className={`rounded-2xl px-4 py-3 flex items-center gap-3 text-[15px] ${notice.kind === 'error' ? 'm-tone-bad' : 'm-tone-ok'}`}>
-                    <Icon name={notice.kind === 'error' ? 'alert' : 'check'} size={18} strokeWidth={2} />
+                <div role={notice.kind === 'error' ? 'alert' : 'status'} className={`rounded-2xl px-4 py-3 flex items-center gap-3 text-[15px] ${notice.kind === 'error' ? 'm-tone-bad' : notice.kind === 'info' ? 'm-tone-hold' : 'm-tone-ok'}`}>
+                    <Icon name={notice.kind === 'ok' ? 'check' : 'alert'} size={18} strokeWidth={2} />
                     <span className="flex-1">{notice.kind === 'error' ? `İçe aktarılamadı: ${notice.text}` : notice.text}</span>
                     <button type="button" className="m-icon-btn" aria-label="Kapat" onClick={() => setNotice(null)}><Icon name="x" size={18} /></button>
                 </div>

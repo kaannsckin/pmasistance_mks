@@ -228,7 +228,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-100 dark:border-gray-700">
                 <div className="flex flex-col">
                     <span className="text-sm font-bold text-gray-800 dark:text-white">Yerel Kayıt</span>
-                    <span className="text-[10px] text-gray-500 dark:text-gray-400">Verileri tarayıcıda sakla.</span>
+                    <span className="text-[10px] text-gray-500 dark:text-gray-400">Değişiklikleri bu tarayıcıya kaydet. Kapalıyken yeni değişiklikler kaydedilmez; kayıtlı veriler silinmez.</span>
                 </div>
                 <button
                   type="button"

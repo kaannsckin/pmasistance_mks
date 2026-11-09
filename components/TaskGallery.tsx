@@ -6,6 +6,7 @@ import FilterDropdown from './FilterDropdown';
 import { parseImportedFile, parseJiraCsv, parseCustomCsv } from '../utils/importer';
 import { exportToExcel, exportToJiraCsv, exportToMsProjectCsv } from '../utils/exporter';
 import { STATUS_LABELS } from '../constants';
+import { importSummary } from '../utils/importMerge';
 
 interface TaskGalleryProps {
   tasks: Task[];
@@ -16,7 +17,7 @@ interface TaskGalleryProps {
   /** Yoksa (yazma yetkisi yok) ekleme ve içe aktarma düğmeleri gösterilmez */
   onNewTask?: () => void;
   onDeleteTask: (taskId: string) => void;
-  onDataImport: (tasks: Task[], resources: Resource[]) => void;
+  onDataImport: (tasks: Task[], resources: Resource[]) => { added: number; skipped: number };
   onTaskStatusChange: (taskId: string, newStatus: TaskStatus) => void;
 }
 
@@ -83,7 +84,8 @@ const TaskGallery: React.FC<TaskGalleryProps> = ({ tasks, resources, onEditTask,
     setImportError(null);
     try {
       const { tasks: newTasks, resources: newResources } = await parseImportedFile(file);
-      onDataImport(newTasks, newResources);
+      const r = onDataImport(newTasks, newResources);
+      alert(importSummary(r.added, r.skipped));
     } catch (error) {
         if (error instanceof Error) {
             setImportError(error.message);
@@ -108,7 +110,8 @@ const TaskGallery: React.FC<TaskGalleryProps> = ({ tasks, resources, onEditTask,
     try {
       const fileContent = await file.text();
       const { tasks: newTasks, resources: newResources } = parseJiraCsv(fileContent);
-      onDataImport(newTasks, newResources);
+      const r = onDataImport(newTasks, newResources);
+      alert(importSummary(r.added, r.skipped));
     } catch (error) {
         if (error instanceof Error) {
             setImportError(error.message);
@@ -132,8 +135,8 @@ const TaskGallery: React.FC<TaskGalleryProps> = ({ tasks, resources, onEditTask,
     try {
       const fileContent = await file.text();
       const { tasks: newTasks, resources: newResources } = parseCustomCsv(fileContent);
-      onDataImport(newTasks, newResources);
-      alert(`${newTasks.length} görev başarıyla aktarıldı.`);
+      const r = onDataImport(newTasks, newResources);
+      alert(importSummary(r.added, r.skipped));
     } catch (error) {
         if (error instanceof Error) {
             setImportError(error.message);
