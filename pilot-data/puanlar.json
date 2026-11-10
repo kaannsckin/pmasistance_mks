@@ -158,5 +158,85 @@
       "eksi": 0
     },
     "gerekce": "ön puan: üç beklentiyi oner_beklenti_yanitla ile uygulamaya yazdı (BL-30), rakamları araçtan aldı (kapasite_talep 1,39 AA yeniden üretildi); demo yoklaması 1/1/2 çağrı ve tutarlı."
+  },
+  {
+    "tarih": "2026-11-10",
+    "persona": "elif",
+    "puan": 83,
+    "kaynak": "koordinator",
+    "kirilim": {
+      "tutarlilik": 28,
+      "dongu": 18,
+      "rapor": 14,
+      "gerekce": 13,
+      "iletisim": 7,
+      "bulgu": 3,
+      "eksi": 0
+    },
+    "gerekce": "ön puan: Jira aktarımı olaylarla tuttu, ATL-146 riski izlemeye alındı, 2 Jira dışı görev ve not uygulamada; kilit sorununu rakamla yönetime taşıdı. Bugün rapor yok (nötr); 9 Kasım KLK/Can görüşmesi sözü kaçtı."
+  },
+  {
+    "tarih": "2026-11-10",
+    "persona": "burak",
+    "puan": 81,
+    "kaynak": "koordinator",
+    "kirilim": {
+      "tutarlilik": 25,
+      "dongu": 18,
+      "rapor": 17,
+      "gerekce": 13,
+      "iletisim": 6,
+      "bulgu": 2,
+      "eksi": 0
+    },
+    "gerekce": "ön puan: NHR iadesini gönderim anında araçtan okuyarak eksiksiz karşıladı (Selin ve Mert onayladı). PSL geciken 5→14 olduğu halde RAG/risk güncellenmedi; beklenti metnindeki eski rakam düzeltilemedi; 6 Kasım toparlanma planı sözü kaçtı. \"Yüksek\" bulgu abartılı."
+  },
+  {
+    "tarih": "2026-11-10",
+    "persona": "selin",
+    "puan": 93,
+    "kaynak": "koordinator",
+    "kirilim": {
+      "tutarlilik": 30,
+      "dongu": 18,
+      "rapor": 19,
+      "gerekce": 14,
+      "iletisim": 9,
+      "bulgu": 3,
+      "eksi": 0
+    },
+    "gerekce": "ön puan: NHR yeniden gönderimini iade notunun maddeleriyle araçta karşılaştırıp onayladı; ATL kilidi için ikinci, farklı (uygulama adımı) beklenti açtı; rakamlar araçtan."
+  },
+  {
+    "tarih": "2026-11-10",
+    "persona": "mert",
+    "puan": 76,
+    "kaynak": "koordinator",
+    "kirilim": {
+      "tutarlilik": 26,
+      "dongu": 18,
+      "rapor": 11,
+      "gerekce": 9,
+      "iletisim": 9,
+      "bulgu": 3,
+      "eksi": 0
+    },
+    "gerekce": "ön puan: NHR ve KLK onayı, H45 yayını, rolsüz tahsis satırının bildirilmesi isabetli; KLK'da bs_approve eksikliğini yakaladı ama onayladı. ATL ve PSL'yi 5 Kasım tarihli rapor rakamları canlı EVM ile farklı diye iade etmesi hatalı gerekçe (B-029) ve yayını eksik bıraktı."
+  },
+  {
+    "tarih": "2026-11-10",
+    "persona": "ahmet",
+    "puan": 91,
+    "kaynak": "koordinator",
+    "kirilim": {
+      "tutarlilik": 29,
+      "dongu": 18,
+      "rapor": 18,
+      "gerekce": 14,
+      "iletisim": 9,
+      "bulgu": 3,
+      "eksi": 0
+    },
+    "gerekce": "ön puan: iki beklentiyi güncel rakamlarla uygulamaya yazdı, kilit için \"karsilandi\" yerine doğru olarak \"inceleniyor\" dedi; portföy metni tutarsızlığını yakaladı (yeniden üretildi); demo yoklaması 1/1/1 çağrı, tutarlı."
   }
 ]

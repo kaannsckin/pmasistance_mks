@@ -1,12 +1,13 @@
-# Ajanda — Ahmet (son güncelleme 2026-11-05)
+# Ajanda — Ahmet (son güncelleme 2026-11-10)
 
 | Madde | Kime | Termin | Durum |
 |---|---|---|---|
-| Selin'den Can Erdem 0,2 AA onayı (U310 itirazsız, U340 sorumlusu onayı bekleniyor) | selin | 2026-11-09 | acik |
-| NHR toparlanma planı: Ozan efor güncellemesi 6 Kasım, kesin tarihler, yük testi 20 Kasım teyidi | burak | 2026-11-06 | acik |
-| PSL açıklaması alındı; Barış Güneş nedenleri 7 Kasım, ardından PSL 2026 planı onay kararı | burak | 2026-11-07 | acik |
-| ATL-130/129 açıklaması alındı; ATL-134 tarihi 6 Kasım, ATL-129 etkisi 9 Kasım | elif | 2026-11-09 | acik |
-| NHR ek bütçe ve sürüm tarihi/kapsam kararı (beklenti inceleniyor) | burak | 2026-11-12 | acik |
-| Mert maliyetlenemeyen kişi/ünvan kararı | mert | 2026-11-10 | acik |
-| 2026-H45 yayınında NHR ve PSL raporlarında rakam, kayıt no, tarih ara; ATL raporunda ATL-130'u ara | burak, elif | 2026-11-10 | acik |
-| KLK bölüm sorumlusu onayının ayrı kişiden geçmesini Selin'e hatırlat | selin | 2026-11-10 | acik |
+| Selin'den Can Erdem 0,2 AA onayı (Elif: 11 Kasım'da sonuç gelecek) | elif | 2026-11-11 | ertelendi |
+| NHR toparlanma planı + Ozan efor + yük testi teyidi + Onur Çelik raporu tek mesaj | burak | 2026-11-11 | ertelendi |
+| PSL: Barış Güneş nedenleri, sonra PSL 2026 plan onayı | burak | 2026-11-12 | ertelendi |
+| ATL-129 yeni tarihi (Merve) ve ATL-129 etkisi | elif | 2026-11-11 | ertelendi |
+| NHR ek bütçe ve sürüm tarihi/kapsam kararı (rakamlar güncel: EAC 6.457.569, VAC -836.919) | burak | 2026-11-12 | acik |
+| ATL plan kilidi: Selin iade akışı, ardından ATL planı yeniden onayı (Ahmet) | selin | 2026-11-11 | acik |
+| Mert maliyetlenemeyen kişi/ünvan kararı (yeni termin) | mert | 2026-11-12 | ertelendi |
+| H45 yayını NHR ve KLK raporları kontrol edildi; PSL ve ATL yayında değil, iade sonrası rapor bekleniyor | burak, elif | 2026-11-10 | tamam |
+| KLK bölüm sorumlusu onayının ayrı kişiden geçtiğinin teyidi | selin | 2026-11-11 | ertelendi |

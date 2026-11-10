@@ -1,0 +1,48 @@
+{
+"persona": "ahmet", "kosu": "2026-11-10 Salı",
+"yapilanlar": [
+{"is": "Portföy, EVM, kapasite-talep ve açık beklenti taraması", "araclar": ["portfoy_ozeti","kapasite_talep","evm_analizi","beklentiler"], "sonuc": "Portföy sağlığı 66; NHR Kritik (skor 32), PSL Riskli (53). Portföy EVM SPI 0,97 / CPI 0,98, VAC -472.805 TL. Kapasite açığı 1,39 AA (3 rol). 2 açık beklenti (ATL plan kilidi, NHR ek bütçe)."},
+{"is": "NHR ek bütçe/sürüm beklentisine güncel rakamlı yanıt", "araclar": ["oner_beklenti_yanitla"], "sonuc": "İnceleniyor; karar 12 Kasım. Eski rakamlar geçersiz ilan edildi; güncel: BAC 5.620.650, EAC 6.457.569, VAC -836.919, SPI 0,86, CPI 0,87. Burak'tan 11 Kasım akşamı tek mesaj istendi."},
+{"is": "ATL plan kilidi beklentisine (exp-mwaa13ot-5w9gpe) karar", "araclar": ["oner_beklenti_yanitla"], "sonuc": "İnceleniyor (kilit açılmadan karsilandi yapılamaz). Kasım: Onur 0,42 / Selin 0,3 / Emre 0,1; Aralık: Onur 0,74, Selin +0,06 AA onaylandı. Selin kilit akışını 11 Kasım'a kadar başlatacak; 11 Kasım'da kilit açık değilse kritik."},
+{"is": "H45 yayınlanan raporların okunması", "araclar": ["haftalik_rapor"], "sonuc": "NHR ve KLK yayında (Onaylandı). NHR EVM evm_analizi ile birebir tutarlı; KLK tutarlı. PSL ve ATL H45 raporları yayında değil (Mert iade etmişti)."}
+],
+"degisiklikler": [
+{"arac": "oner_beklenti_yanitla", "ozet": "NHR beklentisi: inceleniyor, güncel EVM rakamları ve 12 Kasım karar tarihi", "tetikleyici": "Burak ve Selin 10 Kasım mesajları (beklentideki BAC/EAC/VAC eski); evm_analizi", "gerekce": "12 Kasım ek bütçe kararı yanlış rakama dayanmasın", "uygulandi": true},
+{"arac": "oner_beklenti_yanitla", "ozet": "ATL plan kilidi: dağıtım kararı onaylandı, kilit açma adımı ve 11 Kasım termini", "tetikleyici": "Selin'in 10 Kasım yeni beklentisi; Onur Kasım yük 1,2 / kapasite 0,42", "gerekce": "Aşım 0,78 AA sürüyor; karar yazıldı ama kilit açılana kadar kapanmaz", "uygulandi": true}
+],
+"haftalik_rapor": [
+{"proje": "NEHİR Veri Platformu", "hafta": "2026-H45", "gonderildi": true, "duzeltmeler": [], "dayanaksiz_uyarisi": [], "py_puani": 5, "rag": "Kritik", "rag_gerekcesi": "Rapor EVM'i araçla tutarlı; 18 geciken görev, SPI 0,86, CPI 0,87"},
+{"proje": "KALKAN Siber İzleme", "hafta": "2026-H45", "gonderildi": true, "duzeltmeler": [], "dayanaksiz_uyarisi": [], "py_puani": 7, "rag": "Yolunda", "rag_gerekcesi": "SPI/CPI 1,12; 1 geciken görev"}
+],
+"rapor_kararlari": [], "bulgular": [],
+"yanitlar": [
+{"kime": "elif", "mesaj_tarihi": "2026-11-10", "metin": "Elif, ATL için kararım: Kasım Onur 0,42 / Selin 0,3 / Emre 0,1; Aralık Onur 0,74 ve Selin +0,06 AA onaylı, Selin onayını 11 Kasım'a kadar al. 9 Kasım sözünü kaçırdın: 11 Kasım'da Can Erdem 0,2 AA sonucunu, ATL-129 yeni tarihini (Merve) ve Selin onayını tek mesajla yaz. ATL-134 (24 sa / tahmin 11 sa) not edildi."},
+{"kime": "burak", "mesaj_tarihi": "2026-11-10", "metin": "Burak, NHR beklentisine güncel rakamlarla (BAC 5.620.650, EAC 6.457.569, VAC -836.919, SPI 0,86, CPI 0,87) yanıt yazdım. 11 Kasım akşamı tek mesajda: Ozan efor güncellemesi, NHR-114 kök neden planı, 20 Kasım yük testi teyidi, Onur Çelik ölçüm raporu, NHR-92 yeni tarihi ve 18/29 gecikmiş görevin yeni tarihleri. Karar 12 Kasım. PSL: Barış'ın nedenlerini 11 Kasım'da gönder; ardından PSL 2026 plan onayına bakarım."},
+{"kime": "selin", "mesaj_tarihi": "2026-11-10", "metin": "Selin, NHR beklentisi düzeltildi (EAC 6.457.569, VAC -836.919). ATL kilidi: dağıtım kararı onaylı; plan onayını geri çekme/iade akışını 11 Kasım'a kadar başlat, Mert denetiminden sonra yeniden onaylarım. KLK bölüm sorumlusu onayı için ayrı kişi şartını hatırlatırım."}
+],
+"mesajlar": [
+{"kime": "selin", "metin": "KLK bölüm sorumlusu onayının ayrı bir kişiden geçmesi gerekir; H45 KLK'da kimin onayladığını 11 Kasım'a kadar yaz."},
+{"kime": "mert", "metin": "Mert, maliyetlenemeyen kişi/ünvan kararı bugün vadeliydi: kapasite_talep 0,4 AA'lık satırın rolsüz (U340) olduğunu gösteriyor; kişi/ünvanı 12 Kasım'a kadar yazın, işe alım değerlendirmesi buna bağlı. PSL ve ATL H45 raporları iade sonrası yeniden gelince bana durumu bildir."}
+],
+"ajanda": [
+{"madde": "Selin'den Can Erdem 0,2 AA onayı (Elif: 11 Kasım'da sonuç gelecek)", "kime": "elif", "termin": "2026-11-11", "durum": "ertelendi"},
+{"madde": "NHR toparlanma planı + Ozan efor + yük testi teyidi + Onur Çelik raporu tek mesaj", "kime": "burak", "termin": "2026-11-11", "durum": "ertelendi"},
+{"madde": "PSL: Barış Güneş nedenleri, sonra PSL 2026 plan onayı", "kime": "burak", "termin": "2026-11-12", "durum": "ertelendi"},
+{"madde": "ATL-129 yeni tarihi (Merve) ve ATL-129 etkisi", "kime": "elif", "termin": "2026-11-11", "durum": "ertelendi"},
+{"madde": "NHR ek bütçe ve sürüm tarihi/kapsam kararı (rakamlar güncel: EAC 6.457.569, VAC -836.919)", "kime": "burak", "termin": "2026-11-12", "durum": "acik"},
+{"madde": "ATL plan kilidi: Selin iade akışı, ardından ATL planı yeniden onayı (Ahmet)", "kime": "selin", "termin": "2026-11-11", "durum": "acik"},
+{"madde": "Mert maliyetlenemeyen kişi/ünvan kararı (yeni termin)", "kime": "mert", "termin": "2026-11-12", "durum": "ertelendi"},
+{"madde": "H45 yayını NHR ve KLK raporları kontrol edildi; PSL ve ATL yayında değil, iade sonrası rapor bekleniyor", "kime": "burak, elif", "termin": "2026-11-10", "durum": "tamam"},
+{"madde": "KLK bölüm sorumlusu onayının ayrı kişiden geçtiğinin teyidi", "kime": "selin", "termin": "2026-11-11", "durum": "ertelendi"}
+],
+"gercek_disi": [
+{"kimin_verisi": "burak (NHR beklentisi exp-mw34r2q4-rcoqdr)", "ne": "Beklentide eski EVM: BAC 5.572.550, EAC 6.369.110, VAC -796.560", "kanit": "evm_analizi NHR: bac_butce 5620650, eac 6457569, vac -836919; yanıtta geçersiz ilan edildi"},
+{"kimin_verisi": "portfoy_ozeti (dikkat_gerektirenler)", "ne": "NHR detayı 13/27 gecikmiş diyor, aynı çıktıda skor nedeni '18 geciken görev'", "kanit": "portfoy_ozeti: 'nedenler: 18 geciken görev' ve detay '13/27 açık görev gecikmiş (%48)'"}
+],
+"demo_yoklamasi": [
+{"soru": 1, "araclar": ["portfoy_ozeti"], "cagri": 1, "tutarli": true, "yanit_ozeti": "NEHİR (Kritik, skor 32): 18 geciken görev, SPI 0,86, CPI 0,87, VAC -836.919 TL, 1 yüksek risk; sonra PUSULA (Riskli, skor 53): 14 geciken görev, 2026 plan onayım bekliyor. NHR gecikme sayısı dikkat metninde (13/27, 5 Kasım) ile skor nedeninde (18) farklı; güncel 18."},
+{"soru": 2, "araclar": ["kapasite_talep"], "cagri": 1, "tutarli": true, "yanit_ozeti": "Toplam açık 1,39 AA: U320 Test Mühendisi 0,6, U340 Veri Bilimci 0,39, U340 rolsüz satır 0,4. Açık küçük; işe alım yerine kaydırma (Can Erdem 0,2 AA, ATL'den Selin/Emre dağıtımı) yeterli."},
+{"soru": 3, "araclar": ["evm_analizi"], "cagri": 1, "tutarli": true, "yanit_ozeti": "En riskli NHR: EAC 6.457.569, VAC -836.919 TL, SPI 0,86, CPI 0,87. Toparlanma planı Burak'ta 11 Kasım'da gelecek; karar 12 Kasım; yük testi 20 Kasım. Kesin toparlanma tarihi plan gelmeden belirsiz."}
+],
+"arac_cagrisi": 10, "memnuniyet": 7, "gunun_notu": "Kararlar uygulamaya yazıldı ama ATL kilidi ile NHR toparlanma planı hâlâ 11 Kasım'a bağlı."
+}

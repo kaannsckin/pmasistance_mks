@@ -1,0 +1,232 @@
+{
+  "tarih": "2026-11-10T06:03:19.992Z",
+  "sonuc": "GEÇTİ",
+  "adim": 28,
+  "kalan": 0,
+  "dis_kaynak_hatasi": [
+    "cdn-icons-png.flaticon.com"
+  ],
+  "beklenen": {
+    "saglik_skoru": 66,
+    "projeler": [
+      {
+        "proje": "NEHİR Veri Platformu",
+        "skor": 32
+      },
+      {
+        "proje": "PUSULA Saha Mobil Uygulaması",
+        "skor": 53
+      },
+      {
+        "proje": "ATLAS Karar Destek Sistemi",
+        "skor": 70
+      },
+      {
+        "proje": "KALKAN Siber İzleme",
+        "skor": 75
+      },
+      {
+        "proje": "Gib",
+        "skor": 100
+      }
+    ]
+  },
+  "adimlar": [
+    {
+      "arayuz": "klasik",
+      "persona": "ahmet",
+      "adim": "Yönetim",
+      "durum": "GEÇTİ",
+      "notlar": []
+    },
+    {
+      "arayuz": "klasik",
+      "persona": "ahmet",
+      "adim": "Portföy",
+      "durum": "GEÇTİ",
+      "notlar": []
+    },
+    {
+      "arayuz": "klasik",
+      "persona": "ahmet",
+      "adim": "Tahsis › Kapasite-Talep",
+      "durum": "GEÇTİ",
+      "notlar": []
+    },
+    {
+      "arayuz": "klasik",
+      "persona": "ahmet",
+      "adim": "Riskler",
+      "durum": "GEÇTİ",
+      "notlar": []
+    },
+    {
+      "arayuz": "klasik",
+      "persona": "ahmet",
+      "adim": "Haftalık Rapor",
+      "durum": "GEÇTİ",
+      "notlar": []
+    },
+    {
+      "arayuz": "klasik",
+      "persona": "burak",
+      "adim": "NEHİR Veri Platformu › Pano",
+      "durum": "GEÇTİ",
+      "notlar": []
+    },
+    {
+      "arayuz": "klasik",
+      "persona": "burak",
+      "adim": "NEHİR Veri Platformu › Görevler",
+      "durum": "GEÇTİ",
+      "notlar": []
+    },
+    {
+      "arayuz": "klasik",
+      "persona": "burak",
+      "adim": "NEHİR Veri Platformu › Riskler",
+      "durum": "GEÇTİ",
+      "notlar": []
+    },
+    {
+      "arayuz": "klasik",
+      "persona": "burak",
+      "adim": "NEHİR Veri Platformu › Durum Raporu",
+      "durum": "GEÇTİ",
+      "notlar": []
+    },
+    {
+      "arayuz": "klasik",
+      "persona": "burak",
+      "adim": "Haftalık Rapor",
+      "durum": "GEÇTİ",
+      "notlar": []
+    },
+    {
+      "arayuz": "klasik",
+      "persona": "selin",
+      "adim": "Haftalık Rapor",
+      "durum": "GEÇTİ",
+      "notlar": []
+    },
+    {
+      "arayuz": "klasik",
+      "persona": "selin",
+      "adim": "Tahsis › Kapasite-Talep",
+      "durum": "GEÇTİ",
+      "notlar": []
+    },
+    {
+      "arayuz": "klasik",
+      "persona": "mert",
+      "adim": "Tahsis › Karşılaştır",
+      "durum": "GEÇTİ",
+      "notlar": []
+    },
+    {
+      "arayuz": "klasik",
+      "persona": "mert",
+      "adim": "Haftalık Rapor",
+      "durum": "GEÇTİ",
+      "notlar": []
+    },
+    {
+      "arayuz": "modern",
+      "persona": "ahmet",
+      "adim": "Yönetim",
+      "durum": "GEÇTİ",
+      "notlar": []
+    },
+    {
+      "arayuz": "modern",
+      "persona": "ahmet",
+      "adim": "Portföy",
+      "durum": "GEÇTİ",
+      "notlar": []
+    },
+    {
+      "arayuz": "modern",
+      "persona": "ahmet",
+      "adim": "Tahsis › Kapasite-Talep",
+      "durum": "GEÇTİ",
+      "notlar": []
+    },
+    {
+      "arayuz": "modern",
+      "persona": "ahmet",
+      "adim": "Riskler",
+      "durum": "GEÇTİ",
+      "notlar": []
+    },
+    {
+      "arayuz": "modern",
+      "persona": "ahmet",
+      "adim": "Haftalık Rapor",
+      "durum": "GEÇTİ",
+      "notlar": []
+    },
+    {
+      "arayuz": "modern",
+      "persona": "burak",
+      "adim": "NEHİR Veri Platformu › Pano",
+      "durum": "GEÇTİ",
+      "notlar": []
+    },
+    {
+      "arayuz": "modern",
+      "persona": "burak",
+      "adim": "NEHİR Veri Platformu › Görevler",
+      "durum": "GEÇTİ",
+      "notlar": []
+    },
+    {
+      "arayuz": "modern",
+      "persona": "burak",
+      "adim": "NEHİR Veri Platformu › Riskler",
+      "durum": "GEÇTİ",
+      "notlar": []
+    },
+    {
+      "arayuz": "modern",
+      "persona": "burak",
+      "adim": "NEHİR Veri Platformu › Durum Raporu",
+      "durum": "GEÇTİ",
+      "notlar": []
+    },
+    {
+      "arayuz": "modern",
+      "persona": "burak",
+      "adim": "Haftalık Rapor",
+      "durum": "GEÇTİ",
+      "notlar": []
+    },
+    {
+      "arayuz": "modern",
+      "persona": "selin",
+      "adim": "Haftalık Rapor",
+      "durum": "GEÇTİ",
+      "notlar": []
+    },
+    {
+      "arayuz": "modern",
+      "persona": "selin",
+      "adim": "Tahsis › Kapasite-Talep",
+      "durum": "GEÇTİ",
+      "notlar": []
+    },
+    {
+      "arayuz": "modern",
+      "persona": "mert",
+      "adim": "Tahsis › Karşılaştır",
+      "durum": "GEÇTİ",
+      "notlar": []
+    },
+    {
+      "arayuz": "modern",
+      "persona": "mert",
+      "adim": "Haftalık Rapor",
+      "durum": "GEÇTİ",
+      "notlar": []
+    }
+  ]
+}

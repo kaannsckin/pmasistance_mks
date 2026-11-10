@@ -1,18 +1,19 @@
-# Ajanda — Elif (son güncelleme 2026-11-05)
+# Ajanda — Elif (son güncelleme 2026-11-10)
 
 | Madde | Kime | Termin | Durum |
 |---|---|---|---|
-| Selin'den Onur Çelik Kasım kapasite aşımı talebine yanıt al | selin | 2026-11-05 | tamam |
-| Selin'e söz: H45 raporuna kaynak durumunu yansıt | selin | 2026-11-05 | tamam |
-| 2026-H45 haftalık raporunu yaz ve bölüm sorumlusuna gönder | elif | 2026-11-05 | tamam |
-| Test senaryolarını güncelle (ATL görevi, 4 Kasım termini kaçtı) | elif | 2026-11-06 | ertelendi |
-| ATL-104 sapma nedenlerini Cem Bulut'tan teyit et (3 Kasım sözü yanıtsız) | Cem Bulut | 2026-11-05 | acik |
-| ATL-130 performans ölçüm raporu paylaşılacak; rapora göre risk ve tahmin güncellenecek | Onur Çelik | 2026-11-06 | ertelendi |
-| ATL-134 yeni bitiş tarihi, kapanmadıysa risk değerlendirmesi | Merve Aslan | 2026-11-06 | ertelendi |
-| ATL-146 kök neden ve düzeltme planı | Cem Bulut | 2026-11-05 | acik |
-| Hedef: ATL-129 test ortamı; ATL-130 rapor sonrası kapsam kararı; haftalık kapanış 5'in üstünde (bu hafta 8) | elif | 2026-11-09 | acik |
-| Kabul testi tahmin kılavuzu taslağı Elif'e iletilecek | Merve Aslan | 2026-11-10 | acik |
-| KLK Kasım payı en az 0,2 AA çekilmesi görüşmesi (Onur Çelik aşımı) | can | 2026-11-06 | acik |
-| Onur Çelik yeniden dağıtım beklentisinin yönetim yanıtını takip et; karar çıkınca Selin 0,3 + Emre 0,1 tahsisi yazılacak | yonetim | 2026-11-09 | acik |
-| ATL-129 sonrası sürüm tarihi etkisini Ahmet'e yaz | ahmet | 2026-11-09 | acik |
-| ATL-146 plan sonrası v1.15 tarihi etkisini değerlendir | elif | 2026-11-06 | acik |
+| Selin'den Onur Çelik kilit açılışı ve tahsis (Onur 0,8→0,42; Selin 0,3 + Emre 0,1) netleşmesi | selin | 2026-11-11 | acik |
+| Kilit açılınca tahsisi yaz ve kişi profilinden yeniden oku | elif | 2026-11-12 | acik |
+| KLK'dan en az 0,2 AA çekme görüşmesi sonucu Ahmet'e (9 Kasım kaçtı) | can | 2026-11-11 | ertelendi |
+| Onur Aralık aşımı (0,96/0,9) için öneri | ahmet | 2026-11-11 | acik |
+| ATL-129, ATL-126, ATL-133 yeni bitiş tarihleri; ATL-129 sonrası sürüm etkisini tarih+tutarla Ahmet'e yaz | merve | 2026-11-11 | acik |
+| Kabul testi tahmin kılavuzu taslağı Elif'e | merve | 2026-11-10 | acik |
+| ATL-104 sapma nedenleri teyidi | cem | 2026-11-12 | acik |
+| ATL-130 ölçüm raporu (6 Kasım sözü kaçtı); rapora göre risk ve tahmin güncelle | onur | 2026-11-12 | ertelendi |
+| ATL-151 hata nedeni kayda yazılacak | gizem | 2026-11-10 | acik |
+| Test senaryolarını güncelle (ATL görevi, 9 Kasım aksiyonu) | elif | 2026-11-12 | acik |
+| Son dört kapanış sapma özeti ve tahmin kuralı kayda yaz | elif | 2026-11-13 | acik |
+| H46 haftalık raporunu yaz ve bölüm sorumlusuna gönder; EVM rakamlarını göndermeden araçtan yeniden oku | elif | 2026-11-12 | acik |
+| Hedef H46: ATL-129 test ortamı kapanış (en geç 11 Kasım), ATL-126 ve ATL-133 kapanış (13 Kasım), geciken ATL görevi 9'dan 3'e (13 Kasım) | elif | 2026-11-13 | acik |
+| ATL-146 riski: 2 hafta veri kaybı tekrarı yoksa kapat | elif | 2026-11-24 | acik |
+| ATL-146 sonrası v1.15 yeni özelliklerin yeniden başlama tarihi | elif | 2026-11-12 | ertelendi |
