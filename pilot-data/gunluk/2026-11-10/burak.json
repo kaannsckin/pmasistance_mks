@@ -1,0 +1,82 @@
+{
+"persona": "burak", "kosu": "2026-11-10 Salı",
+"yapilanlar": [
+{"is": "Jira güncelleme (NHR, PSL)", "araclar": ["jira_aktar","oneriyi_uygula"], "sonuc": "Olay dosyalarındaki yeni sayısı (5-9 Kasım) ile önizleme tuttu: NHR 7 (2+4+1), PSL 5 (1+2+2) yeni; ikisi uygulandı (NHR 7 yeni/93 güncel, PSL 5 yeni/100 güncel). Aktarım EVM'i değiştirdi: NHR EAC 6.369.110→6.457.569, VAC -748.460→-836.919, SPI 0,87→0,86, CPI 0,88→0,87."},
+{"is": "NHR H45 iade notunu karşılayıp raporu yeniden gönderme", "araclar": ["haftalik_rapor","evm_analizi","oner_haftalik_rapor","oneriyi_uygula"], "sonuc": "Selin'in 4 rakamı gönderim anında evm_analizi'nden yeniden okunarak yazıldı: BAC 5.620.650, VAC -836.919, SPI 0,86, CPI 0,87 (EAC 6.457.569). py_puani_notu SPI/CPI düzeltildi. Rapor 'Bölüm sorumlusunda'."},
+{"is": "Geciken NHR işleri ve riskler", "araclar": ["gorev_ara","risk_listesi","proje_detayi","tahsis_ozeti","beklentiler"], "sonuc": "NHR 18/29 açık görev gecikmiş (NHR-92 12 Ekim'den beri Devam Ediyor). Hata yükü riski güncellendi (yeni açılmadı). Aktif beklenti tek (exp-mw34r2q4-rcoqdr), yeniden açılmadı."},
+{"is": "Notlar ve Jira dışı görevler", "araclar": ["notlari_ara","oner_not_ekle","oner_gorev_ekle","oner_risk_guncelle"], "sonuc": "NHR ve PSL için karar + sorumlu/tarihli aksiyon notu; NHR için 2 Jira dışı görev (toparlanma planı 11 Kasım, değişiklik talebi 13 Kasım) ve risk aksiyon güncellemesi."},
+{"is": "Müşteri istekleri", "araclar": ["musteri_istekleri"], "sonuc": "NHR ve PSL'de New durumunda istek yok; yeni karar gerekmedi."},
+{"is": "Rol sınırı denemesi (bir kez)", "araclar": ["oner_beklenti_yanitla"], "sonuc": "Yönetim yanıt aracı çağrıldı; yalnız parametre doğrulama hatası döndü (beklenti/durum/yanit zorunlu), rol reddi görülmedi; yanıt yazılmadı."}
+],
+"degisiklikler": [
+{"arac": "jira_aktar", "ozet": "NHR Jira aktarımı: 7 yeni, 93 güncellenen", "tetikleyici": "İlk iş; 5-9 Kasım olay dosyaları NHR'de 7 yeni (NHR-110..116)", "gerekce": "Önizleme olay sayısıyla tuttu", "uygulandi": true},
+{"arac": "jira_aktar", "ozet": "PSL Jira aktarımı: 5 yeni, 100 güncellenen", "tetikleyici": "Olay dosyaları PSL'de 5 yeni (PSL-113..117)", "gerekce": "Önizleme olay sayısıyla tuttu", "uygulandi": true},
+{"arac": "oner_haftalik_rapor", "ozet": "NHR 2026-H45 raporu düzeltilip bölüm sorumlusuna yeniden gönderildi", "tetikleyici": "Selin'in 5 Kasım iade notu (BAC/VAC/SPI/CPI)", "gerekce": "Dört rakam gönderim anında evm_analizi'nden okundu", "uygulandi": true},
+{"arac": "oner_not_ekle", "ozet": "NHR günlük notu (NHR-78/NHR-114/NHR-92 kararı, aksiyonlar)", "tetikleyici": "9 Kasım NHR-ek-174, 6 Kasım NHR-ek-172, 9 Kasım NHR-168 notları", "gerekce": "Karar ve sorumlu/tarihli aksiyon kaydı", "uygulandi": true},
+{"arac": "oner_not_ekle", "ozet": "PSL günlük notu (PSL-78 yeniden açıldı, PSL-86/93 kapandı, aksiyonlar 12 Kasım)", "tetikleyici": "9 Kasım PSL-ek-175, PSL-167 ve 5 Kasım PSL-ek-171 notları", "gerekce": "Karar ve aksiyon kaydı", "uygulandi": true},
+{"arac": "oner_gorev_ekle", "ozet": "NHR: toparlanma planını Ahmet Şahin'e gönder (bitiş 11 Kasım)", "tetikleyici": "Ajanda sözü 6 Kasım kaçırıldı", "gerekce": "Jira dışı iş, izlenebilir görev", "uygulandi": true},
+{"arac": "oner_gorev_ekle", "ozet": "NHR: Kurum C kapsam dışı istek için değişiklik talebi (bitiş 13 Kasım)", "tetikleyici": "9 Kasım NHR-168 kararı", "gerekce": "Jira dışı iş", "uygulandi": true},
+{"arac": "oner_risk_guncelle", "ozet": "NHR 'Hata yükü ve yeniden açılan kayıtlar' aksiyon/gerekçe güncellendi (skor 12)", "tetikleyici": "10 Kasım: 18/29 geciken, NHR-78 33 sa/9 sa kapandı ölçümsüz, NHR-114 veri kaybı açık", "gerekce": "Aynı riski yeniden açmadan aksiyonları ve tarihleri güncel tutmak", "uygulandi": true}
+],
+"haftalik_rapor": [
+{"proje": "NHR", "hafta": "2026-H45", "gonderildi": true,
+"duzeltmeler": ["BAC 5.572.550→5.620.650 TL", "VAC -796.560→-836.919 TL (EAC 6.457.569)", "SPI 0,87→0,86", "CPI 0,88→0,87", "py_puani_notu'ndaki SPI/CPI güncellendi"],
+"dayanaksiz_uyarisi": ["Sistem rakam 25,5, 16, 172, 26,5, 41 ve EVM rakamları için 'girdide yok' uyarısı verdi; ilk beşi önceki onaylı madde metninden, EVM rakamları evm_analizi'nden, bu yüzden bırakıldı", "2 uzun cümle uyarısı kaldı"],
+"py_puani": 5, "rag": "red",
+"rag_gerekcesi": "13/27 geciken görev (5 Kasım), 7 açık hata, NHR-78 yeniden açıldı; SPI 0,86 ve CPI 0,87 (evm_analizi); bugün itibarıyla 18/29 gecikmiş."}
+],
+"rapor_kararlari": [
+{"proje": "NHR", "hafta": "2026-H45", "karar": "iade", "not": "Selin'in iade notundaki dört rakam düzeltilip rapor yeniden gönderildi; aşama 'Bölüm sorumlusunda'.", "uygulandi": true}
+],
+"bulgular": [
+{"tur": "tutarsizlik", "onem": "yuksek", "baslik": "Jira aktarımı EVM rakamlarını değiştiriyor; iade notu bayat kalıyor", "kanit": "evm_analizi NHR önce: spi 0.87, cpi 0.88, eac 6369110, vac -748460; jira_aktar --onayla sonrası: spi 0.86, cpi 0.87, eac 6457569, vac -836919", "beklenen": "Gözden geçirenle PY aynı anda aynı sayıyı görmeli veya aktarım sonrası rakam değişimi uyarılmalı", "gerceklesen": "Selin'in iade notundaki 'doğru' değerler aktarımdan sonra tutmuyor"},
+{"tur": "eksik_ozellik", "onem": "orta", "baslik": "Açık yönetim beklentisinin metni PY tarafından düzeltilemiyor", "kanit": "araclar burak listesinde beklenti güncelleme/kapatma aracı yok; beklentiler: exp-mw34r2q4-rcoqdr açıklamasında 'BAC 5.572.550 … VAC -796.560'", "beklenen": "PY kendi beklentisini düzenleyebilmeli", "gerceklesen": "Yalnız yeni beklenti açılabiliyor; düzeltme mesajla bildirildi"},
+{"tur": "kullanilabilirlik", "onem": "dusuk", "baslik": "oner_beklenti_yanitla PY listesinde yok ama çağrılabiliyor (rol reddi yerine parametre hatası)", "kanit": "arac burak oner_beklenti_yanitla '{\"id\":...}' → parametre doğrulama hatası (beklenti, durum, yanit zorunlu)", "beklenen": "Açık rol reddi", "gerceklesen": "Parametre hatası"},
+{"tur": "tutarsizlik", "onem": "dusuk", "baslik": "Açık görev/geciken sayıları kaynağa göre değişiyor", "kanit": "proje_detayi: '18/29 açık görev gecikmiş'; NHR-168 notu: 'açık kayıt 28 (10 hata)'; rapor 13/27 (5 Kasım)", "beklenen": "Aynı gün tek açık görev sayısı", "gerceklesen": "28 ile 29 arasında fark"}
+],
+"yanitlar": [
+{"kime": "selin", "mesaj_tarihi": "2026-11-05", "metin": "Selin Hanım, NHR H45'i dört rakamı gönderim anında evm_analizi'nden okuyarak düzeltip yeniden gönderdim: BAC 5.620.650, VAC -836.919, SPI 0,86, CPI 0,87 (EAC 6.457.569). SPI/CPI sizin yazdığınız 0,87/0,88 ile bir sayı farklı çünkü bugün sabah Jira aktarımını uyguladım (NHR 7 yeni, 93 güncel); aktarımdan önce araç 6.369.110/-748.460/0,87/0,88 veriyordu. RAG gerekçesine SPI 0,86 ve CPI 0,87 yazıldı. Beklenti metnini PY olarak düzenleyemiyorum; Ahmet Bey'e düzeltilmiş rakamları yazdım."},
+{"kime": "mert", "mesaj_tarihi": "2026-11-05", "metin": "Mert Bey, NHR H45 bugün Selin Hanım'a yeniden gönderildi (araçtaki güncel EVM rakamlarıyla). Plan kilidi hâlâ 'Taslak' (NHR plan 45,57 AA); Selin Hanım onayladıktan sonra kilit talebimi size yazacağım. PSL Ekim gerçekleşen 4.760.650 TL (plan 4.745.000, +15.650 TL) bilgisi için teşekkürler."},
+{"kime": "ahmet", "mesaj_tarihi": "2026-11-05", "metin": "Ahmet Bey, beklentimdeki NHR rakamı yanlıştı. Güncel evm_analizi: BAC 5.620.650 TL (ben 5.572.550 yazmıştım), EAC 6.457.569, VAC -836.919, SPI 0,86, CPI 0,87. 6 Kasım toparlanma planını kaçırdım; 11 Kasım'a görev girdim. Bekleyenler: Ozan'ın efor güncellemesi, NHR-114 kök neden planı (11 Kasım), 20 Kasım yük testi ekip teyidi ve Onur Çelik ölçüm raporu; 12 Kasım karar tarihinizi tutacak şekilde 11 Kasım akşamı hepsini tek mesajla göndereceğim. PSL: Barış'ın nedenleri 12 Kasım'da yazılacak."}
+],
+"mesajlar": [
+{"kime": "selin", "metin": "NHR H45 yeniden gönderildi: BAC 5.620.650, VAC -836.919, SPI 0,86, CPI 0,87, EAC 6.457.569 (evm_analizi, Jira aktarımı sonrası, 10 Kasım). 5 Kasım'daki 0,87/0,88 aktarım öncesi değerdi; lütfen aracı yeniden okuyup onaylayın."},
+{"kime": "ahmet", "metin": "NHR beklentisindeki rakamlar düzeltildi (BAC 5.620.650, VAC -836.919, EAC 6.457.569, SPI 0,86, CPI 0,87). Bugün itibarıyla NHR'de 29 açık görevin 18'i gecikmiş; NHR-92 12 Ekim'den beri Devam Ediyor; NHR-114 (veri kaybı) önceliklendi. Toparlanma planı 11 Kasım'da, kararınız 12 Kasım'da."},
+{"kime": "ozan", "metin": "Ozan, NHR-114 için kök neden ve düzeltme planını 11 Kasım'a kadar kayda yaz; 7 açık hata efor güncellemesi 6 Kasım'da bekleniyordu, Jira'da görmedim, bugün tamamla."},
+{"kime": "asli", "metin": "Aslı, NHR-78 33 sa/9 sa tahminle kapandı ama ölçüm raporu yok; ölçüm sonuçları 16 Kasım'a kadar kayıtta olsun. NHR-92 (12 Ekim terminini 4 hafta aştı) kabul testi için yeni tarihini bugün bana yaz."},
+{"kime": "kerem", "metin": "Kerem, PSL-78 tarama bulguları listesini 12 Kasım'a kadar kayda ekle (tahmin 4 sa, harcanan 5,5 sa)."},
+{"kime": "ece", "metin": "Ece, PSL-86 sapma nedenleri (45 sa/13 sa) ve benzer açık kayıtlar için tahmin önerini 12 Kasım'a kadar yaz; PSL-96 PDF dışa aktarım için kapsamı yazılı onaylatmadan başlama."},
+{"kime": "baris", "metin": "Barış, test senaryolarının güncellemesi 12 Kasım'da bekleniyor; PSL sürüm notları 6 Kasım'da gelmedi, 12 Kasım'a ertelendi."}
+],
+"ajanda": [
+{"madde": "Selin: Can Erdem 0,2 AA onayı", "kime": "selin", "termin": "2026-11-06", "durum": "tamam"},
+{"madde": "NHR performans ölçüm raporu (NHR-78 ölçüm sonuçları Aslı'dan bekleniyor)", "kime": "burak", "termin": "2026-11-16", "durum": "ertelendi"},
+{"madde": "NHR toparlanma planını Ahmet'e gönder (görev açıldı)", "kime": "ahmet", "termin": "2026-11-11", "durum": "ertelendi"},
+{"madde": "PSL çevrimdışı mod değerlendirmesi ve Ahmet bilgilendirme", "kime": "ahmet", "termin": "2026-11-06", "durum": "tamam"},
+{"madde": "NHR müşteri kapsam toplantısı ve değişiklik talebi (görev açıldı)", "kime": "burak", "termin": "2026-11-13", "durum": "ertelendi"},
+{"madde": "PSL-86 kapansın", "kime": "Ece Polat / Kerem Doğan", "termin": "2026-11-06", "durum": "tamam"},
+{"madde": "NHR-92 düzeltme + kabul testi (yeni tarih iste)", "kime": "Aslı Çakır", "termin": "2026-11-11", "durum": "acik"},
+{"madde": "PSL açık hata önceliklendirmesi ve saha örnekleri", "kime": "Kerem Doğan", "termin": "2026-11-12", "durum": "ertelendi"},
+{"madde": "Konum servisi tahmin gözden geçirme / PSL-86 sapma nedenleri", "kime": "Ece Polat", "termin": "2026-11-12", "durum": "ertelendi"},
+{"madde": "PSL sürüm notları", "kime": "Barış Güneş", "termin": "2026-11-12", "durum": "ertelendi"},
+{"madde": "NHR test senaryoları güncellemesi", "kime": "Ozan Kılıç", "termin": "2026-11-16", "durum": "ertelendi"},
+{"madde": "NHR-78 performans ölçümü sonuçları", "kime": "Aslı Çakır", "termin": "2026-11-16", "durum": "ertelendi"},
+{"madde": "Ozan 7 açık hata kalan efor güncellemesi (6 Kasım, Jira'da görmedim)", "kime": "Ozan Kılıç", "termin": "2026-11-10", "durum": "acik"},
+{"madde": "PSL-93 teknik borç kaydı (PSL-93 Tamamlandı)", "kime": "Barış Güneş", "termin": "2026-11-07", "durum": "tamam"},
+{"madde": "NHR beklentisine yönetim yanıtı", "kime": "ahmet", "termin": "2026-11-12", "durum": "acik"},
+{"madde": "NHR-114 kök neden ve düzeltme planı", "kime": "Ozan Kılıç", "termin": "2026-11-11", "durum": "acik"},
+{"madde": "PSL-78 tarama bulguları listesi", "kime": "Kerem Doğan", "termin": "2026-11-12", "durum": "acik"},
+{"madde": "H46 hedefi: NHR H45 raporu Selin onayından sonra plan kilidi talebi (Mert)", "kime": "mert", "termin": "2026-11-11", "durum": "acik"},
+{"madde": "H46 hedefi: NHR geciken 18 kaydın en az 12'si için yeni tarih yazılı (Ahmet'e plan)", "kime": "ahmet", "termin": "2026-11-11", "durum": "acik"},
+{"madde": "H46 hedefi: NHR geciken görev sayısı 18'den 14'ün altına", "kime": "burak", "termin": "2026-11-13", "durum": "acik"},
+{"madde": "H46 hedefi: 20 Kasım yük testi tarihini ekiple teyit et", "kime": "burak", "termin": "2026-11-12", "durum": "acik"},
+{"madde": "H46 raporları (PSL ve NHR) Perşembe yazılacak", "kime": "mert", "termin": "2026-11-12", "durum": "acik"}
+],
+"gercek_disi": [
+{"kimin_verisi": "selin (iade notu)", "ne": "Not 'EAC 6.369.110 doğru', SPI 0,87, CPI 0,88; Jira aktarımı sonrası araç 6.457.569, 0,86, 0,87", "kanit": "evm_analizi NHR yil 2026 → eac_tahmini_toplam 6457569, spi 0.86, cpi 0.87"},
+{"kimin_verisi": "burak (kendi beklentisi exp-mw34r2q4-rcoqdr)", "ne": "Metinde BAC 5.572.550, VAC -796.560; araç bac_butce 5.620.650", "kanit": "beklentiler metni ↔ evm_analizi"}
+],
+"demo_yoklamasi": [],
+"arac_cagrisi": 24, "memnuniyet": 6,
+"gunun_notu": "Jira aktarımı EVM'i değiştirince iade notundaki rakamlar bayatladı; gönderimden hemen önce araçtan okuyarak düzelttim ve sebebi Selin'e yazdım."
+}
