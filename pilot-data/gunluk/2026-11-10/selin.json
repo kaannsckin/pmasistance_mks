@@ -1,0 +1,42 @@
+{
+"persona": "selin", "kosu": "2026-11-10 Salı",
+"yapilanlar": [
+{"is": "NHR H45 yeniden gönderilen rapor denetimi", "araclar": ["haftalik_rapor", "evm_analizi"], "sonuc": "5 Kasım iade notunun 5 maddesi karşılandı. Rapor ve araç aynı: BAC 5.620.650, VAC -836.919, SPI 0,86, CPI 0,87, EAC 6.457.569. RAG gerekçesinde SPI/CPI güncel."},
+{"is": "NHR H45 onay kararı", "araclar": ["oner_rapor_karari", "oneriyi_uygula"], "sonuc": "Onaylandı, rapor PYB desteğe geçti."},
+{"is": "U310 doluluk ve karne kontrolü", "araclar": ["doluluk_analizi", "departman_karnesi", "kapasite_talep"], "sonuc": "U310 doluluk 0,90, 3 kişi aşımda. Onur Çelik yıllık 1,26, 9 ay aşım (Kasım 1,2/0,42; Aralık 0,96/0,9). Gizem Yıldız ve Emre Koç tek ay aşımda. kapasite_talep bölümde açık göstermiyor (0 AA)."},
+{"is": "ATL plan kilidi denemesi ve yönetime taşıma", "araclar": ["tahsis_ozeti", "oner_tahsis_ayarla", "beklentiler", "oner_beklenti_ac", "oneriyi_uygula"], "sonuc": "ATL planı 'Onaylı/Kilitli'. Onur Kasım 0,42 denemesi reddedildi. 5 Kasım kararı (exp-mw34nz08-c82cf0) uygulanamadığı için yeni beklenti açıldı: kilidi açacak adım, termin 11 Kasım, Aralık önerisiyle birlikte."}
+],
+"degisiklikler": [
+{"arac": "oner_rapor_karari", "ozet": "NHR 2026-H45 raporu onaylandı", "tetikleyici": "Burak'ın 10 Kasım yeniden gönderimi; 5 Kasım iade notu", "gerekce": "Dört EVM değeri araçla aynı", "uygulandi": true},
+{"arac": "oner_beklenti_ac", "ozet": "ATL plan kilidi hâlâ kapalı: 5 Kasım kararı uygulanamıyor; termin 11 Kasım, önem 'Önemli'. Aralık için Onur ATL 0,8→0,74 ve Selin +0,06 önerildi", "tetikleyici": "Elif'in 10 Kasım mesajı; oner_tahsis_ayarla ATL için 'plan değiştirilemez' dönüyor", "gerekce": "Yönetim kararı var ama kilit açılmadığı için Onur Kasım yük 1,2 / kapasite 0,42 (aşım 0,78); önceki beklenti 'Karşılandı', yeni ve farklı talep (uygulama adımı)", "uygulandi": true}
+],
+"haftalik_rapor": [],
+"rapor_kararlari": [
+{"proje": "NHR", "hafta": "2026-H45", "karar": "onay", "not": "Dört değer evm_analizi (NHR, 2026, Jira aktarımı sonrası) ile eşleşti: BAC 5.620.650, VAC -836.919, SPI 0,86, CPI 0,87 (EAC 6.457.569). RAG gerekçesinde SPI 0,86/CPI 0,87 yazılı. 5 Kasım notumdaki 0,87/0,88 aktarım öncesi değerdi. Beklenti metnindeki eski rakamlar Ahmet Bey ile teyit edilsin.", "uygulandi": true}
+],
+"bulgular": [
+{"tur": "eksik_ozellik", "onem": "yuksek", "baslik": "Yönetim plan kilidinin açılmasına karar verdi ama kararı kimin ve hangi adımla uygulayacağı belli değil", "kanit": "oner_tahsis_ayarla {kisi:Onur Çelik, proje:ATL, ay:11, aa:0.42} → 'ATLAS Karar Destek Sistemi · 2026 planı onayda/kilitli; plan değiştirilemez'; beklentiler tumu ATL → durum 'Karşılandı', yanit 'ATL plan kilidi Kasim/Aralik icin acilsin' (5 Kasım)", "beklenen": "Beklenti 'Karşılandı' olunca kilit açılır ya da kilidi açacak yetkili ve adım görünür", "gerceklesen": "5 gün sonra hâlâ 'Onaylı/Kilitli'. Kilit açma adımı için araç ve rol yok."},
+{"tur": "tutarsizlik", "onem": "orta", "baslik": "Beklenti metni PY tarafından düzenlenemiyor; yönetim yanıtı eski EVM rakamlarını taşıyor", "kanit": "beklentiler aktif → exp-mw34r2q4-rcoqdr: 'BAC 5.572.550 TL, EAC 6.369.110 TL, VAC -796.560 TL'; evm_analizi NHR → bac_butce 5.620.650, eac 6.457.569, vac -836.919", "beklenen": "Rakam düzeltilince açık beklentideki metin de güncellenir", "gerceklesen": "Beklentide aktarım öncesi rakamlar duruyor"}
+],
+"yanitlar": [
+{"kime": "elif", "mesaj_tarihi": "2026-11-10", "metin": "Elif, kilidi açma yetkisi bölüm sorumlusunda değil, oner_tahsis_ayarla ATL için hâlâ 'onayda/kilitli' diyor (Onur Kasım 0,42 denemem de reddedildi). 5 Kasım kararına (exp-mw34nz08-c82cf0) dayanarak yönetime yeni beklenti açtım: kilidi açacak adım, termin 11 Kasım. Aralık için de öneri ekledim (Onur ATL 0,8→0,74, Selin +0,06; Aralık aşımı 0,06). Kilit açılınca Kasım için Onur 0,42, Selin 0,3, Emre 0,1 yazılacak; Selin ve Emre kapasitesini ben doğrularım. KLK 0,2 AA görüşmesini 11 Kasım'da Can Erdem ile yapıp sonucu bana yaz. Kilit açılmazsa 12 Kasım'da yeniden bakarım."},
+{"kime": "burak", "mesaj_tarihi": "2026-11-10", "metin": "Burak, NHR H45'i evm_analizi ile karşılaştırdım: BAC 5.620.650, VAC -836.919, SPI 0,86, CPI 0,87, EAC 6.457.569. Hepsi aynı, rapor onaylandı. 0,87/0,88 aktarım öncesi değerdi. Yönetim beklentisindeki metin hâlâ eski (BAC 5.572.550, VAC -796.560); 12 Kasım kararı öncesi 5.620.650 / 6.457.569 üzerinden teyit edilmesi gerekiyor."}
+],
+"mesajlar": [
+{"kime": "ahmet", "metin": "Ahmet Bey, NHR beklentisi (exp-mw34r2q4-rcoqdr) hâlâ eski EVM rakamlarını taşıyor: BAC 5.572.550, EAC 6.369.110, VAC -796.560. Jira aktarımı sonrası evm_analizi: BAC 5.620.650, EAC 6.457.569, VAC -836.919, SPI 0,86, CPI 0,87. 12 Kasım ek bütçe kararı bu rakamlara göre yazılsın (EAC 88.459 TL daha yüksek). Ayrıca ATL plan kilidi için yeni beklenti açtım: 5 Kasım kararınız uygulanamıyor, Onur Kasım yük 1,2 / kapasite 0,42, termin 11 Kasım."}
+],
+"ajanda": [
+{"madde": "ATL Kasım: Onur 0,8→0,42, Selin 0,3 + Emre 0,1; kilit açılınca tahsis yazılacak (kilit beklentisi açık)", "kime": "elif", "termin": "2026-11-11", "durum": "acik"},
+{"madde": "KLK'da Onur Kasım payını 0,4'ten en az 0,2'ye çekme görüşmesi sonucu", "kime": "elif", "termin": "2026-11-11", "durum": "acik"},
+{"madde": "NHR H45 raporu onayı (BAC/VAC/SPI/CPI)", "kime": "burak", "termin": "2026-11-10", "durum": "tamam"},
+{"madde": "Onur Çelik Nisan-Ekim 1,2/0,9 yapısal aşım: kalıcı çözüm gündemi", "kime": "selin", "termin": "2026-11-17", "durum": "acik"},
+{"madde": "ATL kilit beklentisi (11 Kasım terminli) yanıtlanmazsa yönetime ek hatırlatma; Aralık Onur -0,06 / Selin +0,06 önerisi uygulaması", "kime": "selin", "termin": "2026-11-12", "durum": "acik"},
+{"madde": "NHR beklentisinde eski EVM rakamlarının güncellenip güncellenmediği (12 Kasım kararı öncesi)", "kime": "ahmet", "termin": "2026-11-12", "durum": "acik"}
+],
+"gercek_disi": [
+{"kimin_verisi": "Burak Demir / Ahmet Şahin (NHR beklenti metni exp-mw34r2q4-rcoqdr)", "ne": "Beklenti ve yönetim yanıtı aktarım öncesi EVM rakamlarını taşıyor (BAC 5.572.550, EAC 6.369.110, VAC -796.560); güncel BAC 5.620.650, EAC 6.457.569, VAC -836.919", "kanit": "beklentiler aktif çıktısı ile evm_analizi NHR çıktısı"}
+],
+"demo_yoklamasi": [],
+"arac_cagrisi": 15, "memnuniyet": 6,
+"gunun_notu": "NHR H45 dört değerle araçta eşleşti ve onaylandı; ATL kilidi yönetim kararına rağmen kapalı olduğu için yeni beklenti açıldı ve Onur aşımı sürüyor."
+}
