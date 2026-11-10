@@ -1,0 +1,56 @@
+{
+"persona": "mert", "kosu": "2026-11-10 Salı",
+"yapilanlar": [
+{"is": "H45 raporlarının aşama kontrolü", "araclar": ["haftalik_rapor"], "sonuc": "ATL, PSL ve KLK 'PYB destekte' idi. NHR 'Bölüm sorumlusunda' idi (bs_approve yoktu), onaylamadı. İkinci kontrolde Selin 05:55'te bs_approve vermişti, aşama 'PYB destekte'."},
+{"is": "ATL ve PSL EVM rakamlarını evm_analizi ile karşılaştırdı", "araclar": ["evm_analizi"], "sonuc": "Rapor rakamları araçla uyuşmuyor, ikisini iade etti."},
+{"is": "KLK, NHR ve haftanın yayını", "araclar": ["oner_rapor_karari", "oneriyi_uygula", "oner_hafta_yayinla"], "sonuc": "KLK ve NHR onaylandı. H45 yayınlandı (2 onaylı rapor; ATL ve PSL yayına girmedi)."},
+{"is": "Günlük veri kontrolleri", "araclar": ["kapasite_talep", "tahsis_ozeti", "maliyet_raporu", "beklentiler"], "sonuc": "Tahsis ile maliyet tutarlı. Plan 176,94 AA; Oca–Eki plan 18.978.500 TL, gerçekleşen 18.820.000 TL. 'Rol atanmamış' U340 satırı 0,4 AA. NHR beklentisinde eski EVM rakamları duruyor."}
+],
+"degisiklikler": [
+{"arac": "oner_rapor_karari", "ozet": "ATL H45 iade", "tetikleyici": "ATL raporu PYB destekte; EVM karşılaştırması", "gerekce": "Rapor: %89, SPI 1,05, CPI 1,07, EAC 7.702.921. Araç: %88, 1,04, 1,05, 7.790.455. 3 Kasım toplantısında zaman ve yer yok.", "uygulandi": true},
+{"arac": "oner_rapor_karari", "ozet": "PSL H45 iade", "tetikleyici": "PSL raporu PYB destekte; biçim denetimi 4 uyarı", "gerekce": "Rapor: SPI 0,89, CPI 0,88, EAC 6.347.533, VAC -748.433. Araç: 0,91, 0,91, 6.182.662, -583.562. 3 uzun cümle, toplantıda zaman/yer eksik.", "uygulandi": true},
+{"arac": "oner_rapor_karari", "ozet": "KLK H45 onay", "tetikleyici": "KLK raporu PYB destekte", "gerekce": "Biçim 0 hata 0 uyarı; py_puani 7 dolu, KLK-numaralı maddeler. Notta bs_approve kaydı eksikliği yazıldı.", "uygulandi": true},
+{"arac": "oner_rapor_karari", "ozet": "NHR H45 onay", "tetikleyici": "NHR bs_approve (Selin Kaya, 10 Kasım 05:55)", "gerekce": "EVM araçla birebir; py_puani 5 dolu; gönderen Burak ≠ onaylayan Selin. 2 uzun cümle uyarısı.", "uygulandi": true},
+{"arac": "oner_hafta_yayinla", "ozet": "2026-H45 yayını (KLK ve NHR)", "tetikleyici": "En az bir onaylı rapor var; Salı yayın görevi", "gerekce": "Onaylı 2 rapor; ATL ve PSL iade edildiği için yayına girmedi", "uygulandi": true}
+],
+"haftalik_rapor": [],
+"rapor_kararlari": [
+{"proje": "ATL", "hafta": "2026-H45", "karar": "iade", "not": "EVM rakamları araçla uyuşmuyor (%88, SPI 1,04, CPI 1,05, EAC 7.790.455); toplantı zaman/yer eksik.", "uygulandi": true},
+{"proje": "PSL", "hafta": "2026-H45", "karar": "iade", "not": "SPI/CPI 0,91, EAC 6.182.662, VAC -583.562 olmalı; 3 uzun cümle; toplantı zaman/yer eksik.", "uygulandi": true},
+{"proje": "KLK", "hafta": "2026-H45", "karar": "onay", "not": "Biçim temiz; bs_approve kaydı eksik, teyit istendi.", "uygulandi": true},
+{"proje": "NHR", "hafta": "2026-H45", "karar": "onay", "not": "EVM araçla uyumlu; bs_approve Selin Kaya.", "uygulandi": true},
+{"proje": "tümü", "hafta": "2026-H45", "karar": "yayin", "not": "2 onaylı rapor (KLK, NHR) yayınlandı; ATL ve PSL iade edildiği için girmedi.", "uygulandi": true}
+],
+"bulgular": [
+{"tur": "tutarsizlik", "onem": "orta", "baslik": "KLK H45 geçmişinde bölüm onayı (bs_approve) yok ama rapor PYB aşamasına geçmiş", "kanit": "haftalik_rapor KLK 2026-H45 gecmis: '2026-11-05 13:00 create — Can Erdem', '2026-11-05 14:00 submit — Can Erdem'; asama 'PYB destekte'", "beklenen": "Submit sonrası bs_approve kaydı ya da onaysız PYB aşamasına geçilememesi", "gerceklesen": "bs_approve olmadan PYB aşamasına geçmiş"},
+{"tur": "tutarsizlik", "onem": "orta", "baslik": "NHR yönetim beklentisinde eski EVM rakamları duruyor", "kanit": "beklentiler (aktif) exp-mw34r2q4-rcoqdr: 'BAC 5.572.550, EAC 6.369.110, VAC -796.560'; evm_analizi NHR: bac_butce 5620650, vac_sapma -836919, eac 6457569", "beklenen": "Beklenti rakamları araçla aynı", "gerceklesen": "Rapor düzeltildi ama beklentideki dört rakam eski kaldı"},
+{"tur": "tutarsizlik", "onem": "orta", "baslik": "ATL ve PSL raporlarında EVM rakamları araçtan farklı", "kanit": "evm_analizi ATL: tamamlanma_yuzde 88, spi 1.04, cpi 1.05, eac 7790455; rapor: %89, 1,05, 1,07, 7.702.921. PSL: spi 0.91, cpi 0.91, eac 6182662, vac -583562; rapor: 0,89, 0,88, 6.347.533, -748.433", "beklenen": "Rapor rakamları evm_analizi ile aynı", "gerceklesen": "İki raporda bayat rakamlar var, iade edildi"},
+{"tur": "kullanilabilirlik", "onem": "dusuk", "baslik": "Toplantı zaman/yer eksikliği biçim denetiminde yalnız uyarı", "kanit": "oner_rapor_karari ATL onay önerisi: bicim '0 hata, 1 uyarı' (toplantı zaman/yer eksik)", "beklenen": "Hata olarak işaretlensin", "gerceklesen": "Yalnız uyarı"}
+],
+"yanitlar": [
+{"kime": "elif", "mesaj_tarihi": "2026-11-10", "metin": "Elif Hanım, ATL H45'i iade ettim. 1) EVM rakamlarını evm_analizi'nden alın: tamamlanma %88, SPI 1,04, CPI 1,05, EAC 7.790.455 TL (rapordakiler %89, 1,05, 1,07, 7.702.921). 2) 3 Kasım hata triyaj toplantısında zaman ve yer yazılı değil. Düzeltince yeniden gönderin. Plan kilidi: kilidi açan bir aracım yok; Selin Hanım ya da yönetim tarafından açılması gerek. 11 Kasım'a kadar durumu size yazarım."},
+{"kime": "burak", "mesaj_tarihi": "2026-11-10", "metin": "Burak Bey, NHR H45'i onayladım ve yayınlandı; EVM rakamları araçla birebir (BAC 5.620.650, VAC -836.919, SPI 0,86, CPI 0,87, EAC 6.457.569). Yönetim beklentisi exp-mw34r2q4-rcoqdr'de hâlâ eski rakamlar var; lütfen düzeltin. PSL H45'i iade ettim: SPI/CPI 0,91, EAC 6.182.662, VAC -583.562 olmalı; 3 uzun cümle ve 4 Kasım toplantısına zaman/yer ekleyin. NHR plan kilidi talebi gelince plan 45,57 AA'yı tahsis_ozeti ile teyit ederim."}
+],
+"mesajlar": [
+{"kime": "can", "metin": "Can Bey, KLK H45 onaylandı ve yayınlandı. Geçmişte bs_approve kaydı görünmüyor (create/submit sizde); bölüm onayının kaydını teyit edin. Gelecek rapor: py_puani notu genel kalmasın, KLK-50/51 'kısmen' durumunun nedenini yazın."},
+{"kime": "selin", "metin": "Selin Hanım, ATL ve PSL H45 EVM rakamlarını araçtan farklı buldum, iade ettim (ATL %88/1,04/1,05/EAC 7.790.455; PSL SPI-CPI 0,91, EAC 6.182.662, VAC -583.562). Yeniden gönderilince önce sizde onay gerek. Elif'in plan kilidi talebi (ATL, 11 Kasım) sizde mi çözülür, teyit eder misiniz."},
+{"kime": "u340-py", "metin": "Tahsis Tablosu'nda U340'ta rolü girilmemiş satırlar 0,4 AA (kapasite_talep: Rol atanmamış 0,4; Veri Bilimci açığı 0,39). Lütfen satırlara rol girin; işe alım analizi şu an eksik."}
+],
+"ajanda": [
+{"madde": "ATL ve PSL H45 yeniden gönderilince EVM rakamları ve biçim denetimi, onay", "kime": "elif / burak", "termin": "2026-11-12", "durum": "acik"},
+{"madde": "Elif'e ATL plan kilidi durumu hakkında haber (11 Kasım'a kadar)", "kime": "elif", "termin": "2026-11-11", "durum": "acik"},
+{"madde": "NHR plan kilidi talebi gelince plan 45,57 AA veri teyidi", "kime": "burak", "termin": "2026-11-12", "durum": "acik"},
+{"madde": "KLK bs_approve kaydı teyidi; yanıtı bekle", "kime": "can", "termin": "2026-11-12", "durum": "acik"},
+{"madde": "NHR beklentisindeki eski EVM rakamlarının düzeltilmesi (yönetim kararı 12 Kasım)", "kime": "burak", "termin": "2026-11-11", "durum": "acik"},
+{"madde": "U340 'Rol atanmamış' 0,4 AA satırına rol girilmesi", "kime": "u340-py", "termin": "2026-11-13", "durum": "acik"},
+{"madde": "Maliyetlenemeyen kişi/ünvanlar için maliyet tanımı sorusu", "kime": "PYB / yönetici", "termin": "2026-11-13", "durum": "acik"},
+{"madde": "Ekim gerçekleşen AA ↔ worklog karşılaştırmasını Kasım kapanışında yinele; KLK'da Can/Mert Aydın/Nazlı worklog genel gider mi teyit", "kime": "mert", "termin": "2026-12-01", "durum": "acik"}
+],
+"gercek_disi": [
+{"kimin_verisi": "Burak (NHR yönetim beklentisi)", "ne": "Beklentideki BAC/EAC/VAC eski (BAC 5.572.550 ↔ 5.620.650; VAC -796.560 ↔ -836.919; EAC 6.369.110 ↔ 6.457.569)", "kanit": "beklentiler exp-mw34r2q4-rcoqdr vs evm_analizi NHR"},
+{"kimin_verisi": "Elif (ATL H45)", "ne": "EVM: %89 / SPI 1,05 / CPI 1,07 / EAC 7.702.921 (araç: %88 / 1,04 / 1,05 / 7.790.455)", "kanit": "haftalik_rapor ATL vs evm_analizi ATL (rapor '5 Kasım' tarihli)"},
+{"kimin_verisi": "Burak (PSL H45)", "ne": "SPI 0,89, CPI 0,88, EAC 6.347.533, VAC -748.433 (araç: 0,91, 0,91, 6.182.662, -583.562)", "kanit": "haftalik_rapor PSL vs evm_analizi PSL"}
+],
+"demo_yoklamasi": [],
+"arac_cagrisi": 22, "memnuniyet": 7, "gunun_notu": "ATL ve PSL EVM rakamları bayat olduğu için iade, KLK ve NHR onaylanıp H45 yayınlandı."
+}
