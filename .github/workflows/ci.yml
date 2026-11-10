@@ -1,0 +1,42 @@
+# Her push'ta tür denetimi, testler ve üç derleme (uygulama, MCP sunucusu, pilot).
+# Pilot veri dalı (claude/pilot-veri) ve yalnız belge değişiklikleri koşturmaz.
+name: CI
+
+on:
+  push:
+    branches-ignore:
+      - claude/pilot-veri
+    paths-ignore:
+      - '**.md'
+      - 'pilot-data/**'
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Tür denetimi
+        run: |
+          npx tsc --noEmit
+          npx tsc --noEmit -p api/tsconfig.json
+      - name: Testler
+        run: npx vitest run
+      - name: Derleme
+        run: |
+          npm run build
+          npm run build:mcp
+          npm run build:pilot

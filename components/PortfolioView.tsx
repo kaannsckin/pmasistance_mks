@@ -10,6 +10,8 @@ interface PortfolioViewProps {
   needsPerson: boolean;
   onOpenProject: (id: string) => void;
   onCreateProject: (name: string) => void;
+  /** PoC bulgu takip Excel'inden proje oluşturma / güncelleme penceresi */
+  onImportFindings?: () => void;
   onDeleteProject: (id: string) => void;
   onRenameProject: (id: string, name: string) => void;
   onSetRag: (id: string, rag: RagStatus | undefined, note?: string) => void;
@@ -234,7 +236,7 @@ const ProjectCard: React.FC<{
   );
 };
 
-const PortfolioView: React.FC<PortfolioViewProps> = ({ projects, activeProjectId, identity, people, needsPerson, onOpenProject, onCreateProject, onDeleteProject, onRenameProject, onSetRag, onSetStatus, onSetOwner }) => {
+const PortfolioView: React.FC<PortfolioViewProps> = ({ projects, activeProjectId, identity, people, needsPerson, onOpenProject, onCreateProject, onImportFindings, onDeleteProject, onRenameProject, onSetRag, onSetStatus, onSetOwner }) => {
   const [newName, setNewName] = useState('');
 
   const wsLike = useMemo(() => ({ people, projects, allocations: [] }), [people, projects]);
@@ -329,6 +331,15 @@ const PortfolioView: React.FC<PortfolioViewProps> = ({ projects, activeProjectId
             >
               Oluştur
             </button>
+            {onImportFindings && (
+              <button
+                onClick={onImportFindings}
+                className="mt-3 text-[11px] font-semibold text-gray-400 hover:text-primary transition-colors"
+                title="PoC bulgu takip Excel'inden proje oluştur ya da güncelle"
+              >
+                <i aria-hidden="true" className="fa-solid fa-file-excel mr-1"></i>ya da Excel'den aktar (bulgu takibi)
+              </button>
+            )}
           </div>
         )}
 

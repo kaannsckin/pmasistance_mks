@@ -917,6 +917,7 @@ Tam liste: [`.env.example`](.env.example) · [docs/AI_KURULUM.md](docs/AI_KURULU
 | [docs/RAPOR_AI_PLANI.md](docs/RAPOR_AI_PLANI.md) | Rapor AI geliştirme planı |
 | [docs/INCE_AYAR_KARARI.md](docs/INCE_AYAR_KARARI.md) | İnce ayar karar kaydı ve uygulama adımları |
 | [docs/AJAN_GOREVI_HAFTALIK_RAPOR_AI.md](docs/AJAN_GOREVI_HAFTALIK_RAPOR_AI.md) | Haftalık rapor AI ajan görevi |
+| [docs/BULGU_TAKIP_AKTARIMI.md](docs/BULGU_TAKIP_AKTARIMI.md) | PoC bulgu takip Excel'inden (GİB) proje aktarımı ve eşleme |
 | [supabase/KURULUM.md](supabase/KURULUM.md) | Bulut senkronizasyonu kurulumu |
 | [docs/pilot/](docs/pilot/README.md) | Pilot belgeleri (ana kopya) |
 
