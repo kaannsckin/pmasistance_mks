@@ -1,0 +1,85 @@
+{
+"persona": "burak", "kosu": "2026-11-12 Perşembe",
+"yapilanlar": [
+{"is": "Jira güncellemesi (PSL, NHR)", "araclar": ["jira_aktar","oneriyi_uygula"], "sonuc": "PSL: 2 yeni (PSL-118, PSL-119), 106 güncellenen; NHR: 3 yeni (NHR-117, 118, 119), 97 güncellenen. Olay dosyalarıyla (PSL 1+1, NHR 1+2) tuttu; ikisi uygulandı."},
+{"is": "H45 PSL iadesini yeniden gönderme denemesi", "araclar": ["haftalik_rapor","oner_haftalik_rapor"], "sonuc": "İade notunun 3 maddesini karşılayan düzeltilmiş rapor hazırlandı (EVM araçtan okundu, 3 uzun cümle bölündü, 4 Kasım toplantısı gündem/katılımcı/karar ile yazıldı, saat ve yer kayıtta olmadığı için 'kayıtta yok'). Uygulama gönderimi reddetti: 'Rapor Bölüm sorumlusunda aşamasında; düzenlemek için iade edilmesi gerekir.'"},
+{"is": "H46 PSL ve NHR haftalık raporları", "araclar": ["haftalik_rapor_taslagi","jira_worklog","evm_analizi","haftalik_rapor","oner_haftalik_rapor"], "sonuc": "AI paketi alındı; kaynaklarla düzeltilen iki rapor gönderildi (Bölüm sorumlusunda). H45 plan değerlendirmesi madde_id'li yazıldı. PSL 3 done/partial, 2 slipped; NHR 4 slipped, 1 partial."},
+{"is": "RAG ve risk güncellemesi", "araclar": ["oner_rag_guncelle","oner_risk_guncelle"], "sonuc": "PSL RAG Riskli→Kritik (geciken 5→10, %40). PSL riski 9→12. NHR 'Hata yükü' riski 12→16 (NHR-118). NHR RAG Kritik korundu."},
+{"is": "Görev durumu ve günlük notları", "araclar": ["oner_gorev_durumu","oner_not_ekle"], "sonuc": "NHR toparlanma planı görevi Tamamlandı yapıldı (plan Ahmet'e mesajla gidiyor). PSL ve NHR için 12 Kasım karar ve aksiyon notları yazıldı."}
+],
+"degisiklikler": [
+{"arac": "jira_aktar", "ozet": "PSL Jira aktarımı: 2 yeni, 106 güncellenen", "tetikleyici": "Her koşu başı; PSL-118, PSL-119", "gerekce": "Olay sayısı ile önizleme tuttu", "uygulandi": true},
+{"arac": "jira_aktar", "ozet": "NHR Jira aktarımı: 3 yeni, 97 güncellenen", "tetikleyici": "NHR-117, NHR-118, NHR-119", "gerekce": "Olay sayısı ile önizleme tuttu", "uygulandi": true},
+{"arac": "oner_haftalik_rapor", "ozet": "PSL 2026-H46 raporu bölüm sorumlusuna gönderildi (PY puanı 5)", "tetikleyici": "Perşembe rapor günü", "gerekce": "Kaynaklı maddeler, EVM 12 Kasım araç okuması", "uygulandi": true},
+{"arac": "oner_haftalik_rapor", "ozet": "NHR 2026-H46 raporu bölüm sorumlusuna gönderildi (PY puanı 5)", "tetikleyici": "Perşembe rapor günü", "gerekce": "NHR-118, NHR-78/92/82 sapmaları, EVM 12 Kasım araç okuması", "uygulandi": true},
+{"arac": "oner_haftalik_rapor", "ozet": "PSL 2026-H45 yeniden gönderim", "tetikleyici": "Mert'in 10 Kasım iadesi", "gerekce": "EVM düzeltme + biçim uyarıları", "uygulandi": false},
+{"arac": "oner_rag_guncelle", "ozet": "PSL RAG → Kritik", "tetikleyici": "Geciken 5'ten 10'a (%40), SPI 0,90, CPI 0,89, VAC -664.913 TL", "gerekce": "Geçen koşuda geciken artışına rağmen RAG güncellenmemişti", "uygulandi": true},
+{"arac": "oner_risk_guncelle", "ozet": "NHR 'Hata yükü ve yeniden açılan kayıtlar' 12→16 (4x4)", "tetikleyici": "11 Kasım hata triyajı: NHR-118 Kurum C veri kaybı; NHR-92 ikinci kapanış; NHR-78 ölçümsüz kapanış", "gerekce": "Mevcut kayıt güncellendi, yeni risk açılmadı", "uygulandi": true},
+{"arac": "oner_risk_guncelle", "ozet": "PSL 'Saha bağlantı sorunu ve yeniden açılan kayıtlar' 9→12 (4x3)", "tetikleyici": "Geciken 5→10, PSL-78 9 Kasım'da yeniden açıldı", "gerekce": "Sinyal geldi, yeni risk açılmadı", "uygulandi": true},
+{"arac": "oner_gorev_durumu", "ozet": "NHR toparlanma planı görevi → Tamamlandı", "tetikleyici": "Ajanda sözü 11 Kasım (kaçırılmıştı); Ahmet'in 10 Kasım isteği", "gerekce": "Plan mesajla Ahmet'e iletiliyor", "uygulandi": true},
+{"arac": "oner_not_ekle", "ozet": "NHR günlük notu: NHR-118 önceliği, RAG Kritik, aksiyonlar", "tetikleyici": "11 Kasım NHR-118 triyaj ve sprint notları", "gerekce": "Karar ve aksiyon kaydı", "uygulandi": true},
+{"arac": "oner_not_ekle", "ozet": "PSL günlük notu: RAG Kritik kararı, aksiyonlar", "tetikleyici": "10-11 Kasım PSL notları, geciken artışı", "gerekce": "Karar ve aksiyon kaydı", "uygulandi": true}
+],
+"haftalik_rapor": [
+{"proje": "PSL", "hafta": "2026-H46", "gonderildi": true,
+"duzeltmeler": ["AI taslağı 'Bu hafta çalışmalara devam edildi' ve rutin maddeler içeriyordu; silindi", "PSL-86 kapanışı (45 sa/13 sa, %246) 10 Kasım notundan eklendi", "Geciken görev sayısı 10/25 araçtan yazıldı", "EVM 12 Kasım araç okuması (Ekim sonu verisi) yazıldı", "Gelecek hafta maddeleri sorumlu ve tarihli yazıldı"],
+"dayanaksiz_uyarisi": ["246, 9,5, 25, 10, 40, 0,90, 5.599.100, 6.264.013, 664.913, '5 Kasım', '2 Kasım' girdide yok uyarısı: kaynakları evm_analizi, 10 Kasım olay dosyası, gorev_ara, H45 raporu; çıkarılmadı. Biçim denetimi: 0 uyarı."],
+"py_puani": 5, "rag": "Kritik", "rag_gerekcesi": "25 açık görevin 10'u (%40) gecikmiş, SPI 0,90, CPI 0,89, VAC -664.913 TL (12 Kasım okuması); PSL-86 %246 aşımla kapandı, PSL-78 yeniden açıldı."},
+{"proje": "NHR", "hafta": "2026-H46", "gonderildi": true,
+"duzeltmeler": ["AI taslağı NHR-118 kök neden, durdurulan yeni özellik işleri, EVM, fazla mesai ve gecikme sayısı olmadan yazılmıştı; eklendi", "Gelecek hafta maddeleri sorumlu ve tarihli yazıldı", "H45 sözlerinin 4'ü slipped, 1'i partial olarak gerekçeyle değerlendirildi"],
+"dayanaksiz_uyarisi": ["12 Kasım 2026, 17, 0,85, 5.620.650, 6.548.521, 927.871 ve '20 Kasım' girdide yok uyarısı: kaynakları evm_analizi NHR, gorev_ara geciken (17), 11 Kasım Ahmet mesajı; çıkarılmadı. Biçim denetimi: 1 uyarı ('paragraf gibi yazılmış'); onayla gönderimde düzeltilemedi."],
+"py_puani": 5, "rag": "Kritik", "rag_gerekcesi": "17 görev gecikmiş, SPI 0,85, CPI 0,86, VAC -927.871 TL (12 Kasım okuması), NHR-118 veri kaybı, 12 kayıt hata."},
+{"proje": "PSL", "hafta": "2026-H45", "gonderildi": false,
+"duzeltmeler": ["EVM araçtan yeniden okundu: SPI 0,90, CPI 0,89, EAC 6.264.013, VAC -664.913 (12 Kasım); Mert'in beklediği 0,91/6.182.662/-583.562 değil", "3 uzun cümle bölündü", "4 Kasım toplantısı: gündem, katılımcılar, karar yazıldı; saat ve yer kayıtta yok"],
+"dayanaksiz_uyarisi": [], "py_puani": 6, "rag": "Kritik", "rag_gerekcesi": "H45 yeniden gönderimi uygulama tarafından reddedildi; güncel RAG Kritik (H46 raporunda)."}
+],
+"rapor_kararlari": [],
+"bulgular": [
+{"tur": "hata", "onem": "orta", "baslik": "İade edilmiş rapor 'Bölüm sorumlusunda' görünüyor ve PY yeniden gönderemiyor", "kanit": "haftalik_rapor PSL 2026-H45 → asama 'Bölüm sorumlusunda', gecmis '2026-11-10 return — Mert Aydın'; oner_haftalik_rapor --onayla → {\"hata\":\"Rapor \\\"Bölüm sorumlusunda\\\" aşamasında; düzenlemek için iade edilmesi gerekir.\"}", "beklenen": "İade edilmiş rapor PY'nin düzenleyebileceği aşamaya dönmeli", "gerceklesen": "PY düzenleyemiyor"},
+{"tur": "tutarsizlik", "onem": "orta", "baslik": "Jira aktarımından sonra EVM değerleri değişti (tahsis değişmeden)", "kanit": "evm_analizi NHR 12 Kasım: spi 0.85, cpi 0.86, eac 6548521, vac -927871; 10 Kasım: SPI 0,86, CPI 0,87, EAC 6.457.569, VAC -836.919. PSL: SPI 0,90, EAC 6.264.013 (iade notunda 0,91/6.182.662)", "beklenen": "Tahsis ve plan değişmeden EVM sabit", "gerceklesen": "Jira aktarımı sonrası SPI/CPI/EAC kayıyor"},
+{"tur": "eksik_ozellik", "onem": "orta", "baslik": "Beklenti metni düzenlenemiyor, rakamlar eski kalıyor", "kanit": "beklentiler → exp-mw34r2q4-rcoqdr aciklama 'BAC 5.572.550 … EAC 6.369.110 … VAC -796.560'; araçta oner_beklenti_guncelle yok", "beklenen": "PY açık beklentisinin metnini güncelleyebilmeli", "gerceklesen": "Yalnız yeni beklenti açılabiliyor"},
+{"tur": "hata", "onem": "dusuk", "baslik": "Aynı başlıklı kapalı+açık riskler güncellemeyi engelliyor", "kanit": "oner_risk_guncelle NHR 'Şema doğrulamada veri kaybı' → \"… birden fazla riskle eşleşti: Şema doğrulamada veri kaybı, Şema doğrulamada veri kaybı.\"", "beklenen": "Kapalı kayıt yok sayılmalı ya da kimlikle seçilebilmeli", "gerceklesen": "Açık risk güncellenemedi"},
+{"tur": "kullanilabilirlik", "onem": "dusuk", "baslik": "--onayla ile tek çağrıda öneri ve uygulama; biçim uyarısı sonrası düzeltme imkânı yok", "kanit": "oner_haftalik_rapor NHR --onayla → bicim: ['uyarı: Paragraf gibi yazılmış'] ve uygulandi: true", "beklenen": "Uyarılı raporda onay öncesi durma", "gerceklesen": "Uyarıya rağmen gönderildi"}
+],
+"yanitlar": [
+{"kime": "selin", "mesaj_tarihi": "2026-11-10", "metin": "Selin Hanım, NHR H45 onayı için teşekkürler. Önemli: Jira aktarımından sonra araç NHR için SPI 0,85, CPI 0,86, BAC 5.620.650, EAC 6.548.521, VAC -927.871 TL veriyor (12 Kasım); 10 Kasım'daki 0,86/0,87/6.457.569/-836.919 değişti. H46 raporunda 12 Kasım değerlerini yazdım. Ahmet'in 12 Kasım kararı için bu farkı ona da bildirdim. H46 NHR raporu Bölüm sorumlusunda."},
+{"kime": "mert", "mesaj_tarihi": "2026-11-10", "metin": "Mert Bey, PSL H45 iadesini değerlendirdim. Uygulama yeniden gönderime izin vermedi ('Bölüm sorumlusunda aşamasında; düzenlemek için iade edilmesi gerekir'); H45'i taslağa almanız gerekiyor. EVM'de bugün araç SPI 0,90, CPI 0,89, EAC 6.264.013, VAC -664.913 TL (Ekim sonu) veriyor; sizin 0,91/6.182.662/-583.562 değeriniz Jira aktarımı öncesine ait görünüyor. Uzun cümleleri bölüp 4 Kasım toplantısına gündem/katılımcı/karar ekledim; saat ve yer Confluence kaydında yok. H46 PSL ve NHR raporları gönderildi. NHR plan kilidi: talebi H46 onayından sonra açacağım."},
+{"kime": "ahmet", "mesaj_tarihi": "2026-11-10", "metin": "Ahmet Bey, 11 Kasım akşamı sözümü geç yerine getiriyorum. 1) Ozan'ın 7 hata efor güncellemesi Jira'da hâlâ görünmüyor; 13 Kasım'a istedim. 2) NHR-114 kök neden planı gelmedi; öncelik NHR-118 (Kurum C veri kaybı, termin 13 Kasım, Ozan). 3) 20 Kasım yük testini bugün ekibe sordum, teyit 13 Kasım. 4) Ölçüm raporu: Ozan 17 Kasım, NHR-78 ölçümü Aslı 16 Kasım. 5) NHR-92 10 Kasım'da ikinci kez kapandı (33,5 sa/16 sa); sapma nedenleri Aslı 17 Kasım. 6) 17 gecikmiş görev için teklif tarihleri: NHR-77, 85, 86, 94, 96, 99, 103 → 18 Kasım; NHR-59 → 20 Kasım; NHR-87, 91, 105 → 24 Kasım; NHR-61, 88 → 27 Kasım; NHR-41, 81 → 4 Aralık. Bunlar teklif; Jira'ya sahiplerle yazacağım. Önemli: araçta NHR SPI 0,85, CPI 0,86, EAC 6.548.521, VAC -927.871 TL (12 Kasım); beklenti metnindeki BAC/EAC/VAC eski; kararda bu rakamlara bakmanızı rica ederim."}
+],
+"mesajlar": [
+{"kime": "ozan", "metin": "Ozan, NHR-118 kök neden analizi ve kalıcı düzeltme planını 13 Kasım'a kadar kayda yaz. 7 açık hatanın kalan eforunu Jira'da bugün güncelle (6 Kasım'dan beri bekliyor). Performans ölçüm raporu 17 Kasım. NHR-106 dışındaki yeni özellik işlerine kök neden bulunana kadar dokunma."},
+{"kime": "aslı", "metin": "Aslı, 20 Kasım yük testi tarihini bugün teyit et. NHR-78 ölçüm sonuçları 16 Kasım, NHR-92 ve NHR-82 sapma nedenleri 17 Kasım. NHR-92'nin ikinci kapanışı için kabul testi sonucunu kayda ekle."},
+{"kime": "tuğba", "metin": "Tuğba, 20 Kasım yük testi için ekip kapasitesini bugün teyit et. NHR-103 (Devam Ediyor, termin 9 Kasım) için yeni bitiş tarihini yaz."},
+{"kime": "kerem", "metin": "Kerem, PSL-78 tarama bulguları listesi bugün kayıtta olmalı. Gelmezse 13 Kasım sabahı rapora eksik olarak yazacağım."},
+{"kime": "ece", "metin": "Ece, PSL-86 sapma nedenleri (45 sa / 13 sa tahmin) bugün yazılsın. PSL-72, PSL-96, PSL-98, PSL-102 için yeni tarihleri 13 Kasım'a kadar bana ilet. Performans ölçüm raporu 16 Kasım."},
+{"kime": "barış", "metin": "Barış, test senaryoları güncellemesi ve sürüm notlarının yeni tarihi bugün gelsin; sürüm notları 4 Kasım'dan beri gecikmiş."}
+],
+"ajanda": [
+{"madde": "NHR toparlanma planı Ahmet'e (gecikmiş 11 Kasım)", "kime": "ahmet", "termin": "2026-11-12", "durum": "tamam"},
+{"madde": "20 Kasım yük testi tarihini ekiple teyit et (Aslı/Tuğba'ya soruldu)", "kime": "ahmet", "termin": "2026-11-13", "durum": "ertelendi"},
+{"madde": "PSL gecikmiş 10 görevin yeni tarihlerini Jira'ya yaz", "kime": "mert", "termin": "2026-11-13", "durum": "acik"},
+{"madde": "NHR geciken görev sayısı 17'den 14'ün altına", "kime": "ahmet", "termin": "2026-11-13", "durum": "acik"},
+{"madde": "NHR 17 gecikmiş görev için en az 12 yeni tarih Jira'ya", "kime": "ahmet", "termin": "2026-11-13", "durum": "acik"},
+{"madde": "Kurum C kapsam dışı isteği için değişiklik talebi yaz (NHR)", "kime": "ahmet", "termin": "2026-11-13", "durum": "acik"},
+{"madde": "NHR-118 kök neden ve düzeltme planı", "kime": "Ozan Kılıç", "termin": "2026-11-13", "durum": "acik"},
+{"madde": "Ozan 7 açık hata kalan efor güncellemesi", "kime": "Ozan Kılıç", "termin": "2026-11-12", "durum": "acik"},
+{"madde": "NHR-78 ölçüm sonuçları", "kime": "Aslı Çakır", "termin": "2026-11-16", "durum": "acik"},
+{"madde": "NHR performans ölçüm raporu", "kime": "Ozan Kılıç", "termin": "2026-11-17", "durum": "acik"},
+{"madde": "NHR-92/NHR-82 sapma nedenleri", "kime": "Aslı Çakır", "termin": "2026-11-17", "durum": "acik"},
+{"madde": "PSL-78 tarama bulguları listesi", "kime": "Kerem Doğan", "termin": "2026-11-12", "durum": "acik"},
+{"madde": "PSL-86 sapma nedenleri ve tahmin önerisi", "kime": "Ece Polat", "termin": "2026-11-12", "durum": "acik"},
+{"madde": "PSL test senaryoları + sürüm notları yeni tarihi", "kime": "Barış Güneş", "termin": "2026-11-12", "durum": "acik"},
+{"madde": "PSL H45 iadesi: H45 taslağa alınırsa yeniden gönder", "kime": "mert", "termin": "2026-11-13", "durum": "acik"},
+{"madde": "NHR plan kilidi talebi (H46 onayı sonrası)", "kime": "mert", "termin": "2026-11-16", "durum": "ertelendi"},
+{"madde": "Ahmet'in 12 Kasım NHR kararı sonrası beklenti yanıtını oku", "kime": "ahmet", "termin": "2026-11-13", "durum": "acik"},
+{"madde": "PSL 2026 plan onayı için Barış'ın nedenleri gönderilecek", "kime": "ahmet", "termin": "2026-11-13", "durum": "ertelendi"}
+],
+"gercek_disi": [
+{"kimin_verisi": "Mert (PSL H45 iade notu)", "ne": "İade notundaki SPI/CPI 0,91, EAC 6.182.662, VAC -583.562 değerleri 12 Kasım araç okumasıyla uyuşmuyor (araç: 0,90/0,89, 6.264.013, -664.913)", "kanit": "evm_analizi PSL 2026: spi 0.9, cpi 0.89, eac_tahmini_toplam 6264013, vac_sapma -664913"},
+{"kimin_verisi": "Yönetim beklentisi exp-mw34r2q4-rcoqdr", "ne": "Metindeki BAC 5.572.550, EAC 6.369.110, VAC -796.560 araçta yok (BAC 5.620.650)", "kanit": "beklentiler aciklama; evm_analizi NHR bac_butce 5620650"},
+{"kimin_verisi": "Ahmet 'Onur Çelik ölçüm raporu' ifadesi", "ne": "NHR notlarında Onur Çelik adlı katılımcı yok (performans raporu Ozan Kılıç'a atanmış)", "kanit": "confluence 2026-11-11-NHR-179: 'Aksiyon: Ozan Kılıç, 17 Kasım tarihine kadar performans ölçüm raporunu paylaşacak'"}
+],
+"demo_yoklamasi": [],
+"arac_cagrisi": 39, "memnuniyet": 6,
+"gunun_notu": "Raporlar ve RAG/risk güncellemeleri uygulandı, ancak 6 Kasım sözleri hâlâ kayıyor, H45 PSL iadesi uygulama engeli yüzünden yeniden gönderilemedi."
+}
