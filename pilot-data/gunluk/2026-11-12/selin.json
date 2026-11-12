@@ -1,0 +1,54 @@
+{
+"persona": "selin", "kosu": "2026-11-12 Perşembe",
+"yapilanlar": [
+{"is": "H46 raporlarını araçlarla karşılaştırdı (ATL, PSL, NHR); H45 ATL/PSL iadelerini inceledi", "araclar": ["haftalik_rapor","evm_analizi","proje_listesi","gorev_ara","risk_listesi","kisi_profili"], "sonuc": "ATL ve PSL H46 onaylandı; NHR H46 iade edildi (geciken 17, araç 16). H45 ATL/PSL kararları uygulanamadı."},
+{"is": "ATL kilidi ve U310 kapasite doğrulaması", "araclar": ["tahsis_ozeti","doluluk_analizi","departman_karnesi","kisi_profili","uygun_kisi_bul","oner_tahsis_ayarla","beklentiler"], "sonuc": "Selin Kasım 0,3 boş, Emre 0,9 kapasiteye karşı 0,8 (+0,1 sığar). ATL plan_kilidi hâlâ Onaylı/Kilitli. ATL 0,42 sonrası Onur'da KLK 0,4 ile 0,40 AA aşım sürüyor; yönetimden yeni beklenti açıldı."},
+{"is": "Ahmet'in KLK H45 onaycı sorusu", "araclar": ["haftalik_rapor","tahsis_ozeti"], "sonuc": "KLK H45 raporu bu rol için araçta dönmedi (U340 kapsamı dışı); onaycı kimliği doğrulanamadı, Ahmet'e söylendi."}
+],
+"degisiklikler": [
+{"arac": "oner_rapor_karari", "ozet": "ATLAS 2026-H46: onay → PYB destekte", "tetikleyici": "Elif'in H46 gönderimi", "gerekce": "EVM 12 Kasım %88/1,04/1,05/EAC 7.790.455/BAC 8.203.950 evm_analizi ile birebir; Onur 1,2/0,42 kisi_profili ile tutarlı", "uygulandi": true},
+{"arac": "oner_rapor_karari", "ozet": "PUSULA 2026-H46: onay → PYB destekte", "tetikleyici": "Burak'ın H46 gönderimi", "gerekce": "SPI 0,90, CPI 0,89, EAC 6.264.013, VAC -664.913 evm_analizi ile birebir; 10/25 geciken proje_listesi ile tutarlı", "uygulandi": true},
+{"arac": "oner_rapor_karari", "ozet": "NEHİR 2026-H46: iade → Taslak", "tetikleyici": "Burak'ın H46 gönderimi", "gerekce": "Raporda 17 gecikmiş açık görev; gorev_ara geciken=true 16, proje_listesi 16; paragraf biçim uyarısı. EVM maddesi doğru bırakıldı", "uygulandi": true},
+{"arac": "oner_rapor_karari", "ozet": "ATLAS 2026-H45: onay denendi", "tetikleyici": "Mert'in 10 Kasım iadesi sonrası rapor Bölüm sorumlusunda kaldı", "gerekce": "EVM maddesi 5 Kasım tarihli; tarihli değer olarak doğru", "uygulandi": false},
+{"arac": "oner_rapor_karari", "ozet": "PUSULA 2026-H45: onay denendi", "tetikleyici": "Mert iadesi sonrası rapor Bölüm sorumlusunda kaldı", "gerekce": "EVM 5 Kasım tarihli", "uygulandi": false},
+{"arac": "oner_rapor_karari", "ozet": "ATLAS ve PUSULA 2026-H45: iade denendi", "tetikleyici": "Onay reddedilince; PY'ler Taslak'a dönemiyor", "gerekce": "PY'nin düzeltebilmesi için", "uygulandi": false},
+{"arac": "oner_beklenti_ac", "ozet": "Onur Kasım: ATL 0,42 + KLK 0,4 = 0,82 / kapasite 0,42, 0,40 AA aşım için KLK payı kararı (termin 14 Kasım, önemli)", "tetikleyici": "10 Kasım kararının sayısal sonucu (kisi_profili, uygun_kisi_bul)", "gerekce": "ATL 0,8→0,42 yalnız 0,38 AA düşürür; U310'da 0,4 AA karşılayacak uygun kişi 0; ATL kilit beklentisiyle aynı talep değil", "uygulandi": true}
+],
+"haftalik_rapor": [],
+"rapor_kararlari": [
+{"proje": "ATLAS", "hafta": "2026-H46", "karar": "onay", "not": "EVM 12 Kasım değerleri evm_analizi ile birebir (%88, 1,04, 1,05, EAC 7.790.455, BAC 8.203.950); Onur 1,2/0,42 kisi_profili ile tutarlı; ATL-129 slipped doğru.", "uygulandi": true},
+{"proje": "PUSULA", "hafta": "2026-H46", "karar": "onay", "not": "EVM 12 Kasım evm_analizi ile birebir (SPI 0,90, CPI 0,89, EAC 6.264.013, VAC -664.913); 10/25 geciken proje_listesi ile tutarlı; biçim temiz.", "uygulandi": true},
+{"proje": "NEHIR", "hafta": "2026-H46", "karar": "iade", "not": "1) Geciken 17 yazılmış, araç 16 (122 toplam, 91 tamamlanan, 31 açık); düzeltin ya da açıklayın. 2) Paragraf biçimi maddelere bölünsün. 3) EVM (0,85/0,86/5.620.650/6.548.521/-927.871) doğru, değişmesin. 4) Hata yükü riski skoru 16 yazılsın.", "uygulandi": true},
+{"proje": "ATLAS", "hafta": "2026-H45", "karar": "onay", "not": "EVM 5 Kasım tarihli, o günün değerleriyle doğru; güncel değerler H46'da. Uygulama 'Onaylanamadı (aşama değişmiş ya da yetki yok)' döndü; iade de aynı hata.", "uygulandi": false},
+{"proje": "PUSULA", "hafta": "2026-H45", "karar": "onay", "not": "EVM 5 Kasım tarihli, o günün değerleriyle doğru; onay ve iade uygulanamadı (aynı hata).", "uygulandi": false}
+],
+"bulgular": [
+{"tur": "hata", "onem": "yuksek", "baslik": "H45 ATL ve PSL raporları (Mert iadesi sonrası) 'Bölüm sorumlusunda' görünüyor ama ne onaylanabiliyor ne iade edilebiliyor", "kanit": "haftalik_rapor ATLAS 2026-H45: asama 'Bölüm sorumlusunda', islem 'hafta yayınlandı; değişmez'; oner_rapor_karari onay/iade + --onayla: 'Onaylanamadı / İade edilemedi (aşama değişmiş ya da yetki yok)'", "beklenen": "PYB iadesinden sonra rapor Taslak'a dönmeli ya da bölüm sorumlusu karar verebilmeli", "gerceklesen": "PY düzenleyemiyor, BS karar yazamıyor; H45 tıkalı"},
+{"tur": "eksik_ozellik", "onem": "yuksek", "baslik": "Plan onayını geri çekme/iade akışını başlatacak araç yok", "kanit": "araclar selin listesinde plan onayı aracı yok; oner_tahsis_ayarla ATL: 'onayda/kilitli; plan değiştirilemez'; tahsis_ozeti plan_kilidi 'Onaylı/Kilitli'", "beklenen": "Ahmet'in 10 Kasım kararındaki 'plan onayını geri çekme' adımı uygulamada yapılabilmeli", "gerceklesen": "Rolde bu adım yok; kilit açılamıyor, Onur aşımı sürüyor"},
+{"tur": "tutarsizlik", "onem": "orta", "baslik": "İade (10 Kasım değerleri) ile raporun tarihli değeri (5 Kasım) çelişiyor", "kanit": "ATL H45 'EVM (5 Kasım, uygulama): %89/1,05/1,07'; Mert iadesi evm_analizi (%88/1,04/1,05)", "beklenen": "Tarihli değer kendi tarihine göre değerlendirilmeli", "gerceklesen": "Jira aktarımı sonrası değerler değişince doğru raporlar iade ediliyor"}
+],
+"yanitlar": [
+{"kime": "elif", "mesaj_tarihi": "2026-11-12", "metin": "Elif Hanım, kilit durumu: tahsis_ozeti 12 Kasım ATL plan_kilidi Onaylı/Kilitli; oner_tahsis_ayarla Onur Kasım 0,42 yine reddedildi. Plan onayını geri çekme akışını başlatacak araç rolümde yok. Kapasite doğrulaması (kisi_profili 12 Kasım): Selin Kasım efektif 0,3, planı 0 (0,3 sığar); Emre efektif 0,9, ATL planı 0,8 (+0,1 sığar). Önemli: Onur'un KLK'da Kasım 0,4'ü var; ATL 0,42 + KLK 0,4 = 0,82 / kapasite 0,42, yani 0,40 aşım sürer; yönetimden KLK payı için beklenti açtım (14 Kasım). ATL H46 raporunu onayladım, PYB'de. H45 raporun onay/iade uygulamada tıkalı."},
+{"kime": "burak", "mesaj_tarihi": "2026-11-12", "metin": "Burak Bey, NHR H46 EVM'iniz doğru (SPI 0,85, CPI 0,86, BAC 5.620.650, EAC 6.548.521, VAC -927.871). Fakat gecikmiş görev: raporda 17, gorev_ara ve proje_listesi 16 (122/91/31 açık). Raporu iade ettim; 17'yi 16 yapın ya da farkı açıklayın, paragrafı maddelere bölün, hata yükü riski skoru 16 yazılsın. PSL H46'yı onayladım. PSL H45 uygulamada tıkalı."},
+{"kime": "mert", "mesaj_tarihi": "2026-11-10", "metin": "Mert Bey, ATL ve PSL H45 için iadenizi gördüm: raporlar EVM'i açıkça 5 Kasım tarihli yazıyor ve 5 Kasım onayımda o günün değerleriyle uyuşuyordu; güncel değerler H46'da doğru. H45'leri onaylamak ya da iade etmek istedim ama aşama 'Bölüm sorumlusunda'/'değişmez' görünüyor; onay ve iade hata verdi. Lütfen aşamayı düzeltin. ATL H46 ve PSL H46'yı onayladım, PYB'desiniz. Plan onayını geri çekme aracı rolümde yok, sizinle birlikte yürütmek istiyorum."},
+{"kime": "ahmet", "mesaj_tarihi": "2026-11-10", "metin": "Ahmet Bey, KLK H45 raporunu haftalik_rapor ile okuyamadım (KLK için kayıt dönmedi), kimin onayladığını araçtan doğrulayamıyorum; 13 Kasım'a kadar netleştireceğim. ATL kilidi: plan onayını geri çekme akışını araçta başlatamıyorum. Önemli rakam: ATL Onur 0,42 sonrası KLK 0,4 ile Kasım 0,82 / kapasite 0,42; aşım 0,40 AA sürüyor, KLK için beklenti açtım (14 Kasım)."}
+],
+"mesajlar": [
+{"kime": "can", "metin": "Can Bey, KLK'da Onur Kasım payı 0,4 AA. Onur'un Kasım efektif kapasitesi 0,42 ve ATL'ye 0,42 verilecek; KLK 0,4 ile aşım 0,40 AA sürüyor. Yönetimden karar istedim (14 Kasım); karar çıkana kadar KLK Kasım planını planlarken Onur'u 0'a yakın varsayın. Ahmet KLK H45 bölüm sorumlusu onayını soruyor: bu rapor sizde mi, hangi onay adımında?"}
+],
+"ajanda": [
+{"madde": "ATL plan kilidi: plan onayını geri çekme akışı rolümde yok; Mert/Ahmet yanıtı bekleniyor, Aralık Onur 0,74 / Selin +0,06 kilit açılınca", "kime": "ahmet", "termin": "2026-11-13", "durum": "acik"},
+{"madde": "ATL Kasım: Onur 0,42, Selin 0,3, Emre +0,1; kilit açılınca Elif yazacak", "kime": "elif", "termin": "2026-11-13", "durum": "acik"},
+{"madde": "KLK Onur Kasım 0,4 payı: beklenti açıldı, karar bekleniyor", "kime": "ahmet", "termin": "2026-11-14", "durum": "acik"},
+{"madde": "H45 ATL/PSL raporları: onay/iade uygulanamıyor; Mert aşamayı düzeltince karar yazacağım", "kime": "mert", "termin": "2026-11-13", "durum": "acik"},
+{"madde": "NHR H46 yeniden gönderimi gelince araçla karşılaştırıp onay (geciken 16, paragraf, risk 16)", "kime": "burak", "termin": "2026-11-13", "durum": "acik"},
+{"madde": "KLK H45 bölüm sorumlusu onaycısı kimliği (Ahmet sorusu)", "kime": "ahmet", "termin": "2026-11-13", "durum": "acik"},
+{"madde": "Onur Çelik Nisan-Ekim 1,2/0,9 yapısal aşım: kalıcı çözüm gündemi", "kime": "selin", "termin": "2026-11-17", "durum": "acik"},
+{"madde": "NHR eski EVM'in güncellenmesi sorusu: Burak H46'da güncelledi, Ahmet'e bildirildi", "kime": "ahmet", "termin": "2026-11-12", "durum": "tamam"}
+],
+"gercek_disi": [
+{"kimin_verisi": "Burak (NEHİR H46 raporu)", "ne": "12 Kasım itibarıyla 17 açık görev terminini aştı", "kanit": "gorev_ara proje=NHR geciken=true: eslesen 16; proje_listesi NHR geciken 16, toplam 122, tamamlanan 91"}
+],
+"demo_yoklamasi": [],
+"arac_cagrisi": 24, "memnuniyet": 6, "gunun_notu": "H46'ları rakamla kontrol edip ATL/PSL'yi onayladım, NHR'yi geciken sayısı 16/17 farkıyla iade ettim; H45 ATL/PSL ve plan kilidi uygulamadaki eksiklikler yüzünden tıkalı kaldı."
+}
