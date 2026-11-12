@@ -8,3 +8,4 @@
 | 2026-11-03 | kontrol 34/34 | GEÇTİ 28/28 | 8 | 0 | 81,5 | 7,0 | 3/6 | Hazır değil | Hazır değil |
 | 2026-11-05 | kontrol 34/34 (sonda 33/34) | GEÇTİ 28/28 | 3 | 0 | 83 | 7,2 | 3/6 | Hazır değil | Hazır değil |
 | 2026-11-10 | kontrol 33/34 | GEÇTİ 28/28 | 3 | 0 | 82 | 6,4 | 3/6 | Hazır değil | Hazır değil |
+| 2026-11-12 | kontrol 33/34 | GEÇTİ 28/28 | 1 | 0 | 85,5 | 6,2 | 3/6 | Hazır değil | Hazır değil |

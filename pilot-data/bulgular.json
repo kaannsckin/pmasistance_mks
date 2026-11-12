@@ -20,8 +20,8 @@
     "tur": "tutarsizlik",
     "onem": "orta",
     "ilk": "2026-10-09",
-    "son": "2026-11-10",
-    "gun_sayisi": 4,
+    "son": "2026-11-12",
+    "gun_sayisi": 5,
     "durum": "acik",
     "dogrulama": "kısmen doğrulandı (PSL/YILDIZ doğrulandı; ATL/NHR başlangıç durumu ajan beyanı)",
     "kanit": "proje_listesi PSL rag Yolunda geciken 8; proje_detayi PSL skor 72; proje_detayi YLD-2405 skor 100 guven low kapsam 0.32. ATL/NHR ilk bakışta 'Yolunda' idi (4 ajan bildirdi), PY'ler Riskli yaptı; ilk durum yeniden üretilemez",
@@ -31,7 +31,7 @@
       "mert",
       "burak"
     ],
-    "not": "10 Kasım: PSL RAG amber iken geciken 14/24 (5 Kasım: 5/23); RAG elle güncellenmedi"
+    "not": "12 Kasım: PSL RAG Burak tarafından elle Kritik'e alındı (10/25 geciken); RAG kendiliğinden gecikmeyi yansıtmıyor"
   },
   {
     "id": "B-003",
@@ -101,8 +101,8 @@
     "tur": "eksik_ozellik",
     "onem": "orta",
     "ilk": "2026-10-09",
-    "son": "2026-11-10",
-    "gun_sayisi": 4,
+    "son": "2026-11-12",
+    "gun_sayisi": 5,
     "durum": "acik",
     "dogrulama": "doğrulandı (ahmet)",
     "kanit": "araclar listesi: elif/ahmet/selin için mesaj/talep aracı yok; arac ahmet mesaj_gonder -> 'Bilinmeyen ya da bu rol için kullanılamayan araç'. Pilotta mesajlar sohbet.md ile taklit ediliyor",
@@ -364,14 +364,15 @@
     "tur": "tutarsizlik",
     "onem": "orta",
     "ilk": "2026-11-05",
-    "son": "2026-11-10",
-    "gun_sayisi": 2,
+    "son": "2026-11-12",
+    "gun_sayisi": 3,
     "durum": "acik",
     "kanit": "arac ahmet kapasite_talep {yil:2026,bolum:U340} → \"Rol atanmamış\": planli_proje_aa 0.4, kapasite_aa 0, acik_aa 0.4; uyarı: \"rolü girilmemiş tahsis satırlarında\". Kaynak: Burak'ın Can Erdem NHR Kasım+Aralık 0,2+0,2 yeni satırı. Kendim yeniden ürettim.",
     "kim": [
       "burak",
       "ahmet"
-    ]
+    ],
+    "not": "12 Kasım: satır Can Erdem'in NHR 0,4 AA'sı (rolsüz); kapasite_talep uyarısı kişi adını göstermiyor (Mert)"
   },
   {
     "id": "B-026",
@@ -408,15 +409,16 @@
     "tur": "eksik_ozellik",
     "onem": "orta",
     "ilk": "2026-11-10",
-    "son": "2026-11-10",
-    "gun_sayisi": 1,
+    "son": "2026-11-12",
+    "gun_sayisi": 2,
     "durum": "acik",
     "kanit": "arac mert tahsis_ozeti {yil:2026,proje:ATL} → \"plan_kilidi\": \"Onaylı/Kilitli\"; beklentiler: exp-mw34nz08-c82cf0 \"Karşılandı\" (5 Kasım) ama Elif ve Selin 10 Kasım'da oner_tahsis_ayarla'dan \"planı onayda/kilitli; plan değiştirilemez\" aldı; hiçbir persona'nın araç listesinde kilit açma yok (araclar mert/elif/selin/ahmet). Ajanlar önemi \"yüksek\" verdi; demo ekranlarını bozmadığı için orta bıraktım, kullanıcı kararı gerekir (BL-30 kapsamı?).",
     "kim": [
       "elif",
       "selin",
       "ahmet"
-    ]
+    ],
+    "not": "12 Kasım: Elif, Selin, Mert ve Ahmet ayrı ayrı bildirdi; karar 5 Kasım, kilit hâlâ Onaylı/Kilitli (tahsis_ozeti, kendim gördüm); ajanlar önemi yüksek verdi"
   },
   {
     "id": "B-029",
@@ -424,14 +426,31 @@
     "tur": "tutarsizlik",
     "onem": "orta",
     "ilk": "2026-11-10",
-    "son": "2026-11-10",
-    "gun_sayisi": 1,
+    "son": "2026-11-12",
+    "gun_sayisi": 2,
     "durum": "acik",
     "kanit": "haftalik_rapor ATL 2026-H45: \"EVM (5 Kasım, uygulama): tamamlanma %89, SPI 1,05, CPI 1,07, EAC 7.702.921\"; evm_analizi ATL (10 Kasım): tamamlanma_yuzde 88, spi 1.04, cpi 1.05, eac 7790455; Mert raporu iade etti (iade_notu aynı rakamlar). Selin 5 Kasım'da aynı rakamlarla onaylamıştı. Kendim yeniden ürettim.",
     "kim": [
       "mert",
       "elif",
       "burak"
+    ]
+  },
+  {
+    "id": "B-030",
+    "baslik": "Yayınlanmış haftada Mert iadesi sonrası rapor \"Bölüm sorumlusunda\" takılıyor; PY yeniden gönderemiyor, bölüm sorumlusu karar yazamıyor, PYB iade edemiyor",
+    "tur": "hata",
+    "onem": "orta",
+    "ilk": "2026-11-12",
+    "son": "2026-11-12",
+    "gun_sayisi": 1,
+    "durum": "acik",
+    "kanit": "arac mert haftalik_rapor {proje:ATL,hafta:2026-H45} → \"islem\": \"hafta yayınlandı; değişmez\", \"asama\": \"Bölüm sorumlusunda\", gecmis \"2026-11-10 05:56 return — Mert Aydın\" (kendim gördüm). Elif, Burak, Selin ve Mert uygulama hatasını (\"Bölüm sorumlusunda aşamasında; düzenlemek için iade edilmesi gerekir\" / \"Onaylanamadı … aşama değişmiş ya da yetki yok\") ayrı ayrı bildirdi; ben uygulama hatasını yeniden üretmedim (onaylayıp rapor durumunu bozmamak için). H46 raporları (yayınlanmamış hafta) iade/yeniden gönderme akışında sorunsuz (NHR H46 \"PY'de (taslak)\").",
+    "kim": [
+      "elif",
+      "burak",
+      "selin",
+      "mert"
     ]
   }
 ]

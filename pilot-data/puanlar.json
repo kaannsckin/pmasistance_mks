@@ -238,5 +238,85 @@
       "eksi": 0
     },
     "gerekce": "ön puan: iki beklentiyi güncel rakamlarla uygulamaya yazdı, kilit için \"karsilandi\" yerine doğru olarak \"inceleniyor\" dedi; portföy metni tutarsızlığını yakaladı (yeniden üretildi); demo yoklaması 1/1/1 çağrı, tutarlı."
+  },
+  {
+    "tarih": "2026-11-12",
+    "persona": "elif",
+    "puan": 87,
+    "kaynak": "koordinator",
+    "kirilim": {
+      "tutarlilik": 29,
+      "dongu": 18,
+      "rapor": 17,
+      "gerekce": 14,
+      "iletisim": 6,
+      "bulgu": 3,
+      "eksi": 0
+    },
+    "gerekce": "ön puan: H46 raporu araç rakamlarıyla ve tarihli EVM ile gönderildi, Selin onayladı; ATL RAG amber gerekçeli; risk/görev/not uygulamada. H45 iadesi uygulama engeli yüzünden gönderilemedi (kusur değil). Can sözü ikinci kez kaçtı."
+  },
+  {
+    "tarih": "2026-11-12",
+    "persona": "burak",
+    "puan": 84,
+    "kaynak": "koordinator",
+    "kirilim": {
+      "tutarlilik": 26,
+      "dongu": 19,
+      "rapor": 14,
+      "gerekce": 14,
+      "iletisim": 8,
+      "bulgu": 3,
+      "eksi": 0
+    },
+    "gerekce": "ön puan: PSL RAG Kritik'e alındı (geçen koşudaki eksik giderildi), NHR-118 riski 16, iki H46 raporu; PSL onaylandı. NHR raporunda geciken 17 yazıldı, araç 16 (iade). S1 için Selin'den test kaynağı beklentisi açmadı."
+  },
+  {
+    "tarih": "2026-11-12",
+    "persona": "selin",
+    "puan": 92,
+    "kaynak": "koordinator",
+    "kirilim": {
+      "tutarlilik": 30,
+      "dongu": 18,
+      "rapor": 19,
+      "gerekce": 14,
+      "iletisim": 8,
+      "bulgu": 3,
+      "eksi": 0
+    },
+    "gerekce": "ön puan: ATL ve PSL H46'yı araç rakamlarıyla onayladı, NHR'yi geciken sayısı 17↔16 ile iade etti (yeniden üretildi: proje_listesi 16); KLK Onur payı için uygulanabilir beklenti açtı."
+  },
+  {
+    "tarih": "2026-11-12",
+    "persona": "mert",
+    "puan": 80,
+    "kaynak": "koordinator",
+    "kirilim": {
+      "tutarlilik": 29,
+      "dongu": 14,
+      "rapor": 15,
+      "gerekce": 11,
+      "iletisim": 8,
+      "bulgu": 3,
+      "eksi": 0
+    },
+    "gerekce": "ön puan: tahsis/maliyet/EVM teyitleri tutarlı, KLK raporunu hatırlattı, rolsüz satırın sahibini buldu (Can Erdem), tarihli değer yaklaşımına döndü. Selin ile paralel çalışıp H46 denetimini yapamadı; H45 çıkmazına çözüm üretemedi."
+  },
+  {
+    "tarih": "2026-11-12",
+    "persona": "ahmet",
+    "puan": 91,
+    "kaynak": "koordinator",
+    "kirilim": {
+      "tutarlilik": 29,
+      "dongu": 18,
+      "rapor": 18,
+      "gerekce": 14,
+      "iletisim": 9,
+      "bulgu": 3,
+      "eksi": 0
+    },
+    "gerekce": "ön puan: üç beklentiye rakam ve tarihli karar yazdı (NHR tavan 930.000 TL, KLK Onur payı 0), kilidi doğru olarak açık tuttu; demo yoklaması 1/1/1 çağrı ve tutarlı."
   }
 ]

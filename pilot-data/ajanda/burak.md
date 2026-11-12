@@ -1,26 +1,22 @@
-# Ajanda — Burak (son güncelleme 2026-11-10)
+# Ajanda — Burak (son güncelleme 2026-11-12)
 
 | Madde | Kime | Termin | Durum |
 |---|---|---|---|
-| Selin: Can Erdem 0,2 AA onayı | selin | 2026-11-06 | tamam |
-| NHR performans ölçüm raporu (NHR-78 ölçüm sonuçları Aslı'dan bekleniyor) | burak | 2026-11-16 | ertelendi |
-| NHR toparlanma planını Ahmet'e gönder (görev açıldı) | ahmet | 2026-11-11 | ertelendi |
-| PSL çevrimdışı mod değerlendirmesi ve Ahmet bilgilendirme | ahmet | 2026-11-06 | tamam |
-| NHR müşteri kapsam toplantısı ve değişiklik talebi (görev açıldı) | burak | 2026-11-13 | ertelendi |
-| PSL-86 kapansın | Ece Polat / Kerem Doğan | 2026-11-06 | tamam |
-| NHR-92 düzeltme + kabul testi (yeni tarih iste) | Aslı Çakır | 2026-11-11 | acik |
-| PSL açık hata önceliklendirmesi ve saha örnekleri | Kerem Doğan | 2026-11-12 | ertelendi |
-| Konum servisi tahmin gözden geçirme / PSL-86 sapma nedenleri | Ece Polat | 2026-11-12 | ertelendi |
-| PSL sürüm notları | Barış Güneş | 2026-11-12 | ertelendi |
-| NHR test senaryoları güncellemesi | Ozan Kılıç | 2026-11-16 | ertelendi |
-| NHR-78 performans ölçümü sonuçları | Aslı Çakır | 2026-11-16 | ertelendi |
-| Ozan 7 açık hata kalan efor güncellemesi (6 Kasım, Jira'da görmedim) | Ozan Kılıç | 2026-11-10 | acik |
-| PSL-93 teknik borç kaydı (PSL-93 Tamamlandı) | Barış Güneş | 2026-11-07 | tamam |
-| NHR beklentisine yönetim yanıtı | ahmet | 2026-11-12 | acik |
-| NHR-114 kök neden ve düzeltme planı | Ozan Kılıç | 2026-11-11 | acik |
+| NHR toparlanma planı Ahmet'e (gecikmiş 11 Kasım) | ahmet | 2026-11-12 | tamam |
+| 20 Kasım yük testi tarihini ekiple teyit et (Aslı/Tuğba'ya soruldu) | ahmet | 2026-11-13 | ertelendi |
+| PSL gecikmiş 10 görevin yeni tarihlerini Jira'ya yaz | mert | 2026-11-13 | acik |
+| NHR geciken görev sayısı 17'den 14'ün altına | ahmet | 2026-11-13 | acik |
+| NHR 17 gecikmiş görev için en az 12 yeni tarih Jira'ya | ahmet | 2026-11-13 | acik |
+| Kurum C kapsam dışı isteği için değişiklik talebi yaz (NHR) | ahmet | 2026-11-13 | acik |
+| NHR-118 kök neden ve düzeltme planı | Ozan Kılıç | 2026-11-13 | acik |
+| Ozan 7 açık hata kalan efor güncellemesi | Ozan Kılıç | 2026-11-12 | acik |
+| NHR-78 ölçüm sonuçları | Aslı Çakır | 2026-11-16 | acik |
+| NHR performans ölçüm raporu | Ozan Kılıç | 2026-11-17 | acik |
+| NHR-92/NHR-82 sapma nedenleri | Aslı Çakır | 2026-11-17 | acik |
 | PSL-78 tarama bulguları listesi | Kerem Doğan | 2026-11-12 | acik |
-| H46 hedefi: NHR H45 raporu Selin onayından sonra plan kilidi talebi (Mert) | mert | 2026-11-11 | acik |
-| H46 hedefi: NHR geciken 18 kaydın en az 12'si için yeni tarih yazılı (Ahmet'e plan) | ahmet | 2026-11-11 | acik |
-| H46 hedefi: NHR geciken görev sayısı 18'den 14'ün altına | burak | 2026-11-13 | acik |
-| H46 hedefi: 20 Kasım yük testi tarihini ekiple teyit et | burak | 2026-11-12 | acik |
-| H46 raporları (PSL ve NHR) Perşembe yazılacak | mert | 2026-11-12 | acik |
+| PSL-86 sapma nedenleri ve tahmin önerisi | Ece Polat | 2026-11-12 | acik |
+| PSL test senaryoları + sürüm notları yeni tarihi | Barış Güneş | 2026-11-12 | acik |
+| PSL H45 iadesi: H45 taslağa alınırsa yeniden gönder | mert | 2026-11-13 | acik |
+| NHR plan kilidi talebi (H46 onayı sonrası) | mert | 2026-11-16 | ertelendi |
+| Ahmet'in 12 Kasım NHR kararı sonrası beklenti yanıtını oku | ahmet | 2026-11-13 | acik |
+| PSL 2026 plan onayı için Barış'ın nedenleri gönderilecek | ahmet | 2026-11-13 | ertelendi |

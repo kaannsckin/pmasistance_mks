@@ -1,0 +1,52 @@
+{
+"persona": "ahmet", "kosu": "2026-11-12 Perşembe",
+"yapilanlar": [
+{"is": "Portföy, EVM ve kapasite-talep kontrolü", "araclar": ["portfoy_ozeti", "evm_analizi", "kapasite_talep"], "sonuc": "Portföy sağlığı 62. NHR (skor 22) ve PSL (44) kritik, ATL riskli (69). NHR SPI 0,85, CPI 0,86, EAC 6.548.521, VAC -927.871 TL. Kapasite açığı 1,39 AA: U320 Test Müh. 0,6, U340 Veri Bilimci 0,39, U340 Rol atanmamış 0,4."},
+{"is": "Açık beklentilere karar yazıldı", "araclar": ["beklentiler", "oner_beklenti_yanitla"], "sonuc": "3 aktif beklenti. NHR ve KLK karşılandı, ATL kilidi inceleniyor (kritik). Üçü de uygulamaya yazıldı."},
+{"is": "ATL plan kilidi durumu kontrolü", "araclar": ["tahsis_ozeti"], "sonuc": "plan_kilidi hâlâ 'Onaylı/Kilitli'. 10 Kasım kararı uygulanamadı, beklenti kapatılmadı."}
+],
+"degisiklikler": [
+{"arac": "oner_beklenti_yanitla", "ozet": "NHR beklentisi (exp-mw34r2q4-rcoqdr) Karşılandı: ek bütçe üst sınırı 930.000 TL (VAC -927.871 kadar), Burak'ın 18 Kasım teklif planı ve NHR-114 kök neden planı gelince serbest. Kapsam donduruldu. Sürüm tarihi 20 Kasım yük testine bağlı, Burak 24 Kasım'a kadar tek tarih önerecek. İşe alım yok, Can Erdem 0,2 AA/ay devam.", "tetikleyici": "Beklenti termini 12 Kasım; Burak'ın mesajı: beklenti metnindeki rakamlar eski", "gerekce": "Rakamlar evm_analizi'nden; 10 Kasım'daki EAC 6.457.569 / VAC -836.919 eskidi.", "uygulandi": true},
+{"arac": "oner_beklenti_yanitla", "ozet": "KLK beklentisi (exp-mwd54aoj-d6nk7s) Karşılandı: Onur Çelik Kasım KLK payı 0,4→0 AA. Selin 14 Kasım'a kadar uygular. Beklenen: ATL 0,42 + KLK 0 = kapasite 0,42, aşım 0,40→0.", "tetikleyici": "Selin'in 12 Kasım beklentisi (termin 14 Kasım)", "gerekce": "KLK %87 tamamlanmış, SPI 1,09, CPI 1,10, ay içi tahmin 0,45 AA. KLK planı Taslak, kilit yok. Onur kapasitesi 0,42 AA.", "uygulandi": true},
+{"arac": "oner_beklenti_yanitla", "ozet": "ATL kilit beklentisi (exp-mwaa13ot-5w9gpe) İnceleniyor olarak kaldı, kritik. Kilit açma yolunu Mert 13 Kasım'a kadar bildirecek, Ahmet planı aynı gün yeniden onaylayacak. Karar aynı: Kasım Onur 0,42 / Selin 0,3 / Emre 0,1; Aralık Onur 0,74 / Selin +0,06.", "tetikleyici": "Termin 11 Kasım geçti, kilit hâlâ Onaylı/Kilitli; Selin araçta geri çekme akışı olmadığını yazdı", "gerekce": "10 Kasım'da 'kilit 11 Kasım'da kapalıysa kritik' demişti. Aşım 0,78 AA sürüyor.", "uygulandi": true}
+],
+"haftalik_rapor": [], "rapor_kararlari": [],
+"bulgular": [
+{"tur": "eksik_ozellik", "onem": "yuksek", "baslik": "Onaylı planın kilidini açma / onayı geri çekme akışı hiçbir rolde yok", "kanit": "tahsis_ozeti ATLAS → plan_kilidi 'Onaylı/Kilitli'; Selin: 'plan onayını geri çekme akışını araçta başlatamıyorum'; Müdür araç listesinde yalnız oneriyi_uygula ve oner_beklenti_yanitla var", "beklenen": "Yönetim kararı sonrası yetkili biri kilidi açıp planı değiştirebilmeli", "gerceklesen": "Karar iki gündür uygulanamıyor, Onur 0,78 AA aşımda"},
+{"tur": "tutarsizlik", "onem": "orta", "baslik": "Beklenti açıklamasındaki EVM rakamları araçla uyuşmuyor", "kanit": "beklentiler → NHR 'EAC 6.369.110, VAC -796.560'; evm_analizi → EAC 6.548.521, VAC -927.871", "beklenen": "Beklenti metni güncel rakamı göstermeli", "gerceklesen": "Eski rakam kalıyor, karar yanıtında düzeltmek gerekiyor"}
+],
+"yanitlar": [
+{"kime": "elif", "mesaj_tarihi": "2026-11-12", "metin": "Elif, ATL kilit beklentisi kritik değerlendirmede, termin 13 Kasım. Mert kilit açma yolunu bildirecek, ben planı aynı gün onaylarım. ATL-129 sürüm etkisini 13 Kasım'da Merve'den alıp beklenti aç. Can Erdem 0,2 AA yanıtını 13 Kasım'da yaz. Sözünü 9 Kasım'da kaçırmıştın, tekrarlanmasın."},
+{"kime": "burak", "mesaj_tarihi": "2026-11-12", "metin": "Burak, NHR kararı uygulamada: ek bütçe üst sınırı 930.000 TL (VAC -927.871), kullanım 18 Kasım teklif planı ve NHR-114 kök neden planı gelince serbest. Kapsam dondu. Sürüm tarihi için tek öneri 24 Kasım'a kadar, 20 Kasım yük testi sonucuyla. Öncelik NHR-118 (13 Kasım). 17 gecikmiş görev tekliflerinin (18/20/24/27 Kasım, 4 Aralık) Jira'ya yazılması 13-18 Kasım. Not: sen 17 geciken yazdın, portföy aracı 16 gösteriyor, H46 iadesindeki sayı farkını rapora düzeltmeyle yaz."},
+{"kime": "selin", "mesaj_tarihi": "2026-11-12", "metin": "Selin, KLK Onur Çelik Kasım payı 0,4→0 AA karar karşılandı, 14 Kasım'a kadar uygula ve kisi_profili ile aşımın 0,40'tan 0'a indiğini doğrula. ATL kilidi için araçta geri çekme akışı yok, bunu Mert'e taşıdım (13 Kasım). KLK H45 onayının kimden geçtiğini 13 Kasım'da netleştir."},
+{"kime": "mert", "mesaj_tarihi": "2026-11-12", "metin": "Mert, ATL plan kilidini açmanın yetkili yolunu 13 Kasım'a kadar bildir. Açılınca ben planı aynı gün yeniden onaylarım. H45 ATL ve PSL raporlarının Bölüm sorumlusunda takılması için 13 Kasım'a kadar çıkış yolu yaz. Rol atanmamış 0,4 AA (U340, Can Erdem NHR) 13 Kasım'a kadar çözülsün; kapasite_talep'te hâlâ açık."}
+],
+"mesajlar": [
+{"kime": "elif", "metin": "ATL kilit beklentisi kritik, termin 13 Kasım; Can Erdem yanıtı ve ATL-129 etkisi 13 Kasım."},
+{"kime": "burak", "metin": "NHR kararı yazıldı: ek bütçe tavanı 930.000 TL, kapsam donduruldu, tarih önerisi 24 Kasım'a kadar."},
+{"kime": "selin", "metin": "KLK Onur payı 0 AA kararı 14 Kasım'a kadar uygulanacak; ATL kilidi Mert'e taşındı."},
+{"kime": "mert", "metin": "ATL kilit yolu ve H45 takılı raporlar için 13 Kasım'a kadar bildirim bekliyorum."}
+],
+"ajanda": [
+{"madde": "Can Erdem KLK 0,2 AA görüşmesi sonucu", "kime": "elif", "termin": "2026-11-13", "durum": "acik"},
+{"madde": "ATL-129 yeni tarihi (30 Kasım) ve sürüm etkisi, gerekirse beklenti", "kime": "elif", "termin": "2026-11-13", "durum": "acik"},
+{"madde": "ATL plan kilidi: Mert kilit açma yolunu bildirsin, Ahmet aynı gün planı yeniden onaylar (kritik)", "kime": "mert", "termin": "2026-11-13", "durum": "acik"},
+{"madde": "Rol atanmamış 0,4 AA (U340, Can Erdem NHR) rol girişi ve H45 ATL/PSL raporlarının takılmasının çözümü", "kime": "mert", "termin": "2026-11-13", "durum": "acik"},
+{"madde": "NHR: Ozan efor güncellemesi, NHR-114 kök neden planı, NHR-118, yük testi teyidi", "kime": "burak", "termin": "2026-11-13", "durum": "acik"},
+{"madde": "NHR gecikmiş görev teklif tarihlerinin Jira'ya yazılması; ek bütçe kullanımı bu plana bağlı", "kime": "burak", "termin": "2026-11-18", "durum": "acik"},
+{"madde": "NHR tek sürüm tarihi önerisi (20 Kasım yük testi sonrası)", "kime": "burak", "termin": "2026-11-24", "durum": "acik"},
+{"madde": "KLK Onur Çelik payı 0 AA uygulaması ve kisi_profili ile doğrulama", "kime": "selin", "termin": "2026-11-14", "durum": "acik"},
+{"madde": "KLK H45 onaylayanının araçtan teyidi", "kime": "selin", "termin": "2026-11-13", "durum": "acik"},
+{"madde": "PSL: Barış Güneş nedenleri, ardından PSL 2026 plan onayı", "kime": "burak", "termin": "2026-11-13", "durum": "ertelendi"},
+{"madde": "NHR ek bütçe ve sürüm kararı", "kime": "burak", "termin": "2026-11-12", "durum": "tamam"}
+],
+"gercek_disi": [
+{"kimin_verisi": "Burak (NHR beklentisi)", "ne": "Beklenti metni BAC/EAC/VAC eski rakamlı (EAC 6.369.110, VAC -796.560)", "kanit": "beklentiler: 6.369.110/-796.560; evm_analizi: EAC 6.548.521, VAC -927.871"}
+],
+"demo_yoklamasi": [
+{"soru": 1, "araclar": ["portfoy_ozeti"], "cagri": 1, "tutarli": true, "yanit_ozeti": "NEHİR (skor 22, 16 geciken, SPI 0,85, CPI 0,86, VAC -927.871 TL) ve PUSULA (skor 44, 10 geciken, VAC -664.913 TL) kritik. ATLAS riskli (kilitli plan, Onur 0,78 AA aşım). Portföy sağlığı 62."},
+{"soru": 2, "araclar": ["kapasite_talep"], "cagri": 1, "tutarli": true, "yanit_ozeti": "Toplam açık 1,39 AA; U320 Test Müh. 0,6, U340 Veri Bilimci 0,39, rol atanmamış 0,4. Açık küçük; işe alım değil kaynak kaydırma ve rol girişi yeterli."},
+{"soru": 3, "araclar": ["evm_analizi"], "cagri": 1, "tutarli": true, "yanit_ozeti": "En riskli NHR: SPI 0,85, CPI 0,86, EAC 6.548.521, VAC -927.871 TL. Plan: gecikmiş görevler 18 Kasım–4 Aralık teklif tarihleriyle, yük testi 20 Kasım, sürüm tarihi 24 Kasım'a kadar önerilecek. Kesin sürüm tarihi henüz yok."}
+],
+"arac_cagrisi": 9, "memnuniyet": 7, "gunun_notu": "ATL kilidi iki gündür açılamıyor; ona kritik gözüyle bakıyorum, NHR ve KLK kararları uygulamaya yazıldı."
+}
