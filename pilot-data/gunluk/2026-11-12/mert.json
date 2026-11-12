@@ -1,0 +1,50 @@
+{
+"persona": "mert", "kosu": "2026-11-12 Perşembe",
+"yapilanlar": [
+{"is": "H46 rapor durumları (ATL, PSL, NHR, KLK)", "araclar": ["haftalik_rapor"], "sonuc": "ATL, PSL, NHR H46 'Bölüm sorumlusunda' (Selin onayı gelmedi, karar verilmedi). KLK H46: 'rapor henüz yazılmadı' (son gün bugün); Can'a hatırlatma yazıldı."},
+{"is": "H45 ATL/PSL durumu", "araclar": ["haftalik_rapor"], "sonuc": "İkisi de islem='hafta yayınlandı; değişmez', asama='Bölüm sorumlusunda', iade notu duruyor. PYB aşamasında olmadığı için denetim/iade yapılamaz; bulgu açıldı, Selin/Ahmet'e yönlendirildi."},
+{"is": "Tahsis toplamı ve maliyet tutarlılığı", "araclar": ["tahsis_ozeti", "maliyet_raporu"], "sonuc": "Tahsis toplamı 176,94 AA (ATL 63,13; PSL 46,02; NHR 45,57; KLK 20,24; YILDIZ 1,98). Maliyet planı 22.958.700 TL = proje toplamı. Oca-Eki gerçekleşen 18.820.000 TL, sapma -158.500 TL. NHR plan 45,57 AA teyit edildi."},
+{"is": "EVM rakamları teyidi (Aşama A beyanları)", "araclar": ["evm_analizi"], "sonuc": "ATL %88, SPI 1,04, CPI 1,05, EAC 7.790.455; PSL SPI 0,90, CPI 0,89, EAC 6.264.013, VAC -664.913; NHR SPI 0,85, CPI 0,86, EAC 6.548.521, VAC -927.871. Elif ve Burak'ın H46 rakamları araçla uyumlu."},
+{"is": "Maliyetlenemeyen satırın kişisi", "araclar": ["kapasite_talep", "maliyet_raporu", "tahsis_ozeti"], "sonuc": "U340 'Rol atanmamış' 0,4 AA satırı NHR projesinde Can Erdem'e ait (rolü yok); Can KLK'da 'Proje Yöneticisi'. maliyetlenemeyen_kisi_sayisi=1."},
+{"is": "Yönetim beklentileri kontrolü", "araclar": ["beklentiler"], "sonuc": "2 aktif beklenti (ATL plan kilidi, NHR kapsam/bütçe); yeni talep açılmadı. NHR beklentisinin açıklaması hâlâ eski EVM rakamlarını taşıyor."},
+{"is": "NHR worklog kontrolü", "araclar": ["jira_worklog"], "sonuc": "2-11 Kasım: 71 kayıt, 214 sa, 4 kişi (Ozan 62, Tuğba 59,5, Sena 56,5, Aslı 36)."}
+],
+"degisiklikler": [],
+"haftalik_rapor": [
+{"proje": "ATL", "hafta": "2026-H46", "gonderildi": true, "duzeltmeler": [], "dayanaksiz_uyarisi": [], "py_puani": 7, "rag": "amber", "rag_gerekcesi": "Elif'in beyanı; geciken 4/21 (PYB denetimi bekliyor)"},
+{"proje": "PSL", "hafta": "2026-H46", "gonderildi": true, "duzeltmeler": [], "dayanaksiz_uyarisi": [], "py_puani": 5, "rag": "red", "rag_gerekcesi": "Burak'ın beyanı: Kritik; geciken 10/25"},
+{"proje": "NHR", "hafta": "2026-H46", "gonderildi": true, "duzeltmeler": [], "dayanaksiz_uyarisi": [], "py_puani": 5, "rag": null, "rag_gerekcesi": "Rapor Bölüm sorumlusunda; PYB denetimi yapılmadı"},
+{"proje": "KLK", "hafta": "2026-H46", "gonderildi": false, "duzeltmeler": [], "dayanaksiz_uyarisi": [], "py_puani": null, "rag": null, "rag_gerekcesi": "Rapor henüz yazılmadı; Can'a hatırlatıldı"}
+],
+"rapor_kararlari": [],
+"bulgular": [
+{"tur": "tutarsizlik", "onem": "yuksek", "baslik": "H45 ATL/PSL: 'hafta yayınlandı; değişmez' ama aşama 'Bölüm sorumlusunda' ve PY düzenleyemiyor", "kanit": "pilot arac mert haftalik_rapor {proje:ATL,hafta:2026-H45} → \"islem\": \"hafta yayınlandı; değişmez\", \"asama\": \"Bölüm sorumlusunda\", \"iade_notu\": \"EVM rakamları araçla … uyuşmuyor\" (PSL aynı)", "beklenen": "İade edilmiş rapor taslağa dönmeli ve PY yeniden gönderebilmeli", "gerceklesen": "Rapor Bölüm sorumlusunda aşamasında takılı; PY düzenleyemiyor, PYB iade edemiyor"},
+{"tur": "eksik_ozellik", "onem": "orta", "baslik": "Rolsüz tahsis satırının kişisi/ünvanı kapasite_talep uyarısından belirlenemiyor", "kanit": "tahsis_ozeti {proje:NHR} satırı: kisi Can Erdem, bolum U340, plan_aa 0.4 (rol alanı yok); kapasite_talep U340 'Rol atanmamış' 0.4 AA; maliyet_raporu maliyetlenemeyen_kisi_sayisi 1", "beklenen": "Uyarı kişi/proje adını göstermeli", "gerceklesen": "Yalnız bölüm ve AA gösteriyor"},
+{"tur": "tutarsizlik", "onem": "orta", "baslik": "NHR beklentisinde eski EVM rakamları duruyor; üç farklı EAC dolaşımda", "kanit": "beklentiler: 'BAC 5.572.550, EAC 6.369.110, VAC -796.560'; yanıt 'EAC 6.457.569, VAC -836.919'; evm_analizi NHR bugün: eac 6548521, vac -927871", "beklenen": "Beklenti metni güncel EVM ile uyumlu (rakam tarihi belirtilerek)", "gerceklesen": "6,37 / 6,46 / 6,55 milyon TL"}
+],
+"yanitlar": [
+{"kime": "elif", "mesaj_tarihi": "2026-11-12", "metin": "Elif Hanım, EVM düzeltmeniz (%88, SPI 1,04, CPI 1,05, EAC 7.790.455) evm_analizi ATL çıktısıyla birebir uyuşuyor; saat ve yer için 'kayıtta yok' yazımı biçim açısından kabul. Ancak H45 şu an 'hafta yayınlandı; değişmez' ve 'Bölüm sorumlusunda' görünüyor; PYB olarak bu aşamada iade edemiyorum. Yeniden gönderim akışının açılması Selin Hanım/yönetim tarafında. H46 (puan 7) Bölüm sorumlusunda; Selin onayı gelince biçim denetimini yapacağım."},
+{"kime": "burak", "mesaj_tarihi": "2026-11-12", "metin": "Burak Bey, PSL EVM'inizi (SPI 0,90, CPI 0,89, EAC 6.264.013, VAC -664.913) evm_analizi ile teyit ettim. Eski değerler 5 Kasım tarihli oldukları için hata değil, rapor tarihine göre okunacak. H45 PSL için aynı çıkmaz geçerli. NHR beklentisindeki eski rakamlar hâlâ duruyor; güncel EAC 6.548.521, VAC -927.871 ile düzeltin. NHR plan kilidi talebi geldiğinde 45,57 AA'yı teyit edeceğim."},
+{"kime": "ahmet", "mesaj_tarihi": "2026-11-10", "metin": "Ahmet Bey, maliyetlenemeyen satır: U340 'Rol atanmamış' 0,4 AA, NHR projesinde Can Erdem'e ait (tahsis_ozeti NHR; rolü boş). Can KLK'da 'Proje Yöneticisi' rolünde; NHR satırına rol girilmesini Can/PY'den istedim (termin 13 Kasım). ATL ve PSL H45 yeniden gönderimi gerçekleşmedi: ikisi de Bölüm sorumlusunda takılı."}
+],
+"mesajlar": [
+{"kime": "can", "metin": "Can Bey, KLK 2026-H46 raporu bugün (son gün) hâlâ yazılmadı. Geçen haftanın planı KLK-48, KLK-50, KLK-51. Lütfen bugün gönderin. NHR tahsisinde adınıza 0,4 AA'lık satırın rolü boş: 'Proje Yöneticisi' girilmesini 13 Kasım'a kadar teyit edin; KLK bs_approve kaydı için yanıtınızı da bekliyorum."},
+{"kime": "selin", "metin": "Selin Hanım, ATL, PSL, NHR H46 raporları sizin aşamanızda, onayınız gelince biçim denetimini yaparım. H45 ATL ve PSL de 'Bölüm sorumlusunda' ve 'hafta yayınlandı; değişmez' görünüyor; PY'ler düzeltemiyor, PYB iade edemiyor. İade/yeniden gönderim yolunu sizin açmanız gerekiyor."}
+],
+"ajanda": [
+{"madde": "ATL ve PSL H45 yeniden gönderim durumu; çıkmaz çözülünce EVM ve biçim denetimi", "kime": "elif / burak / selin", "termin": "2026-11-13", "durum": "acik"},
+{"madde": "H46 ATL, PSL, NHR: Selin onayı sonrası PYB biçim denetimi (oner_rapor_karari)", "kime": "mert", "termin": "2026-11-13", "durum": "acik"},
+{"madde": "KLK H46 raporu yazıldı mı kontrol; yoksa tekrar hatırlat", "kime": "can", "termin": "2026-11-13", "durum": "acik"},
+{"madde": "NHR plan kilidi talebi gelince plan 45,57 AA veri teyidi", "kime": "burak", "termin": "2026-11-13", "durum": "acik"},
+{"madde": "KLK bs_approve kaydı teyidi; yanıtı bekle", "kime": "can", "termin": "2026-11-13", "durum": "acik"},
+{"madde": "NHR beklentisindeki eski EVM rakamlarının düzeltilmesi (güncel EAC 6.548.521, VAC -927.871)", "kime": "burak", "termin": "2026-11-13", "durum": "acik"},
+{"madde": "NHR 0,4 AA satırına (Can Erdem) rol girilmesi", "kime": "can", "termin": "2026-11-13", "durum": "acik"},
+{"madde": "Maliyetlenemeyen kişi/ünvan: Can Erdem bildirildi", "kime": "ahmet", "termin": "2026-11-12", "durum": "tamam"},
+{"madde": "Ekim gerçekleşen AA ↔ worklog karşılaştırmasını Kasım kapanışında yinele; KLK'da Can/Mert Aydın/Nazlı worklog genel gider mi teyit", "kime": "mert", "termin": "2026-12-01", "durum": "acik"}
+],
+"gercek_disi": [
+{"kimin_verisi": "burak (NHR beklentisi, Ahmet'in 10 Kasım yanıtı)", "ne": "Beklentideki NHR EVM rakamları güncel değil (EAC 6.369.110, VAC -796.560; yanıtta EAC 6.457.569)", "kanit": "evm_analizi NHR 12 Kasım: eac_tahmini_toplam 6548521, vac_sapma -927871"}
+],
+"demo_yoklamasi": [],
+"arac_cagrisi": 14, "memnuniyet": 6, "gunun_notu": "Selin onayı gelmeyen raporlara karar verilmedi, yayın ve H45 iade çıkmazı kayda geçirildi; uygulamada değişiklik yapılmadı."
+}
