@@ -54,10 +54,22 @@ const ENV_TEMPLATE = `# PlanAsistan yerel ayarları — değişiklikten sonra Pl
 # JIRA_ALLOW_UPDATE=1
 # JIRA_ALLOW_CREATE=1
 
-# ---- Yapay zekâ (isteğe bağlı; uygulamadaki yönetici panelinden de girilebilir) ----
+# ---- Yapay zekâ ----
+# İki yol var (biri yeter):
+#  a) Anahtarı buraya yazın:
 # AI_PROVIDER=openai          # openai | azure | anthropic | gemini
 # AI_API_KEY=
 # AI_MODEL=
+# AI_BASE_URL=                # kurum içi / Azure uç noktası gerekiyorsa
+#  b) Uygulamada Yönetici konsolu → Yapay zekâ panelinden girin (şifreli olarak planasistan-veri klasörüne yazılır).
+
+# ---- Vercel'deki panel ayarlarını ortak kullanmak (isteğe bağlı) ----
+# Vercel'de AI ayarları panelden girildiyse Supabase'de şifreli durur. Aynı ayarları okumak için Vercel'deki
+# üç değeri buraya yazın. DİKKAT: SUPABASE_SERVICE_ROLE_KEY veritabanının tam yetkili anahtarıdır; yalnız
+# kendi bilgisayarınızda ve gerçekten gerekiyorsa kullanın (yoksa yukarıdaki a/b yolu yeterli).
+# SUPABASE_URL=
+# SUPABASE_SERVICE_ROLE_KEY=
+# AI_CONFIG_SECRET=
 
 # ---- Kurum ağı ----
 # TÜBİTAK kök sertifikası uygulamada hazırdır. Başka bir kurum sertifikası gerekirse
@@ -91,7 +103,9 @@ const prepareHome = (): Record<string, string> => {
         secret = randomBytes(32).toString('hex');
         try { writeFileSync(secretFile, secret, { encoding: 'utf8', mode: 0o600 }); } catch { log('Uyarı: veri klasörüne yazılamadı; AI ayarları kalıcı olmayabilir.'); }
     }
-    return { AI_CONFIG_SECRET: secret, AI_SETTINGS_FILE: join(DATA_DIR, 'ai-settings.json') };
+    // Varsayılanlar: ayar dosyası bunları ezebilir (ör. Vercel'deki AI_CONFIG_SECRET ile ortak panel ayarları).
+    // Yalnız bu bilgisayardan erişildiği için erişim koruması varsayılan olarak kapalı.
+    return { AI_AUTH_MODE: 'none', AI_CONFIG_SECRET: secret, AI_SETTINGS_FILE: join(DATA_DIR, 'ai-settings.json') };
 };
 
 const MIME: Record<string, string> = {
@@ -147,12 +161,12 @@ const waitForEnter = (): Promise<void> => new Promise(resolve => {
 });
 
 export const main = async (): Promise<void> => {
-    const fixed = prepareHome();
+    const defaults = prepareHome();
     // Her istekte okunur: ayar dosyası değişirse yeniden başlatmadan da geçerli olur (AI paneli dahil)
     const getEnv = (): Record<string, string | undefined> => {
         let file: Record<string, string> = {};
         try { file = parseEnvFile(readFileSync(ENV_FILE, 'utf8')); } catch { /* dosya yok */ }
-        const env: Record<string, string | undefined> = { ...process.env, ...file, ...fixed };
+        const env: Record<string, string | undefined> = { ...defaults, ...process.env, ...file };
         if (env.AI_CA_CERTS_FILE && !env.AI_CA_CERTS) {
             try { env.AI_CA_CERTS = readFileSync(env.AI_CA_CERTS_FILE, 'utf8'); } catch { log(`Sertifika dosyası okunamadı: ${env.AI_CA_CERTS_FILE}`); }
         }

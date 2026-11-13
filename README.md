@@ -881,7 +881,9 @@ Kurulum ya da Node.js gerektirmeyen tek dosyalık sürüm: arayüz ve sunucu (AI
 2. `PlanAsistan.exe` dosyasına çift tıklayın; tarayıcıda `http://localhost:5180` açılır. Kapatmak için komut penceresini kapatın.
 3. Jira ya da yapay zekâ için exe'nin yanında oluşan `planasistan.env` dosyasını Not Defteri ile düzenleyin (ör. `JIRA_BASE_URL`, `JIRA_TOKEN`) ve uygulamayı yeniden açın.
 
-- **Veriler:** projeler tarayıcıda, bu bilgisayarda tutulur; yedek için uygulamadaki dışa aktarımı ya da bulut eşitlemesini kullanın. Panelden girilen AI ayarları şifreli olarak `planasistan-veri/` klasöründedir.
+- **Vercel ayarları kendiliğinden gelmez:** Jira ve AI değerlerini Vercel → *Settings → Environment Variables* ekranından `planasistan.env`'e kopyalayın (ya da `vercel env pull planasistan.env`). AI anahtarı uygulamadaki *Yönetici konsolu → Yapay zekâ* panelinden de girilebilir. Vercel'de panelden girilmiş AI ayarlarını ortak kullanmak için `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` ve aynı `AI_CONFIG_SECRET` gerekir; service-role anahtarı tam yetkili olduğundan yalnız gerekiyorsa.
+- **Veriler:** projeler tarayıcıda, bu bilgisayarda tutulur. Vercel sürümüyle aynı projeleri görmek için uygulamadaki bulut eşitleme ekranında Supabase adresini ve anon anahtarını girip aynı hesapla oturum açın (her bilgisayarda bir kez). Panelden girilen AI ayarları şifreli olarak `planasistan-veri/` klasöründedir.
+- **Erişim koruması:** yerel sürümde varsayılan olarak kapalıdır (`AI_AUTH_MODE=none`); Vercel'den kopyalanan `AI_ACCESS_TOKEN` ya da Supabase anahtarları bunu değiştirmez. İstenirse `AI_AUTH_MODE` açıkça yazılır.
 - **Erişim:** sunucu yalnız `127.0.0.1`'e bağlanır; ağdaki başka bilgisayarlar ve başka siteler erişemez.
 - **İlk açılış:** exe imzasız olduğu için Windows "kişisel bilgisayarınızı korudu" uyarısı gösterebilir → *Ek bilgi* → *Yine de çalıştır*.
 - **Kaynaktan:** Node.js kuruluysa depoyu indirip `PlanAsistan-Baslat.cmd` dosyasına çift tıklamak da aynı yerel sürümü açar (ilk açılışta bağımlılıkları kurup derler; güncellemeden sonra `dist` ve `dist-local` klasörlerini silin).

@@ -21,6 +21,21 @@ AYARLAR (Jira, yapay zekâ, Teams, e-posta)
 
   Bu dosyada jeton ve parolalar vardır: başkasıyla paylaşmayın.
 
+  Yapay zekâ: AI_PROVIDER / AI_API_KEY / AI_MODEL satırlarını doldurun ya da
+  uygulamada Yönetici konsolu → Yapay zekâ panelinden girin.
+
+  Vercel'deki ayarlar exe'ye kendiliğinden gelmez. Vercel → Project →
+  Settings → Environment Variables ekranındaki değerleri (Jira, AI) bu
+  dosyaya kopyalayın. Vercel CLI kullanıyorsanız "vercel env pull
+  planasistan.env" komutu da aynı dosyayı üretir (gereksiz satırları silin).
+
+BULUT VERİTABANI (SUPABASE) İLE ORTAK ÇALIŞMA
+  Exe, projeleri tek başına bu bilgisayarda tutar. Vercel'deki sürümle aynı
+  projeleri görmek için uygulamada bulut eşitleme ekranını açın, Supabase
+  adresini ve "anon" anahtarını girip aynı e-posta ve parolayla oturum açın,
+  ardından buluttan çekin. Bu bilgiler tarayıcıda saklanır; her bilgisayarda
+  bir kez girilir.
+
 VERİLER NEREDE?
   - Projeleriniz, görevler ve raporlar tarayıcınızda (bu bilgisayarda, bu
     adrese bağlı yerel depoda) tutulur. Aynı tarayıcıyla açın; tarayıcı
