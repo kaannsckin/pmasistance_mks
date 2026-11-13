@@ -873,6 +873,26 @@ timeline
 
 ---
 
+## 💻 Bilgisayarda çalıştırma (exe)
+
+Kurulum ya da Node.js gerektirmeyen tek dosyalık sürüm: arayüz ve sunucu (AI vekili, Jira, Teams, e-posta) `PlanAsistan.exe` içindedir.
+
+1. GitHub sayfasındaki **Releases** bölümünden `PlanAsistan-win-x64.zip` dosyasını indirip bir klasöre açın.
+2. `PlanAsistan.exe` dosyasına çift tıklayın; tarayıcıda `http://localhost:5180` açılır. Kapatmak için komut penceresini kapatın.
+3. Jira ya da yapay zekâ için exe'nin yanında oluşan `planasistan.env` dosyasını Not Defteri ile düzenleyin (ör. `JIRA_BASE_URL`, `JIRA_TOKEN`) ve uygulamayı yeniden açın.
+
+- **Veriler:** projeler tarayıcıda, bu bilgisayarda tutulur; yedek için uygulamadaki dışa aktarımı ya da bulut eşitlemesini kullanın. Panelden girilen AI ayarları şifreli olarak `planasistan-veri/` klasöründedir.
+- **Erişim:** sunucu yalnız `127.0.0.1`'e bağlanır; ağdaki başka bilgisayarlar ve başka siteler erişemez.
+- **İlk açılış:** exe imzasız olduğu için Windows "kişisel bilgisayarınızı korudu" uyarısı gösterebilir → *Ek bilgi* → *Yine de çalıştır*.
+- **Kaynaktan:** Node.js kuruluysa depoyu indirip `PlanAsistan-Baslat.cmd` dosyasına çift tıklamak da aynı yerel sürümü açar (ilk açılışta bağımlılıkları kurup derler; güncellemeden sonra `dist` ve `dist-local` klasörlerini silin).
+
+```bash
+npm run build:exe                      # release/PlanAsistan-win-x64.zip
+npm run build:exe -- win-x64 linux-x64 # birden çok hedef
+```
+
+Exe her `main` push'unda derlenip Windows'ta açılış denemesinden geçer (Actions → *Exe* → *PlanAsistan* dosyası); `v1.0.0` gibi bir etiket gönderildiğinde zip'ler Releases'a yüklenir.
+
 ## 🛠️ Yerel geliştirme
 
 Node.js 20 ya da üstü gerekir.

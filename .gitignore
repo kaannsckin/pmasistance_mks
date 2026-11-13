@@ -30,3 +30,10 @@ dist-ssr
 dist-mcp
 dist-pilot
 /demo-testi/
+
+# Yerel sürüm ve exe paketleri (npm run build:local / build:exe)
+dist-local
+release
+.cache
+planasistan.env
+planasistan-veri/

@@ -1,0 +1,42 @@
+PlanAsistan — yerel sürüm
+=========================
+
+BAŞLATMA
+  PlanAsistan.exe dosyasına çift tıklayın. Bir komut penceresi açılır ve
+  tarayıcınızda http://localhost:5180 adresi kendiliğinden açılır.
+  Kapatmak için komut penceresini kapatın.
+
+  Kurulum ya da Node.js gerekmez. Windows ilk açılışta "Windows kişisel
+  bilgisayarınızı korudu" uyarısı gösterebilir (dosya imzasız):
+  "Ek bilgi" → "Yine de çalıştır".
+
+AYARLAR (Jira, yapay zekâ, Teams, e-posta)
+  İlk açılışta exe'nin yanında planasistan.env dosyası oluşur. Not Defteri
+  ile açın, kullanacağınız satırların başındaki # işaretini kaldırıp değeri
+  yazın, kaydedin ve PlanAsistan'ı kapatıp yeniden açın. Örnek (Jira):
+
+      JIRA_BASE_URL=https://jira.kurum.gov.tr
+      JIRA_TOKEN=<Jira'da oluşturduğunuz kişisel erişim jetonu>
+      JIRA_ALLOW_UPDATE=1
+
+  Bu dosyada jeton ve parolalar vardır: başkasıyla paylaşmayın.
+
+VERİLER NEREDE?
+  - Projeleriniz, görevler ve raporlar tarayıcınızda (bu bilgisayarda, bu
+    adrese bağlı yerel depoda) tutulur. Aynı tarayıcıyla açın; tarayıcı
+    verilerini temizlemek projeleri de siler. Düzenli yedek için uygulamadaki
+    "Dışa aktar" (JSON yedeği) ya da bulut eşitlemesini kullanın.
+  - Yapay zekâ ayarları (panelden girildiyse, şifreli) planasistan-veri
+    klasöründedir.
+  - Uygulama yalnız bu bilgisayardan erişilebilir (127.0.0.1); ağdaki başka
+    bilgisayarlar bağlanamaz.
+
+SORUN GİDERME
+  - "Port kullanımda": planasistan.env dosyasına PORT=5190 yazın. Port
+    değişince tarayıcı verileri başka adreste arar; önce eski adresten
+    yedek alın.
+  - Jira / AI adresinde sertifika (TLS) hatası: TÜBİTAK kök sertifikası
+    hazırdır; başka bir kurum sertifikası gerekiyorsa PEM dosyasının yolunu
+    AI_CA_CERTS_FILE=C:/yol/sertifika.pem olarak yazın.
+  - Jira yalnız kurum ağından erişilebiliyorsa bilgisayarın kurum ağında
+    (ya da VPN'de) olması gerekir.
