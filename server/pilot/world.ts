@@ -154,6 +154,12 @@ export const availableAAOf = (personId: string): number => AVAILABLE_AA[personId
  * simülasyon "geçmişteki kullanıcılar" adına yazar; bu günden itibaren bu
  * işleri rol ajanları yapar.
  */
+/**
+ * Görev ayrılığı (B-016): bu günden itibaren PY'si kendi bölümünün sorumlusu
+ * olan projelerin (KLK, Can Erdem) raporu bölüm onayı olmadan PYB desteğe
+ * gider. Önceki günler değişmez (geçmiş birebir korunur).
+ */
+export const GOREV_AYRILIGI = '2026-11-13';
 export const PILOT_BASLANGIC = '2026-10-19';
 
 /** Simülasyonun worklog ↔ adam-ay dönüşümü: uygulamanın "Jira Billed Hours" kuralıyla aynı (1 iş günü = 8 saat) */

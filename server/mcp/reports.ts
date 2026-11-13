@@ -7,7 +7,7 @@ import { buildVariantRequest, PRODUCTION_VARIANT } from '../../utils/ai/reportVa
 import { buildReportInput, parseReportSuggestion } from '../../utils/ai/weeklyReportPrompt.js';
 import { resolveProject, ToolContext } from '../../utils/ai/scope.js';
 import {
-    actorOf, advanceReport, canEditReport, CATEGORY_META, createReport, dueDate, findReport, flowBlockers, isoWeekOf, isReportFrozen, isReportSteward, isWeekPublished, itemDisplay, lintCounts, lintDictionary, lintReport,
+    actorOf, advanceReport, canEditReport, CATEGORY_META, createReport, dueDate, findReport, flowBlockers, isoWeekOf, isReportFrozen, isReportSteward, reportFlowFor, isWeekPublished, itemDisplay, lintCounts, lintDictionary, lintReport,
     newItem, nextStage, PLAN_REVIEW_STATUSES, previousPlansOf, projectDepartment, publishWeek, reportDictionary, reportFlowOf, reportSettingsOf, returnReportIn,
     saveReport, shiftWeek, STAGE_LABELS, THIS_WEEK_CATEGORIES, visibleReports, weekLabel,
 } from '../../utils/weeklyReport.js';
@@ -318,9 +318,9 @@ export const prepareReportOp = (ws: WorkspaceData, ctx: ToolContext, name: strin
         const not = asText(args.not);
         if (karar === 'iade' && !not) throw new Error('İade için not zorunlu: eksikleri yazın.');
         if (isReportFrozen(ws, existing)) throw new Error(`${weekKey(w)} yayınlandı; onaylı rapor değişmez.`);
-        const owner = existing.stage === 'bs_review' ? ctx.identity.role === 'bolum_sorumlu' : (existing.stage === 'pyds_review' || existing.stage === 'approved') && isReportSteward(ctx.identity);
+        const owner = existing.stage === 'bs_review' ? canEditReport(ws, ctx.identity, existing) : (existing.stage === 'pyds_review' || existing.stage === 'approved') && isReportSteward(ctx.identity);
         if (!owner) throw new Error(`Rapor "${STAGE_LABELS[existing.stage]}" aşamasında; bu aşamanın kararı sizde değil.`);
-        if (karar === 'onay' && !nextStage(existing, reportFlowOf(ws))) throw new Error('Rapor zaten onaylı.');
+        if (karar === 'onay' && !nextStage(existing, reportFlowFor(ws, existing))) throw new Error('Rapor zaten onaylı.');
         const lint = lintCounts(lintReport(existing, reportLintDictionary(ws)));
         return {
             op: { op: 'karar', projectId: project.id, ...w, karar, ...(not ? { not } : {}) },
@@ -388,7 +388,7 @@ export const applyReportOp = (ws: WorkspaceData, ctx: ToolContext, op: ReportOp,
             return { ws: appendAudit({ ...ws, weeklyReports: r.reports }, 'report.return', `${summary}: ${op.not} — Claude (MCP) ile`, project.id), summary };
         }
         // Onay içerik değiştirmez: yalnız aşama ilerler (geçmişe "edit" düşmez)
-        const flow = reportFlowOf(ws);
+        const flow = reportFlowFor(ws, existing);
         if (existing.stage === 'draft' || !canEditReport(ws, id, existing) || !nextStage(existing, flow)) throw new Error('Onaylanamadı (aşama değişmiş ya da yetki yok).');
         if (lintCounts(lintReport(existing, dictionary)).errors > 0) throw new Error('Raporda biçim hatası var; onaylamak yerine iade edin.');
         const next = advanceReport(existing, actor, now, flow);

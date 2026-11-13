@@ -6,7 +6,7 @@ import { Identity, managedDepartmentCode, ownsProject } from '../../utils/rbac';
 import { relativeTime } from '../../utils/recentChanges';
 import {
     actorOf, createReport, dueDate, findReport, isoWeekOf, isReportSteward, isWeekPublished, latestPublication, lintCounts, lintDictionary, lintReport, pendingAuthors,
-    nextStage, projectDepartment, reportDictionary, reportFlowOf, reportSettingsOf, STAGE_LABELS, visibleReports, weekLabel, weekProgress,
+    nextStage, projectDepartment, reportDictionary, reportFlowFor, reportFlowOf, reportSettingsOf, STAGE_LABELS, visibleReports, weekLabel, weekProgress,
 } from '../../utils/weeklyReport';
 import { WeekPicker } from './DateRangePicker';
 import { GuideButton, GuideTour, useGuide } from './GuideTour';
@@ -223,7 +223,7 @@ const ModernWeeklyReport: React.FC<ModernWeeklyReportProps> = ({
                 onSave={(r: WeeklyReport) => onSaveReport(r)}
                 onAdvance={(r: WeeklyReport) => {
                     const from = (live || open).stage;
-                    const to = nextStage(live || open, reportFlowOf(workspace))?.stage;
+                    const to = nextStage(live || open, reportFlowFor(workspace, live || open))?.stage;
                     const ok = onAdvanceReport(r);
                     if (ok) {
                         setOpen(null);

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { WeeklyReport, WorkspaceData } from '../types';
 import {
     actorOf, advanceReport, buildEml, DEFAULT_REPORT_FLOW, DEFAULT_REPORT_SETTINGS, flowBlockers, flowStages, nextStage, previousPlansOf, returnStage, dueDate, latestPublication, markWeekEmailed, publishWeek, reminderText, reportDictionary,
-    returnReportIn, saveReport, unpublishWeek, canEditReport, isReportFrozen, consolidate, createReport, editReport, findAbbreviations, glossaryFor, isoWeekOf,
+    returnReportIn, saveReport, unpublishWeek, canEditReport, isReportFrozen, reportFlowFor, selfReviewed, consolidate, createReport, editReport, findAbbreviations, glossaryFor, isoWeekOf,
     lintCounts, lintDictionary, lintReport, locative, mailtoLink, meetingSentence, newItem, pendingAuthors, projectDepartment, renderReportHtml, renderReportText,
     returnReport, setPlanReview, setReportAiAssessment, shiftWeek, teamsChatLink, visibleReports, weekLabel, weekProgress, weekStart,
 } from './weeklyReport';
@@ -352,6 +352,29 @@ describe('akış işlemleri (yetki işlem anında)', () => {
         // Yayınlanmış haftada yeni rapor açılmaz
         const c = createReport({ kind: 'project', projectId: 'a', departmentCode: 'U310', year: 2026, week: 41 }, py, NOW);
         expect(saveReport({ ...pub, weeklyReports: [done] }, { role: 'py', personId: 'pm1' }, c, py, { now: NOW })).toBeNull();
+    });
+
+    it('B-016: PY kendi bölümünün sorumlusuysa bölüm onayı atlanır, kendi raporunu onaylayamaz', () => {
+        const base = buildWs();
+        // Ayşe (pm1) hem Safir Posta'nın PY'si hem U310'un sorumlusu
+        const ws = { ...base, departments: base.departments.map(d => (d.code === 'U310' ? { ...d, leadPersonId: 'pm1' } : d)) };
+        const draft = { ...createReport({ kind: 'project', projectId: 'a', departmentCode: 'U310', year: 2026, week: 41 }, py, NOW), thisWeek: [newItem('delivery', '3 Ekim 2026 tarihinde sürüm 2 teslim edildi.')] };
+        expect(selfReviewed(ws, draft)).toBe(true);
+        expect(selfReviewed(base, draft)).toBe(false);
+        expect(reportFlowFor(ws, draft).bsReview).toBe(false);
+        const sent = saveReport(ws, { role: 'py', personId: 'pm1' }, draft, py, { advance: true, now: NOW })!;
+        expect(sent.report.stage).toBe('pyds_review');
+        expect(sent.report.history.map(h => h.action)).toEqual(['create', 'submit']);
+        // PYB destek iade ederse rapor PY'ye döner (bölüm sorumlusuna değil)
+        const back = returnReportIn({ ...ws, weeklyReports: sent.reports }, { role: 'pyb_destek' }, sent.report.id, pyds, 'Biçim', NOW)!;
+        expect(back.report.stage).toBe('draft');
+        // Eski kayıt: bölüm sorumlusunda bekleyen kendi raporu → kendisi onaylayamaz, PYB destek ilerletir
+        const legacy = { ...draft, stage: 'bs_review' as const };
+        const wl = { ...ws, weeklyReports: [legacy] };
+        expect(canEditReport(wl, { role: 'bolum_sorumlu', personId: 'pm1' }, legacy)).toBe(false);
+        expect(canEditReport(wl, { role: 'pyb_destek' }, legacy)).toBe(true);
+        // Başka bölüm sorumlusunun raporunda olağan akış
+        expect(canEditReport({ ...base, weeklyReports: [legacy] }, { role: 'bolum_sorumlu', personId: 'bs1' }, legacy)).toBe(true);
     });
 
     it('sözlük, son gün ve hatırlatma metni', () => {

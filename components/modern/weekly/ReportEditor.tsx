@@ -15,7 +15,7 @@ import { Identity, ownsProject } from '../../../utils/rbac';
 import { relativeTime } from '../../../utils/recentChanges';
 import {
     canEditReport, CATEGORY_META, findAbbreviations, findReport, glossaryFor, itemDisplay, lintCounts, lintDictionary, LintIssue, lintReport, locative, meetingSentence,
-    flowBlockers, newItem, nextStage, PLAN_REVIEW_LABELS, PLAN_REVIEW_STATUSES, reportFlowOf, returnStage, setPlanReview, shiftWeek, STAGE_LABELS, THIS_WEEK_CATEGORIES, weekLabel, weekStart,
+    flowBlockers, newItem, nextStage, PLAN_REVIEW_LABELS, PLAN_REVIEW_STATUSES, reportFlowFor, returnStage, setPlanReview, shiftWeek, STAGE_LABELS, THIS_WEEK_CATEGORIES, weekLabel, weekStart,
 } from '../../../utils/weeklyReport';
 import { parseWorklogRows, summarizeWorklog, worklogInWeek } from '../../../utils/worklog';
 import { useAiRun } from '../../assistant/AiButton';
@@ -316,7 +316,7 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
     const pm = project?.pmPersonId ? workspace.people.find(p => p.id === project.pmPersonId) : undefined;
     const deptName = workspace.departments.find(d => d.code === draft.departmentCode)?.name || draft.departmentCode;
     const title = draft.kind === 'department' ? `Bölüm eklemeleri — ${deptName}` : project?.name || 'Silinmiş proje';
-    const flow = reportFlowOf(workspace);
+    const flow = reportFlowFor(workspace, report);
     const next = nextStage(report, flow);
     const returnTo = returnStage(report, flow);
     const canReturn = editable && report.stage !== 'draft' && !!returnTo;
