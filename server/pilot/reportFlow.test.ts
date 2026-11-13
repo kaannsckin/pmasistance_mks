@@ -100,6 +100,8 @@ describe('haftalık rapor akışı (MCP, persona kimlikleriyle)', () => {
         const stuck = await call('selin', 'haftalik_rapor', { proje: 'PSL-2402', hafta: W });
         expect(stuck.json.asama).toBe('Bölüm sorumlusunda');
         expect(stuck.json.islem).toContain('onay ya da iade');
+        // B-029: denetleyen gönderim anının EVM'sini görür
+        expect(stuck.json.evm_rapor_aninda).toMatchObject({ tarih: expect.stringMatching(/^2026-/), not: expect.stringContaining('evm_analizi bugünü') });
         expect((await call('ahmet', 'haftalik_rapor', { proje: 'PSL-2402', hafta: W })).json.durum).toContain('görünür değil');
         // Bölüm sorumlusu iade eder, PY düzeltip gönderir, onay zinciri tamamlanır
         expect((await call('selin', 'oner_rapor_karari', { proje: 'PSL-2402', hafta: W, karar: 'iade', not: 'Teslim tarihini ekleyin.' }, true)).ok).toBe(true);

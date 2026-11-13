@@ -1,6 +1,7 @@
 import type { Abbreviation, MeetingDetails, PlanReviewItem, PlanReviewStatus, Project, ReportCategory, ReportItem, WeeklyReport, WorklogEntry, WorkspaceData } from '../../types.js';
 import { appendAudit } from '../../utils/audit.js';
 import { meetingsHeldInWeek, meetingsPlannedInWeek } from '../../utils/customerMeetings.js';
+import { reportEvmSnapshot } from '../../utils/evm.js';
 import { matchItems } from '../../utils/ai/reportEval.js';
 import { checkSuggestion } from '../../utils/ai/reportRepair.js';
 import { buildVariantRequest, PRODUCTION_VARIANT } from '../../utils/ai/reportVariants.js';
@@ -154,6 +155,13 @@ const ownsProject = (ctx: ToolContext, project: Project) => ctx.identity.role ==
 
 // ---------------------------------------------------------------- okuma
 
+/** Gönderim anındaki EVM (B-029): rapordaki rakamlar canlı evm_analizi ile değil bununla karşılaştırılır */
+const evmSnapshotOut = (s: NonNullable<WeeklyReport['evmSnapshot']>) => ({
+    tarih: s.at.slice(0, 10), durum_ayi: s.statusMonth, tamamlanma_yuzde: Math.round(s.percentComplete * 100),
+    spi: s.spi, cpi: s.cpi, eac: s.eac,
+    not: 'Raporun gönderildiği andaki değerler. Rapordaki EVM rakamlarını bununla karşılaştırın; evm_analizi bugünü gösterir ve tamamlanan işlerle değişir.',
+});
+
 export const readReports = (ws: WorkspaceData, ctx: ToolContext, args: Record<string, unknown>, now: Date): unknown => {
     const w = parseWeek(args.hafta, now);
     const settings = reportSettingsOf(ws);
@@ -189,6 +197,7 @@ export const readReports = (ws: WorkspaceData, ctx: ToolContext, args: Record<st
             py_puani: shown.pmScore, py_puani_notu: shown.pmScoreNote,
             plan_degerlendirmesi: (shown.planReview || []).map(p => ({ madde_id: p.itemId, madde: p.text, durum: p.status })),
             bicim_denetimi: lintReport(shown, reportLintDictionary(ws)).map(l => `${l.level === 'error' ? 'HATA' : 'uyarı'}: ${l.message}`),
+            ...(shown.evmSnapshot ? { evm_rapor_aninda: evmSnapshotOut(shown.evmSnapshot) } : {}),
             gecmis: shown.history.map(h => `${h.at.slice(0, 16).replace('T', ' ')} ${h.action} — ${h.byName || h.byRole}${h.note ? `: ${h.note}` : ''}`),
         } : {}),
         gecen_haftanin_plani: prevPlans.map(p => ({ madde_id: p.id, madde: itemDisplay(p) })),
@@ -396,7 +405,8 @@ export const applyReportOp = (ws: WorkspaceData, ctx: ToolContext, op: ReportOp,
         return { ws: appendAudit({ ...ws, weeklyReports: reports.map(x => (x.id === next.id ? next : x)) }, 'report.approve', `${summary} — Claude (MCP) ile`, project.id), summary };
     }
     const base = existing || createReport({ kind: 'project', projectId: project.id, departmentCode: projectDepartment(ws, project), year: op.year, week: op.week }, actor, now);
-    const r = saveReport(ws, id, { ...base, ...op.content }, actor, { advance: op.gonder, dictionary, now });
+    const evm = op.gonder ? reportEvmSnapshot(ws, project.id, now) : undefined;
+    const r = saveReport(ws, id, { ...base, ...op.content }, actor, { advance: op.gonder, dictionary, now, evm });
     if (!r) throw new Error(op.gonder ? 'Gönderilemedi: yetki, aşama, biçim hatası ya da akış kuralı (geçen haftanın planı, PY puanı).' : 'Kaydedilemedi: yetki ya da aşama değişmiş.');
     const summary = `"${project.name}" ${weekKey(op)} haftalık raporu ${op.gonder ? `gönderildi → ${STAGE_LABELS[r.report.stage]}` : 'taslak olarak kaydedildi'}`;
     const next = { ...ws, weeklyReports: r.reports };

@@ -572,6 +572,21 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
                     Salt okunur: rapor şu an “{STAGE_LABELS[report.stage]}” aşamasında{report.stage === 'approved' ? '' : '; aşamanın sahibi düzenleyebilir'}.
                 </div>
             )}
+            {report.evmSnapshot && report.stage !== 'draft' && (() => {
+                const e = report.evmSnapshot;
+                const n2 = (v: number | null) => (v === null ? '—' : v.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+                return (
+                    <p className="m-0 rounded-2xl px-4 py-3 m-fill-2 text-[14px] m-text-2 flex items-start gap-3">
+                        <Icon name="activity" size={18} style={{ marginTop: 1 }} />
+                        <span>
+                            <b className="m-text">Gönderim anındaki EVM</b> ({new Date(e.at).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' })}
+                            {e.statusMonth ? `, durum ayı ${e.statusMonth}` : ''}): tamamlanma %{Math.round(e.percentComplete * 100)} · SPI {n2(e.spi)} · CPI {n2(e.cpi)}
+                            {e.costed ? ` · EAC ${Math.round(e.eac).toLocaleString('tr-TR')} TL` : ''}.
+                            {' '}Rapordaki rakamları bununla karşılaştırın; proje ekranları bugünü gösterir.
+                        </span>
+                    </p>
+                );
+            })()}
             <Notice notice={notice} onClose={() => setNotice(null)} />
 
             <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px] items-start">

@@ -325,7 +325,7 @@ type SaveWs = WsLike & Pick<WorkspaceData, 'people'>;
  */
 export const saveReport = (
     ws: SaveWs, id: Identity, draft: WeeklyReport, actor: Actor,
-    o: { advance?: boolean; dictionary?: Abbreviation[]; now?: Date } = {},
+    o: { advance?: boolean; dictionary?: Abbreviation[]; now?: Date; evm?: WeeklyReport['evmSnapshot'] } = {},
 ): { reports: WeeklyReport[]; report: WeeklyReport; from: ReportStage } | null => {
     const now = o.now || new Date();
     const reports = ws.weeklyReports || [];
@@ -349,6 +349,8 @@ export const saveReport = (
         if (lintCounts(lintReport(r, o.dictionary)).errors > 0 || !nextStage(r, flow)) return null;
         if (flowBlockers(r, flow, previousPlansOf(reports, r)).length) return null;
         r = advanceReport(r, actor, now, flow);
+        // Taslaktan gönderimde o anın EVM'si raporla saklanır (B-029)
+        if ((existing?.stage ?? 'draft') === 'draft' && o.evm) r = { ...r, evmSnapshot: o.evm };
     }
     return { reports: existing ? reports.map(x => (x.id === r.id ? r : x)) : [...reports, r], report: r, from: existing?.stage || 'draft' };
 };

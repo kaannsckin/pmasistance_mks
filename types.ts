@@ -806,6 +806,22 @@ export interface WorklogEntry {
   source: 'file' | 'jira';
 }
 
+/**
+ * Rapor gönderildiği andaki proje EVM'si (B-029). Denetleyen rapordaki
+ * rakamları bununla karşılaştırır; canlı EVM bugünü gösterir ve tamamlanan
+ * işlerle günden güne değişir.
+ */
+export interface ReportEvmSnapshot {
+  at: string; // ISO: gönderim anı
+  year: number;
+  statusMonth: number; // gerçekleşeni girilmiş son ay (0 = başlamadı)
+  costed: boolean;
+  percentComplete: number; // 0..1
+  spi: number | null;
+  cpi: number | null;
+  eac: number;
+}
+
 export interface WeeklyReport {
   id: string;
   year: number; // ISO hafta yılı
@@ -819,6 +835,8 @@ export interface WeeklyReport {
   stage: ReportStage;
   returnNote?: string; // iade gerekçesi (bir önceki aşamaya)
   worklog?: WorklogEntry[];
+  /** Gönderim anındaki EVM (taslaktan ilk gönderimde ve her yeniden gönderimde yazılır) */
+  evmSnapshot?: ReportEvmSnapshot;
   /** AI'nın son önerisi — onaylı son hâliyle birlikte ince ayar veri setine girer */
   aiDraft?: ReportAiDraft;
   /** PY'nin bu hafta projenin genel sağlığına verdiği puan (1–10); sağlık modelinin girdisi */

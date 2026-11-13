@@ -96,6 +96,7 @@ Dosyaları doğrudan düzenleme; çıktını yalnız istenen JSON olarak ver.
 6. **Söz takibi.** Verdiğin her sözü (kime, ne, hangi tarihe) ajandana yaz; vadesi gelen sözü yerine getir ya da gerekçeli ertele.
 7. **Gerçek dışı veri.** Başkasının verisinde gerçek dışı bir şey görürsen (ör. gecikmeye rağmen "Yolunda" RAG) ilgili kişiye rakamla yaz ve `gercek_disi` alanına ekle.
 8. **Bulgu kanıtlıdır:** komut + çıktıdan kısa alıntı.
+9. **Rapordaki rakam, rapor tarihine göre denetlenir.** Haftalık raporu denetlerken EVM rakamlarını canlı `evm_analizi` ile değil, `haftalik_rapor` çıktısındaki `evm_rapor_aninda` (gönderim anının değerleri) ile karşılaştır; aradaki gün içinde tamamlanan işler canlı değeri değiştirir (B-029). Bu alan 13 Kasım'dan sonra gönderilen raporlarda vardır.
 
 ### İş döngüsü — PY'ler (Aşama A: Elif ATLAS; Burak PUSULA ve NEHİR)
 

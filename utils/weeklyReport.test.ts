@@ -377,6 +377,20 @@ describe('akış işlemleri (yetki işlem anında)', () => {
         expect(canEditReport({ ...base, weeklyReports: [legacy] }, { role: 'bolum_sorumlu', personId: 'bs1' }, legacy)).toBe(true);
     });
 
+    it('B-029: gönderim anının EVM kaydı yalnız taslaktan gönderimde yazılır', () => {
+        const ws = buildWs();
+        const evm = { at: NOW.toISOString(), year: 2026, statusMonth: 9, costed: true, percentComplete: 0.89, spi: 1.05, cpi: 1.07, eac: 7702921 };
+        const draft = { ...createReport({ kind: 'project', projectId: 'a', departmentCode: 'U310', year: 2026, week: 41 }, py, NOW), thisWeek: [newItem('delivery', '3 Ekim 2026 tarihinde sürüm 2 teslim edildi.')] };
+        const pyId = { role: 'py' as const, personId: 'pm1' };
+        expect(saveReport(ws, pyId, draft, py, { now: NOW, evm })!.report.evmSnapshot).toBeUndefined(); // taslak kaydı
+        const sent = saveReport(ws, pyId, draft, py, { advance: true, now: NOW, evm })!;
+        expect(sent.report.evmSnapshot).toEqual(evm);
+        // Bölüm sorumlusu onayı kaydı değiştirmez
+        const later = { ...evm, percentComplete: 0.88, spi: 1.04 };
+        const approved = saveReport({ ...ws, weeklyReports: sent.reports }, { role: 'bolum_sorumlu', personId: 'bs1' }, sent.report, bs, { advance: true, now: NOW, evm: later })!;
+        expect(approved.report.evmSnapshot).toEqual(evm);
+    });
+
     it('sözlük, son gün ve hatırlatma metni', () => {
         const dict = reportDictionary({ ...DEFAULT_REPORT_SETTINGS, abbreviations: [{ abbr: 'KYS', expansion: 'Kurumsal Yazışma Sistemi' }, { abbr: 'İG', expansion: 'İş Geliştirme Birimi' }] });
         expect(dict.find(a => a.abbr === 'KYS')).toBeTruthy();

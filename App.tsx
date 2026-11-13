@@ -85,6 +85,7 @@ import { JiraImportOptions, mergeJiraIssues } from './utils/planning/jiraImport'
 import { linkJiraKeys } from './utils/planning/jiraExport';
 import { departmentLeadIds } from './utils/staffing';
 import { applyJiraSync, pullIssueIntoTasks, sourceLabel } from './utils/planning/jiraSync';
+import { reportEvmSnapshot } from './utils/evm';
 import { useJiraAutoSync } from './components/modern/planning/useJiraAutoSync';
 import { JiraIssueRecord } from './utils/integrations';
 import ModernPortfolio from './components/modern/ModernPortfolio';
@@ -830,7 +831,9 @@ const App: React.FC = () => {
     const ws = workspaceRef.current;
     if (!ws) return false;
     const dictionary = lintDictionary(reportDictionary(reportSettingsOf(ws)), ws.projects);
-    const res = saveReport(ws, identityOf(ws), draft, actorOf(ws), { advance, dictionary });
+    const fromDraft = (ws.weeklyReports || []).find(r => r.id === draft.id)?.stage ?? 'draft';
+    const evm = advance && fromDraft === 'draft' && draft.kind === 'project' ? reportEvmSnapshot(ws, draft.projectId) : undefined;
+    const res = saveReport(ws, identityOf(ws), draft, actorOf(ws), { advance, dictionary, evm });
     if (!res) return false;
     let next: WorkspaceData = { ...ws, weeklyReports: res.reports };
     // Taslaktan gönderimde AI maddelerinin akıbeti öneri günlüğüne (yalnız sayılar)
