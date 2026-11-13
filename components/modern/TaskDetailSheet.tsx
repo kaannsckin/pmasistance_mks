@@ -4,6 +4,8 @@ import { calculatePertFuzzyPert } from '../../utils/timeline';
 import { relativeTime } from '../../utils/recentChanges';
 import { ISSUE_TYPE_LABELS, taskDurations } from '../../utils/planning/lifecycle';
 import { daysLate, initialsOf, PRIORITY_META, shortDate, sprintLabel, TASK_STATUS_LABELS } from './taskMeta';
+import { JiraIssueRecord } from '../../utils/integrations';
+import JiraIssuePanel from './JiraIssuePanel';
 import { Sheet } from './ui';
 
 /**
@@ -20,12 +22,14 @@ interface TaskDetailSheetProps {
     onClose: () => void;
     onEdit: (task: Task) => void;
     onSave: (task: Task) => void;
+    /** Jira'daki hâli göreve uygular; verilirse Jira bölümü görünür (yalnız proje içeriğini düzenleyebilen) */
+    onJiraPull?: (issue: JiraIssueRecord) => void;
 }
 
 const STATUSES: TaskStatus[] = [TaskStatus.Backlog, TaskStatus.ToDo, TaskStatus.InProgress, TaskStatus.Done];
 const num = (v: number) => v.toLocaleString('tr-TR', { maximumFractionDigits: 1 });
 
-const TaskDetailSheet: React.FC<TaskDetailSheetProps> = ({ task, project, authorName, canEdit, onClose, onEdit, onSave }) => {
+const TaskDetailSheet: React.FC<TaskDetailSheetProps> = ({ task, project, authorName, canEdit, onClose, onEdit, onSave, onJiraPull }) => {
     const [comment, setComment] = useState('');
     const pred = task.predecessor ? project.tasks.find(t => t.id === task.predecessor) : undefined;
     const wp = task.workPackageId ? project.workPackages.find(w => w.id === task.workPackageId) : undefined;
@@ -108,6 +112,8 @@ const TaskDetailSheet: React.FC<TaskDetailSheetProps> = ({ task, project, author
                     </React.Fragment>
                 ))}
             </dl>
+
+            {onJiraPull && task.jiraId && <JiraIssuePanel task={task} onPull={onJiraPull} />}
 
             {task.notes && <p className="m-0 text-[15px] leading-relaxed m-text whitespace-pre-line rounded-xl m-fill-2 px-4 py-3">{task.notes}</p>}
 
