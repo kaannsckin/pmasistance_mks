@@ -78,6 +78,16 @@ describe('applyAction', () => {
         expect(describeAction(build(), { type: 'tahsis_ayarla', personId: 'pm', projectId: 'altay', year: 2026, month: 5, field: 'actual', value: 0.25 }).details.some(d => d.value.includes('yeni tahsis satırı'))).toBe(true);
     });
 
+    it('B-025: öneriyle açılan satıra kişinin rolü yazılır (rolsüz satır sahte açık üretmesin)', () => {
+        const ws = build();
+        const withRole = { ...ws, people: ws.people.map(p => (p.id === 'pm' ? { ...p, roles: ['Proje Yöneticisi', 'Analist'] } : p)) };
+        const r = applyAction(withRole, { type: 'tahsis_ayarla', personId: 'pm', projectId: 'altay', year: 2027, month: 1, field: 'plan', value: 0.2 });
+        expect(r.ws.allocations.find(x => x.personId === 'pm' && x.year === 2027)!.role).toBe('Proje Yöneticisi');
+        // Rolü yoksa satır rolsüz kalır (Rol atanmamış uyarısı geçerli)
+        const none = applyAction(build(), { type: 'tahsis_ayarla', personId: 'pm', projectId: 'altay', year: 2027, month: 1, field: 'plan', value: 0.2 });
+        expect(none.ws.allocations.find(x => x.personId === 'pm' && x.year === 2027)!.role).toBeUndefined();
+    });
+
     it('yetkisiz eylemde hata fırlatır (yeniden doğrulama)', () => {
         expect(() => applyAction(build('mudur', null), risk)).toThrow(/yetkiniz yok/);
     });

@@ -1,5 +1,5 @@
 import { Allocation, Project, RagStatus, Resource, RiskLevel, RiskStatus, Task, TaskStatus, WorkspaceData } from '../../types';
-import { createAllocation, getPlanLockStatus, setAllocationCell } from '../allocations';
+import { createAllocation, getPlanLockStatus, inferAllocationRole, setAllocationCell } from '../allocations';
 import { stampLifecycle } from '../planning/lifecycle';
 import { appendAudit } from '../audit';
 import { canEditActualCell, canEditPlanCell, canEditProjectContent, identityOf } from '../rbac';
@@ -312,7 +312,9 @@ export const applyAction = (ws: WorkspaceData, action: AiAction): { ws: Workspac
             let base = ws;
             let row = findAllocationRow(ws, action.personId, action.projectId, action.year);
             if (!row) {
-                const created = createAllocation(ws.allocations, action.personId, action.projectId, action.year);
+                // Rol boş kalırsa kapasite-talep sahte "Rol atanmamış" açığı gösterir (B-025)
+                const role = inferAllocationRole(ws.allocations, ws.people.find(p => p.id === action.personId), action.projectId);
+                const created = createAllocation(ws.allocations, action.personId, action.projectId, action.year, undefined, role);
                 if (!created) throw new Error('Tahsis satırı oluşturulamadı.');
                 base = { ...ws, allocations: [...ws.allocations, created] };
                 row = created;

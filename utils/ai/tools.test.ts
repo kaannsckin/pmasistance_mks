@@ -318,11 +318,18 @@ describe('pilot bulgularından gelen iyileştirmeler', () => {
         expect(r.json.gorevler[0].jira).toBe('ALT-77');
     });
 
-    it('kapasite_talep rolsüz tahsis satırlarında uyarır', async () => {
-        const r = await run('kapasite_talep', { yil: 2026 }, buildWs('pyb_destek', null));
-        expect(r.json.uyari).toContain('rolü girilmemiş');
+    it('kapasite_talep: rolsüz satır kişinin rolüne yazılır ve not düşülür; kişinin rolü yoksa uyarır (B-025)', async () => {
+        const r = await run('kapasite_talep', { yil: 2026, sadece_acik: false }, buildWs('pyb_destek', null));
+        expect(r.json.uyari).toBeUndefined();
+        expect(r.json.not).toContain('rolüne yazıldı');
+        expect((r.json.satirlar as { rol: string }[]).map(x => x.rol)).not.toContain('Rol atanmamış');
+        const roleless = buildWs('pyb_destek', null);
+        roleless.people = roleless.people.map(p => ({ ...p, roles: [] }));
+        expect((await run('kapasite_talep', { yil: 2026 }, roleless)).json.uyari).toContain('rolü girilmemiş');
         const ws = buildWs('pyb_destek', null);
         ws.allocations = ws.allocations.map(a => ({ ...a, role: 'Yazılım Geliştirme Mühendisi' }));
-        expect((await run('kapasite_talep', { yil: 2026 }, ws)).json.uyari).toBeUndefined();
+        const full = (await run('kapasite_talep', { yil: 2026 }, ws)).json;
+        expect(full.uyari).toBeUndefined();
+        expect(full.not).toBeUndefined();
     });
 });

@@ -1,7 +1,7 @@
 import { PermissionKey, ProjectStatus, RagStatus, RiskStatus, Task, TaskStatus } from '../../types';
 import { normalizeEnumArgs } from './enumAliases';
 import { inMonthEstimates, InMonthEstimate } from '../inMonthActual';
-import { getPlanLockStatus, MONTH_INDEXES, ROLE_LABELS, summarizeByProject } from '../allocations';
+import { getPlanLockStatus, inferAllocationRole, MONTH_INDEXES, ROLE_LABELS, summarizeByProject } from '../allocations';
 import { AUDIT_ACTION_LABELS } from '../audit';
 import { buildCostReport, costPeriodLabel } from '../costing';
 import { CATEGORY_LABELS, analyzeDataHealth } from '../dataHealth';
@@ -532,12 +532,18 @@ export const AI_TOOLS: ToolDef[] = [
             // Rolü girilmemiş tahsis satırlarının talebi hiçbir rol kapasitesiyle eşleşmez → açık şişer
             const demand = rows.reduce((s, r) => s + r.totals.planned + r.totals.proposal, 0);
             const unassigned = rows.filter(r => r.role === UNASSIGNED_ROLE).reduce((s, r) => s + r.totals.planned + r.totals.proposal, 0);
+            // Rolsüz satırın talebi kişinin rolüne yazılır (B-025); ne kadarının tahminle yazıldığı söylenir
+            const byId = new Map(ctx.ws.people.map(p => [p.id, p]));
+            const inferredAA = ctx.ws.allocations
+                .filter(x => x.year === year && !(x.role || '').trim() && (!dept || byId.get(x.personId)?.departmentCode === dept) && inferAllocationRole(ctx.ws.allocations, byId.get(x.personId), x.projectId))
+                .reduce((s, x) => s + Object.values(x.plan).reduce((t: number, v) => t + (Number(v) || 0), 0), 0);
             if (a.sadece_acik !== false) rows = rows.filter(r => r.totals.gap > 0);
             return {
                 yil: year, bolum: dept, acigi_olan_rol: gaps.rolesWithGap, toplam_acik_aa: gaps.totalGapAA,
                 ...(unassigned > 0 ? {
                     uyari: `Planlı talebin %${Math.round((unassigned / demand) * 100)}'i (${r2(unassigned)} AA) rolü girilmemiş tahsis satırlarında; bu talep hiçbir rolün kapasitesiyle eşleşmediği için "${UNASSIGNED_ROLE}" satırında açık görünür. İşe alım kararından önce Tahsis Tablosu'nda satırlara rol girilmeli.`,
                 } : {}),
+                ...(inferredAA > 0 ? { not: `Rolü girilmemiş tahsis satırlarındaki ${r2(inferredAA)} AA, kişinin projedeki ya da en sık rolüne yazıldı. Kesin analiz için Tahsis Tablosu'nda rol girilmesi önerilir.` } : {}),
                 satirlar: rows.sort((x, y) => y.totals.gap - x.totals.gap).slice(0, 30).map(r => ({
                     bolum: r.departmentCode, rol: r.role, planli_proje_aa: r2(r.totals.planned), kapasite_aa: r2(r.totals.capacity),
                     teklif_ihtiyaci_aa: r2(r.totals.proposal), acik_aa: r2(r.totals.gap),
