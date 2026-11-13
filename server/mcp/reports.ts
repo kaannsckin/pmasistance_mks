@@ -7,7 +7,7 @@ import { buildVariantRequest, PRODUCTION_VARIANT } from '../../utils/ai/reportVa
 import { buildReportInput, parseReportSuggestion } from '../../utils/ai/weeklyReportPrompt.js';
 import { resolveProject, ToolContext } from '../../utils/ai/scope.js';
 import {
-    actorOf, advanceReport, canEditReport, CATEGORY_META, createReport, dueDate, findReport, flowBlockers, isoWeekOf, isReportSteward, isWeekPublished, itemDisplay, lintCounts, lintDictionary, lintReport,
+    actorOf, advanceReport, canEditReport, CATEGORY_META, createReport, dueDate, findReport, flowBlockers, isoWeekOf, isReportFrozen, isReportSteward, isWeekPublished, itemDisplay, lintCounts, lintDictionary, lintReport,
     newItem, nextStage, PLAN_REVIEW_STATUSES, previousPlansOf, projectDepartment, publishWeek, reportDictionary, reportFlowOf, reportSettingsOf, returnReportIn,
     saveReport, shiftWeek, STAGE_LABELS, THIS_WEEK_CATEGORIES, visibleReports, weekLabel,
 } from '../../utils/weeklyReport.js';
@@ -138,7 +138,7 @@ const itemOut = (i: ReportItem) => ({ id: i.id, kategori: i.category, metin: ite
 /** Kimliğin bu raporda yapabileceği işlem (aşamanın tek sahibi) */
 const actionsFor = (ws: WorkspaceData, ctx: ToolContext, r: WeeklyReport | undefined, projectOwner: boolean): string => {
     if (!r) return projectOwner ? `rapor yok — ${REPORT_SUBMIT_TOOL} ile yazılır` : 'rapor henüz yazılmadı';
-    if (isWeekPublished(ws, r.year, r.week)) return 'hafta yayınlandı; değişmez';
+    if (isReportFrozen(ws, r)) return 'hafta yayınlandı; değişmez';
     switch (r.stage) {
         case 'draft': return projectOwner ? `taslak — düzenle ve gönder (${REPORT_SUBMIT_TOOL})` : 'PY\'de (taslak)';
         case 'bs_review': return ctx.identity.role === 'bolum_sorumlu' ? `onay ya da iade (${REPORT_DECIDE_TOOL})` : 'bölüm sorumlusunda';
@@ -317,6 +317,7 @@ export const prepareReportOp = (ws: WorkspaceData, ctx: ToolContext, name: strin
         const karar = args.karar === 'iade' ? 'iade' : 'onay';
         const not = asText(args.not);
         if (karar === 'iade' && !not) throw new Error('İade için not zorunlu: eksikleri yazın.');
+        if (isReportFrozen(ws, existing)) throw new Error(`${weekKey(w)} yayınlandı; onaylı rapor değişmez.`);
         const owner = existing.stage === 'bs_review' ? ctx.identity.role === 'bolum_sorumlu' : (existing.stage === 'pyds_review' || existing.stage === 'approved') && isReportSteward(ctx.identity);
         if (!owner) throw new Error(`Rapor "${STAGE_LABELS[existing.stage]}" aşamasında; bu aşamanın kararı sizde değil.`);
         if (karar === 'onay' && !nextStage(existing, reportFlowOf(ws))) throw new Error('Rapor zaten onaylı.');
@@ -330,7 +331,8 @@ export const prepareReportOp = (ws: WorkspaceData, ctx: ToolContext, name: strin
     // kaydet / gönder (PY)
     if (!ownsProject(ctx, project)) throw new Error(`"${project.name}" projesinin raporunu yalnız proje sahibi PY yazar.`);
     if (existing && existing.stage !== 'draft') throw new Error(`Rapor "${STAGE_LABELS[existing.stage]}" aşamasında; düzenlemek için iade edilmesi gerekir.`);
-    if (isWeekPublished(ws, w.year, w.week)) throw new Error(`${weekKey(w)} yayınlandı; rapor değişmez.`);
+    // Yayınlanmış haftada yalnız akışta kalmış (iade edilmiş) rapor düzenlenir; yeni rapor açılmaz
+    if (!existing && isWeekPublished(ws, w.year, w.week)) throw new Error(`${weekKey(w)} yayınlandı; yeni rapor açılamaz.`);
     const prevPlans = previousPlansOf(all, { kind: 'project', year: w.year, week: w.week, projectId: project.id, departmentCode: projectDepartment(ws, project) });
     const input = reportInput(ws, project, w, worklog);
     const built = buildContent(args, prevPlans, input, now);

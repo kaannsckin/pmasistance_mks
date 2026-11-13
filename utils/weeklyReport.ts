@@ -127,9 +127,18 @@ const deptHeadOf = (ws: WsLike, id: Identity, dept: string): boolean =>
 export const isWeekPublished = (ws: WsLike, year: number, week: number): boolean =>
     (ws.weeklyPublications || []).some(p => p.year === year && p.week === week);
 
+/**
+ * Yayın, o ana kadar onaylanmış raporları dondurur (müdürlüğe sunulan paket
+ * değişmez). Yayın anında hâlâ akışta olan rapor dondurulmaz: akışa devam
+ * eder, onaylandığında yayınlanmış haftaya geç rapor olarak katılır (B-030:
+ * önceden bu raporlar ara aşamada kalıcı olarak sıkışıyordu).
+ */
+export const isReportFrozen = (ws: WsLike, r: Pick<WeeklyReport, 'year' | 'week' | 'stage'>): boolean =>
+    r.stage === 'approved' && isWeekPublished(ws, r.year, r.week);
+
 /** Raporun içeriğini şu an kim düzenleyebilir (aşamaya göre tek sahip) */
 export const canEditReport = (ws: WsLike, id: Identity, r: WeeklyReport): boolean => {
-    if (isWeekPublished(ws, r.year, r.week)) return false;
+    if (isReportFrozen(ws, r)) return false;
     switch (r.stage) {
         case 'draft': {
             if (r.kind === 'department') return deptHeadOf(ws, id, r.departmentCode);

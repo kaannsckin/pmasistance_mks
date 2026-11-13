@@ -42,12 +42,15 @@ describe('rapor ve görüşme hatırlatmaları', () => {
         expect(returned.reportBadge).toBe(1);
     });
 
-    it('BS ve PYB destek: kendi aşamasındaki raporlar; yayınlanan haftalar sayılmaz', () => {
+    it('BS ve PYB destek: kendi aşamasındaki raporlar; yayından sonra akışta kalan rapor da sayılır (B-030)', () => {
         const reports = [rep('a', 'bs_review'), rep('b', 'pyds_review')];
         expect(reportAttention(ws({ currentRole: 'bolum_sorumlu', currentPersonId: 'bs1', weeklyReports: reports }), MON).reportBadge).toBe(1);
         expect(reportAttention(ws({ currentRole: 'pyb_destek', weeklyReports: reports }), MON).reportBadge).toBe(1);
-        const pub = ws({ currentRole: 'pyb_destek', weeklyReports: reports, weeklyPublications: [{ year: 2026, week: 41, publishedAt: '' }] });
-        expect(reportAttention(pub, MON).reportBadge).toBe(0);
+        const published = [{ year: 2026, week: 41, publishedAt: '' }];
+        // Yayın anında incelemede kalan rapor unutulmasın: hâlâ PYB desteğin işi
+        expect(reportAttention(ws({ currentRole: 'pyb_destek', weeklyReports: reports, weeklyPublications: published }), MON).reportBadge).toBe(1);
+        // Onaylanıp yayınlanan rapor iş listesinden çıkar
+        expect(reportAttention(ws({ currentRole: 'pyb_destek', weeklyReports: [rep('a', 'approved')], weeklyPublications: published }), MON).reportBadge).toBe(0);
     });
 
     it('yönetim: onay bekleyen görüşmeler; sahibi: sonucu yazılmamış görüşmeler', () => {

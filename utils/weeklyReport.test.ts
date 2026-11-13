@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { WeeklyReport, WorkspaceData } from '../types';
 import {
     actorOf, advanceReport, buildEml, DEFAULT_REPORT_FLOW, DEFAULT_REPORT_SETTINGS, flowBlockers, flowStages, nextStage, previousPlansOf, returnStage, dueDate, latestPublication, markWeekEmailed, publishWeek, reminderText, reportDictionary,
-    returnReportIn, saveReport, unpublishWeek, canEditReport, consolidate, createReport, editReport, findAbbreviations, glossaryFor, isoWeekOf,
+    returnReportIn, saveReport, unpublishWeek, canEditReport, isReportFrozen, consolidate, createReport, editReport, findAbbreviations, glossaryFor, isoWeekOf,
     lintCounts, lintDictionary, lintReport, locative, mailtoLink, meetingSentence, newItem, pendingAuthors, projectDepartment, renderReportHtml, renderReportText,
     returnReport, setPlanReview, setReportAiAssessment, shiftWeek, teamsChatLink, visibleReports, weekLabel, weekProgress, weekStart,
 } from './weeklyReport';
@@ -322,6 +322,36 @@ describe('akış işlemleri (yetki işlem anında)', () => {
         expect(latestPublication({ weeklyPublications: pubs })?.week).toBe(41);
         expect(markWeekEmailed(pubs, 2026, 41, NOW)[0].emailedAt).toBe(NOW.toISOString());
         expect(unpublishWeek({ ...w, weeklyPublications: pubs }, { role: 'pyb_destek' }, 2026, 41)).toEqual([]);
+    });
+
+    it('B-030: yayın yalnız onaylıları dondurur; akışta kalan rapor sıkışmaz, onaylanınca yayına katılır', () => {
+        const ws = buildWs();
+        const done = { ...createReport({ kind: 'project', projectId: 'b', departmentCode: 'U320', year: 2026, week: 41 }, py, NOW), stage: 'approved' as const };
+        // ATL H45'teki gibi: PYB iade etti → bölüm sorumlusunda; ardından hafta yayınlandı
+        const late = { ...createReport({ kind: 'project', projectId: 'a', departmentCode: 'U310', year: 2026, week: 41 }, py, NOW), stage: 'bs_review' as const, returnNote: 'EVM rakamı' };
+        const w = { ...ws, weeklyReports: [done, late] };
+        const pubs = publishWeek(w, { role: 'pyb_destek' }, 2026, 41, 'Destek', NOW)!;
+        const pub = { ...w, weeklyPublications: pubs };
+        expect(isReportFrozen(pub, done)).toBe(true);
+        expect(isReportFrozen(pub, late)).toBe(false);
+        expect(canEditReport(pub, { role: 'pyb_destek' }, done)).toBe(false);
+        const bsId = { role: 'bolum_sorumlu' as const, personId: 'bs1' };
+        expect(canEditReport(pub, bsId, late)).toBe(true);
+        // Bölüm sorumlusu PY'ye iade eder; PY düzeltip yeniden gönderir
+        const back = returnReportIn(pub, bsId, late.id, bs, 'Rakamı güncelleyin', NOW)!;
+        expect(back.report.stage).toBe('draft');
+        const pubBack = { ...pub, weeklyReports: back.reports };
+        const resent = saveReport(pubBack, { role: 'py', personId: 'pm1' }, { ...back.report, thisWeek: [newItem('delivery', '3 Ekim 2026 tarihinde sürüm 2 teslim edildi.')] }, py, { advance: true, now: NOW })!;
+        expect(resent.report.stage).toBe('bs_review');
+        // Onay zinciri tamamlanınca müdür raporu yayınlanmış haftada görür
+        const r = advanceReport(advanceReport(resent.report, bs, NOW), pyds, NOW);
+        expect(r.stage).toBe('approved');
+        const final = { ...pubBack, weeklyReports: resent.reports.map(x => (x.id === r.id ? r : x)) };
+        expect(visibleReports(final, { role: 'mudur' }).map(x => x.projectId).sort()).toEqual(['a', 'b']);
+        expect(isReportFrozen(final, r)).toBe(true);
+        // Yayınlanmış haftada yeni rapor açılmaz
+        const c = createReport({ kind: 'project', projectId: 'a', departmentCode: 'U310', year: 2026, week: 41 }, py, NOW);
+        expect(saveReport({ ...pub, weeklyReports: [done] }, { role: 'py', personId: 'pm1' }, c, py, { now: NOW })).toBeNull();
     });
 
     it('sözlük, son gün ve hatırlatma metni', () => {

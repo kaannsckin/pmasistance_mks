@@ -83,4 +83,33 @@ describe('haftalık rapor akışı (MCP, persona kimlikleriyle)', () => {
         const actions = (seen.json.gecmis as string[]).map(h => h.split(' ')[2]);
         expect(actions).toEqual(['create', 'submit', 'return', 'submit', 'bs_approve', 'pyds_approve']);
     });
+
+    it('B-030: hafta, bir rapor incelemedeyken yayınlanırsa o rapor sıkışmaz; onaylanınca yayına katılır', async () => {
+        const W = '2026-H29';
+        const body = (proje: string) => ({
+            proje, hafta: W, py_puani: 4, gonder: true,
+            bu_hafta: [{ kategori: 'ongoing', metin: 'Bu hafta saha uygulamasında çevrimdışı eşitlemenin geliştirilmesine devam edildi.' }],
+            gelecek_hafta: ['24 Temmuz\'a kadar kabul testi senaryoları müşteriyle paylaşılacak.'],
+        });
+        expect((await call('burak', 'oner_haftalik_rapor', body('NHR-2403'), true)).ok).toBe(true);
+        expect((await call('burak', 'oner_haftalik_rapor', body('PSL-2402'), true)).ok).toBe(true);
+        expect((await call('selin', 'oner_rapor_karari', { proje: 'NHR-2403', hafta: W, karar: 'onay' }, true)).ok).toBe(true);
+        expect((await call('mert', 'oner_rapor_karari', { proje: 'NHR-2403', hafta: W, karar: 'onay' }, true)).ok).toBe(true);
+        // PSL hâlâ bölüm sorumlusundayken hafta yayınlanır (pilotta ATL H45)
+        expect((await call('mert', 'oner_hafta_yayinla', { hafta: W }, true)).ok).toBe(true);
+        const stuck = await call('selin', 'haftalik_rapor', { proje: 'PSL-2402', hafta: W });
+        expect(stuck.json.asama).toBe('Bölüm sorumlusunda');
+        expect(stuck.json.islem).toContain('onay ya da iade');
+        expect((await call('ahmet', 'haftalik_rapor', { proje: 'PSL-2402', hafta: W })).json.durum).toContain('görünür değil');
+        // Bölüm sorumlusu iade eder, PY düzeltip gönderir, onay zinciri tamamlanır
+        expect((await call('selin', 'oner_rapor_karari', { proje: 'PSL-2402', hafta: W, karar: 'iade', not: 'Teslim tarihini ekleyin.' }, true)).ok).toBe(true);
+        expect((await call('burak', 'oner_haftalik_rapor', body('PSL-2402'), true)).ok).toBe(true);
+        expect((await call('selin', 'oner_rapor_karari', { proje: 'PSL-2402', hafta: W, karar: 'onay' }, true)).ok).toBe(true);
+        expect((await call('mert', 'oner_rapor_karari', { proje: 'PSL-2402', hafta: W, karar: 'onay' }, true)).ok).toBe(true);
+        expect((await call('ahmet', 'haftalik_rapor', { proje: 'PSL-2402', hafta: W })).json.asama).toBe('Onaylandı');
+        // Onaylı rapor yayınlanmış haftada artık değişmez
+        const locked = await call('selin', 'haftalik_rapor', { proje: 'NHR-2403', hafta: W });
+        expect(locked.json.islem).toBe('hafta yayınlandı; değişmez');
+        expect((await call('mert', 'oner_rapor_karari', { proje: 'NHR-2403', hafta: W, karar: 'iade', not: 'x' })).ok).toBe(false);
+    });
 });
