@@ -151,6 +151,7 @@ export const buildUpstreamRequest = (config: AiConfig, req: ChatRequestBody): Up
 
     switch (config.provider) {
         case 'openai':
+        case 'tubitak':
         case 'azure': {
             const tokenParam = usesMaxCompletionTokens(config) ? 'max_completion_tokens' : 'max_tokens';
             return {
@@ -325,6 +326,7 @@ async function* geminiEvents(events: AsyncIterable<SseEvent>): AsyncGenerator<Ch
 export const parseUpstreamEvents = (config: AiConfig, events: AsyncIterable<SseEvent>): AsyncGenerator<ChatStreamEvent> => {
     switch (config.provider) {
         case 'openai':
+        case 'tubitak':
         case 'azure':
             return openaiEvents(events);
         case 'anthropic':

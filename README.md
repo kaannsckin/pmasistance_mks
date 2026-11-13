@@ -880,6 +880,7 @@ Kurulum ya da Node.js gerektirmeyen tek dosyalık sürüm: arayüz ve sunucu (AI
 1. GitHub sayfasındaki **Releases** bölümünden `PlanAsistan-win-x64.zip` dosyasını indirip bir klasöre açın.
 2. `PlanAsistan.exe` dosyasına çift tıklayın; tarayıcıda `http://localhost:5180` açılır. Kapatmak için komut penceresini kapatın.
 3. Jira ya da yapay zekâ için exe'nin yanında oluşan `planasistan.env` dosyasını Not Defteri ile düzenleyin (ör. `JIRA_BASE_URL`, `JIRA_TOKEN`) ve uygulamayı yeniden açın.
+4. **Yapay zekâ (TÜBİTAK BİLGEM):** uygulamada *Yönetici konsolu → Yapay zekâ → TÜBİTAK ile kur* bölümüne yalnız API anahtarınızı yapıştırın; adres, model (`general` / `code`) ve önerilen ayarlar kendiliğinden gelir. Ortam değişkeniyle: `AI_PROVIDER=tubitak` + `AI_API_KEY`.
 
 - **Vercel ayarları kendiliğinden gelmez:** Jira ve AI değerlerini Vercel → *Settings → Environment Variables* ekranından `planasistan.env`'e kopyalayın (ya da `vercel env pull planasistan.env`). AI anahtarı uygulamadaki *Yönetici konsolu → Yapay zekâ* panelinden de girilebilir. Vercel'de panelden girilmiş AI ayarlarını ortak kullanmak için `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` ve aynı `AI_CONFIG_SECRET` gerekir; service-role anahtarı tam yetkili olduğundan yalnız gerekiyorsa.
 - **Veriler:** projeler tarayıcıda, bu bilgisayarda tutulur. Vercel sürümüyle aynı projeleri görmek için uygulamadaki bulut eşitleme ekranında Supabase adresini ve anon anahtarını girip aynı hesapla oturum açın (her bilgisayarda bir kez). Panelden girilen AI ayarları şifreli olarak `planasistan-veri/` klasöründedir.

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
     AI_SECRET_KEYS, AiAdminError, AiAdminState, AiSettingKey, AiSettingValues, AiTestPart, AiTestResult, clearAiAdmin, DEFAULT_BASE_URLS, draftValues,
-    GEMINI_KEY_URL, geminiQuickValues, getAiAdmin, loadAdminToken, modelsAiAdmin, PROVIDER_LABELS, saveAdminToken, saveAiAdmin, testAiAdmin,
+    GEMINI_KEY_URL, geminiQuickValues, getAiAdmin, tubitakQuickValues, loadAdminToken, modelsAiAdmin, PROVIDER_LABELS, saveAdminToken, saveAiAdmin, testAiAdmin,
 } from '../../../utils/ai/adminConfig';
 import { AiStatus } from '../../../utils/ai/protocol';
 import { Icon } from '../icons';
@@ -32,9 +32,10 @@ type Load =
     | { kind: 'error'; error: string }
     | { kind: 'ready'; state: AiAdminState };
 
-const PROVIDERS = ['openai', 'azure', 'anthropic', 'gemini'];
+const PROVIDERS = ['tubitak', 'openai', 'azure', 'anthropic', 'gemini'];
 const EMBED_PROVIDERS = ['openai', 'azure', 'gemini', 'voyage'];
 const EFFORTS = ['none', 'minimal', 'low', 'medium', 'high'];
+const TUBITAK_LABEL_URL = 'ai-api.bilgem.tubitak.gov.tr';
 const sec = (ms?: number) => (ms === undefined ? '' : ms < 1000 ? `${ms} ms` : `${(ms / 1000).toLocaleString('tr-TR', { maximumFractionDigits: 1 })} sn`);
 
 /** Formun başlangıcı: paneldeki değerler (anahtarlar boş — değiştirmek için yazılır) */
@@ -60,6 +61,9 @@ const AiConnection: React.FC<Props> = ({ onChanged, status }) => {
     const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
     const [quickKey, setQuickKey] = useState('');
     const [quick, setQuick] = useState<{ running: boolean; ok?: boolean; text?: string }>({ running: false });
+    const [tubitakKey, setTubitakKey] = useState('');
+    const [tubitakModel, setTubitakModel] = useState('general');
+    const [tq, setTq] = useState<{ running: boolean; ok?: boolean; text?: string }>({ running: false });
     const [models, setModels] = useState<{ list: string[]; recommended?: string; loading: boolean; error?: string }>({ list: [], loading: false });
 
     const fetchState = useCallback(async (t: string) => {
@@ -111,6 +115,32 @@ const AiConnection: React.FC<Props> = ({ onChanged, status }) => {
             setQuick({ running: false, ok: true, text: `Gemini hazır: ${what}. Asistan kullanıma hazır.` });
         } catch (e) {
             setQuick({ running: false, ok: false, text: (e as Error).message });
+        }
+    };
+
+    /** TÜBİTAK BİLGEM hızlı kurulumu: yalnız anahtar → test → (depo varsa) kayıt */
+    const tubitakSetup = async () => {
+        if (load.kind !== 'ready' || !tubitakKey.trim()) return;
+        const values = tubitakQuickValues(tubitakKey, tubitakModel);
+        setTq({ running: true });
+        setTest(null);
+        setMessage(null);
+        try {
+            const t = await testAiAdmin(token, values);
+            setTest(t);
+            if (!t.chat.ok) { setTq({ running: false, ok: false, text: `Bağlantı kurulamadı: ${t.chat.error || 'bilinmeyen hata'}` }); return; }
+            const what = `${t.chat.model}${t.chat.latencyMs !== undefined ? `, yanıt ${sec(t.chat.latencyMs)}` : ''}`;
+            if (!load.state.store.available) {
+                setTq({ running: false, ok: true, text: `Anahtar çalışıyor (${what}). Panelden kaydetmek için sunucuda kalıcı depo gerekli; ya da sunucuya AI_PROVIDER=tubitak ve AI_API_KEY ortam değişkenlerini ekleyin.` });
+                return;
+            }
+            await saveAiAdmin(token, values);
+            onChanged(`AI bağlantısı: TÜBİTAK BİLGEM hızlı kurulumu (${t.chat.model})`);
+            setTubitakKey('');
+            await fetchState(token);
+            setTq({ running: false, ok: true, text: `TÜBİTAK BİLGEM hazır (${what}). Asistan kullanıma hazır.` });
+        } catch (e) {
+            setTq({ running: false, ok: false, text: (e as Error).message });
         }
     };
 
@@ -212,7 +242,28 @@ const AiConnection: React.FC<Props> = ({ onChanged, status }) => {
             {s.effective.problem && <p className="m-0 text-[13px] m-ink-warn">{s.effective.problem}</p>}
             {!s.store.available && <p className="m-0 text-[13px] m-ink-warn">Kaydetme kapalı: {s.store.problem} Test yine çalışır.</p>}
 
-            <details open={!s.effective.configured} className="rounded-xl p-3.5" style={{ background: 'var(--m-accent-tint)' }}>
+            <details open={!s.effective.configured || s.effective.provider === 'tubitak'} className="rounded-xl p-3.5" style={{ background: 'var(--m-accent-tint)' }}>
+                <summary className="cursor-pointer text-[15px] font-semibold m-text min-h-[30px] flex items-center gap-2"><Icon name="sparkles" size={18} />Hızlı kurulum: TÜBİTAK BİLGEM AI API (yalnız anahtar)</summary>
+                <div className="flex flex-col gap-2.5 mt-2">
+                    <p className="m-0 text-[14px] m-text-2">Kurum API anahtarınızı yapıştırıp "TÜBİTAK ile kur" deyin. Adres ({TUBITAK_LABEL_URL}), model ve önerilen ayarlar kendiliğinden yazılır; bağlantı denenip kaydedilir. Anahtar sunucuda şifreli saklanır, tarayıcıya geri dönmez.</p>
+                    <div className="flex flex-wrap items-end gap-2">
+                        <Field label="TÜBİTAK API anahtarı" htmlFor="ai-tubitak-key">
+                            <input id="ai-tubitak-key" type="password" autoComplete="off" className="m-input !w-[300px] max-w-full" placeholder={s.effective.provider === 'tubitak' && s.panel.AI_API_KEY ? `Kayıtlı ${s.panel.AI_API_KEY} — değiştirmek için yazın` : 'Anahtarınız'} value={tubitakKey} onChange={e => setTubitakKey(e.target.value)} />
+                        </Field>
+                        <Field label="Model" htmlFor="ai-tubitak-model">
+                            <select id="ai-tubitak-model" className="m-input" value={tubitakModel} onChange={e => setTubitakModel(e.target.value)}>
+                                <option value="general">general (genel)</option>
+                                <option value="code">code (yazılım)</option>
+                            </select>
+                        </Field>
+                        <button type="button" className="m-btn m-btn-primary" disabled={!tubitakKey.trim() || tq.running || quick.running || !!busy} onClick={tubitakSetup}><Icon name="sparkles" size={18} />{tq.running ? 'Kuruluyor…' : 'TÜBİTAK ile kur'}</button>
+                    </div>
+                    {tq.text && <p role={tq.ok ? 'status' : 'alert'} className={`m-0 text-[14px] ${tq.ok ? 'm-ink-ok' : 'm-ink-bad'}`}>{tq.text}</p>}
+                    <p className="m-0 text-[12.5px] m-text-3">API yalnız kurum ağından erişilebiliyorsa uygulamanın sunucusu da kurum ağında çalışmalıdır (ör. bilgisayarınızdaki PlanAsistan.exe). Kurum API'sinde embedding olmadığından bilgi bankası anahtar kelimeyle aranır.</p>
+                </div>
+            </details>
+
+            <details className="rounded-xl p-3.5 m-fill-2">
                 <summary className="cursor-pointer text-[15px] font-semibold m-text min-h-[30px] flex items-center gap-2"><Icon name="sparkles" size={18} />Hızlı kurulum: Google Gemini API (yalnız anahtar)</summary>
                 <div className="flex flex-col gap-2.5 mt-2">
                     <ol className="m-0 pl-5 list-decimal text-[14px] m-text-2 flex flex-col gap-0.5">
@@ -224,7 +275,7 @@ const AiConnection: React.FC<Props> = ({ onChanged, status }) => {
                         <Field label="Gemini API anahtarı" htmlFor="ai-gemini-key">
                             <input id="ai-gemini-key" type="password" autoComplete="off" className="m-input !w-[300px] max-w-full" placeholder="AIza…" value={quickKey} onChange={e => setQuickKey(e.target.value)} />
                         </Field>
-                        <button type="button" className="m-btn m-btn-primary" disabled={!quickKey.trim() || quick.running || !!busy} onClick={quickSetup}><Icon name="sparkles" size={18} />{quick.running ? 'Kuruluyor…' : 'Gemini ile kur'}</button>
+                        <button type="button" className="m-btn m-btn-primary" disabled={!quickKey.trim() || quick.running || tq.running || !!busy} onClick={quickSetup}><Icon name="sparkles" size={18} />{quick.running ? 'Kuruluyor…' : 'Gemini ile kur'}</button>
                     </div>
                     {quick.text && <p role={quick.ok ? 'status' : 'alert'} className={`m-0 text-[14px] ${quick.ok ? 'm-ink-ok' : 'm-ink-bad'}`}>{quick.text}</p>}
                     <p className="m-0 text-[12.5px] m-text-3">Ücretsiz katman denemek içindir: dakikalık istek sınırı düşüktür (asistan bir soruda birkaç istek atar) ve Google'ın koşullarına göre ücretsiz katmanda gönderilen içerik Google ürünlerini geliştirmek için kullanılabilir. Kurum verisiyle kalıcı kullanımda faturalı katmanı ve KVKK değerlendirmesini tercih edin.</p>
@@ -247,7 +298,7 @@ const AiConnection: React.FC<Props> = ({ onChanged, status }) => {
                     <div className="flex flex-col gap-1.5">
                         <div className="flex gap-1.5">
                             <input id="ai-model" className="m-input flex-1 min-w-0" list="ai-model-list" placeholder={provider === 'gemini' ? 'auto' : s.env.AI_MODEL || 'Model adı'} value={form.AI_MODEL || ''} onChange={e => set('AI_MODEL', e.target.value)} />
-                            {(provider === 'gemini' || provider === 'openai') && <button type="button" className="m-btn m-btn-plain !px-2 shrink-0" disabled={models.loading} onClick={loadModels}>{models.loading ? '…' : 'Listele'}</button>}
+                            {(provider === 'gemini' || provider === 'openai' || provider === 'tubitak') && <button type="button" className="m-btn m-btn-plain !px-2 shrink-0" disabled={models.loading} onClick={loadModels}>{models.loading ? '…' : 'Listele'}</button>}
                         </div>
                         <datalist id="ai-model-list">{models.list.map(m => <option key={m} value={m}>{m === models.recommended ? 'önerilen' : undefined}</option>)}</datalist>
                         {models.list.length > 0 && <span className="text-[12.5px] m-text-3">{models.list.length} model bulundu{models.recommended ? ` · önerilen ${models.recommended}` : ''}; alana yazarken listeden seçin.</span>}

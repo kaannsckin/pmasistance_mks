@@ -79,6 +79,21 @@ export const geminiQuickValues = (apiKey: string): AiSettingValues => ({
     AI_EMBEDDING_PROVIDER: 'gemini', AI_EMBEDDING_BASE_URL: GEMINI_BASE_URL, AI_EMBEDDING_MODEL: 'auto', AI_EMBEDDING_API_KEY: apiKey.trim(),
 });
 
+/** TÜBİTAK BİLGEM AI API (OpenAI uyumlu kurum ağ geçidi); bkz. server/ai/config.ts */
+export const TUBITAK_AI_BASE_URL = 'https://ai-api.bilgem.tubitak.gov.tr/v1';
+
+/**
+ * TÜBİTAK hızlı kurulumu: yalnız anahtar. Adres, model (general) ve önerilen
+ * üretim ayarları açıkça yazılır; ortamda başka sağlayıcının ayarı (adres,
+ * embedding) olsa da karışmaz. Kurum API'sinde embedding yok: anlamsal arama
+ * kapalı, bilgi bankası anahtar kelimeyle aranır.
+ */
+export const tubitakQuickValues = (apiKey: string, model = 'general'): AiSettingValues => ({
+    AI_PROVIDER: 'tubitak', AI_BASE_URL: TUBITAK_AI_BASE_URL, AI_MODEL: model, AI_API_KEY: apiKey.trim(),
+    AI_TEMPERATURE: '', AI_MAX_OUTPUT_TOKENS: '8192', AI_REASONING_EFFORT: 'medium', AI_EXTRA_BODY: '',
+    AI_EMBEDDING_PROVIDER: '', AI_EMBEDDING_BASE_URL: '', AI_EMBEDDING_MODEL: 'none', AI_EMBEDDING_API_KEY: '',
+});
+
 /**
  * Formdan sunucuya gidecek taslak: gizli alan boş bırakıldıysa gönderilmez
  * (kayıtlı anahtar korunur), "sil" işaretliyse boş metin gider.
@@ -96,8 +111,8 @@ export const draftValues = (form: AiSettingValues, removeSecrets: Partial<Record
 };
 
 export const PROVIDER_LABELS: Record<string, string> = {
-    openai: 'OpenAI uyumlu (OpenAI, vLLM, Ollama, kurum ağ geçidi)', azure: 'Azure OpenAI', anthropic: 'Anthropic', gemini: 'Google Gemini (Google AI Studio anahtarı)',
+    tubitak: 'TÜBİTAK BİLGEM AI API', openai: 'OpenAI uyumlu (OpenAI, vLLM, Ollama, kurum ağ geçidi)', azure: 'Azure OpenAI', anthropic: 'Anthropic', gemini: 'Google Gemini (Google AI Studio anahtarı)',
 };
 export const DEFAULT_BASE_URLS: Record<string, string> = {
-    openai: 'https://api.openai.com/v1', anthropic: 'https://api.anthropic.com', gemini: 'https://generativelanguage.googleapis.com/v1beta', azure: '',
+    tubitak: TUBITAK_AI_BASE_URL, openai: 'https://api.openai.com/v1', anthropic: 'https://api.anthropic.com', gemini: 'https://generativelanguage.googleapis.com/v1beta', azure: '',
 };

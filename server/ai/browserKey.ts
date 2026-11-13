@@ -1,5 +1,5 @@
 import { BROWSER_BASE_URL_HEADER, BROWSER_KEY_HEADER, BROWSER_MODEL_HEADER, BROWSER_PROVIDER_HEADER, LEGACY_BROWSER_KEY_HEADER } from '../../utils/ai/protocol.js';
-import { AiProvider, Env, resolveAuthMode } from './config.js';
+import { AiProvider, Env, resolveAuthMode, TUBITAK_AI_BASE_URL, TUBITAK_DEFAULTS } from './config.js';
 import { GEMINI_BASE_URL } from './gemini.js';
 
 /**
@@ -9,7 +9,7 @@ import { GEMINI_BASE_URL } from './gemini.js';
  * ayar gerekmez: o istek için sunucu ayarı yerine bu bağlantı kullanılır,
  * sunucudaki anahtar kullanılmaz.
  *
- * Adresler sabittir (Gemini, OpenAI, Anthropic); yalnız Azure'da kaynağa özel
+ * Adresler sabittir (TÜBİTAK BİLGEM, Gemini, OpenAI, Anthropic); yalnız Azure'da kaynağa özel
  * *.openai.azure.com adresi verilebilir — başlıkla başka bir adrese istek
  * gönderilemez. Hız sınırı ve izinli kökenler aynen geçerlidir; sunucuda erişim
  * koruması (AI_ACCESS_TOKEN / Supabase) tanımlıysa o da geçerlidir. Tanımlı
@@ -26,12 +26,13 @@ const MODEL_PATTERN = /^[A-Za-z0-9_.:/-]{1,120}$/;
 /** Azure OpenAI kaynağı: https://KAYNAK.openai.azure.com[/yol] */
 const AZURE_PATTERN = /^https:\/\/[a-z0-9][a-z0-9-]{0,62}\.openai\.azure\.com(\/[A-Za-z0-9._/-]*)?$/;
 
-export const BROWSER_PROVIDERS: AiProvider[] = ['gemini', 'openai', 'anthropic', 'azure'];
+export const BROWSER_PROVIDERS: AiProvider[] = ['tubitak', 'gemini', 'openai', 'anthropic', 'azure'];
 
 const FIXED_BASE_URLS: Partial<Record<AiProvider, string>> = {
     gemini: GEMINI_BASE_URL,
     openai: 'https://api.openai.com/v1',
     anthropic: 'https://api.anthropic.com',
+    tubitak: TUBITAK_AI_BASE_URL,
 };
 
 const WHERE = 'Yönetici konsolu › Yapay zekâ';
@@ -54,7 +55,7 @@ export const readBrowserKey = (request: Request, env: Env): { conn?: BrowserConn
     if (!BROWSER_PROVIDERS.includes(provider)) return { problem: `Bu tarayıcıdaki sağlayıcı tanınmadı; ${WHERE} bölümünden yeniden girin.` };
     const model = h(BROWSER_MODEL_HEADER).replace(/^models\//, '');
     if (model && !MODEL_PATTERN.test(model)) return { problem: `Bu tarayıcıdaki model adı geçersiz; ${WHERE} bölümünden yeniden girin.` };
-    if (!model && provider !== 'gemini') return { problem: `Bu tarayıcıdaki bağlantıda model adı eksik; ${WHERE} bölümünden girin.` };
+    if (!model && provider !== 'gemini' && provider !== 'tubitak') return { problem: `Bu tarayıcıdaki bağlantıda model adı eksik; ${WHERE} bölümünden girin.` };
     if (provider === 'azure') {
         const baseUrl = h(BROWSER_BASE_URL_HEADER).replace(/\/+$/, '');
         if (!AZURE_PATTERN.test(baseUrl)) return { problem: `Azure adresi https://KAYNAK.openai.azure.com/openai/v1 biçiminde olmalı; ${WHERE} bölümünden düzeltin.` };
@@ -78,7 +79,7 @@ export const browserKeyEnv = (env: Env, input: BrowserConnection | string): Env 
         AI_PROVIDER: conn.provider,
         AI_BASE_URL: conn.provider === 'azure' ? conn.baseUrl : FIXED_BASE_URLS[conn.provider],
         AI_API_KEY: conn.key,
-        AI_MODEL: conn.model || (conn.provider === 'gemini' ? 'auto' : ''),
+        AI_MODEL: conn.model || (conn.provider === 'gemini' ? 'auto' : conn.provider === 'tubitak' ? TUBITAK_DEFAULTS.model : ''),
     });
     // Anlamsal arama: Gemini ve OpenAI'de aynı anahtarla; Anthropic ve Azure'da anahtar kelime araması
     if (conn.provider === 'gemini') Object.assign(next, { AI_EMBEDDING_PROVIDER: 'gemini', AI_EMBEDDING_BASE_URL: GEMINI_BASE_URL, AI_EMBEDDING_API_KEY: conn.key, AI_EMBEDDING_MODEL: 'auto' });

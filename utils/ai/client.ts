@@ -94,12 +94,12 @@ export const AI_BROWSER_CONNECTION_KEY = 'PLANASISTAN_AI_BROWSER_CONNECTION';
 /** Eski sürümün yalnız Gemini anahtarı (okunduğunda bağlantıya taşınır) */
 const LEGACY_GEMINI_KEY = 'PLANASISTAN_AI_GEMINI_TEST_KEY';
 
-export type BrowserAiProvider = 'gemini' | 'openai' | 'anthropic' | 'azure';
+export type BrowserAiProvider = 'tubitak' | 'gemini' | 'openai' | 'anthropic' | 'azure';
 
 export interface BrowserConnection {
     provider: BrowserAiProvider;
     apiKey: string;
-    /** Gemini'de boşsa otomatik seçilir; diğerlerinde zorunlu */
+    /** Gemini'de boşsa otomatik seçilir, TÜBİTAK'ta general; diğerlerinde zorunlu */
     model?: string;
     /** Yalnız Azure: https://KAYNAK.openai.azure.com/openai/v1 */
     baseUrl?: string;

@@ -170,12 +170,16 @@ AI_MODEL=<model-adı>
 GEMINI_API_KEY=<AIza…>
 # ya da açıkça: AI_PROVIDER=gemini, AI_API_KEY=<anahtar>, AI_MODEL=<model-adı | auto>
 
-# TÜBİTAK BİLGEM AI API (OpenAI-uyumlu)
-AI_PROVIDER=openai
-AI_BASE_URL=https://ai-api.bilgem.tubitak.gov.tr/v1
-AI_MODEL=general            # Qwen3.8 Flash Next · 256K bağlam  (alternatif: code → DeepSeek Flash v4.1 · 1M bağlam)
-AI_REASONING_EFFORT=medium  # varsayılan "en yüksek" yavaş olabilir; sohbet için medium/low önerilir
-AI_MAX_OUTPUT_TOKENS=8192   # akıl yürütme token'ları da bu sınıra dahildir
+# TÜBİTAK BİLGEM AI API (OpenAI-uyumlu) — yalnız anahtar yeter
+AI_PROVIDER=tubitak
+AI_API_KEY=<anahtar>
+# Kendiliğinden gelenler (istenirse ezilebilir):
+#   AI_BASE_URL=https://ai-api.bilgem.tubitak.gov.tr/v1
+#   AI_MODEL=general            # Qwen3.8 Flash Next · 256K bağlam  (alternatif: code → DeepSeek Flash v4.1 · 1M bağlam)
+#   AI_REASONING_EFFORT=medium  # varsayılan "en yüksek" yavaş olabilir
+#   AI_MAX_OUTPUT_TOKENS=8192   # akıl yürütme token'ları da bu sınıra dahildir
+# Panelden: Yönetici konsolu → Yapay zekâ → "TÜBİTAK ile kur" (yalnız anahtar).
+# Eski biçim (AI_PROVIDER=openai + AI_BASE_URL=…bilgem…) aynen çalışmaya devam eder.
 
 # Kurum içi / OpenAI-uyumlu (vLLM, Ollama, LiteLLM, kurumsal ağ geçidi)
 AI_PROVIDER=openai

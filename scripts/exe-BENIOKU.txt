@@ -21,8 +21,12 @@ AYARLAR (Jira, yapay zekâ, Teams, e-posta)
 
   Bu dosyada jeton ve parolalar vardır: başkasıyla paylaşmayın.
 
-  Yapay zekâ: AI_PROVIDER / AI_API_KEY / AI_MODEL satırlarını doldurun ya da
-  uygulamada Yönetici konsolu → Yapay zekâ panelinden girin.
+  Yapay zekâ (TÜBİTAK BİLGEM): uygulamada Yönetici konsolu → Yapay zekâ →
+  "TÜBİTAK ile kur" bölümüne yalnız API anahtarınızı yapıştırın. Ya da bu
+  dosyaya şu iki satırı yazın (adres ve model kendiliğinden gelir):
+
+      AI_PROVIDER=tubitak
+      AI_API_KEY=<anahtarınız>
 
   Vercel'deki ayarlar exe'ye kendiliğinden gelmez. Vercel → Project →
   Settings → Environment Variables ekranındaki değerleri (Jira, AI) bu

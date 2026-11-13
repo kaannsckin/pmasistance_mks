@@ -56,12 +56,13 @@ const ENV_TEMPLATE = `# PlanAsistan yerel ayarları — değişiklikten sonra Pl
 
 # ---- Yapay zekâ ----
 # İki yol var (biri yeter):
-#  a) Anahtarı buraya yazın:
-# AI_PROVIDER=openai          # openai | azure | anthropic | gemini
+#  a) Uygulamada Yönetici konsolu → Yapay zekâ → "TÜBİTAK ile kur": yalnız anahtarı yapıştırın
+#     (şifreli olarak planasistan-veri klasörüne yazılır).
+#  b) Buraya yazın. TÜBİTAK BİLGEM için iki satır yeter (adres ve model kendiliğinden):
+# AI_PROVIDER=tubitak
 # AI_API_KEY=
-# AI_MODEL=
-# AI_BASE_URL=                # kurum içi / Azure uç noktası gerekiyorsa
-#  b) Uygulamada Yönetici konsolu → Yapay zekâ panelinden girin (şifreli olarak planasistan-veri klasörüne yazılır).
+# AI_MODEL=general            # isteğe bağlı: general | code
+#    Başka sağlayıcı: AI_PROVIDER=openai | azure | anthropic | gemini, AI_MODEL=..., gerekirse AI_BASE_URL=...
 
 # ---- Vercel'deki panel ayarlarını ortak kullanmak (isteğe bağlı) ----
 # Vercel'de AI ayarları panelden girildiyse Supabase'de şifreli durur. Aynı ayarları okumak için Vercel'deki

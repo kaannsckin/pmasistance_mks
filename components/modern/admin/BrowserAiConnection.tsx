@@ -26,6 +26,7 @@ interface Props {
 }
 
 const PROVIDERS: { id: BrowserAiProvider; label: string; keyHint: string; modelHint: string }[] = [
+    { id: 'tubitak', label: 'TÜBİTAK BİLGEM', keyHint: 'BİLGEM AI API anahtarı', modelHint: 'Boş bırakın: general (kod için: code)' },
     { id: 'gemini', label: 'Google Gemini', keyHint: 'AIza…', modelHint: 'Boş bırakın: en güncel kararlı Flash modeli seçilir' },
     { id: 'openai', label: 'OpenAI', keyHint: 'sk-…', modelHint: 'ör. gpt-4.1-mini' },
     { id: 'anthropic', label: 'Anthropic', keyHint: 'sk-ant-…', modelHint: 'ör. claude-sonnet-5-5' },
@@ -39,7 +40,7 @@ const BrowserAiConnection: React.FC<Props> = ({ status, onChanged, open }) => {
     const [active, setActive] = useState(loadBrowserConnection);
     const [expired] = useState(() => !active && browserSettingsExpired());
     const [form, setForm] = useState<{ provider: BrowserAiProvider; apiKey: string; model: string; baseUrl: string; accessToken: string }>(() => ({
-        provider: active?.provider || 'gemini', apiKey: '', model: active?.model || '', baseUrl: active?.baseUrl || '', accessToken: '',
+        provider: active?.provider || 'tubitak', apiKey: '', model: active?.model || '', baseUrl: active?.baseUrl || '', accessToken: '',
     }));
     const [editing, setEditing] = useState(false);
     const [running, setRunning] = useState(false);
@@ -61,7 +62,7 @@ const BrowserAiConnection: React.FC<Props> = ({ status, onChanged, open }) => {
             setResult({ ok: false, text: 'API anahtarı biçimi tanınmadı: harf, rakam, nokta, - ve _ karakterlerinden oluşan en az 20 karakterlik bir anahtar girin.' });
             return;
         }
-        if (form.provider !== 'gemini' && !conn.model) { setResult({ ok: false, text: 'Model adını girin.' }); return; }
+        if (form.provider !== 'gemini' && form.provider !== 'tubitak' && !conn.model) { setResult({ ok: false, text: 'Model adını girin.' }); return; }
         if (form.provider === 'azure' && !/^https:\/\/[a-z0-9-]+\.openai\.azure\.com/.test(conn.baseUrl || '')) {
             setResult({ ok: false, text: 'Azure adresi https://KAYNAK.openai.azure.com/openai/v1 biçiminde olmalı.' });
             return;
@@ -129,8 +130,8 @@ const BrowserAiConnection: React.FC<Props> = ({ status, onChanged, open }) => {
                 <Field label="API anahtarı" htmlFor="ai-browser-key" hint={form.provider === 'gemini' ? undefined : 'Sağlayıcının konsolundan alınan anahtar'}>
                     <input id="ai-browser-key" type="password" autoComplete="off" className="m-input" placeholder={meta.keyHint} value={form.apiKey} onChange={e => set({ apiKey: e.target.value })} />
                 </Field>
-                <Field label={form.provider === 'gemini' ? 'Model (isteğe bağlı)' : 'Model'} htmlFor="ai-browser-model" hint={meta.modelHint}>
-                    <input id="ai-browser-model" className="m-input" placeholder={form.provider === 'gemini' ? 'auto' : 'Model adı'} value={form.model} onChange={e => set({ model: e.target.value })} />
+                <Field label={form.provider === 'gemini' || form.provider === 'tubitak' ? 'Model (isteğe bağlı)' : 'Model'} htmlFor="ai-browser-model" hint={meta.modelHint}>
+                    <input id="ai-browser-model" className="m-input" placeholder={form.provider === 'gemini' ? 'auto' : form.provider === 'tubitak' ? 'general' : 'Model adı'} value={form.model} onChange={e => set({ model: e.target.value })} />
                 </Field>
                 {form.provider === 'azure' && (
                     <Field label="Azure adresi" htmlFor="ai-browser-base">

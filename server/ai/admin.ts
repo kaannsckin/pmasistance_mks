@@ -1,5 +1,5 @@
 import { clientIp, safeEqual } from './auth.js';
-import { Env, readAiConfig } from './config.js';
+import { Env, readAiConfig, TUBITAK_AI_BASE_URL } from './config.js';
 import { buildEmbedRequest, parseEmbedResponse, readEmbeddingConfig } from './embeddings.js';
 import { upstreamErrorMessage } from './errors.js';
 import { buildUpstreamRequest, extractUpstreamError, parseUpstreamEvents } from './providers.js';
@@ -186,8 +186,8 @@ export const handleAiAdmin = async (request: Request, env: Env, opts: AdminOptio
                 const chat = list.filter(m => m.methods.includes('generateContent')).map(m => m.id);
                 return json(200, { models: chat, recommended: pickGeminiChatModel(list) }, cors);
             }
-            if (provider === 'openai') {
-                const base = (clean(e.AI_BASE_URL) || 'https://api.openai.com/v1').replace(/\/+$/, '');
+            if (provider === 'openai' || provider === 'tubitak') {
+                const base = (clean(e.AI_BASE_URL) || (provider === 'tubitak' ? TUBITAK_AI_BASE_URL : 'https://api.openai.com/v1')).replace(/\/+$/, '');
                 const res = await (opts.fetchImpl || upstreamFetch(base, e))(`${base}/models`, { headers: { authorization: `Bearer ${key}` } });
                 if (!res.ok) return json(200, { models: [], error: forPanel(upstreamErrorMessage(res.status, extractUpstreamError(await res.text().catch(() => '')))) }, cors);
                 const j = await res.json().catch(() => ({})) as { data?: { id?: string }[] };
