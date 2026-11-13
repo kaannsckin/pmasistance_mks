@@ -979,7 +979,8 @@ Tam liste: [`.env.example`](.env.example) · [docs/AI_KURULUM.md](docs/AI_KURULU
 
 1. **Supabase Realtime:** Ekip üyelerinin değişikliklerini sayfa yenilemeden anlık görme; hücre bazlı canlı eşzamanlılık.
 2. **Normalize veritabanı şeması:** Tahsis/görev verilerinin ayrı tablolara açılması → alan bazlı yazma RBAC'ının sunucuda zorlanması ve çakışmasız eşzamanlı düzenleme.
-3. Supabase kurulum doğrulaması (`supabase/dogrula.mjs`).
+
+Supabase kurulum doğrulaması `supabase/dogrula.mjs` ile yapılır ([supabase/KURULUM.md](supabase/KURULUM.md)).
 
 Pilot sürecindeki geliştirmeler: [docs/pilot/BACKLOG.md](docs/pilot/BACKLOG.md)
 
