@@ -83,6 +83,7 @@ import { appendEvalRun } from './utils/planning/evaluation';
 import { appendModelEval } from './utils/planning/ml/estimateModel';
 import { JiraImportOptions, mergeJiraIssues } from './utils/planning/jiraImport';
 import { linkJiraKeys } from './utils/planning/jiraExport';
+import { departmentLeadIds } from './utils/staffing';
 import { applyJiraSync, pullIssueIntoTasks, sourceLabel } from './utils/planning/jiraSync';
 import { useJiraAutoSync } from './components/modern/planning/useJiraAutoSync';
 import { JiraIssueRecord } from './utils/integrations';
@@ -242,6 +243,8 @@ const App: React.FC = () => {
 
   // ---- Kimlik + kapsam ----
   const identity = useMemo(() => (workspace ? identityOf(workspace) : { role: 'py' as UserRole }), [workspace]);
+  // Bölüm sorumluları uygun kişi aramasında aday sayılmaz (B-008)
+  const departmentLeads = useMemo(() => departmentLeadIds(workspace?.departments), [workspace?.departments]);
   // Ekran yetkileri (admin değiştirebilir; not gizliliği kilitli)
   const canExecutive = can(identity, 'screen.executive');
   const canAdmin = can(identity, 'screen.admin');
@@ -1508,6 +1511,7 @@ const App: React.FC = () => {
         <ModernAllocation
           allocations={workspace.allocations}
           people={workspace.people}
+          departmentLeadIds={departmentLeads}
           projects={workspace.projects}
           planLocks={workspace.planLocks}
           leaves={workspace.leaves || []}
@@ -1529,6 +1533,7 @@ const App: React.FC = () => {
         <AllocationView
           allocations={workspace.allocations}
           people={workspace.people}
+          departmentLeadIds={departmentLeads}
           projects={workspace.projects}
           planLocks={workspace.planLocks}
           leaves={workspace.leaves || []}

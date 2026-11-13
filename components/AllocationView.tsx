@@ -21,6 +21,8 @@ import { BilledApplyMode, BilledHoursOptions, BilledHoursRecord } from '../utils
 interface AllocationViewProps {
   allocations: Allocation[];
   people: Person[];
+  /** Bölüm sorumluları: uygun kişi aramasında aday sayılmaz (B-008) */
+  departmentLeadIds?: ReadonlySet<string>;
   projects: Project[];
   planLocks: PlanLock[];
   leaves: Leave[];
@@ -74,7 +76,7 @@ const LOCK_STYLES: Record<PlanLockStatus, { label: string; cls: string; icon: st
   locked: { label: 'Kilitli', cls: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-300', icon: 'fa-lock' },
 };
 
-const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, projects, planLocks, leaves, titles, currentRole, identity, onSetCell, onAddAllocation, onDeleteAllocation, onLockAction, onApplySuggestions, onApplyBilledHours, control }) => {
+const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, departmentLeadIds, projects, planLocks, leaves, titles, currentRole, identity, onSetCell, onAddAllocation, onDeleteAllocation, onLockAction, onApplySuggestions, onApplyBilledHours, control }) => {
   const wsLike = useMemo(() => ({ people, projects, allocations }), [people, projects, allocations]);
   // Kimlik kapsamına göre hücre/satır düzenlenebilirliği (RBAC)
   const canEnter = identity.role === 'py' || identity.role === 'bolum_sorumlu';
@@ -483,7 +485,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
     const roles = allPersonRoles(people);
     const lo = Math.min(staff.from, staff.to), hi = Math.max(staff.from, staff.to);
     const months = MONTH_INDEXES.filter(m => m >= lo && m <= hi);
-    const candidates = findAvailablePeople(people, allocations, leaves, { role: staff.role || undefined, year, months, requiredAA: staff.aa });
+    const candidates = findAvailablePeople(people, allocations, leaves, { role: staff.role || undefined, year, months, requiredAA: staff.aa, exclude: departmentLeadIds });
     const fitCount = candidates.filter(c => c.fits).length;
     const windowLabel = lo === hi ? MONTHS_TR[lo - 1] : `${MONTHS_TR[lo - 1]}–${MONTHS_TR[hi - 1]}`;
 

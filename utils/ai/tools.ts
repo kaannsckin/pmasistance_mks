@@ -13,7 +13,7 @@ import { buildPersonProfile } from '../personProfile';
 import { recentChanges } from '../recentChanges';
 import { buildRoleAnalysis, summarizeGaps, UNASSIGNED_ROLE } from '../roleAnalysis';
 import { RISK_BAND_LABELS, RISK_STATUS_LABELS, riskBand, riskScore, summarizeRisks } from '../risks';
-import { allPersonRoles, findAvailablePeople } from '../staffing';
+import { allPersonRoles, departmentLeadIds, findAvailablePeople } from '../staffing';
 import { buildStatusReport } from '../statusReport';
 import { buildUtilization } from '../utilization';
 import { RAG_SOURCE_LABELS, RagSourceType } from '../rag/sources';
@@ -445,9 +445,12 @@ export const AI_TOOLS: ToolDef[] = [
             }
             const months = MONTH_INDEXES.filter(m => m >= start && m <= end);
             const people = dept ? ctx.ws.people.filter(p => p.departmentCode === dept) : ctx.ws.people;
-            const rows = findAvailablePeople(people, ctx.ws.allocations, ctx.ws.leaves || [], { role, year, months, requiredAA: required });
+            const leads = departmentLeadIds(ctx.ws.departments);
+            const rows = findAvailablePeople(people, ctx.ws.allocations, ctx.ws.leaves || [], { role, year, months, requiredAA: required, exclude: leads });
+            const leadsSkipped = people.filter(p => leads.has(p.id) && (!role || p.roles.includes(role))).length;
             return {
                 sorgu: { rol: role || 'tümü', yil: year, aylar: `${start}-${end}`, gerekli_aa: required, bolum: dept },
+                ...(leadsSkipped ? { not: `${leadsSkipped} bölüm sorumlusu aday sayılmadı (yönetim görevi; proje tahsisi yok).` } : {}),
                 aday_sayisi: rows.length,
                 uygun_sayisi: rows.filter(r => r.fits).length,
                 adaylar: rows.slice(0, clampLimit(a.limit, 15)).map(r => ({

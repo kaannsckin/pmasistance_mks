@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { findAvailablePeople, allPersonRoles } from './staffing';
+import { departmentLeadIds, findAvailablePeople, allPersonRoles } from './staffing';
 import { Allocation, Leave, Person } from '../types';
 
 const person = (id: string, roles: string[], availableAA = 1): Person => ({
@@ -18,6 +18,13 @@ const allocations: Allocation[] = [
 ];
 
 describe('findAvailablePeople', () => {
+    it('B-008: bölüm sorumlusu (tahsissiz, "tamamen boş") aday sayılmaz', () => {
+        const leads = departmentLeadIds([{ leadPersonId: 'bos' }, {}]);
+        expect([...leads]).toEqual(['bos']);
+        const res = findAvailablePeople(people, allocations, [], { role: 'Yazılım', year: 2026, months: [6], requiredAA: 0.5, exclude: leads });
+        expect(res.map(r => r.personId)).toEqual(['yaridolu', 'dolu']);
+    });
+
     it('rol filtreler; Haziran 0.5 AA gereksinimine uyanları önce sıralar', () => {
         const res = findAvailablePeople(people, allocations, [], { role: 'Yazılım', year: 2026, months: [6], requiredAA: 0.5 });
         expect(res.map(r => r.personId)).not.toContain('sistem'); // rol dışı

@@ -24,7 +24,13 @@ export interface StaffQuery {
     year: number;
     months: number[]; // 1-12 pencere
     requiredAA: number;
+    /** Aday sayılmayanlar: bölüm sorumluları (yönetim görevi; proje kapasitesi yok, bkz. B-008) */
+    exclude?: ReadonlySet<string>;
 }
+
+/** Bölüm sorumluları: tahsisleri olmadığından "tamamen boş" görünürler ama proje kaynağı değildir */
+export const departmentLeadIds = (departments: { leadPersonId?: string }[] | undefined): Set<string> =>
+    new Set((departments || []).map(d => d.leadPersonId).filter((x): x is string => !!x));
 
 const round2 = (v: number): number => Math.round(v * 100) / 100;
 
@@ -36,7 +42,7 @@ export const findAvailablePeople = (
 ): StaffCandidate[] => {
     const wanted = q.role && q.role.trim() ? q.role.trim() : null;
     const months = q.months.length ? q.months : MONTH_INDEXES;
-    const candidates = people.filter(p => !wanted || p.roles.includes(wanted));
+    const candidates = people.filter(p => (!wanted || p.roles.includes(wanted)) && !q.exclude?.has(p.id));
 
     const rows: StaffCandidate[] = candidates.map(p => {
         const freeByMonth = MONTH_INDEXES.map(m => {
