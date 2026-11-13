@@ -488,6 +488,22 @@ export interface SwotItem {
   note?: string; // aksiyon / açıklama (opsiyonel)
 }
 
+/**
+ * Jira canlı eşitleme ayarı (proje bazında). Uygulamadaki Jira anahtarlı açık
+ * kayıtlar her eşitlemede yenilenir; `discover` açıksa kaynaktaki (proje /
+ * etiket / kayıtlı filtre) yeni açık kayıtlar da eklenir. Tüm Jira taranmaz.
+ */
+export interface JiraSyncSettings {
+  projectKey?: string;
+  labels?: string[];
+  filterId?: string;
+  filterName?: string;
+  /** Kaynaktaki yeni açık kayıtlar görev olarak eklensin mi */
+  discover: boolean;
+  /** Otomatik eşitleme aralığı (dakika); 0 = kapalı */
+  autoMinutes: number;
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -497,6 +513,7 @@ export interface Project {
   ragNote?: string; // Haftalık durum açıklaması (PM girer)
   pmPersonId?: string; // Proje Yöneticisi (havuzdaki kişi) — RBAC sahipliği
   jiraProjectKey?: string; // Jira proje anahtarı (worklog çekmek için, ör. MKS)
+  jiraSync?: JiraSyncSettings; // Jira canlı eşitleme kaynağı ve otomatik eşitleme aralığı
   risks?: Risk[];
   pestelItems?: PestelItem[]; // PESTEL dış çevre analizi
   swotItems?: SwotItem[]; // SWOT stratejik analizi
