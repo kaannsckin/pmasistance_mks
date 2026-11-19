@@ -1,6 +1,6 @@
 
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { View, Task, Resource, TaskStatus, Note, CustomerRequest, Objective, Project, Person, WorkspaceData, RagStatus, ProjectStatus, UserRole, PlanLockStatus, WorkPackage, UiStyle, PermissionKey, EstimateLogEntry, ReleasePlan, GoldenItem, EvalRun, ModelEvalRun } from './types';
+import { View, Task, Resource, TaskStatus, Note, CustomerRequest, Objective, Project, Person, WorkspaceData, RagStatus, ProjectStatus, UserRole, PlanLockStatus, WorkPackage, UiStyle, PermissionKey, EstimateLogEntry, JiraSyncSettings, ReleasePlan, GoldenItem, EvalRun, ModelEvalRun } from './types';
 import { INITIAL_TASKS, INITIAL_RESOURCES, INITIAL_OBJECTIVES } from './constants';
 import {
   WORKSPACE_STORAGE_KEY,
@@ -83,6 +83,8 @@ import { appendEvalRun } from './utils/planning/evaluation';
 import { appendModelEval } from './utils/planning/ml/estimateModel';
 import { JiraImportOptions, mergeJiraIssues } from './utils/planning/jiraImport';
 import { linkJiraKeys } from './utils/planning/jiraExport';
+import { applyJiraSync, pullIssueIntoTasks, sourceLabel } from './utils/planning/jiraSync';
+import { useJiraAutoSync } from './components/modern/planning/useJiraAutoSync';
 import { JiraIssueRecord } from './utils/integrations';
 import ModernPortfolio from './components/modern/ModernPortfolio';
 import ModernBoard from './components/modern/ModernBoard';
@@ -1105,6 +1107,44 @@ const App: React.FC = () => {
     });
   }, [updateWorkspace]);
 
+  // ---- Jira canlı eşitleme: ayar, çekilen kayıtların uygulanması (elle / otomatik), tek kaydı Jira'dan alma ----
+  const handleSetJiraSync = useCallback((projectId: string, settings: JiraSyncSettings) => {
+    updateWorkspace(ws => {
+      const project = ws.projects.find(p => p.id === projectId);
+      if (!project || !canEditProjectContent(ws, identityOf(ws), projectId)) return ws;
+      const next = { ...ws, projects: ws.projects.map(p => (p.id === projectId ? { ...p, jiraSync: settings, jiraProjectKey: p.jiraProjectKey || settings.projectKey, updatedAt: new Date().toISOString() } : p)) };
+      return appendAudit(next, 'data.import', `"${project.name}" · Jira eşitleme ayarı: ${sourceLabel(settings) || 'yalnız bağlı açık kayıtlar'}${settings.discover ? ', yeni kayıtlar eklenir' : ''}, otomatik ${settings.autoMinutes ? `${settings.autoMinutes} dk` : 'kapalı'}`, projectId);
+    });
+  }, [updateWorkspace]);
+
+  const handleApplyJiraSync = useCallback((projectId: string, issues: JiraIssueRecord[], opts: JiraImportOptions, addNew: boolean, label: string) => {
+    updateWorkspace(ws => {
+      const project = ws.projects.find(p => p.id === projectId);
+      if (!project || !canEditProjectContent(ws, identityOf(ws), projectId)) return ws;
+      const r = applyJiraSync(project.tasks, issues, opts, addNew, ws.projects.filter(p => p.id !== projectId).flatMap(p => p.tasks.map(t => t.id)));
+      if (!r.added && !r.updated) return ws;
+      const next = { ...ws, projects: ws.projects.map(p => (p.id === projectId ? { ...p, tasks: r.tasks, updatedAt: new Date().toISOString() } : p)) };
+      return appendAudit(next, 'data.import', `"${project.name}" · Jira eşitleme (${label}): ${r.updated} güncellenen${r.closed ? ` (${r.closed} kapanan)` : ''}, ${r.added} yeni kayıt`, projectId);
+    });
+  }, [updateWorkspace]);
+
+  const handleJiraPull = useCallback((projectId: string, issue: JiraIssueRecord) => {
+    updateWorkspace(ws => {
+      const project = ws.projects.find(p => p.id === projectId);
+      if (!project || !canEditProjectContent(ws, identityOf(ws), projectId)) return ws;
+      const tasks = pullIssueIntoTasks(project.tasks, issue, { importedAt: new Date().toISOString(), defaultUnit: 'Genel' });
+      if (JSON.stringify(tasks) === JSON.stringify(project.tasks)) return ws;
+      const next = { ...ws, projects: ws.projects.map(p => (p.id === projectId ? { ...p, tasks, updatedAt: new Date().toISOString() } : p)) };
+      return appendAudit(next, 'data.import', `"${project.name}" · ${issue.key} Jira'daki hâliyle yenilendi`, projectId);
+    });
+  }, [updateWorkspace]);
+
+  // Otomatik eşitleme: aralığı tanımlı ve bu kullanıcının düzenleyebildiği projeler
+  useJiraAutoSync(
+    () => { const ws = workspaceRef.current; return ws ? ws.projects.filter(p => (p.jiraSync?.autoMinutes || 0) > 0 && canEditProjectContent(ws, identityOf(ws), p.id)) : []; },
+    handleApplyJiraSync,
+  );
+
   // ---- Planlama: Jira'da açılan kayıtların anahtarları görevlere yazılır ----
   const handleLinkJira = useCallback((projectId: string, key: string, links: Record<string, string>) => {
     updateWorkspace(ws => {
@@ -1622,6 +1662,8 @@ const App: React.FC = () => {
           onOpenGoals={() => setCurrentView(View.Goals)}
           onImportJira={(key, issues, opts, label) => handleImportJiraHistory(activeProject.id, key, issues, opts, label)}
           onLinkJira={(key, links) => handleLinkJira(activeProject.id, key, links)}
+          onSaveJiraSync={settings => handleSetJiraSync(activeProject.id, settings)}
+          onApplyJiraSync={(issues, opts, addNew, label) => handleApplyJiraSync(activeProject.id, issues, opts, addNew, label)}
         />
       );
     }
@@ -2089,6 +2131,7 @@ const App: React.FC = () => {
           onClose={() => setIsDetailModalOpen(false)}
           onEdit={(t: Task) => { setIsDetailModalOpen(false); setEditingTask(t); setIsFormModalOpen(true); }}
           onSave={handleUpdateTask}
+          onJiraPull={canEditProjectContent(workspace, identity, activeProject.id) ? issue => handleJiraPull(activeProject.id, issue) : undefined}
         />
       ) : (
         <TaskDetailModal task={liveViewingTask} onClose={() => setIsDetailModalOpen(false)} onEdit={(t) => { setIsDetailModalOpen(false); setEditingTask(t); setIsFormModalOpen(true); }} onSave={handleUpdateTask} />
