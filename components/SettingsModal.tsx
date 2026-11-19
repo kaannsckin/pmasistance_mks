@@ -17,6 +17,8 @@ interface SettingsModalProps {
   onSave: (duration: number, date: string, enabled: boolean, aiEnabled: boolean, theme: string, colorScheme: ColorSchemePref) => void;
   onClose: () => void;
   onResetData?: () => void;
+  /** Görünüm ve renk teması seçilince ekranda hemen önizlenir; null önizlemeyi kaldırır (UI-GRS-28) */
+  onPreview?: (p: { colorScheme: ColorSchemePref; theme: string } | null) => void;
 }
 
 const THEMES = [
@@ -78,7 +80,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   onChangeUiStyle,
   onSave,
   onClose,
-  onResetData
+  onResetData,
+  onPreview
 }) => {
   const [duration, setDuration] = useState(sprintDuration);
   const [startDate, setStartDate] = useState(projectStartDate);
@@ -99,9 +102,15 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   const handleSave = () => {
     onSave(duration, startDate, persistenceEnabled, aiEnabled, theme, scheme);
   };
+  // Görünüm ve tema seçimi ekranda hemen görünür (UI-GRS-28): eskiden yalnız "Uygula"dan sonra
+  // değişiyordu, yanındaki "Arayüz" ise hemen değiştiği için ayar çalışmıyor sanılıyordu.
+  // Vazgeç, Kapat ya da Esc önizlemeyi geri alır; "Uygula" kalıcı yapar.
+  const pickScheme = (value: ColorSchemePref) => { setScheme(value); onPreview?.({ colorScheme: value, theme }); };
+  const pickTheme = (id: string) => { setTheme(id); onPreview?.({ colorScheme: scheme, theme: id }); };
+  const cancel = () => { onPreview?.(null); onClose(); };
   // Pencere davranışı (UI-ERS-01): odak içeri girer, Tab içeride döner, Esc kapatır, kapanınca odak geri döner
   const dialogRef = useRef<HTMLDivElement>(null);
-  useModalFocus(dialogRef, onClose);
+  useModalFocus(dialogRef, cancel);
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex justify-center items-center p-4">
@@ -111,7 +120,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             <i aria-hidden="true" className="fa-solid fa-sliders mr-3 text-primary"></i>
             Uygulama Ayarları
           </h2>
-          <button aria-label="Kapat" onClick={onClose} className="text-gray-400 hover:text-gray-700 dark:hover:text-white transition-colors">
+          <button aria-label="Kapat" onClick={cancel} className="text-gray-400 hover:text-gray-700 dark:hover:text-white transition-colors">
             <i aria-hidden="true" className="fa-solid fa-times"></i>
           </button>
         </div>
@@ -156,7 +165,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                             type="button"
                             role="radio"
                             aria-checked={scheme === value}
-                            onClick={() => setScheme(value)}
+                            onClick={() => pickScheme(value)}
                             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${scheme === value ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm ring-1 ring-gray-300 dark:ring-gray-500' : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'}`}
                           >
                               <i aria-hidden="true" className={`fa-solid ${icon}`}></i>
@@ -169,7 +178,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                   {THEMES.map(t => (
                       <button 
                         key={t.id}
-                        onClick={() => setTheme(t.id)}
+                        onClick={() => pickTheme(t.id)}
                         className={`flex items-center space-x-3 p-3 rounded-xl border transition-all ${theme === t.id ? 'border-primary ring-2 ring-primary/20 bg-primary/5' : 'border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
                         style={theme === t.id ? { borderColor: 'var(--app-primary)', backgroundColor: 'var(--app-accent-light)' } : {}}
                       >
@@ -253,7 +262,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
 
         <div className="flex justify-end items-center p-4 bg-gray-50 dark:bg-gray-900/50 border-t dark:border-gray-700">
-          <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-bold text-gray-500 hover:text-gray-800 transition-colors">Vazgeç</button>
+          <button type="button" onClick={cancel} className="px-4 py-2 text-sm font-bold text-gray-500 hover:text-gray-800 transition-colors">Vazgeç</button>
           <button
             type="button" onClick={handleSave}
             className="px-8 py-2.5 rounded-xl bg-primary text-white font-bold hover:opacity-90 shadow-lg shadow-primary/20 transition-all"

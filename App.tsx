@@ -425,7 +425,10 @@ const App: React.FC = () => {
   // Tüm koyu stiller (Tailwind dark:, modern palet) html.dark'a bağlıdır. "Sistem"de işletim
   // sistemi tercihi izlenir ve değişince ekran güncellenir. Tercih localStorage'a da yazılır:
   // index.html'deki betik ilk çizimden önce uygular (açılışta tema yanıp sönmesin).
-  const colorScheme: ColorSchemePref = settings?.colorScheme || 'system';
+  // Ayarlar penceresindeki seçim kaydedilmeden önce de ekranda görünür (UI-GRS-28)
+  const [appearancePreview, setAppearancePreview] = useState<{ colorScheme: ColorSchemePref; theme: string } | null>(null);
+  const colorScheme: ColorSchemePref = appearancePreview?.colorScheme || settings?.colorScheme || 'system';
+  const effectiveTheme = appearancePreview?.theme || settings?.theme || 'classic';
   const settingsLoaded = !!settings;
   useEffect(() => {
     if (!settingsLoaded) return;
@@ -442,7 +445,7 @@ const App: React.FC = () => {
     if (colorScheme !== 'system' || !mq) return;
     mq.addEventListener('change', apply);
     return () => mq.removeEventListener('change', apply);
-  }, [settingsLoaded, colorScheme, settings?.theme]);
+  }, [settingsLoaded, colorScheme, effectiveTheme]);
 
   // Yerel kayıt kapalıyken kaydedilmemiş değişiklik varsa sayfa kapanırken tarayıcı sorar (UI-AKS-31)
   const persistenceOffDirty = !!workspace && workspace.settings.isLocalPersistenceEnabled === false && !!lastPersisted.current
@@ -2193,7 +2196,7 @@ const App: React.FC = () => {
 
   return (
     <AssistantProvider enabled={isAIEnabled && !consoleMode} chat={aiPolicy.chat} embedded={aiPolicy.embedded} getWorkspace={getAssistantWorkspace} getView={getAssistantView} onNavigate={handleAssistantNavigate} onApplyAction={handleApplyAiAction}>
-    <div className={`min-h-screen font-sans theme-${settings?.theme || 'classic'} ${isModern ? 'ui-modern' : 'bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100'}`}>
+    <div className={`min-h-screen font-sans theme-${effectiveTheme} ${isModern ? 'ui-modern' : 'bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100'}`}>
       {isModern ? (
         <div className="flex min-h-screen">
           <ModernSidebar
@@ -2355,10 +2358,11 @@ const App: React.FC = () => {
           isLocalPersistenceEnabled={settings?.isLocalPersistenceEnabled !== false}
           isAIEnabled={settings?.isAIEnabled !== false}
           currentTheme={settings?.theme || 'classic'}
-          colorScheme={colorScheme}
+          colorScheme={settings?.colorScheme || 'system'}
           currentUiStyle={settings?.uiStyle || 'classic'}
           onChangeUiStyle={handleSetUiStyle}
-          onSave={handleSaveSettings} onClose={() => setIsSettingsModalOpen(false)} onResetData={handleResetData}
+          onPreview={setAppearancePreview}
+          onSave={(...args) => { handleSaveSettings(...args); setAppearancePreview(null); }} onClose={() => setIsSettingsModalOpen(false)} onResetData={handleResetData}
         />
       )}
       {isAboutModalOpen && <AboutModal onClose={() => setIsAboutModalOpen(false)} />}
