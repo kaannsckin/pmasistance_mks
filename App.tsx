@@ -1609,6 +1609,8 @@ const App: React.FC = () => {
 
   // Admin konsolu her zaman modern arayüzle açılır
   const isModern = settings?.uiStyle === 'modern' || consoleMode;
+  // Klasik arayüzde gömülen modern parçalar da seçili renk temasını (zümrüt, mor, turuncu…) alır
+  const modernScope = `ui-modern theme-${settings?.theme || 'classic'}`;
   // Proje bağlamındaki ekranlar (modern arayüzde proje başlığı ve segment gezinme gösterilir)
   const inProjectView = !!activeProject && MODERN_PROJECT_VIEWS.includes(currentView) &&
     !notesBlocked;
@@ -1661,7 +1663,7 @@ const App: React.FC = () => {
           onSaveProjectRoles={handleSaveProjectRoles}
         />
       );
-      return isModern ? page : <div className="ui-modern rounded-3xl p-4 sm:p-6">{page}</div>;
+      return isModern ? page : <div className={`${modernScope} rounded-3xl p-4 sm:p-6`}>{page}</div>;
     }
 
     if (currentView === View.Executive || notesBlocked) {
@@ -1712,7 +1714,7 @@ const App: React.FC = () => {
           onSetStatus={handleSetExpectationStatus}
         />
       );
-      return isModern ? page : <div className="ui-modern rounded-3xl p-4 sm:p-6">{page}</div>;
+      return isModern ? page : <div className={`${modernScope} rounded-3xl p-4 sm:p-6`}>{page}</div>;
     }
 
     // Haftalık rapor ve müşteri görüşmeleri (aktif proje gerektirmez)
@@ -1758,7 +1760,7 @@ const App: React.FC = () => {
           onDelete={handleDeleteMeeting}
         />
       );
-      return isModern ? page : <div className="ui-modern rounded-3xl p-4 sm:p-6">{page}</div>;
+      return isModern ? page : <div className={`${modernScope} rounded-3xl p-4 sm:p-6`}>{page}</div>;
     }
 
     // Çalışma alanı seviyesi ekranlar (aktif proje gerektirmez)
@@ -2151,10 +2153,10 @@ const App: React.FC = () => {
           <div role="tablist" aria-label="Pano görünümü" className="self-start inline-flex p-1 rounded-xl bg-gray-100 dark:bg-gray-800">
             {([['status', 'Durum panosu'], ['sprint', 'Sürüm planı']] as const).map(([k, label]) => (
               <button key={k} role="tab" aria-selected={classicBoardMode === k} onClick={() => setClassicBoardMode(k)}
-                className={`px-3 py-1.5 rounded-lg text-sm font-bold ${classicBoardMode === k ? 'bg-white dark:bg-gray-700 text-indigo-600 shadow-sm' : 'text-gray-500'}`}>{label}</button>
+                className={`px-3 py-1.5 rounded-lg text-sm font-bold ${classicBoardMode === k ? 'bg-white dark:bg-gray-700 shadow-sm' : 'text-gray-500'}`} style={classicBoardMode === k ? { color: 'var(--app-primary)' } : undefined}>{label}</button>
             ))}
           </div>
-          {classicBoardMode === 'status' ? <div className="ui-modern rounded-3xl p-4 sm:p-6 bg-white dark:bg-gray-900">{renderProjectBoard()}</div> : (
+          {classicBoardMode === 'status' ? <div className={`${modernScope} rounded-3xl p-4 sm:p-6`} style={{ background: 'var(--m-bg)' }}>{renderProjectBoard()}</div> : (
           <KanbanView
             tasks={tasks} resources={resources}
             sprintDuration={ps.sprintDuration} projectStartDate={ps.projectStartDate}
@@ -2621,7 +2623,7 @@ const App: React.FC = () => {
       {isProfileOpen && workspace && (() => {
         const sheet = <ProfileSwitcherSheet workspace={workspace} onSelect={handleChangeIdentity} onClose={() => setIsProfileOpen(false)} />;
         // Klasik arayüzde modern pencere kendi stil kabında açılır
-        return isModern ? sheet : <div className="ui-modern">{sheet}</div>;
+        return isModern ? sheet : <div className={modernScope}>{sheet}</div>;
       })()}
       {isPaletteOpen && (
         <AssistantCommandPalette items={commandItems} onClose={() => setIsPaletteOpen(false)} modern={isModern} />
@@ -2660,7 +2662,7 @@ const App: React.FC = () => {
             onCancel={() => setPendingTransition(null)}
             onConfirm={input => { finishTransition(pt.task, pt.target, pt.rule, input, pt.extra, pt.setKey, pt.fromLabel, pt.exact); setPendingTransition(null); }} />
         );
-        return isModern ? dlg : <div className="ui-modern">{dlg}</div>;
+        return isModern ? dlg : <div className={modernScope}>{dlg}</div>;
       })()}
       {listsSheetProject && workspace && (() => {
         const p = workspace.projects.find(x => x.id === listsSheetProject);
@@ -2671,19 +2673,21 @@ const App: React.FC = () => {
             onClose={() => setListsSheetProject(null)}
             onSave={(patch, summary) => { handleSaveProjectLists(p.id, patch, summary); setListsSheetProject(null); }} />
         );
-        return isModern ? sheet : <div className="ui-modern">{sheet}</div>;
+        return isModern ? sheet : <div className={modernScope}>{sheet}</div>;
       })()}
       {workflowSheetProject && workspace && (() => {
         const p = workspace.projects.find(x => x.id === workflowSheetProject);
         if (!p) return null;
         const sheet = <ProjectWorkflowSheet project={p} scheme={schemeOf(workspace, p)} people={workspace.people} roleDefs={projectRolesOf(workspace)} onClose={() => setWorkflowSheetProject(null)} onSave={wf => { handleSaveProjectWorkflow(p.id, wf); setWorkflowSheetProject(null); }} />;
-        return isModern ? sheet : <div className="ui-modern">{sheet}</div>;
+        return isModern ? sheet : <div className={modernScope}>{sheet}</div>;
       })()}
       {flowNotice && (
-        <div role="alert" className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[250] flex items-center gap-3 bg-red-700 text-white rounded-xl shadow-2xl px-4 py-2.5 max-w-[92vw]">
-          <i aria-hidden="true" className="fa-solid fa-route text-xs"></i>
-          <span className="text-xs font-semibold">{flowNotice}</span>
-          <button aria-label="Kapat" onClick={() => setFlowNotice(null)} className="text-white/70 hover:text-white" title="Kapat"><i aria-hidden="true" className="fa-solid fa-xmark text-xs"></i></button>
+        <div className={isModern ? '' : modernScope}>
+          <div role="alert" className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[250] flex items-center gap-3 m-tone-bad m-pop rounded-2xl px-4 py-2.5 max-w-[92vw]" style={{ boxShadow: 'var(--m-pop-shadow, 0 10px 30px rgba(0,0,0,.2))', border: '1px solid var(--m-bad)' }}>
+            <i aria-hidden="true" className="fa-solid fa-route text-xs"></i>
+            <span className="text-[13px] font-semibold">{flowNotice}</span>
+            <button aria-label="Kapat" onClick={() => setFlowNotice(null)} className="opacity-70 hover:opacity-100 bg-transparent border-0 cursor-pointer" style={{ color: 'inherit' }} title="Kapat"><i aria-hidden="true" className="fa-solid fa-xmark text-xs"></i></button>
+          </div>
         </div>
       )}
       {undo && (

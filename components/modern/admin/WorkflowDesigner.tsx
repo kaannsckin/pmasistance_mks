@@ -251,7 +251,7 @@ const WorkflowDesigner: React.FC<Props> = ({ value: wf, onChange, pool, usage, p
                                         </path>
                                         {!ruleIsEmpty(wf.rules?.[edgeRuleKey(e.from, e.to)]) && (() => {
                                             const { mid } = pathFor(e.from, e.to);
-                                            return <g aria-label="Geçiş kuralı var"><circle cx={mid.x} cy={mid.y} r={8} fill="var(--m-warn)" stroke="var(--m-bg)" strokeWidth={2} /><text x={mid.x} y={mid.y + 3.5} textAnchor="middle" fontSize="10" fontWeight="700" fill="#fff">K</text></g>;
+                                            return <g aria-label="Geçiş kuralı var"><circle cx={mid.x} cy={mid.y} r={8} fill="var(--m-warn)" stroke="var(--m-bg)" strokeWidth={2} /><text x={mid.x} y={mid.y + 3.5} textAnchor="middle" fontSize="10" fontWeight="700" fill="var(--m-on-warn, #fff)">K</text></g>;
                                         })()}
                                     </g>
                                 );
@@ -285,7 +285,7 @@ const WorkflowDesigner: React.FC<Props> = ({ value: wf, onChange, pool, usage, p
                                         <span className="text-[13px] font-bold truncate">{s.label}</span>
                                         <span className="text-[10.5px] opacity-75 truncate">{s.key}{usage && usage(s.key) ? ` · ${usage(s.key)} görev` : ''}</span>
                                     </span>
-                                    {!ruleIsEmpty(wf.rules?.[entryRuleKey(s.key)]) && <span title="Bu duruma girişte kural var" className="absolute -top-2 -left-2 w-4 h-4 rounded-full text-[9px] font-bold flex items-center justify-center" style={{ background: 'var(--m-warn)', color: '#fff' }}>K</span>}
+                                    {!ruleIsEmpty(wf.rules?.[entryRuleKey(s.key)]) && <span title="Bu duruma girişte kural var" className="absolute -top-2 -left-2 w-4 h-4 rounded-full text-[9px] font-bold flex items-center justify-center" style={{ background: 'var(--m-warn)', color: 'var(--m-on-warn, #fff)' }}>K</span>}
                                     {wf.transitions && (
                                         <span title="Sürükleyerek geçiş oku çizin" aria-label={`${s.label} durumundan ok çiz`} role="button"
                                             className="absolute -right-2 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full flex items-center justify-center"
