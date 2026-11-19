@@ -1,0 +1,53 @@
+{
+"persona": "mert", "kosu": "2026-11-19 Perşembe",
+"yapilanlar": [
+{"is": "H46 (Salı işi) biçim denetimi: ATL, PSL, KLK onay", "araclar": ["haftalik_rapor","oner_rapor_karari","oneriyi_uygula"], "sonuc": "Üçü de PYB destekteydi. Biçim: ATL 0 hata/2 uyarı (toplantı zaman-yer), PSL 0/0, KLK 0/0. Rapor tarihli EVM (12 Kasım) kendi tarihine göre değerlendirildi; 19 Kasım canlı değeri iade gerekçesi yapılmadı."},
+{"is": "H46 haftasını yayınla", "araclar": ["oner_hafta_yayinla","oneriyi_uygula"], "sonuc": "İlk uygulama 'bulutta daha yeni sürüm' (Selin paralel) hatasıyla yazılmadı; aynı öneriyle tekrarda yayınlandı (3 onaylı rapor). NHR o an Bölüm sorumlusundaydı, yayına girmedi."},
+{"is": "NHR H46 onay denemesi", "araclar": ["haftalik_rapor","oner_rapor_karari","oneriyi_uygula"], "sonuc": "Selin bs_approve'u 19 Kasım 06:00 gelmiş, rapor PYB destekte (biçim 0/0, EVM araçla uyumlu). Hafta yayınlanmış ('hafta yayınlandı; değişmez'); oneriyi_uygula 'Onaylanamadı (aşama değişmiş ya da yetki yok)' döndü. NHR H46 onaysız ve yayın dışı kaldı."},
+{"is": "H47 rapor durumu", "araclar": ["haftalik_rapor"], "sonuc": "ATL, PSL, NHR H47 gönderilmiş (Bölüm sorumlusunda). KLK H47 'rapor henüz yazılmadı': Can Erdem'e hatırlatma."},
+{"is": "H45 durumu", "araclar": ["haftalik_rapor"], "sonuc": "ATL ve PSL H45 hâlâ 'Bölüm sorumlusunda', 'hafta yayınlandı; değişmez'; yeniden gönderilemiyor."},
+{"is": "Tahsis/maliyet kontrolü", "araclar": ["tahsis_ozeti","maliyet_raporu"], "sonuc": "Plan toplamı 176,94 AA. Maliyet Oca–Eki plan 18.978.500, gerçekleşen 18.820.000, sapma -158.500 TL; ATL kilit sorunu dışında yeni tutarsızlık yok."}
+],
+"degisiklikler": [
+{"arac": "oner_rapor_karari/oneriyi_uygula", "ozet": "ATL H46 onay", "tetikleyici": "Selin bs_approve 12 Kasım; PYB aşamasında", "gerekce": "0 hata, 2 uyarı; EVM tarihli değer 12 Kasım'a göre doğru", "uygulandi": true},
+{"arac": "oner_rapor_karari/oneriyi_uygula", "ozet": "PSL H46 onay", "tetikleyici": "Selin bs_approve 12 Kasım", "gerekce": "0 hata/0 uyarı, EVM 12 Kasım tarihli değerlerle uyumlu", "uygulandi": true},
+{"arac": "oner_rapor_karari/oneriyi_uygula", "ozet": "KLK H46 onay", "tetikleyici": "Can Erdem submit 12 Kasım; PYB aşaması", "gerekce": "0 hata/0 uyarı, PY puanı 9", "uygulandi": true},
+{"arac": "oner_hafta_yayinla/oneriyi_uygula", "ozet": "2026-H46 yayını (ATL, PSL, KLK)", "tetikleyici": "Salı işi bugüne kaldı; 3 onaylı rapor", "gerekce": "NHR bölüm onayı gelmemişti, yayına girmedi", "uygulandi": true},
+{"arac": "oner_rapor_karari/oneriyi_uygula", "ozet": "NHR H46 onay", "tetikleyici": "Selin bs_approve 19 Kasım sonrası aşama PYB destekte", "gerekce": "Biçim 0/0, rakamlar araçla uyumlu", "uygulandi": false}
+],
+"haftalik_rapor": [],
+"rapor_kararlari": [
+{"proje": "ATL", "hafta": "2026-H46", "karar": "onay", "not": "Biçim 0 hata/2 uyarı; EVM 12 Kasım tarihli değerlendirildi", "uygulandi": true},
+{"proje": "PSL", "hafta": "2026-H46", "karar": "onay", "not": "Biçim 0/0; EVM 12 Kasım tarihli uyumlu", "uygulandi": true},
+{"proje": "KLK", "hafta": "2026-H46", "karar": "onay", "not": "Biçim 0/0; puan 9", "uygulandi": true},
+{"proje": "NHR", "hafta": "2026-H46", "karar": "onay", "not": "Selin onayı yayından sonra geldi; hafta yayınlandığı için uygulanamadı", "uygulandi": false},
+{"proje": "2026-H46 haftası", "hafta": "2026-H46", "karar": "yayin", "not": "ATL, PSL, KLK yayınlandı; NHR dışarıda", "uygulandi": true}
+],
+"bulgular": [
+{"tur": "hata", "onem": "yuksek", "baslik": "Yayınlanmış haftada PYB aşamasındaki rapor onaylanamıyor, rapor aşamada takılı kalıyor", "kanit": "oner_rapor_karari NHR 2026-H46 → oneriyi_uygula: 'Onaylanamadı (aşama değişmiş ya da yetki yok)'; haftalik_rapor islem: 'hafta yayınlandı; değişmez', asama: 'PYB destekte'", "beklenen": "Yayından sonra gelen bölüm onayı için yol (yayını güncelleme/ek yayın)", "gerceklesen": "NHR H46 PYB'de askıda; hafta onaysız raporla yayınlanmış sayılıyor"},
+{"tur": "eksik_ozellik", "onem": "yuksek", "baslik": "H45 ATL/PSL: yayınlanmış hafta iade sonrası yeniden gönderilemiyor", "kanit": "haftalik_rapor ATL/PSL 2026-H45: asama 'Bölüm sorumlusunda', islem 'hafta yayınlandı; değişmez'; Elif: 'Bölüm sorumlusunda; iade edilmesi gerekir' hatası", "beklenen": "Yayınlanmış haftada iade edilen raporu PY düzeltip gönderebilsin ya da yayını geri alma yolu olsun", "gerceklesen": "Rapor 9 gündür çıkmazda; PYB'nin açma yolu yok"},
+{"tur": "kullanilabilirlik", "onem": "orta", "baslik": "Paralel çalışırken yazma çakışması", "kanit": "oneriyi_uygula oneri-757a8993: 'Bulutta daha yeni bir sürüm var… Hiçbir şey yazılmadı'", "beklenen": "Çakışmayı yeniden denemeden çözen akış ya da hangi aşamanın değiştiğinin bildirimi", "gerceklesen": "Tekrar denemek gerekti"},
+{"tur": "tutarsizlik", "onem": "dusuk", "baslik": "ATL H46 biçim uyarısı: toplantı satırlarında 'saat ve yer kayıtta yok' yazılmış", "kanit": "haftalik_rapor ATL 2026-H46 bicim_denetimi: 2x 'uyarı: Toplantının zaman, yer…'", "beklenen": "Eksik veri doldurulmalı ya da denetim bunu kabul etmeli", "gerceklesen": "Uyarı kalıyor, onayı engellemiyor"}
+],
+"yanitlar": [
+{"kime": "elif", "mesaj_tarihi": "2026-11-19", "metin": "Elif Hanım, ATL H46 biçim denetiminden (0 hata, 2 uyarı: toplantı zaman/yer) geçip Onaylandı; 2026-H46 haftası ATL, PSL, KLK ile yayınlandı. H45 ATL için aracımda iade edilmiş raporu açma yolu yok; bunu kritik bulgu olarak kaydettim. H47 ATL raporunuzu Selin onayından sonra denetleyeceğim. Kilit: ATL planı hâlâ Onaylı/Kilitli, kilit açma yolu bende de yok."},
+{"kime": "burak", "mesaj_tarihi": "2026-11-19", "metin": "Burak Bey, PSL H46 onaylandı ve yayınlandı. NHR H46: Selin 19 Kasım 06:00 bs_approve verdi, biçim 0/0 ve EVM araçla uyumlu; ancak hafta yayınlanmış olduğu için onay uygulanamadı, bulgu açtım. H47 PSL ve NHR rakamlarınız araçla tutarlı. NHR plan kilidi talebini 23 Kasım haftasında gönderince 45,57 AA'yı teyit ederim."},
+{"kime": "ahmet", "mesaj_tarihi": "2026-11-12", "metin": "Ahmet Bey, gecikmiş yanıt için özür: H46 ATL, PSL, KLK onaylandı ve yayınlandı (19 Kasım). ATL plan kilidi açılamıyor: araçlarımda geri çekme yok. H45 ATL ve PSL yayınlanmış haftada 'Bölüm sorumlusunda' çıkmazında; NHR H46 yayın sonrası PYB'de askıda. Üçü için uygulama tarafında yönetim düzeyi çözüm gerekir."}
+],
+"mesajlar": [
+{"kime": "can", "metin": "Can Bey, KALKAN H47 raporu hâlâ yazılmadı; son gün bugün (19 Kasım). Lütfen bugün gönderin. H46 raporunuz onaylanıp yayınlandı (puan 9)."},
+{"kime": "selin", "metin": "Selin Hanım, NHR H46 bs_approve'unuz 19 Kasım 06:00'da geldi ama hafta o sırada yayınlanmıştı; PYB onayı 'Onaylanamadı' döndü. H46 yayını ATL, PSL, KLK ile çıktı; NHR dışarıda."}
+],
+"ajanda": [
+{"madde": "H45 ATL/PSL çıkmazı (değişmez, bölüm sorumlusunda): çözülünce EVM ve biçim denetimi", "kime": "elif / burak / selin", "termin": "2026-11-23", "durum": "acik"},
+{"madde": "NHR H46 PYB'de askıda: yayın sonrası onay yolu", "kime": "selin / ahmet", "termin": "2026-11-23", "durum": "acik"},
+{"madde": "KLK H47 raporu yazıldı mı kontrol", "kime": "can", "termin": "2026-11-20", "durum": "acik"},
+{"madde": "H47 ATL, PSL, NHR: biçim denetimi (Selin onayı verildi)", "kime": "mert", "termin": "2026-11-20", "durum": "acik"},
+{"madde": "NHR plan kilidi talebi gelince plan 45,57 AA teyidi", "kime": "burak", "termin": "2026-11-23", "durum": "acik"},
+{"madde": "KLK bs_approve ve rolsüz NHR 0,4 AA satırı (Can Erdem) teyidi", "kime": "can", "termin": "2026-11-23", "durum": "acik"},
+{"madde": "Ekim gerçekleşen AA ↔ worklog karşılaştırmasını Kasım kapanışında yinele", "kime": "mert", "termin": "2026-12-01", "durum": "acik"}
+],
+"gercek_disi": [], "demo_yoklamasi": [],
+"arac_cagrisi": 20, "memnuniyet": 5,
+"gunun_notu": "H46 Salı işi yapıldı ve ATL, PSL, KLK yayınlandı; ancak yayınlanmış haftada NHR onayı ve H45 yeniden gönderimi uygulamada çıkmazda kaldı."
+}
