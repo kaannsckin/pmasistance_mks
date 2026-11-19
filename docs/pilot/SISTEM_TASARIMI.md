@@ -9,7 +9,7 @@ Pilot iki rutin, bir MCP sunucusu ve uygulamanın Supabase çalışma alanından
 ```mermaid
 flowchart LR
     subgraph R1["1. rutin · Jira ajanı (Sal + Per 07:45, Sonnet)"]
-        SIM["Simülasyon v4<br/>server/pilot/sim.ts<br/>tohum 2026, senaryolar"]
+        SIM["Simülasyon v5<br/>server/pilot/sim.ts<br/>tohum 2026, senaryolar"]
     end
     subgraph DAL["Veri dalı · claude/pilot-veri · pilot-data/"]
         JIRA["Sahte Jira<br/>jira/*.json (REST biçimi)"]
@@ -75,13 +75,16 @@ Akış uygulamanın kendi rapor akışıdır (`utils/weeklyReport`); MCP onu aç
 
 ## Demo güvencesi
 
-Demo ajanların ortamında yapıldığı için üç komut, ekranın doğru göründüğünü sınar ve bozulan ortamı geri alır.
+Demo ajanların ortamında yapıldığı için dört komut, ekranın doğru göründüğünü sınar, bozulan ortamı geri alır ve bulut kesilince pilotu durdurmaz.
 
 | Komut | Ne yapar | Ne zaman |
 | --- | --- | --- |
 | `pilot demo-testi` | Çalışma alanını uygulamanın IndexedDB deposuna yazar; müdür, PY, bölüm sorumlusu ve PYB destek gözüyle demo ekranlarını klasik ve modern arayüzde Chromium'da gezer; çökme, sayfa hatası ve portföy sağlığının MCP'deki değerle aynılığını denetler (28 adım) | Perşembe koşuları ve kapı günleri (DH7) |
 | `pilot dondur --ad K<n>-<tarih>` | Çalışma alanını (bulutta notlar dahil), simülasyon durumunu ve sahte Jira'yı `pilot-data/donmus/` altına yazar (yaklaşık 3 MB) | Her kapı gününün sonunda |
-| `pilot geri-yukle --ad …` | Bulutta çalışma alanını yerinde yeniler, durum ve Jira'yı geri koyar, sonraki günlerin olay ve Confluence dosyalarını arşive taşır; aynı günün yeniden üretimi birebir aynıdır | Demo günü `kontrol` ya da `demo-testi` KALDI ise |
+| `pilot geri-yukle --ad …` | Bulutta çalışma alanını yerinde yeniler, durum ve Jira'yı geri koyar, sonraki günlerin olay ve Confluence dosyalarını arşive taşır; aynı günün yeniden üretimi birebir aynıdır. `--dosya` ile kopyayı dosya moduna yükler ve bulut bağlantısını `bulut.beklemede.json`'a park eder | Demo günü `kontrol` ya da `demo-testi` KALDI ise; buluta ulaşılamayan koşuda (`--ad son --dosya`) |
+| `pilot bulut-yokla` | Supabase'e bu ortamdan ulaşılıyor mu (sunucu anahtarıyla en küçük okuma; çıkış kodu 0 / 3, nedeniyle) | Her 1. rutin koşusunun başında |
+
+**Bulut kesilirse (BL-26, 2 Kasım):** 22–29 Ekim'de pilotun Supabase sunucusuna ulaşılamadı ve talimat durmayı söylediği için iki hafta kayboldu. Artık 2. rutin her koşu sonunda `dondur --ad son --zorla` ile kopya alır; 1. rutin `bulut-yokla` başarısızsa `geri-yukle --ad son --dosya` ile dosya moduna geçer (yeniden kurulum günüyse `baslat --zorla --dosya`) ve pilot sürer. Bulut dönünce `buluta-tasi` park edilmiş bağlantıyı okur ve **aynı** çalışma alanını yerinde yeniler: kimlik, üyelikler ve izleyiciler değişmez. Dosya modunda RLS kontrolleri yapılmaz; rapor modu yazar. Demo günü pilot dosya modundaysa sunum JSON yedeğiyle yapılır.
 
 Stil (Tailwind, derleme anında), ikonlar (Font Awesome) ve Excel/CSV kitaplıkları pakete gömülüdür (BL-08); kurum ağı CDN'leri engellese de ekran biçimli görünür. Dışarıdan yalnız Geist yazı tipi (yoksa sistem yazı tipi) ve sekme simgesi gelir; bunların uyarısı bulgu sayılmaz.
 

@@ -131,8 +131,11 @@ describe('PlanAsistan MCP — değişiklikler', () => {
         expect(await yedek.toolNames()).not.toContain(APPLY_TOOL);
         expect((await yedek.call(STATUS_TOOL)).json.degisiklik).toContain('yedek salt-okunur');
         const mudur = server(sampleWorkspace(), { role: 'mudur', allowWrite: true });
-        expect((await mudur.toolNames()).some(n => n.startsWith('oner_'))).toBe(false);
+        // Müdür veri girmez; yazabildiği tek şey beklentiye kararıdır (BL-30)
+        expect((await mudur.toolNames()).filter(n => n.startsWith('oner_'))).toEqual(['oner_beklenti_yanitla']);
         expect((await mudur.call(STATUS_TOOL)).json.degisiklik).toContain('veri girmez');
+        expect((await mudur.call(STATUS_TOOL)).json.degisiklik).toContain('yalnız oner_beklenti_yanitla');
+        expect((await mudur.call('oner_risk_ekle', { baslik: 'X', olasilik: 3, etki: 3 })).isError).toBe(true);
     });
 
     it('öneri hazırlanır, onaylanınca uygulanıp kaydedilir; aynı öneri iki kez uygulanmaz', async () => {

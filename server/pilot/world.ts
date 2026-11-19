@@ -122,7 +122,7 @@ export const PROJECTS: WorldProject[] = [
     },
     {
         id: 'prj-kalkan', name: 'KALKAN Siber İzleme', code: 'KLK-2404', jiraKey: 'KLK', pm: 'p17', status: 'devam',
-        rate: 0.7, mix: [0.3, 0.3, 0.25, 0.15], overrun: 1.1, fromMonth: 4, domain: 'guvenlik',
+        rate: 0.5, mix: [0.3, 0.3, 0.25, 0.15], overrun: 1.0, fromMonth: 4, domain: 'guvenlik',
         team: { p17: 0.3, p18: 0.6, p04: 0.4, p08: 0.4, p12: 0.4 },
         pmo: { p23: 0.1, p24: 0.1 },
         modules: ['olay toplayıcı', 'kural motoru', 'alarm panosu', 'raporlama'],
@@ -154,7 +154,7 @@ export const availableAAOf = (personId: string): number => AVAILABLE_AA[personId
  * simülasyon "geçmişteki kullanıcılar" adına yazar; bu günden itibaren bu
  * işleri rol ajanları yapar.
  */
-export const PILOT_BASLANGIC = '2026-10-19';
+export const PILOT_BASLANGIC = '2026-11-02';
 
 /** Simülasyonun worklog ↔ adam-ay dönüşümü: uygulamanın "Jira Billed Hours" kuralıyla aynı (1 iş günü = 8 saat) */
 export const HOURS_PER_DAY = 8;

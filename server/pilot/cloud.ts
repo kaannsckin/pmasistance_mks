@@ -267,6 +267,18 @@ export const listMembers = async (admin: SupabaseClient, workspaceId: string): P
 // ---------------------------------------------------------------------------
 
 /** Yeni pilot çalışma alanı; sahibi Jira ajanı. Tetikleyici sahibi pyb_destek üye yapar ve özel satırı açar. */
+/**
+ * Bağlantı dosyası kaybolduysa (ör. eski sürümün dosya moduna geçişi bulut.json'u siliyordu) pilot
+ * çalışma alanı adla bulunur: Jira ajanı hesabının açtığı tek pilot çalışma alanı. Birden çok varsa
+ * hiçbiri seçilmez (yanlış alanı ezmemek için); çağıran yenisini açar.
+ */
+export const findPilotWorkspace = async (admin: SupabaseClient, ownerId: string): Promise<string | null> => {
+    const { data, error } = await admin.from('workspaces').select('id').eq('name', PILOT_WORKSPACE_NAME).eq('created_by', ownerId);
+    if (error) throw new Error(`Çalışma alanları okunamadı: ${error.message}`);
+    const rows = (data || []) as { id: string }[];
+    return rows.length === 1 ? rows[0].id : null;
+};
+
 export const createPilotWorkspace = async (admin: SupabaseClient, ownerId: string, ws: WorkspaceData): Promise<string> => {
     const { core, privateDoc, projects } = splitWorkspaceDoc(ws);
     const { data, error } = await admin.from('workspaces').insert({ name: PILOT_WORKSPACE_NAME, core, version: 1, created_by: ownerId }).select('id').single();
