@@ -81,7 +81,7 @@ const TaskChip: React.FC<{ task: Task; draggable: boolean; onOpen: () => void }>
                 <span className="flex-1 min-w-0 flex flex-col gap-1">
                     <span className={`text-[14px] leading-snug line-clamp-2 ${done ? 'm-text-3 line-through' : 'm-text'}`}>{task.name}</span>
                     <span className="flex items-center gap-2 text-[12px] m-text-3">
-                        {task.resourceName && <span className="inline-flex items-center gap-1 min-w-0"><span aria-hidden="true" className="w-5 h-5 rounded-full m-fill flex items-center justify-center text-[10px] font-semibold flex-none">{initialsOf(task.resourceName)}</span><span className="truncate">{task.resourceName.split(' ')[0]}</span></span>}
+                        {task.resourceName && <span className="inline-flex items-center gap-1 min-w-0"><span aria-hidden="true" className="w-5 h-5 rounded-full m-fill m-text-2 flex items-center justify-center text-[10px] font-semibold flex-none">{initialsOf(task.resourceName)}</span><span className="truncate">{task.resourceName.split(' ')[0]}</span></span>}
                         {pert > 0 ? <span className="m-tabular whitespace-nowrap">{num(pert)} g</span> : <span className="m-ink-warn whitespace-nowrap">süre yok</span>}
                         {urgent && <span className={`whitespace-nowrap font-semibold ${PRIORITY_META[task.priority].ink}`}>{PRIORITY_META[task.priority].label}</span>}
                         {late > 0 && <span className="m-ink-bad font-semibold whitespace-nowrap">{late} g gecikti</span>}
