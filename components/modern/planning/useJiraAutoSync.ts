@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { Project } from '../../../types';
-import { fetchIntegrationHealth, fetchJiraSyncPage, IntegrationHealth, JiraIssueRecord } from '../../../utils/integrations';
+import { fetchIntegrationHealth, fetchJiraSyncPage, IntegrationHealth, JiraIssueRecord, updateJiraIssue } from '../../../utils/integrations';
 import { JiraImportOptions } from '../../../utils/planning/jiraImport';
-import { hasSyncWork, readSyncState, runProjectSync, syncDue, writeSyncState } from '../../../utils/planning/jiraSync';
+import { hasSyncWork, JiraPushOutcome, readSyncState, runFullSync, syncDue, writeSyncState } from '../../../utils/planning/jiraSync';
 
 /**
  * Otomatik Jira eşitleme: aralığı tanımlı (proje ayarı) ve düzenlenebilen
@@ -12,7 +12,7 @@ import { hasSyncWork, readSyncState, runProjectSync, syncDue, writeSyncState } f
  */
 export const useJiraAutoSync = (
     getProjects: () => Project[],
-    apply: (projectId: string, issues: JiraIssueRecord[], opts: JiraImportOptions, addNew: boolean, label: string) => void,
+    apply: (projectId: string, issues: JiraIssueRecord[], opts: JiraImportOptions, addNew: boolean, label: string, pushed?: JiraPushOutcome) => void,
 ): void => {
     const getRef = useRef(getProjects);
     const applyRef = useRef(apply);
@@ -33,8 +33,9 @@ export const useJiraAutoSync = (
                 const authMode = health.value.authMode;
                 for (const p of due) {
                     try {
-                        const r = await runProjectSync(p, o => fetchJiraSyncPage(o, authMode));
-                        if (r.preview.added || r.preview.updated) applyRef.current(p.id, r.fetched.issues, r.opts, r.addNew, 'otomatik');
+                        const update = health.value.jiraUpdate ? (key: string, changes: Parameters<typeof updateJiraIssue>[1]) => updateJiraIssue(key, changes, authMode) : null;
+                        const r = await runFullSync(p, o => fetchJiraSyncPage(o, authMode), update);
+                        if (r.shouldApply) applyRef.current(p.id, r.issues, r.opts, r.addNew, 'otomatik', r.pushed);
                         writeSyncState(p.id, { at: new Date().toISOString(), ok: true, text: r.text });
                     } catch (e) {
                         // Hata da damgalanır: bir sonraki deneme aralık dolunca

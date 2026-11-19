@@ -203,6 +203,8 @@ export interface JiraIssueRecord {
     timeSpentSeconds: number | null;
     storyPoints: number | null;
     assignee: string;
+    /** Atanan kişinin e-postası (Jira gizlemiyorsa) */
+    assigneeEmail?: string;
     /** Bu kaydı engelleyen kayıtlar ("is blocked by") */
     blockedBy: string[];
     transitions: JiraTransition[];
@@ -303,6 +305,7 @@ export const normalizeIssue = (raw: JiraFullIssueRaw, categories: Map<string, Ji
         timeSpentSeconds: num(f.timespent),
         storyPoints: Number.isFinite(points) && points > 0 ? points : null,
         assignee: str((f.assignee as { displayName?: unknown })?.displayName) || str((f.assignee as { name?: unknown })?.name),
+        ...(str((f.assignee as { emailAddress?: unknown })?.emailAddress) ? { assigneeEmail: str((f.assignee as { emailAddress?: unknown }).emailAddress) } : {}),
         blockedBy: links
             .filter(l => /block|engel/i.test(str(l.type?.name)) && /blocked by|engellen/i.test(str(l.type?.inward)) && str(l.inwardIssue?.key))
             .map(l => str(l.inwardIssue!.key)),

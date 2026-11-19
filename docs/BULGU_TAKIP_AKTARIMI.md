@@ -32,7 +32,31 @@ Excel güncellendikçe aynı dosyayı yeniden aktarın ve hedef olarak mevcut pr
 | GİB rapor ve toplantı çıktıları | Müşteri istekleri (PY'ye özel alan; görevlere dönüştürülebilir) |
 | Giriş (MS0/MS1, öncelik tanımları) | Proje kartı sözlüğü (haftalık rapor AI'sının bağlamı) |
 | Test Kalemleri | PoC skoru ve zorunlu açık. Önizlemede ve denetim günlüğünde görünür. |
+| Öncelikli Bulgular → Olası Etki | Görev notu ("Olası etki") |
+| Aralık Teslimi · Aralık Sonrası Teslim | Etiket ("Aralık teslimi" / "Aralık sonrası teslim") ve not: alt küme, karar kaynağı, sunumdaki başlık, toplantı notu |
+| GİB'den Yanıt Beklenenler | Etiket "GİB yanıtı bekleniyor" ve not: yanıt durumu ve açıklama |
 
-Excel'deki formül sütunlarının (Sorumlu, Epic, İş Kodu, İlerleme) değerleri dosyada kayıtlı olmayabilir. Bu yüzden aktarım bunları ham girdilerden yeniden hesaplar. Sütunlar başlık adıyla bulunur; yerleri değişse de okunur. Dashboard, EMS Sprintler ve Sayfa1 sayfaları aktarılmaz: bunlar türetilmiş görünümler ya da karalama notlarıdır. Uygulama aynı bilgiyi kendi ekranlarında hesaplar.
+Excel'deki formül sütunlarının (Sorumlu, Epic, İş Kodu, İlerleme) değerleri dosyada kayıtlı olmayabilir. Bu yüzden aktarım bunları ham girdilerden yeniden hesaplar. Sütunlar başlık adıyla bulunur; yerleri değişse de okunur. Dashboard, Milestone (başlangıç tarihi dışında), Rehber, EMS Sprintler ve Sayfa1 sayfaları aktarılmaz: bunlar türetilmiş görünümler ya da karalama notlarıdır. Uygulama aynı bilgiyi kendi ekranlarında hesaplar.
+
+## Jira ile eşitleme
+
+Aktarımda proje, Jira / CR No sütunundaki anahtarların önekiyle (ör. **MPS**) Jira'ya bağlanır ve hazır bir eşitleme ayarı alır. **Planlama → Jira eşitleme → Şimdi eşitle** ile Excel'deki her Jira No'nun güncel hâli Jira'dan çekilir (50'şer anahtarlık isteklerle; tüm Jira taranmaz). Jira'da bulunamayan anahtarlar bildirilir.
+
+Her alan için yön seçilir:
+
+| Yön | Anlamı |
+|---|---|
+| Eşitleme yok | Alan uygulamada (Excel'de) kalır |
+| Jira → Uygulama | Jira'daki değer alınır. Jira'da termin ya da atanan boşsa uygulamadaki silinmez. |
+| Uygulama → Jira | Uygulamadaki değer Jira'ya yazılır (sunucuda `JIRA_ALLOW_UPDATE=1` gerekir) |
+| Çift yönlü | Son eşitlemeden beri hangi taraf değiştiyse o kazanır. İki taraf da değiştiyse Jira esas alınır ve çakışma bildirilir. İlk eşitlemede Jira esastır. |
+
+Jira'ya yalnız durum (iş akışı geçişiyle), termin, öncelik ve başlık yazılabilir. Atanan, açıklama, etiket, süre, bileşen, sürüm ve tür yalnız Jira'dan alınır.
+
+Aktarımın önerdiği ayar ("Excel takibi önerisi"): durum, atanan, termin, harcanan süre ve düzeltme sürümü Jira'dan gelir. Başlık, not, etiketler, öncelik puanı ve ekip birimi Excel'de kalır. Excel yeniden aktarıldığında Jira'dan alınan alanlar ezilmez.
+
+**Kişiler:** "Jira'daki atanan kişileri … otomatik ekle" açıkken (aktarımda açık gelir) Jira'daki atananlar, Veri Havuzu'nda yoksa e-postalarıyla kişi olarak açılır. Proje ekibinde yoksa da kaynak olarak eklenir; birimleri, görevlerinde en sık geçen birimdir. Aynı kişi ikinci kez açılmaz.
+
+Eşitleme elle ya da proje ayarındaki aralıkla otomatik çalışır (uygulama açıkken). Her eşitleme denetim günlüğüne yazılır: güncellenen, kapanan, Jira'ya yazılan kayıtlar, çakışmalar ve eklenen kişiler. Kod: [`utils/planning/jiraFieldSync.ts`](../utils/planning/jiraFieldSync.ts), [`utils/planning/jiraPeople.ts`](../utils/planning/jiraPeople.ts).
 
 Kod: [`utils/gibFindings.ts`](../utils/gibFindings.ts) (dönüştürücü ve birleştirme), [`components/GibImportModal.tsx`](../components/GibImportModal.tsx) (pencere). Testler: [`utils/gibFindings.test.ts`](../utils/gibFindings.test.ts).

@@ -83,7 +83,9 @@ import { appendEvalRun } from './utils/planning/evaluation';
 import { appendModelEval } from './utils/planning/ml/estimateModel';
 import { JiraImportOptions, mergeJiraIssues } from './utils/planning/jiraImport';
 import { linkJiraKeys } from './utils/planning/jiraExport';
-import { applyJiraSync, pullIssueIntoTasks, sourceLabel } from './utils/planning/jiraSync';
+import { applyJiraSync, JiraPushOutcome, pullIssueIntoTasks, sourceLabel } from './utils/planning/jiraSync';
+import { markPushed } from './utils/planning/jiraFieldSync';
+import { ensureJiraPeople } from './utils/planning/jiraPeople';
 import { useJiraAutoSync } from './components/modern/planning/useJiraAutoSync';
 import { JiraIssueRecord } from './utils/integrations';
 import ModernPortfolio from './components/modern/ModernPortfolio';
@@ -1117,14 +1119,30 @@ const App: React.FC = () => {
     });
   }, [updateWorkspace]);
 
-  const handleApplyJiraSync = useCallback((projectId: string, issues: JiraIssueRecord[], opts: JiraImportOptions, addNew: boolean, label: string) => {
+  const handleApplyJiraSync = useCallback((projectId: string, issues: JiraIssueRecord[], opts: JiraImportOptions, addNew: boolean, label: string, pushed?: JiraPushOutcome) => {
     updateWorkspace(ws => {
       const project = ws.projects.find(p => p.id === projectId);
       if (!project || !canEditProjectContent(ws, identityOf(ws), projectId)) return ws;
-      const r = applyJiraSync(project.tasks, issues, opts, addNew, ws.projects.filter(p => p.id !== projectId).flatMap(p => p.tasks.map(t => t.id)));
-      if (!r.added && !r.updated) return ws;
-      const next = { ...ws, projects: ws.projects.map(p => (p.id === projectId ? { ...p, tasks: r.tasks, updatedAt: new Date().toISOString() } : p)) };
-      return appendAudit(next, 'data.import', `"${project.name}" · Jira eşitleme (${label}): ${r.updated} güncellenen${r.closed ? ` (${r.closed} kapanan)` : ''}, ${r.added} yeni kayıt`, projectId);
+      const r = applyJiraSync(project.tasks, issues, opts, addNew, ws.projects.filter(p => p.id !== projectId).flatMap(p => p.tasks.map(t => t.id)), project.jiraSync);
+      const tasks = pushed?.done.length ? markPushed(r.tasks, pushed.done) : r.tasks;
+      // Jira'daki atanan kişiler: Veri Havuzu'na ve proje ekibine (ayar açıksa)
+      const ppl = project.jiraSync?.autoPeople ? ensureJiraPeople(ws.people, project.resources, tasks, issues) : null;
+      const peopleChanged = !!ppl && (ppl.people !== ws.people || ppl.resources !== project.resources);
+      const tasksChanged = JSON.stringify(tasks) !== JSON.stringify(project.tasks);
+      if (!tasksChanged && !peopleChanged) return ws;
+      const next = {
+        ...ws,
+        ...(ppl ? { people: ppl.people } : {}),
+        projects: ws.projects.map(p => (p.id === projectId ? { ...p, tasks, ...(ppl ? { resources: ppl.resources } : {}), updatedAt: new Date().toISOString() } : p)),
+      };
+      const parts = [
+        `${r.updated} güncellenen${r.closed ? ` (${r.closed} kapanan)` : ''}, ${r.added} yeni kayıt`,
+        pushed?.done.length ? `Jira'ya yazılan: ${pushed.done.map(d => d.key).slice(0, 10).join(', ')}${pushed.done.length > 10 ? '…' : ''}` : '',
+        r.conflicts ? `çakışma (Jira esas): ${(r.conflictKeys || []).slice(0, 5).join('; ')}` : '',
+        ppl?.addedPeople.length ? `havuza eklenen kişi: ${ppl.addedPeople.join(', ')}` : '',
+        ppl?.addedResources.length ? `ekibe eklenen: ${ppl.addedResources.join(', ')}` : '',
+      ].filter(Boolean);
+      return appendAudit(next, 'data.import', `"${project.name}" · Jira eşitleme (${label}): ${parts.join(' · ')}`, projectId);
     });
   }, [updateWorkspace]);
 
@@ -1663,7 +1681,7 @@ const App: React.FC = () => {
           onImportJira={(key, issues, opts, label) => handleImportJiraHistory(activeProject.id, key, issues, opts, label)}
           onLinkJira={(key, links) => handleLinkJira(activeProject.id, key, links)}
           onSaveJiraSync={settings => handleSetJiraSync(activeProject.id, settings)}
-          onApplyJiraSync={(issues, opts, addNew, label) => handleApplyJiraSync(activeProject.id, issues, opts, addNew, label)}
+          onApplyJiraSync={(issues, opts, addNew, label, pushed) => handleApplyJiraSync(activeProject.id, issues, opts, addNew, label, pushed)}
         />
       );
     }
