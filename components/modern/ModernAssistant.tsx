@@ -3,6 +3,7 @@ import { AgentStep } from '../../utils/ai/agent';
 import { AiProposal } from '../../utils/ai/actions';
 import { extractText, SUPPORTED_EXTENSIONS } from '../../utils/rag/extract';
 import { addUploadedDoc, indexStatus, listUploadedDocs, onDocsChange, removeUploadedDoc, retriever } from '../../utils/rag/service';
+import { embeddingWaitText } from '../../utils/rag/retriever';
 import { Citation, RAG_SOURCE_LABELS, RagSourceType, UploadedDoc } from '../../utils/rag/sources';
 import { citedSources } from '../assistant/AssistantChat';
 import { useAssistant } from '../assistant/AssistantContext';
@@ -293,10 +294,12 @@ export const ModernKnowledgeBase: React.FC<{ onClose: () => void }> = ({ onClose
         await removeUploadedDoc(d.id);
         await refresh();
     };
+    const waiting = embeddingWaitText(status);
     const sem = a.status?.embeddingProblem ? { tone: 'm-ink-warn', text: `Anlamsal arama yapılandırılamadı: ${a.status.embeddingProblem}` }
         : !status.semanticEnabled ? { tone: 'm-text-3', text: 'Anlamsal arama kapalı — sunucuda embedding modeli (AI_EMBEDDING_MODEL) tanımlı değil. Türkçe ek ve aksan duyarsız anahtar kelime araması kullanılıyor.' }
-            : status.semanticError ? { tone: 'm-ink-bad', text: `Anlamsal arama durdu: ${status.semanticError} (anahtar kelime aramasıyla devam ediliyor).` }
-                : { tone: 'm-ink-ok', text: `Anlamsal arama açık · ${status.model} · ${status.vectors}/${status.chunks} parça vektörlendi${status.embedding ? ' (sürüyor…)' : ''}` };
+            : waiting ? { tone: 'm-ink-warn', text: waiting }
+                : status.semanticError ? { tone: 'm-ink-bad', text: `Anlamsal arama durdu: ${status.semanticError} (anahtar kelime aramasıyla devam ediliyor).` }
+                    : { tone: 'm-ink-ok', text: `Anlamsal arama açık · ${status.model} · ${status.vectors}/${status.chunks} parça vektörlendi${status.embedding ? ' (sürüyor…)' : ''}` };
 
     return (
         <Sheet wide title="Bilgi Bankası" subtitle="Asistanın aradığı bilgi tabanı: uygulama içeriği, kullanım kılavuzu ve kurumsal dokümanlar." onClose={onClose}>

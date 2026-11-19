@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { extractText, SUPPORTED_EXTENSIONS } from '../../utils/rag/extract';
 import { RAG_SOURCE_LABELS, RagSourceType, UploadedDoc } from '../../utils/rag/sources';
 import { addUploadedDoc, indexStatus, listUploadedDocs, onDocsChange, removeUploadedDoc, retriever } from '../../utils/rag/service';
+import { embeddingWaitText } from '../../utils/rag/retriever';
 import { useAssistant } from './AssistantContext';
 
 /**
@@ -70,6 +71,8 @@ const KnowledgeBaseModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     if (!status.semanticEnabled) {
       return { tone: 'text-gray-500', text: 'Anlamsal arama kapalı — sunucuda embedding modeli (AI_EMBEDDING_MODEL) tanımlı değil. Türkçe ek ve aksan duyarsız anahtar kelime araması kullanılıyor.' };
     }
+    const waiting = embeddingWaitText(status);
+    if (waiting) return { tone: 'text-amber-600', text: waiting };
     if (status.semanticError) return { tone: 'text-red-600', text: `Anlamsal arama durdu: ${status.semanticError} (anahtar kelime aramasıyla devam ediliyor).` };
     return {
       tone: 'text-emerald-600',

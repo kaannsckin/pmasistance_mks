@@ -77,6 +77,7 @@ Asistan, serbest metin içeriğinde `bilgi_ara` aracıyla arama yapar ve yanıt�
 
 - **Anahtar kelime araması her zaman çalışır**: Türkçe ek ve aksan duyarsızdır ("butce" → "bütçesi", "gecikmeler" → "gecikme").
 - **Anlamsal arama** `AI_EMBEDDING_MODEL` tanımlanınca açılır. Embedding vektörleri cihazda (IndexedDB) "model:içerik özeti" anahtarıyla önbelleğe alınır, metin saklanmaz. İçerik değişmedikçe yeniden hesaplanmaz.
+- **Kota/hız sınırı**: Partiler aralıklı gönderilir (en az 1 sn). Sağlayıcı sınıra takılınca (ör. Gemini ücretsiz katmanı) dizinleme durmaz: sağlayıcının bildirdiği süre (yoksa 15 sn'den başlayıp artan, en çok 5 dk) beklenir, aynı partiden devam edilir ve aralık uzatılır. Günlük kota ya da bakiye bittiyse saatte bir yeniden denenir. Bilgi Bankası'nda kaç parçanın hazır olduğu ve ne zaman devam edileceği görünür; **Dizini yenile** beklemeyi keser. Tamamlanan partiler önbellekte olduğundan sayfa yenilense de iş kaldığı yerden sürer. Beklerken arama anahtar kelimeyle yapılır.
 - **Kapsam:** Dizin her aramada kullanıcının güncel yetki kapsamından kurulur. Görünmeyen projeler dizine girmez; yönetici rollerinde notlar ve müşteri istekleri dizine girmez.
 - **Dokümanlar bu cihazda (tarayıcıda) saklanır**, ekiple paylaşılmaz. Ekip genelinde paylaşılan bir doküman kütüphanesi için sunucu depolaması (ör. Supabase Storage) gerekir.
 - **Doğruluk ölçümü:** `utils/rag/eval.test.ts` gerçekçi Türkçe sorulardan oluşan bir değerlendirme setiyle recall@3 ve MRR ölçer; `npm run test` her çalıştığında raporlar. Yalnızca anahtar kelime aramasıyla şu an recall@3 = 0,94, MRR = 0,95.
@@ -105,7 +106,7 @@ Asistan, serbest metin içeriğinde `bilgi_ara` aracıyla arama yapar ve yanıt�
 | `AI_EMBEDDING_API_KEY` | farklı sağlayıcıda ✔ | Aynı sağlayıcıda `AI_API_KEY` kullanılır |
 | `AI_EMBEDDING_BASE_URL` | — | Aynı sağlayıcıda `AI_BASE_URL`, yoksa sağlayıcının varsayılanı |
 | `AI_EMBEDDING_DIMENSIONS` | — | Destekleyen modellerde vektör boyutu (ör. 512) |
-| `AI_EMBED_RATE_LIMIT_PER_MIN` | — | Embedding isteği sınırı (varsayılan 120/dk; ilk dizinleme 32'şer parçalık partilerle yapılır) |
+| `AI_EMBED_RATE_LIMIT_PER_MIN` | — | Embedding isteği sınırı (varsayılan 120/dk; ilk dizinleme 32'şer parçalık partilerle, aralıklı yapılır) |
 
 | `AI_ADMIN_TOKEN` | panel için ✔ | Yönetici panelinden bağlantı ayarı ve test için yönetici anahtarı (aşağıya bakın) |
 | `AI_CONFIG_SECRET` | panel için ✔ | Panelde girilen API anahtarlarını şifreleyen anahtar (en az 32 karakter rastgele) |

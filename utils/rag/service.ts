@@ -78,7 +78,7 @@ export const searchKnowledge = async (ctx: ToolContext, query: string, o: Omit<S
 
 export const searchMode = (): 'hibrit (anlamsal + anahtar kelime)' | 'anahtar kelime' => {
     const s = retriever.status();
-    return embedder && s.vectors > 0 && !s.semanticError ? 'hibrit (anlamsal + anahtar kelime)' : 'anahtar kelime';
+    return embedder && s.vectors > 0 && !s.semanticError && !s.waitUntil ? 'hibrit (anlamsal + anahtar kelime)' : 'anahtar kelime';
 };
 
 export const indexStatus = (): RetrieverStatus & { semanticEnabled: boolean } => ({
@@ -86,7 +86,7 @@ export const indexStatus = (): RetrieverStatus & { semanticEnabled: boolean } =>
     semanticEnabled: !!embedder,
 });
 
-/** "Dizini yenile": hata durumunu sıfırlar, dizini kurar ve embedding'i baştan dener */
+/** "Dizini yenile": hata durumunu sıfırlar, dizini kurar ve embedding'i kaldığı yerden (beklemedeyse hemen) dener */
 export const rebuildIndex = async (ctx: ToolContext): Promise<void> => {
     retriever.resetSemanticError();
     await syncIndex(ctx);

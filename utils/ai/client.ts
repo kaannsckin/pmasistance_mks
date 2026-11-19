@@ -16,8 +16,18 @@ export const AI_ACCESS_TOKEN_KEY = 'PLANASISTAN_AI_ACCESS_TOKEN';
 
 export type AiErrorCode = 'config' | 'auth' | 'forbidden' | 'origin' | 'rate_limited' | 'bad_request' | 'upstream' | 'timeout' | 'network' | 'aborted' | 'not_found';
 
+/** daily: günlük kota doldu · exhausted: kota/bakiye bitti (sunucu bildirir) */
+export type AiQuota = 'daily' | 'exhausted';
+
 export class AiError extends Error {
-    constructor(message: string, public code: AiErrorCode, public status?: number) {
+    constructor(
+        message: string,
+        public code: AiErrorCode,
+        public status?: number,
+        /** Hız/kota sınırında sunucunun önerdiği bekleme (sn) */
+        public retryAfterSec?: number,
+        public quota?: AiQuota,
+    ) {
         super(message);
         this.name = 'AiError';
     }
@@ -368,18 +378,11 @@ export const streamChat = async (body: ChatRequestBody, opts: StreamChatOptions)
     return { text: show(stripReasoning(full)), toolCalls, stopReason };
 };
 
-const sleep = (ms: number, signal?: AbortSignal) =>
-    new Promise<void>((resolve, reject) => {
-        const t = setTimeout(resolve, ms);
-        signal?.addEventListener('abort', () => {
-            clearTimeout(t);
-            reject(new AiError('İptal edildi.', 'aborted'));
-        }, { once: true });
-    });
-
 /**
- * Metinler için embedding vektörleri (RAG). Hız sınırına takılırsa sunucunun
- * bildirdiği süre kadar bekleyip en çok 3 kez yeniden dener.
+ * Metinler için embedding vektörleri (RAG). Hız/kota sınırında beklemez:
+ * sunucunun bildirdiği bekleme süresi ve kota türüyle `rate_limited` hatası
+ * fırlatır. Bekleyip kaldığı yerden sürdürmek çağıranın işidir (belgeler:
+ * Retriever; sorgu embedding'i alınamazsa arama anahtar kelimeyle sürer).
  */
 export const embedTexts = async (
     texts: string[],
@@ -389,28 +392,24 @@ export const embedTexts = async (
 ): Promise<number[][]> => {
     // Belge ve sorgu aynı takma adlarla gömülür (eşleşme korunur)
     const masker = currentMasker();
-    for (let attempt = 0; ; attempt++) {
-        let res: Response;
-        try {
-            res = await fetch(`${PROXY_BASE}/embed`, {
-                method: 'POST',
-                headers: { 'content-type': 'application/json', ...(await authHeaders(authMode)), ...browserKeyHeaders(undefined) },
-                body: JSON.stringify({ texts: masker ? texts.map(masker.mask) : texts, kind }),
-                signal,
-            });
-        } catch (e) {
-            if ((e as Error)?.name === 'AbortError') throw new AiError('İptal edildi.', 'aborted');
-            throw new AiError('AI sunucusuna ulaşılamadı.', 'network');
-        }
-        if (res.status === 429 && attempt < 3) {
-            const wait = Math.min(60, Number(res.headers.get('retry-after')) || 5);
-            await sleep(wait * 1000, signal);
-            continue;
-        }
-        const json = await res.json().catch(() => null) as { vectors?: number[][]; error?: string; code?: AiErrorCode } | null;
-        if (!res.ok || !json?.vectors) {
-            throw new AiError(json?.error || `Embedding isteği başarısız (HTTP ${res.status}).`, json?.code || 'upstream', res.status);
-        }
-        return json.vectors;
+    let res: Response;
+    try {
+        res = await fetch(`${PROXY_BASE}/embed`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', ...(await authHeaders(authMode)), ...browserKeyHeaders(undefined) },
+            body: JSON.stringify({ texts: masker ? texts.map(masker.mask) : texts, kind }),
+            signal,
+        });
+    } catch (e) {
+        if ((e as Error)?.name === 'AbortError') throw new AiError('İptal edildi.', 'aborted');
+        throw new AiError('AI sunucusuna ulaşılamadı.', 'network');
     }
+    const json = await res.json().catch(() => null) as
+        { vectors?: number[][]; error?: string; code?: AiErrorCode; retryAfterSec?: number; quota?: AiQuota } | null;
+    if (!res.ok || !json?.vectors) {
+        const retryAfterSec = Number(json?.retryAfterSec) || Number(res.headers.get('retry-after')) || undefined;
+        throw new AiError(json?.error || `Embedding isteği başarısız (HTTP ${res.status}).`,
+            json?.code || (res.status === 429 ? 'rate_limited' : 'upstream'), res.status, retryAfterSec, json?.quota);
+    }
+    return json.vectors;
 };

@@ -44,6 +44,9 @@ export interface SearchOptions {
     embedder?: Embedder | null;
 }
 
+/** Embedding neden bekliyor: dakikalık hız sınırı, günlük kota, kota/bakiye bitti, bağlantı */
+export type EmbeddingWaitKind = 'rate' | 'daily' | 'exhausted' | 'transient';
+
 export interface RetrieverStatus {
     chunks: number;
     byType: Partial<Record<RagSourceType, number>>;
@@ -52,7 +55,57 @@ export interface RetrieverStatus {
     embedding: boolean; // arka planda embedding sürüyor mu
     semanticError?: string;
     lastSync?: string;
+    /** Embedding sınıra takıldı ve bekliyor: bu saatte kaldığı yerden sürer (ISO) */
+    waitUntil?: string;
+    waitKind?: EmbeddingWaitKind;
+    /** Sağlayıcının hata metni */
+    waitDetail?: string;
 }
+
+export interface RetrieverOptions {
+    cache?: KvStore<Float32Array>;
+    batchSize?: number;
+    maxEmbedChunks?: number;
+    /** İki embedding isteği arasındaki en kısa süre (ms); hız sınırına takıldıkça iki katına çıkar */
+    minIntervalMs?: number;
+    /** Aralığın üst sınırı (ms) */
+    maxIntervalMs?: number;
+    /** Sağlayıcı süre bildirmediğinde ilk bekleme (ms); ardışık her sınırda iki katına çıkar */
+    backoffMs?: number;
+    /** Dakikalık sınırda tek beklemenin üst sınırı (ms) */
+    maxWaitMs?: number;
+    /** Günlük kota / bakiye bittiğinde yeniden deneme aralığı (ms) */
+    longWaitMs?: number;
+    /** Bağlantı / zaman aşımı hatasında en çok kaç kez yeniden denenir */
+    maxTransientRetries?: number;
+    /** Testler için saat ve bekleme */
+    now?: () => number;
+    sleep?: (ms: number) => Promise<void>;
+}
+
+/** Embedding hatasının türü: beklenip yeniden denenebilir mi? (AiError alanları; ördek tipleme) */
+const classifyEmbedError = (e: unknown): { kind: 'rate' | 'transient' | 'fatal'; message: string; retryAfterMs?: number; quota?: 'daily' | 'exhausted' } => {
+    const x = (e || {}) as { message?: string; code?: string; status?: number; retryAfterSec?: number; quota?: 'daily' | 'exhausted' };
+    const message = x.message || 'Embedding alınamadı.';
+    const retryAfterMs = x.retryAfterSec && x.retryAfterSec > 0 ? x.retryAfterSec * 1000 : undefined;
+    if (x.code === 'rate_limited' || x.status === 429) return { kind: 'rate', message, retryAfterMs, quota: x.quota };
+    if (x.code === 'timeout' || x.code === 'network') return { kind: 'transient', message, retryAfterMs };
+    return { kind: 'fatal', message };
+};
+
+/** Bilgi Bankası'nda gösterilen bekleme metni; beklenmiyorsa null */
+export const embeddingWaitText = (s: RetrieverStatus, now = Date.now()): string | null => {
+    if (!s.waitUntil) return null;
+    const until = Date.parse(s.waitUntil);
+    const when = until - now <= 90_000
+        ? 'birazdan'
+        : `${new Date(until).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })} civarında`;
+    const why = s.waitKind === 'daily' ? 'AI sağlayıcısının günlük kotası doldu'
+        : s.waitKind === 'exhausted' ? 'AI sağlayıcısının kotası tükendi (faturalandırmayı kontrol edin)'
+            : s.waitKind === 'transient' ? 'AI sunucusuna ulaşılamadı'
+                : 'AI sağlayıcısı hız sınırına ulaştı';
+    return `${why}; anlamsal dizin ${when} kaldığı yerden devam edecek (${s.vectors}/${s.chunks} parça hazır). Bu sırada anahtar kelime araması kullanılıyor.`;
+};
 
 const RRF_K = 60;
 const MAX_PER_DOC = 2;
@@ -92,8 +145,42 @@ export class Retriever {
     private semanticError?: string;
     private lastSync?: string;
     private listeners = new Set<() => void>();
+    /** Sınıra takılan embedding'in beklemesi (bitince kaldığı yerden sürer) */
+    private wait?: { until: number; kind: EmbeddingWaitKind; detail: string };
+    /** Süren beklemeyi hemen bitirir ("Dizini yenile", model değişimi) */
+    private wake: (() => void) | null = null;
 
-    constructor(private opts: { cache?: KvStore<Float32Array>; batchSize?: number; maxEmbedChunks?: number } = {}) {}
+    constructor(private opts: RetrieverOptions = {}) {}
+
+    private now(): number {
+        return this.opts.now ? this.opts.now() : Date.now();
+    }
+
+    /** Uyandırılabilir bekleme */
+    private sleep(ms: number): Promise<void> {
+        return new Promise(resolve => {
+            let timer: ReturnType<typeof setTimeout> | undefined;
+            const done = () => {
+                if (this.wake === done) this.wake = null;
+                if (timer !== undefined) clearTimeout(timer);
+                resolve();
+            };
+            this.wake = done;
+            if (this.opts.sleep) this.opts.sleep(ms).then(done);
+            else timer = setTimeout(done, ms);
+        });
+    }
+
+    private async waitFor(ms: number, kind: EmbeddingWaitKind, detail: string): Promise<void> {
+        this.wait = { until: this.now() + ms, kind, detail };
+        this.emit();
+        try {
+            await this.sleep(ms);
+        } finally {
+            this.wait = undefined;
+            this.emit();
+        }
+    }
 
     onChange(fn: () => void): () => void {
         this.listeners.add(fn);
@@ -124,6 +211,11 @@ export class Retriever {
             this.vectors.clear();
             this.vectorModel = embedder.model;
             this.semanticError = undefined;
+            // Eski modelin işi beklemedeyse uyandırılır; o iş bitince yeni modelle başlanır
+            if (this.embedJob) {
+                this.wake?.();
+                return this.embedJob.then(() => this.startEmbedding(embedder));
+            }
         }
         if (this.embedJob || this.semanticError) return this.embedJob || Promise.resolve();
         this.embedJob = this.fillVectors(embedder).finally(() => {
@@ -134,9 +226,24 @@ export class Retriever {
         return this.embedJob;
     }
 
+    /**
+     * Eksik vektörleri parti parti alır. İstekler aralıklı gider; hız/kota
+     * sınırında sağlayıcının bildirdiği süre (yoksa artan süre) beklenip aynı
+     * partiden devam edilir, aralık da uzatılır. Her parti önbelleğe yazıldığı
+     * için sayfa yenilense de iş kaldığı yerden sürer.
+     */
     private async fillVectors(embedder: Embedder): Promise<void> {
         const batch = this.opts.batchSize || 32;
         const limit = this.opts.maxEmbedChunks || 3000;
+        const minInterval = this.opts.minIntervalMs ?? 1000;
+        const maxInterval = Math.max(minInterval, this.opts.maxIntervalMs ?? 60_000);
+        const backoff = this.opts.backoffMs ?? 15_000;
+        const maxWait = this.opts.maxWaitMs ?? 5 * 60_000;
+        const longWait = this.opts.longWaitMs ?? 60 * 60_000;
+        const maxTransient = this.opts.maxTransientRetries ?? 3;
+        const stale = () => this.vectorModel !== embedder.model;
+        let interval = minInterval;
+        let lastAt = -Infinity;
         // Döngü: dizin embedding sırasında değişirse yeni parçalar da tamamlanır
         for (let round = 0; round < 3; round++) {
             const wanted = Array.from(new Map(this.chunks.slice(0, limit).map(c => [c.hash, c])).values())
@@ -148,13 +255,46 @@ export class Retriever {
             const missing = wanted.filter(c => !this.vectors.has(c.hash));
             for (let i = 0; i < missing.length; i += batch) {
                 const part = missing.slice(i, i + batch);
-                let vecs: number[][];
-                try {
-                    vecs = await embedder.embed(part.map(c => `${c.title}\n${c.text}`), 'document');
-                } catch (e) {
-                    this.semanticError = (e as Error)?.message || 'Embedding alınamadı.';
-                    return;
+                let vecs: number[][] | null = null;
+                let rateStrikes = 0;
+                let transientStrikes = 0;
+                while (!vecs) {
+                    const gap = lastAt + interval - this.now();
+                    if (gap > 0) await this.sleep(gap);
+                    if (stale()) return;
+                    lastAt = this.now();
+                    try {
+                        vecs = await embedder.embed(part.map(c => `${c.title}\n${c.text}`), 'document');
+                    } catch (e) {
+                        const f = classifyEmbedError(e);
+                        if (f.kind === 'fatal') {
+                            if (!stale()) this.semanticError = f.message;
+                            return;
+                        }
+                        let ms: number;
+                        if (f.kind === 'transient') {
+                            if (++transientStrikes > maxTransient) {
+                                if (!stale()) this.semanticError = f.message;
+                                return;
+                            }
+                            ms = Math.min(maxWait, f.retryAfterMs ?? backoff * 2 ** (transientStrikes - 1));
+                        } else if (f.quota) {
+                            // Günlük kota / bakiye: dakikalar içinde açılmaz; seyrek yeniden denenir
+                            ms = Math.max(longWait, Math.min(f.retryAfterMs ?? 0, 24 * 3600_000));
+                        } else {
+                            rateStrikes++;
+                            ms = f.retryAfterMs !== undefined
+                                ? Math.min(f.retryAfterMs, longWait)
+                                : Math.min(maxWait, backoff * 2 ** (rateStrikes - 1));
+                            interval = Math.min(maxInterval, Math.max(interval * 2, 1000));
+                        }
+                        if (stale()) return;
+                        await this.waitFor(ms, f.kind === 'transient' ? 'transient' : f.quota || 'rate', f.message);
+                        if (stale()) return;
+                        lastAt = -Infinity; // bekleme aralığı zaten karşıladı
+                    }
                 }
+                if (stale()) return; // model değişti: eski modelin vektörleri yazılmaz
                 const entries: [string, Float32Array][] = [];
                 part.forEach((c, j) => {
                     if (!vecs[j]?.length) return;
@@ -180,11 +320,14 @@ export class Retriever {
         return {
             chunks: this.chunks.length, byType, vectors, model: this.vectorModel,
             embedding: !!this.embedJob, semanticError: this.semanticError, lastSync: this.lastSync,
+            ...(this.wait ? { waitUntil: new Date(this.wait.until).toISOString(), waitKind: this.wait.kind, waitDetail: this.wait.detail } : {}),
         };
     }
 
+    /** Hatayı sıfırlar; sınır yüzünden bekleyen embedding varsa hemen yeniden dener */
     resetSemanticError(): void {
         this.semanticError = undefined;
+        this.wake?.();
     }
 
     async search(query: string, o: SearchOptions = {}): Promise<RagHit[]> {
@@ -196,7 +339,8 @@ export class Retriever {
         const lex = searchBm25(this.bm25, query, 50, allow);
 
         let sem: { index: number; score: number }[] = [];
-        const canSemantic = !!o.embedder && this.vectorModel === o.embedder.model && !this.semanticError &&
+        // Sınır yüzünden beklenirken sorgu embedding'i de istenmez (kotayı harcar, gecikir)
+        const canSemantic = !!o.embedder && this.vectorModel === o.embedder.model && !this.semanticError && !this.wait &&
             this.chunks.some(c => this.vectors.has(c.hash));
         if (canSemantic) {
             try {

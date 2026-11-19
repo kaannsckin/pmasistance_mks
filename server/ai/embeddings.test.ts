@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { buildEmbedRequest, parseEmbedResponse, readEmbeddingConfig, validateEmbedBody } from './embeddings';
+import { upstreamRetryInfo } from './errors';
 import { handleAiRequest } from './handler';
 import { createRateLimiter } from './rateLimit';
 
@@ -75,10 +76,52 @@ describe('/embed ucu', () => {
         expect((init.headers as Record<string, string>).authorization).toBe('Bearer sohbet-anahtari');
     });
 
+    it('kota sınırında bekleme süresini ve günlük kotayı istemciye iletir (Gemini)', async () => {
+        const body = {
+            error: {
+                code: 429, status: 'RESOURCE_EXHAUSTED',
+                message: 'You exceeded your current quota, please check your plan and billing details.',
+                details: [
+                    { '@type': 'type.googleapis.com/google.rpc.QuotaFailure', violations: [{ quotaMetric: 'generativelanguage.googleapis.com/embed_content_free_tier_requests', quotaId: 'EmbedContentRequestsPerDayPerUserPerProjectPerModel-FreeTier' }] },
+                    { '@type': 'type.googleapis.com/google.rpc.RetryInfo', retryDelay: '36.4s' },
+                ],
+            },
+        };
+        const fetchImpl = vi.fn(async () => new Response(JSON.stringify(body), { status: 429 }));
+        const res = await handleAiRequest(req({ texts: ['a'] }), { ...CHAT, AI_EMBEDDING_MODEL: 'emb-1' }, { isDev: true, fetchImpl, rateLimiter: createRateLimiter(100) });
+        expect(res.status).toBe(429);
+        expect(res.headers.get('retry-after')).toBe('37');
+        const json = await res.json();
+        expect(json).toMatchObject({ code: 'rate_limited', retryAfterSec: 37, quota: 'daily' });
+        expect(json.error).toMatch(/kota\/hız sınırına ulaştı/);
+    });
+
     it('sağlayıcı hatası anlaşılır mesajla 502', async () => {
         const fetchImpl = vi.fn(async () => new Response('{"error":{"message":"model not found"}}', { status: 404 }));
         const res = await handleAiRequest(req({ texts: ['a'] }), { ...CHAT, AI_EMBEDDING_MODEL: 'yok' }, { isDev: true, fetchImpl, rateLimiter: createRateLimiter(100) });
         expect(res.status).toBe(502);
         expect((await res.json()).error).toMatch(/AI_EMBEDDING_MODEL.*model not found/);
+    });
+});
+
+describe('upstreamRetryInfo', () => {
+    const h = (o: Record<string, string> = {}) => new Headers(o);
+
+    it('retry-after-ms, saniye ve tarih biçimli retry-after başlıkları', () => {
+        expect(upstreamRetryInfo(h({ 'retry-after-ms': '1500' }), '')).toEqual({ retryAfterSec: 2 });
+        expect(upstreamRetryInfo(h({ 'retry-after': '20' }), '')).toEqual({ retryAfterSec: 20 });
+        const now = Date.parse('2026-11-19T10:00:00Z');
+        expect(upstreamRetryInfo(h({ 'retry-after': 'Thu, 19 Nov 2026 10:01:30 GMT' }), '', now)).toEqual({ retryAfterSec: 90 });
+    });
+
+    it('Gemini dakikalık sınırı günlük sayılmaz; OpenAI insufficient_quota tükenmiş kotadır', () => {
+        const minute = JSON.stringify({ error: { details: [
+            { '@type': 'type.googleapis.com/google.rpc.QuotaFailure', violations: [{ quotaId: 'EmbedContentRequestsPerMinutePerProjectPerModel-FreeTier' }] },
+            { '@type': 'type.googleapis.com/google.rpc.RetryInfo', retryDelay: '12s' },
+        ] } });
+        expect(upstreamRetryInfo(h(), minute)).toEqual({ retryAfterSec: 12 });
+        expect(upstreamRetryInfo(h(), JSON.stringify({ error: { message: 'You exceeded your current quota', type: 'insufficient_quota', code: 'insufficient_quota' } })))
+            .toEqual({ quota: 'exhausted' });
+        expect(upstreamRetryInfo(h(), 'düz metin hata')).toEqual({});
     });
 });

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { collect, streamOf } from '../../server/ai/testUtils';
 import {
-    AI_ACCESS_TOKEN_KEY, AI_BROWSER_CONNECTION_KEY, browserSettingsExpired, configureMasking, embedTexts, fetchAiStatus, isBrowserKeyFormat, loadAccessToken,
+    AI_ACCESS_TOKEN_KEY, AI_BROWSER_CONNECTION_KEY, AiError, browserSettingsExpired, configureMasking, embedTexts, fetchAiStatus, isBrowserKeyFormat, loadAccessToken,
     loadBrowserConnection, readNdjson, saveAccessToken, saveBrowserConnection, streamChat, trimHistory,
 } from './client';
 import { buildMasker, MASK_NOTE } from './masking';
@@ -181,5 +181,28 @@ describe('ad maskeleme (istemci)', () => {
         await embedTexts(['Safir projesinde Ali Veli'], 'document', 'none');
         expect(bodies[0].texts[0]).toBe(`${SAFIR} projesinde ${ALI}`);
         expect(bodies[1].texts[0]).toBe('Safir projesinde Ali Veli');
+    });
+});
+
+describe('embedTexts kota sınırı', () => {
+    afterEach(() => { vi.unstubAllGlobals(); });
+
+    it('beklemeden fırlatır; bekleme süresi ve kota türü hatada taşınır', async () => {
+        const fetchMock = vi.fn(async () => new Response(
+            JSON.stringify({ error: 'AI sağlayıcısı kota/hız sınırına ulaştı', code: 'rate_limited', retryAfterSec: 37, quota: 'daily' }),
+            { status: 429 },
+        ));
+        vi.stubGlobal('fetch', fetchMock);
+        const err = await embedTexts(['a'], 'document', 'none').catch(e => e);
+        expect(err).toBeInstanceOf(AiError);
+        expect(err).toMatchObject({ code: 'rate_limited', status: 429, retryAfterSec: 37, quota: 'daily' });
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('gövdede süre yoksa retry-after başlığı kullanılır', async () => {
+        vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 429, headers: { 'retry-after': '12' } })));
+        const err = await embedTexts(['a'], 'query', 'none').catch(e => e);
+        expect(err).toMatchObject({ code: 'rate_limited', retryAfterSec: 12 });
+        expect(err.quota).toBeUndefined();
     });
 });

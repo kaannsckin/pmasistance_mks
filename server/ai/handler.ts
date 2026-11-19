@@ -9,7 +9,7 @@ import { describeNetworkError, networkErrorCode, upstreamFetch } from './tls.js'
 import { handleAiAdmin } from './admin.js';
 import { clientIp } from './auth.js';
 import { browserKeyAllowed, browserKeyEnv, browserKeyProblem, readBrowserKey } from './browserKey.js';
-import { upstreamErrorMessage } from './errors.js';
+import { upstreamErrorMessage, upstreamRetryInfo } from './errors.js';
 import { GeminiAuto } from './gemini.js';
 import { effectiveEnv, prepareEnv } from './settingsStore.js';
 
@@ -58,8 +58,8 @@ const jsonResponse = (status: number, body: unknown, headers: Record<string, str
         headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...headers },
     });
 
-const errorResponse = (status: number, code: ErrorCode, message: string, headers: Record<string, string> = {}): Response =>
-    jsonResponse(status, { error: message, code }, headers);
+const errorResponse = (status: number, code: ErrorCode, message: string, headers: Record<string, string> = {}, extra: Record<string, unknown> = {}): Response =>
+    jsonResponse(status, { error: message, code, ...extra }, headers);
 
 /**
  * Köken denetimi: aynı host her zaman serbest; başka kökenler yalnızca
@@ -423,7 +423,7 @@ const handleEmbed = async (
 
     const retryAfter = (opts.rateLimiter || sharedLimiter(c.rateLimitPerMin)).hit(`embed:${subject}`);
     if (retryAfter > 0) {
-        return errorResponse(429, 'rate_limited', `Çok fazla embedding isteği; ${retryAfter} sn sonra tekrar deneyin.`, { ...cors, 'retry-after': String(retryAfter) });
+        return errorResponse(429, 'rate_limited', `Çok fazla embedding isteği; ${retryAfter} sn sonra tekrar deneyin.`, { ...cors, 'retry-after': String(retryAfter) }, { retryAfterSec: retryAfter });
     }
 
     const rawText = await request.text();
@@ -453,8 +453,12 @@ const handleEmbed = async (
         const text = await res.text().catch(() => '');
         if (!res.ok) {
             console.error(`[ai] embedding hatası: ${c.provider} HTTP ${res.status}`);
-            return errorResponse(res.status === 429 ? 429 : 502, res.status === 429 ? 'rate_limited' : 'upstream',
-                upstreamErrorMessage(res.status, extractUpstreamError(text), keyName).replace('AI_API_KEY', 'AI_EMBEDDING_API_KEY').replace('AI_MODEL', 'AI_EMBEDDING_MODEL'), cors);
+            const message = upstreamErrorMessage(res.status, extractUpstreamError(text), keyName).replace('AI_API_KEY', 'AI_EMBEDDING_API_KEY').replace('AI_MODEL', 'AI_EMBEDDING_MODEL');
+            if (res.status !== 429) return errorResponse(502, 'upstream', message, cors);
+            // Bekleme süresi ve kota türü istemciye iletilir: dizinleme o kadar bekleyip kaldığı yerden sürer
+            const retry = upstreamRetryInfo(res.headers, text);
+            return errorResponse(429, 'rate_limited', message,
+                { ...cors, ...(retry.retryAfterSec ? { 'retry-after': String(retry.retryAfterSec) } : {}) }, { ...retry });
         }
         let vectors: number[][];
         try {
