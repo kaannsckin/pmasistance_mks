@@ -371,8 +371,8 @@
 .ui-modern .m-segment[aria-pressed="true"], .ui-modern .m-segment[aria-current="page"], .ui-modern .m-segment[aria-selected="true"] {
   background: var(--m-segment-on); box-shadow: var(--m-shadow); font-weight: 600;
 }
-/* Seçili bölüm zemini koyu temalarda açıklaştığı için içindeki soluk sayılar bir ton koyulaşır */
-.ui-modern .m-segment[aria-pressed="true"] .m-text-3, .ui-modern .m-segment[aria-current="page"] .m-text-3, .ui-modern .m-segment[aria-selected="true"] .m-text-3 { color: var(--m-label-2); }
+/* Seçili bölüm zemini koyu temalarda açıklaştığı için içindeki soluk sayılar ana yazı rengini alır */
+.ui-modern .m-segment[aria-pressed="true"] .m-text-3, .ui-modern .m-segment[aria-current="page"] .m-text-3, .ui-modern .m-segment[aria-selected="true"] .m-text-3 { color: var(--m-label); }
 
 .ui-modern .m-input {
   min-height: 44px; width: 100%; box-sizing: border-box; padding: 0 14px; border-radius: var(--m-radius-ctl);
