@@ -1,0 +1,47 @@
+{
+"persona": "selin", "kosu": "2026-11-19 Perşembe",
+"yapilanlar": [
+{"is": "H47 raporları (ATL, PSL, NHR) ve NHR H46 yeniden gönderimi: araç rakamlarıyla karşılaştırıp karara bağladı", "araclar": ["haftalik_rapor","proje_listesi","evm_analizi","risk_listesi","oner_rapor_karari","oneriyi_uygula"], "sonuc": "4 rapor onaylandı, hepsi PYB destekte aşamasına geçti"},
+{"is": "KLK Onur Çelik payı kararını (Ahmet, 14 Kasım termin) kontrol etti; uygulanmamıştı (KLK Kasım 0,4 / Aralık 0,32), uyguladı", "araclar": ["kisi_profili","oner_tahsis_ayarla","oneriyi_uygula"], "sonuc": "Onur KLK Kasım 0,4→0, Aralık 0,32→0. Aralık planı 0,64 (kapasite 0,9): Aralık aşımı kalktı. Kasım 0,8 / efektif 0,42 (aşım 0,38) ATL kilidi yüzünden sürüyor"},
+{"is": "U310 doluluk ve aşırı tahsis kontrolü", "araclar": ["doluluk_analizi","departman_karnesi","tahsis_ozeti","beklentiler"], "sonuc": "U310 doluluk 0,90, 3 kişi kapasite üstü (Onur yıllık 1,26; Nisan-Ekim 1,2/0,9 yapısal). ATL kilit beklentisi zaten açık; tekrar açılmadı"}
+],
+"degisiklikler": [
+{"arac": "oner_tahsis_ayarla", "ozet": "Onur Çelik KALKAN Kasım plan 0,4→0 AA", "tetikleyici": "Ahmet 12 Kasım mesajı: KLK Onur payı 0 AA, 14 Kasım'a kadar uygulanacak; kisi_profili'nde hâlâ 0,4", "gerekce": "Onur Kasım efektif kapasite 0,42 (16-27 Kasım izin), yük 1,2; KLK planı Taslak olduğu için yazılabildi", "uygulandi": true},
+{"arac": "oner_tahsis_ayarla", "ozet": "Onur Çelik KALKAN Aralık plan 0,32→0 AA", "tetikleyici": "Aynı yönetim kararı", "gerekce": "Aralık Onur yükü 0,96 > kapasite 0,9; KLK 0 olunca 0,64", "uygulandi": true},
+{"arac": "oner_rapor_karari", "ozet": "NHR 2026-H46 onay", "tetikleyici": "Burak 19 Kasım yeniden gönderim; 12 Kasım iadesinin 4 maddesi", "gerekce": "Geciken 16 (122/91/31), paragraf bölündü, EVM aynı, risk skor 16", "uygulandi": true},
+{"arac": "oner_rapor_karari", "ozet": "ATL 2026-H47 onay", "tetikleyici": "Elif H47 gönderimi", "gerekce": "EVM %87 SPI 1,03 CPI 1,04 EAC 7.880.000 VAC 323.950; 7 geciken; araçla birebir", "uygulandi": true},
+{"arac": "oner_rapor_karari", "ozet": "PSL 2026-H47 onay", "tetikleyici": "Burak H47 gönderimi", "gerekce": "9 geciken (125/100/25), SPI 0,90 CPI 0,89, EAC 6.264.013 VAC -664.913, risk 16; araçla birebir", "uygulandi": true},
+{"arac": "oner_rapor_karari", "ozet": "NHR 2026-H47 onay", "tetikleyici": "Burak H47 gönderimi", "gerekce": "19 geciken (126/93/33), SPI 0,85 CPI 0,86 EAC 6.548.521 VAC -927.871, iki risk 16; araçla birebir", "uygulandi": true}
+],
+"haftalik_rapor": [],
+"rapor_kararlari": [
+{"proje": "NHR", "hafta": "2026-H46", "karar": "onay", "not": "4 iade maddesi karşılandı: geciken 16, paragraf bölündü, EVM değişmedi, risk 16", "uygulandi": true},
+{"proje": "ATL", "hafta": "2026-H47", "karar": "onay", "not": "Rakamlar araçla uyuşuyor; biçim uyarıları PYB'ye bırakıldı", "uygulandi": true},
+{"proje": "PSL", "hafta": "2026-H47", "karar": "onay", "not": "Rakamlar araçla uyuşuyor; 3 biçim uyarısı PYB'de", "uygulandi": true},
+{"proje": "NHR", "hafta": "2026-H47", "karar": "onay", "not": "Rakamlar araçla uyuşuyor; 4 biçim uyarısı PYB'de", "uygulandi": true}
+],
+"bulgular": [
+{"tur": "eksik_ozellik", "onem": "yuksek", "baslik": "Bölüm sorumlusu onaylı plan kilidini geri çekemiyor", "kanit": "arac selin tahsis_ozeti {proje:ATL} → \"plan_kilidi\": \"Onaylı/Kilitli\"; kisi_profili Onur ATL Kasım 0,8 (karar 0,42)", "beklenen": "Yönetim kararı sonrası yetkili kişi kilidi açabilmeli", "gerceklesen": "Karar 10 Kasım'da verildi, 9 gün sonra Onur Kasım aşımı 0,38 sürüyor"},
+{"tur": "tutarsizlik", "onem": "orta", "baslik": "Biçim uyarıları bölüm sorumlusu onayından PYB'ye görünür aktarılmıyor", "kanit": "oner_rapor_karari ATL H47 → \"bicim\": \"0 hata, 2 uyarı\"", "beklenen": "Uyarılar PYB aşamasına görünür aktarılsın", "gerceklesen": "Yalnız karar notuyla bildirildi"}
+],
+"yanitlar": [
+{"kime": "elif", "mesaj_tarihi": "2026-11-19", "metin": "ATL H47 onaylandı (EVM %87/SPI 1,03/CPI 1,04, 7 geciken araçla aynı). KLK Onur payını 0 yaptım (Kasım 0,4→0, Aralık 0,32→0): Aralık planı 0,64/0,9; ATL Aralık 0,74 / Selin +0,06 önerisi gerekmiyor. Kasım için ATL 0,42 / Selin 0,3 / Emre +0,1 kilit açılınca geçerli; kilit 24 Kasım'da hâlâ kapalıysa yönetim beklentisi üzerinden ilerlerim. ATL-157 devri için 20 Kasım toplantısında Emre (Kasım yük 0,8/kap. 0,9, boşluk ~0,1) ile Cem durumunu birlikte bakalım; Emre'ye yeni iş verilirse Kasım doluluğunu önce bana yaz."},
+{"kime": "burak", "mesaj_tarihi": "2026-11-19", "metin": "NHR H46 onaylandı (16 geciken, paragraf, EVM, risk 16 karşılandı); NHR, PSL ve ATL H47 de araç rakamlarıyla (NHR 19 geciken 126/93/33, PSL 9 geciken 125/100/25) onaylandı; biçim uyarıları PYB'de. NHR için 20 Kasım yük testi sonrası 24 Kasım sürüm önerisini Ahmet'e yetiştir."},
+{"kime": "mert", "mesaj_tarihi": "2026-11-12", "metin": "ATL/PSL/NHR H46 ve H47 raporlarına bugün karar verdim; hepsi PYB aşamasında, biçim denetimini yapabilirsin (ATL 2, PSL 3, NHR 4 uyarı). H45 ATL ve PSL aşamalarında hâlâ 'yayınlandı; değişmez' sorunu varsa iade/yeniden gönderim yolunu Ahmet ile sen açmalısın; bölüm sorumlusu rolümde araç yok."},
+{"kime": "ahmet", "mesaj_tarihi": "2026-11-12", "metin": "KLK Onur payı 0 AA uygulandı (19 Kasım): Kasım 0,4→0, Aralık 0,32→0. ATL Kasım için Onur 0,42 kararı kilit nedeniyle hâlâ yazılamıyor (Onur 0,8/0,42, aşım 0,38). KLK H45 bölüm sorumlusu onaycısı sorusu açık, Mert'le netleştirin."}
+],
+"mesajlar": [
+{"kime": "ahmet", "metin": "ATL kilidi 9 gündür kapalı: karar gün içinde uygulanamıyorsa Onur Kasım aşımı (0,38 AA, efektif 0,42) 27 Kasım izin sonuna kadar sürer. Bölüm sorumlusu olarak kilidi açamıyorum; mevcut beklenti açık, yeniden açmadım."}
+],
+"ajanda": [
+{"madde": "ATL plan kilidi: kilit açılınca Kasım Onur 0,42 / Selin 0,3 / Emre +0,1 (Aralık için ek değişiklik gerekmiyor, 0,64)", "kime": "ahmet", "termin": "2026-11-24", "durum": "acik"},
+{"madde": "KLK Onur payı 0 AA (Kasım+Aralık) uygulandı", "kime": "ahmet", "termin": "2026-11-19", "durum": "tamam"},
+{"madde": "ATL-157 devri (Emre/Cem) 20 Kasım: Emre/Cem Kasım doluluğunu araçtan doğrula", "kime": "elif", "termin": "2026-11-20", "durum": "acik"},
+{"madde": "NHR H46/H47, PSL H47, ATL H47 onaylandı", "kime": "burak", "termin": "2026-11-19", "durum": "tamam"},
+{"madde": "H45 ATL/PSL raporları: aşama düzeltmesi bekleniyor", "kime": "mert", "termin": "2026-11-24", "durum": "ertelendi"},
+{"madde": "Onur Nisan-Ekim 1,2/0,9 yapısal aşım kalıcı çözüm gündemi", "kime": "selin", "termin": "2026-11-26", "durum": "ertelendi"}
+],
+"gercek_disi": [], "demo_yoklamasi": [],
+"arac_cagrisi": 24, "memnuniyet": 8,
+"gunun_notu": "Dört rapor araç rakamlarıyla onaylandı ve KLK Onur payı sıfırlandı; ATL kilidi yüzünden Onur Kasım aşımı hâlâ 0,38."
+}
