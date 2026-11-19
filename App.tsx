@@ -1,6 +1,6 @@
 
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { View, Task, Resource, TaskStatus, Note, CustomerRequest, Objective, Project, Person, WorkspaceData, RagStatus, ProjectStatus, UserRole, PlanLockStatus, WorkPackage, UiStyle, PermissionKey, EstimateLogEntry, JiraSyncSettings, ReleasePlan, GoldenItem, EvalRun, ModelEvalRun } from './types';
+import { View, Task, Resource, TaskStatus, Note, CustomerRequest, Objective, Project, Person, WorkspaceData, RagStatus, ProjectStatus, UserRole, PlanLockStatus, WorkPackage, UiStyle, PermissionKey, EstimateLogEntry, JiraSyncSettings, ReleasePlan, GoldenItem, EvalRun, ModelEvalRun, BoardConfig } from './types';
 import { INITIAL_TASKS, INITIAL_RESOURCES, INITIAL_OBJECTIVES } from './constants';
 import {
   WORKSPACE_STORAGE_KEY,
@@ -88,7 +88,7 @@ import { applyJiraSync, pullIssueIntoTasks, sourceLabel } from './utils/planning
 import { useJiraAutoSync } from './components/modern/planning/useJiraAutoSync';
 import { JiraIssueRecord } from './utils/integrations';
 import ModernPortfolio from './components/modern/ModernPortfolio';
-import ModernBoard from './components/modern/ModernBoard';
+import ProjectBoard from './components/modern/ProjectBoard';
 import ModernProjectOverview from './components/modern/ModernProjectOverview';
 import ModernTaskList from './components/modern/ModernTaskList';
 import ModernAllocation from './components/modern/ModernAllocation';
@@ -174,6 +174,8 @@ const App: React.FC = () => {
   const [isPaletteOpen, setIsPaletteOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isWpManagerOpen, setIsWpManagerOpen] = useState(false);
+  // Klasik arayüzde "Pano" sekmesi: Jira tarzı durum panosu ya da sürüm planı
+  const [classicBoardMode, setClassicBoardMode] = useState<'status' | 'sprint'>('status');
   const [isGibImportOpen, setIsGibImportOpen] = useState(false);
   // Modern arayüz: dar ekranda kenar çubuğu çekmecesi, "yeni proje" isteği, sürprizler
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -1090,6 +1092,18 @@ const App: React.FC = () => {
     } : ws));
   }, [updateWorkspace]);
 
+  // ---- Proje panosu yapılandırması (kolonlar, kurallar, hızlı filtreler, kulvarlar) ----
+  const handleSaveBoardConfig = useCallback((projectId: string, boardConfig: BoardConfig | undefined) => {
+    updateWorkspace(ws => {
+      const project = ws.projects.find(p => p.id === projectId);
+      if (!project || !canEditProjectContent(ws, identityOf(ws), projectId)) return ws;
+      const next = { ...ws, projects: ws.projects.map(p => (p.id === projectId ? { ...p, boardConfig, updatedAt: new Date().toISOString() } : p)) };
+      return appendAudit(next, 'config.update', boardConfig
+        ? `"${project.name}" panosu yapılandırıldı: ${boardConfig.columns.map(c => c.name).join(' → ')} · ${boardConfig.quickFilters.length} hızlı filtre`
+        : `"${project.name}" panosu varsayılan ayarlara döndü`, projectId);
+    });
+  }, [updateWorkspace]);
+
   const handleSetJiraKey = useCallback((projectId: string, key: string) => {
     updateWorkspace(ws => (canEditProjectContent(ws, identityOf(ws), projectId)
       ? { ...ws, projects: ws.projects.map(p => (p.id === projectId ? { ...p, jiraProjectKey: key } : p)) }
@@ -1607,6 +1621,29 @@ const App: React.FC = () => {
     const { tasks, resources, notes, customerRequests, objectives } = activeProject;
     const ps = activeProject.settings;
     const changeTaskStatus = (id: string, s: TaskStatus) => setTasks(prev => prev.map(t => t.id === id ? { ...t, status: s } : t));
+    const moveBoardTask = (id: string, patch: Partial<Task>) => setTasks(prev => prev.map(t => t.id === id ? { ...t, ...patch } : t));
+    const boardMe = (() => { const p = workspace.people.find(x => x.id === workspace.currentPersonId); return p ? `${p.firstName} ${p.lastName}`.trim() : undefined; })();
+    const renderProjectBoard = () => (
+      <ProjectBoard
+        tasks={tasks}
+        config={activeProject.boardConfig}
+        canConfigure={canEditProjectContent(workspace, identity, activeProject.id)}
+        onSaveConfig={cfg => handleSaveBoardConfig(activeProject.id, cfg)}
+        onMoveTask={moveBoardTask}
+        onStatusChange={changeTaskStatus}
+        onViewTask={viewTask}
+        onEditTask={editTask}
+        onDeleteTask={deleteTask}
+        onNotifyTask={notifyTask}
+        onNewTask={newTask}
+        onCelebrate={celebrate}
+        sprintNames={ps.sprintNames || {}}
+        me={boardMe}
+        wpNames={new Map(activeProject.workPackages.map(w => [w.id, w.name]))}
+        minPriority={roleView.minTaskPriority}
+        sortKey={roleView.taskSort}
+      />
+    );
     const viewTask = (t: Task) => { setViewingTask(t); setIsDetailModalOpen(true); };
     const editTask = (t: Task) => { setEditingTask(t); setIsFormModalOpen(true); };
     const deleteTask = (taskId: string) => { if (window.confirm('Emin misiniz?')) setTasks(prev => prev.filter(t => t.id !== taskId)); };
@@ -1759,23 +1796,7 @@ const App: React.FC = () => {
         />
       );
     }
-    if (isModern && currentView === View.Roadmap) {
-      return (
-        <ModernBoard
-          tasks={tasks}
-          sprintNames={ps.sprintNames || {}}
-          onStatusChange={changeTaskStatus}
-          onViewTask={viewTask}
-          onEditTask={editTask}
-          onDeleteTask={deleteTask}
-          onNotifyTask={notifyTask}
-          onNewTask={newTask}
-          onCelebrate={celebrate}
-          minPriority={roleView.minTaskPriority}
-          sortKey={roleView.taskSort}
-        />
-      );
-    }
+    if (isModern && currentView === View.Roadmap) return renderProjectBoard();
     if (isModern && currentView === View.Tasks) {
       return (
         <ModernTaskList
@@ -1821,6 +1842,14 @@ const App: React.FC = () => {
         );
       case View.Kanban:
         return (
+          <div className="flex flex-col gap-4">
+          <div role="tablist" aria-label="Pano görünümü" className="self-start inline-flex p-1 rounded-xl bg-gray-100 dark:bg-gray-800">
+            {([['status', 'Durum panosu'], ['sprint', 'Sürüm planı']] as const).map(([k, label]) => (
+              <button key={k} role="tab" aria-selected={classicBoardMode === k} onClick={() => setClassicBoardMode(k)}
+                className={`px-3 py-1.5 rounded-lg text-sm font-bold ${classicBoardMode === k ? 'bg-white dark:bg-gray-700 text-indigo-600 shadow-sm' : 'text-gray-500'}`}>{label}</button>
+            ))}
+          </div>
+          {classicBoardMode === 'status' ? <div className="ui-modern rounded-3xl p-4 sm:p-6 bg-white dark:bg-gray-900">{renderProjectBoard()}</div> : (
           <KanbanView
             tasks={tasks} resources={resources}
             sprintDuration={ps.sprintDuration} projectStartDate={ps.projectStartDate}
@@ -1834,6 +1863,8 @@ const App: React.FC = () => {
             onNewTask={() => { setEditingTask(null); setIsFormModalOpen(true); }}
             onViewTaskDetails={(taskId) => { const t = tasks.find(x => x.id === taskId); if(t) { setViewingTask(t); setIsDetailModalOpen(true); } }}
           />
+          )}
+          </div>
         );
       case View.Overview: // klasik arayüzde karşılığı pano
       case View.Roadmap:

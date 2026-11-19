@@ -506,7 +506,8 @@ classDiagram
 | Özellik | Açıklama |
 |---|---|
 | **Otomatik planlama** | Topolojik liste çizelgeleme + kritik zincir önceliklendirmesi ile görevleri sürüm (sprint) takvimine yerleştirir; termin (EDD) ve kapasite farkındalıklı |
-| **Kanban panosu** | Sürüm bazlı, sürükle-bırak; plan uyarıları (aşırı büyük görev, öncül döngüsü) banner ile |
+| **Proje panosu (Jira tarzı)** | Kolon ekle / sil / sırala; durumları (uygulama + Jira durum adları) kolonlara sürükleyerek eşle, eşlenmemiş durumlar paneli; etiket kuralı (süreç önce: etiket, aynı aşamanın alt kolonunu seçer — ya da etiket önce); min/max WIP uyarısı; hızlı filtreler (sadece benim işlerim, son güncellenenler, gecikenler, etiketten tek tıkla); kişi avatarları, arama; kulvarlar (Expedite, kişi, öncelik, iş paketi); tamamlananlarda "son N gün" (15 / 109). Ayar projeyle saklanır, denetim günlüğüne yazılır — `utils/board.ts` |
+| **Sürüm planı** | Sürüm bazlı, sürükle-bırak; plan uyarıları (aşırı büyük görev, öncül döngüsü) banner ile (klasik arayüzde Pano › Sürüm planı) |
 | **Analiz ve zaman çizelgesi** | Proje bitiş tarihi ve kritik yolu hesaplayan Gantt şeması |
 | **Diğer** | OKR / Hedefler, Haftalık Notlar, Müşteri İstekleri, Risk kaydı (5×5 matris) |
 | **Kayıt yaşam döngüsü** | Açılış, ilk başlama, kapanış ve durum geçişleri otomatik kaydedilir; kapanma süresi Türkiye iş günü takvimiyle ölçülür; kayıt türü (hata / özellik / iyileştirme / görev) |

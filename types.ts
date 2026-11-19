@@ -65,6 +65,53 @@ export interface Task {
   actualHours?: number; // harcanan efor (Jira "Time Spent" / worklog)
   storyPoints?: number;
   fixVersion?: string; // kaynak sistemdeki hedef sürüm
+  jiraStatus?: string; // Jira'daki durum adı (ör. "ANALYSIS"); pano kolon eşlemesinde kullanılır
+  updatedAt?: string; // son değişiklik (Jira "Updated" ya da panoda taşıma) — "Son güncellenenler" filtresi
+}
+
+// ---------------------------------------------------------------- Proje panosu (Jira tarzı yapılandırma)
+
+/** Pano kolonuna eşlenen durum: uygulama durumu (`app:ToDo`) ya da Jira durum adı (`jira:ANALYSIS`) */
+export type BoardStatusKey = `app:${TaskStatus}` | `jira:${string}`;
+
+export interface BoardColumnConfig {
+  id: string;
+  name: string;
+  statuses: BoardStatusKey[];
+  /** Etiket kuralı: görevde bu etiketlerden biri varsa bu kolon (kural önceliğine göre) */
+  labels?: string[];
+  /** WIP sınırları (Jira "Min/Max") */
+  min?: number;
+  max?: number;
+  /** Kart bu kolona taşınınca uygulamadaki durum */
+  targetStatus: TaskStatus;
+}
+
+export interface BoardQuickFilter {
+  id: string;
+  name: string;
+  /** me: atanan oturumdaki kişi; diğer koşullar VE ile birleşir */
+  assignee?: 'me' | string;
+  labels?: string[];
+  priorities?: Task['priority'][];
+  issueTypes?: IssueType[];
+  overdue?: boolean;
+  /** Son N günde güncellenen */
+  recentDays?: number;
+}
+
+export type BoardSwimlane = 'none' | 'expedite' | 'assignee' | 'priority' | 'workPackage';
+
+export interface BoardConfig {
+  columns: BoardColumnConfig[];
+  /** status: önce durum eşlemesi, aynı durumun kolonları arasında etiket seçer; label: etiket kuralı her zaman önce */
+  rulePriority: 'status' | 'label';
+  quickFilters: BoardQuickFilter[];
+  swimlane: BoardSwimlane;
+  /** Expedite kulvarı: bu önceliklerden ya da etiketlerden biri */
+  expedite?: { priorities?: Task['priority'][]; labels?: string[] };
+  /** Tamamlanma kolonlarında yalnız son N günde kapananlar (0/yok: hepsi) */
+  doneDays?: number;
 }
 
 export type IssueType = 'bug' | 'feature' | 'improvement' | 'task' | 'other';
@@ -514,6 +561,7 @@ export interface Project {
   pmPersonId?: string; // Proje Yöneticisi (havuzdaki kişi) — RBAC sahipliği
   jiraProjectKey?: string; // Jira proje anahtarı (worklog çekmek için, ör. MKS)
   jiraSync?: JiraSyncSettings; // Jira canlı eşitleme kaynağı ve otomatik eşitleme aralığı
+  boardConfig?: BoardConfig; // Pano kolonları, kurallar, hızlı filtreler ve kulvarlar
   risks?: Risk[];
   pestelItems?: PestelItem[]; // PESTEL dış çevre analizi
   swotItems?: SwotItem[]; // SWOT stratejik analizi
