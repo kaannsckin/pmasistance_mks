@@ -1,0 +1,50 @@
+{
+"persona": "ahmet", "kosu": "2026-11-19 Perşembe",
+"yapilanlar": [
+{"is": "Portföy, kapasite-talep ve NHR detayı okundu", "araclar": ["portfoy_ozeti","kapasite_talep","proje_detayi"], "sonuc": "Portföy sağlığı %58 (2 kritik: NHR 21, PSL 39; ATL 58 Riskli). Açık kapasite 1,39 AA (U320 Test 0,6; U340 Veri Bilimci 0,39; rol atanmamış 0,4)."},
+{"is": "Açık beklenti kontrolü (ATL plan kilidi)", "araclar": ["beklentiler","tahsis_ozeti"], "sonuc": "Tek aktif beklenti ATL kilidi; plan_kilidi hâlâ Onaylı/Kilitli, termin 11 Kasım (8 gün gecikti). Kapatılmadı, yönetim düzeyine taşındı, yeni termin 21 Kasım."},
+{"is": "ATL-157 devri için kapasite kontrolü", "araclar": ["gorev_ara","kisi_profili","uygun_kisi_bul"], "sonuc": "ATL-157 High, atanan Onur (izinde), termin bugün, tahmin 1 gün. Emre Koç Kasım planı 0,8/0,9 (0,1 boşluk): devir onaylandı."},
+{"is": "H46 raporlarını oku (Salı işi)", "araclar": ["haftalik_rapor"], "sonuc": "ATL, PSL, KLK H46 Onaylandı/yayınlandı (KLK PY puanı 9). NHR H46 müdüre görünür değil (yayın dışı)."},
+{"is": "Beklenti kararı uygulamaya yazıldı", "araclar": ["oner_beklenti_yanitla"], "sonuc": "oneri-78ef78ae uygulandı (inceleniyor, termin 21 Kasım)."}
+],
+"degisiklikler": [
+{"arac": "oner_beklenti_yanitla", "ozet": "ATL plan kilidi beklentisi: karar aynen geçerli (Kasım Onur 0,42/Selin 0,3/Emre 0,1; Aralık Onur 0,74/Selin +0,06), yeni termin 21 Kasım; ATL-157 devri Emre Koç'a onaylandı (Jira atamasını Elif 20 Kasım yapar); 23 Kasım sürüm notu aksiyonu Emre/Cem ile", "tetikleyici": "13 Kasım terimi geçmiş beklenti; Elif/Selin/Mert 19 Kasım mesajları; tahsis_ozeti Onaylı/Kilitli", "gerekce": "Kilit uygulamada açılamıyor (kimsede geri çekme aracı yok), kritik kalem kapatılmaz ama bekletilmez: yönetim düzeyine taşındı. Emre'nin Kasım boşluğu 0,1 AA, görev 1 gün.", "uygulandi": true}
+],
+"haftalik_rapor": [
+{"proje": "ATLAS Karar Destek Sistemi", "hafta": "2026-H46", "gonderildi": true, "duzeltmeler": [], "dayanaksiz_uyarisi": [], "py_puani": null, "rag": "Riskli", "rag_gerekcesi": "Yayınlandı/değişmez; okundu, müdahale gerekmedi."},
+{"proje": "PUSULA Saha Mobil Uygulaması", "hafta": "2026-H46", "gonderildi": true, "duzeltmeler": [], "dayanaksiz_uyarisi": [], "py_puani": null, "rag": "Kritik", "rag_gerekcesi": "Rapor: SPI 0,90, CPI 0,89, 25 açık görevin 10'u gecikmiş (portföy aracıyla tutarlı)."},
+{"proje": "KALKAN Siber İzleme", "hafta": "2026-H46", "gonderildi": true, "duzeltmeler": [], "dayanaksiz_uyarisi": [], "py_puani": 9, "rag": "Yolunda", "rag_gerekcesi": "KLK-52 ve KLK-54 tamamlandı."}
+],
+"rapor_kararlari": [],
+"bulgular": [
+{"tur": "eksik_ozellik", "onem": "yuksek", "baslik": "Onaylı plan kilidini geri çekme/açma yolu hiçbir rolde yok", "kanit": "tahsis_ozeti {proje:ATL} → \"plan_kilidi\": \"Onaylı/Kilitli\" (19 Kasım); Mert: 'araçlarımda geri çekme yok'; müdür araç listesinde oner_tahsis_ayarla yok", "beklenen": "Yetkili rol kilidi açıp yönetim kararını uygulayabilmeli", "gerceklesen": "Karar 5 Kasım'da verildi, 14 gündür uygulanamıyor; Onur Kasım aşımı sürüyor"},
+{"tur": "tutarsizlik", "onem": "orta", "baslik": "Yayın, bölüm sorumlusu onayından önce yapılabiliyor (NHR H46 yayın dışı kaldı)", "kanit": "haftalik_rapor {proje:NHR,hafta:2026-H46} → 'Bu rapor bu rol için görünür değil'; Mert: yayın Selin onayından önce yapıldı", "beklenen": "Onaylanmamış hafta yayına alınamamalı veya sonradan onaylanabilmeli", "gerceklesen": "NHR H46 askıda, H45 ATL/PSL takılı"}
+],
+"yanitlar": [
+{"kime": "elif", "mesaj_tarihi": "2026-11-19", "metin": "Elif, ATL-157 (High, termin bugün) devri onaylandı: Emre Koç'a ata (Kasım boşluğu 0,1 AA, görev 1 gün), 20 Kasım'a kadar Jira'da yap. 23 Kasım sürüm notu aksiyonu da Emre/Cem'e. Can Erdem 0,2 AA yanıtı 21 Kasım'da bana ilet; ATL-129 erken kapanışı için teşekkürler, sürüm beklentisi gerekmiyor. Geciken ATL görevleri 4'ten 7'ye çıktı: 21 Kasım'a kadar neden ve toparlanma tarihini yaz."},
+{"kime": "burak", "mesaj_tarihi": "2026-11-19", "metin": "Burak, teşekkürler. NHR: SPI 0,85, CPI 0,86, 19/33 açık görev gecikmiş, VAC -927.871 TL; tavan 930.000 TL aşılmayacak. 20 Kasım yük testi sonrası 24 Kasım'a kadar tek sürüm tarihi ve teklif tarih listesini bekliyorum; NHR-118/123 kök neden planı (Sena, 20 Kasım) ekte olsun. Kritik proje: bu açıklamayı 24 Kasım'a kadar yazılı iste."},
+{"kime": "selin", "mesaj_tarihi": "2026-11-19", "metin": "Selin, KLK Onur 0 AA için teşekkürler. ATL kilidi beklentisini yeniden açmadınız, doğru; kilit uygulamada açılamadığı için yönetim düzeyine taşıdım (termin 21 Kasım). Onur aşımı 27 Kasım'a kadar sürer, karar aynı. KLK H45 onaycısını Mert'le netleştirip 21 Kasım'a kadar yazın."},
+{"kime": "mert", "mesaj_tarihi": "2026-11-19", "metin": "Mert, H46 yayını için teşekkürler. Kilit, H45 ATL/PSL ve NHR H46 çıkmazlarını uygulama düzeyinde bulgu olarak kaydettim (yönetim çözümü); 21 Kasım'a kadar her biri için hangi adımın elinizde olduğunu tek mesajla yazın. Rol atanmamış 0,4 AA (U340) hâlâ açık: rol girişini 21 Kasım'a bırakıyorum."}
+],
+"mesajlar": [],
+"ajanda": [
+{"madde": "Can Erdem KLK 0,2 AA görüşmesi sonucu", "kime": "elif", "termin": "2026-11-21", "durum": "acik"},
+{"madde": "ATL plan kilidi: yönetim düzeyinde çözüm; açılınca aynı gün planı yeniden onayla", "kime": "mert", "termin": "2026-11-21", "durum": "acik"},
+{"madde": "ATL-157 Emre Koç'a Jira devri", "kime": "elif", "termin": "2026-11-20", "durum": "acik"},
+{"madde": "Rol atanmamış 0,4 AA (U340) rol girişi, H45 ATL/PSL ve NHR H46 çıkmazı", "kime": "mert", "termin": "2026-11-21", "durum": "acik"},
+{"madde": "NHR teklif tarih listesi + tek sürüm tarihi + NHR-118/123 kök neden planı", "kime": "burak", "termin": "2026-11-24", "durum": "acik"},
+{"madde": "KLK H45 onaylayanının teyidi", "kime": "selin", "termin": "2026-11-21", "durum": "acik"},
+{"madde": "KLK Onur payı 0 AA uygulaması", "kime": "selin", "termin": "2026-11-19", "durum": "tamam"},
+{"madde": "PSL 2026 plan onayı (Barış Güneş nedenleri sonrası); PSL-124 durumu", "kime": "burak", "termin": "2026-11-24", "durum": "ertelendi"},
+{"madde": "ATL geciken görev artışı (4→7) toparlanma tarihi", "kime": "elif", "termin": "2026-11-21", "durum": "acik"}
+],
+"gercek_disi": [
+{"kimin_verisi": "mert/selin", "ne": "NHR H46: Mert 'onay uygulanamıyor', Selin 'onayladı' — Ahmet çelişki sandı", "kanit": "haftalik_rapor NHR H46 müdüre görünmüyor; Selin bs_approve verdi (PYB'ye geçti), Mert'in PYB onayı yayından sonra reddedildi (çelişki değil, iki ayrı adım)"}
+],
+"demo_yoklamasi": [
+{"soru": 1, "araclar": ["portfoy_ozeti"], "cagri": 1, "tutarli": true, "yanit_ozeti": "NHR (skor 21, SPI 0,85, CPI 0,86, 19 geciken görev) ve PSL (skor 39, 9 geciken, SPI 0,9, CPI 0,89) kritik; ATL (58) riskli: 7 geciken, kilit sorunu. Portföy %58."},
+{"soru": 2, "araclar": ["kapasite_talep"], "cagri": 1, "tutarli": true, "yanit_ozeti": "Toplam açık 1,39 AA (U320 Test 0,6; U340 Veri Bilimci 0,39; rol atanmamış 0,4): işe alım gerektirmeyecek küçüklükte; kaynak kaydırma ve rol girişiyle çözülür."},
+{"soru": 3, "araclar": ["proje_detayi"], "cagri": 1, "tutarli": true, "yanit_ozeti": "En riskli NHR: skor 21, VAC -927.871 TL, ek bütçe tavanı 930.000 TL, kapsam donduruldu; NHR-118/123 kök neden planı 20 Kasım (Sena), tek sürüm tarihi 24 Kasım'a kadar. Net toparlanma tarihi henüz yok."}
+],
+"arac_cagrisi": 14, "memnuniyet": 6, "gunun_notu": "ATL kilidi 14 gündür uygulanamıyor: karar verildi, uygulama yolu yok, bu yüzden yönetim düzeyine taşındı."
+}

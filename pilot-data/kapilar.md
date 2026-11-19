@@ -18,3 +18,13 @@ Karar ve sonraki adım: K0 Geçmedi, tek ölçüt nedeniyle (Selin ve Ahmet yazm
 | Açık yüksek bulgu yok ya da düzeltmesi planlandı | ✓ | `bulgular.json`: açık yüksek 0; B-028 (kilit açma aracı yok) ve B-029 orta, düzeltme planı yok (kullanıcı kararı) |
 
 Karar ve sonraki adım: K1 Geçti, ama ATL/PSL raporları yayında değil (Mert'in EVM gerekçeli iadesi tartışmalı, B-029) ve plan kilidi kararı uygulanamıyor (B-028). 12 Kasım koşusunda Elif ve Burak raporlarını yeniden gönderecek; Selin ve Mert denetleyecek. Kopya: `K1-2026-11-10`.
+
+## K2 Senaryo — 2026-11-19: Geçmedi
+| Ölçüt | Durum | Kanıt |
+|---|---|---|
+| S1, S2, S4, S7 başarı ölçütleri; S3 ve S6 erken tepkisi — en az 4/6 ✓ | ✓ (5/6) | S1 ✓ (12 Kasım: NHR-118 aktarım, risk 16, RAG Kritik, rapor; Ahmet tavan 930.000 TL). S2 ✓ (5 Kasım ret). S4 ✓ (NHR H45 ve H46 iadelerinin tüm maddeleri karşılandı). S7 ✓ (3 Kasım, ±0,05 AA). S3 ✓ (Elif ATL-157 riski + devir talebi, Ahmet Emre'ye devri onayladı; izin duyurusu notta yok, izin olay satırı var). S6 ✗ (NHR fazla mesai/ay içi tahmin ile erken uyarı yok; Mert NHR worklog'unu kontrol etti, Burak yazmadı) |
+| PY ortalaması ≥ 75 | ✓ | 12 Kasım 85,5; 19 Kasım 86,5 |
+| DH1–DH3 ✓ | ✗ | DH1 ✗ (33/34 dört koşudur, #21); DH2 ✗ (açık orta: B-025, B-028, B-030, B-031, B-032); DH3 ✓ |
+| Gömülü bulguların en az 3/6'sı bulundu | ✓ | G1 (Burak), G2 (Elif), G3 (Mert) = 3/6 |
+
+Karar ve sonraki adım: K2 Geçmedi, tek ölçüt nedeniyle (DH1–DH3). Senaryo ölçütleri ve puan tamam. 17 Kasım koşusu yapılamadığı için S9 (PSL kritik hata, 18 Kasım) tepkisi bugün ilk kez alındı: Burak öncelik/risk/RAG yazdı, iki projenin krizini Ahmet'e birlikte anlatmadı, S2'yi yeniden değerlendirmedi. S6'nın telafisi (S12) 24 ve 26 Kasım koşularına bırakılabilir. Demo kapsamı için karar: kod düzeltmesi (kontrol #21 rolsüz tahsis satırı, kilit açma yolu B-028, yayınlanmış haftada takılan raporlar B-030) kullanıcıda. Kopya: `K2-2026-11-19`.

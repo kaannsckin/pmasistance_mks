@@ -318,5 +318,85 @@
       "eksi": 0
     },
     "gerekce": "ön puan: üç beklentiye rakam ve tarihli karar yazdı (NHR tavan 930.000 TL, KLK Onur payı 0), kilidi doğru olarak açık tuttu; demo yoklaması 1/1/1 çağrı ve tutarlı."
+  },
+  {
+    "tarih": "2026-11-19",
+    "persona": "elif",
+    "puan": 87,
+    "kaynak": "koordinator",
+    "kirilim": {
+      "tutarlilik": 29,
+      "dongu": 18,
+      "rapor": 17,
+      "gerekce": 14,
+      "iletisim": 6,
+      "bulgu": 3,
+      "eksi": 0
+    },
+    "gerekce": "ön puan: 7 günlük Jira aktarımı olaylarla tuttu, ATL-157 riskini (Onur izni) açıp devri yönetimden istedi (S3), H47 raporu araç rakamlarıyla gönderildi ve onaylandı. Can sözü üçüncü kez kaçtı; 3 kendi görevi geç."
+  },
+  {
+    "tarih": "2026-11-19",
+    "persona": "burak",
+    "puan": 86,
+    "kaynak": "koordinator",
+    "kirilim": {
+      "tutarlilik": 28,
+      "dongu": 18,
+      "rapor": 18,
+      "gerekce": 13,
+      "iletisim": 6,
+      "bulgu": 3,
+      "eksi": 0
+    },
+    "gerekce": "ön puan: NHR H46 iade notunu eksiksiz karşıladı, üç rapor Selin tarafından onaylandı; PSL-124 (S9) için öncelik/risk 16/RAG Kritik. Fazla mesai (S6) erken uyarısı ve iki projenin krizini Ahmet'e birlikte anlatma yok; 13 Kasım sözleri tarih aracı olmadığı için açık."
+  },
+  {
+    "tarih": "2026-11-19",
+    "persona": "selin",
+    "puan": 93,
+    "kaynak": "koordinator",
+    "kirilim": {
+      "tutarlilik": 30,
+      "dongu": 19,
+      "rapor": 19,
+      "gerekce": 14,
+      "iletisim": 8,
+      "bulgu": 3,
+      "eksi": 0
+    },
+    "gerekce": "ön puan: dört raporu araç rakamlarıyla onayladı, KLK Onur payını sıfırlayarak Aralık aşımını kaldırdı (kisi_profili ile yeniden üretildi); karar uygulaması 14 Kasım terminini aştı."
+  },
+  {
+    "tarih": "2026-11-19",
+    "persona": "mert",
+    "puan": 85,
+    "kaynak": "koordinator",
+    "kirilim": {
+      "tutarlilik": 29,
+      "dongu": 17,
+      "rapor": 16,
+      "gerekce": 12,
+      "iletisim": 8,
+      "bulgu": 3,
+      "eksi": 0
+    },
+    "gerekce": "ön puan: H46 ATL/PSL/KLK onayı ve yayın, tarihli EVM yaklaşımı doğru; NHR H46 yayın dışı kaldı (Selin ile sıra çakışması); H45 çıkmazına çözüm yok."
+  },
+  {
+    "tarih": "2026-11-19",
+    "persona": "ahmet",
+    "puan": 90,
+    "kaynak": "koordinator",
+    "kirilim": {
+      "tutarlilik": 29,
+      "dongu": 17,
+      "rapor": 18,
+      "gerekce": 14,
+      "iletisim": 9,
+      "bulgu": 3,
+      "eksi": 0
+    },
+    "gerekce": "ön puan: ATL-157 devrini kapasite verisiyle onayladı, kilit beklentisini doğru olarak \"inceleniyor\" tuttu; demo yoklaması 1/1/1 çağrı. Aralık kararını Selin'in \"gerekmiyor\" notuna rağmen aynen bıraktı; Selin/Mert \"çelişkisi\" yanlış okuma."
   }
 ]
