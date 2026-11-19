@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Person, TaskStatus, WorkflowConfig, WorkflowStatusDef } from '../../../types';
+import { Person, ProjectRoleDef, TaskStatus, WorkflowConfig, WorkflowStatusDef } from '../../../types';
 import { dropRuleKeys, edgeRuleKey, entryRuleKey, renameRuleKeys, ruleIsEmpty, setRule } from '../../../utils/transitions';
 import TransitionRuleEditor from './TransitionRuleEditor';
 import { linearTransitions } from '../../../utils/projectScheme';
@@ -68,9 +68,10 @@ interface Props {
     people?: Person[];
     /** Kurallar yalnız okunur (projeye özel akışta kuralları yönetici tanımlar) */
     rulesReadOnly?: boolean;
+    roleDefs?: ProjectRoleDef[];
 }
 
-const WorkflowDesigner: React.FC<Props> = ({ value: wf, onChange, pool, usage, people, rulesReadOnly }) => {
+const WorkflowDesigner: React.FC<Props> = ({ value: wf, onChange, pool, usage, people, rulesReadOnly, roleDefs }) => {
     const restricted = !!pool;
     const layout = useMemo(() => autoLayout(wf), [wf]);
     const [drag, setDrag] = useState<{ key: string; dx: number; dy: number; pos: Pt } | null>(null);
@@ -342,11 +343,11 @@ const WorkflowDesigner: React.FC<Props> = ({ value: wf, onChange, pool, usage, p
                     <p className="m-0 text-[12px] m-text-3">Renk kategoriyi gösterir: gri Yapılacak/Bekleyen, mavi Süreçte, yeşil Tamamlandı. Soldaki ● ok başlangıç durumudur. "K" rozeti: geçiş kuralı (koşul/doğrulayıcı/sonrası işlem) var.</p>
                 </aside>
                 {people && selEdge && (
-                    <TransitionRuleEditor key={`e:${selEdge.from}>${selEdge.to}`} title={`Geçiş kuralı: ${label(selEdge.from)} → ${label(selEdge.to)}`} people={people} readOnly={rulesReadOnly}
+                    <TransitionRuleEditor key={`e:${selEdge.from}>${selEdge.to}`} title={`Geçiş kuralı: ${label(selEdge.from)} → ${label(selEdge.to)}`} people={people} roleDefs={roleDefs} readOnly={rulesReadOnly}
                         rule={wf.rules?.[edgeRuleKey(selEdge.from, selEdge.to)] || {}} onChange={r => commit({ rules: setRule(wf.rules, edgeRuleKey(selEdge.from, selEdge.to), r) })} />
                 )}
                 {people && selNode && (
-                    <TransitionRuleEditor key={`n:${selNode.key}`} title={`"${selNode.label}" durumuna girişte (bu duruma gelen tüm geçişler)`} people={people} readOnly={rulesReadOnly}
+                    <TransitionRuleEditor key={`n:${selNode.key}`} title={`"${selNode.label}" durumuna girişte (bu duruma gelen tüm geçişler)`} people={people} roleDefs={roleDefs} readOnly={rulesReadOnly}
                         rule={wf.rules?.[entryRuleKey(selNode.key)] || {}} onChange={r => commit({ rules: setRule(wf.rules, entryRuleKey(selNode.key), r) })} />
                 )}
             </div>

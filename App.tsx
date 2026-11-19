@@ -1,6 +1,6 @@
 
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { View, Task, Resource, TaskStatus, Note, CustomerRequest, Objective, Project, Person, WorkspaceData, RagStatus, ProjectStatus, UserRole, PlanLockStatus, WorkPackage, UiStyle, PermissionKey, EstimateLogEntry, JiraSyncSettings, ReleasePlan, GoldenItem, EvalRun, ModelEvalRun, BoardConfig, ProjectScheme, WorkflowConfig, TransitionRule, ProjectComponent, ProjectVersion } from './types';
+import { View, Task, Resource, TaskStatus, Note, CustomerRequest, Objective, Project, Person, WorkspaceData, RagStatus, ProjectStatus, UserRole, PlanLockStatus, WorkPackage, UiStyle, PermissionKey, EstimateLogEntry, JiraSyncSettings, ReleasePlan, GoldenItem, EvalRun, ModelEvalRun, BoardConfig, ProjectScheme, WorkflowConfig, TransitionRule, ProjectComponent, ProjectVersion, ProjectRoleDef } from './types';
 import { INITIAL_TASKS, INITIAL_RESOURCES, INITIAL_OBJECTIVES } from './constants';
 import {
   WORKSPACE_STORAGE_KEY,
@@ -37,6 +37,7 @@ import { describeNotify, fetchIntegrationHealth, sendNotification } from './util
 import { boardForProject, DEFAULT_SCHEME_ID, effectiveScheme, migrateTasksToWorkflow, schemeOf, schemeUsage, validateProjectWorkflow, validateScheme } from './utils/projectScheme';
 import ProjectWorkflowSheet from './components/modern/ProjectWorkflowSheet';
 import ProjectListsSheet from './components/modern/ProjectListsSheet';
+import { cleanRoleMembers, projectRolesOf } from './utils/projectRoles';
 import { AllocationSuggestion, ApplyMode, applyAllocationSuggestions } from './utils/taskToAllocation';
 import { applyBilledHoursActuals, planBilledHoursPoolAdditions, suggestBilledHoursActuals, BilledApplyMode, BilledHoursOptions, BilledHoursRecord } from './utils/billedHours';
 import { buildTodoItems, TodoItem } from './utils/todoItems';
@@ -1182,7 +1183,7 @@ const App: React.FC = () => {
     });
   }, [updateWorkspace]);
   // Projenin bileşen ve sürüm listeleri: proje sahibi ya da admin (görev başvurularıyla birlikte)
-  const handleSaveProjectLists = useCallback((projectId: string, patch: { components: ProjectComponent[]; versions: ProjectVersion[]; tasks: Task[] }, summary: string) => {
+  const handleSaveProjectLists = useCallback((projectId: string, patch: { components: ProjectComponent[]; versions: ProjectVersion[]; tasks: Task[]; roleMembers?: Project['roleMembers'] }, summary: string) => {
     updateWorkspace(ws => {
       const project = ws.projects.find(p => p.id === projectId);
       const who = identityOf(ws);
@@ -1193,8 +1194,19 @@ const App: React.FC = () => {
         const n = byId.get(t.id);
         return n && (JSON.stringify(n.components) !== JSON.stringify(t.components) || n.fixVersion !== t.fixVersion) ? { ...t, components: n.components, fixVersion: n.fixVersion } : t;
       });
-      const next = { ...ws, projects: ws.projects.map(p => (p.id === projectId ? { ...p, components: patch.components, versions: patch.versions, tasks, updatedAt: new Date().toISOString() } : p)) };
-      return appendAudit(next, 'config.update', `"${project.name}" bileşen ve sürümleri: ${summary} · ${patch.components.length} bileşen, ${patch.versions.length} sürüm`, projectId);
+      const next = { ...ws, projects: ws.projects.map(p => (p.id === projectId ? { ...p, components: patch.components, versions: patch.versions, roleMembers: patch.roleMembers, tasks, updatedAt: new Date().toISOString() } : p)) };
+      return appendAudit(next, 'config.update', `"${project.name}" proje ayarları: ${summary} · ${patch.components.length} bileşen, ${patch.versions.length} sürüm`, projectId);
+    });
+  }, [updateWorkspace]);
+  // Proje rolü tanımları (admin): silinen rolün üyelikleri projelerden temizlenir
+  const handleSaveProjectRoles = useCallback((defs: ProjectRoleDef[]) => {
+    updateWorkspace(ws => {
+      if (!can(identityOf(ws), 'screen.admin')) return ws;
+      const projects = ws.projects.map(p => {
+        const roleMembers = cleanRoleMembers(p.roleMembers, defs);
+        return JSON.stringify(roleMembers) === JSON.stringify(p.roleMembers) ? p : { ...p, roleMembers };
+      });
+      return appendAudit({ ...ws, projectRoles: defs, projects }, 'config.update', `Proje rolleri: ${defs.map(d => d.name).join(', ')}`);
     });
   }, [updateWorkspace]);
   const handleAssignScheme = useCallback((projectId: string, schemeId: string) => {
@@ -1431,7 +1443,7 @@ const App: React.FC = () => {
     }
     const rule = known || !key ? ruleFor(wf, cur.key, target.key) : {};
     const ws = workspaceRef.current!;
-    const cond = conditionProblem(rule, task, transitionActor(), ws.people);
+    const cond = conditionProblem(rule, task, transitionActor(), ws.people, { roleMembers: activeProject?.roleMembers, roleDefs: projectRolesOf(ws) });
     if (cond) { setFlowNotice(cond); return; }
     const needs = transitionNeeds(rule, { ...task, ...extra });
     if (needs.blocking) { setFlowNotice(needs.blocking); return; }
@@ -1569,6 +1581,7 @@ const App: React.FC = () => {
           onSaveProjectBoard={handleSaveBoardConfig}
           onOpenProjectWorkflow={id => setWorkflowSheetProject(id)}
           onOpenProjectLists={id => setListsSheetProject(id)}
+          onSaveProjectRoles={handleSaveProjectRoles}
         />
       );
       return isModern ? page : <div className="ui-modern rounded-3xl p-4 sm:p-6">{page}</div>;
@@ -2563,7 +2576,7 @@ const App: React.FC = () => {
         const p = workspace.projects.find(x => x.id === listsSheetProject);
         if (!p) return null;
         const sheet = (
-          <ProjectListsSheet project={p} canEdit={can(identity, 'screen.admin') || canEditProjectContent(workspace, identity, p.id)}
+          <ProjectListsSheet project={p} roleDefs={projectRolesOf(workspace)} pool={[...workspace.people].sort((a, b) => `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`, 'tr'))} canEdit={can(identity, 'screen.admin') || canEditProjectContent(workspace, identity, p.id)}
             people={[...new Set([...p.resources.map(r => r.name), ...workspace.people.map(x => `${x.firstName} ${x.lastName}`.trim())])].filter(Boolean).sort((a, b) => a.localeCompare(b, 'tr'))}
             onClose={() => setListsSheetProject(null)}
             onSave={(patch, summary) => { handleSaveProjectLists(p.id, patch, summary); setListsSheetProject(null); }} />
@@ -2573,7 +2586,7 @@ const App: React.FC = () => {
       {workflowSheetProject && workspace && (() => {
         const p = workspace.projects.find(x => x.id === workflowSheetProject);
         if (!p) return null;
-        const sheet = <ProjectWorkflowSheet project={p} scheme={schemeOf(workspace, p)} people={workspace.people} onClose={() => setWorkflowSheetProject(null)} onSave={wf => { handleSaveProjectWorkflow(p.id, wf); setWorkflowSheetProject(null); }} />;
+        const sheet = <ProjectWorkflowSheet project={p} scheme={schemeOf(workspace, p)} people={workspace.people} roleDefs={projectRolesOf(workspace)} onClose={() => setWorkflowSheetProject(null)} onSave={wf => { handleSaveProjectWorkflow(p.id, wf); setWorkflowSheetProject(null); }} />;
         return isModern ? sheet : <div className="ui-modern">{sheet}</div>;
       })()}
       {flowNotice && (

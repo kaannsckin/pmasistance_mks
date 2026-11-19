@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { BoardConfig, IssueType, ProjectScheme, SchemeRequiredField, TaskStatus, WorkflowConfig, WorkflowStatusDef, WorkspaceData } from '../../../types';
+import { BoardConfig, IssueType, ProjectRoleDef, ProjectScheme, SchemeRequiredField, TaskStatus, WorkflowConfig, WorkflowStatusDef, WorkspaceData } from '../../../types';
 import { boardConfigOf, statusKeyLabel } from '../../../utils/board';
 import {
     boardForProject, copyScheme, createScheme, DEFAULT_SCHEME_ID, ISSUE_TYPE_OPTIONS, linearTransitions, REQUIRED_FIELD_LABELS,
@@ -8,6 +8,7 @@ import {
 import { CATEGORY_LABELS, CATEGORY_ORDER, WORKFLOW_STATUSES, workflowKey } from '../../../utils/workflow';
 import BoardSettings from '../BoardSettings';
 import WorkflowDesigner from './WorkflowDesigner';
+import { newRoleId, projectRolesOf } from '../../../utils/projectRoles';
 import { dropRuleKeys, renameRuleKeys } from '../../../utils/transitions';
 import { Icon } from '../icons';
 import { Sheet } from '../ui';
@@ -26,6 +27,7 @@ interface Props {
     onSaveProjectBoard: (projectId: string, cfg: BoardConfig | undefined) => void;
     onOpenProjectWorkflow: (projectId: string) => void;
     onOpenProjectLists: (projectId: string) => void;
+    onSaveProjectRoles: (defs: ProjectRoleDef[]) => void;
 }
 
 const CAT_TONE: Record<TaskStatus, string> = {
@@ -186,7 +188,7 @@ const SchemeEditor: React.FC<{
                         <button type="button" className="m-segment" aria-pressed={wfView === 'diagram'} onClick={() => setWfView('diagram')}>Diyagram</button>
                         <button type="button" className="m-segment" aria-pressed={wfView === 'table'} onClick={() => setWfView('table')}>Tablo</button>
                     </div>
-                    {wfView === 'diagram' ? <WorkflowDesigner value={wf} onChange={next => setS(x => ({ ...x, workflow: next }))} usage={usage} people={workspace.people} /> : (<>
+                    {wfView === 'diagram' ? <WorkflowDesigner value={wf} onChange={next => setS(x => ({ ...x, workflow: next }))} usage={usage} people={workspace.people} roleDefs={projectRolesOf(workspace)} /> : (<>
                     <FlowPreview wf={wf} />
                     <div className="flex flex-col">
                         <div className="grid gap-2 px-1 pb-1 text-[12px] font-semibold m-text-3" style={{ gridTemplateColumns: '56px 1fr 1fr 150px 70px 70px 32px' }}>
@@ -316,7 +318,34 @@ const SchemeEditor: React.FC<{
     );
 };
 
-const ProjectSchemes: React.FC<Props> = ({ workspace, onSaveScheme, onDeleteScheme, onAssignScheme, onSaveProjectBoard, onOpenProjectWorkflow, onOpenProjectLists }) => {
+/** Proje rolü tanımları (kurum geneli); üyeler projelerde atanır */
+const ProjectRolesEditor: React.FC<{ defs: ProjectRoleDef[]; workspace: WorkspaceData; onSave: (d: ProjectRoleDef[]) => void }> = ({ defs, workspace, onSave }) => {
+    const [draft, setDraft] = useState<ProjectRoleDef[]>(() => defs.map(d => ({ ...d })));
+    const dirty = JSON.stringify(draft) !== JSON.stringify(defs);
+    const usedIn = (id: string) => workspace.projects.filter(p => (p.roleMembers?.[id] || []).length).length;
+    const invalid = draft.some(d => !d.name.trim()) || new Set(draft.map(d => d.name.trim().toLocaleLowerCase('tr-TR'))).size !== draft.length;
+    return (
+        <section aria-label="Proje rolleri" className="m-surface rounded-2xl p-4 flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+                <h2 className="m-0 flex-1 text-[20px] font-semibold m-text">Proje rolleri <span className="text-[15px] font-normal m-text-3">{draft.length}</span></h2>
+                <button type="button" className="m-btn m-btn-gray !min-h-[34px] !px-3 text-[14px]" onClick={() => setDraft(d => [...d, { id: newRoleId('rol'), name: 'Yeni rol' }])}><Icon name="plus" size={14} />Rol ekle</button>
+                <button type="button" className="m-btn m-btn-primary !min-h-[34px] !px-3 text-[14px]" disabled={!dirty || invalid} onClick={() => onSave(draft.map(d => ({ ...d, name: d.name.trim() })))}><Icon name="check" size={14} />Kaydet</button>
+            </div>
+            <p className="m-0 text-[13px] m-text-3">Jira'daki proje rolleri gibi: rolü burada tanımlarsınız, her projenin üyelerini proje yöneticisi "Proje ayarları › Roller"den atar. Geçiş koşulları ve bildirimler kişi yerine role bağlanınca aynı yapılandırma her ekipte çalışır.</p>
+            {draft.map((d, i) => (
+                <div key={d.id} className="grid gap-2 items-center py-1.5 border-t m-sep" style={{ gridTemplateColumns: 'minmax(140px, 220px) 1fr auto 36px', borderTopStyle: 'solid', borderTopWidth: 1 }}>
+                    <input aria-label="Rol adı" className="m-input !h-9 !py-0 text-[14px]" value={d.name} maxLength={40} onChange={e => setDraft(l => l.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} />
+                    <input aria-label="Açıklama" className="m-input !h-9 !py-0 text-[13px]" value={d.description || ''} placeholder="Açıklama" onChange={e => setDraft(l => l.map((x, j) => (j === i ? { ...x, description: e.target.value || undefined } : x)))} />
+                    <span className="text-[12.5px] m-text-3 whitespace-nowrap">{usedIn(d.id)} projede üye var</span>
+                    <button type="button" className="m-icon-btn !w-8 !h-8" aria-label={`${d.name} rolünü sil`} onClick={() => { if (!usedIn(d.id) || window.confirm(`"${d.name}" ${usedIn(d.id)} projede kullanılıyor; üyelikler silinsin mi?`)) setDraft(l => l.filter((_, j) => j !== i)); }}><Icon name="trash" size={14} /></button>
+                </div>
+            ))}
+            {invalid && <p role="alert" className="m-0 text-[13px] m-ink-bad">Rol adları boş ya da aynı olamaz.</p>}
+        </section>
+    );
+};
+
+const ProjectSchemes: React.FC<Props> = ({ workspace, onSaveScheme, onDeleteScheme, onAssignScheme, onSaveProjectBoard, onOpenProjectWorkflow, onOpenProjectLists, onSaveProjectRoles }) => {
     const schemes = schemesOf(workspace);
     const [editing, setEditing] = useState<{ scheme: ProjectScheme; isNew: boolean } | null>(null);
     const [picking, setPicking] = useState(false);
@@ -403,6 +432,8 @@ const ProjectSchemes: React.FC<Props> = ({ workspace, onSaveScheme, onDeleteSche
                     })}
                 </div>
             </section>
+
+            <ProjectRolesEditor defs={projectRolesOf(workspace)} workspace={workspace} onSave={onSaveProjectRoles} />
 
             <section aria-label="Projeler" className="m-surface rounded-2xl p-4 flex flex-col gap-2">
                 <h2 className="m-0 text-[20px] font-semibold m-text">Projeler <span className="text-[15px] font-normal m-text-3">{projects.length}</span></h2>

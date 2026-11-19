@@ -71,3 +71,24 @@ describe('geçiş kuralları', () => {
         expect(setRule(undefined, 'A>B', {})).toBeUndefined();
     });
 });
+
+describe('proje rolleri', () => {
+    it('koşul: proje rolü üyesi geçebilir, diğerleri gerekçeyle reddedilir', async () => {
+        const { DEFAULT_PROJECT_ROLES } = await import('./projectRoles');
+        const proj = { roleMembers: { test: ['p2'] }, roleDefs: DEFAULT_PROJECT_ROLES };
+        const r = { projectRoles: ['test'] };
+        expect(conditionProblem(r, task(), { role: 'py', personId: 'p2' }, people, proj)).toBeNull();
+        expect(conditionProblem(r, task(), { role: 'py', personId: 'p1' }, people, proj)).toBe('Bu geçişi yalnız Test rolü yapabilir.');
+        // Rol ya da kişi: biri yeter
+        expect(conditionProblem({ projectRoles: ['test'], people: ['p1'] }, task(), { role: 'py', personId: 'p1' }, people, proj)).toBeNull();
+        expect(describeRule(r, people, DEFAULT_PROJECT_ROLES).conditions).toEqual(['yalnız Test rolü']);
+    });
+
+    it('rol tanımı silinince üyelikler temizlenir; varsayılan roller', async () => {
+        const { cleanRoleMembers, projectRolesOf, rolesOfPerson, DEFAULT_PROJECT_ROLES } = await import('./projectRoles');
+        expect(projectRolesOf({}).map(r => r.name)).toEqual(['Geliştirici', 'Test', 'Analist', 'Ürün sahibi']);
+        expect(cleanRoleMembers({ test: ['p1'], eski: ['p2'], gelistirici: [] }, DEFAULT_PROJECT_ROLES)).toEqual({ test: ['p1'] });
+        expect(cleanRoleMembers({ eski: ['p2'] }, DEFAULT_PROJECT_ROLES)).toBeUndefined();
+        expect(rolesOfPerson({ roleMembers: { test: ['p1'], analist: ['p1'] } }, DEFAULT_PROJECT_ROLES, 'p1')).toEqual(['Test', 'Analist']);
+    });
+});

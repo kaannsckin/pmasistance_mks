@@ -228,3 +228,15 @@ describe('AI önerileri ve geçiş kuralları', () => {
         expect(r.effects?.map(e => e.to)).toEqual(['Can Er']);
     });
 });
+
+describe('AI önerileri ve proje rolleri', () => {
+    it('geçiş proje rolüne bağlıysa yalnız rol üyesi adına öneri uygulanır', () => {
+        const ws = build();
+        const scheme = { ...createScheme('support', 'Destek'), id: 'sps' };
+        scheme.workflow = { ...scheme.workflow, rules: { 'OPEN>ANALYSIS': { projectRoles: ['analist'] } } };
+        const make = (members: Record<string, string[]>) => ({ ...ws, projectSchemes: [scheme], projects: ws.projects.map(p => (p.id === 'altay' ? { ...p, schemeId: 'sps', roleMembers: members, tasks: p.tasks.map(t => ({ ...t, jiraStatus: 'OPEN' })) } : p)) });
+        const a: AiAction = { type: 'gorev_durumu', projectId: 'altay', taskId: 't1', status: TaskStatus.InProgress, workflowKey: 'ANALYSIS' };
+        expect(validateAction(make({ analist: ['dev'] }), a)).toBe('Bu geçişi yalnız Analist rolü yapabilir.');
+        expect(validateAction(make({ analist: ['pm'] }), a)).toBeNull();
+    });
+});

@@ -20,7 +20,7 @@ import {
 import { flowStages, reportFlowOf, reportSettingsOf, STAGE_LABELS, WEEKDAYS } from '../../utils/weeklyReport';
 import { AdminSection, ADMIN_SECTIONS } from './adminSections';
 import ProjectSchemes from './admin/ProjectSchemes';
-import type { BoardConfig, ProjectScheme } from '../../types';
+import type { BoardConfig, ProjectRoleDef, ProjectScheme } from '../../types';
 import { Icon } from './icons';
 import { PROJECT_STATUS_LABEL } from './ModernProjectHeader';
 import { AuditLogPanel } from './sheets/AuditLogSheet';
@@ -81,6 +81,7 @@ export interface ModernAdminProps {
     onSaveProjectBoard: (projectId: string, cfg: BoardConfig | undefined) => void;
     onOpenProjectWorkflow: (projectId: string) => void;
     onOpenProjectLists: (projectId: string) => void;
+    onSaveProjectRoles: (defs: ProjectRoleDef[]) => void;
 }
 
 const SHORT_ROLE: Record<UserRole, string> = {

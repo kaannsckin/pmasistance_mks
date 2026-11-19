@@ -8,6 +8,7 @@ import { createNote } from '../notes';
 import { createRisk, RISK_STATUS_LABELS, riskScore } from '../risks';
 import { effectiveScheme, missingRequiredFields, allowedIssueTypes } from '../projectScheme';
 import { initialStatus, resolveTransition, taskStatusLabel, taskWorkflow } from '../workflow';
+import { projectRolesOf } from '../projectRoles';
 import { applyTransition, conditionProblem, inputProblems, ruleFor, TransitionActor, TransitionEffect } from '../transitions';
 
 /** Öneriyi uygulayan kişi (aktif kimlik) — geçiş koşulları için */
@@ -113,7 +114,7 @@ export const validateAction = (ws: WorkspaceData, action: AiAction): string | nu
             if ('error' in r) return r.error;
             // Geçiş kuralı: koşul (kim) ve doğrulayıcılar (not, süre, alanlar, alt görevler)
             const rule = ruleFor(wf, taskWorkflow(task, wf).key, r.target.key);
-            const cond = conditionProblem(rule, task, actorOf(ws), ws.people);
+            const cond = conditionProblem(rule, task, actorOf(ws), ws.people, { roleMembers: project.roleMembers, roleDefs: projectRolesOf(ws) });
             if (cond) return cond;
             const problems = inputProblems(rule, task, { comment: action.comment, hours: action.hours });
             if (problems.length) return `${problems.join(' ')}${rule.requireComment || rule.requireHours ? ' (Öneride geçiş notu / harcanan süre verilebilir; ya da görev menüsünden yapın.)' : ''}`;

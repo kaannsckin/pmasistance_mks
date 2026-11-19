@@ -1,4 +1,5 @@
-import { Person, SchemeRequiredField, Task, TransitionRule, UserRole, WorkflowConfig } from '../types';
+import { Person, Project, ProjectRoleDef, SchemeRequiredField, Task, TransitionRule, UserRole, WorkflowConfig } from '../types';
+import { isInProjectRole } from './projectRoles';
 import { ROLE_LABELS } from './allocations';
 import { REQUIRED_FIELD_LABELS, missingRequiredFields } from './projectScheme';
 import { WorkflowStatus } from './workflow';
@@ -27,6 +28,7 @@ export const mergeRules = (a?: TransitionRule, b?: TransitionRule): TransitionRu
     roles: union(a?.roles, b?.roles),
     people: union(a?.people, b?.people),
     assigneeOnly: !!(a?.assigneeOnly || b?.assigneeOnly) || undefined,
+    projectRoles: union(a?.projectRoles, b?.projectRoles),
     requireComment: !!(a?.requireComment || b?.requireComment) || undefined,
     requireHours: !!(a?.requireHours || b?.requireHours) || undefined,
     requireFields: union(a?.requireFields, b?.requireFields),
@@ -42,15 +44,17 @@ export const ruleFor = (wf: WorkflowConfig, from: string, to: string): Transitio
     mergeRules(wf.rules?.[entryRuleKey(to)], wf.rules?.[edgeRuleKey(from, to)]);
 
 export const ruleIsEmpty = (r?: TransitionRule): boolean =>
-    !r || !(r.roles?.length || r.people?.length || r.assigneeOnly || r.requireComment || r.requireHours || r.requireFields?.length
+    !r || !(r.roles?.length || r.people?.length || r.projectRoles?.length || r.assigneeOnly || r.requireComment || r.requireHours || r.requireFields?.length
         || r.requireSubtasksDone || r.addLabels?.length || r.removeLabels?.length || r.assign || r.notifyAssignee);
 
 /** Kuralın kısa Türkçe özeti (diyagram ve listelerde) */
-export const describeRule = (r: TransitionRule | undefined, people: Pick<Person, 'id' | 'firstName' | 'lastName'>[] = []): { conditions: string[]; validators: string[]; post: string[] } => {
+export const describeRule = (r: TransitionRule | undefined, people: Pick<Person, 'id' | 'firstName' | 'lastName'>[] = [], roleDefs: ProjectRoleDef[] = []): { conditions: string[]; validators: string[]; post: string[] } => {
     const name = (id: string) => { const p = people.find(x => x.id === id); return p ? `${p.firstName} ${p.lastName}`.trim() : id; };
+    const roleName = (id: string) => `${roleDefs.find(d => d.id === id)?.name || id} rolü`;
     return {
         conditions: [
-            ...(r?.roles?.length || r?.people?.length ? [`yalnız ${[...(r.roles || []).map(x => ROLE_LABELS[x]), ...(r.people || []).map(name)].join(', ')}`] : []),
+            ...(r?.roles?.length || r?.people?.length || r?.projectRoles?.length
+                ? [`yalnız ${[...(r.roles || []).map(x => ROLE_LABELS[x]), ...(r.projectRoles || []).map(roleName), ...(r.people || []).map(name)].join(', ')}`] : []),
             ...(r?.assigneeOnly ? ['yalnız atanan'] : []),
         ],
         validators: [
@@ -78,10 +82,18 @@ export interface TransitionActor {
 const norm = (s: string) => s.trim().toLocaleLowerCase('tr-TR');
 
 /** Koşul: geçişi bu kişi yapabilir mi (yapamıyorsa gerekçe) */
-export const conditionProblem = (r: TransitionRule, task: Pick<Task, 'resourceName'>, actor: TransitionActor, people: Pick<Person, 'id' | 'firstName' | 'lastName'>[] = []): string | null => {
-    if (r.roles?.length || r.people?.length) {
-        const ok = (r.roles || []).includes(actor.role) || (!!actor.personId && (r.people || []).includes(actor.personId));
-        if (!ok) return `Bu geçişi ${describeRule({ roles: r.roles, people: r.people }, people).conditions[0].replace(/^yalnız /, 'yalnız ')} yapabilir.`;
+export const conditionProblem = (
+    r: TransitionRule,
+    task: Pick<Task, 'resourceName'>,
+    actor: TransitionActor,
+    people: Pick<Person, 'id' | 'firstName' | 'lastName'>[] = [],
+    project?: { roleMembers?: Project['roleMembers']; roleDefs?: ProjectRoleDef[] },
+): string | null => {
+    if (r.roles?.length || r.people?.length || r.projectRoles?.length) {
+        const ok = (r.roles || []).includes(actor.role)
+            || (!!actor.personId && (r.people || []).includes(actor.personId))
+            || isInProjectRole({ roleMembers: project?.roleMembers }, r.projectRoles, actor.personId);
+        if (!ok) return `Bu geçişi ${describeRule({ roles: r.roles, people: r.people, projectRoles: r.projectRoles }, people, project?.roleDefs).conditions[0]} yapabilir.`;
     }
     if (r.assigneeOnly && (!actor.name || !task.resourceName || norm(actor.name) !== norm(task.resourceName))) {
         return task.resourceName ? `Bu geçişi yalnız görevin atananı (${task.resourceName}) yapabilir.` : 'Bu geçiş için görevin bir atananı olmalı ve geçişi o yapmalı.';

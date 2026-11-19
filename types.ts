@@ -138,6 +138,8 @@ export interface TransitionRule {
   people?: string[];
   /** Yalnız görevin atananı */
   assigneeOnly?: boolean;
+  /** Projede bu proje rollerinden birinin üyesi (ör. Test ekibi) */
+  projectRoles?: string[];
   // --- Doğrulayıcılar: geçişte istenen bilgi
   /** Geçiş notu (göreve yorum olarak eklenir) */
   requireComment?: boolean;
@@ -157,6 +159,13 @@ export interface TransitionRule {
 }
 
 export type SchemeRequiredField = 'resourceName' | 'dueDate' | 'estimate' | 'issueType' | 'labels' | 'workPackage' | 'component' | 'fixVersion';
+
+/** Proje rolü (Jira "project role"): tanımı kurum geneli, üyeleri proje bazında */
+export interface ProjectRoleDef {
+  id: string;
+  name: string;
+  description?: string;
+}
 
 /** Projenin bileşeni (Jira "Component"): modül/alan; sorumlusu varsayılan atanan olabilir */
 export interface ProjectComponent {
@@ -673,6 +682,7 @@ export interface Project {
   workflowOverride?: WorkflowConfig; // Projeye özel iş akışı (şema izin veriyorsa; yalnız şemanın durumlarıyla)
   components?: ProjectComponent[]; // Projenin bileşen listesi
   versions?: ProjectVersion[]; // Projenin sürüm listesi (görevlerin hedef sürümü)
+  roleMembers?: Record<string, string[]>; // Proje rolü → havuz kişi kimlikleri
   risks?: Risk[];
   pestelItems?: PestelItem[]; // PESTEL dış çevre analizi
   swotItems?: SwotItem[]; // SWOT stratejik analizi
@@ -821,6 +831,8 @@ export interface WorkspaceData {
   currentPersonId?: string;
   /** Admin'in proje yapılandırma şemaları (iş akışı, kayıt türleri, zorunlu alanlar, pano) */
   projectSchemes?: ProjectScheme[];
+  /** Proje rolü tanımları (yoksa hazır roller); üyeler projede atanır */
+  projectRoles?: ProjectRoleDef[];
   // Veri havuzu
   people: Person[];
   departments: Department[];

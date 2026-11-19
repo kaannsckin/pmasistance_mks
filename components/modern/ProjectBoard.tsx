@@ -238,7 +238,7 @@ const ProjectBoard: React.FC<ProjectBoardProps> = ({
                     </span>
                     <button type="button" className="m-btn m-btn-primary !min-h-[36px] !px-3 text-[14px]" onClick={onNewTask}><Icon name="plus" size={15} />Görev</button>
                     {schemeName && <span className="hidden lg:inline-flex items-center gap-1 h-7 px-2.5 rounded-full m-fill-2 text-[12.5px] m-text-2" title={`Yönetici tarafından atanan proje yapılandırması${boardSource === 'project' ? ' · bu projeye özel pano' : ''}`}><Icon name="sliders" size={12} />{schemeName}{boardSource === 'project' ? ' · özel pano' : ''}</span>}
-                    {onOpenLists && <button type="button" className="m-btn m-btn-gray !min-h-[36px] !px-3 text-[14px]" onClick={onOpenLists} title="Projenin bileşen ve sürüm listeleri"><Icon name="grid" size={15} />Bileşen ve sürümler</button>}
+                    {onOpenLists && <button type="button" className="m-btn m-btn-gray !min-h-[36px] !px-3 text-[14px]" onClick={onOpenLists} title="Projenin sürümleri, bileşenleri ve rol üyeleri"><Icon name="grid" size={15} />Proje ayarları</button>}
                     {onOpenWorkflow && <button type="button" className="m-btn m-btn-gray !min-h-[36px] !px-3 text-[14px]" onClick={onOpenWorkflow} title="Bu projenin iş akışı: durumlar arası okları çizin"><Icon name="activity" size={15} />İş akışı</button>}
                     {canConfigure && <button type="button" className="m-btn m-btn-gray !min-h-[36px] !px-3 text-[14px]" onClick={() => setSettingsOpen(true)} title="Kolonlar, durum/etiket kuralları, WIP, hızlı filtreler, kulvarlar"><Icon name="sliders" size={15} />Panoyu yapılandır</button>}
                 </div>

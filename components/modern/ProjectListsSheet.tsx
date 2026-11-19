@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Project, ProjectComponent, ProjectVersion, Task } from '../../types';
+import { Person, Project, ProjectComponent, ProjectRoleDef, ProjectVersion, Task } from '../../types';
 import {
     componentUsage, listId, listProblems, listSuggestions, releaseVersion, renameComponentInTasks, renameVersionInTasks, VERSION_STATUS_LABELS, versionProgress,
 } from '../../utils/projectLists';
@@ -18,9 +18,14 @@ const ProjectListsSheet: React.FC<{
     people: string[];
     canEdit: boolean;
     onClose: () => void;
-    onSave: (patch: { components: ProjectComponent[]; versions: ProjectVersion[]; tasks: Task[] }, summary: string) => void;
-}> = ({ project, people, canEdit, onClose, onSave }) => {
-    const [tab, setTab] = useState<'components' | 'versions'>('versions');
+    onSave: (patch: { components: ProjectComponent[]; versions: ProjectVersion[]; tasks: Task[]; roleMembers?: Project['roleMembers'] }, summary: string) => void;
+    /** Proje rolleri: tanımlar (yönetici) ve üye seçilecek havuz */
+    roleDefs?: ProjectRoleDef[];
+    pool?: Person[];
+}> = ({ project, people, canEdit, onClose, onSave, roleDefs = [], pool = [] }) => {
+    const [tab, setTab] = useState<'components' | 'versions' | 'roles'>('versions');
+    const [members, setMembers] = useState<Record<string, string[]>>(() => JSON.parse(JSON.stringify(project.roleMembers || {})));
+    const personName = (id: string) => { const p = pool.find(x => x.id === id); return p ? `${p.firstName} ${p.lastName}`.trim() : id; };
     const [components, setComponents] = useState<ProjectComponent[]>(() => JSON.parse(JSON.stringify(project.components || [])));
     const [versions, setVersions] = useState<ProjectVersion[]>(() => JSON.parse(JSON.stringify(project.versions || [])));
     const [tasks, setTasks] = useState<Task[]>(project.tasks);
@@ -69,20 +74,22 @@ const ProjectListsSheet: React.FC<{
     const setV = (id: string, patch: Partial<ProjectVersion>) => setVersions(list => list.map(x => (x.id === id ? { ...x, ...patch } : x)));
 
     const visibleVersions = versions.filter(v => showArchived || v.status !== 'archived');
-    const dirty = log.length > 0 || JSON.stringify(components) !== JSON.stringify(project.components || []) || JSON.stringify(versions) !== JSON.stringify(project.versions || []);
+    const cleanMembers: Record<string, string[]> = Object.fromEntries((Object.entries(members) as [string, string[]][]).filter(([, v]) => v.length));
+    const membersChanged = JSON.stringify(cleanMembers) !== JSON.stringify(Object.fromEntries((Object.entries(project.roleMembers || {}) as [string, string[]][]).filter(([, v]) => v.length)));
+    const dirty = log.length > 0 || membersChanged || JSON.stringify(components) !== JSON.stringify(project.components || []) || JSON.stringify(versions) !== JSON.stringify(project.versions || []);
 
     return (
-        <Sheet xl title={`Bileşenler ve sürümler: ${project.name}`} subtitle="Jira'daki gibi: bileşen = projenin modülü (sorumlusu olabilir), sürüm = görevlerin hedef sürümü ve yayın planı."
+        <Sheet xl title={`Proje ayarları: ${project.name}`} subtitle="Jira'daki gibi: sürüm = görevlerin hedef sürümü ve yayın planı, bileşen = projenin modülü (sorumlusu olabilir), rol = bu projede kimin hangi ekipte olduğu (geçiş kuralları ve bildirimler role göre çalışır)."
             onClose={onClose}
             footer={canEdit ? (
                 <>
                     {errors.length ? <span role="alert" className="flex-1 text-[13px] m-ink-bad">{errors[0]}</span> : <span className="flex-1 text-[13px] m-text-3">{log.length ? `Bekleyen: ${log.join('; ')}` : 'Değişiklikler "Kaydet" ile görevlerle birlikte yazılır.'}</span>}
                     <button type="button" className="m-btn m-btn-gray" onClick={onClose}>Vazgeç</button>
-                    <button type="button" className="m-btn m-btn-primary" disabled={!!errors.length || !dirty} onClick={() => onSave({ components, versions, tasks }, log.join('; ') || 'liste güncellendi')}><Icon name="check" size={16} />Kaydet</button>
+                    <button type="button" className="m-btn m-btn-primary" disabled={!!errors.length || !dirty} onClick={() => onSave({ components, versions, tasks, roleMembers: Object.keys(cleanMembers).length ? cleanMembers : undefined }, [...log, ...(membersChanged ? ['rol üyeleri güncellendi'] : [])].join('; ') || 'liste güncellendi')}><Icon name="check" size={16} />Kaydet</button>
                 </>
             ) : undefined}>
             <div role="tablist" className="flex gap-1 p-1 rounded-xl m-fill-2 self-start">
-                {([['versions', `Sürümler (${versions.length})`], ['components', `Bileşenler (${components.length})`]] as const).map(([k, l]) => (
+                {([['versions', `Sürümler (${versions.length})`], ['components', `Bileşenler (${components.length})`], ['roles', `Roller (${Object.values(cleanMembers).reduce((n: number, l: string[]) => n + l.length, 0)} üye)`]] as const).map(([k, l]) => (
                     <button key={k} type="button" role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
                         className={`h-8 px-3 rounded-lg border-0 cursor-pointer text-[14px] ${tab === k ? 'm-surface font-semibold m-text' : 'bg-transparent m-text-2'}`}>{l}</button>
                 ))}
@@ -145,6 +152,36 @@ const ProjectListsSheet: React.FC<{
                         {canEdit && sugg.versions.map(s => <button key={s.name} type="button" className="m-pill" onClick={() => addVersion(s.name)}><Icon name="plus" size={12} />{s.name} <span className="m-text-3">{s.count}</span></button>)}
                         {versions.some(v => v.status === 'archived') && <label className="ml-auto flex items-center gap-1.5 text-[13px] m-text-2"><input type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} />Arşivlenenleri göster</label>}
                     </div>
+                </div>
+            )}
+
+            {tab === 'roles' && (
+                <div className="flex flex-col gap-2">
+                    {roleDefs.length === 0 && <p className="m-0 text-[14px] m-text-3">Tanımlı proje rolü yok (yönetici konsolu › Proje yapılandırması).</p>}
+                    {roleDefs.map(d => {
+                        const ids = members[d.id] || [];
+                        return (
+                            <div key={d.id} className="grid gap-3 items-start py-2 border-t m-sep" style={{ gridTemplateColumns: 'minmax(140px, 200px) 1fr', borderTopStyle: 'solid', borderTopWidth: 1 }}>
+                                <span className="flex flex-col"><span className="text-[15px] font-semibold m-text">{d.name}</span>{d.description && <span className="text-[12.5px] m-text-3">{d.description}</span>}</span>
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                    {ids.map(id => (
+                                        <span key={id} className="inline-flex items-center gap-1 h-7 pl-2.5 pr-1 rounded-full m-fill-2 text-[13px] m-text">
+                                            {personName(id)}
+                                            {canEdit && <button type="button" className="m-icon-btn !w-5 !h-5" aria-label={`${personName(id)} kişisini ${d.name} rolünden çıkar`} onClick={() => setMembers(m => ({ ...m, [d.id]: (m[d.id] || []).filter(x => x !== id) }))}><Icon name="x" size={11} /></button>}
+                                        </span>
+                                    ))}
+                                    {ids.length === 0 && <span className="text-[13px] m-text-3">Üye yok</span>}
+                                    {canEdit && (
+                                        <select aria-label={`${d.name} rolüne kişi ekle`} className="m-input !h-8 !py-0 !w-auto text-[13px]" value="" onChange={e => e.target.value && setMembers(m => ({ ...m, [d.id]: [...(m[d.id] || []), e.target.value] }))}>
+                                            <option value="">+ Kişi ekle…</option>
+                                            {pool.filter(p => !ids.includes(p.id)).map(p => <option key={p.id} value={p.id}>{`${p.firstName} ${p.lastName}`.trim()}{p.departmentCode ? ` · ${p.departmentCode}` : ''}</option>)}
+                                        </select>
+                                    )}
+                                </div>
+                            </div>
+                        );
+                    })}
+                    <p className="m-0 text-[12.5px] m-text-3">Rol tanımlarını yönetici yapar; üyeleri her projede ayrıca atanır. Örn. "Testte → Çözüldü" geçişi yalnız <b>Test</b> rolüne açıksa, bu projede yalnız buraya eklenen kişiler yapabilir.</p>
                 </div>
             )}
 

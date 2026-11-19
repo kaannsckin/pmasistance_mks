@@ -1,5 +1,5 @@
 import React from 'react';
-import { Person, SchemeRequiredField, TransitionRule, UserRole } from '../../../types';
+import { Person, ProjectRoleDef, SchemeRequiredField, TransitionRule, UserRole } from '../../../types';
 import { ROLE_LABELS } from '../../../utils/allocations';
 import { REQUIRED_FIELD_LABELS } from '../../../utils/projectScheme';
 import { describeRule } from '../../../utils/transitions';
@@ -32,15 +32,17 @@ const TransitionRuleEditor: React.FC<{
     rule: TransitionRule;
     onChange: (r: TransitionRule) => void;
     people: Person[];
+    /** Proje rolü tanımları (koşulda kişi yerine rol) */
+    roleDefs?: ProjectRoleDef[];
     readOnly?: boolean;
-}> = ({ title, rule: r, onChange, people, readOnly }) => {
+}> = ({ title, rule: r, onChange, people, roleDefs = [], readOnly }) => {
     const set = (patch: Partial<TransitionRule>) => onChange({ ...r, ...patch });
     const toggle = <T,>(arr: T[] | undefined, v: T, on: boolean): T[] | undefined => {
         const next = on ? [...new Set([...(arr || []), v])] : (arr || []).filter(x => x !== v);
         return next.length ? next : undefined;
     };
     if (readOnly) {
-        const d = describeRule(r, people);
+        const d = describeRule(r, people, roleDefs);
         const row = (label: string, items: string[]) => <p className="m-0 text-[13px]"><b className="m-text-2">{label}:</b> <span className="m-text-3">{items.join(' · ') || 'yok'}</span></p>;
         return (
             <section className="m-surface rounded-xl p-3 flex flex-col gap-1" style={{ boxShadow: 'inset 0 0 0 1px var(--m-sep)' }} aria-label={title}>
@@ -54,7 +56,14 @@ const TransitionRuleEditor: React.FC<{
         <section className="flex flex-col gap-2" aria-label={title}>
             <span className="text-[13px] font-semibold m-text">{title}</span>
             <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
-                <Box title="Koşullar" hint="Geçişi kim yapabilir? Boşsa herkes (seçilen rollerden ya da kişilerden biri).">
+                <Box title="Koşullar" hint="Geçişi kim yapabilir? Boşsa herkes (seçilen proje rollerinden, uygulama rollerinden ya da kişilerden biri).">
+                    {roleDefs.length > 0 && <>
+                        <span className="text-[12px] m-text-3">Proje rolü (üyeleri her projede atanır)</span>
+                        <div className="flex flex-wrap gap-x-3 gap-y-1">
+                            {roleDefs.map(x => <Check key={x.id} label={x.name} checked={!!r.projectRoles?.includes(x.id)} onChange={on => set({ projectRoles: toggle(r.projectRoles, x.id, on) })} />)}
+                        </div>
+                    </>}
+                    <span className="text-[12px] m-text-3">Uygulama rolü</span>
                     <div className="flex flex-wrap gap-x-3 gap-y-1">
                         {ROLES.map(x => <Check key={x} label={ROLE_LABELS[x]} checked={!!r.roles?.includes(x)} onChange={on => set({ roles: toggle(r.roles, x, on) })} />)}
                     </div>
