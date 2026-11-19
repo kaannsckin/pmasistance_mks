@@ -30,6 +30,7 @@ import { resetReportGuide, saveDepartmentGuide, saveReportGuide } from './utils/
 import { setReportExemplar } from './utils/ai/reportExamples';
 import { applyRuleAction, RuleAction, ruleActionLabel } from './utils/ai/reportRules';
 import { stampLifecycle } from './utils/planning/lifecycle';
+import { applyWorkflow, workflowOptions } from './utils/workflow';
 import { AllocationSuggestion, ApplyMode, applyAllocationSuggestions } from './utils/taskToAllocation';
 import { applyBilledHoursActuals, planBilledHoursPoolAdditions, suggestBilledHoursActuals, BilledApplyMode, BilledHoursOptions, BilledHoursRecord } from './utils/billedHours';
 import { buildTodoItems, TodoItem } from './utils/todoItems';
@@ -1622,6 +1623,7 @@ const App: React.FC = () => {
     const ps = activeProject.settings;
     const changeTaskStatus = (id: string, s: TaskStatus) => setTasks(prev => prev.map(t => t.id === id ? { ...t, status: s } : t));
     const moveBoardTask = (id: string, patch: Partial<Task>) => setTasks(prev => prev.map(t => t.id === id ? { ...t, ...patch } : t));
+    const changeTaskWorkflow = (id: string, key: string) => setTasks(prev => prev.map(t => t.id === id ? { ...applyWorkflow(t, key, workflowOptions(prev).flatMap(g => g.statuses)), updatedAt: new Date().toISOString() } : t));
     const boardMe = (() => { const p = workspace.people.find(x => x.id === workspace.currentPersonId); return p ? `${p.firstName} ${p.lastName}`.trim() : undefined; })();
     const renderProjectBoard = () => (
       <ProjectBoard
@@ -1631,6 +1633,7 @@ const App: React.FC = () => {
         onSaveConfig={cfg => handleSaveBoardConfig(activeProject.id, cfg)}
         onMoveTask={moveBoardTask}
         onStatusChange={changeTaskStatus}
+        onWorkflowChange={changeTaskWorkflow}
         onViewTask={viewTask}
         onEditTask={editTask}
         onDeleteTask={deleteTask}
@@ -1804,6 +1807,7 @@ const App: React.FC = () => {
           resources={resources}
           sprintNames={ps.sprintNames || {}}
           onStatusChange={changeTaskStatus}
+          onWorkflowChange={changeTaskWorkflow}
           onViewTask={viewTask}
           onEditTask={editTask}
           onDeleteTask={deleteTask}

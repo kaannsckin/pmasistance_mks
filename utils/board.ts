@@ -1,4 +1,5 @@
 import { BoardColumnConfig, BoardConfig, BoardQuickFilter, BoardStatusKey, Task, TaskStatus } from '../types';
+import { WORKFLOW_STATUSES, workflowLabel } from './workflow';
 
 /**
  * Jira tarzı proje panosu: kolonlar durumlara (uygulama durumu ya da Jira
@@ -25,9 +26,10 @@ export const APP_STATUS_LABELS: Record<TaskStatus, string> = {
 };
 
 export const appKey = (s: TaskStatus): BoardStatusKey => `app:${s}`;
-export const jiraKey = (name: string): BoardStatusKey => `jira:${name.trim().toUpperCase()}`;
+export const jiraKey = (name: string): BoardStatusKey => `jira:${name.trim().toUpperCase().replace(/\s+/g, ' ')}`;
+/** Durum anahtarının adı: uygulama kategorisi ya da iş akışı durumunun Türkçe adı (bilinmeyen Jira durumu olduğu gibi) */
 export const statusKeyLabel = (k: BoardStatusKey): string =>
-    k.startsWith('app:') ? APP_STATUS_LABELS[k.slice(4) as TaskStatus] || k.slice(4) : k.slice(5);
+    k.startsWith('app:') ? APP_STATUS_LABELS[k.slice(4) as TaskStatus] || k.slice(4) : workflowLabel(k.slice(5));
 export const isJiraKey = (k: BoardStatusKey): boolean => k.startsWith('jira:');
 
 /** Büyük/küçük ve ı/i duyarsız karşılaştırma ("GIB" = "gib", "İSTEMCİ" = "istemci") */
@@ -35,11 +37,15 @@ const norm = (s: string) => s.trim().toLocaleLowerCase('tr-TR').replace(/ı/g, '
 let seq = 0;
 export const boardId = (prefix: string): string => `${prefix}-${Date.now().toString(36)}-${(++seq).toString(36)}`;
 
+/** Kategorinin hazır iş akışı durumları (ilk Jira anahtarı, karta taşınınca yazılan durumdur) */
+const wf = (...cats: TaskStatus[]): BoardStatusKey[] => WORKFLOW_STATUSES.filter(s => cats.includes(s.category)).map(s => jiraKey(s.key));
+
 export const defaultBoardConfig = (): BoardConfig => ({
     columns: [
-        { id: 'col-todo', name: 'Yapılacak', statuses: [appKey(TaskStatus.Backlog), appKey(TaskStatus.ToDo)], targetStatus: TaskStatus.ToDo },
-        { id: 'col-progress', name: 'Devam Ediyor', statuses: [appKey(TaskStatus.InProgress)], targetStatus: TaskStatus.InProgress },
-        { id: 'col-done', name: 'Tamamlandı', statuses: [appKey(TaskStatus.Done)], targetStatus: TaskStatus.Done },
+        { id: 'col-todo', name: 'Yapılacak', statuses: [appKey(TaskStatus.Backlog), appKey(TaskStatus.ToDo), jiraKey('TO DO'), ...wf(TaskStatus.ToDo, TaskStatus.Backlog).filter(k => k !== jiraKey('TO DO'))], targetStatus: TaskStatus.ToDo },
+        { id: 'col-progress', name: 'Devam Ediyor', statuses: [appKey(TaskStatus.InProgress), ...wf(TaskStatus.InProgress).filter(k => k !== jiraKey('TESTING'))], targetStatus: TaskStatus.InProgress },
+        { id: 'col-test', name: 'Testte', statuses: [jiraKey('TESTING')], targetStatus: TaskStatus.InProgress },
+        { id: 'col-done', name: 'Tamamlandı', statuses: [appKey(TaskStatus.Done), jiraKey('DONE'), ...wf(TaskStatus.Done).filter(k => k !== jiraKey('DONE'))], targetStatus: TaskStatus.Done },
     ],
     rulePriority: 'status',
     quickFilters: [
@@ -205,6 +211,8 @@ export const buildLanes = (tasks: Task[], cfg: BoardConfig, wpNames: Map<string,
 export const statusUsage = (tasks: Task[]): Map<BoardStatusKey, number> => {
     const m = new Map<BoardStatusKey, number>();
     Object.values(TaskStatus).forEach(s => m.set(appKey(s), 0));
+    // Hazır iş akışı durumları da (Jira'daki "görev içermeyen durumlar" gibi) eşlenebilsin
+    WORKFLOW_STATUSES.forEach(s => m.set(jiraKey(s.key), 0));
     tasks.forEach(t => {
         const k = t.jiraStatus ? jiraKey(t.jiraStatus) : appKey(t.status);
         m.set(k, (m.get(k) || 0) + 1);

@@ -1,3 +1,5 @@
+import WorkflowSelect from './WorkflowSelect';
+import { taskStatusLabel } from '../../utils/workflow';
 import React, { useState } from 'react';
 import { Project, Task, TaskStatus } from '../../types';
 import { calculatePertFuzzyPert } from '../../utils/timeline';
@@ -26,7 +28,6 @@ interface TaskDetailSheetProps {
     onJiraPull?: (issue: JiraIssueRecord) => void;
 }
 
-const STATUSES: TaskStatus[] = [TaskStatus.Backlog, TaskStatus.ToDo, TaskStatus.InProgress, TaskStatus.Done];
 const num = (v: number) => v.toLocaleString('tr-TR', { maximumFractionDigits: 1 });
 
 const TaskDetailSheet: React.FC<TaskDetailSheetProps> = ({ task, project, authorName, canEdit, onClose, onEdit, onSave, onJiraPull }) => {
@@ -95,13 +96,14 @@ const TaskDetailSheet: React.FC<TaskDetailSheetProps> = ({ task, project, author
             </div>
 
             {canEdit ? (
-                <div className="m-segmented self-start" role="group" aria-label="Durum">
-                    {STATUSES.map(s => (
-                        <button key={s} type="button" className="m-segment" aria-pressed={task.status === s} onClick={() => task.status !== s && onSave({ ...task, status: s })}>{TASK_STATUS_LABELS[s]}</button>
-                    ))}
+                <div className="flex items-center gap-2 self-start">
+                    <span className="text-[13px] font-semibold m-text-2">Durum</span>
+                    <WorkflowSelect className="m-input !w-auto !h-9 !py-0" value={task} tasks={project.tasks}
+                        onChange={p => (p.status !== task.status || p.jiraStatus !== task.jiraStatus) && onSave({ ...task, ...p })} />
+                    <span className="text-[12.5px] m-text-3">{TASK_STATUS_LABELS[task.status]}</span>
                 </div>
             ) : (
-                <span className="self-start inline-flex items-center h-7 px-3 rounded-full text-[13px] font-semibold m-tone-accent">{TASK_STATUS_LABELS[task.status]}</span>
+                <span className="self-start inline-flex items-center h-7 px-3 rounded-full text-[13px] font-semibold m-tone-accent" title={TASK_STATUS_LABELS[task.status]}>{taskStatusLabel(task)}</span>
             )}
 
             <dl className="m-0 grid gap-x-5 gap-y-2 text-[15px]" style={{ gridTemplateColumns: 'auto 1fr' }}>

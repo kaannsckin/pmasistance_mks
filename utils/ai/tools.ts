@@ -21,6 +21,7 @@ import { summarizeWorkPackages } from '../workPackages';
 import { can } from '../permissions';
 import { AiAction, AiProposal, describeAction, validateAction } from './actions';
 import { JsonSchema, ToolCall, ToolSpec } from './protocol';
+import { taskStatusLabel } from '../workflow';
 import { DIALOG_KEYS, DIALOGS, DialogKey, SCREEN_KEYS, SCREENS, ScreenKey } from './uiActions';
 import type { JiraIssueRecord } from '../integrations';
 import {
@@ -104,6 +105,7 @@ const taskRow = (t: Task, ctx: ToolContext, projectName: string, wpNames: Map<st
     proje: projectName,
     gorev: t.name,
     durum: TASK_STATUS_TR[t.status] || t.status,
+    is_durumu: t.jiraStatus ? taskStatusLabel(t) : undefined,
     oncelik: t.priority,
     atanan: t.resourceName || undefined,
     bitis: t.dueDate ? t.dueDate.slice(0, 10) : undefined,

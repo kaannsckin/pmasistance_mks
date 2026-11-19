@@ -1,4 +1,5 @@
 
+import { workflowOptions, workflowValue } from '../utils/workflow';
 import React, { useState, useEffect, useMemo } from 'react';
 import { EMBED_SYSTEM, parsePertEstimate, pertEstimatePrompt } from '../utils/ai/embedded';
 import { AiButton, AiErrorNote, useAiRun } from './assistant/AiButton';
@@ -61,6 +62,7 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, people, 
         jiraId: task.jiraId,
         notes: task.notes,
         status: task.status,
+        jiraStatus: task.jiraStatus,
         labels: task.labels || [],
         includeInSprints: task.includeInSprints ?? true,
         keyResultId: task.keyResultId,
@@ -249,8 +251,11 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, people, 
             </div>
              <div>
               <label htmlFor="status" className="block text-sm font-medium text-black dark:text-white">Durum</label>
-              <select name="status" id="status" value={formData.status} onChange={handleChange} className={`mt-1 block w-full ${inputStyle}`}>
-                {Object.values(TaskStatus).map(s => <option key={s} value={s}>{s}</option>)}
+              <select name="status" id="status" value={workflowValue(formData)} className={`mt-1 block w-full ${inputStyle}`}
+                onChange={e => { const s = workflowOptions([formData, ...(tasks || [])]).flatMap(g => g.statuses).find(x => x.key === e.target.value); if (s) setFormData(prev => ({ ...prev, status: s.category, jiraStatus: s.key })); }}>
+                {workflowOptions([formData, ...(tasks || [])]).map(g => (
+                  <optgroup key={g.category} label={g.label}>{g.statuses.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}</optgroup>
+                ))}
               </select>
             </div>
           </div>

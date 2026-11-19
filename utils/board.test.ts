@@ -24,11 +24,19 @@ const jiraLike = (): BoardConfig => ({
 });
 
 describe('pano kolon kuralları', () => {
-    it('varsayılan pano uygulama durumlarını üç kolona dağıtır', () => {
+    it('varsayılan pano uygulama ve iş akışı durumlarını dört kolona dağıtır', () => {
         const cfg = defaultBoardConfig();
         expect(columnOfTask(task('a', { status: TaskStatus.Backlog }), cfg)?.name).toBe('Yapılacak');
         expect(columnOfTask(task('b', { status: TaskStatus.InProgress }), cfg)?.name).toBe('Devam Ediyor');
-        expect(boardConfigOf(undefined).columns).toHaveLength(3);
+        expect(columnOfTask(task('c', { status: TaskStatus.InProgress, jiraStatus: 'Testing' }), cfg)?.name).toBe('Testte');
+        expect(columnOfTask(task('d', { status: TaskStatus.InProgress, jiraStatus: 'In Review' }), cfg)?.name).toBe('Devam Ediyor');
+        expect(columnOfTask(task('e', { status: TaskStatus.Done, jiraStatus: 'Resolved' }), cfg)?.name).toBe('Tamamlandı');
+        expect(boardConfigOf(undefined).columns.map(c => c.name)).toEqual(['Yapılacak', 'Devam Ediyor', 'Testte', 'Tamamlandı']);
+        expect(validateBoardConfig(cfg)).toEqual([]);
+        // Hazır durumların hepsi eşli; taşınınca kolonun ilk iş akışı durumu yazılır
+        expect(unmappedStatuses(cfg, statusUsage([]))).toEqual([]);
+        expect(moveTaskPatch(task('f'), cfg.columns[3], cfg, NOW).jiraStatus).toBe('DONE');
+        expect(moveTaskPatch(task('g'), cfg.columns[1], cfg, NOW).jiraStatus).toBe('IN PROGRESS');
     });
 
     it('Jira durumu uygulama durumundan önce gelir; eşlenmemiş Jira durumu uygulama durumuna düşer', () => {
@@ -83,7 +91,8 @@ describe('kart taşıma', () => {
     });
 
     it('Jira durumu eşlemeyen kolona taşınınca eski Jira durumu temizlenir', () => {
-        const cfg = defaultBoardConfig();
+        const base = defaultBoardConfig();
+        const cfg = { ...base, columns: base.columns.map(c => ({ ...c, statuses: c.statuses.filter(k => k.startsWith('app:')) })).filter(c => c.statuses.length) };
         const t = task('a', { status: TaskStatus.ToDo, jiraStatus: 'OPEN' });
         const p = moveTaskPatch(t, cfg.columns[1], cfg, NOW);
         expect('jiraStatus' in p && p.jiraStatus === undefined).toBe(true);
@@ -112,7 +121,7 @@ describe('hızlı filtreler, WIP, kulvarlar', () => {
         expect(wipState(1, { min: 2 })).toBe('under');
         expect(wipState(2, { min: 1, max: 2 })).toBe('ok');
         const done = [task('x', { status: TaskStatus.Done, resolvedAt: '2026-11-15T00:00:00Z' }), task('y', { status: TaskStatus.Done, resolvedAt: '2026-01-01T00:00:00Z' })];
-        const col = distribute(done, { ...defaultBoardConfig(), doneDays: 14 }, NOW).columns[2];
+        const col = distribute(done, { ...defaultBoardConfig(), doneDays: 14 }, NOW).columns[3];
         expect([col.tasks.map(t => t.id), col.total]).toEqual([['x'], 2]);
     });
 

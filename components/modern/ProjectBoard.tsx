@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { BoardColumnConfig, BoardConfig, BoardSwimlane, Task, TaskSortKey, TaskStatus } from '../../types';
 import { boardConfigOf, buildLanes, distribute, filterBoardTasks, moveTaskPatch, wipState } from '../../utils/board';
+import { taskStatusLabel } from '../../utils/workflow';
 import { MIN_PRIORITY_OPTIONS, taskComparator, TaskPriority, taskPassesView } from '../../utils/viewConfig';
 import BoardSettings from './BoardSettings';
 import { Icon } from './icons';
@@ -23,6 +24,8 @@ interface ProjectBoardProps {
     /** Kart taşıma: durum (+ Jira durumu / etiket) değişikliği */
     onMoveTask: (id: string, patch: Partial<Task>) => void;
     onStatusChange: (id: string, status: TaskStatus) => void;
+    /** Ayrıntılı iş akışı durumu (Testte, Çözüldü …) */
+    onWorkflowChange?: (id: string, key: string) => void;
     onViewTask: (task: Task) => void;
     onEditTask: (task: Task) => void;
     onDeleteTask: (id: string) => void;
@@ -64,7 +67,9 @@ const Card: React.FC<{
     const prio = PRIORITY_META[t.priority];
     const type = t.issueType ? TYPE_ICON[t.issueType] : undefined;
     const bar = PRIORITY_BAR[t.priority];
-    const showJira = t.jiraStatus && t.jiraStatus.toLocaleUpperCase('tr-TR') !== columnName.toLocaleUpperCase('tr-TR');
+    const statusLabel = taskStatusLabel(t);
+    // Ayrıntılı durum kolon adından farklıysa kartta gösterilir (ör. Devam Ediyor kolonunda "Analizde")
+    const showJira = !!t.jiraStatus && statusLabel.toLocaleLowerCase('tr-TR') !== columnName.toLocaleLowerCase('tr-TR');
     return (
         <article draggable onDragStart={onDragStart}
             className="m-surface rounded-[10px] flex items-start gap-1 pl-3 pr-1 py-1 cursor-grab active:cursor-grabbing"
@@ -72,7 +77,7 @@ const Card: React.FC<{
             <button type="button" onClick={onView} className="flex-1 min-w-0 flex flex-col gap-1.5 py-2 text-left bg-transparent border-0 p-0 cursor-pointer" style={{ font: 'inherit' }}>
                 <span className="flex items-center gap-2 flex-wrap text-[12.5px]">
                     {t.jiraId && <span className={`m-text-3 m-tabular font-semibold ${done ? 'line-through' : ''}`}>{t.jiraId}</span>}
-                    {showJira && <span className="inline-flex items-center h-5 px-1.5 rounded text-[11px] font-bold m-fill-2 m-text-2" style={UPPER}>{t.jiraStatus}</span>}
+                    {showJira && <span title={t.jiraStatus} className="inline-flex items-center h-5 px-1.5 rounded text-[11px] font-bold m-fill-2 m-text-2" style={UPPER}>{statusLabel}</span>}
                     {late > 0 && <span className="inline-flex items-center h-5 px-1.5 rounded text-[11px] font-semibold m-tone-bad">{late} gün gecikti</span>}
                 </span>
                 <span className={`text-[14.5px] leading-snug ${done ? 'm-text-2' : 'm-text font-medium'}`}>{t.name}</span>
@@ -100,7 +105,7 @@ const Card: React.FC<{
 };
 
 const ProjectBoard: React.FC<ProjectBoardProps> = ({
-    tasks, config, canConfigure, onSaveConfig, onMoveTask, onStatusChange, onViewTask, onEditTask, onDeleteTask, onNotifyTask, onNewTask, onCelebrate,
+    tasks, config, canConfigure, onSaveConfig, onMoveTask, onStatusChange, onWorkflowChange, onViewTask, onEditTask, onDeleteTask, onNotifyTask, onNewTask, onCelebrate,
     sprintNames, me, wpNames, minPriority = 'Low' as TaskPriority, sortKey = 'smart' as TaskSortKey,
 }) => {
     const cfg = useMemo(() => boardConfigOf(config), [config]);
@@ -223,7 +228,7 @@ const ProjectBoard: React.FC<ProjectBoardProps> = ({
             {hiddenByView > 0 && <ViewFilterNote text={`Yönetici ayarı: ${MIN_PRIORITY_OPTIONS.find(o => o.value === minPriority)!.label.toLocaleLowerCase('tr-TR')} görevler gösteriliyor · ${hiddenByView} görev gizli`} />}
             {unmapped.length > 0 && (
                 <p role="status" className="m-0 flex items-center gap-2 text-[13.5px] m-ink-warn">
-                    <Icon name="alert" size={15} />{unmapped.length} görev hiçbir kolona eşlenmemiş durumda ({uniq(unmapped.map(t => t.jiraStatus || t.status)).slice(0, 5).join(', ')}).
+                    <Icon name="alert" size={15} />{unmapped.length} görev hiçbir kolona eşlenmemiş durumda ({uniq(unmapped.map(t => taskStatusLabel(t))).slice(0, 5).join(', ')}).
                     {canConfigure && <button type="button" className="underline bg-transparent border-0 p-0 m-accent cursor-pointer" onClick={() => setSettingsOpen(true)}>Kolonlara eşle</button>}
                 </p>
             )}
@@ -282,7 +287,7 @@ const ProjectBoard: React.FC<ProjectBoardProps> = ({
                                                         <Card key={t.id} t={t} done={done} columnName={c.name}
                                                             onView={() => onViewTask(t)}
                                                             onDragStart={e => { e.dataTransfer.setData('text/plain', t.id); e.dataTransfer.effectAllowed = 'move'; }}
-                                                            menu={<TaskActionsMenu task={t} onStatusChange={onStatusChange} onEdit={onEditTask} onDelete={onDeleteTask} onNotify={onNotifyTask} />} />
+                                                            menu={<TaskActionsMenu task={t} onStatusChange={onStatusChange} onWorkflowChange={onWorkflowChange} workflowTasks={tasks} onEdit={onEditTask} onDelete={onDeleteTask} onNotify={onNotifyTask} />} />
                                                     ))}
                                                 </div>
                                             );

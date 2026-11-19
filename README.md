@@ -507,6 +507,7 @@ classDiagram
 |---|---|
 | **Otomatik planlama** | Topolojik liste çizelgeleme + kritik zincir önceliklendirmesi ile görevleri sürüm (sprint) takvimine yerleştirir; termin (EDD) ve kapasite farkındalıklı |
 | **Proje panosu (Jira tarzı)** | Kolon ekle / sil / sırala; durumları (uygulama + Jira durum adları) kolonlara sürükleyerek eşle, eşlenmemiş durumlar paneli; etiket kuralı (süreç önce: etiket, aynı aşamanın alt kolonunu seçer — ya da etiket önce); min/max WIP uyarısı; hızlı filtreler (sadece benim işlerim, son güncellenenler, gecikenler, etiketten tek tıkla); kişi avatarları, arama; kulvarlar (Expedite, kişi, öncelik, iş paketi); tamamlananlarda "son N gün" (15 / 109). Ayar projeyle saklanır, denetim günlüğüne yazılır — `utils/board.ts` |
+| **İş akışı durumları** | Jira'daki gibi ayrıntılı durumlar, Türkçe adlarıyla: Bekleyen, Ertelendi · Yapılacak, Açık, Yeniden Açıldı · Geliştirmede, Analizde, Kod İncelemede, Testte, Engellendi · Çözüldü, Tamamlandı, Kapandı, Reddedildi; Jira'dan gelen projeye özgü durumlar da seçilebilir. Her durum bir kategoriye bağlıdır (ilerleme, EVM, tahmin kategoriyi kullanır); Jira anahtarıyla saklandığı için Jira eşitlemesi ve pano kolon kurallarıyla uyumludur — `utils/workflow.ts` |
 | **Sürüm planı** | Sürüm bazlı, sürükle-bırak; plan uyarıları (aşırı büyük görev, öncül döngüsü) banner ile (klasik arayüzde Pano › Sürüm planı) |
 | **Analiz ve zaman çizelgesi** | Proje bitiş tarihi ve kritik yolu hesaplayan Gantt şeması |
 | **Diğer** | OKR / Hedefler, Haftalık Notlar, Müşteri İstekleri, Risk kaydı (5×5 matris) |

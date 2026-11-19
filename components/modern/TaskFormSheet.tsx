@@ -1,3 +1,4 @@
+import WorkflowSelect from './WorkflowSelect';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Objective, Person, Project, Resource, Task, TaskStatus, WorkPackage } from '../../types';
 import { EMBED_SYSTEM, parsePertEstimate, pertEstimatePrompt } from '../../utils/ai/embedded';
@@ -31,7 +32,6 @@ interface TaskFormSheetProps {
 
 type Draft = Omit<Task, 'id' | 'availability'>;
 
-const STATUSES: TaskStatus[] = [TaskStatus.Backlog, TaskStatus.ToDo, TaskStatus.InProgress, TaskStatus.Done];
 const PRIORITIES: Task['priority'][] = ['Blocker', 'High', 'Medium', 'Low'];
 
 const emptyDraft = (resources: Resource[]): Draft => ({
@@ -44,7 +44,7 @@ const fromTask = (t: Task): Draft => ({
     name: t.name, priority: t.priority, version: t.version, predecessor: t.predecessor, unit: t.unit, resourceName: t.resourceName,
     time: { ...t.time }, jiraId: t.jiraId, notes: t.notes, status: t.status, labels: t.labels || [], includeInSprints: t.includeInSprints ?? true,
     keyResultId: t.keyResultId, workPackageId: t.workPackageId, dueDate: t.dueDate, subtasks: t.subtasks, comments: t.comments,
-    issueType: t.issueType, estimateSource: t.estimateSource,
+    issueType: t.issueType, estimateSource: t.estimateSource, jiraStatus: t.jiraStatus,
 });
 
 const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
@@ -152,12 +152,9 @@ const TaskFormSheet: React.FC<TaskFormSheetProps> = ({ task, tasks, resources, p
                 </Field>
 
                 <Section title="Plan">
-                    <div className="flex flex-col gap-1.5">
-                        <span className="text-[13px] font-semibold m-text-2">Durum</span>
-                        <div className="m-segmented self-start" role="group" aria-label="Durum">
-                            {STATUSES.map(s => <button key={s} type="button" className="m-segment" aria-pressed={d.status === s} onClick={() => set({ status: s })}>{TASK_STATUS_LABELS[s]}</button>)}
-                        </div>
-                    </div>
+                    <Field label="Durum" htmlFor="tf-status" hint="Jira'daki gibi ayrıntılı durum; ilerleme ve tahmin hesapları kategorisini (Bekleyen / Yapılacak / Süreçte / Tamamlandı) kullanır">
+                        <WorkflowSelect id="tf-status" value={d} tasks={tasks} onChange={set} />
+                    </Field>
                     <Field label="Kayıt türü" htmlFor="tf-type" hint="Planlama simülasyonu ve AI tahmini benzer kayıtları türüne göre karşılaştırır">
                         <select id="tf-type" className="m-input" value={d.issueType || ''} onChange={e => set({ issueType: (e.target.value || undefined) as Task['issueType'] })}>
                             <option value="">Belirtilmedi</option>
