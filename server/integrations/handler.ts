@@ -384,11 +384,14 @@ export interface JiraSyncSource {
     projectKey?: string;
     labels?: string[];
     filterId?: string;
+    /** Serbest metin araması (text ~); yalnız harf, rakam, boşluk, nokta, alt çizgi — JQL'e kaçış gerektirmez */
+    text?: string;
 }
 export const JIRA_SYNC_KEYS_MAX = 100;
 const ISSUE_KEY_RE = /^[A-Za-z][A-Za-z0-9_]{1,19}-\d{1,9}$/;
 const LABEL_RE = /^[^\s"\\,()]{1,100}$/;
 const FILTER_RE = /^\d{1,12}$/;
+const TEXT_RE = /^[\p{L}\p{N}][\p{L}\p{N} ._]{1,99}$/u;
 
 const allowedProjects = (env: Env): string[] => (clean(env.JIRA_ALLOWED_PROJECTS) || '').split(',').map(k => k.trim().toUpperCase()).filter(k => KEY_RE.test(k));
 const quoted = (list: string[]) => list.map(v => `"${v}"`).join(', ');
@@ -399,12 +402,14 @@ export const checkSyncSource = (env: Env, raw: unknown): { source: JiraSyncSourc
     const projectKey = r.projectKey ? String(r.projectKey).trim().toUpperCase() : undefined;
     const labels = Array.isArray(r.labels) ? [...new Set(r.labels.map(l => String(l).trim()).filter(Boolean))] : [];
     const filterId = r.filterId ? String(r.filterId).trim() : undefined;
+    const text = r.text ? String(r.text).replace(/\s+/g, ' ').trim() : undefined;
     if (!projectKey && !labels.length && !filterId) return { error: 'Eşitleme kaynağı gerekli: proje, etiket ya da kayıtlı filtre seçin (tüm Jira taranmaz).', status: 400 };
     if ((projectKey && !KEY_RE.test(projectKey)) || labels.length > 10 || labels.some(l => !LABEL_RE.test(l)) || (filterId && !FILTER_RE.test(filterId))) {
         return { error: 'Geçersiz proje anahtarı, etiket ya da filtre.', status: 400 };
     }
+    if (text && !TEXT_RE.test(text)) return { error: 'Arama metni yalnız harf, rakam, boşluk, nokta ve alt çizgi içerebilir (2–100 karakter).', status: 400 };
     if (projectKey && !jiraProjectAllowed(env, projectKey)) return { error: `${projectKey} projesi bu sunucuda Jira erişimine açık değil.`, status: 403 };
-    return { source: { ...(projectKey ? { projectKey } : {}), ...(labels.length ? { labels } : {}), ...(filterId ? { filterId } : {}) } };
+    return { source: { ...(projectKey ? { projectKey } : {}), ...(labels.length ? { labels } : {}), ...(filterId ? { filterId } : {}), ...(text ? { text } : {}) } };
 };
 
 /** Kaynak JQL'i: yalnız açık kayıtlar (istenirse); izin listesi varsa sorgu ona da daraltılır */
@@ -414,6 +419,7 @@ export const buildSyncJql = (env: Env, source: JiraSyncSource, openOnly = true):
         source.projectKey ? `project = "${source.projectKey}"` : allowed.length ? `project in (${quoted(allowed)})` : '',
         source.labels?.length ? `labels in (${quoted(source.labels)})` : '',
         source.filterId ? `filter = ${source.filterId}` : '',
+        source.text ? `text ~ "${source.text}"` : '',
         openOnly ? 'statusCategory != Done' : '',
     ].filter(Boolean).join(' AND ') + ' ORDER BY key ASC';
 };

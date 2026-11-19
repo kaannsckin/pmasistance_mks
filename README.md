@@ -653,6 +653,9 @@ sequenceDiagram
 | **Araçlar** | Portföy sağlığı, proje detayı, görev/risk arama, kişi profili, uygun kişi, doluluk, departman karnesi, kapasite-talep, tahsis, öngörü, EVM, maliyet, veri sağlığı, son değişiklikler, notlar, durum raporu |
 | **Bilgi tabanı (RAG)** | Notlar, görev/risk açıklamaları, istekler, PESTEL/SWOT, kullanım kılavuzu ve Bilgi Bankası dokümanları; artımlı dizinleme, numaralı kaynak, doğruluk değerlendirme seti |
 | **Onaylı değişiklik** | "Şu riski ekle", "görevi tamamlandı yap" → öneri kartı → onay → yetki ve plan kilidi yeniden doğrulanır → denetim günlüğü → geri alınabilir |
+| **Ajan modu** | "ATLAS'ın risklerini aç", "Ayşe'nin profilini göster" → asistan ekranı/kaydı sizin yerinize açar (veri değişmez; menüdeki yetkilerle sınırlı) |
+| **Dosya ekleme** | Sohbete PDF, Word, Excel, CSV, metin, JSON ekleyin (📎, sürükle-bırak, yapıştır); metin tarayıcıda çıkarılır, dosya yüklenmez |
+| **Jira'dan okuma** | "MKS-42 ne durumda?", "MKS'de açık hataları kime atanmış?" → Jira'daki güncel kayıt, arama ve dağılımlar (salt okunur, jeton sunucuda) |
 | **Ekran içi AI** | Durum raporundan e-posta, yönetici brifingi, risk önerisi, PESTEL/SWOT taslağı, PERT süre tahmini |
 | **Haftalık rapor asistanı** | Notlar, worklog, görüşmeler ve kapanan işlerden kılavuza uygun taslak; dayanak denetimi (girdide olmayan rakam/tarih/ad vurgulanır); kurum, bölüm, proje ve kişi bazında ölçülebilir öğrenme — [docs/RAPOR_AI.md](docs/RAPOR_AI.md) |
 | **Güvenlik** | Anahtar yalnız sunucuda; erişim kodu ya da Supabase üyeliği; hız sınırı; köken denetimi; yanıtlar HTML yorumlanmadan gösterilir |

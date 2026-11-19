@@ -63,6 +63,7 @@ import GibImportModal, { GibImportChoice } from './components/GibImportModal';
 import { applyGibImport, formatPercent, GibImportPackage } from './utils/gibFindings';
 import { CommandItem } from './components/CommandPalette';
 import { AssistantProvider } from './components/assistant/AssistantContext';
+import { dialogProblem, DIALOGS, resolveScreen, SCREENS, UiCommand, UiEnv, UiResult } from './utils/ai/uiActions';
 import AssistantPanel, { AssistantCommandPalette } from './components/assistant/AssistantPanel';
 import { buildSuggestions } from './utils/ai/suggestions';
 import { RagRef } from './utils/rag/sources';
@@ -1924,6 +1925,60 @@ const App: React.FC = () => {
     handleOpenProject(ref.projectId);
     setCurrentView(ref.view);
   }, [handleOpenProject]);
+
+  // Ajan modu: asistanın arayüz komutları. Yetki, menüdeki/komut paletindeki
+  // kuralların aynısıyla GÜNCEL durumdan yeniden denetlenir; veri değişmez.
+  const uiEnvRef = useRef<Omit<UiEnv, 'activeProjectId'>>(null!);
+  uiEnvRef.current = {
+    modern: isModern, consoleMode, canExecutive, canAdmin, canNotes, canAudit, canDataHealth,
+    projectSections: roleView.projectSections, visibleProjectIds: visibleProjectIdSet,
+  };
+  const handleAssistantUiCommand = useCallback((cmd: UiCommand): UiResult => {
+    const ws = workspaceRef.current;
+    if (!ws) return { ok: false, message: 'Çalışma alanı hazır değil.' };
+    const base = uiEnvRef.current;
+    const targetProjectId = 'projectId' in cmd && cmd.projectId ? cmd.projectId : ws.activeProjectId;
+    const env: UiEnv = { ...base, activeProjectId: targetProjectId && base.visibleProjectIds.has(targetProjectId) ? targetProjectId : null };
+    const project = env.activeProjectId ? ws.projects.find(p => p.id === env.activeProjectId) : undefined;
+    if ('projectId' in cmd && cmd.projectId && !project) return { ok: false, message: 'Bu proje kullanıcının yetki kapsamında değil.' };
+    const openProject = () => {
+      if (project && ws.activeProjectId !== project.id) updateWorkspace(w => ({ ...w, activeProjectId: project.id }));
+    };
+    switch (cmd.type) {
+      case 'screen': {
+        const r = resolveScreen(cmd.screen, env);
+        if ('error' in r) return { ok: false, message: r.error };
+        if (SCREENS[cmd.screen].project) openProject();
+        setCurrentView(r.view);
+        return { ok: true, message: `${SCREENS[cmd.screen].label} ekranı açıldı${SCREENS[cmd.screen].project && project ? ` (${project.name})` : ''}.` };
+      }
+      case 'task': {
+        const task = project?.tasks.find(t => t.id === cmd.taskId);
+        if (!project || !task) return { ok: false, message: 'Görev bulunamadı.' };
+        const list = resolveScreen('gorevler', env);
+        openProject();
+        if (!('error' in list) && !MODERN_PROJECT_VIEWS.includes(currentViewRef.current)) setCurrentView(list.view);
+        setViewingTask(task);
+        setIsDetailModalOpen(true);
+        return { ok: true, message: `"${task.name}" görevinin ayrıntısı açıldı (${project.name}).` };
+      }
+      case 'person': {
+        const person = ws.people.find(p => p.id === cmd.personId);
+        if (!person || base.consoleMode) return { ok: false, message: 'Kişi profili açılamadı.' };
+        setViewingPersonId(person.id);
+        return { ok: true, message: `${person.firstName} ${person.lastName} profil penceresi açıldı.`.replace(/\s+/g, ' ') };
+      }
+      case 'dialog': {
+        const problem = dialogProblem(cmd.dialog, env);
+        if (problem) return { ok: false, message: problem };
+        if (cmd.dialog === 'veri_sagligi') setIsHealthModalOpen(true);
+        else if (cmd.dialog === 'denetim_gunlugu') setIsAuditModalOpen(true);
+        else if (cmd.dialog === 'is_paketleri') setIsWpManagerOpen(true);
+        else setIsProfileOpen(true);
+        return { ok: true, message: `${DIALOGS[cmd.dialog]} penceresi açıldı.` };
+      }
+    }
+  }, [updateWorkspace]);
   const aiSuggestions = useMemo(
     () => buildSuggestions(identity, activeProject && visibleProjects.some(p => p.id === activeProject.id) ? activeProject.name : undefined),
     [identity, activeProject, visibleProjects]
@@ -1980,7 +2035,7 @@ const App: React.FC = () => {
   }, [workspace, visibleProjects, identity, handleOpenProject, activeProject, consoleMode, canAudit, canDataHealth, isModern, roleView]);
 
   return (
-    <AssistantProvider enabled={isAIEnabled && !consoleMode} chat={aiPolicy.chat} embedded={aiPolicy.embedded} getWorkspace={getAssistantWorkspace} getView={getAssistantView} onNavigate={handleAssistantNavigate} onApplyAction={handleApplyAiAction}>
+    <AssistantProvider enabled={isAIEnabled && !consoleMode} chat={aiPolicy.chat} embedded={aiPolicy.embedded} getWorkspace={getAssistantWorkspace} getView={getAssistantView} onNavigate={handleAssistantNavigate} onApplyAction={handleApplyAiAction} onUiCommand={handleAssistantUiCommand}>
     <div className={`min-h-screen font-sans theme-${settings?.theme || 'classic'} ${isModern ? 'ui-modern' : 'bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100'}`}>
       {isModern ? (
         <div className="flex min-h-screen">

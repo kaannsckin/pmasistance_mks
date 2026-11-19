@@ -35,6 +35,8 @@ export interface AgentTurnResult {
 }
 
 export const DEFAULT_MAX_STEPS = 6;
+/** Ajan modu (gezinme + Jira + öneri zinciri) için asistan sohbetinin adım sınırı */
+export const AGENT_MAX_STEPS = 10;
 
 /** Bu turdaki eski araç sonuçlarını, bütçe aşılırsa kısa bir notla değiştirir (çağrı/sonuç eşleşmesi korunur) */
 export const compactToolResults = (messages: ChatMessage[], budget: number): ChatMessage[] => {

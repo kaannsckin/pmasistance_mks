@@ -335,6 +335,7 @@ describe('Jira canlı eşitleme (jira-sync)', () => {
         expect(buildSyncJql({ JIRA_ALLOWED_PROJECTS: 'mks, ABC' }, { filterId: '12345' })).toBe('project in ("MKS", "ABC") AND filter = 12345 AND statusCategory != Done ORDER BY key ASC');
         expect(buildSyncJql({}, { labels: ['x'] }, false)).toBe('labels in ("x") ORDER BY key ASC');
         expect(buildKeysJql(['MKS-1', 'MKS-2'])).toBe('key in ("MKS-1", "MKS-2") ORDER BY key ASC');
+        expect(buildSyncJql({}, { projectKey: 'MKS', text: 'giriş hatası' }, false)).toBe('project = "MKS" AND text ~ "giriş hatası" ORDER BY key ASC');
     });
 
     it('kapsamsız ya da geçersiz kaynak reddedilir; serbest JQL kabul edilmez', async () => {
@@ -343,6 +344,8 @@ describe('Jira canlı eşitleme (jira-sync)', () => {
         expect((await run({ op: 'search', jql: 'ORDER BY key' }, fetchImpl)).status).toBe(400);
         expect((await run({ op: 'search', source: { labels: ['a" OR project = X'] } }, fetchImpl)).status).toBe(400);
         expect((await run({ op: 'search', source: { filterId: '1 OR 1=1' } }, fetchImpl)).status).toBe(400);
+        expect((await run({ op: 'search', source: { projectKey: 'MKS', text: 'a" OR project = X' } }, fetchImpl)).status).toBe(400);
+        expect((await run({ op: 'search', source: { text: 'yalniz metin' } }, fetchImpl)).status).toBe(400);
         expect((await run({ op: 'search', keys: ['MKS-1", "X-1'] }, fetchImpl)).status).toBe(400);
         expect((await run({ op: 'search', source: { projectKey: 'XYZ' } }, fetchImpl, { ...env, JIRA_ALLOWED_PROJECTS: 'MKS' })).status).toBe(403);
         expect((await run({ op: 'search', keys: ['XYZ-1'] }, fetchImpl, { ...env, JIRA_ALLOWED_PROJECTS: 'MKS' })).status).toBe(403);
