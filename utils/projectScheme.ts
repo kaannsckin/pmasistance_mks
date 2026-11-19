@@ -132,6 +132,37 @@ export const schemeOf = (ws: Pick<WorkspaceData, 'projectSchemes'>, project?: Pi
     return (project?.schemeId && all.find(s => s.id === project.schemeId)) || all[0];
 };
 
+/**
+ * Projenin ETKİN yapılandırması: atanan şema + (şema izin veriyorsa) projeye
+ * özel iş akışı. Özel akış yalnız şemanın durumlarını kullanabilir; şemadan
+ * çıkarılmış durumlar özel akıştan da düşer (admin şemayı daraltırsa projeler
+ * kendiliğinden uyar). Uygulamanın her yeri (pano, menü, form, AI) bunu kullanır.
+ */
+export const effectiveScheme = (ws: Pick<WorkspaceData, 'projectSchemes'>, project?: Pick<Project, 'schemeId' | 'workflowOverride'> | null): ProjectScheme & { workflowSource: 'scheme' | 'project' } => {
+    const scheme = schemeOf(ws, project);
+    const o = project?.workflowOverride;
+    if (!scheme.allowProjectWorkflow || !o) return { ...scheme, workflowSource: 'scheme' };
+    const pool = new Map(scheme.workflow.statuses.map(s => [s.key, s]));
+    const statuses = o.statuses.filter(s => pool.has(s.key)).map(s => pool.get(s.key)!);
+    if (!statuses.length) return { ...scheme, workflowSource: 'scheme' };
+    const keys = new Set(statuses.map(s => s.key));
+    const transitions = o.transitions
+        ? Object.fromEntries(Object.entries(o.transitions).filter(([f]) => keys.has(f)).map(([f, tos]) => [f, tos.filter(t => keys.has(t))]))
+        : undefined;
+    const workflow: WorkflowConfig = { statuses, initial: keys.has(o.initial) ? o.initial : statuses[0].key, ...(transitions ? { transitions } : {}), ...(o.layout ? { layout: o.layout } : {}) };
+    return { ...scheme, workflow, workflowSource: 'project' };
+};
+
+/** Proje sahibinin özel iş akışı kuralı: yalnız şemanın durumları, şemada yeni durum yok */
+export const validateProjectWorkflow = (scheme: ProjectScheme, wf: WorkflowConfig): string[] => {
+    const pool = new Set(scheme.workflow.statuses.map(s => s.key));
+    const extra = wf.statuses.filter(s => !pool.has(s.key)).map(s => s.label);
+    return [
+        ...(extra.length ? [`Yalnız yapılandırmanın durumları kullanılabilir: ${extra.join(', ')} yapılandırmada yok (yeni durumu yönetici ekler).`] : []),
+        ...validateScheme({ ...scheme, workflow: wf }),
+    ];
+};
+
 export const schemeUsage = (ws: Pick<WorkspaceData, 'projects' | 'projectSchemes'>, schemeId: string): Project[] =>
     ws.projects.filter(p => schemeOf(ws, p).id === schemeId);
 

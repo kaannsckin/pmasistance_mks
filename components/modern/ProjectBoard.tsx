@@ -31,6 +31,8 @@ interface ProjectBoardProps {
     /** Pano nereden geliyor: projeye özel / şema / iş akışından otomatik */
     boardSource?: 'project' | 'scheme' | 'auto';
     schemeName?: string;
+    /** Verilirse "İş akışı" düğmesi (projeye özel akış; yapılandırma izin veriyorsa) */
+    onOpenWorkflow?: () => void;
     onViewTask: (task: Task) => void;
     onEditTask: (task: Task) => void;
     onDeleteTask: (id: string) => void;
@@ -110,7 +112,7 @@ const Card: React.FC<{
 };
 
 const ProjectBoard: React.FC<ProjectBoardProps> = ({
-    tasks, config, canConfigure, onSaveConfig, onMoveTask, onStatusChange, onWorkflowChange, workflow, boardSource, schemeName, onViewTask, onEditTask, onDeleteTask, onNotifyTask, onNewTask, onCelebrate,
+    tasks, config, canConfigure, onSaveConfig, onMoveTask, onStatusChange, onWorkflowChange, workflow, boardSource, schemeName, onOpenWorkflow, onViewTask, onEditTask, onDeleteTask, onNotifyTask, onNewTask, onCelebrate,
     sprintNames, me, wpNames, minPriority = 'Low' as TaskPriority, sortKey = 'smart' as TaskSortKey,
 }) => {
     const cfg = useMemo(() => boardConfigOf(config, workflow), [config, workflow]);
@@ -226,6 +228,7 @@ const ProjectBoard: React.FC<ProjectBoardProps> = ({
                     </span>
                     <button type="button" className="m-btn m-btn-primary !min-h-[36px] !px-3 text-[14px]" onClick={onNewTask}><Icon name="plus" size={15} />Görev</button>
                     {schemeName && <span className="hidden lg:inline-flex items-center gap-1 h-7 px-2.5 rounded-full m-fill-2 text-[12.5px] m-text-2" title={`Yönetici tarafından atanan proje yapılandırması${boardSource === 'project' ? ' · bu projeye özel pano' : ''}`}><Icon name="sliders" size={12} />{schemeName}{boardSource === 'project' ? ' · özel pano' : ''}</span>}
+                    {onOpenWorkflow && <button type="button" className="m-btn m-btn-gray !min-h-[36px] !px-3 text-[14px]" onClick={onOpenWorkflow} title="Bu projenin iş akışı: durumlar arası okları çizin"><Icon name="activity" size={15} />İş akışı</button>}
                     {canConfigure && <button type="button" className="m-btn m-btn-gray !min-h-[36px] !px-3 text-[14px]" onClick={() => setSettingsOpen(true)} title="Kolonlar, durum/etiket kuralları, WIP, hızlı filtreler, kulvarlar"><Icon name="sliders" size={15} />Panoyu yapılandır</button>}
                 </div>
             </div>

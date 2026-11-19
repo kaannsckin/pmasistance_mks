@@ -1,6 +1,6 @@
 
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { View, Task, Resource, TaskStatus, Note, CustomerRequest, Objective, Project, Person, WorkspaceData, RagStatus, ProjectStatus, UserRole, PlanLockStatus, WorkPackage, UiStyle, PermissionKey, EstimateLogEntry, JiraSyncSettings, ReleasePlan, GoldenItem, EvalRun, ModelEvalRun, BoardConfig, ProjectScheme } from './types';
+import { View, Task, Resource, TaskStatus, Note, CustomerRequest, Objective, Project, Person, WorkspaceData, RagStatus, ProjectStatus, UserRole, PlanLockStatus, WorkPackage, UiStyle, PermissionKey, EstimateLogEntry, JiraSyncSettings, ReleasePlan, GoldenItem, EvalRun, ModelEvalRun, BoardConfig, ProjectScheme, WorkflowConfig } from './types';
 import { INITIAL_TASKS, INITIAL_RESOURCES, INITIAL_OBJECTIVES } from './constants';
 import {
   WORKSPACE_STORAGE_KEY,
@@ -31,7 +31,8 @@ import { setReportExemplar } from './utils/ai/reportExamples';
 import { applyRuleAction, RuleAction, ruleActionLabel } from './utils/ai/reportRules';
 import { stampLifecycle } from './utils/planning/lifecycle';
 import { applyWorkflow, canTransition, taskStatusLabel, taskWorkflow, transitionToCategory, workflowOptions } from './utils/workflow';
-import { boardForProject, DEFAULT_SCHEME_ID, migrateTasksToWorkflow, schemeOf, schemeUsage, validateScheme } from './utils/projectScheme';
+import { boardForProject, DEFAULT_SCHEME_ID, effectiveScheme, migrateTasksToWorkflow, schemeOf, schemeUsage, validateProjectWorkflow, validateScheme } from './utils/projectScheme';
+import ProjectWorkflowSheet from './components/modern/ProjectWorkflowSheet';
 import { AllocationSuggestion, ApplyMode, applyAllocationSuggestions } from './utils/taskToAllocation';
 import { applyBilledHoursActuals, planBilledHoursPoolAdditions, suggestBilledHoursActuals, BilledApplyMode, BilledHoursOptions, BilledHoursRecord } from './utils/billedHours';
 import { buildTodoItems, TodoItem } from './utils/todoItems';
@@ -186,6 +187,8 @@ const App: React.FC = () => {
   const [undo, setUndo] = useState<{ message: string; snapshot: WorkspaceData } | null>(null);
   // İş akışı kuralı bildirimi (izin verilmeyen geçiş, eksik zorunlu alan)
   const [flowNotice, setFlowNotice] = useState<string | null>(null);
+  // Projeye özel iş akışı penceresi (proje kimliği)
+  const [workflowSheetProject, setWorkflowSheetProject] = useState<string | null>(null);
   useEffect(() => { if (!flowNotice) return; const id = window.setTimeout(() => setFlowNotice(null), 6000); return () => window.clearTimeout(id); }, [flowNotice]);
   const [storageFull, setStorageFull] = useState(false);
   const [storageWarnClosed, setStorageWarnClosed] = useState(false);
@@ -245,7 +248,7 @@ const App: React.FC = () => {
   const settings = workspace?.settings;
   // Aktif projenin admin yapılandırma şeması (iş akışı, kayıt türleri, zorunlu alanlar, pano)
   const activeScheme = useMemo(
-    () => schemeOf({ projectSchemes: workspace?.projectSchemes }, workspace?.projects.find(p => p.id === workspace.activeProjectId)),
+    () => effectiveScheme({ projectSchemes: workspace?.projectSchemes }, workspace?.projects.find(p => p.id === workspace.activeProjectId)),
     [workspace?.projectSchemes, workspace?.projects, workspace?.activeProjectId]
   );
   const activeProject = useMemo(
@@ -1123,7 +1126,7 @@ const App: React.FC = () => {
     let moved = 0;
     const projects = ws.projects.map(p => {
       if (!ids.has(p.id)) return p;
-      const r = migrateTasksToWorkflow(p.tasks, schemeOf(ws, p).workflow);
+      const r = migrateTasksToWorkflow(p.tasks, effectiveScheme(ws, p).workflow);
       moved += r.moved;
       return r.moved ? { ...p, tasks: r.tasks, updatedAt: new Date().toISOString() } : p;
     });
@@ -1154,6 +1157,22 @@ const App: React.FC = () => {
       const next0 = { ...ws, projectSchemes: (ws.projectSchemes || []).filter(x => x.id !== schemeId), projects: ws.projects.map(p => (affected.has(p.id) ? { ...p, schemeId: undefined } : p)) };
       const { ws: next, moved } = migrateProjects(next0, affected);
       return appendAudit(next, 'config.update', `Proje yapılandırması "${scheme.name}" silindi; ${affected.size} proje varsayılana döndü${moved ? ` · ${moved} görev taşındı` : ''}`);
+    });
+  }, [updateWorkspace]);
+  // Projeye özel iş akışı: admin ya da (yapılandırma izin veriyorsa) proje sahibi
+  const handleSaveProjectWorkflow = useCallback((projectId: string, wf: WorkflowConfig | undefined) => {
+    updateWorkspace(ws => {
+      const project = ws.projects.find(p => p.id === projectId);
+      if (!project) return ws;
+      const scheme = schemeOf(ws, project);
+      const who = identityOf(ws);
+      if (!can(who, 'screen.admin') && !(scheme.allowProjectWorkflow && canEditProjectContent(ws, who, projectId))) return ws;
+      if (wf && validateProjectWorkflow(scheme, wf).length) return ws;
+      const next0 = { ...ws, projects: ws.projects.map(p => (p.id === projectId ? { ...p, workflowOverride: wf, updatedAt: new Date().toISOString() } : p)) };
+      const { ws: next, moved } = migrateProjects(next0, new Set([projectId]));
+      return appendAudit(next, 'config.update', wf
+        ? `"${project.name}" projeye özel iş akışı kaydedildi: ${wf.statuses.length} durum, ${wf.transitions ? `${Object.values(wf.transitions).reduce((n, l) => n + l.length, 0)} geçiş` : 'serbest geçiş'}${moved ? ` · ${moved} görev taşındı` : ''}`
+        : `"${project.name}" projeye özel iş akışı kaldırıldı ("${scheme.name}" akışına dönüldü)${moved ? ` · ${moved} görev taşındı` : ''}`, projectId);
     });
   }, [updateWorkspace]);
   const handleAssignScheme = useCallback((projectId: string, schemeId: string) => {
@@ -1445,6 +1464,7 @@ const App: React.FC = () => {
           onDeleteScheme={handleDeleteScheme}
           onAssignScheme={handleAssignScheme}
           onSaveProjectBoard={handleSaveBoardConfig}
+          onOpenProjectWorkflow={id => setWorkflowSheetProject(id)}
         />
       );
       return isModern ? page : <div className="ui-modern rounded-3xl p-4 sm:p-6">{page}</div>;
@@ -1710,7 +1730,8 @@ const App: React.FC = () => {
         config={projectBoard.config}
         boardSource={projectBoard.source}
         workflow={wf}
-        schemeName={activeScheme.id === DEFAULT_SCHEME_ID ? undefined : activeScheme.name}
+        schemeName={activeScheme.id === DEFAULT_SCHEME_ID && activeScheme.workflowSource !== 'project' ? undefined : `${activeScheme.name}${activeScheme.workflowSource === 'project' ? ' · özel akış' : ''}`}
+        onOpenWorkflow={activeScheme.allowProjectWorkflow && canEditProjectContent(workspace, identity, activeProject.id) ? () => setWorkflowSheetProject(activeProject.id) : undefined}
         canConfigure={activeScheme.allowProjectBoard && canEditProjectContent(workspace, identity, activeProject.id)}
         onSaveConfig={cfg => handleSaveBoardConfig(activeProject.id, cfg)}
         onMoveTask={moveBoardTask}
@@ -2414,6 +2435,12 @@ const App: React.FC = () => {
           <button type="button" onClick={() => setStorageWarnClosed(true)} className="opacity-70 hover:opacity-100" aria-label="Uyarıyı kapat"><i aria-hidden="true" className="fa-solid fa-xmark text-sm"></i></button>
         </div>
       )}
+      {workflowSheetProject && workspace && (() => {
+        const p = workspace.projects.find(x => x.id === workflowSheetProject);
+        if (!p) return null;
+        const sheet = <ProjectWorkflowSheet project={p} scheme={schemeOf(workspace, p)} onClose={() => setWorkflowSheetProject(null)} onSave={wf => { handleSaveProjectWorkflow(p.id, wf); setWorkflowSheetProject(null); }} />;
+        return isModern ? sheet : <div className="ui-modern">{sheet}</div>;
+      })()}
       {flowNotice && (
         <div role="alert" className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[250] flex items-center gap-3 bg-red-700 text-white rounded-xl shadow-2xl px-4 py-2.5 max-w-[92vw]">
           <i aria-hidden="true" className="fa-solid fa-route text-xs"></i>

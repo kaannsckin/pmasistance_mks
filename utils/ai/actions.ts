@@ -1,4 +1,4 @@
-import { Allocation, Project, RagStatus, Resource, RiskLevel, RiskStatus, Task, TaskStatus, WorkspaceData } from '../../types';
+import { Allocation, IssueType, Project, RagStatus, Resource, RiskLevel, RiskStatus, Task, TaskStatus, WorkspaceData } from '../../types';
 import { createAllocation, getPlanLockStatus, setAllocationCell } from '../allocations';
 import { stampLifecycle } from '../planning/lifecycle';
 import { appendAudit } from '../audit';
@@ -6,6 +6,8 @@ import { canEditActualCell, canEditPlanCell, canEditProjectContent, identityOf }
 import { markConverted, REQUEST_STATUS_LABELS, taskDraftFromRequest } from '../customerRequests';
 import { createNote } from '../notes';
 import { createRisk, RISK_STATUS_LABELS, riskScore } from '../risks';
+import { effectiveScheme, missingRequiredFields, allowedIssueTypes } from '../projectScheme';
+import { initialStatus, resolveTransition, taskStatusLabel } from '../workflow';
 
 /**
  * AI'nın önerdiği veri değişiklikleri — ASLA kendiliğinden uygulanmaz.
@@ -16,8 +18,9 @@ import { createRisk, RISK_STATUS_LABELS, riskScore } from '../risks';
 
 export type AiAction =
     | { type: 'risk_ekle'; projectId: string; title: string; description?: string; probability: RiskLevel; impact: RiskLevel; mitigation?: string; ownerPersonId?: string }
-    | { type: 'gorev_ekle'; projectId: string; name: string; priority: Task['priority']; resourceName?: string; dueDate?: string; time?: { best: number; avg: number; worst: number }; notes?: string }
-    | { type: 'gorev_durumu'; projectId: string; taskId: string; status: TaskStatus }
+    | { type: 'gorev_ekle'; projectId: string; name: string; priority: Task['priority']; resourceName?: string; dueDate?: string; time?: { best: number; avg: number; worst: number }; notes?: string; issueType?: IssueType; labels?: string[] }
+    /** status: hedef kategori; workflowKey verilirse belirli iş akışı durumu (ör. TESTING) — geçiş kuralları uygulanır */
+    | { type: 'gorev_durumu'; projectId: string; taskId: string; status: TaskStatus; workflowKey?: string }
     | { type: 'rag_guncelle'; projectId: string; rag: RagStatus; ragNote?: string }
     | { type: 'tahsis_ayarla'; personId: string; projectId: string; year: number; month: number; field: 'plan' | 'actual'; value: number }
     | { type: 'risk_guncelle'; projectId: string; riskId: string; status?: RiskStatus; probability?: RiskLevel; impact?: RiskLevel; mitigation?: string; ownerPersonId?: string; reason?: string }
@@ -84,12 +87,22 @@ export const validateAction = (ws: WorkspaceData, action: AiAction): string | nu
             if (!action.title.trim()) return 'Risk başlığı boş olamaz.';
             if (![1, 2, 3, 4, 5].includes(action.probability) || ![1, 2, 3, 4, 5].includes(action.impact)) return 'Olasılık ve etki 1-5 arasında olmalı.';
             return null;
-        case 'gorev_ekle':
+        case 'gorev_ekle': {
             if (!action.name.trim()) return 'Görev adı boş olamaz.';
             if (action.dueDate && !/^\d{4}-\d{2}-\d{2}$/.test(action.dueDate)) return 'Bitiş tarihi YYYY-AA-GG biçiminde olmalı.';
-            return null;
-        case 'gorev_durumu':
-            return project.tasks.some(t => t.id === action.taskId) ? null : 'Görev bulunamadı (silinmiş olabilir).';
+            // Proje yapılandırması: kayıt türü ve zorunlu alanlar (görev formuyla aynı kural)
+            const scheme = effectiveScheme(ws, project);
+            if (action.issueType && !allowedIssueTypes(scheme).includes(action.issueType)) return `Bu projede "${action.issueType}" kayıt türü kullanılamıyor (yapılandırma: ${scheme.name}).`;
+            const missing = missingRequiredFields(scheme, { resourceName: action.resourceName, dueDate: action.dueDate, time: action.time, issueType: action.issueType, labels: action.labels });
+            return missing.length ? `Projenin yapılandırmasında (${scheme.name}) zorunlu alan eksik: ${missing.join(', ')}.` : null;
+        }
+        case 'gorev_durumu': {
+            const task = project.tasks.find(t => t.id === action.taskId);
+            if (!task) return 'Görev bulunamadı (silinmiş olabilir).';
+            // İş akışı geçiş kuralları (kullanıcının menüsü ve panosuyla aynı)
+            const r = resolveTransition(task, effectiveScheme(ws, project).workflow, { key: action.workflowKey, category: action.status });
+            return 'error' in r ? r.error : null;
+        }
         case 'rag_guncelle':
             return null;
         case 'risk_guncelle': {
@@ -159,11 +172,14 @@ export const describeAction = (ws: WorkspaceData, action: AiAction): { title: st
             };
         case 'gorev_durumu': {
             const task = project?.tasks.find(t => t.id === action.taskId);
+            const wf = effectiveScheme(ws, project).workflow;
+            const r = task ? resolveTransition(task, wf, { key: action.workflowKey, category: action.status }) : null;
+            const to = r && 'target' in r ? r.target.label : TASK_STATUS_TR[action.status];
             return {
                 title: `Görev durumu: ${task?.name || '?'}`,
                 details: [
                     { label: 'Proje', value: pName },
-                    { label: 'Durum', value: `${task ? TASK_STATUS_TR[task.status] : '?'} → ${TASK_STATUS_TR[action.status]}` },
+                    { label: 'Durum', value: `${task ? taskStatusLabel(task, wf) : '?'} → ${to}` },
                 ],
             };
         }
@@ -274,7 +290,8 @@ export const applyAction = (ws: WorkspaceData, action: AiAction): { ws: Workspac
             const task: Task = {
                 id: newTaskId(), name: action.name.trim(), availability: time.avg > 0, priority: action.priority, version: 1,
                 predecessor: null, unit: '', resourceName: action.resourceName || '', time, jiraId: '', notes: action.notes?.trim() || '',
-                status: TaskStatus.ToDo, labels: [], includeInSprints: true, ...(action.dueDate ? { dueDate: action.dueDate } : {}),
+                ...initialStatus(effectiveScheme(ws, project).workflow), labels: action.labels || [], includeInSprints: true, ...(action.dueDate ? { dueDate: action.dueDate } : {}),
+                ...(action.issueType ? { issueType: action.issueType } : {}),
                 ...(time.avg > 0 ? { estimateSource: 'ai' as const } : {}),
             };
             next = touch(ws, project.id, p => {
@@ -295,8 +312,14 @@ export const applyAction = (ws: WorkspaceData, action: AiAction): { ws: Workspac
         }
         case 'gorev_durumu': {
             const task = project.tasks.find(t => t.id === action.taskId)!;
-            next = touch(ws, project.id, p => ({ ...p, tasks: p.tasks.map(t => (t.id === action.taskId ? { ...t, status: action.status } : t)) }));
-            summary = `"${project.name}" · ${task.name}: ${TASK_STATUS_TR[task.status]} → ${TASK_STATUS_TR[action.status]}`;
+            const wf = effectiveScheme(ws, project).workflow;
+            const r = resolveTransition(task, wf, { key: action.workflowKey, category: action.status });
+            if ('error' in r) throw new Error(r.error);
+            const target = r.target;
+            // Ayrıntılı durum: istenmişse, akış kısıtlıysa ya da görevde zaten varsa yazılır (menüyle aynı davranış)
+            const setKey = !!action.workflowKey || !!wf.transitions || !!task.jiraStatus;
+            next = touch(ws, project.id, p => ({ ...p, tasks: p.tasks.map(t => (t.id === action.taskId ? { ...t, status: target.category, ...(setKey ? { jiraStatus: target.key } : {}), updatedAt: new Date().toISOString() } : t)) }));
+            summary = `"${project.name}" · ${task.name}: ${taskStatusLabel(task, wf)} → ${target.label}`;
             break;
         }
         case 'rag_guncelle': {
@@ -349,7 +372,7 @@ export const applyAction = (ws: WorkspaceData, action: AiAction): { ws: Workspac
                     ...draft,
                     name: action.task?.name?.trim() || draft.name,
                     priority: action.task?.priority || draft.priority,
-                    status: TaskStatus.ToDo,
+                    ...initialStatus(effectiveScheme(ws, project).workflow),
                     ...(action.task?.dueDate ? { dueDate: action.task.dueDate } : {}),
                     ...(time ? { time, availability: time.avg > 0 } : {}),
                 };

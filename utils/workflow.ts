@@ -153,3 +153,38 @@ export const reconcileWorkflow = (old: Pick<Task, 'status' | 'jiraStatus'>, t: T
     if (known && known.category === t.status) return t;
     return { ...t, jiraStatus: undefined };
 };
+
+const normLabel = (x: string) => x.trim().toLocaleLowerCase('tr-TR').replace(/ı/g, 'i');
+
+/**
+ * İstenen geçişi iş akışına göre çözer (AI önerisi ve dış çağrılar için): ad
+ * (Türkçe) ya da Jira adıyla belirli durum veya yalnız kategori. İzin yoksa
+ * kullanıcıya/modele gösterilecek gerekçe ve izinli geçişler döner.
+ */
+export const resolveTransition = (
+    t: Pick<Task, 'status' | 'jiraStatus'>,
+    wf: WorkflowConfig,
+    want: { key?: string; category?: TaskStatus },
+): { target: WorkflowStatus } | { error: string } => {
+    const cur = taskWorkflow(t, wf);
+    const allowed = workflowOptions([], wf, t).flatMap(g => g.statuses).filter(s => s.key !== cur.key);
+    const allowedText = allowed.length ? allowed.map(s => s.label).join(', ') : 'yok';
+    if (want.key) {
+        const k = workflowKey(want.key);
+        const s = wf.statuses.find(x => x.key === k || normLabel(x.label) === normLabel(want.key!));
+        if (!s) return { error: `"${want.key}" bu projenin iş akışında yok. Durumlar: ${wf.statuses.map(x => x.label).join(', ')}.` };
+        if (!canTransition(wf, cur.key, s.key)) return { error: `"${cur.label}" → "${s.label}" geçişi projenin iş akışında tanımlı değil. İzinli geçişler: ${allowedText}.` };
+        return { target: s };
+    }
+    if (!want.category) return { error: 'Hedef durum belirtilmedi.' };
+    const s = transitionToCategory(t, want.category, wf);
+    if (!s) return { error: `"${cur.label}" durumundan "${CATEGORY_LABELS[want.category]}" kategorisine geçiş projenin iş akışında tanımlı değil. İzinli geçişler: ${allowedText}.` };
+    return { target: s };
+};
+
+/** Yeni kaydın başlangıcı (iş akışının başlangıç durumu) */
+export const initialStatus = (wf: WorkflowConfig): { status: TaskStatus; jiraStatus?: string } => {
+    const s = wf.statuses.find(x => x.key === wf.initial);
+    if (!s) return { status: TaskStatus.ToDo };
+    return wf === DEFAULT_WORKFLOW ? { status: s.category } : { status: s.category, jiraStatus: s.key };
+};

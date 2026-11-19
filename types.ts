@@ -115,6 +115,8 @@ export interface WorkflowConfig {
   transitions?: Record<string, string[]>;
   /** Yeni kaydın başlangıç durumu */
   initial: string;
+  /** Diyagramdaki durum kutularının konumları (tasarımcı; yoksa otomatik yerleşim) */
+  layout?: Record<string, { x: number; y: number }>;
 }
 
 export type SchemeRequiredField = 'resourceName' | 'dueDate' | 'estimate' | 'issueType' | 'labels' | 'workPackage';
@@ -137,6 +139,12 @@ export interface ProjectScheme {
   board?: BoardConfig;
   /** Proje sahibi panoyu kendi projesi için özelleştirebilir */
   allowProjectBoard: boolean;
+  /**
+   * Proje sahibi kendi projesinin iş akışını özelleştirebilir (Jira "genişletilmiş
+   * proje yönetimi" gibi): yalnız bu yapılandırmanın durumlarını kullanır, yeni
+   * durum ekleyemez; geçişleri ve başlangıcı değiştirebilir, durum çıkarabilir.
+   */
+  allowProjectWorkflow?: boolean;
   updatedAt?: string;
 }
 
@@ -603,6 +611,7 @@ export interface Project {
   jiraSync?: JiraSyncSettings; // Jira canlı eşitleme kaynağı ve otomatik eşitleme aralığı
   boardConfig?: BoardConfig; // Projeye özel pano (şema izin veriyorsa; yoksa şemanın panosu)
   schemeId?: string; // Admin'in atadığı yapılandırma şeması (yoksa varsayılan)
+  workflowOverride?: WorkflowConfig; // Projeye özel iş akışı (şema izin veriyorsa; yalnız şemanın durumlarıyla)
   risks?: Risk[];
   pestelItems?: PestelItem[]; // PESTEL dış çevre analizi
   swotItems?: SwotItem[]; // SWOT stratejik analizi

@@ -1,4 +1,4 @@
-import { PermissionKey, ProjectStatus, RagStatus, RiskStatus, Task, TaskStatus } from '../../types';
+import { IssueType, PermissionKey, ProjectStatus, RagStatus, RiskStatus, Task, TaskStatus } from '../../types';
 import { normalizeEnumArgs } from './enumAliases';
 import { inMonthEstimates, InMonthEstimate } from '../inMonthActual';
 import { getPlanLockStatus, MONTH_INDEXES, ROLE_LABELS, summarizeByProject } from '../allocations';
@@ -21,7 +21,8 @@ import { summarizeWorkPackages } from '../workPackages';
 import { can } from '../permissions';
 import { AiAction, AiProposal, describeAction, validateAction } from './actions';
 import { JsonSchema, ToolCall, ToolSpec } from './protocol';
-import { taskStatusLabel } from '../workflow';
+import { knownWorkflow, taskStatusLabel } from '../workflow';
+import { effectiveScheme } from '../projectScheme';
 import { DIALOG_KEYS, DIALOGS, DialogKey, SCREEN_KEYS, SCREENS, ScreenKey } from './uiActions';
 import type { JiraIssueRecord } from '../integrations';
 import {
@@ -857,6 +858,8 @@ const PROPOSAL_TOOLS: ToolDef[] = [
                 sure_ortalama: S.num('Ortalama süre (gün).'),
                 sure_kotumser: S.num('Kötümser süre (gün).'),
                 aciklama: S.str('Görev açıklaması.'),
+                tur: S.str('', ['bug', 'feature', 'improvement', 'task', 'other']),
+                etiketler: S.str('virgülle'),
             }, ['ad']),
         },
         run: (a, ctx) => {
@@ -871,6 +874,8 @@ const PROPOSAL_TOOLS: ToolDef[] = [
                 dueDate: str(a.bitis) || undefined,
                 time: hasTime ? { best: days(a.sure_iyimser), avg: days(a.sure_ortalama), worst: days(a.sure_kotumser) } : undefined,
                 notes: str(a.aciklama) || undefined,
+                ...(['bug', 'feature', 'improvement', 'task', 'other'].includes(str(a.tur)) ? { issueType: str(a.tur) as IssueType } : {}),
+                ...(str(a.etiketler) ? { labels: str(a.etiketler).split(',').map(x => x.trim()).filter(Boolean) } : {}),
             });
         },
     },
@@ -879,21 +884,28 @@ const PROPOSAL_TOOLS: ToolDef[] = [
         writeOnly: true,
         spec: {
             name: 'oner_gorev_durumu',
-            description: 'Bir görevin durumunu değiştirmeyi ÖNERİR (kullanıcı onaylamadan uygulanmaz).',
+            description: 'Görev durumunu değiştirmeyi ÖNERİR (onaysız uygulanmaz). İş akışı geçiş kuralları uygulanır; izinsizse hata izinli geçişleri listeler.',
             parameters: S.obj({
                 proje: P.project,
-                gorev: S.str('Görevin adı (kısmi olabilir).'),
-                durum: S.str('Yeni durum.', ['Backlog', 'ToDo', 'InProgress', 'Done']),
-            }, ['gorev', 'durum']),
+                gorev: S.str('Görev adı ya da Jira anahtarı'),
+                is_durumu: S.str('Hedef durum adı (ör. Testte, Çözüldü)'),
+                durum: S.str('ya da kategori', ['Backlog', 'ToDo', 'InProgress', 'Done']),
+            }, ['gorev']),
         },
         run: (a, ctx) => {
             const project = resolveProject(ctx, a.proje);
-            const status = str(a.durum) as TaskStatus;
-            if (!Object.values(TaskStatus).includes(status)) throw new ToolError('Durum Backlog, ToDo, InProgress ya da Done olmalı.');
-            const hits = matchByText(project.tasks, str(a.gorev), t => [t.name]);
+            const key = str(a.is_durumu);
+            let status = str(a.durum) as TaskStatus;
+            if (!key && !Object.values(TaskStatus).includes(status)) throw new ToolError('is_durumu ya da durum (Backlog, ToDo, InProgress, Done) gerekli.');
+            const hits = matchByText(project.tasks, str(a.gorev), t => [t.name, t.jiraId]);
             if (hits.length === 0) throw new ToolError(`"${str(a.gorev)}" adlı görev ${project.name} projesinde bulunamadı.`);
             if (hits.length > 1) throw new ToolError(`"${str(a.gorev)}" birden fazla görevle eşleşti: ${hits.slice(0, 8).map(t => t.name).join(', ')}.`);
-            return propose(ctx, { type: 'gorev_durumu', projectId: project.id, taskId: hits[0].id, status });
+            if (key) {
+                const s = knownWorkflow(key, effectiveScheme(ctx.ws, project).workflow);
+                if (s) status = s.category;
+                else status = status && Object.values(TaskStatus).includes(status) ? status : hits[0].status;
+            }
+            return propose(ctx, { type: 'gorev_durumu', projectId: project.id, taskId: hits[0].id, status, ...(key ? { workflowKey: key } : {}) });
         },
     },
     {

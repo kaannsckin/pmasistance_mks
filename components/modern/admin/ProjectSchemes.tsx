@@ -7,6 +7,7 @@ import {
 } from '../../../utils/projectScheme';
 import { CATEGORY_LABELS, CATEGORY_ORDER, WORKFLOW_STATUSES, workflowKey } from '../../../utils/workflow';
 import BoardSettings from '../BoardSettings';
+import WorkflowDesigner from './WorkflowDesigner';
 import { Icon } from '../icons';
 import { Sheet } from '../ui';
 
@@ -22,6 +23,7 @@ interface Props {
     onDeleteScheme: (id: string) => void;
     onAssignScheme: (projectId: string, schemeId: string) => void;
     onSaveProjectBoard: (projectId: string, cfg: BoardConfig | undefined) => void;
+    onOpenProjectWorkflow: (projectId: string) => void;
 }
 
 const CAT_TONE: Record<TaskStatus, string> = {
@@ -64,6 +66,7 @@ const SchemeEditor: React.FC<{
 }> = ({ initial, workspace, isNew, onClose, onSave }) => {
     const [s, setS] = useState<ProjectScheme>(() => JSON.parse(JSON.stringify(initial)));
     const [tab, setTab] = useState<Tab>('general');
+    const [wfView, setWfView] = useState<'diagram' | 'table'>('diagram');
     const [boardOpen, setBoardOpen] = useState(false);
     const [saveError, setSaveError] = useState<string | null>(null);
     const users = useMemo(() => schemeUsage(workspace, s.id), [workspace, s.id]);
@@ -126,7 +129,7 @@ const SchemeEditor: React.FC<{
     ];
 
     return (
-        <Sheet xl title={isNew ? 'Yeni proje yapılandırması' : `Yapılandırma: ${initial.name}`}
+        <Sheet xxl title={isNew ? 'Yeni proje yapılandırması' : `Yapılandırma: ${initial.name}`}
             subtitle={users.length ? `${users.length} proje kullanıyor — değişiklik hepsine uygulanır: ${users.slice(0, 4).map(p => p.name).join(', ')}${users.length > 4 ? '…' : ''}` : 'Henüz hiçbir projeye atanmadı.'}
             onClose={onClose}
             footer={(
@@ -160,7 +163,12 @@ const SchemeEditor: React.FC<{
                     <label className="flex items-start gap-2 cursor-pointer">
                         <input type="checkbox" className="mt-1" checked={s.allowProjectBoard} onChange={e => setS(x => ({ ...x, allowProjectBoard: e.target.checked }))} />
                         <span className="flex flex-col"><span className="text-[15px] m-text font-semibold">Proje yöneticisi panoyu kendi projesi için özelleştirebilir</span>
-                            <span className="text-[13px] m-text-3">Kapalıysa projeler bu yapılandırmanın panosunu kullanır, "Panoyu yapılandır" yalnız burada (admin) yapılır. İş akışı ve geçiş kuralları her durumda buradan gelir.</span></span>
+                            <span className="text-[13px] m-text-3">Kapalıysa projeler bu yapılandırmanın panosunu kullanır, "Panoyu yapılandır" yalnız burada (admin) yapılır.</span></span>
+                    </label>
+                    <label className="flex items-start gap-2 cursor-pointer">
+                        <input type="checkbox" className="mt-1" checked={!!s.allowProjectWorkflow} onChange={e => setS(x => ({ ...x, allowProjectWorkflow: e.target.checked }))} />
+                        <span className="flex flex-col"><span className="text-[15px] m-text font-semibold">Proje yöneticisi kendi projesinin iş akışını özelleştirebilir</span>
+                            <span className="text-[13px] m-text-3">Jira'daki "genişletilmiş proje yönetimi" gibi: yalnız bu yapılandırmanın durumlarını kullanır (yeni durum ekleyemez); okları/geçişleri ve başlangıcı değiştirebilir, durum çıkarabilir. Kapalıysa iş akışı yalnız buradan değişir.</span></span>
                     </label>
                     <div className="m-surface rounded-xl p-3 flex flex-col gap-2" style={{ boxShadow: 'inset 0 0 0 1px var(--m-sep)' }}>
                         <span className="text-[13px] font-semibold m-text-2">Özet</span>
@@ -172,6 +180,11 @@ const SchemeEditor: React.FC<{
 
             {tab === 'workflow' && (
                 <div className="flex flex-col gap-4">
+                    <div className="m-segmented self-start" role="group" aria-label="İş akışı görünümü">
+                        <button type="button" className="m-segment" aria-pressed={wfView === 'diagram'} onClick={() => setWfView('diagram')}>Diyagram</button>
+                        <button type="button" className="m-segment" aria-pressed={wfView === 'table'} onClick={() => setWfView('table')}>Tablo</button>
+                    </div>
+                    {wfView === 'diagram' ? <WorkflowDesigner value={wf} onChange={next => setS(x => ({ ...x, workflow: next }))} usage={usage} /> : (<>
                     <FlowPreview wf={wf} />
                     <div className="flex flex-col">
                         <div className="grid gap-2 px-1 pb-1 text-[12px] font-semibold m-text-3" style={{ gridTemplateColumns: '56px 1fr 1fr 150px 70px 70px 32px' }}>
@@ -241,6 +254,7 @@ const SchemeEditor: React.FC<{
                             </>
                         )}
                     </fieldset>
+                    </>)}
                 </div>
             )}
 
@@ -300,7 +314,7 @@ const SchemeEditor: React.FC<{
     );
 };
 
-const ProjectSchemes: React.FC<Props> = ({ workspace, onSaveScheme, onDeleteScheme, onAssignScheme, onSaveProjectBoard }) => {
+const ProjectSchemes: React.FC<Props> = ({ workspace, onSaveScheme, onDeleteScheme, onAssignScheme, onSaveProjectBoard, onOpenProjectWorkflow }) => {
     const schemes = schemesOf(workspace);
     const [editing, setEditing] = useState<{ scheme: ProjectScheme; isNew: boolean } | null>(null);
     const [picking, setPicking] = useState(false);
@@ -332,6 +346,15 @@ const ProjectSchemes: React.FC<Props> = ({ workspace, onSaveScheme, onDeleteSche
                             );
                         })}
                     </div>
+                    {schemes.length > 0 && (
+                        <div className="flex flex-col gap-2">
+                            <h3 className="m-0 text-[15px] font-semibold m-text">ya da kayıtlı bir yapılandırmadan başla</h3>
+                            <div className="flex flex-wrap gap-2">
+                                {schemes.map(x => <button key={x.id} type="button" className="m-pill" onClick={() => { setPicking(false); setEditing({ scheme: copyScheme(x), isNew: true }); }}><Icon name="copy" size={12} />{x.name}</button>)}
+                            </div>
+                            <p className="m-0 text-[12.5px] m-text-3">Çizdiğiniz iş akışı (oklar ve kutu yerleşimi dahil) kopyalanır; yeni yapılandırmada değiştirebilirsiniz.</p>
+                        </div>
+                    )}
                 </Sheet>
             )}
 
@@ -396,7 +419,9 @@ const ProjectSchemes: React.FC<Props> = ({ workspace, onSaveScheme, onDeleteSche
                                 {schemes.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
                             </select>
                             <span className="flex items-center gap-2 justify-end">
+                                {sc.allowProjectWorkflow && p.workflowOverride && <span className="inline-flex items-center h-6 px-2 rounded-full text-[12px] font-semibold m-tone-warn">Özel akış</span>}
                                 <span className={`inline-flex items-center h-6 px-2 rounded-full text-[12px] font-semibold ${b.source === 'project' ? 'm-tone-warn' : 'm-fill-2 m-text-2'}`}>{b.source === 'project' ? 'Özel pano' : 'Yapılandırmanın panosu'}</span>
+                                {sc.allowProjectWorkflow && <button type="button" className="m-btn m-btn-plain !min-h-[32px] !px-2.5 text-[13px]" onClick={() => onOpenProjectWorkflow(p.id)}><Icon name="activity" size={14} />Akış</button>}
                                 <button type="button" className="m-btn m-btn-plain !min-h-[32px] !px-2.5 text-[13px]" onClick={() => setBoardProject(p.id)}><Icon name="sliders" size={14} />Pano</button>
                             </span>
                         </div>

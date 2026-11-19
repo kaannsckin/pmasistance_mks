@@ -79,6 +79,7 @@ export interface ModernAdminProps {
     onDeleteScheme: (id: string) => void;
     onAssignScheme: (projectId: string, schemeId: string) => void;
     onSaveProjectBoard: (projectId: string, cfg: BoardConfig | undefined) => void;
+    onOpenProjectWorkflow: (projectId: string) => void;
 }
 
 const SHORT_ROLE: Record<UserRole, string> = {

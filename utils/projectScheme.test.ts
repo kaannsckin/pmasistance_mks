@@ -106,3 +106,28 @@ describe('iş akışı geçiş kuralları', () => {
         expect(transitionToCategory(task({ status: TaskStatus.Done, jiraStatus: 'RESOLVED' }), TaskStatus.ToDo, wf)?.key).toBe('REOPENED');
     });
 });
+
+describe('projeye özel iş akışı', () => {
+    const scheme = { ...createScheme('support', 'S'), id: 's', allowProjectWorkflow: true };
+    it('yalnız şemanın durumlarıyla; şemadan çıkarılan durum özel akıştan da düşer', async () => {
+        const { effectiveScheme, validateProjectWorkflow } = await import('./projectScheme');
+        const own = { statuses: scheme.workflow.statuses.filter(s => s.key !== 'REOPENED'), initial: 'OPEN', transitions: { 'OPEN': ['ANALYSIS', 'GONE'], 'ANALYSIS': ['RESOLVED'], 'RESOLVED': ['CLOSED'], 'GONE': ['OPEN'] } };
+        const eff = effectiveScheme({ projectSchemes: [scheme] }, { schemeId: 's', workflowOverride: own });
+        expect(eff.workflowSource).toBe('project');
+        expect(eff.workflow.statuses.map(s => s.key)).toEqual(['OPEN', 'ANALYSIS', 'TESTING', 'RESOLVED', 'CLOSED']);
+        expect(eff.workflow.transitions).toEqual({ 'OPEN': ['ANALYSIS'], 'ANALYSIS': ['RESOLVED'], 'RESOLVED': ['CLOSED'] });
+        expect(effectiveScheme({ projectSchemes: [{ ...scheme, allowProjectWorkflow: false }] }, { schemeId: 's', workflowOverride: own }).workflowSource).toBe('scheme');
+        expect(validateProjectWorkflow(scheme, { ...own, statuses: [...own.statuses, { key: 'NEW', label: 'Yeni', category: TaskStatus.InProgress }] }).join(' ')).toMatch(/Yalnız yapılandırmanın durumları/);
+    });
+
+    it('otomatik yerleşim: kategori sütunları, kayıtlı konumlar korunur', async () => {
+        const { autoLayout } = await import('../components/modern/admin/WorkflowDesigner');
+        const wf = { ...scheme.workflow, layout: { 'OPEN': { x: 500, y: 300 } } };
+        const l = autoLayout(wf);
+        expect(l['OPEN']).toEqual({ x: 500, y: 300 });
+        expect(l['REOPENED']).toEqual({ x: 60, y: 40 });
+        expect(l['ANALYSIS'].x).toBeGreaterThan(l['REOPENED'].x);
+        expect(l['CLOSED'].x).toBeGreaterThan(l['TESTING'].x);
+        expect(autoLayout(wf, false)['OPEN']).toEqual({ x: 60, y: 40 });
+    });
+});
