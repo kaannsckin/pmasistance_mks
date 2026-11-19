@@ -190,7 +190,7 @@ const JiraHistoryImport: React.FC<Props> = ({ project, onImport, onOpenList, onC
                                     ); })}</tbody>
                                 </table>
                             </div>
-                            <p className="m-0 text-[13px] m-text-3">Var olan kayıtlar Jira anahtarıyla eşleşir. Uygulamadaki sürüm, öncül, iş paketi, hedef bağlantısı, termin ve kendi tahmininiz korunur; kapanmış kayıtlar sürüm planına girmez, geçmiş veri olarak kalır.</p>
+                            <p className="m-0 text-[13px] m-text-3">Var olan kayıtlar Jira anahtarıyla eşleşir. Uygulamadaki sprint, öncül, iş paketi, hedef bağlantısı, termin ve kendi tahmininiz korunur; kapanmış kayıtlar sprint planına girmez, geçmiş veri olarak kalır.</p>
                             <div className="flex flex-wrap gap-2">
                                 <button type="button" className="m-btn m-btn-primary" disabled={!preview.added && !preview.updated} onClick={commit}>
                                     <Icon name="check" size={18} />{preview.added || preview.updated ? `Aktar (${num(preview.added + preview.updated)} kayıt)` : 'Değişiklik yok'}

@@ -783,7 +783,7 @@ export const findImportedProject = (projects: Project[], pkg: Pick<GibImportPack
     return best;
 };
 
-/** Excel'in sahip olduğu alanlar (yeniden aktarımda güncellenir); yaşam döngüsü ve sürüm uygulamada kalır */
+/** Excel'in sahip olduğu alanlar (yeniden aktarımda güncellenir); yaşam döngüsü ve sprint uygulamada kalır */
 const mergeTask = (old: Task, next: Task, statusFromSheet: boolean, now: Date): Task => {
     const merged: Task = {
         ...old,

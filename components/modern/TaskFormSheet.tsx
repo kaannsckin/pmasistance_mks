@@ -228,7 +228,7 @@ const TaskFormSheet: React.FC<TaskFormSheetProps> = ({ task, tasks, resources, p
                         <Field label="Birim" htmlFor="tf-unit">
                             <input id="tf-unit" className="m-input" value={d.unit} onChange={e => set({ unit: e.target.value })} />
                         </Field>
-                        <Field label="Sürüm" htmlFor="tf-version">
+                        <Field label="Sprint" htmlFor="tf-version">
                             <select id="tf-version" className="m-input" value={d.version} onChange={e => set({ version: parseInt(e.target.value, 10) || 0 })}>
                                 {versions.map(v => <option key={v} value={v}>{sprintLabel(v, sprintNames)}</option>)}
                             </select>
@@ -239,7 +239,7 @@ const TaskFormSheet: React.FC<TaskFormSheetProps> = ({ task, tasks, resources, p
                     </div>
                     <label className="flex items-center gap-2.5 text-[15px] m-text cursor-pointer self-start">
                         <input type="checkbox" className="w-4 h-4" checked={d.includeInSprints !== false} onChange={e => set({ includeInSprints: e.target.checked })} />
-                        Sürüm planlamasına dahil
+                        Sprint planlamasına dahil
                     </label>
                 </Section>
 

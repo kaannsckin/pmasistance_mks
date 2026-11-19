@@ -14,7 +14,7 @@ import { toIsoDay } from '../calendarRange';
  *     kendisinden ÖNCE kapanmış kayıtlarla tahmin edilir ve gerçekle
  *     karşılaştırılır (zaman ayrımı; geleceği görmeden). Dürüst aralıkta
  *     gerçeklerin ≈ %50'si P50'nin, ≈ %80'i P80'in altında kalmalı.
- *  2. Sürüm simülasyonunun geriye dönük testi: tamamlanmış geçmiş sürümler,
+ *  2. Sprint simülasyonunun geriye dönük testi: tamamlanmış geçmiş sprintler,
  *     başladıkları gün bilinen tahminler ve o güne kadarki geçmişle simüle
  *     edilir; P80 tarihine gerçekten ≈ %80 oranında yetişilmeli.
  *  3. Kalibrasyon izleme: birim × tür grubunda gerçekleşen ÷ tahmin oranı ve
@@ -116,7 +116,7 @@ export const summarizeRecordBacktest = (items: RecordBacktestItem[], skipped: nu
     return s;
 };
 
-// ---------------------------------------------------------------- 2. sürüm simülasyonu
+// ---------------------------------------------------------------- 2. sprint simülasyonu
 
 export interface ReleaseCase {
     projectId: string;
@@ -131,8 +131,8 @@ export interface ReleaseCase {
 }
 
 /**
- * Tamamlanmış geçmiş sürümler: sürümün bütün kayıtları kapanmış ve en az
- * `minTasks` kaydın tahmini var. Sürüm, ilk kaydının başladığı gün o güne
+ * Tamamlanmış geçmiş sprintler: sprintin bütün kayıtları kapanmış ve en az
+ * `minTasks` kaydın tahmini var. Sprint, ilk kaydının başladığı gün o güne
  * kadar kapanmış geçmişle ve kayıtların bilinen tahminleriyle simüle edilir.
  * Ekip bugünkü ekiptir; o sırada projede yürüyen başka işler hesaba katılmaz.
  */
@@ -149,7 +149,7 @@ export const releaseCases = (projects: Project[], history: PlanningHistory, ctx:
             const startIso = starts.sort()[0];
             const startDate = new Date(startIso);
             const past: PlanningHistory = { report: history.report, records: history.records.filter(r => r.resolvedAt < startIso) };
-            // Sürümün tüm kayıtları simüle edilir (tahmini olmayan, o güne kadar kapanmış benzer
+            // Sprintin tüm kayıtları simüle edilir (tahmini olmayan, o güne kadar kapanmış benzer
             // kayıtlardan); gerçek bitiş yalnız simüle edilen kayıtlar üzerinden ölçülür
             const ids = new Set(tasks.map(t => t.id));
             const fresh: Task[] = tasks.map(t => ({
@@ -162,7 +162,7 @@ export const releaseCases = (projects: Project[], history: PlanningHistory, ctx:
             const endIso = tasks.filter(t => simulated.has(t.id)).map(t => t.resolvedAt!).sort().slice(-1)[0];
             const simStart = simulationStart(startDate);
             out.push({
-                projectId: p.id, projectName: p.name, version: v, label: opts.sprintName?.(p, v) || `Sürüm ${v}`,
+                projectId: p.id, projectName: p.name, version: v, label: opts.sprintName?.(p, v) || `Sprint ${v}`,
                 start: toIsoDay(simStart), actualEnd: endIso.slice(0, 10), actualOffset: workdaysBetween(simStart, endIso) ?? 0,
                 taskCount: simulated.size, input: built.input,
             });
@@ -201,14 +201,14 @@ export const summarizeReleaseBacktest = (rows: ReleaseBacktestRow[]) => {
         medianError: median(rows.map(r => r.actualOffset - r.p50)),
         advice: [] as string[],
     };
-    if (s.n < 5) s.advice.push(`Anlamlı bir oran için en az 5 tamamlanmış sürüm gerekir (şu an ${s.n}). Sürümler kapandıkça dolar.`);
+    if (s.n < 5) s.advice.push(`Anlamlı bir oran için en az 5 tamamlanmış sprint gerekir (şu an ${s.n}). Sprintler kapandıkça dolar.`);
     else if (s.hit80 !== null) {
         s.advice.push(s.hit80 >= 0.7 && s.hit80 <= 0.9
-            ? `P80 tarihine sürümlerin %${Math.round(s.hit80 * 100)} kadarında yetişildi (hedef ≈ %80): simülasyon dürüst.`
+            ? `P80 tarihine sprintlerin %${Math.round(s.hit80 * 100)} kadarında yetişildi (hedef ≈ %80): simülasyon dürüst.`
             : s.hit80 < 0.7
-                ? `P80 tarihine sürümlerin yalnız %${Math.round(s.hit80 * 100)} kadarında yetişildi: simülasyon iyimser; sürümlerde plan dışı iş, kapsam artışı ya da eşzamanlı projeler olabilir.`
-                : `P80 tarihine sürümlerin %${Math.round(s.hit80 * 100)} kadarında yetişildi: simülasyon temkinli.`);
-        if (s.hitDeterministic !== null) s.advice.push(`Karşılaştırma: tek nokta plan (herkes tahmin ettiği sürede bitirirse) sürümlerin %${Math.round(s.hitDeterministic * 100)} kadarında tuttu.`);
+                ? `P80 tarihine sprintlerin yalnız %${Math.round(s.hit80 * 100)} kadarında yetişildi: simülasyon iyimser; sprintlerde plan dışı iş, kapsam artışı ya da eşzamanlı projeler olabilir.`
+                : `P80 tarihine sprintlerin %${Math.round(s.hit80 * 100)} kadarında yetişildi: simülasyon temkinli.`);
+        if (s.hitDeterministic !== null) s.advice.push(`Karşılaştırma: tek nokta plan (herkes tahmin ettiği sürede bitirirse) sprintlerin %${Math.round(s.hitDeterministic * 100)} kadarında tuttu.`);
     }
     return s;
 };

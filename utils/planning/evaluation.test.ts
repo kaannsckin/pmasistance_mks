@@ -55,8 +55,8 @@ describe('benzer kayıt tahmininin geriye dönük testi', () => {
     });
 });
 
-describe('sürüm simülasyonunun geriye dönük testi', () => {
-    it('tamamlanmış sürüm, başladığı günkü verilerle simüle edilip gerçekle karşılaştırılır', () => {
+describe('sprint simülasyonunun geriye dönük testi', () => {
+    it('tamamlanmış sprint, başladığı günkü verilerle simüle edilip gerçekle karşılaştırılır', () => {
         const done = [
             closed('a', '2026-09-07', 3, { version: 1, includeInSprints: true, resourceName: 'Ayşe' }),
             closed('b', '2026-09-07', 2, { version: 1, includeInSprints: true, resourceName: 'Ayşe' }),
@@ -69,7 +69,7 @@ describe('sürüm simülasyonunun geriye dönük testi', () => {
         });
         const h = buildHistory([p]);
         const cases = releaseCases([p], h, {}, { iterations: 300 });
-        expect(cases).toHaveLength(1); // sürüm 2 açık
+        expect(cases).toHaveLength(1); // sprint 2 açık
         const c = cases[0];
         expect(c).toMatchObject({ version: 1, start: '2026-09-07', taskCount: 3 });
         expect(c.actualOffset).toBeGreaterThan(0);

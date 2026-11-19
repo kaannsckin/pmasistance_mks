@@ -445,8 +445,8 @@ const emptyDay = (name: string): ProjectDay => ({ ad: name, yeni: [], baslayan: 
 
 /**
  * Kaydın planı (kayıt anahtarından tohumlu, her çağrıda aynı): planlandığı
- * sürüm ve termin — sürüm sonu; tahmin daha uzunsa tahmine göre. Termin
- * Jira'ya (duedate) yazılır; sürüm ve iş paketi uygulama tarafının planıdır.
+ * sprint ve termin — sprint sonu; tahmin daha uzunsa tahmine göre. Termin
+ * Jira'ya (duedate) yazılır; sprint ve iş paketi uygulama tarafının planıdır.
  */
 const planOf = (project: Project, key: string, createdDay: string, estimateHours: number | null) => {
     const rng = mulberry32(hashStr(key));
@@ -458,7 +458,7 @@ const planOf = (project: Project, key: string, createdDay: string, estimateHours
     return { sprint, due: dayOf(byEstimate > sprintEnd ? byEstimate : sprintEnd), rng };
 };
 
-/** Arka plandaki (persona olmayan) PY'nin aktarımı sonrası yeni görevlere uygulama planı: iş paketi, sürüm */
+/** Arka plandaki (persona olmayan) PY'nin aktarımı sonrası yeni görevlere uygulama planı: iş paketi, sprint */
 const decorateNewTask = (t: Task, project: Project, issue: SimIssue): Task => {
     const createdDay = issue.rec.created ? dayOf(new Date(issue.rec.created)) : project.settings.projectStartDate.slice(0, 10);
     const { sprint, rng } = planOf(project, issue.rec.key, createdDay, issue.rec.originalEstimateSeconds ? issue.rec.originalEstimateSeconds / 3600 : null);
@@ -730,7 +730,7 @@ export const stepDay = (state: SimState, input: WorkspaceData, day: string, opts
         const recent = jira.issues.filter(x => x.rec.resolved && dateOf(day).getTime() - new Date(x.rec.resolved).getTime() < 7 * 86_400_000);
         const openIssues = jira.issues.filter(x => x.rec.statusCategory !== 'done');
 
-        // 6. Confluence: toplantı notu (Pazartesi koordinasyon, sürüm sonunda sprint değerlendirme, diğer günler ara sıra)
+        // 6. Confluence: toplantı notu (Pazartesi koordinasyon, sprint sonunda değerlendirme, diğer günler ara sıra)
         let nextWork = addDays(day, 1);
         while (!isWorkday(dateOf(nextWork))) nextWork = addDays(nextWork, 1);
         const sprintEnd = sprintNo(project, nextWork) !== sprintNo(project, day);

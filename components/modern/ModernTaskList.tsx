@@ -127,8 +127,8 @@ const ModernTaskList: React.FC<ModernTaskListProps> = ({ tasks, resources, sprin
                     <option value="all">Herkes</option>
                     {people.map(p => <option key={p} value={p}>{p}</option>)}
                 </select>
-                <select aria-label="Sürüm" className={`m-pill ${sprint !== 'all' ? 'is-active' : ''}`} value={sprint} onChange={e => setSprint(e.target.value)}>
-                    <option value="all">Tüm sürümler</option>
+                <select aria-label="Sprint" className={`m-pill ${sprint !== 'all' ? 'is-active' : ''}`} value={sprint} onChange={e => setSprint(e.target.value)}>
+                    <option value="all">Tüm sprintler</option>
                     {versions.map(v => <option key={v} value={String(v)}>{sprintLabel(v, sprintNames)}</option>)}
                 </select>
                 {units.length > 1 && (
@@ -200,7 +200,7 @@ const ModernTaskList: React.FC<ModernTaskListProps> = ({ tasks, resources, sprin
                         <div className="m-surface rounded-2xl overflow-x-auto">
                             <div style={{ minWidth: 820 }}>
                                 <div aria-hidden="true" className="grid items-center gap-3 pl-2 pr-4 pt-2.5 pb-2 text-[13px] m-text-3" style={{ gridTemplateColumns: GRID }}>
-                                    <span></span><span>Görev</span><span>Atanan</span><span>Sürüm</span><span>Öncelik</span><span>Bitiş</span><span></span>
+                                    <span></span><span>Görev</span><span>Atanan</span><span>Sprint</span><span>Öncelik</span><span>Bitiş</span><span></span>
                                 </div>
                                 {rows.map(t => {
                                     const late = daysLate(t);

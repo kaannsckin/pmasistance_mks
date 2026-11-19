@@ -269,7 +269,7 @@ const StepItems: React.FC<{ plan: ReleasePlan; project: Project; canEdit: boolea
 
             {pool && (
                 <div className="rounded-xl m-fill-2 p-3.5 flex flex-col gap-2">
-                    <span className="text-[13px] font-semibold m-text-2">Havuzdaki açık kayıtlar (sürüm atanmamış)</span>
+                    <span className="text-[13px] font-semibold m-text-2">Havuzdaki açık kayıtlar (sprint atanmamış)</span>
                     <div className="flex flex-col max-h-[260px] overflow-y-auto">
                         {backlog.map(t => (
                             <label key={t.id} className="flex items-center gap-2.5 min-h-[40px] text-[15px] m-text cursor-pointer">
@@ -544,7 +544,7 @@ const StepSimulation: React.FC<{ plan: ReleasePlan; project: Project; history: P
             <div className="flex flex-wrap items-start justify-between gap-2">
                 <div className="min-w-0">
                     <h3 id="rp-s4" className="m-0 text-[17px] font-semibold m-text">Simülasyon</h3>
-                    <p className="m-0 mt-0.5 text-[14px] m-text-3">Sürüm kayıtları, projedeki {others} açık kayıtla birlikte ekip kapasitesine binlerce kez yerleştirilir; mevcut sürümlerdeki işler önce gelir. Sona {plan.testDays} iş günü test eklenir.</p>
+                    <p className="m-0 mt-0.5 text-[14px] m-text-3">Sürüm kayıtları, projedeki {others} açık kayıtla birlikte ekip kapasitesine binlerce kez yerleştirilir; mevcut sprintlerdeki işler önce gelir. Sona {plan.testDays} iş günü test eklenir.</p>
                 </div>
                 {sim.running && <span role="status" className="inline-flex items-center h-7 px-3 rounded-full text-[13px] font-semibold m-tone-accent">Hesaplanıyor</span>}
             </div>
@@ -713,8 +713,8 @@ const StepCommit: React.FC<{ plan: ReleasePlan; project: Project; history: Plann
                 <>
                     <ul className="m-0 pl-5 flex flex-col gap-1.5 text-[15px] m-text">
                         <li><b>{preview.created}</b> yeni görev açılır{preview.updated ? `, havuzdaki ${preview.updated} görev güncellenir` : ''}{excluded ? `; ${excluded} kayıt kapsam dışı kalır (kararı günlüğe yazılır)` : ''}.</li>
-                        {preview.skipped.length > 0 && <li className="m-ink-warn">Havuzdan alınan {preview.skipped.length} görev bu arada başka bir sürüme ya da hedefe bağlanmış veya kapanmış; aktarılmaz: {preview.skipped.map(x => `"${x.name}"`).join(', ')}.</li>}
-                        <li>Görevler simülasyon takvimine göre {versions.length > 1 ? `sürüm ${versions[0]}–${versions[versions.length - 1]} arasına` : `sürüm ${versions[0] ?? '—'} içine`} yerleşir; termin, kilometre taşının hedef tarihi (yoksa P80'i) olur.</li>
+                        {preview.skipped.length > 0 && <li className="m-ink-warn">Havuzdan alınan {preview.skipped.length} görev bu arada başka bir sprinte ya da hedefe bağlanmış veya kapanmış; aktarılmaz: {preview.skipped.map(x => `"${x.name}"`).join(', ')}.</li>}
+                        <li>Görevler simülasyon takvimine göre {versions.length > 1 ? `sprint ${versions[0]}–${versions[versions.length - 1]} arasına` : `sprint ${versions[0] ?? '—'} içine`} yerleşir; termin, kilometre taşının hedef tarihi (yoksa P80'i) olur.</li>
                         {preview.plan.milestones.length > 0 && <li>"{`Sürüm: ${plan.name}`}" hedefi ve {preview.plan.milestones.length} anahtar sonuç (kilometre taşları) Hedefler ekranına eklenir.</li>}
                         <li>Taban çizgisi: P50 {fmtDay(dates.p50)}, P80 {fmtDay(dates.p80)}, P95 {fmtDay(dates.p95)}{dates.targetProbability !== null ? `; hedef olasılığı ${pct(dates.targetProbability)}` : ''}. Sonradan güncel tahminle karşılaştırılır.</li>
                     </ul>
@@ -722,7 +722,7 @@ const StepCommit: React.FC<{ plan: ReleasePlan; project: Project; history: Plann
                     {canEdit ? (
                         <div className="flex flex-wrap items-center gap-3">
                             <button type="button" className="m-btn m-btn-primary" disabled={sim.running || committing} onClick={commit}><Icon name="check" size={18} strokeWidth={2.4} />{committing ? 'Taban çizgisi hesaplanıyor…' : 'Planı aktar'}</button>
-                            <span className="text-[13px] m-text-3">Taban çizgisi, kayıtlar sürüm takvimine yerleştikten sonra yeniden simüle edilerek kesinleşir.</span>
+                            <span className="text-[13px] m-text-3">Taban çizgisi, kayıtlar sprint takvimine yerleştikten sonra yeniden simüle edilerek kesinleşir.</span>
                         </div>
                     ) : <p className="m-0 text-[14px] m-text-3">Bu projeye plan aktarma yetkiniz yok.</p>}
                 </>

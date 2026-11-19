@@ -11,8 +11,8 @@ import { DEFAULT_SPREAD } from './simulationInput';
 import { isWorkday } from './workdays';
 
 /**
- * "Bu yeni kayıt hangi sürüme sığar?" — sürüm bazında olasılık. Her sürüm
- * için kaydın birimindeki kalan kapasite (sürümün kalan iş günleri × kişi
+ * "Bu yeni kayıt hangi sprinte sığar?" — sprint bazında olasılık. Her sprint
+ * için kaydın birimindeki kalan kapasite (sprintin kalan iş günleri × kişi
  * katılımı × izin payı) ile o birimdeki açık işlerin eforu ve yeni kaydın
  * eforu rastgele çekilerek karşılaştırılır; P(toplam ≤ kapasite).
  * Eforlar kişiden yenen gün cinsindendir (katılım kapasiteye bir kez girer).
@@ -26,13 +26,13 @@ export interface SprintFitRow {
     capacity: number; // birimin kalan efor kapasitesi (gün)
     committed: number; // birimdeki açık işlerin beklenen eforu (gün)
     probability: number | null; // birimde kapasite yoksa null
-    isNew: boolean; // planın sonuna eklenecek yeni sürüm
+    isNew: boolean; // planın sonuna eklenecek yeni sprint
 }
 
 export interface SprintFit {
     unit: string;
     rows: SprintFitRow[];
-    /** P ≥ 0,8 olan ilk sürüm; yoksa P ≥ 0,5 olan ilk sürüm */
+    /** P ≥ 0,8 olan ilk sprint; yoksa P ≥ 0,5 olan ilk sprint */
     recommended: number | null;
     recommendedRisky: boolean;
     unitHasTeam: boolean;
@@ -57,7 +57,7 @@ export const sprintFit = (
     const team = project.resources.filter(r => fold(r.unit) === unit);
     const planned = project.tasks.filter(t => t.includeInSprints !== false);
     const maxVersion = Math.max(0, ...planned.map(t => t.version || 0));
-    // Plan geçmişte kaldıysa bugünden sonraki ilk boş sürüme kadar uzat
+    // Plan geçmişte kaldıysa bugünden sonraki ilk boş sprinte kadar uzat
     const windows = buildSprintWindows(project, maxVersion + MAX_EXTRA_SPRINTS);
     const people = new Map((ctx.people || []).map(p => [fold(`${p.firstName} ${p.lastName}`), p]));
     const cal = calibrator(history);
@@ -101,7 +101,7 @@ export const sprintFit = (
 
     const iterations = ctx.iterations ?? 2000;
     const rows: SprintFitRow[] = [];
-    // Bitmiş sürümlerde kalan açık işler ilk açık sürüme devreder
+    // Bitmiş sprintlerde kalan açık işler ilk açık sprinte devreder
     let carried: Task[] = [];
     for (let i = 0; i < windows.length && rows.length < MAX_ROWS; i++) {
         const w = windows[i];
@@ -126,7 +126,7 @@ export const sprintFit = (
         }
         rows.push({
             version: v,
-            label: ctx.sprintName?.(v) || `Sürüm ${v}`,
+            label: ctx.sprintName?.(v) || `Sprint ${v}`,
             start: w.start,
             end: w.end,
             capacity: Math.round(capacity * 10) / 10,
@@ -134,7 +134,7 @@ export const sprintFit = (
             probability,
             isNew: v > maxVersion,
         });
-        if (v > maxVersion) break; // planın sonuna yalnız bir yeni sürüm önerilir
+        if (v > maxVersion) break; // planın sonuna yalnız bir yeni sprint önerilir
     }
 
     const firstAt = (p: number) => rows.find(r => r.probability !== null && r.probability >= p);

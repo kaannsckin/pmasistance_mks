@@ -20,7 +20,7 @@ import { Field, rowSep } from '../ui';
 /**
  * Tekil yeni kayıt: kayıt formu gibi doldurulur; benzer kapanmış kayıtların
  * gerçek sürelerinden kapanma süresi, efor, önem ve tür önerilir ve kaydın
- * hangi sürüme hangi olasılıkla sığacağı hesaplanır. "Kayıtlara gönder" ile
+ * hangi sprinte hangi olasılıkla sığacağı hesaplanır. "Kayıtlara gönder" ile
  * görev listesine eklenir; verilen tahmin kayıtta saklanır ve kayıt
  * kapandığında isabeti ölçülür.
  *
@@ -123,14 +123,14 @@ const NewRecordPlanner: React.FC<Props> = ({ project, history, people, leaves, v
         : effChoice === 'own' ? (est.calibration && !hidden ? { dist: { kind: 'fixed', value: ownDays! }, calibration: est.calibration.ratios } : { dist: { kind: 'pert', min: ownDays! * DEFAULT_SPREAD.low, mode: ownDays!, max: ownDays! * DEFAULT_SPREAD.high } })
         : null;
 
-    // Örnekler her çizimde yeni dizi; sürüme sığma yalnız içerik değişince yeniden hesaplansın
+    // Örnekler her çizimde yeni dizi; sprinte sığma yalnız içerik değişince yeniden hesaplansın
     const effortKey = !effort ? '' : effort.dist.kind === 'samples'
         ? `s${effort.dist.values.length}:${effort.dist.values.reduce((a, b) => a + b, 0)}`
         : `${JSON.stringify(effort.dist)}|${effort.calibration?.length || 0}`;
     const fit = useMemo<SprintFit | null>(() => (unit.trim() && effort ? sprintFit(project, history, { unit, effort: effort.dist, calibration: effort.calibration }, { people, leaves, visibleProjectIds, sprintName: v => sprintLabel(v, project.settings.sprintNames) }) : null),
         // eslint-disable-next-line react-hooks/exhaustive-deps
         [project, history, unit, effortKey, people, leaves, visibleProjectIds]);
-    // Birimde ekip yoksa kayıt havuza gider (önceki birimde seçilen sürüm geçerli değil)
+    // Birimde ekip yoksa kayıt havuza gider (önceki birimde seçilen sprint geçerli değil)
     const targetVersion = fit && !fit.unitHasTeam ? 0 : version ?? fit?.recommended ?? 0;
 
     const suggestedPriority = est.priority && est.priority.share >= 0.5 ? est.priority : null;
@@ -314,7 +314,7 @@ const NewRecordPlanner: React.FC<Props> = ({ project, history, people, leaves, v
                     ) : noHistory || est.method === 'none' ? (
                         <p className="m-0 text-[15px] m-text-2">
                             Henüz eğitime uygun kapanmış kayıt yok ({history.records.length}). Jira CSV ile geçmiş kayıtları içe aktarın ya da kayıtlar kapandıkça
-                            öneriler belirir. Bu sırada kendi tahmininizle sürüme sığma olasılığını görebilirsiniz.
+                            öneriler belirir. Bu sırada kendi tahmininizle sprinte sığma olasılığını görebilirsiniz.
                         </p>
                     ) : (
                         <>
@@ -508,15 +508,15 @@ const NewRecordPlanner: React.FC<Props> = ({ project, history, people, leaves, v
 
                 <section className="m-surface rounded-2xl p-5 flex flex-col gap-3" aria-labelledby="nr-fit">
                     <div>
-                        <h2 id="nr-fit" className="m-0 text-[17px] font-semibold m-text">Hangi sürüme sığar?</h2>
-                        <p className="m-0 mt-0.5 text-[14px] m-text-3">Birimin kalan kapasitesi ile o sürümdeki açık işler ve bu kaydın eforu birlikte simüle edilir.</p>
+                        <h2 id="nr-fit" className="m-0 text-[17px] font-semibold m-text">Hangi sprinte sığar?</h2>
+                        <p className="m-0 mt-0.5 text-[14px] m-text-3">Birimin kalan kapasitesi ile o sprintteki açık işler ve bu kaydın eforu birlikte simüle edilir.</p>
                     </div>
                     {!unit.trim() || !effort ? (
                         <p className="m-0 text-[15px] m-text-2">{hidden ? 'Birim ve kendi tahmininiz gerekli (öneriler kör tahminden sonra açılır).' : 'Birim ve bir tahmin (öneri ya da kendi tahmininiz) gerekli.'}</p>
                     ) : !fit?.unitHasTeam ? (
                         <p className="m-0 text-[15px] m-text-2">Bu projede "{unit}" biriminde ekip yok; kayıt havuza eklenir.</p>
                     ) : (
-                        <div role="radiogroup" aria-label="Hedef sürüm" className="flex flex-col">
+                        <div role="radiogroup" aria-label="Hedef sprint" className="flex flex-col">
                             {fit.rows.map((r, i) => {
                                 const s = rowSep(i);
                                 const selected = targetVersion === r.version;
@@ -541,7 +541,7 @@ const NewRecordPlanner: React.FC<Props> = ({ project, history, people, leaves, v
                             })}
                             <label className="flex items-center gap-3 py-2.5 cursor-pointer border-t m-sep" style={{ borderTopStyle: 'solid', borderTopWidth: 1 }}>
                                 <input type="radio" name="nr-version" checked={targetVersion === 0} onChange={() => setVersion(0)} />
-                                <span className="text-[15px] m-text">Havuz (sürüme atama)</span>
+                                <span className="text-[15px] m-text">Havuz (sprinte atama)</span>
                             </label>
                         </div>
                     )}

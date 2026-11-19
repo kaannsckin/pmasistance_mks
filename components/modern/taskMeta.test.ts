@@ -24,23 +24,23 @@ describe('taskMeta', () => {
         expect(columnOf(TaskStatus.InProgress)).toBe(TaskStatus.InProgress);
     });
 
-    it('baş harfler ve sürüm adı', () => {
+    it('baş harfler ve sprint adı', () => {
         expect(initialsOf('ayşe yılmaz')).toBe('AY');
         expect(initialsOf('Kaan')).toBe('K');
         expect(initialsOf('  ')).toBe('?');
         expect(sprintLabel(0)).toBe('Havuz');
-        expect(sprintLabel(2)).toBe('Sürüm 2');
+        expect(sprintLabel(2)).toBe('Sprint 2');
         expect(sprintLabel(2, { 2: 'Pilot' })).toBe('Pilot');
     });
 });
 
 describe('celebrationFor', () => {
     const t = (id: string, version: number, status: TaskStatus) => ({ id, version, status } as unknown as import('../../types').Task);
-    it('sürüm ve proje tamamlanınca mesaj üretir', () => {
+    it('sprint ve proje tamamlanınca mesaj üretir', () => {
         const tasks = [t('a', 1, TaskStatus.Done), t('b', 1, TaskStatus.InProgress), t('c', 2, TaskStatus.ToDo)];
-        expect(celebrationFor(tasks, 'b', TaskStatus.Done)).toBe('Sürüm 1 tamamlandı!');
+        expect(celebrationFor(tasks, 'b', TaskStatus.Done)).toBe('Sprint 1 tamamlandı!');
         expect(celebrationFor(tasks, 'b', TaskStatus.Done, { 1: 'Pilot' })).toBe('Pilot tamamlandı!');
-        expect(celebrationFor(tasks, 'c', TaskStatus.Done)).toBe('Sürüm 2 tamamlandı!');
+        expect(celebrationFor(tasks, 'c', TaskStatus.Done)).toBe('Sprint 2 tamamlandı!');
         expect(celebrationFor([...tasks, t('d', 2, TaskStatus.ToDo)], 'c', TaskStatus.Done)).toBeNull();
         expect(celebrationFor([t('a', 1, TaskStatus.Done), t('b', 2, TaskStatus.ToDo)], 'b', TaskStatus.Done)).toBe('Proje tamamlandı! Tebrikler.');
         expect(celebrationFor(tasks, 'b', TaskStatus.InProgress)).toBeNull();

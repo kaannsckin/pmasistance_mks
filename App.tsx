@@ -183,7 +183,7 @@ const App: React.FC = () => {
   const [isPaletteOpen, setIsPaletteOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isWpManagerOpen, setIsWpManagerOpen] = useState(false);
-  // Klasik arayüzde "Pano" sekmesi: Jira tarzı durum panosu ya da sürüm planı
+  // Klasik arayüzde "Pano" sekmesi: Jira tarzı durum panosu ya da sprint planı
   const [classicBoardMode, setClassicBoardMode] = useState<'status' | 'sprint'>('status');
   const [isGibImportOpen, setIsGibImportOpen] = useState(false);
   // Modern arayüz: dar ekranda kenar çubuğu çekmecesi, "yeni proje" isteği, sürprizler
@@ -1961,7 +1961,7 @@ const App: React.FC = () => {
       setIsFormModalOpen(true);
     };
 
-    // Sürüm ekleme/silme (klasik pano ve modern zaman çizelgesi ortak)
+    // Sprint ekleme/silme (klasik pano ve modern zaman çizelgesi ortak)
     const insertSprint = (n: number) => setTasks(prev => prev.map(t => t.version >= n ? { ...t, version: t.version + 1 } : t));
     const deleteSprint = (n: number) => setTasks(prev => prev.map(t => t.version === n ? { ...t, version: 0, status: TaskStatus.Backlog } : t.version > n ? { ...t, version: t.version - 1 } : t));
     if (isModern && currentView === View.Kanban) {
@@ -2151,7 +2151,7 @@ const App: React.FC = () => {
         return (
           <div className="flex flex-col gap-4">
           <div role="tablist" aria-label="Pano görünümü" className="self-start inline-flex p-1 rounded-xl bg-gray-100 dark:bg-gray-800">
-            {([['status', 'Durum panosu'], ['sprint', 'Sürüm planı']] as const).map(([k, label]) => (
+            {([['status', 'Durum panosu'], ['sprint', 'Sprint planı']] as const).map(([k, label]) => (
               <button key={k} role="tab" aria-selected={classicBoardMode === k} onClick={() => setClassicBoardMode(k)}
                 className={`px-3 py-1.5 rounded-lg text-sm font-bold ${classicBoardMode === k ? 'bg-white dark:bg-gray-700 shadow-sm' : 'text-gray-500'}`} style={classicBoardMode === k ? { color: 'var(--app-primary)' } : undefined}>{label}</button>
             ))}

@@ -295,7 +295,7 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, people, 
           )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
              <div>
-              <label htmlFor="version" className="block text-sm font-medium text-black dark:text-white">Sürüm</label>
+              <label htmlFor="version" className="block text-sm font-medium text-black dark:text-white">Sprint</label>
               <input type="number" name="version" id="version" value={formData.version} onChange={handleChange} min="0" className={`mt-1 block w-full ${inputStyle}`} />
             </div>
              <div>
@@ -351,7 +351,7 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, people, 
                 className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
               />
               <label htmlFor="includeInSprints" className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
-                Sürüm planlamasına dahil et
+                Sprint planlamasına dahil et
               </label>
             </div>
           </div>

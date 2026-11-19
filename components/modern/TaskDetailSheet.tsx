@@ -64,7 +64,7 @@ const TaskDetailSheet: React.FC<TaskDetailSheetProps> = ({ task, project, author
         ['Yaşam döngüsü', lifecycle ? <>{lifecycle}{closedIn !== null && <span className="ml-2 font-semibold">{closedIn} iş gününde {dur.cycleDays !== null ? 'tamamlandı' : 'kapandı'}</span>}{dur.reopened > 0 && <span className="ml-2 m-ink-warn">{dur.reopened} kez yeniden açıldı</span>}</> : <span className="m-text-3">Kayıt yok</span>],
         ['Sorumlu', task.resourceName || <span className="m-ink-warn">Atanmadı</span>],
         ['Birim', task.unit || '—'],
-        ['Sürüm', sprintLabel(task.version, project.settings.sprintNames)],
+        ['Sprint', sprintLabel(task.version, project.settings.sprintNames)],
         ...(task.fixVersion ? [['Hedef sürüm', task.fixVersion] as [string, React.ReactNode]] : []),
         ...(task.components?.length ? [['Bileşen', task.components.join(', ')] as [string, React.ReactNode]] : []),
         ...(task.resolution ? [['Çözüm', task.resolution] as [string, React.ReactNode]] : []),
@@ -78,7 +78,7 @@ const TaskDetailSheet: React.FC<TaskDetailSheetProps> = ({ task, project, author
         ['İş paketi', wp?.name || '—'],
         ['Hedef', objective ? `${objective.name}${kr ? ` · ${kr.name}` : ''}` : '—'],
         ['Jira', task.jiraId ? `${task.jiraId}${task.fixVersion ? ` · ${task.fixVersion}` : ''}${task.storyPoints ? ` · ${task.storyPoints} SP` : ''}${task.actualHours ? ` · ${task.actualHours} sa harcandı` : ''}` : '—'],
-        ['Planlama', task.includeInSprints !== false ? 'Sürüm planına dahil' : 'Sürüm planı dışında'],
+        ['Planlama', task.includeInSprints !== false ? 'Sprint planına dahil' : 'Sprint planı dışında'],
     ];
 
     return (

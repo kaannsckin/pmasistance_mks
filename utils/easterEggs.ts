@@ -8,7 +8,7 @@ import { Task, TaskStatus } from '../types';
  *  - Logo (roket): tek tık → fırlatma; 5 hızlı tık → hiper sürüş
  *  - Konami kodu (↑↑↓↓←→←→BA) → uzay modu
  *  - Komut paletinde "roket" → fırlatma
- *  - Bir sürümün/projenin son görevi tamamlanınca → kutlama
+ *  - Bir sprintin/projenin son görevi tamamlanınca → kutlama
  *  - Gece yarısı, cuma akşamı ve pazartesi sabahı → küçük selamlar
  */
 
@@ -60,12 +60,12 @@ export const timeGreeting = (now: Date = new Date()): string | null => {
     const day = now.getDay(); // 0 pazar … 5 cuma
     if (h >= 23 || h < 5) return 'Geç oldu; dinlenmeyi unutmayın.';
     if (day === 5 && h >= 16) return 'Hafta sonu yaklaşıyor. Kolay gelsin!';
-    if (day === 1 && h < 10) return 'Yeni hafta, yeni sürüm.';
+    if (day === 1 && h < 10) return 'Yeni hafta, yeni sprint.';
     return null;
 };
 
 /**
- * Durum değişikliği bir grubu (ör. sürüm) tamamen bitiriyor mu?
+ * Durum değişikliği bir grubu (ör. sprint) tamamen bitiriyor mu?
  * Önceden bitmemiş en az bir görev varken değişiklikten sonra hepsi Done ise true.
  */
 export const completesGroup = (group: Pick<Task, 'id' | 'status'>[], taskId: string, newStatus: TaskStatus): boolean => {

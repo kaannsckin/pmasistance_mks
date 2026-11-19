@@ -490,7 +490,7 @@ export interface Sprint {
     responsible?: string;
     assignedTaskIds?: string[];
     foundDefects?: string;
-    duration?: number; // Sürüm bazlı test günü
+    duration?: number; // Sprint bazlı test günü
   };
 }
 
@@ -542,7 +542,7 @@ export interface ProjectData {
     isAIEnabled?: boolean;
     tagColors?: Record<string, string>;
     titleCosts?: Record<string, number>;
-    sprintNames?: Record<number, string>; // Özel sürüm isimleri
+    sprintNames?: Record<number, string>; // Özel sprint isimleri
     globalTestDays?: number; // Genel test günü sayısı
     manMonthTableColor?: string; // Adam/Ay tablo ana rengi
     costTableColor?: string; // Maliyet tablo ana rengi

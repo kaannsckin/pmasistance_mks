@@ -11,7 +11,7 @@ import { analyzeRecords } from './recordQuality';
  * Jira'dan gelen alanlar güncellenir: başlık, açıklama, tür, önem, durum,
  * açılış / işe başlama / kapanış anları, durum geçişleri, tahmin ve harcanan
  * süre, story point, düzeltme sürümü; sorumlu ve birim (bileşen) Jira'da
- * doluysa. Uygulamadaki planlama alanları korunur: sürüm, öncül, iş paketi,
+ * doluysa. Uygulamadaki planlama alanları korunur: sprint, öncül, iş paketi,
  * hedef bağlantısı, termin, alt görevler, yorumlar, açılıştaki tahmin ve
  * kendi tahmininiz (tahmin yoksa Jira'nınki yazılır; termin yoksa Jira'daki
  * termin — duedate — yazılır).

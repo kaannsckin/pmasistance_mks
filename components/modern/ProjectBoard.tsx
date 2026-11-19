@@ -206,7 +206,7 @@ const ProjectBoard: React.FC<ProjectBoardProps> = ({
                     onSave={c => { onSaveConfig(c); setSettingsOpen(false); }} />
             )}
 
-            {/* Üst çubuk: arama, sürüm, kulvar, yapılandırma */}
+            {/* Üst çubuk: arama, sprint, kulvar, yapılandırma */}
             <div className="flex flex-wrap items-center gap-2">
                 <label className="relative flex-none">
                     <span className="sr-only">Panoda ara</span>
@@ -225,8 +225,8 @@ const ProjectBoard: React.FC<ProjectBoardProps> = ({
                         {assignees.length > 8 && <span className="w-8 h-8 rounded-full m-fill-2 m-text-3 text-[11px] font-bold flex items-center justify-center border-2" style={{ borderColor: 'var(--m-bg)' }}>+{assignees.length - 8}</span>}
                     </div>
                 )}
-                <select aria-label="Sürüm" className={`m-pill ${sprint !== 'all' ? 'is-active' : ''}`} value={sprint} onChange={e => setSprint(e.target.value)}>
-                    <option value="all">Tüm sürümler</option>
+                <select aria-label="Sprint" className={`m-pill ${sprint !== 'all' ? 'is-active' : ''}`} value={sprint} onChange={e => setSprint(e.target.value)}>
+                    <option value="all">Tüm sprintler</option>
                     {versions.map(v => <option key={v} value={String(v)}>{sprintLabel(v, sprintNames)}</option>)}
                 </select>
                 <select aria-label="Kulvar" className={`m-pill ${lanesMode !== 'none' ? 'is-active' : ''}`} value={lanesMode} onChange={e => setSwimlane(e.target.value as BoardSwimlane)}>

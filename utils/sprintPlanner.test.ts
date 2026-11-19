@@ -36,9 +36,9 @@ const CAPACITY = WEEKS * 5 - TEST_DAYS;
 const versionOf = (tasks: Task[], id: string) => tasks.find(t => t.id === id)!.version;
 
 describe('planTaskVersionsDetailed — bağımlılık doğruluğu', () => {
-    it('ardıl görevi asla öncülünden önceki veya aynı sürüme atamaz', () => {
+    it('ardıl görevi asla öncülünden önceki veya aynı sprinte atamaz', () => {
         // Eski algoritmanın bug senaryosu: yüksek öncelikli kısa ardıl, öncülünden
-        // önce yerleştirilip Sürüm 1'e düşüyordu; öncül sonra Sürüm 2'ye gidiyordu.
+        // önce yerleştirilip Sprint 1'e düşüyordu; öncül sonra Sprint 2'ye gidiyordu.
         const tasks = [
             makeTask({ id: 'dolgu', time: { best: 9, avg: 9, worst: 9 }, priority: 'High' }),
             makeTask({ id: 'oncul', time: { best: 8, avg: 8, worst: 8 }, priority: 'Low' }),
@@ -49,10 +49,10 @@ describe('planTaskVersionsDetailed — bağımlılık doğruluğu', () => {
         const predV = versionOf(planned, 'oncul');
         const succV = versionOf(planned, 'ardil');
         expect(predV).toBeGreaterThan(0);
-        expect(succV).toBeGreaterThan(predV); // kesinlikle sonraki sürümde
+        expect(succV).toBeGreaterThan(predV); // kesinlikle sonraki sprintte
     });
 
-    it('zincir halinde bağımlılıklar sıralı sürümlere yerleşir', () => {
+    it('zincir halinde bağımlılıklar sıralı sprintlere yerleşir', () => {
         const tasks = [
             makeTask({ id: 'a' }),
             makeTask({ id: 'b', predecessor: 'a' }),
@@ -63,7 +63,7 @@ describe('planTaskVersionsDetailed — bağımlılık doğruluğu', () => {
         expect(versionOf(planned, 'c')).toBeGreaterThan(versionOf(planned, 'b'));
     });
 
-    it('elle sabitlenmiş (plan dışı) bitmemiş öncülün sürümünden sonraya planlar', () => {
+    it('elle sabitlenmiş (plan dışı) bitmemiş öncülün sprintinden sonraya planlar', () => {
         const tasks = [
             makeTask({ id: 'sabit', includeInSprints: false, version: 3, status: TaskStatus.InProgress }),
             makeTask({ id: 'ardil', predecessor: 'sabit' }),
@@ -104,8 +104,8 @@ describe('planTaskVersionsDetailed — döngü güvenliği', () => {
 });
 
 describe('planTaskVersionsDetailed — kapasite ve paketleme', () => {
-    it('kaynak kapasitesini aşan görevleri sonraki sürüme kaydırır', () => {
-        // Her biri 5 gün, kapasite 11 → ilk ikisi Sürüm 1 (10/11), üçüncüsü Sürüm 2
+    it('kaynak kapasitesini aşan görevleri sonraki sprinte kaydırır', () => {
+        // Her biri 5 gün, kapasite 11 → ilk ikisi Sprint 1 (10/11), üçüncüsü Sprint 2
         const tasks = [
             makeTask({ id: 't1' }),
             makeTask({ id: 't2' }),
@@ -119,14 +119,14 @@ describe('planTaskVersionsDetailed — kapasite ve paketleme', () => {
     });
 
     it('testDays parametresi kapasiteyi etkiler (globalTestDays tutarlılığı)', () => {
-        // testDays=10 → kapasite 5 gün → 5 günlük görevler ayrı sürümlere dağılır
+        // testDays=10 → kapasite 5 gün → 5 günlük görevler ayrı sprintlere dağılır
         const tasks = [makeTask({ id: 't1' }), makeTask({ id: 't2' })];
         const { tasks: planned } = planTaskVersionsDetailed(tasks, resources, WEEKS, 10);
         const versions = ['t1', 't2'].map(id => versionOf(planned, id)).sort();
         expect(versions).toEqual([1, 2]);
     });
 
-    it('farklı kaynaklar aynı sürümü paylaşabilir', () => {
+    it('farklı kaynaklar aynı sprinti paylaşabilir', () => {
         const tasks = [
             makeTask({ id: 'k1', resourceName: 'Kaan', time: { best: 10, avg: 10, worst: 10 } }),
             makeTask({ id: 'a1', resourceName: 'Ayşe', time: { best: 10, avg: 10, worst: 10 } }),
@@ -148,7 +148,7 @@ describe('planTaskVersionsDetailed — kapasite ve paketleme', () => {
         expect(versions).toEqual([1, 2]);
     });
 
-    it('sprint kapasitesinden büyük görevi Backlog yerine boş bir sürüme taşırarak yerleştirir ve uyarır', () => {
+    it('sprint kapasitesinden büyük görevi Backlog yerine boş bir sprinte taşırarak yerleştirir ve uyarır', () => {
         const tasks = [makeTask({ id: 'dev', time: { best: 20, avg: 20, worst: 20 } })];
         const { tasks: planned, warnings } = planTaskVersionsDetailed(tasks, resources, WEEKS, TEST_DAYS);
         expect(versionOf(planned, 'dev')).toBe(1); // eski algoritma 0'a (Backlog) atıyordu
@@ -162,7 +162,7 @@ describe('planTaskVersionsDetailed — kapasite ve paketleme', () => {
 });
 
 describe('planTaskVersionsDetailed — önceliklendirme', () => {
-    it('kapasite kısıtında Blocker görev Sürüm 1 önceliği alır', () => {
+    it('kapasite kısıtında Blocker görev Sprint 1 önceliği alır', () => {
         const tasks = [
             makeTask({ id: 'dusuk1', priority: 'Low', time: { best: 6, avg: 6, worst: 6 } }),
             makeTask({ id: 'dusuk2', priority: 'Low', time: { best: 6, avg: 6, worst: 6 } }),
@@ -172,7 +172,7 @@ describe('planTaskVersionsDetailed — önceliklendirme', () => {
         expect(versionOf(planned, 'kritik')).toBe(1);
     });
 
-    it('eşit öncelikte yakın terminli görev erken sürüme yerleşir', () => {
+    it('eşit öncelikte yakın terminli görev erken sprinte yerleşir', () => {
         const tasks = [
             makeTask({ id: 'gec', dueDate: '2026-12-01', time: { best: 6, avg: 6, worst: 6 } }),
             makeTask({ id: 'acil', dueDate: '2026-01-15', time: { best: 6, avg: 6, worst: 6 } }),
@@ -196,7 +196,7 @@ describe('planTaskVersionsDetailed — önceliklendirme', () => {
 });
 
 describe('planTaskVersionsDetailed — durum koruma', () => {
-    it('tamamlanmış ve plan dışı görevlerin sürümü/durumu değişmez, sıra korunur', () => {
+    it('tamamlanmış ve plan dışı görevlerin sprinti/durumu değişmez, sıra korunur', () => {
         const tasks = [
             makeTask({ id: 'bitti', status: TaskStatus.Done, version: 7 }),
             makeTask({ id: 'plandisi', includeInSprints: false, version: 4 }),

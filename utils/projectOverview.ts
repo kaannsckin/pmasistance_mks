@@ -5,7 +5,7 @@ import { riskScore } from './risks';
 
 /**
  * Modern proje "Genel bakış" sekmesinin veri katmanı. PM projeye girdiğinde
- * önce nerede olduğunu (aktif sürüm, ilerleme), neyin yaklaştığını (terminler)
+ * önce nerede olduğunu (aktif sprint, ilerleme), neyin yaklaştığını (terminler)
  * ve neyin takıldığını (gecikme, risk, yük) tek bakışta görür.
  */
 
@@ -52,13 +52,13 @@ export interface CurrentSprint {
     end: Date;
     /** Planlanan iş bitişine kalan gün; negatifse o kadar gün geride */
     daysLeft: number;
-    /** Sonraki sürümlerde bekleyen görev sayısı */
+    /** Sonraki sprintlerde bekleyen görev sayısı */
     laterTasks: number;
 }
 
 /**
- * Aktif sürüm: bitmemiş görevi olan en küçük sürüm (Havuz hariç). Hepsi
- * bitmişse son sürüm. Tarihler panodaki takvimle aynı kurallarla hesaplanır.
+ * Aktif sprint: bitmemiş görevi olan en küçük sprint (Havuz hariç). Hepsi
+ * bitmişse son sprint. Tarihler panodaki takvimle aynı kurallarla hesaplanır.
  */
 export const currentSprint = (project: Project, now: Date = new Date()): CurrentSprint | null => {
     const tasks = (project.tasks || []).filter(t => (t.version || 0) > 0 && t.includeInSprints !== false);

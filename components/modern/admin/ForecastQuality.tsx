@@ -27,7 +27,7 @@ import { Note, SwitchRow } from './controls';
 
 /**
  * Yönetici konsolu › Tahmin kalitesi: geriye dönük testler (benzer kayıt
- * tahmini, sürüm simülasyonu), kalibrasyon kayması, altın set ve AI kalite
+ * tahmini, sprint simülasyonu), kalibrasyon kayması, altın set ve AI kalite
  * kapısı, öneri günlüğünün isabeti. AI değerlendirmesi konsolda asistandan
  * bağımsız, doğrudan AI sunucusuyla yapılır (kurum geneli AI açıksa).
  */
@@ -64,7 +64,7 @@ const ForecastQuality: React.FC<Props> = ({ workspace, onUpdateAiPolicy, onSetGo
     return (
         <div className="flex flex-col gap-4">
             <Note>
-                Tahminler geleceği görmeden sınanır: her kayıt yalnız kendisinden önce kapanmış kayıtlarla tahmin edilir, her geçmiş sürüm başladığı günkü verilerle simüle edilir.
+                Tahminler geleceği görmeden sınanır: her kayıt yalnız kendisinden önce kapanmış kayıtlarla tahmin edilir, her geçmiş sprint başladığı günkü verilerle simüle edilir.
                 Dürüst bir aralıkta gerçeklerin yaklaşık %50'si P50'nin, %80'i P80'in altında kalır. Eğitime uygun kapanmış kayıt: {history.records.length}.
             </Note>
             <RecordBacktest history={history} />
@@ -140,14 +140,14 @@ const RecordBacktest: React.FC<{ history: PlanningHistory }> = ({ history }) => 
     );
 };
 
-// ------------------------------------------------------------------ sürüm simülasyonu
+// ------------------------------------------------------------------ sprint simülasyonu
 
 const ReleaseBacktest: React.FC<{ workspace: WorkspaceData; history: PlanningHistory }> = ({ workspace, history }) => {
     const [rows, setRows] = useState<ReleaseBacktestRow[] | null>(null);
     const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
     const run = async () => {
         const cases = releaseCases(workspace.projects, history, { people: workspace.people, leaves: workspace.leaves || [] }, {
-            sprintName: (p, v) => p.settings.sprintNames?.[v]?.trim() || `Sürüm ${v}`,
+            sprintName: (p, v) => p.settings.sprintNames?.[v]?.trim() || `Sprint ${v}`,
         });
         const out: ReleaseBacktestRow[] = [];
         setProgress({ done: 0, total: cases.length });
@@ -162,15 +162,15 @@ const ReleaseBacktest: React.FC<{ workspace: WorkspaceData; history: PlanningHis
     const s = rows ? summarizeReleaseBacktest(rows) : null;
     const at = (start: string, k: number) => fmtDay(toIsoDay(dateAtOffset(start, k)));
     return (
-        <Card title="Sürüm simülasyonu — geriye dönük test" subtitle="Tamamlanmış geçmiş sürümler, başladıkları gün bilinen tahminler ve o güne kadarki geçmişle simüle edilir; gerçek bitişle karşılaştırılır.">
+        <Card title="Sprint simülasyonu — geriye dönük test" subtitle="Tamamlanmış geçmiş sprintler, başladıkları gün bilinen tahminler ve o güne kadarki geçmişle simüle edilir; gerçek bitişle karşılaştırılır.">
             <div className="flex flex-wrap items-center gap-2">
                 <button type="button" className="m-btn m-btn-gray" disabled={!!progress} onClick={run}><Icon name="refresh" size={18} />{progress ? `Simüle ediliyor… ${progress.done}/${progress.total}` : rows ? 'Yeniden çalıştır' : 'Testi çalıştır'}</button>
-                <span className="text-[13px] m-text-3">Ekip bugünkü ekiptir; sürüm sırasında projede yürüyen başka işler hesaba katılmaz.</span>
+                <span className="text-[13px] m-text-3">Ekip bugünkü ekiptir; sprint sırasında projede yürüyen başka işler hesaba katılmaz.</span>
             </div>
             {s && rows && (
                 <>
                     <div className="grid gap-2.5 grid-cols-2 sm:grid-cols-4">
-                        <Tile label="Tamamlanmış sürüm" value={String(s.n)} />
+                        <Tile label="Tamamlanmış sprint" value={String(s.n)} />
                         <Tile label="P80'e yetişildi" value={pct(s.hit80)} hint="hedef ≈ %80" tone={idealTone(s.hit80, 0.8)} />
                         <Tile label="P50'ye yetişildi" value={pct(s.hit50)} hint="hedef ≈ %50" tone={idealTone(s.hit50, 0.5)} />
                         <Tile label="Tek nokta plan tuttu" value={pct(s.hitDeterministic)} />
@@ -178,7 +178,7 @@ const ReleaseBacktest: React.FC<{ workspace: WorkspaceData; history: PlanningHis
                     {rows.length > 0 && (
                         <div className="relative overflow-x-auto -mx-1">
                             <table className="w-full min-w-[620px] text-[14px] border-collapse">
-                                <thead><tr className="text-left m-text-3 text-[13px]"><th className="font-semibold py-2 px-1">Proje · sürüm</th><th className="font-semibold py-2 px-1">Başlangıç</th><th className="font-semibold py-2 px-1">Gerçek bitiş</th><th className="font-semibold py-2 px-1">P50</th><th className="font-semibold py-2 px-1">P80</th><th className="font-semibold py-2 px-1 text-right">P80 tuttu</th></tr></thead>
+                                <thead><tr className="text-left m-text-3 text-[13px]"><th className="font-semibold py-2 px-1">Proje · sprint</th><th className="font-semibold py-2 px-1">Başlangıç</th><th className="font-semibold py-2 px-1">Gerçek bitiş</th><th className="font-semibold py-2 px-1">P50</th><th className="font-semibold py-2 px-1">P80</th><th className="font-semibold py-2 px-1 text-right">P80 tuttu</th></tr></thead>
                                 <tbody>{rows.map((r, i) => { const sep = rowSep(i); return (
                                     <tr key={`${r.projectName}-${r.label}-${i}`} className={sep.className} style={sep.style}>
                                         <td className="py-2 px-1 m-text">{r.projectName} · {r.label} <span className="m-text-3 text-[12px]">({r.taskCount} kayıt)</span></td>
