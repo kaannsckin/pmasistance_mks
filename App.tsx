@@ -33,7 +33,7 @@ import { stampLifecycle } from './utils/planning/lifecycle';
 import { canTransition, DEFAULT_WORKFLOW, resolveTransition, taskStatusLabel, taskWorkflow, workflowKey, workflowOptions, WorkflowStatus } from './utils/workflow';
 import { applyTransition, conditionProblem, needsInput, ruleFor, TransitionActor, TransitionEffect, TransitionInput, TransitionNeeds, transitionNeeds } from './utils/transitions';
 import TransitionDialog from './components/modern/TransitionDialog';
-import { describeNotify, fetchIntegrationHealth, sendNotification } from './utils/integrations';
+import { describeNotify, fetchIntegrationHealth, sendNotification, updateJiraIssue } from './utils/integrations';
 import { boardForProject, DEFAULT_SCHEME_ID, effectiveScheme, migrateTasksToWorkflow, schemeOf, schemeUsage, validateProjectWorkflow, validateScheme } from './utils/projectScheme';
 import ProjectWorkflowSheet from './components/modern/ProjectWorkflowSheet';
 import ProjectListsSheet from './components/modern/ProjectListsSheet';
@@ -1431,8 +1431,9 @@ const App: React.FC = () => {
 
   // ---- İş akışı geçiş kapısı: koşul → doğrulayıcı (gerekirse geçiş penceresi) → uygula → sonrası işlemler ----
   const sendTransitionEffectsRef = useRef<(e: TransitionEffect[]) => void>(() => undefined);
+  const writeBackToJiraRef = useRef<(projectId: string, task: Task, target: WorkflowStatus, input: TransitionInput, resolution: string | undefined, exact: boolean) => void>(() => undefined);
   const [pendingTransition, setPendingTransition] = useState<null | {
-    task: Task; target: WorkflowStatus; rule: TransitionRule; needs: TransitionNeeds; extra: Partial<Task>; setKey: boolean; fromLabel: string;
+    task: Task; target: WorkflowStatus; rule: TransitionRule; needs: TransitionNeeds; extra: Partial<Task>; setKey: boolean; fromLabel: string; exact: boolean;
   }>(null);
   const transitionActor = (): TransitionActor => {
     const ws = workspaceRef.current!;
@@ -1457,10 +1458,39 @@ const App: React.FC = () => {
     }
   };
   sendTransitionEffectsRef.current = sendTransitionEffects;
-  const finishTransition = (task: Task, target: WorkflowStatus, rule: TransitionRule, input: TransitionInput, extra: Partial<Task>, setKey: boolean, fromLabel: string) => {
+  /**
+   * Jira'ya geri yazma: yapılandırma açıksa Jira'ya bağlı görevin geçişi Jira'da
+   * da yapılır. `exact`: belirli durum seçildiyse Jira'da aynı adlı duruma,
+   * yalnız kategori istendiyse o kategoriye götüren geçiş seçilir.
+   */
+  const writeBackToJira = async (projectId: string, task: Task, target: WorkflowStatus, input: TransitionInput, resolution: string | undefined, exact: boolean) => {
+    const ws = workspaceRef.current;
+    const project = ws?.projects.find(p => p.id === projectId);
+    if (!ws || !project || !task.jiraId || !effectiveScheme(ws, project).jiraWriteBack) return;
+    if (!canEditProjectContent(ws, identityOf(ws), projectId)) return;
+    const key = task.jiraId;
+    try {
+      const health = await fetchIntegrationHealth();
+      if (!health.jira || !health.jiraUpdate) { setFlowNotice(`${key} Jira'ya yazılamadı: sunucuda Jira güncelleme kapalı (JIRA_ALLOW_UPDATE).`); return; }
+      const status = target.category === TaskStatus.Done ? 'done' : target.category === TaskStatus.InProgress ? 'indeterminate' : 'new';
+      const r = await updateJiraIssue(key, {
+        status, ...(exact ? { statusName: target.key } : {}),
+        ...(input.comment?.trim() ? { comment: `[PlanAsistan · ${target.label}] ${input.comment.trim()}` } : {}),
+        ...(input.hours ? { worklogHours: input.hours } : {}),
+        ...(resolution ? { resolution } : {}),
+      }, health.authMode);
+      if (r.errors.length) setFlowNotice(`Jira (${key}): ${r.errors.map(e => e.message).join('; ')}${r.applied.includes('status') ? '' : ' — uygulamadaki durum bir sonraki eşitlemede Jira\'daki duruma döner.'}`);
+      if (r.applied.length) updateWorkspace(w => appendAudit(w, 'data.export', `${key} Jira'ya yazıldı (${target.label}): ${r.applied.join(', ')}`, projectId));
+    } catch (e) {
+      setFlowNotice(`${key} Jira'ya yazılamadı: ${(e as Error).message}`);
+    }
+  };
+  writeBackToJiraRef.current = writeBackToJira;
+  const finishTransition = (task: Task, target: WorkflowStatus, rule: TransitionRule, input: TransitionInput, extra: Partial<Task>, setKey: boolean, fromLabel: string, exact = false) => {
     const r = applyTransition({ ...task, ...extra }, target, rule, input, { actor: transitionActor(), setKey, projectName: activeProject?.name, fromLabel, versions: activeProject?.versions });
     setTasks(prev => prev.map(t => (t.id === task.id ? { ...t, ...r.task } : t)));
     if (r.effects.length) sendTransitionEffects(r.effects);
+    if (activeProject && task.jiraId) writeBackToJira(activeProject.id, task, target, input, r.task.resolution !== task.resolution ? r.task.resolution : undefined, exact);
   };
   /**
    * Görevi bir duruma (anahtar) ya da kategoriye taşıma isteği. Geçiş, koşul ve
@@ -1493,8 +1523,10 @@ const App: React.FC = () => {
     const needs = transitionNeeds(rule, { ...task, ...extra });
     if (needs.blocking) { setFlowNotice(needs.blocking); return; }
     const setKey = !!opts.explicitKey || !!wf.transitions || !!task.jiraStatus || wf !== DEFAULT_WORKFLOW;
-    if (needsInput(needs)) { setPendingTransition({ task, target, rule, needs, extra, setKey, fromLabel: cur.label }); return; }
-    finishTransition(task, target, rule, {}, extra, setKey, cur.label);
+    // Jira'ya geri yazmada belirli durum mu, yalnız kategori mi istendi
+    const exact = !!opts.explicitKey || wf !== DEFAULT_WORKFLOW;
+    if (needsInput(needs)) { setPendingTransition({ task, target, rule, needs, extra, setKey, fromLabel: cur.label, exact }); return; }
+    finishTransition(task, target, rule, {}, extra, setKey, cur.label, exact);
   };
 
   const handleUpdateTask = (updatedTask: Task) => {
@@ -2218,6 +2250,15 @@ const App: React.FC = () => {
       const before = current.projects.find(p => p.id === action.projectId);
       const after = result.ws.projects.find(p => p.id === action.projectId);
       if (before && after && before.tasks !== after.tasks) queueNotifications(result.ws, after, before.tasks, after.tasks);
+      // Onaylanan durum önerisi Jira'ya bağlı görevdeyse Jira'ya da yazılır (yapılandırma açıksa)
+      if (action.type === 'gorev_durumu' && before && after) {
+        const oldT = before.tasks.find(t => t.id === action.taskId);
+        const newT = after.tasks.find(t => t.id === action.taskId);
+        if (oldT?.jiraId && newT) {
+          const wfA = effectiveScheme(result.ws, after).workflow;
+          writeBackToJiraRef.current(after.id, oldT, taskWorkflow(newT, wfA), { comment: action.comment, hours: action.hours }, newT.resolution !== oldT.resolution ? newT.resolution : undefined, !!action.workflowKey || wfA !== DEFAULT_WORKFLOW);
+        }
+      }
       setWorkspace(result.ws);
       workspaceRef.current = result.ws;
       // Geçişin sonrası işlemi: atanana bildirim (AI önerisi de kullanıcının geçişi gibi)
@@ -2617,7 +2658,7 @@ const App: React.FC = () => {
             components={(activeProject?.components || []).map(c => c.name)}
             versions={(activeProject?.versions || []).filter(v => v.status === 'unreleased').map(v => v.name)}
             onCancel={() => setPendingTransition(null)}
-            onConfirm={input => { finishTransition(pt.task, pt.target, pt.rule, input, pt.extra, pt.setKey, pt.fromLabel); setPendingTransition(null); }} />
+            onConfirm={input => { finishTransition(pt.task, pt.target, pt.rule, input, pt.extra, pt.setKey, pt.fromLabel, pt.exact); setPendingTransition(null); }} />
         );
         return isModern ? dlg : <div className="ui-modern">{dlg}</div>;
       })()}

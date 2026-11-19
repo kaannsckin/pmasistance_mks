@@ -222,6 +222,11 @@ const SchemeEditor: React.FC<{
                             <span className="text-[13px] m-text-3">Kapalıysa projeler bu yapılandırmanın panosunu kullanır, "Panoyu yapılandır" yalnız burada (admin) yapılır.</span></span>
                     </label>
                     <label className="flex items-start gap-2 cursor-pointer">
+                        <input type="checkbox" className="mt-1" checked={!!s.jiraWriteBack} onChange={e => setS(x => ({ ...x, jiraWriteBack: e.target.checked || undefined }))} />
+                        <span className="flex flex-col"><span className="text-[15px] m-text font-semibold">Durum geçişlerini Jira'ya da yaz</span>
+                            <span className="text-[13px] m-text-3">Jira'ya bağlı görev uygulamada bir duruma geçince Jira'da da aynı adlı duruma (yalnız kategori istendiyse o kategoriye) geçirilir; geçiş notu Jira'ya yorum, harcanan süre worklog, çözüm resolution olarak yazılır. Sunucuda <code>JIRA_ALLOW_UPDATE=1</code> ve jetonun düzenleme izni gerekir; yalnız proje içeriğini düzenleyebilen kullanıcıların geçişleri yazılır. Jira geçişi reddederse uyarı gösterilir ve sonraki eşitlemede Jira'daki durum geçerli olur.</span></span>
+                    </label>
+                    <label className="flex items-start gap-2 cursor-pointer">
                         <input type="checkbox" className="mt-1" checked={!!s.allowProjectWorkflow} onChange={e => setS(x => ({ ...x, allowProjectWorkflow: e.target.checked }))} />
                         <span className="flex flex-col"><span className="text-[15px] m-text font-semibold">Proje yöneticisi kendi projesinin iş akışını özelleştirebilir</span>
                             <span className="text-[13px] m-text-3">Jira'daki "genişletilmiş proje yönetimi" gibi: yalnız bu yapılandırmanın durumlarını kullanır (yeni durum ekleyemez); okları/geçişleri ve başlangıcı değiştirebilir, durum çıkarabilir. Kapalıysa iş akışı yalnız buradan değişir.</span></span>

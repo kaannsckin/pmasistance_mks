@@ -76,10 +76,34 @@ Panodaki **Bileşen ve sürümler** (proje sahibi) ya da konsoldaki Projeler tab
 - Görev formunda bileşen seçimi ve hedef sürüm (yayınlanmamış sürümler); kartlarda bileşen ve sürüm etiketi; panoda bileşen/sürüm hızlı filtreleri ve **bileşene / hedef sürüme göre** kulvar; yapılandırmada "Bileşen" ve "Hedef sürüm" zorunlu alan olarak seçilebilir.
 - Jira'dan aktarım/eşitleme bileşenleri de getirir.
 
-**Sonraki adım önerileri:** proje rolleri (proje bazında "test ekibi" gibi gruplar ve koşullarda kullanımı), bildirim şeması (olay → alıcı), geçişte alan güncelleme (ör. Çözüldü'de çözüm tarihi) ve Jira'ya geri yazma (geçişin Jira'da da yapılması).
+## Proje rolleri
+
+Jira'daki proje rolleri gibi: **rol tanımları kurum genelidir** (Proje yapılandırması › Proje rolleri; hazır: Geliştirici, Test, Analist, Ürün sahibi), **üyeleri her projede ayrıca atanır** (panoda Proje ayarları › Roller, ya da konsolda Listeler). Geçiş koşulları ve bildirim alıcıları kişi yerine role bağlanır; böylece tek yapılandırma farklı ekiplerin projelerinde çalışır (ör. "Testte → Çözüldü yalnız Test rolü"). Silinen rolün üyelikleri projelerden temizlenir.
+
+## Bildirim şeması
+
+Yapılandırmanın **Bildirimler** sekmesi (Jira notification scheme): olay → alıcılar.
+
+| Olay | Örnek |
+|---|---|
+| Görev oluşturuldu | Ürün sahibi rolüne |
+| Durum değişti (isteğe bağlı: yalnız belirli durumlara girince) | Testte'ye girince Test rolüne |
+| Tamamlandı / Yeniden açıldı | Proje yöneticisine |
+| Atanan değişti | Atanana |
+| Yorum eklendi | Atanana |
+
+Alıcılar: atanan, proje yöneticisi, proje rolleri, belirli kişiler, Teams kanalı. E-posta havuzdaki adrese gider (sunucuda e-posta yapılandırması gerekir). Değişikliği yapan kişiye bildirim gitmez; Jira/bulut eşitlemesinden gelen değişiklikler bildirim üretmez; onaylanan AI önerileri üretir. Aynı değişiklik bir kez bildirilir.
+
+## Geçişte alan güncelleme ve Çözüm
+
+Sonrası işlemlerde **Alan güncelle**: öncelik; termin (temizle / bugün + N gün); hedef sürüm (temizle / sıradaki yayınlanmamış sürüm); **Çözüm** (yaz / temizle). Çözüm, Jira "Resolution" karşılığıdır (Düzeltildi, Tamamlandı, Yapılmayacak, Tekrar, Tekrarlanamadı, Hata değil); doğrulayıcıda zorunlu alan yapılırsa geçiş penceresinde sorulur. Tipik kurgu: "Çözüldü'ye girişte çözüm = Düzeltildi", "Yeniden Açıldı'ya girişte çözümü temizle".
+
+## Jira'ya geri yazma
+
+Yapılandırmada **Durum geçişlerini Jira'ya da yaz** açıksa, Jira'ya bağlı görev uygulamada bir duruma geçince Jira'da da geçirilir: belirli durum seçildiyse Jira'da **aynı adlı** duruma (ör. TESTING), yalnız kategori istendiyse o kategoriye götüren geçişle. Geçiş notu Jira'ya yorum, harcanan süre worklog, çözüm resolution olarak yazılır (Jira geçiş ekranında çözüm yoksa çözümsüz geçilir ve bildirilir). Jira geçişi reddederse Jira'daki geçişler listelenerek uyarı gösterilir ve sonraki eşitlemede Jira'daki durum geçerli olur. Sunucuda `JIRA_ALLOW_UPDATE=1` gerekir; yalnız proje içeriğini düzenleyebilen kullanıcıların (ve onayladıkları AI önerilerinin) geçişleri yazılır; yazılanlar denetim günlüğüne girer.
 
 ## AI asistanı
 
 AI'nın durum ve görev önerileri de aynı kurallara bağlıdır (`utils/ai/actions.ts`): izinsiz geçiş önerisi kart hazırlanmadan reddedilir ve model izinli geçişleri görür; belirli durum (Testte, Çözüldü …) Türkçe ya da Jira adıyla istenebilir; yeni görev önerisi başlangıç durumuyla açılır, kayıt türü ve zorunlu alan kurallarına uyar. Kart onaylanırken kurallar güncel veriyle yeniden denetlenir.
 
-Kod: `utils/projectScheme.ts` (şablonlar, çözümleme, doğrulama, taşıma), `utils/workflow.ts` (durumlar, geçişler), `utils/board.ts` (pano), `components/modern/admin/ProjectSchemes.tsx` (konsol), `components/modern/admin/WorkflowDesigner.tsx` (diyagram), `components/modern/ProjectWorkflowSheet.tsx` (projeye özel akış), `utils/transitions.ts` + `components/modern/admin/TransitionRuleEditor.tsx` + `components/modern/TransitionDialog.tsx` (geçiş kuralları), `utils/projectLists.ts` + `components/modern/ProjectListsSheet.tsx` (bileşen/sürüm).
+Kod: `utils/projectScheme.ts` (şablonlar, çözümleme, doğrulama, taşıma), `utils/workflow.ts` (durumlar, geçişler), `utils/board.ts` (pano), `components/modern/admin/ProjectSchemes.tsx` (konsol), `components/modern/admin/WorkflowDesigner.tsx` (diyagram), `components/modern/ProjectWorkflowSheet.tsx` (projeye özel akış), `utils/transitions.ts` + `components/modern/admin/TransitionRuleEditor.tsx` + `components/modern/TransitionDialog.tsx` (geçiş kuralları), `utils/projectLists.ts` + `components/modern/ProjectListsSheet.tsx` (bileşen/sürüm/roller), `utils/projectRoles.ts` (roller), `utils/notifications.ts` (bildirim şeması), `server/integrations/handler.ts` › `updateJiraIssue` (Jira'ya geri yazma).

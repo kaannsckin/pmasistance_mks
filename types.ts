@@ -241,6 +241,8 @@ export interface ProjectScheme {
   allowProjectBoard: boolean;
   /** Bildirim şeması: olay → alıcılar */
   notifications?: NotificationRule[];
+  /** Jira'ya bağlı görevlerde durum geçişini Jira'da da yap (not → yorum, süre → worklog, çözüm → resolution) */
+  jiraWriteBack?: boolean;
   /**
    * Proje sahibi kendi projesinin iş akışını özelleştirebilir (Jira "genişletilmiş
    * proje yönetimi" gibi): yalnız bu yapılandırmanın durumlarını kullanır, yeni

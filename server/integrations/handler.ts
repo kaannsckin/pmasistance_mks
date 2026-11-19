@@ -498,6 +498,10 @@ export interface JiraUpdateChanges {
     status?: JiraStatusCategory;
     comment?: string;
     worklogHours?: number;
+    /** Hedef Jira durum adı (ör. TESTING): verilirse geçiş bu duruma göre seçilir, yoksa kategoriye göre */
+    statusName?: string;
+    /** Geçişte yazılacak çözüm (Türkçe ad ya da Jira adı; ekranda yoksa geçiş çözümsüz yeniden denenir) */
+    resolution?: string;
 }
 export interface JiraUpdateResult {
     applied: string[];
@@ -511,6 +515,13 @@ const TRANSITION_HINTS: Record<JiraStatusCategory, RegExp> = {
     indeterminate: /in ?progress|start|devam|surec|basla/,
     done: /done|close|resolve|tamam|kapat|cozul|bitti/,
 };
+/** Uygulamadaki Türkçe çözüm adlarının Jira'daki standart karşılıkları */
+const RESOLUTION_MAP: Record<string, string> = {
+    'duzeltildi': 'Fixed', 'tamamlandi': 'Done', 'yapilmayacak': "Won't Do", 'tekrar (duplicate)': 'Duplicate', 'tekrar': 'Duplicate',
+    'tekrarlanamadi': 'Cannot Reproduce', 'hata degil': 'Not a Bug',
+};
+export const jiraResolutionName = (name: string): string => RESOLUTION_MAP[foldName(name)] || name.trim();
+
 const jiraErrorText = (body: { errors?: Record<string, unknown>; errorMessages?: unknown[] }, status: number): string =>
     [...Object.entries(body.errors || {}).map(([k, v]) => `${k}: ${str(v)}`), ...(Array.isArray(body.errorMessages) ? body.errorMessages.map(str) : [])].filter(Boolean).join('; ') || `HTTP ${status}`;
 
@@ -559,19 +570,33 @@ export const updateJiraIssue = async (env: Env, key: string, changes: JiraUpdate
         break;
     }
 
-    // 2) Durum geçişi: hedef kategoriye götüren iş akışı adımı
-    if (changes.status) {
+    // 2) Durum geçişi: belirli durum adı verildiyse ona, yoksa hedef kategoriye götüren iş akışı adımı
+    if (changes.status || changes.statusName) {
         const cur = await call('GET', `${path}?fields=status`);
-        const current = asCategory(((cur.body.fields as { status?: { statusCategory?: { key?: unknown } } } | undefined)?.status?.statusCategory?.key));
-        if (current !== changes.status) {
+        const st = (cur.body.fields as { status?: { name?: unknown; statusCategory?: { key?: unknown } } } | undefined)?.status;
+        const current = asCategory(st?.statusCategory?.key);
+        const wantName = changes.statusName ? foldName(changes.statusName) : '';
+        const already = wantName ? foldName(str(st?.name)) === wantName : current === changes.status;
+        if (!already) {
             const t = await call('GET', `${path}/transitions`);
-            const options = (Array.isArray(t.body.transitions) ? t.body.transitions as { id?: unknown; name?: unknown; to?: { name?: unknown; statusCategory?: { key?: unknown } } }[] : [])
-                .filter(x => asCategory(x.to?.statusCategory?.key) === changes.status);
-            const pick = options.find(x => TRANSITION_HINTS[changes.status!].test(foldName(`${str(x.name)} ${str(x.to?.name)}`))) || options[0];
-            if (!pick) errors.push({ field: 'status', message: 'Jira iş akışı bu kayıt için istenen duruma doğrudan geçişe izin vermiyor.' });
-            else {
-                const r = await call('POST', `${path}/transitions`, { transition: { id: str(pick.id) } });
-                if (r.ok) applied.push('status');
+            const all = Array.isArray(t.body.transitions) ? t.body.transitions as { id?: unknown; name?: unknown; to?: { name?: unknown; statusCategory?: { key?: unknown } } }[] : [];
+            let pick = wantName ? all.find(x => foldName(str(x.to?.name)) === wantName) || all.find(x => foldName(str(x.name)) === wantName) : undefined;
+            if (!pick && changes.status && !wantName) {
+                const options = all.filter(x => asCategory(x.to?.statusCategory?.key) === changes.status);
+                pick = options.find(x => TRANSITION_HINTS[changes.status!].test(foldName(`${str(x.name)} ${str(x.to?.name)}`))) || options[0];
+            }
+            if (!pick) {
+                const avail = all.map(x => str(x.to?.name) || str(x.name)).filter(Boolean);
+                errors.push({ field: 'status', message: `Jira iş akışı bu kayıt için ${changes.statusName ? `"${changes.statusName}" durumuna` : 'istenen duruma'} doğrudan geçişe izin vermiyor${avail.length ? ` (Jira'daki geçişler: ${avail.join(', ')})` : ''}.` });
+            } else {
+                const resolution = changes.resolution ? jiraResolutionName(changes.resolution) : undefined;
+                let r = await call('POST', `${path}/transitions`, { transition: { id: str(pick.id) }, ...(resolution ? { fields: { resolution: { name: resolution } } } : {}) });
+                // Çözüm alanı geçiş ekranında yoksa çözümsüz yeniden dene
+                if (!r.ok && resolution && r.status === 400) {
+                    r = await call('POST', `${path}/transitions`, { transition: { id: str(pick.id) } });
+                    if (r.ok) errors.push({ field: 'resolution', message: "Jira geçiş ekranında çözüm alanı yok; çözüm yazılmadı." });
+                }
+                if (r.ok) { applied.push('status'); if (resolution && !errors.some(e => e.field === 'resolution')) applied.push('resolution'); }
                 else errors.push({ field: 'status', message: jiraErrorText(r.body, r.status) });
             }
         }
@@ -933,6 +958,8 @@ export const handleIntegrationRequest = async (request: Request, env: Env, opts:
                     status: asCategory(c.status) || undefined,
                     comment: typeof c.comment === 'string' ? c.comment.trim().slice(0, 30000) || undefined : undefined,
                     worklogHours: hours(c.worklogHours, 24),
+                    statusName: typeof c.statusName === 'string' && /^[\p{L}\p{N} ._'()&/-]{1,60}$/u.test(c.statusName.trim()) ? c.statusName.trim() : undefined,
+                    resolution: typeof c.resolution === 'string' && /^[\p{L}\p{N} ._'()-]{1,60}$/u.test(c.resolution.trim()) ? c.resolution.trim() : undefined,
                 };
                 if (!Object.values(changes).some(v => v !== undefined)) return json(400, { error: 'Güncellenecek geçerli alan yok.', code: 'bad_request' });
                 return json(200, await updateJiraIssue(env, key, changes, opts.fetchImpl, opts.now));

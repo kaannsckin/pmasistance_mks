@@ -202,6 +202,10 @@ export interface JiraUpdateChanges {
     status?: 'new' | 'indeterminate' | 'done';
     comment?: string;
     worklogHours?: number;
+    /** Hedef Jira durum adı (ör. TESTING); verilirse geçiş buna göre seçilir */
+    statusName?: string;
+    /** Geçişte yazılacak çözüm */
+    resolution?: string;
 }
 export interface JiraUpdateResult {
     applied: string[];
