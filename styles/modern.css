@@ -242,9 +242,11 @@
   --m-fill-2: #E9EDF7;
   --m-sep: rgba(100, 110, 160, 0.16);
   --m-label: #2A2F4A; --m-label-2: #454B6B; --m-label-3: #5E6485; --m-chevron: #7A80A0;
-  --m-accent: #C2412D; --m-accent-ink: #9C2F1F; --m-accent-tint: #FFE1D9; --m-on-accent: #FFFFFF;
+  /* Mercan yalnız dolgu (birincil buton, seçili menü). Yazı, bağlantı, bilgi notu
+     ve "süreçte" gibi durumlar çivit: kırmızı "gecikti/kritik" ile karışmasın */
+  --m-accent: #4A55B8; --m-accent-ink: #363F96; --m-accent-tint: #DFE3FA; --m-on-accent: #FFFFFF;
   --m-accent-fill: linear-gradient(145deg, #D9573F, #B83A27);
-  --app-ring: rgba(194, 65, 45, 0.22);
+  --app-ring: rgba(74, 85, 184, 0.22);
   --m-card-shadow: 8px 8px 20px rgba(110, 120, 170, 0.24), -6px -6px 16px rgba(255, 255, 255, 0.85), inset 2px 2px 4px rgba(255, 255, 255, 0.7), inset -2px -2px 5px rgba(110, 120, 170, 0.10);
   --m-raise: 4px 4px 10px rgba(110, 120, 170, 0.25), -3px -3px 8px rgba(255, 255, 255, 0.85), inset 1px 1px 2px rgba(255, 255, 255, 0.7);
   --m-inset: inset 3px 3px 6px rgba(110, 120, 170, 0.22), inset -3px -3px 6px rgba(255, 255, 255, 0.8);
@@ -261,10 +263,10 @@
   --m-fill: #1D2033;
   --m-fill-2: #262A40;
   --m-sep: rgba(255, 255, 255, 0.07);
-  --m-label: #EEF0FF; --m-label-2: #C9CCE6; --m-label-3: #A2A7C8; --m-chevron: #8A8FB0;
-  --m-accent: #FF8A73; --m-accent-ink: #FFB9AA; --m-accent-tint: rgba(255, 138, 115, 0.18); --m-on-accent: #3A120A;
+  --m-label: #EEF0FF; --m-label-2: #C9CCE6; --m-label-3: #B3B8D6; --m-chevron: #8A8FB0;
+  --m-accent: #A9B1FF; --m-accent-ink: #C9CEFF; --m-accent-tint: rgba(169, 177, 255, 0.16); --m-on-accent: #1B1E3A;
   --m-accent-fill: linear-gradient(145deg, #FFA28E, #F2785F);
-  --app-ring: rgba(255, 138, 115, 0.28);
+  --app-ring: rgba(169, 177, 255, 0.28);
   --m-card-shadow: 8px 8px 20px rgba(0, 0, 0, 0.42), -4px -4px 12px rgba(255, 255, 255, 0.035), inset 2px 2px 4px rgba(255, 255, 255, 0.06), inset -3px -3px 6px rgba(0, 0, 0, 0.22);
   --m-raise: 4px 4px 10px rgba(0, 0, 0, 0.38), -2px -2px 6px rgba(255, 255, 255, 0.04), inset 1px 1px 2px rgba(255, 255, 255, 0.06);
   --m-inset: inset 3px 3px 6px rgba(0, 0, 0, 0.38), inset -2px -2px 5px rgba(255, 255, 255, 0.05);
@@ -369,6 +371,8 @@
 .ui-modern .m-segment[aria-pressed="true"], .ui-modern .m-segment[aria-current="page"], .ui-modern .m-segment[aria-selected="true"] {
   background: var(--m-segment-on); box-shadow: var(--m-shadow); font-weight: 600;
 }
+/* Seçili bölüm zemini koyu temalarda açıklaştığı için içindeki soluk sayılar bir ton koyulaşır */
+.ui-modern .m-segment[aria-pressed="true"] .m-text-3, .ui-modern .m-segment[aria-current="page"] .m-text-3, .ui-modern .m-segment[aria-selected="true"] .m-text-3 { color: var(--m-label-2); }
 
 .ui-modern .m-input {
   min-height: 44px; width: 100%; box-sizing: border-box; padding: 0 14px; border-radius: var(--m-radius-ctl);
@@ -405,6 +409,9 @@
 .ui-modern .m-md thead { background: var(--m-fill-2); }
 
 /* 3. Yeniden yazılmamış ekranlar için yumuşatma -------------------------- */
+/* Eski ekranlardaki vurgu zeminli düğmeler (bg-primary + text-white): gece
+   temalarında vurgu açık renk olduğundan yazı temanın vurgu-üstü rengini alır */
+.ui-modern .bg-primary.text-white { color: var(--m-on-accent); }
 /* Büyük harf + harf aralıklı mini başlıklar (pencereler dahil) sade yazılır */
 .ui-modern .uppercase { text-transform: none; }
 .ui-modern [class*="tracking-"]:not([class*="tracking-[-"]) { letter-spacing: normal; }
