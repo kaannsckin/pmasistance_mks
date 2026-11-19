@@ -1,7 +1,7 @@
 import WorkflowSelect from './WorkflowSelect';
 import { taskStatusLabel } from '../../utils/workflow';
 import React, { useState } from 'react';
-import { Project, Task, TaskStatus } from '../../types';
+import { Project, Task, TaskStatus, WorkflowConfig } from '../../types';
 import { calculatePertFuzzyPert } from '../../utils/timeline';
 import { relativeTime } from '../../utils/recentChanges';
 import { ISSUE_TYPE_LABELS, taskDurations } from '../../utils/planning/lifecycle';
@@ -26,11 +26,13 @@ interface TaskDetailSheetProps {
     onSave: (task: Task) => void;
     /** Jira'daki hâli göreve uygular; verilirse Jira bölümü görünür (yalnız proje içeriğini düzenleyebilen) */
     onJiraPull?: (issue: JiraIssueRecord) => void;
+    /** Projenin iş akışı (admin şeması): yalnız izin verilen geçişler */
+    workflow?: WorkflowConfig;
 }
 
 const num = (v: number) => v.toLocaleString('tr-TR', { maximumFractionDigits: 1 });
 
-const TaskDetailSheet: React.FC<TaskDetailSheetProps> = ({ task, project, authorName, canEdit, onClose, onEdit, onSave, onJiraPull }) => {
+const TaskDetailSheet: React.FC<TaskDetailSheetProps> = ({ task, project, authorName, canEdit, onClose, onEdit, onSave, onJiraPull, workflow }) => {
     const [comment, setComment] = useState('');
     const pred = task.predecessor ? project.tasks.find(t => t.id === task.predecessor) : undefined;
     const wp = task.workPackageId ? project.workPackages.find(w => w.id === task.workPackageId) : undefined;
@@ -98,12 +100,12 @@ const TaskDetailSheet: React.FC<TaskDetailSheetProps> = ({ task, project, author
             {canEdit ? (
                 <div className="flex items-center gap-2 self-start">
                     <span className="text-[13px] font-semibold m-text-2">Durum</span>
-                    <WorkflowSelect className="m-input !w-auto !h-9 !py-0" value={task} tasks={project.tasks}
+                    <WorkflowSelect className="m-input !w-auto !h-9 !py-0" value={task} tasks={project.tasks} workflow={workflow} from={task}
                         onChange={p => (p.status !== task.status || p.jiraStatus !== task.jiraStatus) && onSave({ ...task, ...p })} />
                     <span className="text-[12.5px] m-text-3">{TASK_STATUS_LABELS[task.status]}</span>
                 </div>
             ) : (
-                <span className="self-start inline-flex items-center h-7 px-3 rounded-full text-[13px] font-semibold m-tone-accent" title={TASK_STATUS_LABELS[task.status]}>{taskStatusLabel(task)}</span>
+                <span className="self-start inline-flex items-center h-7 px-3 rounded-full text-[13px] font-semibold m-tone-accent" title={TASK_STATUS_LABELS[task.status]}>{taskStatusLabel(task, workflow)}</span>
             )}
 
             <dl className="m-0 grid gap-x-5 gap-y-2 text-[15px]" style={{ gridTemplateColumns: 'auto 1fr' }}>

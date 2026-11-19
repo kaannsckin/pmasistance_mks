@@ -1,6 +1,7 @@
 import WorkflowSelect from './WorkflowSelect';
+import { allowedIssueTypes, missingRequiredFields, REQUIRED_FIELD_LABELS } from '../../utils/projectScheme';
 import React, { useEffect, useMemo, useState } from 'react';
-import { Objective, Person, Project, Resource, Task, TaskStatus, WorkPackage } from '../../types';
+import { Objective, Person, Project, ProjectScheme, Resource, Task, TaskStatus, WorkPackage } from '../../types';
 import { EMBED_SYSTEM, parsePertEstimate, pertEstimatePrompt } from '../../utils/ai/embedded';
 import { buildHistory } from '../../utils/planning/history';
 import { ISSUE_TYPE_LABELS } from '../../utils/planning/lifecycle';
@@ -28,6 +29,8 @@ interface TaskFormSheetProps {
     history?: { projects: Project[]; projectId: string; visibleProjectIds: ReadonlySet<string> };
     onClose: () => void;
     onSave: (task: Task) => void;
+    /** Admin'in projeye atadığı yapılandırma şeması: iş akışı, kayıt türleri, zorunlu alanlar */
+    scheme?: ProjectScheme;
 }
 
 type Draft = Omit<Task, 'id' | 'availability'>;
@@ -54,10 +57,21 @@ const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title
     </fieldset>
 );
 
-const TaskFormSheet: React.FC<TaskFormSheetProps> = ({ task, tasks, resources, people, workPackages, objectives, sprintNames, history, onClose, onSave }) => {
+const TaskFormSheet: React.FC<TaskFormSheetProps> = ({ task, tasks, resources, people, workPackages, objectives, sprintNames, history, onClose, onSave, scheme }) => {
     // Müşteri isteğinden açılan taslak listede yoktur → "yeni görev" sayılır
     const isNew = !task || !tasks.some(t => t.id === task.id);
-    const [d, setD] = useState<Draft>(() => (task ? fromTask(task) : emptyDraft(resources)));
+    const wf = scheme?.workflow;
+    const [d, setD] = useState<Draft>(() => {
+        const base = task ? fromTask(task) : emptyDraft(resources);
+        // Yeni kayıt şemanın başlangıç durumuyla açılır (müşteri isteğinden gelen taslak da)
+        if (isNew && wf) {
+            const init = wf.statuses.find(x => x.key === wf.initial);
+            if (init) return { ...base, status: init.category, jiraStatus: init.key };
+        }
+        return base;
+    });
+    const typeOptions = scheme ? allowedIssueTypes(scheme) : (Object.keys(ISSUE_TYPE_LABELS) as NonNullable<Task['issueType']>[]);
+    const [missing, setMissing] = useState<string[]>([]);
     const [objectiveId, setObjectiveId] = useState(() => (task?.keyResultId ? objectives.find(o => o.keyResults.some(kr => kr.id === task.keyResultId))?.id || '' : ''));
     const [labelText, setLabelText] = useState(() => (task?.labels || []).join(', '));
     const [touched, setTouched] = useState(false);
@@ -114,6 +128,9 @@ const TaskFormSheet: React.FC<TaskFormSheetProps> = ({ task, tasks, resources, p
         setTouched(true);
         if (!d.name.trim() || timeError) return;
         const labels = labelText.split(',').map(s => s.trim()).filter(Boolean);
+        const miss = scheme ? missingRequiredFields(scheme, { ...d, labels }) : [];
+        setMissing(miss);
+        if (miss.length) return;
         onSave({
             ...d,
             name: d.name.trim(),
@@ -136,10 +153,11 @@ const TaskFormSheet: React.FC<TaskFormSheetProps> = ({ task, tasks, resources, p
     return (
         <Sheet
             title={isNew ? 'Yeni görev' : 'Görevi düzenle'}
+            subtitle={scheme && (scheme.requiredFields?.length || scheme.id !== 'default') ? `Proje yapılandırması: ${scheme.name}${scheme.requiredFields?.length ? ` · zorunlu: ${scheme.requiredFields.map(f => REQUIRED_FIELD_LABELS[f].toLocaleLowerCase('tr-TR')).join(', ')}` : ''}` : undefined}
             onClose={onClose}
             wide
             footer={<>
-                <span className="flex-1"></span>
+                {missing.length > 0 ? <span role="alert" className="flex-1 text-[13.5px] m-ink-bad">Zorunlu alan eksik: {missing.join(', ')}</span> : <span className="flex-1"></span>}
                 <button type="button" className="m-btn m-btn-plain" onClick={onClose}>Vazgeç</button>
                 <button type="button" className="m-btn m-btn-primary" onClick={save}>{isNew ? 'Görevi ekle' : 'Kaydet'}</button>
             </>}
@@ -153,12 +171,12 @@ const TaskFormSheet: React.FC<TaskFormSheetProps> = ({ task, tasks, resources, p
 
                 <Section title="Plan">
                     <Field label="Durum" htmlFor="tf-status" hint="Jira'daki gibi ayrıntılı durum; ilerleme ve tahmin hesapları kategorisini (Bekleyen / Yapılacak / Süreçte / Tamamlandı) kullanır">
-                        <WorkflowSelect id="tf-status" value={d} tasks={tasks} onChange={set} />
+                        <WorkflowSelect id="tf-status" value={d} tasks={tasks} onChange={set} workflow={wf} from={!isNew && task ? task : undefined} />
                     </Field>
                     <Field label="Kayıt türü" htmlFor="tf-type" hint="Planlama simülasyonu ve AI tahmini benzer kayıtları türüne göre karşılaştırır">
                         <select id="tf-type" className="m-input" value={d.issueType || ''} onChange={e => set({ issueType: (e.target.value || undefined) as Task['issueType'] })}>
                             <option value="">Belirtilmedi</option>
-                            {(Object.keys(ISSUE_TYPE_LABELS) as NonNullable<Task['issueType']>[]).map(k => <option key={k} value={k}>{ISSUE_TYPE_LABELS[k]}</option>)}
+                            {typeOptions.map(k => <option key={k} value={k}>{ISSUE_TYPE_LABELS[k]}</option>)}
                         </select>
                     </Field>
                     <div className="flex flex-col gap-1.5">

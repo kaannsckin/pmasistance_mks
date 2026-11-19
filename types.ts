@@ -100,6 +100,46 @@ export interface BoardQuickFilter {
   recentDays?: number;
 }
 
+// ---------------------------------------------------------------- Proje yapılandırma şeması (Jira "scheme" modeli)
+
+/** İş akışı durumu: Jira anahtarı (eşleme), Türkçe adı ve ana kategorisi */
+export interface WorkflowStatusDef {
+  key: string;
+  label: string;
+  category: TaskStatus;
+}
+
+export interface WorkflowConfig {
+  statuses: WorkflowStatusDef[];
+  /** İzin verilen geçişler (anahtar → gidilebilecek anahtarlar). Yoksa serbest: her durumdan her duruma */
+  transitions?: Record<string, string[]>;
+  /** Yeni kaydın başlangıç durumu */
+  initial: string;
+}
+
+export type SchemeRequiredField = 'resourceName' | 'dueDate' | 'estimate' | 'issueType' | 'labels' | 'workPackage';
+
+/**
+ * Proje yapılandırma şeması — admin tanımlar, projelere atar (birden çok
+ * proje aynı şemayı paylaşabilir): iş akışı ve geçişler, kayıt türleri,
+ * zorunlu alanlar, pano. Atanmamış proje yerleşik "Varsayılan" şemayı kullanır.
+ */
+export interface ProjectScheme {
+  id: string;
+  name: string;
+  description?: string;
+  workflow: WorkflowConfig;
+  /** Kullanılabilen kayıt türleri (yok/boş: hepsi) */
+  issueTypes?: IssueType[];
+  /** Yeni kayıtta ve düzenlemede zorunlu alanlar */
+  requiredFields?: SchemeRequiredField[];
+  /** Şemanın panosu (yoksa iş akışından otomatik) */
+  board?: BoardConfig;
+  /** Proje sahibi panoyu kendi projesi için özelleştirebilir */
+  allowProjectBoard: boolean;
+  updatedAt?: string;
+}
+
 export type BoardSwimlane = 'none' | 'expedite' | 'assignee' | 'priority' | 'workPackage';
 
 export interface BoardConfig {
@@ -561,7 +601,8 @@ export interface Project {
   pmPersonId?: string; // Proje Yöneticisi (havuzdaki kişi) — RBAC sahipliği
   jiraProjectKey?: string; // Jira proje anahtarı (worklog çekmek için, ör. MKS)
   jiraSync?: JiraSyncSettings; // Jira canlı eşitleme kaynağı ve otomatik eşitleme aralığı
-  boardConfig?: BoardConfig; // Pano kolonları, kurallar, hızlı filtreler ve kulvarlar
+  boardConfig?: BoardConfig; // Projeye özel pano (şema izin veriyorsa; yoksa şemanın panosu)
+  schemeId?: string; // Admin'in atadığı yapılandırma şeması (yoksa varsayılan)
   risks?: Risk[];
   pestelItems?: PestelItem[]; // PESTEL dış çevre analizi
   swotItems?: SwotItem[]; // SWOT stratejik analizi
@@ -708,6 +749,8 @@ export interface WorkspaceData {
   currentRole?: UserRole;
   /** Aktif kimlik: py/bölüm sorumlusu rollerinde kapsamı belirleyen havuz kişisi */
   currentPersonId?: string;
+  /** Admin'in proje yapılandırma şemaları (iş akışı, kayıt türleri, zorunlu alanlar, pano) */
+  projectSchemes?: ProjectScheme[];
   // Veri havuzu
   people: Person[];
   departments: Department[];

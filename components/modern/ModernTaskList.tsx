@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { Resource, Task, TaskSortKey, TaskStatus } from '../../types';
+import { Resource, Task, TaskSortKey, TaskStatus, WorkflowConfig } from '../../types';
 import { exportToExcel, exportToJiraCsv, exportToMsProjectCsv } from '../../utils/exporter';
 import { parseCustomCsv, parseImportedFile, parseJiraCsv } from '../../utils/importer';
 import { Icon } from './icons';
@@ -16,6 +16,8 @@ interface ModernTaskListProps {
     onStatusChange: (id: string, status: TaskStatus) => void;
     /** Ayrıntılı iş akışı durumu (Analizde, Testte, Çözüldü …) */
     onWorkflowChange?: (id: string, key: string) => void;
+    /** Projenin iş akışı (admin şeması) */
+    workflow?: WorkflowConfig;
     onViewTask: (task: Task) => void;
     onEditTask: (task: Task) => void;
     onDeleteTask: (id: string) => void;
@@ -33,7 +35,7 @@ const lower = (s: string) => s.toLocaleLowerCase('tr-TR');
 
 type ImportKind = 'excel' | 'jira' | 'csv';
 
-const ModernTaskList: React.FC<ModernTaskListProps> = ({ tasks, resources, sprintNames, onStatusChange, onWorkflowChange, onViewTask, onEditTask, onDeleteTask, onNotifyTask, onDataImport, onCelebrate, minPriority = 'Low' as TaskPriority, sortKey = 'smart' as TaskSortKey }) => {
+const ModernTaskList: React.FC<ModernTaskListProps> = ({ tasks, resources, sprintNames, onStatusChange, onWorkflowChange, workflow, onViewTask, onEditTask, onDeleteTask, onNotifyTask, onDataImport, onCelebrate, minPriority = 'Low' as TaskPriority, sortKey = 'smart' as TaskSortKey }) => {
     const [query, setQuery] = useState('');
     const [status, setStatus] = useState<string>('all');
     const [person, setPerson] = useState<string>('all');
@@ -219,7 +221,7 @@ const ModernTaskList: React.FC<ModernTaskListProps> = ({ tasks, resources, sprin
                                             <button type="button" onClick={() => onViewTask(t)} className="min-w-0 flex flex-col gap-0.5 text-left bg-transparent border-0 p-0 cursor-pointer" style={{ font: 'inherit' }}>
                                                 <span className={`text-[15px] font-semibold truncate ${isDone ? 'm-text-2' : 'm-text'}`}>{t.name}</span>
                                                 <span className="text-[13px] m-text-3 truncate flex items-center gap-1.5">
-                                                    {t.jiraStatus && <span title={t.jiraStatus} className="inline-flex items-center h-5 px-1.5 rounded text-[11.5px] font-semibold m-fill-2 m-text-2 flex-none">{taskStatusLabel(t)}</span>}
+                                                    {t.jiraStatus && <span title={t.jiraStatus} className="inline-flex items-center h-5 px-1.5 rounded text-[11.5px] font-semibold m-fill-2 m-text-2 flex-none">{taskStatusLabel(t, workflow)}</span>}
                                                     <span className="truncate">{[t.jiraId, t.unit].filter(Boolean).join(' · ') || 'Numara yok'}</span>
                                                 </span>
                                             </button>
@@ -238,7 +240,7 @@ const ModernTaskList: React.FC<ModernTaskListProps> = ({ tasks, resources, sprin
                                                 {late > 0 && <span className="text-[13px] m-ink-bad">{late} gün gecikti</span>}
                                                 {late === 0 && missingEstimate(t) && <span className="text-[13px] m-ink-warn">Süre tahmini yok</span>}
                                             </span>
-                                            <TaskActionsMenu task={t} onStatusChange={changeStatus} onWorkflowChange={onWorkflowChange} workflowTasks={tasks} onEdit={onEditTask} onDelete={onDeleteTask} onNotify={onNotifyTask} />
+                                            <TaskActionsMenu task={t} onStatusChange={changeStatus} onWorkflowChange={onWorkflowChange} workflowTasks={tasks} workflow={workflow} onEdit={onEditTask} onDelete={onDeleteTask} onNotify={onNotifyTask} />
                                         </div>
                                     );
                                 })}

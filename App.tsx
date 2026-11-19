@@ -1,6 +1,6 @@
 
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { View, Task, Resource, TaskStatus, Note, CustomerRequest, Objective, Project, Person, WorkspaceData, RagStatus, ProjectStatus, UserRole, PlanLockStatus, WorkPackage, UiStyle, PermissionKey, EstimateLogEntry, JiraSyncSettings, ReleasePlan, GoldenItem, EvalRun, ModelEvalRun, BoardConfig } from './types';
+import { View, Task, Resource, TaskStatus, Note, CustomerRequest, Objective, Project, Person, WorkspaceData, RagStatus, ProjectStatus, UserRole, PlanLockStatus, WorkPackage, UiStyle, PermissionKey, EstimateLogEntry, JiraSyncSettings, ReleasePlan, GoldenItem, EvalRun, ModelEvalRun, BoardConfig, ProjectScheme } from './types';
 import { INITIAL_TASKS, INITIAL_RESOURCES, INITIAL_OBJECTIVES } from './constants';
 import {
   WORKSPACE_STORAGE_KEY,
@@ -30,7 +30,8 @@ import { resetReportGuide, saveDepartmentGuide, saveReportGuide } from './utils/
 import { setReportExemplar } from './utils/ai/reportExamples';
 import { applyRuleAction, RuleAction, ruleActionLabel } from './utils/ai/reportRules';
 import { stampLifecycle } from './utils/planning/lifecycle';
-import { applyWorkflow, workflowOptions } from './utils/workflow';
+import { applyWorkflow, canTransition, taskStatusLabel, taskWorkflow, transitionToCategory, workflowOptions } from './utils/workflow';
+import { boardForProject, DEFAULT_SCHEME_ID, migrateTasksToWorkflow, schemeOf, schemeUsage, validateScheme } from './utils/projectScheme';
 import { AllocationSuggestion, ApplyMode, applyAllocationSuggestions } from './utils/taskToAllocation';
 import { applyBilledHoursActuals, planBilledHoursPoolAdditions, suggestBilledHoursActuals, BilledApplyMode, BilledHoursOptions, BilledHoursRecord } from './utils/billedHours';
 import { buildTodoItems, TodoItem } from './utils/todoItems';
@@ -183,6 +184,9 @@ const App: React.FC = () => {
   const [newProjectRequest, setNewProjectRequest] = useState(0);
   const [egg, setEgg] = useState<EggEvent | null>(null);
   const [undo, setUndo] = useState<{ message: string; snapshot: WorkspaceData } | null>(null);
+  // İş akışı kuralı bildirimi (izin verilmeyen geçiş, eksik zorunlu alan)
+  const [flowNotice, setFlowNotice] = useState<string | null>(null);
+  useEffect(() => { if (!flowNotice) return; const id = window.setTimeout(() => setFlowNotice(null), 6000); return () => window.clearTimeout(id); }, [flowNotice]);
   const [storageFull, setStorageFull] = useState(false);
   const [storageWarnClosed, setStorageWarnClosed] = useState(false);
   const undoTimer = useRef<number | undefined>(undefined);
@@ -239,6 +243,11 @@ const App: React.FC = () => {
   }, []);
 
   const settings = workspace?.settings;
+  // Aktif projenin admin yapılandırma şeması (iş akışı, kayıt türleri, zorunlu alanlar, pano)
+  const activeScheme = useMemo(
+    () => schemeOf({ projectSchemes: workspace?.projectSchemes }, workspace?.projects.find(p => p.id === workspace.activeProjectId)),
+    [workspace?.projectSchemes, workspace?.projects, workspace?.activeProjectId]
+  );
   const activeProject = useMemo(
     () => workspace?.projects.find(p => p.id === workspace.activeProjectId) ?? null,
     [workspace]
@@ -1097,11 +1106,63 @@ const App: React.FC = () => {
   const handleSaveBoardConfig = useCallback((projectId: string, boardConfig: BoardConfig | undefined) => {
     updateWorkspace(ws => {
       const project = ws.projects.find(p => p.id === projectId);
-      if (!project || !canEditProjectContent(ws, identityOf(ws), projectId)) return ws;
+      if (!project) return ws;
+      const isAdmin = can(identityOf(ws), 'screen.admin');
+      // Proje sahibi yalnız şema izin veriyorsa; admin her zaman
+      if (!isAdmin && (!canEditProjectContent(ws, identityOf(ws), projectId) || !schemeOf(ws, project).allowProjectBoard)) return ws;
       const next = { ...ws, projects: ws.projects.map(p => (p.id === projectId ? { ...p, boardConfig, updatedAt: new Date().toISOString() } : p)) };
       return appendAudit(next, 'config.update', boardConfig
         ? `"${project.name}" panosu yapılandırıldı: ${boardConfig.columns.map(c => c.name).join(' → ')} · ${boardConfig.quickFilters.length} hızlı filtre`
         : `"${project.name}" panosu varsayılan ayarlara döndü`, projectId);
+    });
+  }, [updateWorkspace]);
+
+  // ---- Proje yapılandırma şemaları (admin): kaydet / sil / projeye ata ----
+  // İş akışı değişince yeni akışta olmayan durumdaki yerel görevler aynı kategorinin ilk durumuna taşınır
+  const migrateProjects = (ws: WorkspaceData, ids: Set<string>): { ws: WorkspaceData; moved: number } => {
+    let moved = 0;
+    const projects = ws.projects.map(p => {
+      if (!ids.has(p.id)) return p;
+      const r = migrateTasksToWorkflow(p.tasks, schemeOf(ws, p).workflow);
+      moved += r.moved;
+      return r.moved ? { ...p, tasks: r.tasks, updatedAt: new Date().toISOString() } : p;
+    });
+    return { ws: moved ? { ...ws, projects } : ws, moved };
+  };
+  const handleSaveScheme = useCallback((scheme: ProjectScheme): string | null => {
+    const problems = validateScheme(scheme);
+    if (problems.length) return problems[0];
+    let error: string | null = null;
+    updateWorkspace(ws => {
+      if (!can(identityOf(ws), 'screen.admin')) { error = 'Yalnız yönetici şema düzenleyebilir.'; return ws; }
+      const list = ws.projectSchemes || [];
+      const exists = list.some(x => x.id === scheme.id);
+      const saved = { ...scheme, updatedAt: new Date().toISOString() };
+      const next0 = { ...ws, projectSchemes: exists ? list.map(x => (x.id === scheme.id ? saved : x)) : [...list, saved] };
+      const users = new Set(schemeUsage(next0, scheme.id).map(p => p.id));
+      const { ws: next, moved } = migrateProjects(next0, users);
+      return appendAudit(next, 'config.update', `Proje yapılandırması "${scheme.name}" ${exists || scheme.id === DEFAULT_SCHEME_ID ? 'güncellendi' : 'oluşturuldu'}: ${scheme.workflow.statuses.length} durum, geçişler ${scheme.workflow.transitions ? 'tanımlı' : 'serbest'}, ${users.size} proje${moved ? ` · ${moved} görev yeni iş akışına taşındı` : ''}`);
+    });
+    return error;
+  }, [updateWorkspace]);
+  const handleDeleteScheme = useCallback((schemeId: string) => {
+    updateWorkspace(ws => {
+      if (!can(identityOf(ws), 'screen.admin') || schemeId === DEFAULT_SCHEME_ID) return ws;
+      const scheme = (ws.projectSchemes || []).find(x => x.id === schemeId);
+      if (!scheme) return ws;
+      const affected = new Set<string>(ws.projects.filter(p => p.schemeId === schemeId).map(p => p.id));
+      const next0 = { ...ws, projectSchemes: (ws.projectSchemes || []).filter(x => x.id !== schemeId), projects: ws.projects.map(p => (affected.has(p.id) ? { ...p, schemeId: undefined } : p)) };
+      const { ws: next, moved } = migrateProjects(next0, affected);
+      return appendAudit(next, 'config.update', `Proje yapılandırması "${scheme.name}" silindi; ${affected.size} proje varsayılana döndü${moved ? ` · ${moved} görev taşındı` : ''}`);
+    });
+  }, [updateWorkspace]);
+  const handleAssignScheme = useCallback((projectId: string, schemeId: string) => {
+    updateWorkspace(ws => {
+      const project = ws.projects.find(p => p.id === projectId);
+      if (!project || !can(identityOf(ws), 'screen.admin')) return ws;
+      const next0 = { ...ws, projects: ws.projects.map(p => (p.id === projectId ? { ...p, schemeId: schemeId === DEFAULT_SCHEME_ID ? undefined : schemeId, updatedAt: new Date().toISOString() } : p)) };
+      const { ws: next, moved } = migrateProjects(next0, new Set([projectId]));
+      return appendAudit(next, 'config.update', `"${project.name}" projesine "${schemeOf(next, next.projects.find(p => p.id === projectId)).name}" yapılandırması atandı${moved ? ` · ${moved} görev yeni iş akışına taşındı` : ''}`, projectId);
     });
   }, [updateWorkspace]);
 
@@ -1380,6 +1441,10 @@ const App: React.FC = () => {
           cloudLinked={!!loadCloudConfig()?.workspaceId}
           onOpenCloud={() => setIsCloudModalOpen(true)}
           onOpenProfile={() => setIsProfileOpen(true)}
+          onSaveScheme={handleSaveScheme}
+          onDeleteScheme={handleDeleteScheme}
+          onAssignScheme={handleAssignScheme}
+          onSaveProjectBoard={handleSaveBoardConfig}
         />
       );
       return isModern ? page : <div className="ui-modern rounded-3xl p-4 sm:p-6">{page}</div>;
@@ -1621,15 +1686,32 @@ const App: React.FC = () => {
 
     const { tasks, resources, notes, customerRequests, objectives } = activeProject;
     const ps = activeProject.settings;
-    const changeTaskStatus = (id: string, s: TaskStatus) => setTasks(prev => prev.map(t => t.id === id ? { ...t, status: s } : t));
+    const wf = activeScheme.workflow;
+    // Yalnız kategori isteyen kontroller (işaretle, eski menüler): iş akışında izin verilen o kategorideki ilk duruma
+    const changeTaskStatus = (id: string, s: TaskStatus) => {
+      const task = tasks.find(t => t.id === id);
+      if (!task) return;
+      const target = transitionToCategory(task, s, wf);
+      if (!target) { setFlowNotice(`"${taskStatusLabel(task, wf)}" durumundan bu duruma geçiş, projenin iş akışında (${activeScheme.name}) tanımlı değil.`); return; }
+      setTasks(prev => prev.map(t => t.id === id ? { ...t, status: target.category, jiraStatus: wf.transitions || t.jiraStatus ? target.key : t.jiraStatus, updatedAt: new Date().toISOString() } : t));
+    };
     const moveBoardTask = (id: string, patch: Partial<Task>) => setTasks(prev => prev.map(t => t.id === id ? { ...t, ...patch } : t));
-    const changeTaskWorkflow = (id: string, key: string) => setTasks(prev => prev.map(t => t.id === id ? { ...applyWorkflow(t, key, workflowOptions(prev).flatMap(g => g.statuses)), updatedAt: new Date().toISOString() } : t));
+    const changeTaskWorkflow = (id: string, key: string) => {
+      const task = tasks.find(t => t.id === id);
+      if (!task) return;
+      if (!canTransition(wf, taskWorkflow(task, wf).key, key)) { setFlowNotice(`Bu geçiş projenin iş akışında (${activeScheme.name}) tanımlı değil.`); return; }
+      setTasks(prev => prev.map(t => t.id === id ? { ...applyWorkflow(t, key, workflowOptions(prev, wf).flatMap(g => g.statuses), wf), updatedAt: new Date().toISOString() } : t));
+    };
+    const projectBoard = boardForProject(activeScheme, activeProject);
     const boardMe = (() => { const p = workspace.people.find(x => x.id === workspace.currentPersonId); return p ? `${p.firstName} ${p.lastName}`.trim() : undefined; })();
     const renderProjectBoard = () => (
       <ProjectBoard
         tasks={tasks}
-        config={activeProject.boardConfig}
-        canConfigure={canEditProjectContent(workspace, identity, activeProject.id)}
+        config={projectBoard.config}
+        boardSource={projectBoard.source}
+        workflow={wf}
+        schemeName={activeScheme.id === DEFAULT_SCHEME_ID ? undefined : activeScheme.name}
+        canConfigure={activeScheme.allowProjectBoard && canEditProjectContent(workspace, identity, activeProject.id)}
         onSaveConfig={cfg => handleSaveBoardConfig(activeProject.id, cfg)}
         onMoveTask={moveBoardTask}
         onStatusChange={changeTaskStatus}
@@ -1808,6 +1890,7 @@ const App: React.FC = () => {
           sprintNames={ps.sprintNames || {}}
           onStatusChange={changeTaskStatus}
           onWorkflowChange={changeTaskWorkflow}
+          workflow={wf}
           onViewTask={viewTask}
           onEditTask={editTask}
           onDeleteTask={deleteTask}
@@ -2190,9 +2273,10 @@ const App: React.FC = () => {
           history={{ projects: workspace.projects, projectId: activeProject.id, visibleProjectIds: visibleProjectIdSet }}
           onClose={closeTaskForm}
           onSave={saveTaskFromForm}
+          scheme={activeScheme}
         />
       ) : (
-        <TaskFormModal task={editingTask} resources={activeProject.resources} people={workspace.people} workPackages={activeProject.workPackages} tasks={activeProject.tasks} objectives={activeProject.objectives} onClose={closeTaskForm} onSave={saveTaskFromForm} />
+        <TaskFormModal task={editingTask} resources={activeProject.resources} people={workspace.people} workPackages={activeProject.workPackages} tasks={activeProject.tasks} objectives={activeProject.objectives} onClose={closeTaskForm} onSave={saveTaskFromForm} scheme={activeScheme} />
       ))}
       {isWpManagerOpen && activeProject && workspace && isModern && (
         <WorkPackagesSheet
@@ -2222,6 +2306,7 @@ const App: React.FC = () => {
           onEdit={(t: Task) => { setIsDetailModalOpen(false); setEditingTask(t); setIsFormModalOpen(true); }}
           onSave={handleUpdateTask}
           onJiraPull={canEditProjectContent(workspace, identity, activeProject.id) ? issue => handleJiraPull(activeProject.id, issue) : undefined}
+          workflow={activeScheme.workflow}
         />
       ) : (
         <TaskDetailModal task={liveViewingTask} onClose={() => setIsDetailModalOpen(false)} onEdit={(t) => { setIsDetailModalOpen(false); setEditingTask(t); setIsFormModalOpen(true); }} onSave={handleUpdateTask} />
@@ -2327,6 +2412,13 @@ const App: React.FC = () => {
           <i className="fa-solid fa-triangle-exclamation mt-0.5" aria-hidden="true"></i>
           <span className="text-sm flex-1">Tarayıcı depolaması dolu: son değişiklikler bu tarayıcıya kaydedilemedi. Sayfayı kapatmadan önce bulut eşitlemesini kullanın ya da "Yedeği indir" ile yedek alın.</span>
           <button type="button" onClick={() => setStorageWarnClosed(true)} className="opacity-70 hover:opacity-100" aria-label="Uyarıyı kapat"><i aria-hidden="true" className="fa-solid fa-xmark text-sm"></i></button>
+        </div>
+      )}
+      {flowNotice && (
+        <div role="alert" className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[250] flex items-center gap-3 bg-red-700 text-white rounded-xl shadow-2xl px-4 py-2.5 max-w-[92vw]">
+          <i aria-hidden="true" className="fa-solid fa-route text-xs"></i>
+          <span className="text-xs font-semibold">{flowNotice}</span>
+          <button aria-label="Kapat" onClick={() => setFlowNotice(null)} className="text-white/70 hover:text-white" title="Kapat"><i aria-hidden="true" className="fa-solid fa-xmark text-xs"></i></button>
         </div>
       )}
       {undo && (

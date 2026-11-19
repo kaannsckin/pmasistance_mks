@@ -1,7 +1,7 @@
-import React, { useMemo, useState } from 'react';
-import { BoardColumnConfig, BoardConfig, BoardSwimlane, Task, TaskSortKey, TaskStatus } from '../../types';
+import React, { useEffect, useMemo, useState } from 'react';
+import { BoardColumnConfig, BoardConfig, BoardSwimlane, Task, TaskSortKey, TaskStatus, WorkflowConfig } from '../../types';
 import { boardConfigOf, buildLanes, distribute, filterBoardTasks, moveTaskPatch, wipState } from '../../utils/board';
-import { taskStatusLabel } from '../../utils/workflow';
+import { canTransition, taskStatusLabel, taskWorkflow, workflowKey } from '../../utils/workflow';
 import { MIN_PRIORITY_OPTIONS, taskComparator, TaskPriority, taskPassesView } from '../../utils/viewConfig';
 import BoardSettings from './BoardSettings';
 import { Icon } from './icons';
@@ -26,6 +26,11 @@ interface ProjectBoardProps {
     onStatusChange: (id: string, status: TaskStatus) => void;
     /** Ayrıntılı iş akışı durumu (Testte, Çözüldü …) */
     onWorkflowChange?: (id: string, key: string) => void;
+    /** Projenin iş akışı (admin şeması): durum adları ve izin verilen geçişler */
+    workflow?: WorkflowConfig;
+    /** Pano nereden geliyor: projeye özel / şema / iş akışından otomatik */
+    boardSource?: 'project' | 'scheme' | 'auto';
+    schemeName?: string;
     onViewTask: (task: Task) => void;
     onEditTask: (task: Task) => void;
     onDeleteTask: (id: string) => void;
@@ -60,14 +65,14 @@ const TYPE_ICON: Record<string, { icon: string; label: string; color: string }> 
 };
 
 const Card: React.FC<{
-    t: Task; done: boolean; columnName: string;
+    t: Task; done: boolean; columnName: string; workflow?: WorkflowConfig;
     onView: () => void; onDragStart: (e: React.DragEvent) => void; menu: React.ReactNode;
-}> = ({ t, done, columnName, onView, onDragStart, menu }) => {
+}> = ({ t, done, columnName, workflow, onView, onDragStart, menu }) => {
     const late = daysLate(t);
     const prio = PRIORITY_META[t.priority];
     const type = t.issueType ? TYPE_ICON[t.issueType] : undefined;
     const bar = PRIORITY_BAR[t.priority];
-    const statusLabel = taskStatusLabel(t);
+    const statusLabel = taskStatusLabel(t, workflow);
     // Ayrıntılı durum kolon adından farklıysa kartta gösterilir (ör. Devam Ediyor kolonunda "Analizde")
     const showJira = !!t.jiraStatus && statusLabel.toLocaleLowerCase('tr-TR') !== columnName.toLocaleLowerCase('tr-TR');
     return (
@@ -105,10 +110,12 @@ const Card: React.FC<{
 };
 
 const ProjectBoard: React.FC<ProjectBoardProps> = ({
-    tasks, config, canConfigure, onSaveConfig, onMoveTask, onStatusChange, onWorkflowChange, onViewTask, onEditTask, onDeleteTask, onNotifyTask, onNewTask, onCelebrate,
+    tasks, config, canConfigure, onSaveConfig, onMoveTask, onStatusChange, onWorkflowChange, workflow, boardSource, schemeName, onViewTask, onEditTask, onDeleteTask, onNotifyTask, onNewTask, onCelebrate,
     sprintNames, me, wpNames, minPriority = 'Low' as TaskPriority, sortKey = 'smart' as TaskSortKey,
 }) => {
-    const cfg = useMemo(() => boardConfigOf(config), [config]);
+    const cfg = useMemo(() => boardConfigOf(config, workflow), [config, workflow]);
+    const [notice, setNotice] = useState<string | null>(null);
+    useEffect(() => { if (!notice) return; const id = setTimeout(() => setNotice(null), 5000); return () => clearTimeout(id); }, [notice]);
     const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set());
     const [people, setPeople] = useState<Set<string>>(new Set());
     const [query, setQuery] = useState('');
@@ -153,7 +160,20 @@ const ProjectBoard: React.FC<ProjectBoardProps> = ({
     const drop = (col: BoardColumnConfig, id: string) => {
         const task = tasks.find(t => t.id === id);
         if (!task || colIndex.get(id) === col.id) return;
-        const patch = moveTaskPatch(task, col, cfg, new Date());
+        // İş akışı geçiş kuralı (Jira'daki gibi): kolondaki, mevcut durumdan gidilebilen ilk durum
+        let target = col;
+        if (workflow?.transitions) {
+            const cur = taskWorkflow(task, workflow).key;
+            const keys = col.statuses.filter(k => k.startsWith('jira:')).map(k => workflowKey(k.slice(5)));
+            const pool = keys.length ? keys : workflow.statuses.filter(x => x.category === col.targetStatus).map(x => x.key);
+            const ok = pool.find(k => canTransition(workflow, cur, k));
+            if (!ok) {
+                setNotice(`"${taskStatusLabel(task, workflow)}" durumundan "${col.name}" kolonuna geçiş bu projenin iş akışında tanımlı değil.`);
+                return;
+            }
+            target = { ...col, statuses: [`jira:${ok}` as const, ...col.statuses.filter(k => k !== `jira:${ok}`)] };
+        }
+        const patch = moveTaskPatch(task, target, cfg, new Date());
         if (patch.status !== task.status && onCelebrate) {
             const message = celebrationFor(tasks, id, patch.status!, sprintNames);
             if (message) onCelebrate(message);
@@ -167,7 +187,8 @@ const ProjectBoard: React.FC<ProjectBoardProps> = ({
     return (
         <div className="flex flex-col gap-4">
             {settingsOpen && (
-                <BoardSettings tasks={tasks} config={cfg} isCustom={!!config} people={assignees}
+                <BoardSettings tasks={tasks} config={cfg} isCustom={boardSource === 'project'} people={assignees} workflow={workflow}
+                    resetLabel={schemeName ? `Şemanın panosuna dön (${schemeName})` : undefined}
                     onClose={() => setSettingsOpen(false)}
                     onSave={c => { onSaveConfig(c); setSettingsOpen(false); }} />
             )}
@@ -204,6 +225,7 @@ const ProjectBoard: React.FC<ProjectBoardProps> = ({
                         <span className="text-[13px] m-text-2 whitespace-nowrap"><b className="m-tabular">{doneCount}/{mappedTotal}</b> tamam</span>
                     </span>
                     <button type="button" className="m-btn m-btn-primary !min-h-[36px] !px-3 text-[14px]" onClick={onNewTask}><Icon name="plus" size={15} />Görev</button>
+                    {schemeName && <span className="hidden lg:inline-flex items-center gap-1 h-7 px-2.5 rounded-full m-fill-2 text-[12.5px] m-text-2" title={`Yönetici tarafından atanan proje yapılandırması${boardSource === 'project' ? ' · bu projeye özel pano' : ''}`}><Icon name="sliders" size={12} />{schemeName}{boardSource === 'project' ? ' · özel pano' : ''}</span>}
                     {canConfigure && <button type="button" className="m-btn m-btn-gray !min-h-[36px] !px-3 text-[14px]" onClick={() => setSettingsOpen(true)} title="Kolonlar, durum/etiket kuralları, WIP, hızlı filtreler, kulvarlar"><Icon name="sliders" size={15} />Panoyu yapılandır</button>}
                 </div>
             </div>
@@ -225,10 +247,11 @@ const ProjectBoard: React.FC<ProjectBoardProps> = ({
                 </div>
             )}
 
+            {notice && <p role="alert" className="m-0 m-tone-bad rounded-xl px-3 py-2 text-[14px] flex items-center gap-2"><Icon name="alert" size={15} />{notice}</p>}
             {hiddenByView > 0 && <ViewFilterNote text={`Yönetici ayarı: ${MIN_PRIORITY_OPTIONS.find(o => o.value === minPriority)!.label.toLocaleLowerCase('tr-TR')} görevler gösteriliyor · ${hiddenByView} görev gizli`} />}
             {unmapped.length > 0 && (
                 <p role="status" className="m-0 flex items-center gap-2 text-[13.5px] m-ink-warn">
-                    <Icon name="alert" size={15} />{unmapped.length} görev hiçbir kolona eşlenmemiş durumda ({uniq(unmapped.map(t => taskStatusLabel(t))).slice(0, 5).join(', ')}).
+                    <Icon name="alert" size={15} />{unmapped.length} görev hiçbir kolona eşlenmemiş durumda ({uniq(unmapped.map(t => taskStatusLabel(t, workflow))).slice(0, 5).join(', ')}).
                     {canConfigure && <button type="button" className="underline bg-transparent border-0 p-0 m-accent cursor-pointer" onClick={() => setSettingsOpen(true)}>Kolonlara eşle</button>}
                 </p>
             )}
@@ -287,7 +310,8 @@ const ProjectBoard: React.FC<ProjectBoardProps> = ({
                                                         <Card key={t.id} t={t} done={done} columnName={c.name}
                                                             onView={() => onViewTask(t)}
                                                             onDragStart={e => { e.dataTransfer.setData('text/plain', t.id); e.dataTransfer.effectAllowed = 'move'; }}
-                                                            menu={<TaskActionsMenu task={t} onStatusChange={onStatusChange} onWorkflowChange={onWorkflowChange} workflowTasks={tasks} onEdit={onEditTask} onDelete={onDeleteTask} onNotify={onNotifyTask} />} />
+                                                            workflow={workflow}
+                                                            menu={<TaskActionsMenu task={t} onStatusChange={onStatusChange} onWorkflowChange={onWorkflowChange} workflowTasks={tasks} workflow={workflow} onEdit={onEditTask} onDelete={onDeleteTask} onNotify={onNotifyTask} />} />
                                                     ))}
                                                 </div>
                                             );

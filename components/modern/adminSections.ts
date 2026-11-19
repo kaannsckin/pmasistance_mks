@@ -1,10 +1,11 @@
 import { IconName } from './icons';
 
 /** Yönetici konsolunun bölümleri (kenar çubuğu ve konsol ekranı ortak kullanır) */
-export type AdminSection = 'permissions' | 'views' | 'report' | 'health' | 'ai' | 'forecast' | 'profiles' | 'audit' | 'app';
+export type AdminSection = 'permissions' | 'projects' | 'views' | 'report' | 'health' | 'ai' | 'forecast' | 'profiles' | 'audit' | 'app';
 
 export const ADMIN_SECTIONS: { key: AdminSection; label: string; icon: IconName; description: string }[] = [
     { key: 'permissions', label: 'Yetkiler', icon: 'key', description: 'Rollerin hangi özellikleri kullanacağı' },
+    { key: 'projects', label: 'Proje yapılandırması', icon: 'briefcase', description: "Jira'daki gibi: iş akışı ve geçişler, kayıt türleri, zorunlu alanlar ve pano — yapılandırmalar projelere atanır" },
     { key: 'views', label: 'Görünüm ve filtreler', icon: 'eye', description: 'Rol bazında sekmeler, kartlar, kayıt süzgeçleri ve sıralamalar' },
     { key: 'report', label: 'Haftalık rapor akışı', icon: 'report', description: 'Onay adımları ve gönderim kuralları' },
     { key: 'health', label: 'Sağlık puanı', icon: 'gauge', description: 'Girdi ağırlıkları ve bant eşikleri' },

@@ -1,5 +1,6 @@
 import { BoardColumnConfig, BoardConfig, BoardQuickFilter, BoardStatusKey, Task, TaskStatus } from '../types';
-import { WORKFLOW_STATUSES, workflowLabel } from './workflow';
+import { WorkflowConfig } from '../types';
+import { CATEGORY_LABELS, DEFAULT_WORKFLOW, WORKFLOW_STATUSES, workflowLabel } from './workflow';
 
 /**
  * Jira tarzı proje panosu: kolonlar durumlara (uygulama durumu ya da Jira
@@ -28,8 +29,8 @@ export const APP_STATUS_LABELS: Record<TaskStatus, string> = {
 export const appKey = (s: TaskStatus): BoardStatusKey => `app:${s}`;
 export const jiraKey = (name: string): BoardStatusKey => `jira:${name.trim().toUpperCase().replace(/\s+/g, ' ')}`;
 /** Durum anahtarının adı: uygulama kategorisi ya da iş akışı durumunun Türkçe adı (bilinmeyen Jira durumu olduğu gibi) */
-export const statusKeyLabel = (k: BoardStatusKey): string =>
-    k.startsWith('app:') ? APP_STATUS_LABELS[k.slice(4) as TaskStatus] || k.slice(4) : workflowLabel(k.slice(5));
+export const statusKeyLabel = (k: BoardStatusKey, wf?: WorkflowConfig): string =>
+    k.startsWith('app:') ? APP_STATUS_LABELS[k.slice(4) as TaskStatus] || k.slice(4) : workflowLabel(k.slice(5), wf);
 export const isJiraKey = (k: BoardStatusKey): boolean => k.startsWith('jira:');
 
 /** Büyük/küçük ve ı/i duyarsız karşılaştırma ("GIB" = "gib", "İSTEMCİ" = "istemci") */
@@ -57,9 +58,33 @@ export const defaultBoardConfig = (): BoardConfig => ({
     expedite: { priorities: ['Blocker'] },
 });
 
-/** Kayıtlı ayarı eksik alanlarıyla tamamlar (eski sürümler / elle düzenlenmiş JSON) */
-export const boardConfigOf = (cfg?: BoardConfig | null): BoardConfig => {
-    const d = defaultBoardConfig();
+/**
+ * İş akışından pano (Jira'nın yeni pano davranışı gibi): Yapılacak kolonu
+ * (Bekleyen + Yapılacak kategorisi), Süreçteki her durum ayrı kolon (4'ten
+ * fazlaysa tek "Devam Ediyor" kolonu), Tamamlandı kolonu. Kolonun ilk iş akışı
+ * durumu, karta taşınınca yazılan durumdur.
+ */
+export const boardFromWorkflow = (wf: WorkflowConfig = DEFAULT_WORKFLOW): BoardConfig => {
+    if (wf === DEFAULT_WORKFLOW) return defaultBoardConfig();
+    const keys = (cats: TaskStatus[]) => wf.statuses.filter(s => cats.includes(s.category)).map(s => jiraKey(s.key));
+    const todo = keys([TaskStatus.ToDo, TaskStatus.Backlog]);
+    const initial = jiraKey(wf.initial);
+    const progress = wf.statuses.filter(s => s.category === TaskStatus.InProgress);
+    const done = wf.statuses.filter(s => s.category === TaskStatus.Done);
+    const columns: BoardColumnConfig[] = [
+        { id: 'col-todo', name: CATEGORY_LABELS[TaskStatus.ToDo], statuses: [appKey(TaskStatus.Backlog), appKey(TaskStatus.ToDo), ...(todo.includes(initial) ? [initial] : []), ...todo.filter(k => k !== initial)], targetStatus: TaskStatus.ToDo },
+        ...(progress.length <= 4
+            ? progress.map((s, i) => ({ id: `col-${s.key.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`, name: s.label, statuses: [...(i === 0 ? [appKey(TaskStatus.InProgress)] : []), jiraKey(s.key)], targetStatus: TaskStatus.InProgress }))
+            : [{ id: 'col-progress', name: 'Devam Ediyor', statuses: [appKey(TaskStatus.InProgress), ...progress.map(s => jiraKey(s.key))], targetStatus: TaskStatus.InProgress }]),
+        { id: 'col-done', name: done[0]?.label && done.length === 1 ? done[0].label : CATEGORY_LABELS[TaskStatus.Done], statuses: [appKey(TaskStatus.Done), ...done.map(s => jiraKey(s.key))], targetStatus: TaskStatus.Done },
+    ];
+    if (!progress.length) columns.splice(1, 0, { id: 'col-progress', name: 'Devam Ediyor', statuses: [appKey(TaskStatus.InProgress)], targetStatus: TaskStatus.InProgress });
+    return { ...defaultBoardConfig(), columns };
+};
+
+/** Kayıtlı ayarı eksik alanlarıyla tamamlar (eski sürümler / elle düzenlenmiş JSON); ayar yoksa iş akışından */
+export const boardConfigOf = (cfg?: BoardConfig | null, wf?: WorkflowConfig): BoardConfig => {
+    const d = boardFromWorkflow(wf);
     if (!cfg || !Array.isArray(cfg.columns) || !cfg.columns.length) return d;
     return {
         ...d,
@@ -208,11 +233,11 @@ export const buildLanes = (tasks: Task[], cfg: BoardConfig, wpNames: Map<string,
 };
 
 /** Projede görülen tüm durum anahtarları ve görev sayıları (yapılandırma ekranı) */
-export const statusUsage = (tasks: Task[]): Map<BoardStatusKey, number> => {
+export const statusUsage = (tasks: Task[], wf: WorkflowConfig = DEFAULT_WORKFLOW): Map<BoardStatusKey, number> => {
     const m = new Map<BoardStatusKey, number>();
     Object.values(TaskStatus).forEach(s => m.set(appKey(s), 0));
-    // Hazır iş akışı durumları da (Jira'daki "görev içermeyen durumlar" gibi) eşlenebilsin
-    WORKFLOW_STATUSES.forEach(s => m.set(jiraKey(s.key), 0));
+    // İş akışının durumları da (Jira'daki "görev içermeyen durumlar" gibi) eşlenebilsin
+    (wf.statuses.length ? wf.statuses : WORKFLOW_STATUSES).forEach(s => m.set(jiraKey(s.key), 0));
     tasks.forEach(t => {
         const k = t.jiraStatus ? jiraKey(t.jiraStatus) : appKey(t.status);
         m.set(k, (m.get(k) || 0) + 1);

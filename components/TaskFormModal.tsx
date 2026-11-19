@@ -1,9 +1,10 @@
 
 import { workflowOptions, workflowValue } from '../utils/workflow';
+import { missingRequiredFields } from '../utils/projectScheme';
 import React, { useState, useEffect, useMemo } from 'react';
 import { EMBED_SYSTEM, parsePertEstimate, pertEstimatePrompt } from '../utils/ai/embedded';
 import { AiButton, AiErrorNote, useAiRun } from './assistant/AiButton';
-import { Task, Resource, TaskStatus, Objective, Person, WorkPackage } from '../types';
+import { Task, Resource, TaskStatus, Objective, Person, WorkPackage, ProjectScheme } from '../types';
 
 interface TaskFormModalProps {
   task: Task | null;
@@ -14,9 +15,14 @@ interface TaskFormModalProps {
   objectives: Objective[];
   onClose: () => void;
   onSave: (task: Task) => void;
+  /** Admin'in projeye atadığı yapılandırma: iş akışı ve zorunlu alanlar */
+  scheme?: ProjectScheme;
 }
 
-const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, people, workPackages, tasks, objectives, onClose, onSave }) => {
+const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, people, workPackages, tasks, objectives, onClose, onSave, scheme }) => {
+  const wf = scheme?.workflow;
+  const initial = wf?.statuses.find(x => x.key === wf.initial);
+  const [missing, setMissing] = useState<string[]>([]);
   const [formData, setFormData] = useState<Omit<Task, 'id' | 'availability'>>({
     name: '',
     priority: 'Medium',
@@ -27,7 +33,8 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, people, 
     time: { best: 0, avg: 0, worst: 0 },
     jiraId: '',
     notes: '',
-    status: TaskStatus.ToDo,
+    status: initial?.category ?? TaskStatus.ToDo,
+    ...(initial ? { jiraStatus: initial.key } : {}),
     labels: [],
     includeInSprints: true,
     keyResultId: undefined,
@@ -138,6 +145,9 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, people, 
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const miss = scheme ? missingRequiredFields(scheme, formData) : [];
+    setMissing(miss);
+    if (miss.length) return;
     const taskToSave: Task = {
       ...formData,
       id: task ? task.id : new Date().toISOString(),
@@ -251,9 +261,9 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, people, 
             </div>
              <div>
               <label htmlFor="status" className="block text-sm font-medium text-black dark:text-white">Durum</label>
-              <select name="status" id="status" value={workflowValue(formData)} className={`mt-1 block w-full ${inputStyle}`}
-                onChange={e => { const s = workflowOptions([formData, ...(tasks || [])]).flatMap(g => g.statuses).find(x => x.key === e.target.value); if (s) setFormData(prev => ({ ...prev, status: s.category, jiraStatus: s.key })); }}>
-                {workflowOptions([formData, ...(tasks || [])]).map(g => (
+              <select name="status" id="status" value={workflowValue(formData, wf)} className={`mt-1 block w-full ${inputStyle}`}
+                onChange={e => { const s = workflowOptions([formData, ...(tasks || [])], wf, task || undefined).flatMap(g => g.statuses).find(x => x.key === e.target.value); if (s) setFormData(prev => ({ ...prev, status: s.category, jiraStatus: s.key })); }}>
+                {workflowOptions([formData, ...(tasks || [])], wf, task || undefined).map(g => (
                   <optgroup key={g.category} label={g.label}>{g.statuses.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}</optgroup>
                 ))}
               </select>
@@ -324,6 +334,7 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, people, 
 
         </form>
         <div className="flex justify-end items-center p-4 border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+          {missing.length > 0 && <span role="alert" className="flex-1 text-sm text-red-600">Zorunlu alan eksik: {missing.join(', ')}</span>}
           <button type="button" onClick={onClose} className="px-4 py-2 rounded-md border dark:border-gray-600 mr-2 hover:bg-gray-100 dark:hover:bg-gray-700">İptal</button>
           <button type="submit" onClick={handleSubmit} className="px-4 py-2 rounded-md bg-primary text-white hover:opacity-90">Kaydet</button>
         </div>

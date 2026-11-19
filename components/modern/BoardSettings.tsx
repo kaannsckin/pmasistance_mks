@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { WorkflowConfig } from '../../types';
 import { BoardColumnConfig, BoardConfig, BoardQuickFilter, BoardStatusKey, BoardSwimlane, Task, TaskStatus } from '../../types';
 import {
     APP_STATUS_LABELS, boardId, defaultBoardConfig, isJiraKey, jiraKey, statusKeyLabel, statusUsage, topLabels, unmappedStatuses, validateBoardConfig,
@@ -18,13 +19,13 @@ const PRIORITY_TR: Record<Task['priority'], string> = { Blocker: 'Engelleyici', 
 const splitList = (s: string) => [...new Set(s.split(',').map(x => x.trim()).filter(Boolean))];
 const numOrUndef = (v: string) => { const n = Math.round(Number(v)); return v.trim() && Number.isFinite(n) && n > 0 ? n : undefined; };
 
-const StatusChip: React.FC<{ k: BoardStatusKey; count?: number; onRemove?: () => void }> = ({ k, count, onRemove }) => (
+const StatusChip: React.FC<{ k: BoardStatusKey; count?: number; onRemove?: () => void; wf?: WorkflowConfig }> = ({ k, count, onRemove, wf }) => (
     <span draggable onDragStart={e => { e.dataTransfer.setData('application/x-board-status', k); e.dataTransfer.effectAllowed = 'move'; }}
         title={`${isJiraKey(k) ? 'Jira durumu' : 'Uygulama durumu'} · sürükleyerek taşıyın`}
         className="m-surface rounded-lg pl-2 pr-1 h-9 flex items-center gap-2 cursor-grab active:cursor-grabbing" style={{ boxShadow: 'inset 0 0 0 1px var(--m-sep)' }}>
-        <span className={`inline-flex items-center h-5 px-1.5 rounded text-[11.5px] font-bold truncate max-w-[130px] ${isJiraKey(k) ? 'm-accent-tint' : 'm-fill-2 m-text-2'}`} style={isJiraKey(k) ? { textTransform: 'uppercase' } : undefined}>{statusKeyLabel(k)}</span>
+        <span className={`inline-flex items-center h-5 px-1.5 rounded text-[11.5px] font-bold truncate max-w-[130px] ${isJiraKey(k) ? 'm-accent-tint' : 'm-fill-2 m-text-2'}`} style={isJiraKey(k) ? { textTransform: 'uppercase' } : undefined}>{statusKeyLabel(k, wf)}</span>
         <span className="flex-1 text-[12px] m-text-3 m-tabular whitespace-nowrap">{count ? `${count} görev` : '—'}</span>
-        {onRemove && <button type="button" className="m-icon-btn !w-7 !h-7" aria-label={`${statusKeyLabel(k)} durumunu kolondan çıkar`} onClick={onRemove}><Icon name="x" size={13} /></button>}
+        {onRemove && <button type="button" className="m-icon-btn !w-7 !h-7" aria-label={`${statusKeyLabel(k, wf)} durumunu kolondan çıkar`} onClick={onRemove}><Icon name="x" size={13} /></button>}
     </span>
 );
 
@@ -32,15 +33,19 @@ const BoardSettings: React.FC<{
     tasks: Task[];
     config: BoardConfig;
     isCustom: boolean;
+    /** Projenin iş akışı (şemadan): eşlenebilecek durumlar ve adları */
+    workflow?: WorkflowConfig;
+    /** "Varsayılana dön" düğmesinin metni (ör. şemanın panosuna dön) */
+    resetLabel?: string;
     people: string[];
     onClose: () => void;
     onSave: (cfg: BoardConfig | undefined) => void;
-}> = ({ tasks, config, isCustom, people, onClose, onSave }) => {
+}> = ({ tasks, config, isCustom, people, workflow, resetLabel, onClose, onSave }) => {
     const [cfg, setCfg] = useState<BoardConfig>(() => JSON.parse(JSON.stringify(config)));
     const [tab, setTab] = useState<Tab>('columns');
     const [hover, setHover] = useState<string | null>(null);
     const [newJira, setNewJira] = useState('');
-    const usage = useMemo(() => statusUsage(tasks), [tasks]);
+    const usage = useMemo(() => statusUsage(tasks, workflow), [tasks, workflow]);
     const extraKeys = useMemo(() => cfg.columns.flatMap(c => c.statuses).filter(k => !usage.has(k)), [cfg, usage]);
     const [manual, setManual] = useState<BoardStatusKey[]>([]);
     const allUsage = useMemo(() => { const m = new Map(usage); [...extraKeys, ...manual].forEach(k => { if (!m.has(k)) m.set(k, 0); }); return m; }, [usage, extraKeys, manual]);
@@ -106,7 +111,7 @@ const BoardSettings: React.FC<{
         <Sheet xl title="Panoyu yapılandır" subtitle="Jira'daki gibi: durumları kolonlara sürükleyin; etiket kuralı ve WIP sınırı tanımlayın." onClose={onClose}
             footer={(
                 <>
-                    {isCustom && <button type="button" className="m-btn m-btn-plain" onClick={() => { if (window.confirm('Pano varsayılan ayarlara dönsün mü?')) onSave(undefined); }}>Varsayılana dön</button>}
+                    {isCustom && <button type="button" className="m-btn m-btn-plain" onClick={() => { if (window.confirm(resetLabel ? `${resetLabel}: projeye özel ayar silinsin mi?` : 'Pano varsayılan ayarlara dönsün mü?')) onSave(undefined); }}>{resetLabel || 'Varsayılana dön'}</button>}
                     <span className="flex-1"></span>
                     <button type="button" className="m-btn m-btn-gray" onClick={onClose}>Vazgeç</button>
                     <button type="button" className="m-btn m-btn-primary" disabled={errors.length > 0} onClick={() => onSave(cfg)}><Icon name="check" size={16} />Kaydet</button>
@@ -136,8 +141,8 @@ const BoardSettings: React.FC<{
                         <div className="flex flex-wrap gap-2 items-start">
                             {unmapped.map(k => (
                                 <div key={k} className="flex items-center gap-1.5">
-                                    <StatusChip k={k} count={allUsage.get(k)} />
-                                    <select aria-label={`${statusKeyLabel(k)} durumunu kolona ekle`} className="m-input !h-8 !py-0 !w-auto text-[12.5px]" value="" onChange={e => e.target.value && moveStatus(k, e.target.value)}>
+                                    <StatusChip k={k} wf={workflow} count={allUsage.get(k)} />
+                                    <select aria-label={`${statusKeyLabel(k, workflow)} durumunu kolona ekle`} className="m-input !h-8 !py-0 !w-auto text-[12.5px]" value="" onChange={e => e.target.value && moveStatus(k, e.target.value)}>
                                         <option value="">→ Kolon…</option>
                                         {cfg.columns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                                     </select>
@@ -174,7 +179,7 @@ const BoardSettings: React.FC<{
                                         <input className="m-input !h-8 !py-0 text-[13px]" placeholder="ör. test, analiz" defaultValue={(c.labels || []).join(', ')} onBlur={e => setCol(c.id, { labels: splitList(e.target.value) })} />
                                     </label>
                                     <div {...dropProps(c.id)} className={`flex flex-col gap-1.5 min-h-[64px] rounded-lg p-1 transition-colors ${hover === c.id ? 'm-accent-tint' : ''}`} style={{ outline: '1px dashed var(--m-sep)' }}>
-                                        {c.statuses.map(k => <StatusChip key={k} k={k} count={allUsage.get(k)} onRemove={() => moveStatus(k, null)} />)}
+                                        {c.statuses.map(k => <StatusChip key={k} k={k} wf={workflow} count={allUsage.get(k)} onRemove={() => moveStatus(k, null)} />)}
                                         {c.statuses.length === 0 && <span className="text-[12.5px] m-text-3 text-center py-3">Durumu buraya sürükleyin</span>}
                                     </div>
                                 </section>

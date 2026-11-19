@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { Task, TaskStatus } from '../../types';
+import { Task, TaskStatus, WorkflowConfig } from '../../types';
 import { Icon } from './icons';
 import { COLUMN_META, columnOf } from './taskMeta';
 import { taskWorkflow, workflowOptions } from '../../utils/workflow';
@@ -15,8 +15,10 @@ const TaskActionsMenu: React.FC<{
     onWorkflowChange?: (id: string, key: string) => void;
     /** Projede görülen Jira'ya özgü durumlar da listelensin */
     workflowTasks?: Pick<Task, 'status' | 'jiraStatus'>[];
+    /** Projenin iş akışı: yalnız izin verilen geçişler listelenir */
+    workflow?: WorkflowConfig;
     align?: 'left' | 'right';
-}> = ({ task, onStatusChange, onEdit, onDelete, onNotify, onWorkflowChange, workflowTasks, align = 'right' }) => {
+}> = ({ task, onStatusChange, onEdit, onDelete, onNotify, onWorkflowChange, workflowTasks, workflow, align = 'right' }) => {
     const [open, setOpen] = useState(false);
     // Menü, kaydırılan tablo/sütun içinde kırpılmasın diye ekrana göre konumlanır
     const [pos, setPos] = useState<React.CSSProperties>({});
@@ -52,8 +54,10 @@ const TaskActionsMenu: React.FC<{
                     <div role="menu" className="w-60 m-surface m-pop rounded-2xl py-1.5 z-50 overflow-y-auto" style={{ ...pos, maxHeight: onWorkflowChange ? 'min(520px, calc(100vh - 16px))' : undefined }} onClick={e => e.stopPropagation()}>
                         <p className="px-3.5 pt-1 pb-1 text-[13px] font-semibold m-text-3">Durum</p>
                         {onWorkflowChange && (() => {
-                            const cur = taskWorkflow(task).key;
-                            return workflowOptions(workflowTasks).map(g => (
+                            const cur = taskWorkflow(task, workflow).key;
+                            const groups = workflowOptions(workflowTasks, workflow, task);
+                            if (groups.flatMap(g => g.statuses).length <= 1) return <p className="px-3.5 py-1 m-0 text-[13px] m-text-3">Bu durumdan geçiş tanımlı değil.</p>;
+                            return groups.map(g => (
                                 <div key={g.category} role="group" aria-label={g.label}>
                                     <p className="px-3.5 pt-1.5 pb-0.5 text-[11.5px] font-semibold m-text-3 flex items-center gap-1.5">
                                         <span aria-hidden="true" className="w-2.5 h-2.5 rounded-full box-border" style={{ border: `2px solid ${COLUMN_META[columnOf(g.category)].ring}`, background: COLUMN_META[columnOf(g.category)].fill }}></span>{g.label}
