@@ -107,7 +107,7 @@ import {
   canEditExpectation, canRespondExpectation, CATEGORY_LABELS, createExpectation, ExpectationDraft, isOwnExpectation,
   respondExpectation, setExpectationStatus, updateExpectationDraft, URGENCY_LABELS, urgencyCounts, visibleExpectations,
 } from './utils/expectations';
-import { Celebration, EggEvent, HyperdriveOverlay, SpaceMode } from './components/modern/Eggs';
+import { AuroraSweep, Boing, BubblePop, Celebration, EggEvent, EggGuide, HyperdriveOverlay, ShipIt, SpaceMode } from './components/modern/Eggs';
 import ModernWeeklyReport from './components/modern/ModernWeeklyReport';
 import ModernAdmin from './components/modern/ModernAdmin';
 import ProfileSwitcherSheet from './components/modern/ProfileSwitcherSheet';
@@ -130,7 +130,7 @@ import {
 } from './utils/customerMeetings';
 import { reportAttention } from './utils/reportAttention';
 import { Icon } from './components/modern/icons';
-import { createSequenceDetector } from './utils/easterEggs';
+import { createSequenceDetector, createWordDetector, EggTrigger, TYPED_EGGS } from './utils/easterEggs';
 
 const THEME_COLORS: Record<string, string> = {
   classic: '#2563eb',
@@ -399,13 +399,21 @@ const App: React.FC = () => {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  // Sürpriz: Konami kodu (↑↑↓↓←→←→BA) → uzay modu (yazı alanlarında dinlenmez)
+  // Sürpriz: Konami kodu (↑↑↓↓←→←→BA) → uzay modu; modern arayüzde yazılan
+  // kelimeler: "egg"/"yumurta" → rehber, "pop" · "aurora" · "ship" · "boing" → tema
+  // sürprizleri (yazı alanlarında ve Ctrl/⌘ kısayollarında dinlenmez)
+  const isModernRef = useRef(false);
   useEffect(() => {
     const feed = createSequenceDetector();
+    const word = createWordDetector(TYPED_EGGS);
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement | null;
       if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
-      if (feed(e.key)) setEgg({ kind: 'space' });
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (feed(e.key)) { setEgg({ kind: 'space' }); return; }
+      const hit = word(e.key);
+      if (!hit || !isModernRef.current) return;
+      setEgg(hit === 'egg' || hit === 'yumurta' ? { kind: 'guide' } : { kind: hit });
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -1350,6 +1358,7 @@ const App: React.FC = () => {
 
   // Admin konsolu her zaman modern arayüzle açılır
   const isModern = settings?.uiStyle === 'modern' || consoleMode;
+  isModernRef.current = isModern;
   // Proje bağlamındaki ekranlar (modern arayüzde proje başlığı ve segment gezinme gösterilir)
   const inProjectView = !!activeProject && MODERN_PROJECT_VIEWS.includes(currentView) &&
     !notesBlocked;
@@ -2003,6 +2012,7 @@ const App: React.FC = () => {
     if (activeProject && isModern && roleView.projectSections.has('planning')) items.push({ id: 'v-planning', group: 'Ekranlar', label: `Planlama asistanı — ${activeProject.name}`, icon: 'fa-chart-area', keywords: 'planlama simulasyon monte carlo tahmin olasilik surum yeni kayit benzer', run: go(View.Planning) });
     if (activeProject) items.push({ id: 'a-wp', group: 'Aksiyonlar', label: `İş Paketleri — ${activeProject.name}`, icon: 'fa-briefcase', keywords: 'is paketi work package gorev', run: () => setIsWpManagerOpen(true) });
     items.push({ id: 'egg-rocket', group: 'Sürpriz', label: 'Roketi fırlat', icon: 'fa-rocket', keywords: 'roket rocket uzay', hidden: true, run: () => setEgg({ kind: 'hyper' }) });
+    if (isModern) items.push({ id: 'egg-guide', group: 'Sürpriz', label: 'Sürpriz rehberi', icon: 'fa-egg', keywords: 'egg yumurta surpriz easter', hidden: true, run: () => setEgg({ kind: 'guide' }) });
     visibleProjects.forEach(p => items.push({ id: `p-${p.id}`, group: 'Projeler', label: p.name, sublabel: 'Projeyi aç', icon: 'fa-folder-open', keywords: p.code || '', run: () => handleOpenProject(p.id) }));
     workspace.people.forEach(p => items.push({ id: `k-${p.id}`, group: 'Kişiler', label: `${p.firstName} ${p.lastName}`.trim(), sublabel: `${p.departmentCode || ''} · kişi profili`, icon: 'fa-user', keywords: p.sicil || '', run: () => setViewingPersonId(p.id) }));
     return items;
@@ -2264,6 +2274,17 @@ const App: React.FC = () => {
       {egg?.kind === 'hyper' && <HyperdriveOverlay onDone={() => setEgg(null)} />}
       {egg?.kind === 'space' && <SpaceMode onDone={() => setEgg(null)} />}
       {egg?.kind === 'celebrate' && <Celebration message={egg.message} onDone={() => setEgg(null)} />}
+      {egg?.kind === 'pop' && <BubblePop onDone={() => setEgg(null)} />}
+      {egg?.kind === 'aurora' && <AuroraSweep onDone={() => setEgg(null)} />}
+      {egg?.kind === 'ship' && <ShipIt onDone={() => setEgg(null)} />}
+      {egg?.kind === 'boing' && <Boing onDone={() => setEgg(null)} />}
+      {egg?.kind === 'guide' && (
+        <EggGuide
+          theme={modernTheme}
+          onClose={() => setEgg(null)}
+          onTry={(id: EggTrigger) => setEgg(id === 'celebrate' ? { kind: 'celebrate', message: 'Örnek kutlama: Sürüm 3 tamamlandı!' } : id === 'rocket' ? { kind: 'hyper' } : { kind: id })}
+        />
+      )}
       {storageFull && !storageWarnClosed && (
         <div role="alert" className="fixed top-3 left-1/2 -translate-x-1/2 z-[260] w-[min(640px,calc(100vw-32px))] flex items-start gap-3 bg-amber-50 dark:bg-amber-950 text-amber-900 dark:text-amber-100 border border-amber-300 dark:border-amber-800 rounded-xl shadow-2xl px-4 py-3">
           <i className="fa-solid fa-triangle-exclamation mt-0.5" aria-hidden="true"></i>
