@@ -1,0 +1,73 @@
+{
+"persona": "elif", "kosu": "2026-11-19 Perşembe",
+"yapilanlar": [
+{"is": "Jira güncelleme (ATL)", "araclar": ["jira_aktar"], "sonuc": "Önizleme: yeni 10, güncellenecek 155, alınan 167. Olay dosyaları 12–18 Kasım ATL yeni: 1+1+1+2+5=10 (ATL-158..167), tuttu. Uygulandı."},
+{"is": "Geciken/yaklaşan iş incelemesi", "araclar": ["gorev_ara", "proje_listesi"], "sonuc": "7 geciken görev (ATL-142, 145, 156, kendi 3 Jira dışı görevi, Gizem'in kapsam toplantısı). ATL-157 (High) bugün terminli, Yapılacak; atanan Onur 16–27 Kasım izinde."},
+{"is": "Risk güncelle/aç", "araclar": ["risk_listesi", "oner_risk_guncelle", "oner_risk_ekle"], "sonuc": "Test ortamı riski ATL-129 kapandığı için 12→6, izlemeye alındı. Yeni risk: ATL-157 v1.15 öncesi kapanmayabilir (Onur izinde), 4x3=12."},
+{"is": "Günlük notu ve RAG", "araclar": ["oner_not_ekle", "oner_rag_guncelle"], "sonuc": "Karar + sorumlu/tarihli aksiyonlar notlara yazıldı. RAG amber, gerekçe 19 Kasım EVM, 7 geciken, riskler ile güncellendi."},
+{"is": "H47 haftalık rapor (ATL)", "araclar": ["haftalik_rapor_taslagi", "jira_worklog", "evm_analizi", "haftalik_rapor", "oner_haftalik_rapor"], "sonuc": "AI paketi ai_taslagi olarak saklandı; kaynaksız/belirsiz maddeler silinip rakamlar araçtan doğrulandı (EVM 19 Kasım %87, SPI 1,03, CPI 1,04, EAC 7.880.000 TL). H46 plan maddeleri 6 adet değerlendirildi. Bölüm sorumlusunda."},
+{"is": "Yönetim beklentisi kontrolü", "araclar": ["beklentiler"], "sonuc": "ATL kilit beklentisi (exp-mwaa13ot-5w9gpe) aktif, termin 13 Kasım'ı geçti; tekrar açılmadı. ATL-129 Jira bitişinden 13 gün erken kapandığı için yeni beklenti gerekmedi."},
+{"is": "Rol sınırı yoklaması (H45)", "araclar": ["oner_haftalik_rapor"], "sonuc": "H45 yeniden gönderimi denendi; uygulama reddetti, iade edilmesi gerekiyor."},
+{"is": "Salı işleri (17 Kasım koşulamadı)", "araclar": ["haftalik_rapor", "oner_not_ekle"], "sonuc": "Geçen hafta hedefleri gözden geçirildi (plan_degerlendirmesi), bu haftanın hedefleri nota yazıldı."}
+],
+"degisiklikler": [
+{"arac": "jira_aktar", "ozet": "ATL Jira aktarımı: 10 yeni, 155 güncellenen", "tetikleyici": "12–18 Kasım olay dosyaları (ATL-158..167)", "gerekce": "Yeni sayısı olay dosyalarıyla tuttu", "uygulandi": true},
+{"arac": "oner_risk_guncelle", "ozet": "Test ortamı riski Açık→İzleniyor, olasılık 4→2 (skor 6)", "tetikleyici": "17 Kasım olay dosyası: ATL-129 kapandı (10 sa/5 sa)", "gerekce": "Kurulum Jira bitişinden 13 gün erken bitti", "uygulandi": true},
+{"arac": "oner_risk_ekle", "ozet": "Yeni risk: ATL-157 v1.15 öncesi kapanmayabilir, Onur izinde (4x3=12)", "tetikleyici": "16 Kasım izin kaydı (Onur 16–27 Kasım) + gorev_ara: ATL-157 Yapılacak, termin 19 Kasım", "gerekce": "v1.15 öncesi kapanma kararı var; devir kararı 20 Kasım", "uygulandi": true},
+{"arac": "oner_rag_guncelle", "ozet": "ATL RAG amber, not 19 Kasım rakamlarıyla", "tetikleyici": "evm_analizi 19 Kasım, proje_listesi 7 geciken", "gerekce": "SPI 1,03 / CPI 1,04 > 1, 15+ skorlu risk yok; gecikme ve kilit nedeniyle amber", "uygulandi": true},
+{"arac": "oner_not_ekle", "ozet": "19 Kasım kararı ve aksiyonları (ATL-157 devri 20 Kasım, kapsam toplantısı 24 Kasım, taşıma 25 Kasım)", "tetikleyici": "Olay dosyaları ve 16 Kasım koordinasyon notu", "gerekce": "Karar günlüğü", "uygulandi": true},
+{"arac": "oner_haftalik_rapor", "ozet": "ATL 2026-H47 raporu gönderildi (py_puani 6, ai_taslagi saklı)", "tetikleyici": "Perşembe rapor günü", "gerekce": "Her rakam araç/olay/not kaynaklı", "uygulandi": true}
+],
+"haftalik_rapor": [
+{"proje": "ATL", "hafta": "2026-H47", "gonderildi": true,
+"duzeltmeler": ["AI taslağında kısaltma açılımları tamamlandı (10 kısaltma)", "Toplantıya zaman/yer ('kayıtta yok')/katılımcı/gündem/karar eklendi; Onur toplantı katılımcısından çıkarıldı (izin 16 Kasım başladı)", "Belirsiz 'sürüm notları hazırlanacak', 'müşteriyle toplantı yapılacak' maddeleri kişi/tarihli hale getirildi", "'ATL-129 tahminin %30 üzerinde sürdü' maddesi silindi: ATL-129 17 Kasım'da kapandı (10 sa/5 sa)", "Rutin worklog maddesi silindi, EVM 19 Kasım tarihli araç değeriyle yazıldı (%87, SPI 1,03, CPI 1,04, EAC 7.880.000 TL)", "Geçen haftanın 6 plan maddesi madde_id ile değerlendirildi: 1 done, 1 partial, 4 slipped"],
+"dayanaksiz_uyarisi": ["13,5; 11; 15; Kilitli; 8.203.950; 323.950; 7.790.455; 142; 11 Kasım; Cem Bulut; 25 Kasım 2026 'girdide yok' uyarısı: kaynakları olay dosyası, evm_analizi 19 Kasım, tahsis_ozeti ve kendi plan tarihleri; bırakıldı", "Biçim uyarıları: toplantı alanları ayrı alan istiyor, bir uzun cümle uyarısı kaldı"],
+"py_puani": 6, "rag": "amber", "rag_gerekcesi": "19 Kasım: SPI 1,03, CPI 1,04, tamamlanma %87 (durum ayı 10); 7 geciken görev; plan kilidi hâlâ kilitli; en yüksek risk skoru 12 (ATL-157/Onur izni), 15+ yok."}
+],
+"rapor_kararlari": [],
+"bulgular": [
+{"tur": "eksik_ozellik", "onem": "yuksek", "baslik": "H45 iade edilmedikçe düzeltilemiyor ve yönetim akışında iade yolu yok", "kanit": "arac elif oner_haftalik_rapor {H45,gonder:true} → {\"hata\":\"Rapor \\\"Bölüm sorumlusunda\\\" aşamasında; düzenlemek için iade edilmesi gerekir.\"}; Mert 12 Kasım: 'hafta yayınlandı; değişmez'", "beklenen": "İade edilmiş rapor PY'ye geri dönüp yeniden gönderilebilir", "gerceklesen": "H45 (iade notuyla) 'Bölüm sorumlusunda' kilitli, 3 koşudur düzeltilemiyor"},
+{"tur": "eksik_ozellik", "onem": "yuksek", "baslik": "Onaylı/Kilitli plan için geri çekme akışı yok", "kanit": "arac elif tahsis_ozeti {ATL,2026} → plan_kilidi 'Onaylı/Kilitli' (19 Kasım); 10 Kasım yönetim kararı 9 gündür yazılamıyor", "beklenen": "Yetkili rol kilidi açabilmeli ya da yönetim kararı uygulanabilmeli", "gerceklesen": "Selin/Mert/PY araçlarında açma yolu yok; beklenti termini 13 Kasım'ı geçti"},
+{"tur": "tutarsizlik", "onem": "orta", "baslik": "Haftalık rapor 'dayanaksız' denetimi yalnız AI girdisine bakıyor", "kanit": "oner_haftalik_rapor çıktısı: rakam \"8.203.950\" girdide yok; \"7.790.455\" girdide yok (rakamlar evm_analizi ve olay dosyasından)", "beklenen": "Araç çıktısı ve olay dosyası kaynakları da geçerli sayılmalı", "gerceklesen": "Araçtan doğrulanmış rakamlar da 'girdide yok' uyarısı alıyor"},
+{"tur": "tutarsizlik", "onem": "dusuk", "baslik": "EVM değerleri aynı durum ayında 7 günde değişti", "kanit": "evm_analizi ATL: 12 Kasım %88/SPI 1,04/CPI 1,05/EAC 7.790.455; 19 Kasım %87/1,03/1,04/7.880.000, durum_ayi 10 her ikisinde", "beklenen": "Ekim kapanışı sabit; değişim nedeni görünür", "gerceklesen": "Jira aktarımı sonrası değişti, neden açıklaması yok"}
+],
+"yanitlar": [
+{"kime": "selin", "mesaj_tarihi": "2026-11-12", "metin": "Selin Hanım, 19 Kasım: tahsis_ozeti ATL plan_kilidi hâlâ Onaylı/Kilitli, Onur Kasım 0,42 yazılamadı. Onur 16–27 Kasım izinde (Kasım efektif 0,42). Kapasite doğrulamanız (Selin 0,3, Emre +0,1) yeniden okunacak, kilit açılınca yazacağım. KLK 0,4 payı için ayrı beklenti sizde, tekrar açmadım. Aralık Onur 0,74 / Selin +0,06 önerim geçerli, onayınızı bekliyorum (24 Kasım kontrol)."},
+{"kime": "mert", "mesaj_tarihi": "2026-11-12", "metin": "Mert Bey, EVM teyidiniz için teşekkürler. H45 yeniden gönderim denemem 19 Kasım'da 'Bölüm sorumlusunda; iade edilmesi gerekir' hatası verdi. İade yolu açılana dek bekliyorum. H47 raporu Bölüm sorumlusunda (puan 6, EVM 19 Kasım %87/SPI 1,03/CPI 1,04); H46 durumunuzu teyit eder misiniz?"},
+{"kime": "ahmet", "mesaj_tarihi": "2026-11-12", "metin": "Ahmet Bey, 13 Kasım terimi geçti, tek mesajla durum: kilit hâlâ Onaylı/Kilitli (19 Kasım tahsis_ozeti), Onur Kasım aşımı izinle 0,42 efektife indi ama plan 1,2. ATL-129 17 Kasım'da kapandı (10 sa/5 sa), Jira bitişi 30 Kasım'dan 13 gün erken, sürüm etkisi beklentisi gerekmedi. Can Erdem'den KLK 0,2 AA yanıtı yok. Yeni risk: ATL-157 (High, termin bugün) atananı Onur 27 Kasım'a kadar izinde; Emre Koç/Cem Bulut'a devri 20 Kasım'da sizden istiyorum. Sürüm notu aksiyonu (23 Kasım) için de aynısı."},
+{"kime": "ahmet", "mesaj_tarihi": "2026-11-12", "metin": "Ahmet Bey, Can Erdem sözünü yine kaçırdım: 13 Kasım'da yazmadım. Bugün Can'a 0,2 AA talebini sorarak yazdım, yanıtı 21 Kasım'da size ileteceğim. 13 Kasım hedefim (ATL-126 kapanışı) tuttu; geciken ATL görevleri 4'ten 7'ye çıktı."}
+],
+"mesajlar": [
+{"kime": "can", "metin": "Can Bey, ATL için KLK'daki Onur Çelik payından (Kasım 0,4 AA) en az 0,2 AA çekmeyi görüşmüştük. Onur ATL planı 1,2 / efektif 0,42. Yanıtınızı 21 Kasım'a kadar rica ediyorum; Ahmet Bey'e ileteceğim."},
+{"kime": "merve", "metin": "Merve Hanım, ATL-129 17 Kasım'da kapanmış (10 sa/5 sa), teşekkürler. Kabul testlerini yeni test ortamına 25 Kasım'a kadar taşıyıp kayda yazmanızı rica ediyorum."},
+{"kime": "gizem", "metin": "Gizem Hanım, müşteri kapsam toplantısı 16 Kasım'da yapılmadı (görev Yapılacak). Yeni tarih 24 Kasım; ATL-151 hata nedeni de kayıtta yok, 24 Kasım'a kadar yazın."},
+{"kime": "emre", "metin": "Emre Bey, ATL-157 (High, termin 19 Kasım) atananı Onur izinde. Devir kararı 20 Kasım'da Ahmet Bey'den gelecek; sizin ya da Cem'in kapasitesini önceden değerlendirin (Kasım ATL planınız 0,8, +0,1 sığar)."},
+{"kime": "onur", "metin": "Onur Bey, izniniz 16 Kasım'da başlamış; ATL-157 regresyon nedeni, ATL-130 ölçüm raporu yazılmadı; 30 Kasım'daki dönüşünüzde ilk iş olacak."}
+],
+"ajanda": [
+{"madde": "Selin: kilit açma akışı durumu, Selin/Emre kapasite doğrulaması, Selin Aralık onayı", "kime": "selin", "termin": "2026-11-24", "durum": "acik"},
+{"madde": "Kilit açılınca Onur Kasım 0,42, Selin 0,3, Emre 0,1 yaz ve kisi_profili'nden yeniden oku", "kime": "elif", "termin": "2026-11-24", "durum": "ertelendi"},
+{"madde": "KLK'dan en az 0,2 AA çekme: Can yanıtı Ahmet'e", "kime": "can", "termin": "2026-11-21", "durum": "ertelendi"},
+{"madde": "Ahmet'e tek mesaj (Can sonucu, ATL-129, Selin onayı, ATL-157 devri)", "kime": "ahmet", "termin": "2026-11-19", "durum": "tamam"},
+{"madde": "ATL-157 ve 23 Kasım sürüm notu devri kararı (Onur izinde)", "kime": "ahmet", "termin": "2026-11-20", "durum": "acik"},
+{"madde": "Onur Aralık aşımı: Onur 0,74, Selin +0,06 onayı", "kime": "selin", "termin": "2026-11-24", "durum": "acik"},
+{"madde": "ATL-129 sonrası kabul testlerini yeni test ortamına taşıma", "kime": "merve", "termin": "2026-11-25", "durum": "acik"},
+{"madde": "ATL-104 sapma nedenleri teyidi; ATL-146 üretim doğrulaması", "kime": "cem", "termin": "2026-11-24", "durum": "ertelendi"},
+{"madde": "ATL-130 ölçüm raporu, ATL-157 regresyon nedeni (izin dönüşü)", "kime": "onur", "termin": "2026-11-30", "durum": "ertelendi"},
+{"madde": "ATL-151 hata nedeni kayda (10 Kasım kaçtı)", "kime": "gizem", "termin": "2026-11-24", "durum": "ertelendi"},
+{"madde": "Müşteriyle kapsam netleştirme toplantısı", "kime": "gizem", "termin": "2026-11-24", "durum": "ertelendi"},
+{"madde": "Test senaryolarını güncelle (2 ATL görevi)", "kime": "elif", "termin": "2026-11-24", "durum": "ertelendi"},
+{"madde": "Son dört kapanış sapma özeti + tahmin kuralı kayda", "kime": "elif", "termin": "2026-11-24", "durum": "ertelendi"},
+{"madde": "H45 iade: iade işlemi sonrası düzeltilmiş H45 yeniden gönder (uygulama engeli)", "kime": "mert", "termin": "2026-11-24", "durum": "ertelendi"},
+{"madde": "H47 raporu yaz ve gönder", "kime": "elif", "termin": "2026-11-19", "durum": "tamam"},
+{"madde": "Hedef: geciken ATL görevi sayısı 7'den 3'e", "kime": "elif", "termin": "2026-11-26", "durum": "ertelendi"},
+{"madde": "ATL-146 riski: 2 hafta tekrar yoksa kapat", "kime": "elif", "termin": "2026-11-24", "durum": "acik"},
+{"madde": "ATL-157 riski ve test ortamı riski taşıma kontrolü", "kime": "elif", "termin": "2026-11-25", "durum": "acik"}
+],
+"gercek_disi": [
+{"kimin_verisi": "ATL Confluence haftalık koordinasyon notu, 16 Kasım", "ne": "Onur Çelik katılımcı listesinde, oysa yıllık izni 16 Kasım'da başladı; notta aynı gün ona 23 Kasım sürüm notu aksiyonu verilmiş", "kanit": "olaylar/2026-11-16.md: 'İzin başladı: Onur Çelik (16 Kasım–27 Kasım)'; confluence/2026-11-16-ATL-183.md: 'Katılımcılar: Elif Yılmaz, Emre Koç, Gizem Yıldız, Onur Çelik'"}
+],
+"demo_yoklamasi": [],
+"arac_cagrisi": 35, "memnuniyet": 6,
+"gunun_notu": "Rakamlar araçtan okunup rapor gönderildi, ama kendi 3 gecikmiş görevim, kapsam toplantısı ve plan kilidi hâlâ açık; H45 yine uygulama engelinde."
+}
