@@ -92,3 +92,34 @@ describe('proje rolleri', () => {
         expect(rolesOfPerson({ roleMembers: { test: ['p1'], analist: ['p1'] } }, DEFAULT_PROJECT_ROLES, 'p1')).toEqual(['Test', 'Analist']);
     });
 });
+
+describe('geçişte alan güncelleme', () => {
+    const versions = [
+        { id: '1', name: '2.0', status: 'released' as const, releaseDate: '2026-10-01' },
+        { id: '2', name: '2.2', status: 'unreleased' as const },
+        { id: '3', name: '2.1', status: 'unreleased' as const, releaseDate: '2026-12-01' },
+    ];
+    const ctx = { actor: { role: 'py' as const }, setKey: true, now: new Date('2026-11-19T10:00:00Z'), versions };
+
+    it('öncelik, termin, hedef sürüm ve çözüm yazılır / temizlenir', async () => {
+        const { nextVersionName } = await import('./transitions');
+        expect(nextVersionName(versions)).toBe('2.1');
+        const out = applyTransition(task({ dueDate: '2026-11-01' }), target, { setFields: { priority: 'Low', dueDate: 3, fixVersion: 'next', resolution: 'Düzeltildi' } }, {}, ctx).task;
+        expect(out).toMatchObject({ priority: 'Low', dueDate: '2026-11-22', fixVersion: '2.1', resolution: 'Düzeltildi' });
+        const reopen = applyTransition(out, { key: 'REOPENED', label: 'Yeniden Açıldı', category: TaskStatus.ToDo }, { setFields: { resolution: 'clear', dueDate: 'clear', fixVersion: 'clear' } }, {}, ctx).task;
+        expect([reopen.resolution, reopen.dueDate, reopen.fixVersion]).toEqual([undefined, undefined, undefined]);
+    });
+
+    it('birleştirme: geçişin alanı girişinkini ezer; özet', () => {
+        const wf = { statuses: [], initial: '', rules: { '*>RESOLVED': { setFields: { resolution: 'Düzeltildi', priority: 'Low' as const } }, 'TESTING>RESOLVED': { setFields: { resolution: 'Tamamlandı' } } } };
+        const r = ruleFor(wf, 'TESTING', 'RESOLVED');
+        expect(r.setFields).toEqual({ resolution: 'Tamamlandı', priority: 'Low' });
+        expect(ruleIsEmpty({ setFields: {} })).toBe(true);
+        expect(describeRule(r).post).toEqual(['öncelik: Düşük', 'çözüm: Tamamlandı']);
+    });
+
+    it('çözüm zorunlu alan olarak istenebilir', () => {
+        expect(transitionNeeds({ requireFields: ['resolution'] }, task()).fields).toEqual(['resolution']);
+        expect(inputProblems({ requireFields: ['resolution'] }, task(), { fields: { resolution: 'Yapılmayacak' } })).toEqual([]);
+    });
+});

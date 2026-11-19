@@ -92,6 +92,7 @@ const Card: React.FC<{
                     {late > 0 && <span className="inline-flex items-center h-5 px-1.5 rounded text-[11px] font-semibold m-tone-bad">{late} gün gecikti</span>}
                 </span>
                 <span className={`text-[14.5px] leading-snug ${done ? 'm-text-2' : 'm-text font-medium'}`}>{t.name}</span>
+                {done && t.resolution && <span className="self-start inline-flex items-center h-5 px-1.5 rounded text-[11px] font-semibold m-tone-ok" title="Çözüm">{t.resolution}</span>}
                 {(t.components?.length || t.fixVersion) ? (
                     <span className="flex flex-wrap gap-1">
                         {(t.components || []).slice(0, 2).map(c => <span key={c} title="Bileşen" className="inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[11px] font-semibold m-accent-tint"><Icon name="grid" size={10} />{c}</span>)}

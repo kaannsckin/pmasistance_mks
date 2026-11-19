@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { IssueType, Task, TransitionRule, WorkPackage } from '../../types';
-import { ISSUE_TYPE_OPTIONS, REQUIRED_FIELD_LABELS } from '../../utils/projectScheme';
+import { ISSUE_TYPE_OPTIONS, REQUIRED_FIELD_LABELS, RESOLUTIONS } from '../../utils/projectScheme';
 import { inputProblems, TransitionInput, TransitionNeeds } from '../../utils/transitions';
 import { Icon } from './icons';
 import { Sheet } from './ui';
@@ -72,6 +72,11 @@ const TransitionDialog: React.FC<{
                             </select>
                         )}
                         {f === 'labels' && <input className="m-input" placeholder="Etiketler (virgülle)" onChange={e => setF({ labels: e.target.value.split(',').map(x => x.trim()).filter(Boolean) })} />}
+                        {f === 'resolution' && (
+                            <select className="m-input" value={fields.resolution || ''} onChange={e => setF({ resolution: e.target.value || undefined })}>
+                                <option value="">Seçin…</option>{RESOLUTIONS.map(x => <option key={x} value={x}>{x}</option>)}
+                            </select>
+                        )}
                         {f === 'component' && (
                             <select className="m-input" value={fields.components?.[0] || ''} onChange={e => setF({ components: e.target.value ? [e.target.value] : undefined })}>
                                 <option value="">Seçin…</option>{components.map(c => <option key={c} value={c}>{c}</option>)}

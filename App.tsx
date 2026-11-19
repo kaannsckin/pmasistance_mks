@@ -1458,7 +1458,7 @@ const App: React.FC = () => {
   };
   sendTransitionEffectsRef.current = sendTransitionEffects;
   const finishTransition = (task: Task, target: WorkflowStatus, rule: TransitionRule, input: TransitionInput, extra: Partial<Task>, setKey: boolean, fromLabel: string) => {
-    const r = applyTransition({ ...task, ...extra }, target, rule, input, { actor: transitionActor(), setKey, projectName: activeProject?.name, fromLabel });
+    const r = applyTransition({ ...task, ...extra }, target, rule, input, { actor: transitionActor(), setKey, projectName: activeProject?.name, fromLabel, versions: activeProject?.versions });
     setTasks(prev => prev.map(t => (t.id === task.id ? { ...t, ...r.task } : t)));
     if (r.effects.length) sendTransitionEffects(r.effects);
   };

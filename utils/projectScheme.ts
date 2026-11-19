@@ -30,7 +30,11 @@ export const REQUIRED_FIELD_LABELS: Record<SchemeRequiredField, string> = {
     workPackage: 'İş paketi',
     component: 'Bileşen',
     fixVersion: 'Hedef sürüm',
+    resolution: 'Çözüm',
 };
+
+/** Jira'daki standart çözüm değerleri (Türkçe) */
+export const RESOLUTIONS = ['Düzeltildi', 'Tamamlandı', 'Yapılmayacak', 'Tekrar (duplicate)', 'Tekrarlanamadı', 'Hata değil'];
 
 export const ISSUE_TYPE_OPTIONS: { value: IssueType; label: string }[] = [
     { value: 'bug', label: 'Hata' },
@@ -197,6 +201,7 @@ export const missingRequiredFields = (scheme: ProjectScheme, t: Partial<Task>): 
             case 'workPackage': return !t.workPackageId;
             case 'component': return !t.components?.length;
             case 'fixVersion': return !t.fixVersion;
+            case 'resolution': return !t.resolution;
             default: return false;
         }
     }).map(f => REQUIRED_FIELD_LABELS[f]);

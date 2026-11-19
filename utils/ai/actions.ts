@@ -340,7 +340,7 @@ export const applyAction = (ws: WorkspaceData, action: AiAction): { ws: Workspac
             const setKey = !!action.workflowKey || !!wf.transitions || !!task.jiraStatus;
             const fromLabel = taskStatusLabel(task, wf);
             const rule = ruleFor(wf, taskWorkflow(task, wf).key, target.key);
-            const done = applyTransition(task, target, rule, { comment: action.comment, hours: action.hours }, { actor: actorOf(ws), setKey, projectName: project.name, fromLabel });
+            const done = applyTransition(task, target, rule, { comment: action.comment, hours: action.hours }, { actor: actorOf(ws), setKey, projectName: project.name, fromLabel, versions: project.versions });
             effects = done.effects;
             next = touch(ws, project.id, p => ({ ...p, tasks: p.tasks.map(t => (t.id === action.taskId ? done.task : t)) }));
             summary = `"${project.name}" · ${task.name}: ${fromLabel} → ${target.label}`;

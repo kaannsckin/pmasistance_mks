@@ -1,4 +1,4 @@
-import { Person, Project, ProjectRoleDef, SchemeRequiredField, Task, TransitionRule, UserRole, WorkflowConfig } from '../types';
+import { Person, Project, ProjectRoleDef, ProjectVersion, SchemeRequiredField, Task, TransitionRule, UserRole, WorkflowConfig } from '../types';
 import { isInProjectRole } from './projectRoles';
 import { ROLE_LABELS } from './allocations';
 import { REQUIRED_FIELD_LABELS, missingRequiredFields } from './projectScheme';
@@ -37,6 +37,8 @@ export const mergeRules = (a?: TransitionRule, b?: TransitionRule): TransitionRu
     removeLabels: union(a?.removeLabels, b?.removeLabels),
     assign: b?.assign ?? a?.assign,
     notifyAssignee: !!(a?.notifyAssignee || b?.notifyAssignee) || undefined,
+    // Alan güncellemelerinde geçişinki girişinkinin üzerine yazar
+    ...(a?.setFields || b?.setFields ? { setFields: { ...(a?.setFields || {}), ...(b?.setFields || {}) } } : {}),
 });
 
 /** Geçişin etkin kuralı: hedefe giriş kuralı + o geçişin kuralı */
@@ -45,7 +47,8 @@ export const ruleFor = (wf: WorkflowConfig, from: string, to: string): Transitio
 
 export const ruleIsEmpty = (r?: TransitionRule): boolean =>
     !r || !(r.roles?.length || r.people?.length || r.projectRoles?.length || r.assigneeOnly || r.requireComment || r.requireHours || r.requireFields?.length
-        || r.requireSubtasksDone || r.addLabels?.length || r.removeLabels?.length || r.assign || r.notifyAssignee);
+        || r.requireSubtasksDone || r.addLabels?.length || r.removeLabels?.length || r.assign || r.notifyAssignee
+        || (r.setFields && Object.values(r.setFields).some(v => v !== undefined)));
 
 /** Kuralın kısa Türkçe özeti (diyagram ve listelerde) */
 export const describeRule = (r: TransitionRule | undefined, people: Pick<Person, 'id' | 'firstName' | 'lastName'>[] = [], roleDefs: ProjectRoleDef[] = []): { conditions: string[]; validators: string[]; post: string[] } => {
@@ -68,9 +71,20 @@ export const describeRule = (r: TransitionRule | undefined, people: Pick<Person,
             ...(r?.removeLabels?.length ? [`etiket çıkar: ${r.removeLabels.join(', ')}`] : []),
             ...(r?.assign ? [r.assign === 'actor' ? 'geçişi yapana ata' : r.assign === 'none' ? 'atamayı kaldır' : `ata: ${r.assign}`] : []),
             ...(r?.notifyAssignee ? ['atanana bildir'] : []),
+            ...(r?.setFields?.priority ? [`öncelik: ${PRIORITY_TR[r.setFields.priority]}`] : []),
+            ...(r?.setFields?.dueDate !== undefined ? [r.setFields.dueDate === 'clear' ? 'termini temizle' : `termin: bugün + ${r.setFields.dueDate} gün`] : []),
+            ...(r?.setFields?.fixVersion ? [r.setFields.fixVersion === 'clear' ? 'hedef sürümü temizle' : r.setFields.fixVersion === 'next' ? 'hedef sürüm: sıradaki sürüm' : `hedef sürüm: ${r.setFields.fixVersion}`] : []),
+            ...(r?.setFields?.resolution ? [r.setFields.resolution === 'clear' ? 'çözümü temizle' : `çözüm: ${r.setFields.resolution}`] : []),
         ],
     };
 };
+
+const PRIORITY_TR: Record<Task['priority'], string> = { Blocker: 'Engelleyici', High: 'Yüksek', Medium: 'Orta', Low: 'Düşük' };
+
+/** Sıradaki sürüm: yayınlanmamış, yayın tarihi en yakın (tarihsizler sonda, sonra liste sırası) */
+export const nextVersionName = (versions: ProjectVersion[] | undefined): string | undefined =>
+    (versions || []).map((v, i) => ({ v, i })).filter(x => x.v.status === 'unreleased')
+        .sort((a, b) => (a.v.releaseDate || '9999').localeCompare(b.v.releaseDate || '9999') || a.i - b.i)[0]?.v.name;
 
 export interface TransitionActor {
     role: UserRole;
@@ -161,7 +175,7 @@ export const applyTransition = (
     target: WorkflowStatus,
     r: TransitionRule,
     input: TransitionInput,
-    ctx: { actor: TransitionActor; now?: Date; setKey: boolean; projectName?: string; fromLabel?: string },
+    ctx: { actor: TransitionActor; now?: Date; setKey: boolean; projectName?: string; fromLabel?: string; versions?: ProjectVersion[] },
 ): { task: Task; effects: TransitionEffect[] } => {
     const now = (ctx.now || new Date()).toISOString();
     let t: Task = { ...task, ...(input.fields || {}), status: target.category, ...(ctx.setKey ? { jiraStatus: target.key } : {}), updatedAt: now };
@@ -180,6 +194,20 @@ export const applyTransition = (
     if (r.assign === 'actor' && ctx.actor.name) t = { ...t, resourceName: ctx.actor.name };
     else if (r.assign === 'none') t = { ...t, resourceName: '' };
     else if (r.assign && r.assign !== 'actor') t = { ...t, resourceName: r.assign };
+    // Alan güncelle
+    const f = r.setFields;
+    if (f?.priority) t = { ...t, priority: f.priority };
+    if (f?.dueDate === 'clear') t = { ...t, dueDate: undefined };
+    else if (typeof f?.dueDate === 'number') {
+        const d = new Date(ctx.now || new Date());
+        d.setDate(d.getDate() + f.dueDate);
+        t = { ...t, dueDate: d.toISOString().slice(0, 10) };
+    }
+    if (f?.fixVersion === 'clear') t = { ...t, fixVersion: undefined };
+    else if (f?.fixVersion === 'next') { const n = nextVersionName(ctx.versions); if (n) t = { ...t, fixVersion: n }; }
+    else if (f?.fixVersion) t = { ...t, fixVersion: f.fixVersion };
+    if (f?.resolution === 'clear') t = { ...t, resolution: undefined };
+    else if (f?.resolution) t = { ...t, resolution: f.resolution };
     const effects: TransitionEffect[] = [];
     if (r.notifyAssignee && t.resourceName) {
         effects.push({

@@ -67,6 +67,7 @@ export interface Task {
   fixVersion?: string; // kaynak sistemdeki hedef sürüm
   jiraStatus?: string; // Jira'daki durum adı (ör. "ANALYSIS"); pano kolon eşlemesinde kullanılır
   components?: string[]; // Projenin bileşen listesinden (Jira "Component/s")
+  resolution?: string; // Çözüm (Jira "Resolution"): Düzeltildi, Yapılmayacak, Tekrar …
   updatedAt?: string; // son değişiklik (Jira "Updated" ya da panoda taşıma) — "Son güncellenenler" filtresi
 }
 
@@ -156,9 +157,19 @@ export interface TransitionRule {
   assign?: 'actor' | 'none' | string;
   /** Atanan kişiye bildirim (e-posta; yoksa Teams kanalı) */
   notifyAssignee?: boolean;
+  /** Alan güncelle (Jira "update issue field") */
+  setFields?: {
+    priority?: Task['priority'];
+    /** 'clear' temizle, sayı: bugünden N gün sonra */
+    dueDate?: 'clear' | number;
+    /** 'clear' temizle, 'next' yayın tarihi en yakın yayınlanmamış sürüm, ya da sürüm adı */
+    fixVersion?: 'clear' | 'next' | string;
+    /** 'clear' temizle ya da çözüm değeri */
+    resolution?: 'clear' | string;
+  };
 }
 
-export type SchemeRequiredField = 'resourceName' | 'dueDate' | 'estimate' | 'issueType' | 'labels' | 'workPackage' | 'component' | 'fixVersion';
+export type SchemeRequiredField = 'resourceName' | 'dueDate' | 'estimate' | 'issueType' | 'labels' | 'workPackage' | 'component' | 'fixVersion' | 'resolution';
 
 export type NotificationEvent = 'created' | 'transitioned' | 'done' | 'reopened' | 'assigned' | 'commented';
 

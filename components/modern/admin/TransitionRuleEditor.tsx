@@ -1,7 +1,7 @@
 import React from 'react';
-import { Person, ProjectRoleDef, SchemeRequiredField, TransitionRule, UserRole } from '../../../types';
+import { Person, ProjectRoleDef, SchemeRequiredField, Task, TransitionRule, UserRole } from '../../../types';
 import { ROLE_LABELS } from '../../../utils/allocations';
-import { REQUIRED_FIELD_LABELS } from '../../../utils/projectScheme';
+import { REQUIRED_FIELD_LABELS, RESOLUTIONS } from '../../../utils/projectScheme';
 import { describeRule } from '../../../utils/transitions';
 
 /**
@@ -37,6 +37,11 @@ const TransitionRuleEditor: React.FC<{
     readOnly?: boolean;
 }> = ({ title, rule: r, onChange, people, roleDefs = [], readOnly }) => {
     const set = (patch: Partial<TransitionRule>) => onChange({ ...r, ...patch });
+    const setF = (patch: NonNullable<TransitionRule['setFields']>) => {
+        const next = { ...(r.setFields || {}), ...patch };
+        (Object.keys(next) as (keyof typeof next)[]).forEach(k => next[k] === undefined && delete next[k]);
+        onChange({ ...r, setFields: Object.keys(next).length ? next : undefined });
+    };
     const toggle = <T,>(arr: T[] | undefined, v: T, on: boolean): T[] | undefined => {
         const next = on ? [...new Set([...(arr || []), v])] : (arr || []).filter(x => x !== v);
         return next.length ? next : undefined;
@@ -104,6 +109,30 @@ const TransitionRuleEditor: React.FC<{
                         </select>
                     </label>
                     <Check label="Atanana bildir (e-posta; yoksa Teams kanalı)" checked={!!r.notifyAssignee} onChange={v => set({ notifyAssignee: v || undefined })} />
+                    <span className="text-[12px] m-text-3 mt-1">Alan güncelle</span>
+                    <div className="grid grid-cols-2 gap-1.5">
+                        <label className="flex flex-col gap-0.5 text-[11.5px] m-text-3">Öncelik
+                            <select className="m-input !h-8 !py-0 text-[13px]" value={r.setFields?.priority || ''} onChange={e => setF({ priority: (e.target.value || undefined) as Task['priority'] | undefined })}>
+                                <option value="">Değiştirme</option><option value="Blocker">Engelleyici</option><option value="High">Yüksek</option><option value="Medium">Orta</option><option value="Low">Düşük</option>
+                            </select>
+                        </label>
+                        <label className="flex flex-col gap-0.5 text-[11.5px] m-text-3">Çözüm
+                            <select className="m-input !h-8 !py-0 text-[13px]" value={r.setFields?.resolution || ''} onChange={e => setF({ resolution: e.target.value || undefined })}>
+                                <option value="">Değiştirme</option><option value="clear">Temizle</option>{RESOLUTIONS.map(x => <option key={x} value={x}>{x}</option>)}
+                            </select>
+                        </label>
+                        <label className="flex flex-col gap-0.5 text-[11.5px] m-text-3">Termin
+                            <select className="m-input !h-8 !py-0 text-[13px]" value={r.setFields?.dueDate === undefined ? '' : r.setFields.dueDate === 'clear' ? 'clear' : 'days'} onChange={e => setF({ dueDate: e.target.value === 'clear' ? 'clear' : e.target.value === 'days' ? 7 : undefined })}>
+                                <option value="">Değiştirme</option><option value="clear">Temizle</option><option value="days">Bugün + N gün</option>
+                            </select>
+                            {typeof r.setFields?.dueDate === 'number' && <input aria-label="Gün" className="m-input !h-8 !py-0 text-[13px] mt-1" inputMode="numeric" value={r.setFields.dueDate} onChange={e => { const n = Math.max(0, Math.round(Number(e.target.value) || 0)); setF({ dueDate: n }); }} />}
+                        </label>
+                        <label className="flex flex-col gap-0.5 text-[11.5px] m-text-3">Hedef sürüm
+                            <select className="m-input !h-8 !py-0 text-[13px]" value={r.setFields?.fixVersion || ''} onChange={e => setF({ fixVersion: e.target.value || undefined })}>
+                                <option value="">Değiştirme</option><option value="clear">Temizle</option><option value="next">Sıradaki sürüm</option>
+                            </select>
+                        </label>
+                    </div>
                 </Box>
             </div>
         </section>
