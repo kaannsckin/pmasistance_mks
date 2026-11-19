@@ -129,3 +129,37 @@ export const canAddAllocationToProject = (ws: WsLike, id: Identity, projectId: s
     // Bölüm sorumlusu bölümündeki bir kişi için ekleyebilir → satır formunda kişi bazlı doğrulanır
     return id.role === 'bolum_sorumlu' && !!managedDepartmentCode(ws, id);
 };
+
+const personLabel = (ws: WsLike, personId: string | undefined): string => {
+    const p = personId ? ws.people.find(x => x.id === personId) : undefined;
+    return p ? `${p.firstName} ${p.lastName}`.trim() : '';
+};
+
+/**
+ * Tahsis hücresi neden düzenlenemiyor (düzenlenebiliyorsa null). Kullanıcıya
+ * gösterilir: hangi kural engelliyor ve ne yapılmalı.
+ */
+export const allocationEditBlock = (ws: WsLike, id: Identity, locks: PlanLock[], projectId: string, personId: string | null, year: number, field: 'plan' | 'actual'): string | null => {
+    const project = ws.projects.find(p => p.id === projectId);
+    if (!project) return 'Proje bulunamadı.';
+    if (identityNeedsPerson(id)) return 'Rol seçiminde kim olduğunuzu (kişiyi) seçin; PY ve bölüm sorumlusu kişiye bağlı çalışır.';
+    const owns = ownsProject(project, id);
+    const manages = personId ? managesPerson(ws, id, personId) : id.role === 'bolum_sorumlu';
+    if (!owns && !manages) {
+        if (id.role === 'py') {
+            const pm = personLabel(ws, project.pmPersonId);
+            const me = personLabel(ws, id.personId);
+            return pm
+                ? `Bu projenin PY'si ${pm}; siz ${me || 'başka bir kişi'} olarak girdiniz. Rol seçiminde ${pm} kişisini seçin ya da proje kartından PY'yi değiştirin.`
+                : 'Bu projeye PY atanmamış. Proje kartından PY olarak kendinizi seçin.';
+        }
+        if (id.role === 'bolum_sorumlu') return 'Bölüm sorumlusu yalnız kendi bölümündeki kişilerin tahsisini düzenler.';
+        return 'Tahsisi yalnız projenin PY\'si ve kişinin bölüm sorumlusu düzenler; bu rol yalnız görüntüler.';
+    }
+    if (field === 'plan') {
+        const st = getPlanLockStatus(locks, projectId, year);
+        if (st === 'submitted') return `${year} planı onaya gönderildi; onaylanana ya da reddedilene kadar değiştirilemez (gerçekleşen girilebilir).`;
+        if (st === 'locked') return `${year} planı onaylanıp kilitlendi; değişiklik için müdür / PYB sorumlusu kilidi açmalı (gerçekleşen girilebilir).`;
+    }
+    return null;
+};

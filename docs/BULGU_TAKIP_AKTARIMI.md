@@ -59,4 +59,27 @@ Aktarımın önerdiği ayar ("Excel takibi önerisi"): durum, atanan, termin, ha
 
 Eşitleme elle ya da proje ayarındaki aralıkla otomatik çalışır (uygulama açıkken). Her eşitleme denetim günlüğüne yazılır: güncellenen, kapanan, Jira'ya yazılan kayıtlar, çakışmalar ve eklenen kişiler. Kod: [`utils/planning/jiraFieldSync.ts`](../utils/planning/jiraFieldSync.ts), [`utils/planning/jiraPeople.ts`](../utils/planning/jiraPeople.ts).
 
+## Ekip tahsisi ve Jira
+
+**Ekip ve tahsis → Tahsis tablosu**'nda hücreler AA (adam-ay, 1 = tam zamanlı) ya da **%** olarak girilir. Tablonun üstündeki **Birim** düğmesiyle seçilir; %100, 1 AA'dır. Seçim bu cihazda hatırlanır.
+
+Hücre kapalıysa nedeni projenin başlığında ve hücrenin üzerine gelince yazar:
+- **PY başka biri:** Tahsisi yalnız projenin PY'si (ve kişinin bölüm sorumlusu) girer. Rol seçiminde projenin PY'si olan kişiyi seçin ya da proje kartından PY'yi değiştirin. Excel aktarımında PY olarak yeni bir kişi (ör. MKS) açıldıysa, rol seçiminde o kişi seçilmelidir.
+- **Plan onaya gönderildi ya da kilitlendi:** Plan değiştirilemez, gerçekleşen girilebilir. Kilidi müdür / PYB sorumlusu açar.
+
+**Jira'dan** düğmeleri (Jira anahtarlı görevleri olan projeler için):
+- **Plan (atamalar):** Jira'da birine atanmış açık işlerin kalan eforu (tahmin − harcanan) bugünden termine kadar iş günlerine yayılır. Termin yoksa iş bugünden başlayarak eforu kadar iş gününe yayılır. Sonuç önizlenir; "boş ayları doldur" ya da "üzerine yaz" ile tabloya yazılır.
+- **Gerçekleşen (worklog):** Projenin Jira kayıtlarına yazılan worklog'lar kişi × ay saate toplanır ve gerçekleşen AA'ya çevrilir (saat ÷ 8 ÷ ayın iş günü). Aynı Jira projesindeki başka işlere yazılanlar alınmaz. Havuzda olmayan kişiler Veri Havuzu'na eklenir.
+
+## Ayarları panelden girmek
+
+**Yönetici konsolu → Entegrasyonlar**'da `.env` / `planasistan.env` dosyasındaki Jira, Teams ve e-posta değerleri girilir: Jira adresi, jeton, izinli projeler (`JIRA_ALLOWED_PROJECTS`), Jira'ya yazma / kayıt açma, Teams webhook'u, SMTP. "Jira bağlantısını dene" kaydetmeden jeton sahibini ve erişilen projeleri gösterir.
+
+- Panelde girilen değer dosyadakinin üzerine yazılır; boş alan dosyadakini kullanır. "Paneldekileri sil" ile dosyaya dönülür.
+- Jeton, parola ve webhook sunucuda şifreli saklanır (AI ayarlarıyla aynı depo ve `AI_CONFIG_SECRET`), tarayıcıya geri gelmez.
+- Kayıttan sonra yeniden başlatmak gerekmez; en geç 30 saniye içinde geçerli olur.
+- Masaüstü sürümünde (exe) yönetici anahtarı istenmez; ayarlar `planasistan-veri/integration-settings.json` dosyasına yazılır. Web sürümünde AI bağlantısıyla aynı yönetici anahtarı (`AI_ADMIN_TOKEN`) ve kalıcı depo gerekir.
+
+"MPS projesi bu sunucuda Jira erişimine açık değil" hatası: İzinli projeler alanı (`JIRA_ALLOWED_PROJECTS`) dolu ve MPS listede yok. Alanı `MKS, MPS` yapın ya da boşaltın.
+
 Kod: [`utils/gibFindings.ts`](../utils/gibFindings.ts) (dönüştürücü ve birleştirme), [`components/GibImportModal.tsx`](../components/GibImportModal.tsx) (pencere). Testler: [`utils/gibFindings.test.ts`](../utils/gibFindings.test.ts).

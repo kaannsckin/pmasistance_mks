@@ -2,6 +2,7 @@ import { authorize } from '../ai/auth.js';
 import { Env, resolveAuthMode } from '../ai/config.js';
 import { createRateLimiter } from '../ai/rateLimit.js';
 import { describeNetworkError, extraCaFor, upstreamFetch } from '../ai/tls.js';
+import { withIntegrationSettings } from './settings.js';
 
 /**
  * Kurum entegrasyonları (yalnız sunucu): Jira worklog okuma, Teams ve e-posta
@@ -805,7 +806,9 @@ const limiter = createRateLimiter(20);
 // Geçmiş aktarımı ve Jira'ya gönderme küçük parçalarla ilerler; ayrı ve daha geniş sınır
 const jiraPageLimiter = createRateLimiter(60);
 
-export const handleIntegrationRequest = async (request: Request, env: Env, opts: IntegrationOptions): Promise<Response> => {
+export const handleIntegrationRequest = async (request: Request, rawEnv: Env, opts: IntegrationOptions): Promise<Response> => {
+    // Yönetici panelinde girilen Jira / Teams / e-posta ayarları ortam değişkenlerinin üzerine
+    const env = await withIntegrationSettings(rawEnv, { isDev: opts.isDev, fetchImpl: opts.fetchImpl });
     const status = integrationStatus(env);
     // authMode gizli değildir: istemci hangi kimlik bilgisini göndereceğini bilmeli
     if (opts.route === 'health') return json(200, { ...status, authMode: resolveAuthMode(env, !!opts.isDev).mode });
