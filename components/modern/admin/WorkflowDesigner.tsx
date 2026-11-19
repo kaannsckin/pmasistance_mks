@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { TaskStatus, WorkflowConfig, WorkflowStatusDef } from '../../../types';
+import { Person, TaskStatus, WorkflowConfig, WorkflowStatusDef } from '../../../types';
+import { dropRuleKeys, edgeRuleKey, entryRuleKey, renameRuleKeys, ruleIsEmpty, setRule } from '../../../utils/transitions';
+import TransitionRuleEditor from './TransitionRuleEditor';
 import { linearTransitions } from '../../../utils/projectScheme';
 import { CATEGORY_LABELS, CATEGORY_ORDER, WORKFLOW_STATUSES, workflowKey } from '../../../utils/workflow';
 import { Icon } from '../icons';
@@ -62,9 +64,13 @@ interface Props {
     pool?: WorkflowStatusDef[];
     /** Her durumda kaç görev var (bilgi) */
     usage?: (key: string) => number;
+    /** Geçiş kuralları (koşul/doğrulayıcı/sonrası işlem) için kişi havuzu; verilmezse kural düzenleme gizli */
+    people?: Person[];
+    /** Kurallar yalnız okunur (projeye özel akışta kuralları yönetici tanımlar) */
+    rulesReadOnly?: boolean;
 }
 
-const WorkflowDesigner: React.FC<Props> = ({ value: wf, onChange, pool, usage }) => {
+const WorkflowDesigner: React.FC<Props> = ({ value: wf, onChange, pool, usage, people, rulesReadOnly }) => {
     const restricted = !!pool;
     const layout = useMemo(() => autoLayout(wf), [wf]);
     const [drag, setDrag] = useState<{ key: string; dx: number; dy: number; pos: Pt } | null>(null);
@@ -96,7 +102,9 @@ const WorkflowDesigner: React.FC<Props> = ({ value: wf, onChange, pool, usage })
     };
     const removeEdge = (from: string, to: string) => {
         if (!wf.transitions) return;
-        commit({ transitions: { ...wf.transitions, [from]: (wf.transitions[from] || []).filter(x => x !== to) } });
+        const rules = wf.rules ? { ...wf.rules } : undefined;
+        if (rules) delete rules[edgeRuleKey(from, to)];
+        commit({ transitions: { ...wf.transitions, [from]: (wf.transitions[from] || []).filter(x => x !== to) }, ...(rules ? { rules: Object.keys(rules).length ? rules : undefined } : {}) });
         setSel(null);
     };
     const removeNode = (key: string) => {
@@ -105,7 +113,7 @@ const WorkflowDesigner: React.FC<Props> = ({ value: wf, onChange, pool, usage })
         const transitions = wf.transitions ? Object.fromEntries(Object.entries(wf.transitions as Record<string, string[]>).filter(([f]) => f !== key).map(([f, t]) => [f, t.filter(x => x !== key)])) : undefined;
         const lay = { ...(wf.layout || layout) };
         delete lay[key];
-        commit({ statuses, initial: wf.initial === key ? statuses[0].key : wf.initial, layout: lay, ...(transitions ? { transitions } : {}) });
+        commit({ statuses, initial: wf.initial === key ? statuses[0].key : wf.initial, layout: lay, ...(transitions ? { transitions } : {}), rules: dropRuleKeys(wf.rules, key) });
         setSel(null);
     };
     const addNode = (def: WorkflowStatusDef) => {
@@ -132,7 +140,7 @@ const WorkflowDesigner: React.FC<Props> = ({ value: wf, onChange, pool, usage })
         const transitions = wf.transitions ? Object.fromEntries(Object.entries(wf.transitions as Record<string, string[]>).map(([f, t]) => [f === key ? nk : f, t.map(x => (x === key ? nk : x))])) : undefined;
         const lay = { ...layout, [nk]: layout[key] };
         delete lay[key];
-        commit({ statuses, initial: wf.initial === key ? nk : wf.initial, layout: lay, ...(transitions ? { transitions } : {}) });
+        commit({ statuses, initial: wf.initial === key ? nk : wf.initial, layout: lay, ...(transitions ? { transitions } : {}), rules: renameRuleKeys(wf.rules, key, nk) });
         setSel({ kind: 'node', key: nk });
     };
     const fromAll = (key: string) => {
@@ -218,7 +226,7 @@ const WorkflowDesigner: React.FC<Props> = ({ value: wf, onChange, pool, usage })
 
             <div className="flex gap-3 items-stretch flex-col">
                 {/* Tuval */}
-                <div ref={canvasRef} className="relative flex-1 w-full overflow-auto rounded-2xl m-fill-2" style={{ height: 420, touchAction: 'none' }}
+                <div ref={canvasRef} className="relative flex-1 w-full overflow-auto rounded-2xl m-fill-2" style={{ height: Math.max(260, Math.min(460, Math.max(...(Object.values(layout) as Pt[]).map(p => p.y), 0) + NODE_H + 90)), touchAction: 'none' }}
                     onPointerDown={e => { if (e.target === e.currentTarget || (e.target as Element).tagName === 'svg') setSel(null); }}>
                     <div className="relative" style={{ width: CANVAS_W, height: CANVAS_H, backgroundImage: 'radial-gradient(var(--m-sep) 1px, transparent 1px)', backgroundSize: '20px 20px' }}>
                         <svg width={CANVAS_W} height={CANVAS_H} className="absolute inset-0" role="img" aria-label="Geçiş okları">
@@ -240,6 +248,10 @@ const WorkflowDesigner: React.FC<Props> = ({ value: wf, onChange, pool, usage })
                                         <path d={d} stroke={on ? 'var(--m-accent)' : ink} strokeWidth={on ? 3 : 2.2} fill="none" markerEnd={`url(#${on ? 'wf-arrow-sel' : 'wf-arrow'})`}>
                                             <title>{`${label(e.from)} → ${label(e.to)}`}</title>
                                         </path>
+                                        {!ruleIsEmpty(wf.rules?.[edgeRuleKey(e.from, e.to)]) && (() => {
+                                            const { mid } = pathFor(e.from, e.to);
+                                            return <g aria-label="Geçiş kuralı var"><circle cx={mid.x} cy={mid.y} r={8} fill="var(--m-warn)" stroke="var(--m-bg)" strokeWidth={2} /><text x={mid.x} y={mid.y + 3.5} textAnchor="middle" fontSize="10" fontWeight="700" fill="#fff">K</text></g>;
+                                        })()}
                                     </g>
                                 );
                             })}
@@ -272,6 +284,7 @@ const WorkflowDesigner: React.FC<Props> = ({ value: wf, onChange, pool, usage })
                                         <span className="text-[13px] font-bold truncate">{s.label}</span>
                                         <span className="text-[10.5px] opacity-75 truncate">{s.key}{usage && usage(s.key) ? ` · ${usage(s.key)} görev` : ''}</span>
                                     </span>
+                                    {!ruleIsEmpty(wf.rules?.[entryRuleKey(s.key)]) && <span title="Bu duruma girişte kural var" className="absolute -top-2 -left-2 w-4 h-4 rounded-full text-[9px] font-bold flex items-center justify-center" style={{ background: 'var(--m-warn)', color: '#fff' }}>K</span>}
                                     {wf.transitions && (
                                         <span title="Sürükleyerek geçiş oku çizin" aria-label={`${s.label} durumundan ok çiz`} role="button"
                                             className="absolute -right-2 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full flex items-center justify-center"
@@ -326,8 +339,16 @@ const WorkflowDesigner: React.FC<Props> = ({ value: wf, onChange, pool, usage })
                             {palette.length === 0 && restricted && <span className="text-[12.5px] m-text-3">Tüm durumlar akışta.</span>}
                         </div>
                     </section>
-                    <p className="m-0 text-[12px] m-text-3">Renk kategoriyi gösterir: gri Yapılacak/Bekleyen, mavi Süreçte, yeşil Tamamlandı. Soldaki ● ok başlangıç durumudur.</p>
+                    <p className="m-0 text-[12px] m-text-3">Renk kategoriyi gösterir: gri Yapılacak/Bekleyen, mavi Süreçte, yeşil Tamamlandı. Soldaki ● ok başlangıç durumudur. "K" rozeti: geçiş kuralı (koşul/doğrulayıcı/sonrası işlem) var.</p>
                 </aside>
+                {people && selEdge && (
+                    <TransitionRuleEditor key={`e:${selEdge.from}>${selEdge.to}`} title={`Geçiş kuralı: ${label(selEdge.from)} → ${label(selEdge.to)}`} people={people} readOnly={rulesReadOnly}
+                        rule={wf.rules?.[edgeRuleKey(selEdge.from, selEdge.to)] || {}} onChange={r => commit({ rules: setRule(wf.rules, edgeRuleKey(selEdge.from, selEdge.to), r) })} />
+                )}
+                {people && selNode && (
+                    <TransitionRuleEditor key={`n:${selNode.key}`} title={`"${selNode.label}" durumuna girişte (bu duruma gelen tüm geçişler)`} people={people} readOnly={rulesReadOnly}
+                        rule={wf.rules?.[entryRuleKey(selNode.key)] || {}} onChange={r => commit({ rules: setRule(wf.rules, entryRuleKey(selNode.key), r) })} />
+                )}
             </div>
         </div>
     );

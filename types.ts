@@ -117,6 +117,38 @@ export interface WorkflowConfig {
   initial: string;
   /** Diyagramdaki durum kutularının konumları (tasarımcı; yoksa otomatik yerleşim) */
   layout?: Record<string, { x: number; y: number }>;
+  /**
+   * Geçiş kuralları (Jira koşul / doğrulayıcı / sonrası işlem). Anahtar
+   * "KAYNAK>HEDEF" (tek geçiş) ya da "*>HEDEF" (o duruma giren tüm geçişler);
+   * ikisi birlikte uygulanır.
+   */
+  rules?: Record<string, TransitionRule>;
+}
+
+export interface TransitionRule {
+  // --- Koşullar: geçişi kim yapabilir (boşsa herkes)
+  /** Bu rollerden biri ya da `people` listesindeki biri */
+  roles?: UserRole[];
+  /** Havuz kişi kimlikleri */
+  people?: string[];
+  /** Yalnız görevin atananı */
+  assigneeOnly?: boolean;
+  // --- Doğrulayıcılar: geçişte istenen bilgi
+  /** Geçiş notu (göreve yorum olarak eklenir) */
+  requireComment?: boolean;
+  /** Harcanan süre (saat; görevin harcanan süresine eklenir) */
+  requireHours?: boolean;
+  /** Dolu olması gereken alanlar (boşsa geçiş penceresinde istenir) */
+  requireFields?: SchemeRequiredField[];
+  /** Tüm alt görevler tamamlanmış olmalı */
+  requireSubtasksDone?: boolean;
+  // --- Sonrası işlemler: geçiş sonrası otomatik
+  addLabels?: string[];
+  removeLabels?: string[];
+  /** Atananı değiştir: geçişi yapan kişi, atamayı kaldır ya da belirli kişi (ad soyad) */
+  assign?: 'actor' | 'none' | string;
+  /** Atanan kişiye bildirim (e-posta; yoksa Teams kanalı) */
+  notifyAssignee?: boolean;
 }
 
 export type SchemeRequiredField = 'resourceName' | 'dueDate' | 'estimate' | 'issueType' | 'labels' | 'workPackage';

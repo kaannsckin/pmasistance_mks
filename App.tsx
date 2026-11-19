@@ -1,6 +1,6 @@
 
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { View, Task, Resource, TaskStatus, Note, CustomerRequest, Objective, Project, Person, WorkspaceData, RagStatus, ProjectStatus, UserRole, PlanLockStatus, WorkPackage, UiStyle, PermissionKey, EstimateLogEntry, JiraSyncSettings, ReleasePlan, GoldenItem, EvalRun, ModelEvalRun, BoardConfig, ProjectScheme, WorkflowConfig } from './types';
+import { View, Task, Resource, TaskStatus, Note, CustomerRequest, Objective, Project, Person, WorkspaceData, RagStatus, ProjectStatus, UserRole, PlanLockStatus, WorkPackage, UiStyle, PermissionKey, EstimateLogEntry, JiraSyncSettings, ReleasePlan, GoldenItem, EvalRun, ModelEvalRun, BoardConfig, ProjectScheme, WorkflowConfig, TransitionRule } from './types';
 import { INITIAL_TASKS, INITIAL_RESOURCES, INITIAL_OBJECTIVES } from './constants';
 import {
   WORKSPACE_STORAGE_KEY,
@@ -30,7 +30,10 @@ import { resetReportGuide, saveDepartmentGuide, saveReportGuide } from './utils/
 import { setReportExemplar } from './utils/ai/reportExamples';
 import { applyRuleAction, RuleAction, ruleActionLabel } from './utils/ai/reportRules';
 import { stampLifecycle } from './utils/planning/lifecycle';
-import { applyWorkflow, canTransition, taskStatusLabel, taskWorkflow, transitionToCategory, workflowOptions } from './utils/workflow';
+import { canTransition, DEFAULT_WORKFLOW, resolveTransition, taskStatusLabel, taskWorkflow, workflowKey, workflowOptions, WorkflowStatus } from './utils/workflow';
+import { applyTransition, conditionProblem, needsInput, ruleFor, TransitionActor, TransitionEffect, TransitionInput, TransitionNeeds, transitionNeeds } from './utils/transitions';
+import TransitionDialog from './components/modern/TransitionDialog';
+import { describeNotify, fetchIntegrationHealth, sendNotification } from './utils/integrations';
 import { boardForProject, DEFAULT_SCHEME_ID, effectiveScheme, migrateTasksToWorkflow, schemeOf, schemeUsage, validateProjectWorkflow, validateScheme } from './utils/projectScheme';
 import ProjectWorkflowSheet from './components/modern/ProjectWorkflowSheet';
 import { AllocationSuggestion, ApplyMode, applyAllocationSuggestions } from './utils/taskToAllocation';
@@ -1350,7 +1353,82 @@ const App: React.FC = () => {
     setIsSettingsModalOpen(false);
   };
 
+  // ---- İş akışı geçiş kapısı: koşul → doğrulayıcı (gerekirse geçiş penceresi) → uygula → sonrası işlemler ----
+  const sendTransitionEffectsRef = useRef<(e: TransitionEffect[]) => void>(() => undefined);
+  const [pendingTransition, setPendingTransition] = useState<null | {
+    task: Task; target: WorkflowStatus; rule: TransitionRule; needs: TransitionNeeds; extra: Partial<Task>; setKey: boolean; fromLabel: string;
+  }>(null);
+  const transitionActor = (): TransitionActor => {
+    const ws = workspaceRef.current!;
+    const id = identityOf(ws);
+    const person = ws.people.find(p => p.id === id.personId);
+    return { role: id.role, personId: id.personId, name: person ? `${person.firstName} ${person.lastName}`.trim() : undefined };
+  };
+  const sendTransitionEffects = async (effects: TransitionEffect[]) => {
+    for (const e of effects) {
+      const ws = workspaceRef.current;
+      const person = ws?.people.find(p => `${p.firstName} ${p.lastName}`.trim().toLocaleLowerCase('tr-TR') === e.to.trim().toLocaleLowerCase('tr-TR'));
+      try {
+        const health = await fetchIntegrationHealth();
+        const byEmail = !!(person?.email && health.email);
+        if (!byEmail && !health.teams) { setFlowNotice(`${e.to} için bildirim gönderilemedi: e-posta/Teams sunucuda yapılandırılmadı.`); continue; }
+        const r = await sendNotification({ subject: e.subject, text: e.text, ...(byEmail ? { email: { to: [person!.email!] } } : { teams: true }) }, health.authMode);
+        const d = describeNotify(r);
+        if (!d.ok) setFlowNotice(`Bildirim (${e.to}): ${d.text}`);
+      } catch (err) {
+        setFlowNotice(`Bildirim gönderilemedi (${e.to}): ${(err as Error).message}`);
+      }
+    }
+  };
+  sendTransitionEffectsRef.current = sendTransitionEffects;
+  const finishTransition = (task: Task, target: WorkflowStatus, rule: TransitionRule, input: TransitionInput, extra: Partial<Task>, setKey: boolean, fromLabel: string) => {
+    const r = applyTransition({ ...task, ...extra }, target, rule, input, { actor: transitionActor(), setKey, projectName: activeProject?.name, fromLabel });
+    setTasks(prev => prev.map(t => (t.id === task.id ? { ...t, ...r.task } : t)));
+    if (r.effects.length) sendTransitionEffects(r.effects);
+  };
+  /**
+   * Görevi bir duruma (anahtar) ya da kategoriye taşıma isteği. Geçiş, koşul ve
+   * doğrulayıcılar projenin etkin iş akışına göre denetlenir; uygun değilse
+   * gerekçe gösterilir, bilgi gerekiyorsa geçiş penceresi açılır.
+   */
+  const requestTransition = (task: Task, key: string | null, opts: { category?: TaskStatus; extra?: Partial<Task>; explicitKey?: boolean } = {}): void => {
+    const wf = activeScheme.workflow;
+    const extra = opts.extra || {};
+    const cur = taskWorkflow(task, wf);
+    let target: WorkflowStatus | undefined;
+    const known = key ? wf.statuses.find(s => s.key === workflowKey(key)) : undefined;
+    if (key && !known) {
+      // İş akışında olmayan (Jira'ya özgü) durum: kural yok, olduğu gibi
+      target = workflowOptions(activeProject?.tasks || [], wf).flatMap(g => g.statuses).find(s => s.key === workflowKey(key));
+      if (!target) { setFlowNotice(`"${key}" bu projenin iş akışında yok.`); return; }
+    } else {
+      const res = resolveTransition(task, wf, key ? { key } : { category: opts.category });
+      if ('error' in res) { setFlowNotice(res.error); return; }
+      target = res.target;
+    }
+    if (target.key === cur.key && target.category === task.status) {
+      if (Object.keys(extra).length) setTasks(prev => prev.map(t => (t.id === task.id ? { ...t, ...extra } : t)));
+      return;
+    }
+    const rule = known || !key ? ruleFor(wf, cur.key, target.key) : {};
+    const ws = workspaceRef.current!;
+    const cond = conditionProblem(rule, task, transitionActor(), ws.people);
+    if (cond) { setFlowNotice(cond); return; }
+    const needs = transitionNeeds(rule, { ...task, ...extra });
+    if (needs.blocking) { setFlowNotice(needs.blocking); return; }
+    const setKey = !!opts.explicitKey || !!wf.transitions || !!task.jiraStatus || wf !== DEFAULT_WORKFLOW;
+    if (needsInput(needs)) { setPendingTransition({ task, target, rule, needs, extra, setKey, fromLabel: cur.label }); return; }
+    finishTransition(task, target, rule, {}, extra, setKey, cur.label);
+  };
+
   const handleUpdateTask = (updatedTask: Task) => {
+    const existing = activeProject?.tasks.find(t => t.id === updatedTask.id);
+    // Durum değiştiyse iş akışı kapısından geçer (koşul, doğrulayıcı, sonrası işlem)
+    if (existing && (existing.status !== updatedTask.status || (existing.jiraStatus || '') !== (updatedTask.jiraStatus || ''))) {
+      const { status: _s, jiraStatus: _j, ...rest } = updatedTask;
+      requestTransition(existing, updatedTask.jiraStatus || null, { category: updatedTask.status, extra: rest, explicitKey: !!updatedTask.jiraStatus });
+      return;
+    }
     setTasks(prev => prev.map(t => t.id === updatedTask.id ? updatedTask : t));
   };
 
@@ -1382,8 +1460,14 @@ const App: React.FC = () => {
     ));
   }, [updateProjectById, updateWorkspace]);
 
-  const saveTaskFromForm = (t: Task) => {
+  const saveTaskFromForm = (formTask: Task) => {
     const requestId = convertingRequestId;
+    // Kayıtlı görevde durum değiştiyse: önce diğer alanlar eski durumla kaydedilir, durum geçiş kapısından geçer
+    const existingTask = activeProject?.tasks.find(x => x.id === formTask.id);
+    const flow = existingTask && (existingTask.status !== formTask.status || (existingTask.jiraStatus || '') !== (formTask.jiraStatus || ''))
+      ? { key: formTask.jiraStatus || null, category: formTask.status } : null;
+    const t = flow && existingTask ? { ...formTask, status: existingTask.status, jiraStatus: existingTask.jiraStatus } : formTask;
+    if (flow && existingTask) setTimeout(() => requestTransition({ ...existingTask, ...t }, flow.key, { category: flow.category, explicitKey: !!flow.key }), 0);
     updateActiveProject(p => {
       // Formda olmayan alanlar (yaşam döngüsü damgaları, Jira alanları) korunur
       const tasks = p.tasks.some(x => x.id === t.id) ? p.tasks.map(x => x.id === t.id ? { ...x, ...t } : x) : [...p.tasks, t];
@@ -1710,17 +1794,19 @@ const App: React.FC = () => {
     // Yalnız kategori isteyen kontroller (işaretle, eski menüler): iş akışında izin verilen o kategorideki ilk duruma
     const changeTaskStatus = (id: string, s: TaskStatus) => {
       const task = tasks.find(t => t.id === id);
-      if (!task) return;
-      const target = transitionToCategory(task, s, wf);
-      if (!target) { setFlowNotice(`"${taskStatusLabel(task, wf)}" durumundan bu duruma geçiş, projenin iş akışında (${activeScheme.name}) tanımlı değil.`); return; }
-      setTasks(prev => prev.map(t => t.id === id ? { ...t, status: target.category, jiraStatus: wf.transitions || t.jiraStatus ? target.key : t.jiraStatus, updatedAt: new Date().toISOString() } : t));
+      if (task) requestTransition(task, null, { category: s });
     };
-    const moveBoardTask = (id: string, patch: Partial<Task>) => setTasks(prev => prev.map(t => t.id === id ? { ...t, ...patch } : t));
-    const changeTaskWorkflow = (id: string, key: string) => {
+    // Pano sürükle-bırak: durum değişiyorsa geçiş kapısı (etiket kuralı ek alan olarak gider)
+    const moveBoardTask = (id: string, patch: Partial<Task>) => {
       const task = tasks.find(t => t.id === id);
       if (!task) return;
-      if (!canTransition(wf, taskWorkflow(task, wf).key, key)) { setFlowNotice(`Bu geçiş projenin iş akışında (${activeScheme.name}) tanımlı değil.`); return; }
-      setTasks(prev => prev.map(t => t.id === id ? { ...applyWorkflow(t, key, workflowOptions(prev, wf).flatMap(g => g.statuses), wf), updatedAt: new Date().toISOString() } : t));
+      const statusChange = (patch.status !== undefined && patch.status !== task.status) || ('jiraStatus' in patch && (patch.jiraStatus || '') !== (task.jiraStatus || ''));
+      if (!statusChange) { setTasks(prev => prev.map(t => t.id === id ? { ...t, ...patch } : t)); return; }
+      requestTransition(task, patch.jiraStatus || null, { category: patch.status, explicitKey: !!patch.jiraStatus, extra: 'labels' in patch ? { labels: patch.labels } : {} });
+    };
+    const changeTaskWorkflow = (id: string, key: string) => {
+      const task = tasks.find(t => t.id === id);
+      if (task) requestTransition(task, key, { explicitKey: true });
     };
     const projectBoard = boardForProject(activeScheme, activeProject);
     const boardMe = (() => { const p = workspace.people.find(x => x.id === workspace.currentPersonId); return p ? `${p.firstName} ${p.lastName}`.trim() : undefined; })();
@@ -2051,6 +2137,8 @@ const App: React.FC = () => {
       summary = result.summary;
       setWorkspace(result.ws);
       workspaceRef.current = result.ws;
+      // Geçişin sonrası işlemi: atanana bildirim (AI önerisi de kullanıcının geçişi gibi)
+      if (result.effects?.length) sendTransitionEffectsRef.current(result.effects);
     } catch (e) {
       return { ok: false, message: (e as Error).message || 'Uygulanamadı.' };
     }
@@ -2435,10 +2523,21 @@ const App: React.FC = () => {
           <button type="button" onClick={() => setStorageWarnClosed(true)} className="opacity-70 hover:opacity-100" aria-label="Uyarıyı kapat"><i aria-hidden="true" className="fa-solid fa-xmark text-sm"></i></button>
         </div>
       )}
+      {pendingTransition && workspace && (() => {
+        const pt = pendingTransition;
+        const dlg = (
+          <TransitionDialog task={pt.task} fromLabel={pt.fromLabel} toLabel={pt.target.label} rule={pt.rule} needs={pt.needs}
+            assignees={[...new Set([...(activeProject?.resources || []).map(r => r.name), ...workspace.people.map(p => `${p.firstName} ${p.lastName}`.trim())])].filter(Boolean)}
+            workPackages={activeProject?.workPackages || []}
+            onCancel={() => setPendingTransition(null)}
+            onConfirm={input => { finishTransition(pt.task, pt.target, pt.rule, input, pt.extra, pt.setKey, pt.fromLabel); setPendingTransition(null); }} />
+        );
+        return isModern ? dlg : <div className="ui-modern">{dlg}</div>;
+      })()}
       {workflowSheetProject && workspace && (() => {
         const p = workspace.projects.find(x => x.id === workflowSheetProject);
         if (!p) return null;
-        const sheet = <ProjectWorkflowSheet project={p} scheme={schemeOf(workspace, p)} onClose={() => setWorkflowSheetProject(null)} onSave={wf => { handleSaveProjectWorkflow(p.id, wf); setWorkflowSheetProject(null); }} />;
+        const sheet = <ProjectWorkflowSheet project={p} scheme={schemeOf(workspace, p)} people={workspace.people} onClose={() => setWorkflowSheetProject(null)} onSave={wf => { handleSaveProjectWorkflow(p.id, wf); setWorkflowSheetProject(null); }} />;
         return isModern ? sheet : <div className="ui-modern">{sheet}</div>;
       })()}
       {flowNotice && (

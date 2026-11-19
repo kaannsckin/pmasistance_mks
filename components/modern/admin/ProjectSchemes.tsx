@@ -8,6 +8,7 @@ import {
 import { CATEGORY_LABELS, CATEGORY_ORDER, WORKFLOW_STATUSES, workflowKey } from '../../../utils/workflow';
 import BoardSettings from '../BoardSettings';
 import WorkflowDesigner from './WorkflowDesigner';
+import { dropRuleKeys, renameRuleKeys } from '../../../utils/transitions';
 import { Icon } from '../icons';
 import { Sheet } from '../ui';
 
@@ -83,7 +84,7 @@ const SchemeEditor: React.FC<{
         if (patch.key !== undefined && patch.key !== old.key) {
             const nk = patch.key;
             const tr = wf.transitions ? Object.fromEntries(Object.entries(wf.transitions as Record<string, string[]>).map(([f, tos]) => [f === old.key ? nk : f, tos.map(t => (t === old.key ? nk : t))])) : undefined;
-            setWf({ statuses, initial: wf.initial === old.key ? nk : wf.initial, ...(tr ? { transitions: tr } : {}) });
+            setWf({ statuses, initial: wf.initial === old.key ? nk : wf.initial, ...(tr ? { transitions: tr } : {}), rules: renameRuleKeys(wf.rules, old.key, nk) });
         } else setWf({ statuses });
     };
     const moveStatus = (i: number, d: -1 | 1) => {
@@ -97,7 +98,7 @@ const SchemeEditor: React.FC<{
         const k = wf.statuses[i].key;
         const statuses = wf.statuses.filter((_, j) => j !== i);
         const tr = wf.transitions ? Object.fromEntries(Object.entries(wf.transitions as Record<string, string[]>).filter(([f]) => f !== k).map(([f, tos]) => [f, tos.filter(t => t !== k)])) : undefined;
-        setWf({ statuses, initial: wf.initial === k ? statuses[0]?.key || '' : wf.initial, ...(tr ? { transitions: tr } : {}) });
+        setWf({ statuses, initial: wf.initial === k ? statuses[0]?.key || '' : wf.initial, ...(tr ? { transitions: tr } : {}), rules: dropRuleKeys(wf.rules, k) });
     };
     const addStatus = (def?: WorkflowStatusDef) => {
         const d = def || { key: `DURUM ${wf.statuses.length + 1}`, label: 'Yeni durum', category: TaskStatus.InProgress };
@@ -184,7 +185,7 @@ const SchemeEditor: React.FC<{
                         <button type="button" className="m-segment" aria-pressed={wfView === 'diagram'} onClick={() => setWfView('diagram')}>Diyagram</button>
                         <button type="button" className="m-segment" aria-pressed={wfView === 'table'} onClick={() => setWfView('table')}>Tablo</button>
                     </div>
-                    {wfView === 'diagram' ? <WorkflowDesigner value={wf} onChange={next => setS(x => ({ ...x, workflow: next }))} usage={usage} /> : (<>
+                    {wfView === 'diagram' ? <WorkflowDesigner value={wf} onChange={next => setS(x => ({ ...x, workflow: next }))} usage={usage} people={workspace.people} /> : (<>
                     <FlowPreview wf={wf} />
                     <div className="flex flex-col">
                         <div className="grid gap-2 px-1 pb-1 text-[12px] font-semibold m-text-3" style={{ gridTemplateColumns: '56px 1fr 1fr 150px 70px 70px 32px' }}>

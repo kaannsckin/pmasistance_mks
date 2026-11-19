@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Project, ProjectScheme, WorkflowConfig } from '../../types';
+import { Person, Project, ProjectScheme, WorkflowConfig } from '../../types';
 import { effectiveScheme, validateProjectWorkflow } from '../../utils/projectScheme';
 import { workflowKey } from '../../utils/workflow';
 import WorkflowDesigner from './admin/WorkflowDesigner';
@@ -17,7 +17,8 @@ const ProjectWorkflowSheet: React.FC<{
     onClose: () => void;
     /** undefined: projeye özel akışı kaldır (yapılandırmanınkine dön) */
     onSave: (wf: WorkflowConfig | undefined) => void;
-}> = ({ project, scheme, onClose, onSave }) => {
+    people?: Person[];
+}> = ({ project, scheme, onClose, onSave, people }) => {
     const eff = effectiveScheme({ projectSchemes: [scheme] }, { schemeId: scheme.id, workflowOverride: project.workflowOverride });
     const [wf, setWf] = useState<WorkflowConfig>(() => JSON.parse(JSON.stringify(eff.workflow)));
     const errors = validateProjectWorkflow(scheme, wf);
@@ -34,7 +35,7 @@ const ProjectWorkflowSheet: React.FC<{
                     <button type="button" className="m-btn m-btn-primary" disabled={errors.length > 0} onClick={() => onSave(wf)}><Icon name="check" size={16} />Kaydet</button>
                 </>
             )}>
-            <WorkflowDesigner value={wf} onChange={setWf} pool={scheme.workflow.statuses} usage={usage} />
+            <WorkflowDesigner value={wf} onChange={setWf} pool={scheme.workflow.statuses} usage={usage} people={people} rulesReadOnly />
         </Sheet>
     );
 };

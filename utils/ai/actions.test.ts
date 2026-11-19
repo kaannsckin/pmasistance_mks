@@ -197,3 +197,34 @@ describe('AI önerileri ve proje yapılandırması', () => {
         expect(validateAction(ws3, { type: 'gorev_durumu', projectId: 'altay', taskId: 't1', status: TaskStatus.InProgress, workflowKey: 'ANALYSIS' })).toBeNull();
     });
 });
+
+describe('AI önerileri ve geçiş kuralları', () => {
+    const ws0 = (rules: Record<string, import('../../types').TransitionRule>) => {
+        const ws = build();
+        const scheme = { ...createScheme('support', 'Destek'), id: 'sps' };
+        scheme.workflow = { ...scheme.workflow, rules };
+        return { ...ws, projectSchemes: [scheme], projects: ws.projects.map(p => (p.id === 'altay' ? { ...p, schemeId: 'sps', tasks: p.tasks.map(t => ({ ...t, jiraStatus: 'OPEN', resourceName: 'Can Er' })) } : p)) };
+    };
+    const toAnalysis: AiAction = { type: 'gorev_durumu', projectId: 'altay', taskId: 't1', status: TaskStatus.InProgress, workflowKey: 'ANALYSIS' };
+
+    it('koşul: yetkisiz kişinin geçişi reddedilir', () => {
+        expect(validateAction(ws0({ 'OPEN>ANALYSIS': { people: ['dev'] } }), toAnalysis)).toBe('Bu geçişi yalnız Can Er yapabilir.');
+        expect(validateAction(ws0({ 'OPEN>ANALYSIS': { roles: ['py'] } }), toAnalysis)).toBeNull();
+    });
+
+    it('doğrulayıcı: not/süre öneride verilmezse reddedilir, verilirse yoruma ve süreye yazılır', () => {
+        const ws = ws0({ '*>ANALYSIS': { requireComment: true, requireHours: true, addLabels: ['analiz'] } });
+        expect(validateAction(ws, toAnalysis)).toMatch(/Geçiş notu gerekli\. Harcanan süre \(saat\) gerekli\..*Öneride geçiş notu/);
+        const full = { ...toAnalysis, comment: 'Kök neden araştırılıyor', hours: 2 };
+        expect(validateAction(ws, full)).toBeNull();
+        expect(describeAction(ws, full).details.map(d => d.label)).toEqual(['Proje', 'Durum', 'Geçiş notu', 'Harcanan süre']);
+        const t = applyAction(ws, full).ws.projects[0].tasks[0];
+        expect(t).toMatchObject({ jiraStatus: 'ANALYSIS', actualHours: 2, labels: ['analiz'] });
+        expect(t.comments?.[0].text).toBe('[Açık → Analizde] Kök neden araştırılıyor');
+    });
+
+    it('sonrası işlem: bildirim etkisi döner', () => {
+        const r = applyAction(ws0({ '*>ANALYSIS': { notifyAssignee: true } }), toAnalysis);
+        expect(r.effects?.map(e => e.to)).toEqual(['Can Er']);
+    });
+});

@@ -852,12 +852,12 @@ const PROPOSAL_TOOLS: ToolDef[] = [
                 proje: P.project,
                 ad: S.str('Görev adı.'),
                 oncelik: S.str('Öncelik (varsayılan Medium).', ['Blocker', 'High', 'Medium', 'Low']),
-                atanan: S.str('Atanacak kişinin adı soyadı (veri havuzundan).'),
-                bitis: S.str('Bitiş tarihi YYYY-AA-GG.'),
+                atanan: S.str('Ad soyad'),
+                bitis: S.str('YYYY-AA-GG'),
                 sure_iyimser: S.num('İyimser süre (gün).'),
                 sure_ortalama: S.num('Ortalama süre (gün).'),
                 sure_kotumser: S.num('Kötümser süre (gün).'),
-                aciklama: S.str('Görev açıklaması.'),
+                aciklama: S.str('Açıklama'),
                 tur: S.str('', ['bug', 'feature', 'improvement', 'task', 'other']),
                 etiketler: S.str('virgülle'),
             }, ['ad']),
@@ -884,12 +884,14 @@ const PROPOSAL_TOOLS: ToolDef[] = [
         writeOnly: true,
         spec: {
             name: 'oner_gorev_durumu',
-            description: 'Görev durumunu değiştirmeyi ÖNERİR (onaysız uygulanmaz). İş akışı geçiş kuralları uygulanır; izinsizse hata izinli geçişleri listeler.',
+            description: 'Görev durumunu değiştirmeyi ÖNERİR (onaysız uygulanmaz). İş akışı kuralları uygulanır; kural not/süre isterse gecis_notu/harcanan_saat ver.',
             parameters: S.obj({
                 proje: P.project,
-                gorev: S.str('Görev adı ya da Jira anahtarı'),
-                is_durumu: S.str('Hedef durum adı (ör. Testte, Çözüldü)'),
+                gorev: S.str('Ad ya da Jira anahtarı'),
+                is_durumu: S.str('Hedef durum (ör. Testte)'),
                 durum: S.str('ya da kategori', ['Backlog', 'ToDo', 'InProgress', 'Done']),
+                gecis_notu: S.str(''),
+                harcanan_saat: S.num(''),
             }, ['gorev']),
         },
         run: (a, ctx) => {
@@ -905,7 +907,11 @@ const PROPOSAL_TOOLS: ToolDef[] = [
                 if (s) status = s.category;
                 else status = status && Object.values(TaskStatus).includes(status) ? status : hits[0].status;
             }
-            return propose(ctx, { type: 'gorev_durumu', projectId: project.id, taskId: hits[0].id, status, ...(key ? { workflowKey: key } : {}) });
+            const hours = Number(a.harcanan_saat);
+            return propose(ctx, {
+                type: 'gorev_durumu', projectId: project.id, taskId: hits[0].id, status, ...(key ? { workflowKey: key } : {}),
+                ...(str(a.gecis_notu) ? { comment: str(a.gecis_notu) } : {}), ...(Number.isFinite(hours) && hours > 0 ? { hours } : {}),
+            });
         },
     },
     {

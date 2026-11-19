@@ -149,7 +149,14 @@ export const effectiveScheme = (ws: Pick<WorkspaceData, 'projectSchemes'>, proje
     const transitions = o.transitions
         ? Object.fromEntries(Object.entries(o.transitions).filter(([f]) => keys.has(f)).map(([f, tos]) => [f, tos.filter(t => keys.has(t))]))
         : undefined;
-    const workflow: WorkflowConfig = { statuses, initial: keys.has(o.initial) ? o.initial : statuses[0].key, ...(transitions ? { transitions } : {}), ...(o.layout ? { layout: o.layout } : {}) };
+    // Geçiş kuralları (koşul/doğrulayıcı/sonrası işlem) her zaman yöneticinin yapılandırmasından gelir
+    const rules = scheme.workflow.rules
+        ? Object.fromEntries(Object.entries(scheme.workflow.rules).filter(([k]) => { const [f, t] = k.split('>'); return (f === '*' || keys.has(f)) && keys.has(t); }))
+        : undefined;
+    const workflow: WorkflowConfig = {
+        statuses, initial: keys.has(o.initial) ? o.initial : statuses[0].key,
+        ...(transitions ? { transitions } : {}), ...(o.layout ? { layout: o.layout } : {}), ...(rules && Object.keys(rules).length ? { rules } : {}),
+    };
     return { ...scheme, workflow, workflowSource: 'project' };
 };
 
