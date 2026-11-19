@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { buildIssueJql, buildWorklogJql, checkRecipients, handleIntegrationRequest, integrationStatus, JiraIssueRecord, Mailer, pickIssueType, pickPriority, plainDescription, reminderMessage, teamsCard } from './handler';
+import { buildIssueJql, buildKeysJql, buildSyncJql, buildWorklogJql, checkRecipients, handleIntegrationRequest, integrationStatus, JiraIssueRecord, Mailer, pickIssueType, pickPriority, plainDescription, reminderMessage, teamsCard } from './handler';
 
 const TOKEN = 'erisim-kodu-12345678901234567890';
 const BASE_ENV = { AI_ACCESS_TOKEN: TOKEN };
@@ -16,12 +16,12 @@ const jsonRes = (status: number, body: unknown) => new Response(JSON.stringify(b
 describe('durum ve yardımcılar', () => {
     it('hangi entegrasyonun yapılandırıldığını gizli bilgi vermeden söyler', async () => {
         const env = { JIRA_BASE_URL: 'https://jira.kurum.gov.tr', JIRA_TOKEN: 'x', TEAMS_WEBHOOK_URL: 'https://hook', SMTP_HOST: 'smtp', SMTP_FROM: 'pa@kurum.gov.tr' };
-        expect(integrationStatus(env)).toEqual({ jira: true, jiraCreate: false, teams: true, email: true, reminder: false });
+        expect(integrationStatus(env)).toEqual({ jira: true, jiraCreate: false, jiraUpdate: false, teams: true, email: true, reminder: false });
         expect(integrationStatus({ ...env, JIRA_ALLOW_CREATE: '1' }).jiraCreate).toBe(true);
         expect(integrationStatus({ JIRA_ALLOW_CREATE: '1' }).jiraCreate).toBe(false); // Jira yoksa açma da yok
         const res = await handleIntegrationRequest(new Request('http://x/api/integrations/health'), env, { route: 'health' });
         const body = await res.json();
-        expect(body).toEqual({ jira: true, jiraCreate: false, teams: true, email: true, reminder: false, authMode: 'none' });
+        expect(body).toEqual({ jira: true, jiraCreate: false, jiraUpdate: false, teams: true, email: true, reminder: false, authMode: 'none' });
         expect(JSON.stringify(body)).not.toContain('jira.kurum');
     });
 
@@ -320,5 +320,133 @@ describe('haftalık hatırlatma (cron)', () => {
         const res = await handleIntegrationRequest(cronReq('dogru'), env, { route: 'cron-reminder', fetchImpl, mailer: { sendMail: async m => { sent.push(m); } } });
         expect(await res.json()).toEqual({ ok: true, teams: 'sent', email: 'sent' });
         expect(sent[0].bcc).toBe('py-listesi@kurum.gov.tr');
+    });
+});
+
+describe('Jira canlı eşitleme (jira-sync)', () => {
+    const env = { ...BASE_ENV, JIRA_BASE_URL: 'https://jira-sync.kurum.gov.tr', JIRA_TOKEN: 'pat-gizli' };
+    const STATUSES = [{ id: '1', statusCategory: { key: 'new' } }, { id: '3', statusCategory: { key: 'indeterminate' } }, { id: '6', statusCategory: { key: 'done' } }];
+    const raw = (key: string, status = '3', extra: Record<string, unknown> = {}) => ({ key, fields: { summary: `Kayıt ${key}`, status: { id: status, name: status === '6' ? 'Kapandı' : 'Devam Ediyor' }, priority: { name: 'High' }, updated: '2026-11-12T09:00:00.000+0300', labels: ['mks-takip'], ...extra }, changelog: { total: 0, histories: [] } });
+    const run = (body: unknown, fetchImpl: typeof fetch, e: Record<string, string> = env) => handleIntegrationRequest(post('jira-sync', body), e, { route: 'jira-sync', fetchImpl, now: new Date('2026-11-13T08:00:00Z') });
+    const meta = (url: string) => (url.endsWith('/rest/api/2/status') ? jsonRes(200, STATUSES) : url.endsWith('/rest/api/2/field') ? jsonRes(200, []) : null);
+
+    it('kaynak JQL: yalnız açık kayıtlar; izin listesi sorguya eklenir', () => {
+        expect(buildSyncJql({}, { projectKey: 'MKS', labels: ['a', 'b'] })).toBe('project = "MKS" AND labels in ("a", "b") AND statusCategory != Done ORDER BY key ASC');
+        expect(buildSyncJql({ JIRA_ALLOWED_PROJECTS: 'mks, ABC' }, { filterId: '12345' })).toBe('project in ("MKS", "ABC") AND filter = 12345 AND statusCategory != Done ORDER BY key ASC');
+        expect(buildSyncJql({}, { labels: ['x'] }, false)).toBe('labels in ("x") ORDER BY key ASC');
+        expect(buildKeysJql(['MKS-1', 'MKS-2'])).toBe('key in ("MKS-1", "MKS-2") ORDER BY key ASC');
+    });
+
+    it('kapsamsız ya da geçersiz kaynak reddedilir; serbest JQL kabul edilmez', async () => {
+        const fetchImpl = vi.fn(async () => jsonRes(200, { issues: [], total: 0 })) as unknown as typeof fetch;
+        expect((await run({ op: 'search', source: {} }, fetchImpl)).status).toBe(400);
+        expect((await run({ op: 'search', jql: 'ORDER BY key' }, fetchImpl)).status).toBe(400);
+        expect((await run({ op: 'search', source: { labels: ['a" OR project = X'] } }, fetchImpl)).status).toBe(400);
+        expect((await run({ op: 'search', source: { filterId: '1 OR 1=1' } }, fetchImpl)).status).toBe(400);
+        expect((await run({ op: 'search', keys: ['MKS-1", "X-1'] }, fetchImpl)).status).toBe(400);
+        expect((await run({ op: 'search', source: { projectKey: 'XYZ' } }, fetchImpl, { ...env, JIRA_ALLOWED_PROJECTS: 'MKS' })).status).toBe(403);
+        expect((await run({ op: 'search', keys: ['XYZ-1'] }, fetchImpl, { ...env, JIRA_ALLOWED_PROJECTS: 'MKS' })).status).toBe(403);
+        expect((await run({ op: 'baska' }, fetchImpl)).status).toBe(400);
+        expect((await run({ op: 'meta' }, fetchImpl, BASE_ENV)).status).toBe(501);
+        expect(fetchImpl).not.toHaveBeenCalled();
+    });
+
+    it('kaynaktan açık kayıtlar ve anahtarla güncel hâl; bulunamayan anahtar atlanıp bildirilir', async () => {
+        const calls: string[] = [];
+        const fetchImpl = (async (url: string) => {
+            calls.push(decodeURIComponent(url));
+            const m = meta(url);
+            if (m) return m;
+            const u = decodeURIComponent(url);
+            if (u.includes('labels in ("mks-takip")')) return jsonRes(200, { issues: [raw('MKS-7')], total: 1 });
+            if (u.includes('"MKS-99"')) return jsonRes(400, { errorMessages: ["An issue with key 'MKS-99' does not exist for field 'key'."] });
+            return jsonRes(200, { issues: [raw('MKS-1', '6'), raw('MKS-2')], total: 2 });
+        }) as unknown as typeof fetch;
+        const src = await (await run({ op: 'search', source: { labels: ['mks-takip'] } }, fetchImpl)).json();
+        expect(src).toMatchObject({ total: 1, next: null, missing: [], issues: [{ key: 'MKS-7', statusCategory: 'indeterminate', updated: '2026-11-12T06:00:00.000Z' }] });
+        expect(calls.some(c => c.includes('labels in ("mks-takip") AND statusCategory != Done'))).toBe(true);
+
+        const res = await run({ op: 'search', keys: ['mks-1', 'MKS-2', 'MKS-99'] }, fetchImpl);
+        const body = await res.json() as { issues: JiraIssueRecord[]; missing: string[] };
+        expect(body.issues.map(i => [i.key, i.statusCategory])).toEqual([['MKS-1', 'done'], ['MKS-2', 'indeterminate']]);
+        expect(body.missing).toEqual(['MKS-99']);
+        expect(calls.at(-1)).toContain('key in ("MKS-1", "MKS-2") ORDER BY');
+        expect(JSON.stringify(body)).not.toContain('pat-gizli');
+    });
+
+    it('meta: jeton sahibi, izinli projeler ve sık kullanılan filtreler', async () => {
+        const fetchImpl = (async (url: string) => {
+            if (url.endsWith('/myself')) return jsonRes(200, { displayName: 'Murat S.' });
+            if (url.endsWith('/project')) return jsonRes(200, [{ key: 'XYZ', name: 'Başka' }, { key: 'MKS', name: 'Merkezi Kayıt' }]);
+            if (url.endsWith('/filter/favourite')) return jsonRes(200, [{ id: '12345', name: 'MKS açıklar', jql: 'project = MKS AND resolution = Unresolved' }]);
+            return jsonRes(404, {});
+        }) as unknown as typeof fetch;
+        expect(await (await run({ op: 'meta' }, fetchImpl, { ...env, JIRA_ALLOWED_PROJECTS: 'MKS' })).json()).toEqual({
+            user: 'Murat S.', projects: [{ key: 'MKS', name: 'Merkezi Kayıt' }], filters: [{ id: '12345', name: 'MKS açıklar', jql: 'project = MKS AND resolution = Unresolved' }],
+        });
+        const denied = await run({ op: 'meta' }, (async () => jsonRes(401, {})) as unknown as typeof fetch);
+        expect(denied.status).toBe(502);
+    });
+
+    it('güncelleme: kapalıysa reddedilir; alan, durum geçişi, yorum ve worklog ayrı ayrı uygulanır', async () => {
+        const noop = vi.fn(async () => jsonRes(200, {})) as unknown as typeof fetch;
+        expect((await run({ op: 'update', key: 'MKS-1', changes: { summary: 'x' } }, noop)).status).toBe(403);
+        const on = { ...env, JIRA_ALLOW_UPDATE: '1' };
+        expect((await run({ op: 'update', key: 'MKS-1', changes: {} }, noop, on)).status).toBe(400);
+        expect((await run({ op: 'update', key: 'MKS-1', changes: { priority: 'toString' } }, noop, on)).status).toBe(400);
+        expect((await run({ op: 'update', key: 'XYZ-1', changes: { summary: 'x' } }, noop, { ...on, JIRA_ALLOWED_PROJECTS: 'MKS' })).status).toBe(403);
+        expect(noop).not.toHaveBeenCalled();
+
+        const sent: { method: string; url: string; body?: Record<string, unknown> }[] = [];
+        let put = 0;
+        const fetchImpl = (async (url: string, init?: RequestInit) => {
+            const method = init?.method || 'GET';
+            sent.push({ method, url, ...(init?.body ? { body: JSON.parse(String(init.body)) } : {}) });
+            const m = meta(url);
+            if (m) return m;
+            if (url.endsWith('/rest/api/2/priority')) return jsonRes(200, [{ id: '2', name: 'High' }, { id: '4', name: 'Low' }]);
+            if (method === 'PUT') return ++put === 1 ? jsonRes(400, { errors: { duedate: 'Alan ekranda yok.' } }) : new Response(null, { status: 204 });
+            if (url.endsWith('/transitions') && method === 'GET') return jsonRes(200, { transitions: [{ id: '11', name: 'İptal', to: { name: 'İptal', statusCategory: { key: 'done' } } }, { id: '21', name: 'Kapat', to: { name: 'Kapandı', statusCategory: { key: 'done' } } }, { id: '31', name: 'Başla', to: { name: 'Devam', statusCategory: { key: 'indeterminate' } } }] });
+            if (url.endsWith('/transitions')) return new Response(null, { status: 204 });
+            if (url.endsWith('/comment')) return jsonRes(201, { id: '1' });
+            if (url.endsWith('/worklog')) return jsonRes(400, { errorMessages: ['Zaman takibi kapalı.'] });
+            if (url.includes('/issue/MKS-1?fields=status')) return jsonRes(200, { fields: { status: { statusCategory: { key: 'indeterminate' } } } });
+            if (url.includes('/search?')) return jsonRes(200, { issues: [raw('MKS-1', '6')], total: 1 });
+            return jsonRes(404, {});
+        }) as unknown as typeof fetch;
+        const res = await run({ op: 'update', key: 'mks-1', changes: { summary: '  Yeni   başlık ', priority: 'High', dueDate: '2026-12-01', status: 'done', comment: 'Kapatıldı', worklogHours: 1.5 } }, fetchImpl, on);
+        expect(res.status).toBe(200);
+        const body = await res.json() as { applied: string[]; errors: { field: string; message: string }[]; issue: JiraIssueRecord };
+        expect(body.applied).toEqual(['summary', 'priority', 'status', 'comment']);
+        expect(body.errors).toEqual([{ field: 'dueDate', message: 'Alan ekranda yok.' }, { field: 'worklog', message: 'Zaman takibi kapalı.' }]);
+        expect(body.issue).toMatchObject({ key: 'MKS-1', statusCategory: 'done' });
+        const puts = sent.filter(x => x.method === 'PUT');
+        expect(puts[0].body).toEqual({ fields: { summary: 'Yeni başlık', priority: { id: '2' }, duedate: '2026-12-01' } });
+        expect(puts[1].body).toEqual({ fields: { summary: 'Yeni başlık', priority: { id: '2' } } });
+        expect(sent.find(x => x.method === 'POST' && x.url.endsWith('/transitions'))!.body).toEqual({ transition: { id: '21' } }); // adı ipucuna uyan geçiş
+        expect(sent.find(x => x.url.endsWith('/comment'))!.body).toEqual({ body: 'Kapatıldı' });
+        expect(sent.find(x => x.url.endsWith('/worklog'))!.body).toEqual({ timeSpentSeconds: 5400, started: '2026-11-13T08:00:00.000+0000' });
+    });
+
+    it('durum zaten hedefteyse geçiş denenmez; geçiş yoksa hata alan bazında döner', async () => {
+        const on = { ...env, JIRA_ALLOW_UPDATE: '1' };
+        const mk = (current: string) => {
+            const methods: string[] = [];
+            const fetchImpl = (async (url: string, init?: RequestInit) => {
+                methods.push(`${init?.method || 'GET'} ${url.split('/rest/api/2')[1]}`);
+                const m = meta(url);
+                if (m) return m;
+                if (url.includes('?fields=status')) return jsonRes(200, { fields: { status: { statusCategory: { key: current } } } });
+                if (url.endsWith('/transitions')) return jsonRes(200, { transitions: [{ id: '31', name: 'Başla', to: { statusCategory: { key: 'indeterminate' } } }] });
+                return jsonRes(200, { issues: [raw('MKS-1')], total: 1 });
+            }) as unknown as typeof fetch;
+            return { fetchImpl, methods };
+        };
+        const same = mk('done');
+        expect(await (await run({ op: 'update', key: 'MKS-1', changes: { status: 'done' } }, same.fetchImpl, on)).json()).toMatchObject({ applied: [], errors: [] });
+        expect(same.methods.some(m => m.includes('/transitions'))).toBe(false);
+        const none = mk('new');
+        expect(await (await run({ op: 'update', key: 'MKS-1', changes: { status: 'done' } }, none.fetchImpl, on)).json()).toMatchObject({ applied: [], errors: [{ field: 'status' }] });
+        expect(none.methods.some(m => m.startsWith('POST'))).toBe(false);
     });
 });

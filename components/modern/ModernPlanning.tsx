@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { EstimateLogEntry, Project, ReleasePlan, Task, WorkspaceData } from '../../types';
+import { EstimateLogEntry, JiraSyncSettings, Project, ReleasePlan, Task, WorkspaceData } from '../../types';
 import { CommitResult } from '../../utils/planning/releasePlan';
 import { JiraIssueRecord } from '../../utils/integrations';
 import { JiraImportOptions } from '../../utils/planning/jiraImport';
@@ -14,6 +14,7 @@ import { Icon } from './icons';
 import { startStepFor } from '../../utils/guides';
 import JiraExport from './planning/JiraExport';
 import JiraHistoryImport from './planning/JiraHistoryImport';
+import JiraSync from './planning/JiraSync';
 import NewRecordPlanner from './planning/NewRecordPlanner';
 import PlanSimulator from './planning/PlanSimulator';
 import ReleasePlanner from './planning/ReleasePlanner';
@@ -42,18 +43,22 @@ interface Props {
     onImportJira?: (key: string, issues: JiraIssueRecord[], opts: JiraImportOptions, label: string) => void;
     /** Jira'da açılan kayıtların anahtarlarını görevlere yazar (yalnız düzenleyebilen) */
     onLinkJira?: (key: string, links: Record<string, string>) => void;
+    /** Jira canlı eşitleme: ayarı kaydeder ve çekilen kayıtları görevlere uygular (yalnız düzenleyebilen) */
+    onSaveJiraSync?: (settings: JiraSyncSettings) => void;
+    onApplyJiraSync?: (issues: JiraIssueRecord[], opts: JiraImportOptions, addNew: boolean, label: string) => void;
 }
 
 type Mode = 'record' | 'release' | 'simulate';
 
 const num = (v: number) => v.toLocaleString('tr-TR', { maximumFractionDigits: 1 });
 
-const ModernPlanning: React.FC<Props> = ({ project, workspace, visibleProjectIds, canEdit, onAddTask, onViewTask, onOpenList, onSaveReleasePlan, onDeleteReleasePlan, onCommitReleasePlan, onOpenGoals, onImportJira, onLinkJira }) => {
+const ModernPlanning: React.FC<Props> = ({ project, workspace, visibleProjectIds, canEdit, onAddTask, onViewTask, onOpenList, onSaveReleasePlan, onDeleteReleasePlan, onCommitReleasePlan, onOpenGoals, onImportJira, onLinkJira, onSaveJiraSync, onApplyJiraSync }) => {
     const [mode, setMode] = useState<Mode>('record');
     const [jiraOpen, setJiraOpen] = useState(false);
+    const [syncOpen, setSyncOpen] = useState(false);
     // Jira'ya gönder paneli; açıkken önceden seçili görevler
     const [exportOpen, setExportOpen] = useState<{ preselect: string[] } | null>(null);
-    const sendToJira = canEdit && onLinkJira ? (ids: string[]) => { setJiraOpen(false); setExportOpen({ preselect: ids }); } : undefined;
+    const sendToJira = canEdit && onLinkJira ? (ids: string[]) => { setJiraOpen(false); setSyncOpen(false); setExportOpen({ preselect: ids }); } : undefined;
     // Rehber: sayfa ilk açıldığında bir kez; sonra "?" ile (açık kipin adımından)
     const guide = useGuide('planning');
     // Geçmiş yalnız görevler ya da ekip değişince yeniden kurulur (sürüm taslağı kaydı onu bozmasın)
@@ -84,8 +89,11 @@ const ModernPlanning: React.FC<Props> = ({ project, workspace, visibleProjectIds
                     </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
+                    {canEdit && onSaveJiraSync && onApplyJiraSync && (
+                        <button type="button" className="m-btn m-btn-gray" aria-expanded={syncOpen} onClick={() => { setExportOpen(null); setJiraOpen(false); setSyncOpen(v => !v); }}><Icon name="refresh" size={18} />Jira eşitleme</button>
+                    )}
                     {canEdit && onImportJira && (
-                        <button type="button" className="m-btn m-btn-gray" aria-expanded={jiraOpen} onClick={() => { setExportOpen(null); setJiraOpen(v => !v); }}><Icon name="download" size={18} />Jira'dan geçmiş</button>
+                        <button type="button" className="m-btn m-btn-gray" aria-expanded={jiraOpen} onClick={() => { setExportOpen(null); setSyncOpen(false); setJiraOpen(v => !v); }}><Icon name="download" size={18} />Jira'dan geçmiş</button>
                     )}
                     {sendToJira && (
                         <button type="button" className="m-btn m-btn-gray" aria-expanded={!!exportOpen} onClick={() => (exportOpen ? setExportOpen(null) : sendToJira([]))}><Icon name="send" size={18} />Jira'ya gönder</button>
@@ -99,6 +107,9 @@ const ModernPlanning: React.FC<Props> = ({ project, workspace, visibleProjectIds
                 </div>
             </div>
             {guide.open && <GuideTour guide={guide.guide} start={guide.start} onClose={guide.close} />}
+            {syncOpen && canEdit && onSaveJiraSync && onApplyJiraSync && (
+                <JiraSync key={`jira-sync-${project.id}`} project={project} onSaveSettings={onSaveJiraSync} onApply={onApplyJiraSync} onClose={() => setSyncOpen(false)} />
+            )}
             {jiraOpen && canEdit && onImportJira && (
                 <JiraHistoryImport key={`jira-${project.id}`} project={project} onImport={onImportJira} onOpenList={onOpenList} onClose={() => setJiraOpen(false)} />
             )}
