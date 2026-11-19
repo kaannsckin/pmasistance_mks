@@ -1,6 +1,6 @@
 
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { View, Task, Resource, TaskStatus, Note, CustomerRequest, Objective, Project, Person, WorkspaceData, RagStatus, ProjectStatus, UserRole, PlanLockStatus, WorkPackage, UiStyle, PermissionKey, EstimateLogEntry, JiraSyncSettings, ReleasePlan, GoldenItem, EvalRun, ModelEvalRun } from './types';
+import { View, Task, Resource, TaskStatus, Note, CustomerRequest, Objective, Project, Person, WorkspaceData, RagStatus, ProjectStatus, UserRole, PlanLockStatus, WorkPackage, UiStyle, ModernTheme, ColorMode, PermissionKey, EstimateLogEntry, JiraSyncSettings, ReleasePlan, GoldenItem, EvalRun, ModelEvalRun } from './types';
 import { INITIAL_TASKS, INITIAL_RESOURCES, INITIAL_OBJECTIVES } from './constants';
 import {
   WORKSPACE_STORAGE_KEY,
@@ -34,6 +34,7 @@ import { AllocationSuggestion, ApplyMode, applyAllocationSuggestions } from './u
 import { applyBilledHoursActuals, planBilledHoursPoolAdditions, suggestBilledHoursActuals, BilledApplyMode, BilledHoursOptions, BilledHoursRecord } from './utils/billedHours';
 import { buildTodoItems, TodoItem } from './utils/todoItems';
 import { loadCloudConfig, scheduleAutoPush } from './utils/cloudSync';
+import { isDarkResolved, resolveColorMode, resolveModernTheme } from './utils/theme';
 import { joinStored, openIndexedDbStore, requestPersistentStorage, WorkspacePersister } from './utils/workspaceStore';
 import CloudSyncModal from './components/CloudSyncModal';
 import Header from './components/Header';
@@ -317,15 +318,31 @@ const App: React.FC = () => {
   }, []);
 
   // ---- Tema / gece modu ----
+  // Gündüz/Gece/Sistem tercihi <html class="dark"> ile uygulanır; Tailwind'in
+  // dark: sınıfları ve modern.css aynı sinyali okur. 'Sistem' seçiliyken işletim
+  // sistemi tercihi değiştikçe görünüm de anında değişir.
+  const colorMode = resolveColorMode(settings);
+  const modernTheme = resolveModernTheme(settings);
+  const [systemDark, setSystemDark] = useState(() => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-color-scheme: dark)').matches);
   useEffect(() => {
-    if (settings?.isDarkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-    const themeColor = getComputedStyle(document.documentElement).getPropertyValue('--app-primary').trim();
-    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', themeColor);
-  }, [settings?.isDarkMode, settings?.theme]);
+    const mq = window.matchMedia?.('(prefers-color-scheme: dark)');
+    if (!mq) return;
+    const onChange = (e: MediaQueryListEvent) => setSystemDark(e.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+  const isDark = isDarkResolved(colorMode, systemDark);
+  useEffect(() => {
+    // Çalışma alanı yüklenene dek index.html'deki erken karar geçerli kalsın
+    if (!settings) return;
+    document.documentElement.classList.toggle('dark', isDark);
+    document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
+    try { localStorage.setItem('pm-color-mode', colorMode); } catch { /* gizli pencere vb. */ }
+    // Tema değişkenleri kök öğede değil uygulama kabında; tarayıcı çubuğu rengi oradan okunur
+    const host = document.querySelector('.ui-modern') || document.documentElement;
+    const themeColor = getComputedStyle(host).getPropertyValue(host === document.documentElement ? '--app-primary' : '--m-bg').trim();
+    if (themeColor) document.querySelector('meta[name="theme-color"]')?.setAttribute('content', themeColor);
+  }, [settings, isDark, colorMode, modernTheme]);
 
   // ---- Kalıcılık ----
   useEffect(() => {
@@ -1229,7 +1246,20 @@ const App: React.FC = () => {
     if (uiStyle === 'classic') setCurrentView(v => (v === View.Overview ? View.Roadmap : v));
   }, [updateWorkspace]);
 
-  const handleSaveSettings = (newDuration: number, newDate: string, enabled: boolean, aiEnabled: boolean, newTheme: string, dark: boolean) => {
+  // Görünüm (modern tema, gündüz/gece): ayarlar penceresinde seçildiği an uygulanır
+  const handleSetAppearance = useCallback((patch: { modernTheme?: ModernTheme; colorMode?: ColorMode }) => {
+    updateWorkspace(ws => ({
+      ...ws,
+      settings: {
+        ...ws.settings,
+        ...patch,
+        // Eski sürümler isDarkMode okur; açık bir seçim yapıldıysa onu da güncel tut
+        ...(patch.colorMode && patch.colorMode !== 'system' ? { isDarkMode: patch.colorMode === 'dark' } : {}),
+      },
+    }));
+  }, [updateWorkspace]);
+
+  const handleSaveSettings = (newDuration: number, newDate: string, enabled: boolean, aiEnabled: boolean, newTheme: string) => {
     updateWorkspace(ws => ({
       ...ws,
       settings: {
@@ -1237,7 +1267,6 @@ const App: React.FC = () => {
         isLocalPersistenceEnabled: enabled,
         isAIEnabled: aiEnabled,
         theme: newTheme,
-        isDarkMode: dark,
       },
     }));
     if (activeProject) {
@@ -1981,7 +2010,7 @@ const App: React.FC = () => {
 
   return (
     <AssistantProvider enabled={isAIEnabled && !consoleMode} chat={aiPolicy.chat} embedded={aiPolicy.embedded} getWorkspace={getAssistantWorkspace} getView={getAssistantView} onNavigate={handleAssistantNavigate} onApplyAction={handleApplyAiAction}>
-    <div className={`min-h-screen font-sans theme-${settings?.theme || 'classic'} ${isModern ? 'ui-modern' : 'bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100'}`}>
+    <div className={`min-h-screen font-sans theme-${settings?.theme || 'classic'} ${isModern ? `ui-modern mt-${modernTheme}` : 'bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100'}`}>
       {isModern ? (
         <div className="flex min-h-screen">
           <ModernSidebar
@@ -2144,7 +2173,10 @@ const App: React.FC = () => {
           isLocalPersistenceEnabled={settings?.isLocalPersistenceEnabled !== false}
           isAIEnabled={settings?.isAIEnabled !== false}
           currentTheme={settings?.theme || 'classic'}
-          isDarkMode={settings?.isDarkMode || false}
+          colorMode={colorMode}
+          modernTheme={modernTheme}
+          onChangeAppearance={handleSetAppearance}
+          isModernActive={isModern}
           currentUiStyle={settings?.uiStyle || 'classic'}
           onChangeUiStyle={handleSetUiStyle}
           onSave={handleSaveSettings} onClose={() => setIsSettingsModalOpen(false)} onResetData={handleResetData}

@@ -189,7 +189,7 @@ export const ModernChat: React.FC<{
             {a.messages.map(msg => (
                 <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                     <div className={`min-w-0 max-w-[92%] rounded-2xl px-4 py-3 text-[15px] leading-relaxed ${
-                        msg.role === 'user' ? 'm-accent-bg rounded-br-md' : msg.role === 'system_alert' ? 'm-tone-bad' : 'm-surface m-text rounded-bl-md'}`}>
+                        msg.role === 'user' ? 'm-chat-user m-accent-bg rounded-br-md' : msg.role === 'system_alert' ? 'm-tone-bad' : 'm-chat-ai m-surface m-text rounded-bl-md'}`}>
                         {msg.role === 'assistant' ? (
                             <>
                                 {msg.steps && msg.steps.length > 0 && <StepChips steps={msg.steps} />}
