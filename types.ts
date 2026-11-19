@@ -66,6 +66,7 @@ export interface Task {
   storyPoints?: number;
   fixVersion?: string; // kaynak sistemdeki hedef sürüm
   jiraStatus?: string; // Jira'daki durum adı (ör. "ANALYSIS"); pano kolon eşlemesinde kullanılır
+  components?: string[]; // Projenin bileşen listesinden (Jira "Component/s")
   updatedAt?: string; // son değişiklik (Jira "Updated" ya da panoda taşıma) — "Son güncellenenler" filtresi
 }
 
@@ -98,6 +99,10 @@ export interface BoardQuickFilter {
   overdue?: boolean;
   /** Son N günde güncellenen */
   recentDays?: number;
+  /** Bu bileşenlerden biri */
+  components?: string[];
+  /** Bu hedef sürümlerden biri */
+  fixVersions?: string[];
 }
 
 // ---------------------------------------------------------------- Proje yapılandırma şeması (Jira "scheme" modeli)
@@ -151,7 +156,29 @@ export interface TransitionRule {
   notifyAssignee?: boolean;
 }
 
-export type SchemeRequiredField = 'resourceName' | 'dueDate' | 'estimate' | 'issueType' | 'labels' | 'workPackage';
+export type SchemeRequiredField = 'resourceName' | 'dueDate' | 'estimate' | 'issueType' | 'labels' | 'workPackage' | 'component' | 'fixVersion';
+
+/** Projenin bileşeni (Jira "Component"): modül/alan; sorumlusu varsayılan atanan olabilir */
+export interface ProjectComponent {
+  id: string;
+  name: string;
+  description?: string;
+  /** Bileşen sorumlusu (ad soyad) */
+  lead?: string;
+  /** Bu bileşenle açılan atanmamış göreve sorumlu atanır */
+  assignLead?: boolean;
+}
+
+/** Projenin sürümü (Jira "Version/Release"): görevlerin hedef sürümü (fixVersion) */
+export interface ProjectVersion {
+  id: string;
+  name: string;
+  description?: string;
+  startDate?: string;
+  releaseDate?: string;
+  status: 'unreleased' | 'released' | 'archived';
+  releasedAt?: string;
+}
 
 /**
  * Proje yapılandırma şeması — admin tanımlar, projelere atar (birden çok
@@ -180,7 +207,7 @@ export interface ProjectScheme {
   updatedAt?: string;
 }
 
-export type BoardSwimlane = 'none' | 'expedite' | 'assignee' | 'priority' | 'workPackage';
+export type BoardSwimlane = 'none' | 'expedite' | 'assignee' | 'priority' | 'workPackage' | 'component' | 'fixVersion';
 
 export interface BoardConfig {
   columns: BoardColumnConfig[];
@@ -644,6 +671,8 @@ export interface Project {
   boardConfig?: BoardConfig; // Projeye özel pano (şema izin veriyorsa; yoksa şemanın panosu)
   schemeId?: string; // Admin'in atadığı yapılandırma şeması (yoksa varsayılan)
   workflowOverride?: WorkflowConfig; // Projeye özel iş akışı (şema izin veriyorsa; yalnız şemanın durumlarıyla)
+  components?: ProjectComponent[]; // Projenin bileşen listesi
+  versions?: ProjectVersion[]; // Projenin sürüm listesi (görevlerin hedef sürümü)
   risks?: Risk[];
   pestelItems?: PestelItem[]; // PESTEL dış çevre analizi
   swotItems?: SwotItem[]; // SWOT stratejik analizi

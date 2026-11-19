@@ -1,10 +1,11 @@
 
 import { workflowOptions, workflowValue } from '../utils/workflow';
 import { missingRequiredFields } from '../utils/projectScheme';
+import { defaultAssigneeFor } from '../utils/projectLists';
 import React, { useState, useEffect, useMemo } from 'react';
 import { EMBED_SYSTEM, parsePertEstimate, pertEstimatePrompt } from '../utils/ai/embedded';
 import { AiButton, AiErrorNote, useAiRun } from './assistant/AiButton';
-import { Task, Resource, TaskStatus, Objective, Person, WorkPackage, ProjectScheme } from '../types';
+import { Task, Resource, TaskStatus, Objective, Person, WorkPackage, ProjectScheme, ProjectComponent, ProjectVersion } from '../types';
 
 interface TaskFormModalProps {
   task: Task | null;
@@ -17,9 +18,11 @@ interface TaskFormModalProps {
   onSave: (task: Task) => void;
   /** Admin'in projeye atadığı yapılandırma: iş akışı ve zorunlu alanlar */
   scheme?: ProjectScheme;
+  projectComponents?: ProjectComponent[];
+  projectVersions?: ProjectVersion[];
 }
 
-const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, people, workPackages, tasks, objectives, onClose, onSave, scheme }) => {
+const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, people, workPackages, tasks, objectives, onClose, onSave, scheme, projectComponents = [], projectVersions = [] }) => {
   const wf = scheme?.workflow;
   const initial = wf?.statuses.find(x => x.key === wf.initial);
   const [missing, setMissing] = useState<string[]>([]);
@@ -70,6 +73,8 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, people, 
         notes: task.notes,
         status: task.status,
         jiraStatus: task.jiraStatus,
+        components: task.components,
+        fixVersion: task.fixVersion,
         labels: task.labels || [],
         includeInSprints: task.includeInSprints ?? true,
         keyResultId: task.keyResultId,
@@ -269,6 +274,25 @@ const TaskFormModal: React.FC<TaskFormModalProps> = ({ task, resources, people, 
               </select>
             </div>
           </div>
+          {(projectComponents.length > 0 || projectVersions.length > 0) && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="component" className="block text-sm font-medium text-black dark:text-white">Bileşen</label>
+              <select id="component" value={formData.components?.[0] || ''} className={`mt-1 block w-full ${inputStyle}`}
+                onChange={e => { const n = e.target.value; const lead = n && !formData.resourceName ? defaultAssigneeFor(projectComponents, [n]) : undefined; setFormData(prev => ({ ...prev, components: n ? [n] : undefined, ...(lead ? { resourceName: lead } : {}) })); }}>
+                <option value="">Belirtilmedi</option>
+                {[...new Set([...projectComponents.map(c => c.name), ...(formData.components || [])])].map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="fixVersion" className="block text-sm font-medium text-black dark:text-white">Hedef sürüm</label>
+              <select id="fixVersion" value={formData.fixVersion || ''} className={`mt-1 block w-full ${inputStyle}`} onChange={e => setFormData(prev => ({ ...prev, fixVersion: e.target.value || undefined }))}>
+                <option value="">Belirtilmedi</option>
+                {[...new Set([...projectVersions.filter(v => v.status === 'unreleased').map(v => v.name), ...(formData.fixVersion ? [formData.fixVersion] : [])])].map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </div>
+          </div>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
              <div>
               <label htmlFor="version" className="block text-sm font-medium text-black dark:text-white">Sürüm</label>

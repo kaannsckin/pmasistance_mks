@@ -1,6 +1,6 @@
 
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { View, Task, Resource, TaskStatus, Note, CustomerRequest, Objective, Project, Person, WorkspaceData, RagStatus, ProjectStatus, UserRole, PlanLockStatus, WorkPackage, UiStyle, PermissionKey, EstimateLogEntry, JiraSyncSettings, ReleasePlan, GoldenItem, EvalRun, ModelEvalRun, BoardConfig, ProjectScheme, WorkflowConfig, TransitionRule } from './types';
+import { View, Task, Resource, TaskStatus, Note, CustomerRequest, Objective, Project, Person, WorkspaceData, RagStatus, ProjectStatus, UserRole, PlanLockStatus, WorkPackage, UiStyle, PermissionKey, EstimateLogEntry, JiraSyncSettings, ReleasePlan, GoldenItem, EvalRun, ModelEvalRun, BoardConfig, ProjectScheme, WorkflowConfig, TransitionRule, ProjectComponent, ProjectVersion } from './types';
 import { INITIAL_TASKS, INITIAL_RESOURCES, INITIAL_OBJECTIVES } from './constants';
 import {
   WORKSPACE_STORAGE_KEY,
@@ -36,6 +36,7 @@ import TransitionDialog from './components/modern/TransitionDialog';
 import { describeNotify, fetchIntegrationHealth, sendNotification } from './utils/integrations';
 import { boardForProject, DEFAULT_SCHEME_ID, effectiveScheme, migrateTasksToWorkflow, schemeOf, schemeUsage, validateProjectWorkflow, validateScheme } from './utils/projectScheme';
 import ProjectWorkflowSheet from './components/modern/ProjectWorkflowSheet';
+import ProjectListsSheet from './components/modern/ProjectListsSheet';
 import { AllocationSuggestion, ApplyMode, applyAllocationSuggestions } from './utils/taskToAllocation';
 import { applyBilledHoursActuals, planBilledHoursPoolAdditions, suggestBilledHoursActuals, BilledApplyMode, BilledHoursOptions, BilledHoursRecord } from './utils/billedHours';
 import { buildTodoItems, TodoItem } from './utils/todoItems';
@@ -192,6 +193,8 @@ const App: React.FC = () => {
   const [flowNotice, setFlowNotice] = useState<string | null>(null);
   // Projeye özel iş akışı penceresi (proje kimliği)
   const [workflowSheetProject, setWorkflowSheetProject] = useState<string | null>(null);
+  // Bileşen ve sürüm listeleri penceresi (proje kimliği)
+  const [listsSheetProject, setListsSheetProject] = useState<string | null>(null);
   useEffect(() => { if (!flowNotice) return; const id = window.setTimeout(() => setFlowNotice(null), 6000); return () => window.clearTimeout(id); }, [flowNotice]);
   const [storageFull, setStorageFull] = useState(false);
   const [storageWarnClosed, setStorageWarnClosed] = useState(false);
@@ -1178,6 +1181,22 @@ const App: React.FC = () => {
         : `"${project.name}" projeye özel iş akışı kaldırıldı ("${scheme.name}" akışına dönüldü)${moved ? ` · ${moved} görev taşındı` : ''}`, projectId);
     });
   }, [updateWorkspace]);
+  // Projenin bileşen ve sürüm listeleri: proje sahibi ya da admin (görev başvurularıyla birlikte)
+  const handleSaveProjectLists = useCallback((projectId: string, patch: { components: ProjectComponent[]; versions: ProjectVersion[]; tasks: Task[] }, summary: string) => {
+    updateWorkspace(ws => {
+      const project = ws.projects.find(p => p.id === projectId);
+      const who = identityOf(ws);
+      if (!project || !(can(who, 'screen.admin') || canEditProjectContent(ws, who, projectId))) return ws;
+      // Yalnız bileşen/sürüm başvuruları değişen görevler alınır (pencere açıkken yapılan diğer değişiklikler ezilmez)
+      const byId = new Map(patch.tasks.map(t => [t.id, t]));
+      const tasks = project.tasks.map(t => {
+        const n = byId.get(t.id);
+        return n && (JSON.stringify(n.components) !== JSON.stringify(t.components) || n.fixVersion !== t.fixVersion) ? { ...t, components: n.components, fixVersion: n.fixVersion } : t;
+      });
+      const next = { ...ws, projects: ws.projects.map(p => (p.id === projectId ? { ...p, components: patch.components, versions: patch.versions, tasks, updatedAt: new Date().toISOString() } : p)) };
+      return appendAudit(next, 'config.update', `"${project.name}" bileşen ve sürümleri: ${summary} · ${patch.components.length} bileşen, ${patch.versions.length} sürüm`, projectId);
+    });
+  }, [updateWorkspace]);
   const handleAssignScheme = useCallback((projectId: string, schemeId: string) => {
     updateWorkspace(ws => {
       const project = ws.projects.find(p => p.id === projectId);
@@ -1549,6 +1568,7 @@ const App: React.FC = () => {
           onAssignScheme={handleAssignScheme}
           onSaveProjectBoard={handleSaveBoardConfig}
           onOpenProjectWorkflow={id => setWorkflowSheetProject(id)}
+          onOpenProjectLists={id => setListsSheetProject(id)}
         />
       );
       return isModern ? page : <div className="ui-modern rounded-3xl p-4 sm:p-6">{page}</div>;
@@ -1817,6 +1837,7 @@ const App: React.FC = () => {
         boardSource={projectBoard.source}
         workflow={wf}
         schemeName={activeScheme.id === DEFAULT_SCHEME_ID && activeScheme.workflowSource !== 'project' ? undefined : `${activeScheme.name}${activeScheme.workflowSource === 'project' ? ' · özel akış' : ''}`}
+        onOpenLists={canEditProjectContent(workspace, identity, activeProject.id) ? () => setListsSheetProject(activeProject.id) : undefined}
         onOpenWorkflow={activeScheme.allowProjectWorkflow && canEditProjectContent(workspace, identity, activeProject.id) ? () => setWorkflowSheetProject(activeProject.id) : undefined}
         canConfigure={activeScheme.allowProjectBoard && canEditProjectContent(workspace, identity, activeProject.id)}
         onSaveConfig={cfg => handleSaveBoardConfig(activeProject.id, cfg)}
@@ -2383,9 +2404,11 @@ const App: React.FC = () => {
           onClose={closeTaskForm}
           onSave={saveTaskFromForm}
           scheme={activeScheme}
+          projectComponents={activeProject.components}
+          projectVersions={activeProject.versions}
         />
       ) : (
-        <TaskFormModal task={editingTask} resources={activeProject.resources} people={workspace.people} workPackages={activeProject.workPackages} tasks={activeProject.tasks} objectives={activeProject.objectives} onClose={closeTaskForm} onSave={saveTaskFromForm} scheme={activeScheme} />
+        <TaskFormModal task={editingTask} resources={activeProject.resources} people={workspace.people} workPackages={activeProject.workPackages} tasks={activeProject.tasks} objectives={activeProject.objectives} onClose={closeTaskForm} onSave={saveTaskFromForm} scheme={activeScheme} projectComponents={activeProject.components} projectVersions={activeProject.versions} />
       ))}
       {isWpManagerOpen && activeProject && workspace && isModern && (
         <WorkPackagesSheet
@@ -2529,10 +2552,23 @@ const App: React.FC = () => {
           <TransitionDialog task={pt.task} fromLabel={pt.fromLabel} toLabel={pt.target.label} rule={pt.rule} needs={pt.needs}
             assignees={[...new Set([...(activeProject?.resources || []).map(r => r.name), ...workspace.people.map(p => `${p.firstName} ${p.lastName}`.trim())])].filter(Boolean)}
             workPackages={activeProject?.workPackages || []}
+            components={(activeProject?.components || []).map(c => c.name)}
+            versions={(activeProject?.versions || []).filter(v => v.status === 'unreleased').map(v => v.name)}
             onCancel={() => setPendingTransition(null)}
             onConfirm={input => { finishTransition(pt.task, pt.target, pt.rule, input, pt.extra, pt.setKey, pt.fromLabel); setPendingTransition(null); }} />
         );
         return isModern ? dlg : <div className="ui-modern">{dlg}</div>;
+      })()}
+      {listsSheetProject && workspace && (() => {
+        const p = workspace.projects.find(x => x.id === listsSheetProject);
+        if (!p) return null;
+        const sheet = (
+          <ProjectListsSheet project={p} canEdit={can(identity, 'screen.admin') || canEditProjectContent(workspace, identity, p.id)}
+            people={[...new Set([...p.resources.map(r => r.name), ...workspace.people.map(x => `${x.firstName} ${x.lastName}`.trim())])].filter(Boolean).sort((a, b) => a.localeCompare(b, 'tr'))}
+            onClose={() => setListsSheetProject(null)}
+            onSave={(patch, summary) => { handleSaveProjectLists(p.id, patch, summary); setListsSheetProject(null); }} />
+        );
+        return isModern ? sheet : <div className="ui-modern">{sheet}</div>;
       })()}
       {workflowSheetProject && workspace && (() => {
         const p = workspace.projects.find(x => x.id === workflowSheetProject);

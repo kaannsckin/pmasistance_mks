@@ -1,7 +1,8 @@
 import WorkflowSelect from './WorkflowSelect';
+import { defaultAssigneeFor } from '../../utils/projectLists';
 import { allowedIssueTypes, missingRequiredFields, REQUIRED_FIELD_LABELS } from '../../utils/projectScheme';
 import React, { useEffect, useMemo, useState } from 'react';
-import { Objective, Person, Project, ProjectScheme, Resource, Task, TaskStatus, WorkPackage } from '../../types';
+import { Objective, Person, Project, ProjectComponent, ProjectScheme, ProjectVersion, Resource, Task, TaskStatus, WorkPackage } from '../../types';
 import { EMBED_SYSTEM, parsePertEstimate, pertEstimatePrompt } from '../../utils/ai/embedded';
 import { buildHistory } from '../../utils/planning/history';
 import { ISSUE_TYPE_LABELS } from '../../utils/planning/lifecycle';
@@ -31,6 +32,9 @@ interface TaskFormSheetProps {
     onSave: (task: Task) => void;
     /** Admin'in projeye atadığı yapılandırma şeması: iş akışı, kayıt türleri, zorunlu alanlar */
     scheme?: ProjectScheme;
+    /** Projenin bileşen ve sürüm listeleri */
+    projectComponents?: ProjectComponent[];
+    projectVersions?: ProjectVersion[];
 }
 
 type Draft = Omit<Task, 'id' | 'availability'>;
@@ -47,7 +51,7 @@ const fromTask = (t: Task): Draft => ({
     name: t.name, priority: t.priority, version: t.version, predecessor: t.predecessor, unit: t.unit, resourceName: t.resourceName,
     time: { ...t.time }, jiraId: t.jiraId, notes: t.notes, status: t.status, labels: t.labels || [], includeInSprints: t.includeInSprints ?? true,
     keyResultId: t.keyResultId, workPackageId: t.workPackageId, dueDate: t.dueDate, subtasks: t.subtasks, comments: t.comments,
-    issueType: t.issueType, estimateSource: t.estimateSource, jiraStatus: t.jiraStatus,
+    issueType: t.issueType, estimateSource: t.estimateSource, jiraStatus: t.jiraStatus, components: t.components, fixVersion: t.fixVersion,
 });
 
 const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
@@ -57,7 +61,8 @@ const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title
     </fieldset>
 );
 
-const TaskFormSheet: React.FC<TaskFormSheetProps> = ({ task, tasks, resources, people, workPackages, objectives, sprintNames, history, onClose, onSave, scheme }) => {
+const TaskFormSheet: React.FC<TaskFormSheetProps> = ({ task, tasks, resources, people, workPackages, objectives, sprintNames, history, onClose, onSave, scheme, projectComponents = [], projectVersions = [] }) => {
+    const openVersions = projectVersions.filter(v => v.status === 'unreleased');
     // Müşteri isteğinden açılan taslak listede yoktur → "yeni görev" sayılır
     const isNew = !task || !tasks.some(t => t.id === task.id);
     const wf = scheme?.workflow;
@@ -179,6 +184,33 @@ const TaskFormSheet: React.FC<TaskFormSheetProps> = ({ task, tasks, resources, p
                             {typeOptions.map(k => <option key={k} value={k}>{ISSUE_TYPE_LABELS[k]}</option>)}
                         </select>
                     </Field>
+                    {(projectComponents.length > 0 || (d.components || []).length > 0) && (
+                        <div className="flex flex-col gap-1.5">
+                            <span className="text-[13px] font-semibold m-text-2">Bileşenler</span>
+                            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Bileşenler">
+                                {[...new Set([...projectComponents.map(c => c.name), ...(d.components || [])])].map(n => {
+                                    const on = (d.components || []).includes(n);
+                                    return (
+                                        <button key={n} type="button" aria-pressed={on} className={`m-pill ${on ? 'is-active' : ''}`}
+                                            onClick={() => {
+                                                const next = on ? (d.components || []).filter(x => x !== n) : [...(d.components || []), n];
+                                                // Jira: bileşen sorumlusu atanmamış göreve varsayılan atanan olur
+                                                const lead = !on && !d.resourceName ? defaultAssigneeFor(projectComponents, [n]) : undefined;
+                                                set({ components: next.length ? next : undefined, ...(lead ? { resourceName: lead } : {}) });
+                                            }}>{n}</button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+                    {(openVersions.length > 0 || d.fixVersion) && (
+                        <Field label="Hedef sürüm" htmlFor="tf-fixver" hint="Projenin sürüm listesinden (yayınlanmamış sürümler)">
+                            <select id="tf-fixver" className="m-input" value={d.fixVersion || ''} onChange={e => set({ fixVersion: e.target.value || undefined })}>
+                                <option value="">Belirtilmedi</option>
+                                {[...new Set([...openVersions.map(v => v.name), ...(d.fixVersion ? [d.fixVersion] : [])])].map(n => <option key={n} value={n}>{n}</option>)}
+                            </select>
+                        </Field>
+                    )}
                     <div className="flex flex-col gap-1.5">
                         <span className="text-[13px] font-semibold m-text-2">Öncelik</span>
                         <div className="m-segmented self-start" role="group" aria-label="Öncelik">

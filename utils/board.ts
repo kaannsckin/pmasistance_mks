@@ -155,6 +155,8 @@ export const matchesQuickFilter = (t: Task, f: BoardQuickFilter, ctx: { me?: str
     if (f.priorities?.length && !f.priorities.includes(t.priority)) return false;
     if (f.issueTypes?.length && !(t.issueType && f.issueTypes.includes(t.issueType))) return false;
     if (f.overdue && !isTaskOverdue(t, ctx.now)) return false;
+    if (f.components?.length && !(t.components || []).some(c => f.components!.some(x => norm(x) === norm(c)))) return false;
+    if (f.fixVersions?.length && !(t.fixVersion && f.fixVersions.some(x => norm(x) === norm(t.fixVersion!)))) return false;
     if (f.recentDays) {
         const at = lastActivity(t);
         if (!at || ctx.now.getTime() - new Date(at).getTime() > f.recentDays * 86_400_000) return false;
@@ -167,7 +169,7 @@ export const filterBoardTasks = (tasks: Task[], active: BoardQuickFilter[], ctx:
     const q = norm(ctx.query || '');
     return tasks.filter(t =>
         active.every(f => matchesQuickFilter(t, f, ctx))
-        && (!q || [t.name, t.jiraId, t.resourceName, ...(t.labels || [])].some(v => v && norm(v).includes(q))));
+        && (!q || [t.name, t.jiraId, t.resourceName, t.fixVersion, ...(t.labels || []), ...(t.components || [])].some(v => v && norm(v).includes(q))));
 };
 
 const isDoneColumn = (c: BoardColumnConfig) => c.targetStatus === TaskStatus.Done;
@@ -228,6 +230,8 @@ export const buildLanes = (tasks: Task[], cfg: BoardConfig, wpNames: Map<string,
         case 'assignee': return group(t => t.resourceName || '', undefined, k => k || 'Atanmamış');
         case 'priority': return group(t => t.priority, PRIORITY_ORDER, k => PRIORITY_TR[k as Task['priority']] || k);
         case 'workPackage': return group(t => (t.workPackageId && wpNames.get(t.workPackageId)) || '', undefined, k => k || 'İş paketi yok');
+        case 'component': return group(t => t.components?.[0] || '', undefined, k => k || 'Bileşen yok');
+        case 'fixVersion': return group(t => t.fixVersion || '', undefined, k => k || 'Hedef sürüm yok');
         default: return [{ id: 'lane-all', title: '', tasks }];
     }
 };

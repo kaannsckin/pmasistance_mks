@@ -28,6 +28,8 @@ export const REQUIRED_FIELD_LABELS: Record<SchemeRequiredField, string> = {
     issueType: 'Kayıt türü',
     labels: 'En az bir etiket',
     workPackage: 'İş paketi',
+    component: 'Bileşen',
+    fixVersion: 'Hedef sürüm',
 };
 
 export const ISSUE_TYPE_OPTIONS: { value: IssueType; label: string }[] = [
@@ -193,6 +195,8 @@ export const missingRequiredFields = (scheme: ProjectScheme, t: Partial<Task>): 
             case 'issueType': return !t.issueType;
             case 'labels': return !t.labels?.length;
             case 'workPackage': return !t.workPackageId;
+            case 'component': return !t.components?.length;
+            case 'fixVersion': return !t.fixVersion;
             default: return false;
         }
     }).map(f => REQUIRED_FIELD_LABELS[f]);

@@ -50,10 +50,36 @@ Jira'da iki yol vardır: **şirket yönetimli** projeler (ayarlar paylaşılan �
 - Projeler tablosunda "Özel akış" / "Özel pano" rozetleri ve **Akış** / **Pano** düğmeleriyle admin her projeyi görüp düzenleyebilir ya da sıfırlayabilir.
 - Projeye özel akış kaydedilince akışta olmayan durumdaki yerel görevler taşınır; denetim günlüğüne yazılır.
 
-**Sonraki adım önerileri** (Jira'da olup henüz olmayanlar): proje bazlı roller ve izin şeması (ör. "geçişi yalnız test ekibi yapabilir" — Jira koşulları), geçiş ekranları ve doğrulayıcılar (ör. Çözüldü'ye geçerken çözüm notu / harcanan süre zorunlu — Jira validator), geçiş sonrası otomatik işlemler (atanana bildirim, etiket ekleme — Jira post function / otomasyon), bileşen ve sürüm listelerinin projeye özel yönetimi, bildirim şeması.
+## Geçiş kuralları (koşul · doğrulayıcı · sonrası işlem)
+
+Diyagramda bir **oka** tıklayınca o geçişin, bir **kutuya** tıklayınca o duruma **girişin** (gelen tüm geçişler) kuralı düzenlenir; ikisi birlikte uygulanır. Kuralı olan ok ve kutularda "K" rozeti görünür. Serbest geçiş modunda da giriş kuralları çalışır.
+
+| Bölüm | Seçenekler | Jira karşılığı |
+|---|---|---|
+| **Koşullar** — kim yapabilir | Rol(ler) ve/veya kişi(ler) (biri yeter), yalnız görevin atananı | Conditions |
+| **Doğrulayıcılar** — ne istenir | Geçiş notu (göreve yorum olarak eklenir), harcanan süre (saat; görevin harcanan süresine eklenir), dolu alanlar (atanan, termin, tahmin, tür, etiket, iş paketi, bileşen, hedef sürüm), tamamlanmış alt görevler | Validators + transition screen |
+| **Sonrası işlemler** — ne olur | Etiket ekle / çıkar, atananı değiştir (geçişi yapan, kaldır, belirli kişi), atanana bildir (e-posta; yoksa Teams kanalı) | Post functions |
+
+- Bilgi gerekiyorsa **geçiş penceresi** açılır; eksikse geçiş yapılmaz. Koşula uymayan kişi gerekçeyi görür.
+- Görev menüsü, "tamamlandı işaretle", pano sürükle-bırak, görev detayı ve görev formu aynı kapıdan geçer.
+- **AI önerileri** de aynı kurallara uyar: koşula uymayan kullanıcı adına öneri hazırlanmaz; not/süre isteyen geçişte AI bunları öneride verebilir (kart ayrıntısında görünür), aksi hâlde neden yapılamadığını söyler. Onaylanınca sonrası işlemler (bildirim dahil) uygulanır.
+- Projeye özel akışta kurallar yöneticinin yapılandırmasından gelir; proje yöneticisi görür, değiştiremez.
+- Jira eşitlemesi kurallara tabi değildir (Jira'daki durum her zaman uygulanır).
+
+## Bileşenler ve sürümler (projeye özel listeler)
+
+Panodaki **Bileşen ve sürümler** (proje sahibi) ya da konsoldaki Projeler tablosunda **Listeler** (admin):
+
+- **Bileşenler** (Jira Components): ad, açıklama, sorumlu; "Sorumluya ata" açıksa bileşeni seçilen atanmamış göreve sorumlu otomatik atanır.
+- **Sürümler** (Jira Versions/Releases): ad, başlangıç ve yayın tarihi, ilerleme (tamamlanan/toplam), yayın tarihi geçmişse "gecikti". **Yayınla** bitmemiş işleri başka bir sürüme taşır ya da sürümden çıkarır; yayınlanan sürüm arşivlenebilir, geri alınabilir.
+- Görevlerde (Jira'dan gelenler dahil) geçen ama listede olmayan adlar tek tıkla eklenir; yeniden adlandırma ve silme görevlerdeki başvuruları da günceller.
+- Görev formunda bileşen seçimi ve hedef sürüm (yayınlanmamış sürümler); kartlarda bileşen ve sürüm etiketi; panoda bileşen/sürüm hızlı filtreleri ve **bileşene / hedef sürüme göre** kulvar; yapılandırmada "Bileşen" ve "Hedef sürüm" zorunlu alan olarak seçilebilir.
+- Jira'dan aktarım/eşitleme bileşenleri de getirir.
+
+**Sonraki adım önerileri:** proje rolleri (proje bazında "test ekibi" gibi gruplar ve koşullarda kullanımı), bildirim şeması (olay → alıcı), geçişte alan güncelleme (ör. Çözüldü'de çözüm tarihi) ve Jira'ya geri yazma (geçişin Jira'da da yapılması).
 
 ## AI asistanı
 
 AI'nın durum ve görev önerileri de aynı kurallara bağlıdır (`utils/ai/actions.ts`): izinsiz geçiş önerisi kart hazırlanmadan reddedilir ve model izinli geçişleri görür; belirli durum (Testte, Çözüldü …) Türkçe ya da Jira adıyla istenebilir; yeni görev önerisi başlangıç durumuyla açılır, kayıt türü ve zorunlu alan kurallarına uyar. Kart onaylanırken kurallar güncel veriyle yeniden denetlenir.
 
-Kod: `utils/projectScheme.ts` (şablonlar, çözümleme, doğrulama, taşıma), `utils/workflow.ts` (durumlar, geçişler), `utils/board.ts` (pano), `components/modern/admin/ProjectSchemes.tsx` (konsol), `components/modern/admin/WorkflowDesigner.tsx` (diyagram), `components/modern/ProjectWorkflowSheet.tsx` (projeye özel akış).
+Kod: `utils/projectScheme.ts` (şablonlar, çözümleme, doğrulama, taşıma), `utils/workflow.ts` (durumlar, geçişler), `utils/board.ts` (pano), `components/modern/admin/ProjectSchemes.tsx` (konsol), `components/modern/admin/WorkflowDesigner.tsx` (diyagram), `components/modern/ProjectWorkflowSheet.tsx` (projeye özel akış), `utils/transitions.ts` + `components/modern/admin/TransitionRuleEditor.tsx` + `components/modern/TransitionDialog.tsx` (geçiş kuralları), `utils/projectLists.ts` + `components/modern/ProjectListsSheet.tsx` (bileşen/sürüm).

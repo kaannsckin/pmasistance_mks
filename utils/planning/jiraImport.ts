@@ -85,6 +85,7 @@ export const issueToTask = (issue: JiraIssueRecord, opts: JiraImportOptions, id 
         ...(issue.fixVersions[0] ? { fixVersion: issue.fixVersions[0] } : {}),
         ...(issue.due ? { dueDate: issue.due } : {}),
         ...(issue.status ? { jiraStatus: issue.status } : {}),
+        ...(issue.components.length ? { components: issue.components } : {}),
         ...(issue.updated ? { updatedAt: issue.updated } : {}),
     };
 };
@@ -107,6 +108,7 @@ const updateFrom = (e: Task, fresh: Task, issue: JiraIssueRecord): Task => ({
     unit: issue.components.length ? fresh.unit : e.unit,
     labels: fresh.labels ?? e.labels,
     jiraStatus: fresh.jiraStatus ?? e.jiraStatus,
+    components: issue.components.length ? fresh.components : e.components,
     updatedAt: fresh.updatedAt ?? e.updatedAt,
     resourceName: issue.assignee || e.resourceName,
     originalEstimateHours: fresh.originalEstimateHours ?? e.originalEstimateHours,

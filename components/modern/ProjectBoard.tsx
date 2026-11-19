@@ -33,6 +33,8 @@ interface ProjectBoardProps {
     schemeName?: string;
     /** Verilirse "İş akışı" düğmesi (projeye özel akış; yapılandırma izin veriyorsa) */
     onOpenWorkflow?: () => void;
+    /** Verilirse "Bileşen ve sürümler" düğmesi */
+    onOpenLists?: () => void;
     onViewTask: (task: Task) => void;
     onEditTask: (task: Task) => void;
     onDeleteTask: (id: string) => void;
@@ -53,6 +55,8 @@ const SWIMLANES: { value: BoardSwimlane; label: string }[] = [
     { value: 'assignee', label: 'Kişiye göre' },
     { value: 'priority', label: 'Önceliğe göre' },
     { value: 'workPackage', label: 'İş paketine göre' },
+    { value: 'component', label: 'Bileşene göre' },
+    { value: 'fixVersion', label: 'Hedef sürüme göre' },
 ];
 
 /** Jira tarzı büyük harfli başlık/etiket (modern tema genelde büyük harfi kapatır) */
@@ -88,6 +92,12 @@ const Card: React.FC<{
                     {late > 0 && <span className="inline-flex items-center h-5 px-1.5 rounded text-[11px] font-semibold m-tone-bad">{late} gün gecikti</span>}
                 </span>
                 <span className={`text-[14.5px] leading-snug ${done ? 'm-text-2' : 'm-text font-medium'}`}>{t.name}</span>
+                {(t.components?.length || t.fixVersion) ? (
+                    <span className="flex flex-wrap gap-1">
+                        {(t.components || []).slice(0, 2).map(c => <span key={c} title="Bileşen" className="inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[11px] font-semibold m-accent-tint"><Icon name="grid" size={10} />{c}</span>)}
+                        {t.fixVersion && <span title="Hedef sürüm" className="inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[11px] font-semibold m-tone-ok"><Icon name="flag" size={10} />{t.fixVersion}</span>}
+                    </span>
+                ) : null}
                 {t.labels && t.labels.length > 0 && (
                     <span className="flex flex-wrap gap-1">
                         {t.labels.slice(0, 3).map(l => <span key={l} className="inline-flex items-center h-5 px-1.5 rounded text-[11px] m-fill-2 m-text-2">{l}</span>)}
@@ -112,7 +122,7 @@ const Card: React.FC<{
 };
 
 const ProjectBoard: React.FC<ProjectBoardProps> = ({
-    tasks, config, canConfigure, onSaveConfig, onMoveTask, onStatusChange, onWorkflowChange, workflow, boardSource, schemeName, onOpenWorkflow, onViewTask, onEditTask, onDeleteTask, onNotifyTask, onNewTask, onCelebrate,
+    tasks, config, canConfigure, onSaveConfig, onMoveTask, onStatusChange, onWorkflowChange, workflow, boardSource, schemeName, onOpenWorkflow, onOpenLists, onViewTask, onEditTask, onDeleteTask, onNotifyTask, onNewTask, onCelebrate,
     sprintNames, me, wpNames, minPriority = 'Low' as TaskPriority, sortKey = 'smart' as TaskSortKey,
 }) => {
     const cfg = useMemo(() => boardConfigOf(config, workflow), [config, workflow]);
@@ -228,6 +238,7 @@ const ProjectBoard: React.FC<ProjectBoardProps> = ({
                     </span>
                     <button type="button" className="m-btn m-btn-primary !min-h-[36px] !px-3 text-[14px]" onClick={onNewTask}><Icon name="plus" size={15} />Görev</button>
                     {schemeName && <span className="hidden lg:inline-flex items-center gap-1 h-7 px-2.5 rounded-full m-fill-2 text-[12.5px] m-text-2" title={`Yönetici tarafından atanan proje yapılandırması${boardSource === 'project' ? ' · bu projeye özel pano' : ''}`}><Icon name="sliders" size={12} />{schemeName}{boardSource === 'project' ? ' · özel pano' : ''}</span>}
+                    {onOpenLists && <button type="button" className="m-btn m-btn-gray !min-h-[36px] !px-3 text-[14px]" onClick={onOpenLists} title="Projenin bileşen ve sürüm listeleri"><Icon name="grid" size={15} />Bileşen ve sürümler</button>}
                     {onOpenWorkflow && <button type="button" className="m-btn m-btn-gray !min-h-[36px] !px-3 text-[14px]" onClick={onOpenWorkflow} title="Bu projenin iş akışı: durumlar arası okları çizin"><Icon name="activity" size={15} />İş akışı</button>}
                     {canConfigure && <button type="button" className="m-btn m-btn-gray !min-h-[36px] !px-3 text-[14px]" onClick={() => setSettingsOpen(true)} title="Kolonlar, durum/etiket kuralları, WIP, hızlı filtreler, kulvarlar"><Icon name="sliders" size={15} />Panoyu yapılandır</button>}
                 </div>

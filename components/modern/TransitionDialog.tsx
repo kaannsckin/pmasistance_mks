@@ -17,9 +17,11 @@ const TransitionDialog: React.FC<{
     needs: TransitionNeeds;
     assignees: string[];
     workPackages: WorkPackage[];
+    components?: string[];
+    versions?: string[];
     onCancel: () => void;
     onConfirm: (input: TransitionInput) => void;
-}> = ({ task, fromLabel, toLabel, rule, needs, assignees, workPackages, onCancel, onConfirm }) => {
+}> = ({ task, fromLabel, toLabel, rule, needs, assignees, workPackages, components = [], versions = [], onCancel, onConfirm }) => {
     const [comment, setComment] = useState('');
     const [hours, setHours] = useState('');
     const [fields, setFields] = useState<Partial<Task>>({});
@@ -70,6 +72,16 @@ const TransitionDialog: React.FC<{
                             </select>
                         )}
                         {f === 'labels' && <input className="m-input" placeholder="Etiketler (virgülle)" onChange={e => setF({ labels: e.target.value.split(',').map(x => x.trim()).filter(Boolean) })} />}
+                        {f === 'component' && (
+                            <select className="m-input" value={fields.components?.[0] || ''} onChange={e => setF({ components: e.target.value ? [e.target.value] : undefined })}>
+                                <option value="">Seçin…</option>{components.map(c => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                        )}
+                        {f === 'fixVersion' && (
+                            <select className="m-input" value={fields.fixVersion || ''} onChange={e => setF({ fixVersion: e.target.value || undefined })}>
+                                <option value="">Seçin…</option>{versions.map(v => <option key={v} value={v}>{v}</option>)}
+                            </select>
+                        )}
                         {f === 'workPackage' && (
                             <select className="m-input" value={fields.workPackageId || ''} onChange={e => setF({ workPackageId: e.target.value || undefined })}>
                                 <option value="">Seçin…</option>{workPackages.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}

@@ -80,6 +80,7 @@ export interface ModernAdminProps {
     onAssignScheme: (projectId: string, schemeId: string) => void;
     onSaveProjectBoard: (projectId: string, cfg: BoardConfig | undefined) => void;
     onOpenProjectWorkflow: (projectId: string) => void;
+    onOpenProjectLists: (projectId: string) => void;
 }
 
 const SHORT_ROLE: Record<UserRole, string> = {

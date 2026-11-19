@@ -107,6 +107,8 @@ const taskRow = (t: Task, ctx: ToolContext, projectName: string, wpNames: Map<st
     gorev: t.name,
     durum: TASK_STATUS_TR[t.status] || t.status,
     is_durumu: t.jiraStatus ? taskStatusLabel(t) : undefined,
+    bilesen: t.components?.length ? t.components.join(', ') : undefined,
+    hedef_surum: t.fixVersion || undefined,
     oncelik: t.priority,
     atanan: t.resourceName || undefined,
     bitis: t.dueDate ? t.dueDate.slice(0, 10) : undefined,

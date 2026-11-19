@@ -52,6 +52,8 @@ const BoardSettings: React.FC<{
     const unmapped = unmappedStatuses(cfg, allUsage);
     const errors = validateBoardConfig(cfg);
     const labels = useMemo(() => topLabels(tasks, 16), [tasks]);
+    const compNames = useMemo(() => [...new Set<string>(tasks.flatMap(t => t.components || []))].sort((a, b) => a.localeCompare(b, 'tr')), [tasks]);
+    const verNames = useMemo(() => [...new Set<string>(tasks.map(t => t.fixVersion).filter((x): x is string => !!x))].sort((a, b) => a.localeCompare(b, 'tr')), [tasks]);
 
     const setCol = (id: string, patch: Partial<BoardColumnConfig>) => setCfg(c => ({ ...c, columns: c.columns.map(x => (x.id === id ? { ...x, ...patch } : x)) }));
     const moveStatus = (k: BoardStatusKey, toColumn: string | null) => setCfg(c => ({
@@ -96,6 +98,8 @@ const BoardSettings: React.FC<{
         f.priorities?.length ? `öncelik: ${f.priorities.map(p => PRIORITY_TR[p]).join(', ')}` : '',
         f.overdue ? 'geciken' : '',
         f.recentDays ? `son ${f.recentDays} günde güncellenen` : '',
+        f.components?.length ? `bileşen: ${f.components.join(', ')}` : '',
+        f.fixVersions?.length ? `sürüm: ${f.fixVersions.join(', ')}` : '',
     ].filter(Boolean).join(' · ');
     const moveFilter = (i: number, d: -1 | 1) => setCfg(c => {
         const list = [...c.quickFilters];
@@ -213,6 +217,13 @@ const BoardSettings: React.FC<{
                             ))}
                         </div>
                     )}
+                    {(compNames.length > 0 || verNames.length > 0) && (
+                        <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="text-[13px] m-text-3 mr-1">Bileşen / sürümden tek tıkla:</span>
+                            {compNames.filter(n => !cfg.quickFilters.some(f => f.components?.length === 1 && f.components[0] === n)).map(n => <button key={`c-${n}`} type="button" className="m-pill" onClick={() => addFilter({ name: n, components: [n] })}><Icon name="plus" size={12} />{n}</button>)}
+                            {verNames.filter(n => !cfg.quickFilters.some(f => f.fixVersions?.length === 1 && f.fixVersions[0] === n)).map(n => <button key={`v-${n}`} type="button" className="m-pill" onClick={() => addFilter({ name: `Sürüm ${n}`, fixVersions: [n] })}><Icon name="plus" size={12} />Sürüm {n}</button>)}
+                        </div>
+                    )}
                     <form className="m-surface rounded-xl p-3 flex flex-col gap-2" style={{ boxShadow: 'inset 0 0 0 1px var(--m-sep)' }}
                         onSubmit={e => {
                             e.preventDefault();
@@ -262,6 +273,8 @@ const BoardSettings: React.FC<{
                             <option value="assignee">Kişiye göre</option>
                             <option value="priority">Önceliğe göre</option>
                             <option value="workPackage">İş paketine göre</option>
+                            <option value="component">Bileşene göre</option>
+                            <option value="fixVersion">Hedef sürüme göre</option>
                         </select>
                     </label>
                     <fieldset className="m-surface rounded-xl p-3 flex flex-col gap-2 border-0" style={{ boxShadow: 'inset 0 0 0 1px var(--m-sep)' }}>

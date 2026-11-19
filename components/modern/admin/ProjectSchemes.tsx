@@ -25,6 +25,7 @@ interface Props {
     onAssignScheme: (projectId: string, schemeId: string) => void;
     onSaveProjectBoard: (projectId: string, cfg: BoardConfig | undefined) => void;
     onOpenProjectWorkflow: (projectId: string) => void;
+    onOpenProjectLists: (projectId: string) => void;
 }
 
 const CAT_TONE: Record<TaskStatus, string> = {
@@ -315,7 +316,7 @@ const SchemeEditor: React.FC<{
     );
 };
 
-const ProjectSchemes: React.FC<Props> = ({ workspace, onSaveScheme, onDeleteScheme, onAssignScheme, onSaveProjectBoard, onOpenProjectWorkflow }) => {
+const ProjectSchemes: React.FC<Props> = ({ workspace, onSaveScheme, onDeleteScheme, onAssignScheme, onSaveProjectBoard, onOpenProjectWorkflow, onOpenProjectLists }) => {
     const schemes = schemesOf(workspace);
     const [editing, setEditing] = useState<{ scheme: ProjectScheme; isNew: boolean } | null>(null);
     const [picking, setPicking] = useState(false);
@@ -424,6 +425,7 @@ const ProjectSchemes: React.FC<Props> = ({ workspace, onSaveScheme, onDeleteSche
                                 <span className={`inline-flex items-center h-6 px-2 rounded-full text-[12px] font-semibold ${b.source === 'project' ? 'm-tone-warn' : 'm-fill-2 m-text-2'}`}>{b.source === 'project' ? 'Özel pano' : 'Yapılandırmanın panosu'}</span>
                                 {sc.allowProjectWorkflow && <button type="button" className="m-btn m-btn-plain !min-h-[32px] !px-2.5 text-[13px]" onClick={() => onOpenProjectWorkflow(p.id)}><Icon name="activity" size={14} />Akış</button>}
                                 <button type="button" className="m-btn m-btn-plain !min-h-[32px] !px-2.5 text-[13px]" onClick={() => setBoardProject(p.id)}><Icon name="sliders" size={14} />Pano</button>
+                                <button type="button" className="m-btn m-btn-plain !min-h-[32px] !px-2.5 text-[13px]" onClick={() => onOpenProjectLists(p.id)} title={`${(p.components || []).length} bileşen, ${(p.versions || []).length} sürüm`}><Icon name="grid" size={14} />Listeler</button>
                             </span>
                         </div>
                     );
