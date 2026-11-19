@@ -28,6 +28,9 @@ const ModernBoard: React.FC<ModernBoardProps> = ({ tasks, sprintNames, onStatusC
     const [sprint, setSprint] = useState<string>('all');
     const [person, setPerson] = useState<string>('all');
     const [dragOver, setDragOver] = useState<BoardColumn | null>(null);
+    // Telefonda kolonlar alt alta dizilince "Süreçte"ye ulaşmak için tüm "Yapılacak"
+    // kartlarını kaydırmak gerekiyordu; dar ekranda kolonlar sekmeyle seçilir
+    const [phoneColumn, setPhoneColumn] = useState<BoardColumn>(TaskStatus.InProgress);
 
     const versions = useMemo(() => uniq<number>(tasks.map(t => t.version)).sort((a, b) => a - b), [tasks]);
     const people = useMemo(() => uniq<string>(tasks.map(t => t.resourceName).filter(Boolean)).sort((a, b) => a.localeCompare(b, 'tr')), [tasks]);
@@ -77,6 +80,24 @@ const ModernBoard: React.FC<ModernBoardProps> = ({ tasks, sprintNames, onStatusC
 
             {hiddenByView > 0 && <ViewFilterNote text={`Yönetici ayarı: ${MIN_PRIORITY_OPTIONS.find(o => o.value === minPriority)!.label.toLocaleLowerCase('tr-TR')} görevler gösteriliyor · ${hiddenByView} görev gizli`} />}
 
+            <div className="sm:hidden">
+                <div className="m-segmented w-full" role="group" aria-label="Gösterilecek kolon">
+                    {COLUMNS.map(col => (
+                        <button
+                            key={col}
+                            type="button"
+                            className="m-segment flex-1 justify-center"
+                            style={{ padding: '0 8px' }}
+                            aria-pressed={phoneColumn === col}
+                            onClick={() => setPhoneColumn(col)}
+                        >
+                            {COLUMN_META[col].label}
+                            <span className="m-text-3 m-tabular">{byColumn[col].length}</span>
+                        </button>
+                    ))}
+                </div>
+            </div>
+
             <div className="grid gap-5 items-start" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}>
                 {COLUMNS.map(col => {
                     const meta = COLUMN_META[col];
@@ -85,7 +106,7 @@ const ModernBoard: React.FC<ModernBoardProps> = ({ tasks, sprintNames, onStatusC
                         <section
                             key={col}
                             aria-label={`${meta.label}, ${list.length} görev`}
-                            className={`flex flex-col gap-2.5 rounded-2xl p-1 -m-1 transition-colors ${dragOver === col ? 'm-accent-tint' : ''}`}
+                            className={`flex flex-col gap-2.5 rounded-2xl p-1 -m-1 transition-colors ${dragOver === col ? 'm-accent-tint' : ''} ${phoneColumn === col ? '' : 'max-sm:hidden'}`}
                             onDragOver={(e) => { e.preventDefault(); if (dragOver !== col) setDragOver(col); }}
                             onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(null); }}
                             onDrop={(e) => { e.preventDefault(); setDragOver(null); const id = e.dataTransfer.getData('text/plain'); if (id) changeStatus(id, col); }}

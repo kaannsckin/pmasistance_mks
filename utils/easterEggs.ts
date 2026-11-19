@@ -1,4 +1,4 @@
-import { Task, TaskStatus } from '../types';
+import { ModernTheme, Task, TaskStatus } from '../types';
 
 /**
  * Küçük sürprizler (easter egg'ler). Hepsi yan etkisizdir ve
@@ -10,6 +10,9 @@ import { Task, TaskStatus } from '../types';
  *  - Komut paletinde "roket" → fırlatma
  *  - Bir sürümün/projenin son görevi tamamlanınca → kutlama
  *  - Gece yarısı, cuma akşamı ve pazartesi sabahı → küçük selamlar
+ *  - Yazı alanı dışında kelime yazmak (temalara özel):
+ *      "egg" / "yumurta" → sürpriz rehberi kartı
+ *      "pop" (Baloncuk) · "aurora" (Aurora) · "ship" (Pro) · "boing" (Kil)
  */
 
 export const prefersReducedMotion = (): boolean => {
@@ -75,3 +78,53 @@ export const completesGroup = (group: Pick<Task, 'id' | 'status'>[], taskId: str
     const after = group.every(t => (t.id === taskId ? newStatus : t.status) === TaskStatus.Done);
     return !before && after;
 };
+
+/** Yazı alanı dışında yazılınca tetiklenen kelimeler */
+export const TYPED_EGGS = ['egg', 'yumurta', 'pop', 'aurora', 'ship', 'boing'] as const;
+export type TypedEgg = typeof TYPED_EGGS[number];
+
+/**
+ * Harfleri sırayla besler; son yazılanlar bir kelimeyle bitiyorsa o kelimeyi
+ * döner (ve tamponu boşaltır). `gapMs`'den uzun duraklama tamponu sıfırlar;
+ * harf olmayan tek karakterli tuşlar (boşluk, rakam) da kelimeyi böler.
+ */
+export const createWordDetector = <W extends string>(words: readonly W[], gapMs = 1500) => {
+    const max = Math.max(...words.map(w => w.length));
+    let buf = '';
+    let last = 0;
+    return (key: string, now: number = Date.now()): W | null => {
+        if (key.length !== 1) return null; // Shift, ok tuşları vb. kelimeyi bölmez
+        if (now - last > gapMs) buf = '';
+        last = now;
+        const ch = key.toLocaleLowerCase('en-US');
+        if (!/[a-zçğıöşü]/.test(ch)) { buf = ''; return null; }
+        buf = (buf + ch).slice(-max);
+        const hit = words.find(w => buf.endsWith(w));
+        if (hit) buf = '';
+        return hit ?? null;
+    };
+};
+
+/** Sürpriz rehberi kartında ve komut paletinde kullanılan katalog */
+export type EggTrigger = 'rocket' | 'hyper' | 'space' | 'celebrate' | 'pop' | 'aurora' | 'ship' | 'boing';
+export interface EggInfo {
+    id: EggTrigger | 'greeting';
+    title: string;
+    how: string;
+    /** Bu sürpriz en çok hangi temaya yakışır (rehberde "temana özel" rozeti) */
+    theme?: ModernTheme;
+    /** Rehberden "Dene" ile doğrudan çalıştırılabilir mi */
+    tryable: boolean;
+}
+
+export const EGG_CATALOG: EggInfo[] = [
+    { id: 'rocket', title: 'Roket kalkışı', how: 'Sol üstteki logoya tıklayın.', tryable: false },
+    { id: 'hyper', title: 'Hiper sürüş', how: 'Logoya 2 saniye içinde 5 kez tıklayın ya da komut paletinde "roket" arayın.', tryable: true },
+    { id: 'space', title: 'Uzay modu', how: 'Klavyede ↑ ↑ ↓ ↓ ← → ← → B A.', tryable: true },
+    { id: 'celebrate', title: 'Kutlama', how: 'Bir sürümün ya da projenin son görevini tamamlayın.', tryable: true },
+    { id: 'greeting', title: 'Saatli selam', how: 'Gece yarısı, cuma akşamı ya da pazartesi sabahı Portföy\'e bakın.', tryable: false },
+    { id: 'pop', title: 'Baloncuk patlat', how: 'Bir yazı alanında değilken "pop" yazın.', theme: 'bubble', tryable: true },
+    { id: 'aurora', title: 'Kuzey ışıkları', how: 'Bir yazı alanında değilken "aurora" yazın.', theme: 'aurora', tryable: true },
+    { id: 'ship', title: 'Yayına al', how: 'Bir yazı alanında değilken "ship" yazın.', theme: 'pro', tryable: true },
+    { id: 'boing', title: 'Jöle kartlar', how: 'Bir yazı alanında değilken "boing" yazın.', theme: 'clay', tryable: true },
+];
