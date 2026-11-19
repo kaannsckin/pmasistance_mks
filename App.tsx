@@ -38,6 +38,7 @@ import { boardForProject, DEFAULT_SCHEME_ID, effectiveScheme, migrateTasksToWork
 import ProjectWorkflowSheet from './components/modern/ProjectWorkflowSheet';
 import ProjectListsSheet from './components/modern/ProjectListsSheet';
 import { cleanRoleMembers, projectRolesOf } from './utils/projectRoles';
+import { buildDeliveries, detectTaskEvents, NotificationDelivery } from './utils/notifications';
 import { AllocationSuggestion, ApplyMode, applyAllocationSuggestions } from './utils/taskToAllocation';
 import { applyBilledHoursActuals, planBilledHoursPoolAdditions, suggestBilledHoursActuals, BilledApplyMode, BilledHoursOptions, BilledHoursRecord } from './utils/billedHours';
 import { buildTodoItems, TodoItem } from './utils/todoItems';
@@ -428,6 +429,49 @@ const App: React.FC = () => {
     setUndo(null);
   }, [undo]);
 
+  // ---- Bildirim şeması: yerel görev değişikliklerinden olay → alıcılar ----
+  // Güncelleyici içinde kuyruğa alınır (anahtarla tekilleştirilir), çizimden sonra gönderilir.
+  const notifyQueue = useRef<NotificationDelivery[]>([]);
+  const notifySent = useRef<Set<string>>(new Set());
+  const notifyWarned = useRef(false);
+  const queueNotifications = (ws: WorkspaceData, project: Project, prev: Task[], next: Task[]) => {
+    const scheme = effectiveScheme(ws, project);
+    if (!scheme.notifications?.length) return;
+    const events = detectTaskEvents(prev, next);
+    if (!events.length) return;
+    const id = identityOf(ws);
+    const me = ws.people.find(x => x.id === id.personId);
+    notifyQueue.current.push(...buildDeliveries(events, scheme.notifications, {
+      project, people: ws.people, wf: scheme.workflow, roleDefs: projectRolesOf(ws), actorName: me ? `${me.firstName} ${me.lastName}`.trim() : undefined,
+    }));
+  };
+  useEffect(() => {
+    // Kuyruk içinde de tekilleştir (güncelleyici iki kez çalışabilir — React StrictMode)
+    const pending: NotificationDelivery[] = [...new Map<string, NotificationDelivery>(notifyQueue.current.filter(d => !notifySent.current.has(d.key)).map(d => [d.key, d])).values()];
+    notifyQueue.current = [];
+    if (!pending.length) return;
+    pending.forEach(d => notifySent.current.add(d.key));
+    if (notifySent.current.size > 1000) notifySent.current = new Set([...notifySent.current].slice(-500));
+    (async () => {
+      let health;
+      try { health = await fetchIntegrationHealth(); } catch { return; }
+      for (const d of pending) {
+        const emails: string[] = [...new Set<string>(d.recipients.map(r => r.email).filter((e): e is string => !!e))];
+        const byEmail = health.email && emails.length > 0;
+        const byTeams = d.teams && health.teams;
+        if (!byEmail && !byTeams) {
+          if (!notifyWarned.current) { notifyWarned.current = true; setFlowNotice(`Bildirim gönderilemedi (${d.recipients.map(r => r.name).join(', ') || 'Teams'}): ${!health.email && !health.teams ? 'e-posta/Teams sunucuda yapılandırılmadı' : 'alıcının e-posta adresi yok'}.`); }
+          continue;
+        }
+        try {
+          const r = await sendNotification({ subject: d.subject, text: d.text, ...(byEmail ? { email: { to: emails } } : {}), ...(byTeams ? { teams: true } : {}) }, health.authMode);
+          const res = describeNotify(r);
+          if (!res.ok) setFlowNotice(`Bildirim: ${res.text}`);
+        } catch (e) { setFlowNotice(`Bildirim gönderilemedi: ${(e as Error).message}`); }
+      }
+    })();
+  }, [workspace]);
+
   // Belirli bir projeyi günceller (null → etkin proje)
   const updateProjectById = useCallback((id: string | null, updater: (p: Project) => Project) => {
     updateWorkspace(ws => ({
@@ -439,6 +483,7 @@ const App: React.FC = () => {
         const now = new Date();
         // Yerel değişikliklerde kayıt yaşam döngüsü damgalanır (açılış, başlama, kapanış, durum günlüğü)
         const tasks = next.tasks !== p.tasks ? stampLifecycle(p.tasks, next.tasks, now) : next.tasks;
+        if (tasks !== p.tasks) queueNotifications(ws, { ...next, tasks }, p.tasks, tasks);
         return { ...next, tasks, updatedAt: now.toISOString() };
       }),
     }));
@@ -2169,6 +2214,10 @@ const App: React.FC = () => {
     try {
       const result = applyAction(current, action);
       summary = result.summary;
+      // Onaylanan AI önerisi de yerel değişikliktir: bildirim şeması uygulanır
+      const before = current.projects.find(p => p.id === action.projectId);
+      const after = result.ws.projects.find(p => p.id === action.projectId);
+      if (before && after && before.tasks !== after.tasks) queueNotifications(result.ws, after, before.tasks, after.tasks);
       setWorkspace(result.ws);
       workspaceRef.current = result.ws;
       // Geçişin sonrası işlemi: atanana bildirim (AI önerisi de kullanıcının geçişi gibi)

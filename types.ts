@@ -160,6 +160,27 @@ export interface TransitionRule {
 
 export type SchemeRequiredField = 'resourceName' | 'dueDate' | 'estimate' | 'issueType' | 'labels' | 'workPackage' | 'component' | 'fixVersion';
 
+export type NotificationEvent = 'created' | 'transitioned' | 'done' | 'reopened' | 'assigned' | 'commented';
+
+/** Bildirim kuralı (Jira "notification scheme" satırı) */
+export interface NotificationRule {
+  id: string;
+  event: NotificationEvent;
+  /** 'transitioned' için: yalnız bu durumlara girişte (boş: her geçişte) */
+  statuses?: string[];
+  to: {
+    assignee?: boolean;
+    /** Projenin proje yöneticisi */
+    pm?: boolean;
+    /** Proje rolü üyeleri */
+    roles?: string[];
+    /** Havuz kişi kimlikleri */
+    people?: string[];
+    /** Teams kanalına da gönder */
+    teams?: boolean;
+  };
+}
+
 /** Proje rolü (Jira "project role"): tanımı kurum geneli, üyeleri proje bazında */
 export interface ProjectRoleDef {
   id: string;
@@ -207,6 +228,8 @@ export interface ProjectScheme {
   board?: BoardConfig;
   /** Proje sahibi panoyu kendi projesi için özelleştirebilir */
   allowProjectBoard: boolean;
+  /** Bildirim şeması: olay → alıcılar */
+  notifications?: NotificationRule[];
   /**
    * Proje sahibi kendi projesinin iş akışını özelleştirebilir (Jira "genişletilmiş
    * proje yönetimi" gibi): yalnız bu yapılandırmanın durumlarını kullanır, yeni

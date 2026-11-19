@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { BoardConfig, IssueType, ProjectRoleDef, ProjectScheme, SchemeRequiredField, TaskStatus, WorkflowConfig, WorkflowStatusDef, WorkspaceData } from '../../../types';
+import { BoardConfig, IssueType, NotificationEvent, NotificationRule, Person, ProjectRoleDef, ProjectScheme, SchemeRequiredField, TaskStatus, WorkflowConfig, WorkflowStatusDef, WorkspaceData } from '../../../types';
 import { boardConfigOf, statusKeyLabel } from '../../../utils/board';
 import {
     boardForProject, copyScheme, createScheme, DEFAULT_SCHEME_ID, ISSUE_TYPE_OPTIONS, linearTransitions, REQUIRED_FIELD_LABELS,
@@ -9,6 +9,7 @@ import { CATEGORY_LABELS, CATEGORY_ORDER, WORKFLOW_STATUSES, workflowKey } from 
 import BoardSettings from '../BoardSettings';
 import WorkflowDesigner from './WorkflowDesigner';
 import { newRoleId, projectRolesOf } from '../../../utils/projectRoles';
+import { describeNotificationRule, NOTIFICATION_EVENT_LABELS, suggestedNotificationRules } from '../../../utils/notifications';
 import { dropRuleKeys, renameRuleKeys } from '../../../utils/transitions';
 import { Icon } from '../icons';
 import { Sheet } from '../ui';
@@ -59,7 +60,57 @@ const FlowPreview: React.FC<{ wf: WorkflowConfig }> = ({ wf }) => (
     </div>
 );
 
-type Tab = 'general' | 'workflow' | 'fields' | 'board';
+type Tab = 'general' | 'workflow' | 'fields' | 'notify' | 'board';
+
+/** Bildirim şeması düzenleyici: olay → alıcılar */
+const NotificationEditor: React.FC<{ rules: NotificationRule[]; onChange: (r: NotificationRule[] | undefined) => void; wf: WorkflowConfig; people: Person[]; roleDefs: ProjectRoleDef[] }> = ({ rules, onChange, wf, people, roleDefs }) => {
+    const set = (i: number, patch: Partial<NotificationRule>) => onChange(rules.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+    const setTo = (i: number, patch: Partial<NotificationRule['to']>) => set(i, { to: { ...rules[i].to, ...patch } });
+    const toggle = <T,>(arr: T[] | undefined, v: T): T[] | undefined => { const n = arr?.includes(v) ? arr.filter(x => x !== v) : [...(arr || []), v]; return n.length ? n : undefined; };
+    const nid = () => `bil-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+    const fullName = (p: Person) => `${p.firstName} ${p.lastName}`.trim();
+    return (
+        <div className="flex flex-col gap-3">
+            <p className="m-0 text-[13.5px] m-text-2">Jira bildirim şeması gibi: bir olay olduğunda kimlere e-posta (ve istenirse Teams kanalına mesaj) gideceği. Değişikliği yapan kişiye bildirim gitmez; Jira eşitlemesinden gelen değişiklikler bildirim üretmez. E-posta için kişinin havuzda e-posta adresi ve sunucuda e-posta yapılandırması gerekir.</p>
+            {rules.length === 0 && <p className="m-0 text-[14px] m-text-3">Bildirim kuralı yok.</p>}
+            {rules.map((r, i) => (
+                <div key={r.id} className="m-surface rounded-xl p-3 flex flex-col gap-2" style={{ boxShadow: 'inset 0 0 0 1px var(--m-sep)' }}>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <select aria-label="Olay" className="m-input !h-9 !py-0 !w-auto text-[14px] font-semibold" value={r.event} onChange={e => set(i, { event: e.target.value as NotificationEvent, statuses: undefined })}>
+                            {(Object.keys(NOTIFICATION_EVENT_LABELS) as NotificationEvent[]).map(ev => <option key={ev} value={ev}>{NOTIFICATION_EVENT_LABELS[ev]}</option>)}
+                        </select>
+                        <span className="flex-1 text-[12.5px] m-text-3">{describeNotificationRule(r, people, roleDefs, wf)}</span>
+                        <button type="button" className="m-icon-btn !w-8 !h-8" aria-label="Kuralı sil" onClick={() => onChange(rules.filter((_, j) => j !== i).length ? rules.filter((_, j) => j !== i) : undefined)}><Icon name="trash" size={14} /></button>
+                    </div>
+                    {r.event === 'transitioned' && (
+                        <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="text-[12.5px] m-text-3 mr-1">Yalnız şu durumlara girince (boş: her geçiş):</span>
+                            {wf.statuses.map(st => <button key={st.key} type="button" className={`m-pill ${r.statuses?.includes(st.key) ? 'is-active' : ''}`} aria-pressed={!!r.statuses?.includes(st.key)} onClick={() => set(i, { statuses: toggle(r.statuses, st.key) })}>{st.label}</button>)}
+                        </div>
+                    )}
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[13.5px]">
+                        <span className="text-[12.5px] m-text-3">Alıcılar:</span>
+                        <label className="flex items-center gap-1.5"><input type="checkbox" checked={!!r.to.assignee} onChange={e => setTo(i, { assignee: e.target.checked || undefined })} />Atanan</label>
+                        <label className="flex items-center gap-1.5"><input type="checkbox" checked={!!r.to.pm} onChange={e => setTo(i, { pm: e.target.checked || undefined })} />Proje yöneticisi</label>
+                        {roleDefs.map(d => <label key={d.id} className="flex items-center gap-1.5"><input type="checkbox" checked={!!r.to.roles?.includes(d.id)} onChange={() => setTo(i, { roles: toggle(r.to.roles, d.id) })} />{d.name} rolü</label>)}
+                        <label className="flex items-center gap-1.5"><input type="checkbox" checked={!!r.to.teams} onChange={e => setTo(i, { teams: e.target.checked || undefined })} />Teams kanalı</label>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                        {(r.to.people || []).map(id => { const p = people.find(x => x.id === id); return <button key={id} type="button" className="m-pill is-active" onClick={() => setTo(i, { people: toggle(r.to.people, id) })}>{p ? fullName(p) : id} ×</button>; })}
+                        <select aria-label="Kişi ekle" className="m-input !h-8 !py-0 !w-auto text-[13px]" value="" onChange={e => e.target.value && setTo(i, { people: toggle(r.to.people, e.target.value) })}>
+                            <option value="">+ Kişi ekle…</option>
+                            {people.filter(p => !(r.to.people || []).includes(p.id)).map(p => <option key={p.id} value={p.id}>{fullName(p)}{p.email ? '' : ' (e-posta yok)'}</option>)}
+                        </select>
+                    </div>
+                </div>
+            ))}
+            <div className="flex flex-wrap gap-2">
+                <button type="button" className="m-btn m-btn-gray !min-h-[34px] !px-3 text-[14px]" onClick={() => onChange([...rules, { id: nid(), event: 'transitioned', to: { assignee: true } }])}><Icon name="plus" size={14} />Kural ekle</button>
+                {rules.length === 0 && <button type="button" className="m-btn m-btn-plain !min-h-[34px] !px-3 text-[14px]" onClick={() => onChange(suggestedNotificationRules(nid))}>Önerilen kuralları ekle</button>}
+            </div>
+        </div>
+    );
+};
 
 const SchemeEditor: React.FC<{
     initial: ProjectScheme;
@@ -129,6 +180,7 @@ const SchemeEditor: React.FC<{
         { key: 'general', label: 'Genel' },
         { key: 'workflow', label: `İş akışı (${wf.statuses.length})` },
         { key: 'fields', label: 'Kayıt türleri ve alanlar' },
+        { key: 'notify', label: `Bildirimler (${s.notifications?.length || 0})` },
         { key: 'board', label: 'Pano' },
     ];
 
@@ -295,6 +347,8 @@ const SchemeEditor: React.FC<{
                     </fieldset>
                 </div>
             )}
+
+            {tab === 'notify' && <NotificationEditor rules={s.notifications || []} onChange={n => setS(x => ({ ...x, notifications: n }))} wf={wf} people={workspace.people} roleDefs={projectRolesOf(workspace)} />}
 
             {tab === 'board' && (
                 <div className="flex flex-col gap-3">
