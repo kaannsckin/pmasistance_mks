@@ -1,13 +1,14 @@
 import type { Abbreviation, MeetingDetails, PlanReviewItem, PlanReviewStatus, Project, ReportCategory, ReportItem, WeeklyReport, WorklogEntry, WorkspaceData } from '../../types.js';
 import { appendAudit } from '../../utils/audit.js';
 import { meetingsHeldInWeek, meetingsPlannedInWeek } from '../../utils/customerMeetings.js';
+import { reportEvmSnapshot } from '../../utils/evm.js';
 import { matchItems } from '../../utils/ai/reportEval.js';
 import { checkSuggestion } from '../../utils/ai/reportRepair.js';
 import { buildVariantRequest, PRODUCTION_VARIANT } from '../../utils/ai/reportVariants.js';
 import { buildReportInput, parseReportSuggestion } from '../../utils/ai/weeklyReportPrompt.js';
 import { resolveProject, ToolContext } from '../../utils/ai/scope.js';
 import {
-    actorOf, advanceReport, canEditReport, CATEGORY_META, createReport, dueDate, findReport, flowBlockers, isoWeekOf, isReportSteward, isWeekPublished, itemDisplay, lintCounts, lintDictionary, lintReport,
+    actorOf, advanceReport, canEditReport, CATEGORY_META, createReport, dueDate, findReport, flowBlockers, isoWeekOf, isReportFrozen, isReportSteward, reportFlowFor, isWeekPublished, itemDisplay, lintCounts, lintDictionary, lintReport,
     newItem, nextStage, PLAN_REVIEW_STATUSES, previousPlansOf, projectDepartment, publishWeek, reportDictionary, reportFlowOf, reportSettingsOf, returnReportIn,
     saveReport, shiftWeek, STAGE_LABELS, THIS_WEEK_CATEGORIES, visibleReports, weekLabel,
 } from '../../utils/weeklyReport.js';
@@ -138,7 +139,7 @@ const itemOut = (i: ReportItem) => ({ id: i.id, kategori: i.category, metin: ite
 /** Kimliğin bu raporda yapabileceği işlem (aşamanın tek sahibi) */
 const actionsFor = (ws: WorkspaceData, ctx: ToolContext, r: WeeklyReport | undefined, projectOwner: boolean): string => {
     if (!r) return projectOwner ? `rapor yok — ${REPORT_SUBMIT_TOOL} ile yazılır` : 'rapor henüz yazılmadı';
-    if (isWeekPublished(ws, r.year, r.week)) return 'hafta yayınlandı; değişmez';
+    if (isReportFrozen(ws, r)) return 'hafta yayınlandı; değişmez';
     switch (r.stage) {
         case 'draft': return projectOwner ? `taslak — düzenle ve gönder (${REPORT_SUBMIT_TOOL})` : 'PY\'de (taslak)';
         case 'bs_review': return ctx.identity.role === 'bolum_sorumlu' ? `onay ya da iade (${REPORT_DECIDE_TOOL})` : 'bölüm sorumlusunda';
@@ -153,6 +154,13 @@ const reportLintDictionary = (ws: WorkspaceData): Abbreviation[] => lintDictiona
 const ownsProject = (ctx: ToolContext, project: Project) => ctx.identity.role === 'py' && project.pmPersonId === ctx.identity.personId;
 
 // ---------------------------------------------------------------- okuma
+
+/** Gönderim anındaki EVM (B-029): rapordaki rakamlar canlı evm_analizi ile değil bununla karşılaştırılır */
+const evmSnapshotOut = (s: NonNullable<WeeklyReport['evmSnapshot']>) => ({
+    tarih: s.at.slice(0, 10), durum_ayi: s.statusMonth, tamamlanma_yuzde: Math.round(s.percentComplete * 100),
+    spi: s.spi, cpi: s.cpi, eac: s.eac,
+    not: 'Raporun gönderildiği andaki değerler. Rapordaki EVM rakamlarını bununla karşılaştırın; evm_analizi bugünü gösterir ve tamamlanan işlerle değişir.',
+});
 
 export const readReports = (ws: WorkspaceData, ctx: ToolContext, args: Record<string, unknown>, now: Date): unknown => {
     const w = parseWeek(args.hafta, now);
@@ -189,6 +197,7 @@ export const readReports = (ws: WorkspaceData, ctx: ToolContext, args: Record<st
             py_puani: shown.pmScore, py_puani_notu: shown.pmScoreNote,
             plan_degerlendirmesi: (shown.planReview || []).map(p => ({ madde_id: p.itemId, madde: p.text, durum: p.status })),
             bicim_denetimi: lintReport(shown, reportLintDictionary(ws)).map(l => `${l.level === 'error' ? 'HATA' : 'uyarı'}: ${l.message}`),
+            ...(shown.evmSnapshot ? { evm_rapor_aninda: evmSnapshotOut(shown.evmSnapshot) } : {}),
             gecmis: shown.history.map(h => `${h.at.slice(0, 16).replace('T', ' ')} ${h.action} — ${h.byName || h.byRole}${h.note ? `: ${h.note}` : ''}`),
         } : {}),
         gecen_haftanin_plani: prevPlans.map(p => ({ madde_id: p.id, madde: itemDisplay(p) })),
@@ -317,9 +326,10 @@ export const prepareReportOp = (ws: WorkspaceData, ctx: ToolContext, name: strin
         const karar = args.karar === 'iade' ? 'iade' : 'onay';
         const not = asText(args.not);
         if (karar === 'iade' && !not) throw new Error('İade için not zorunlu: eksikleri yazın.');
-        const owner = existing.stage === 'bs_review' ? ctx.identity.role === 'bolum_sorumlu' : (existing.stage === 'pyds_review' || existing.stage === 'approved') && isReportSteward(ctx.identity);
+        if (isReportFrozen(ws, existing)) throw new Error(`${weekKey(w)} yayınlandı; onaylı rapor değişmez.`);
+        const owner = existing.stage === 'bs_review' ? canEditReport(ws, ctx.identity, existing) : (existing.stage === 'pyds_review' || existing.stage === 'approved') && isReportSteward(ctx.identity);
         if (!owner) throw new Error(`Rapor "${STAGE_LABELS[existing.stage]}" aşamasında; bu aşamanın kararı sizde değil.`);
-        if (karar === 'onay' && !nextStage(existing, reportFlowOf(ws))) throw new Error('Rapor zaten onaylı.');
+        if (karar === 'onay' && !nextStage(existing, reportFlowFor(ws, existing))) throw new Error('Rapor zaten onaylı.');
         const lint = lintCounts(lintReport(existing, reportLintDictionary(ws)));
         return {
             op: { op: 'karar', projectId: project.id, ...w, karar, ...(not ? { not } : {}) },
@@ -330,7 +340,8 @@ export const prepareReportOp = (ws: WorkspaceData, ctx: ToolContext, name: strin
     // kaydet / gönder (PY)
     if (!ownsProject(ctx, project)) throw new Error(`"${project.name}" projesinin raporunu yalnız proje sahibi PY yazar.`);
     if (existing && existing.stage !== 'draft') throw new Error(`Rapor "${STAGE_LABELS[existing.stage]}" aşamasında; düzenlemek için iade edilmesi gerekir.`);
-    if (isWeekPublished(ws, w.year, w.week)) throw new Error(`${weekKey(w)} yayınlandı; rapor değişmez.`);
+    // Yayınlanmış haftada yalnız akışta kalmış (iade edilmiş) rapor düzenlenir; yeni rapor açılmaz
+    if (!existing && isWeekPublished(ws, w.year, w.week)) throw new Error(`${weekKey(w)} yayınlandı; yeni rapor açılamaz.`);
     const prevPlans = previousPlansOf(all, { kind: 'project', year: w.year, week: w.week, projectId: project.id, departmentCode: projectDepartment(ws, project) });
     const input = reportInput(ws, project, w, worklog);
     const built = buildContent(args, prevPlans, input, now);
@@ -386,7 +397,7 @@ export const applyReportOp = (ws: WorkspaceData, ctx: ToolContext, op: ReportOp,
             return { ws: appendAudit({ ...ws, weeklyReports: r.reports }, 'report.return', `${summary}: ${op.not} — Claude (MCP) ile`, project.id), summary };
         }
         // Onay içerik değiştirmez: yalnız aşama ilerler (geçmişe "edit" düşmez)
-        const flow = reportFlowOf(ws);
+        const flow = reportFlowFor(ws, existing);
         if (existing.stage === 'draft' || !canEditReport(ws, id, existing) || !nextStage(existing, flow)) throw new Error('Onaylanamadı (aşama değişmiş ya da yetki yok).');
         if (lintCounts(lintReport(existing, dictionary)).errors > 0) throw new Error('Raporda biçim hatası var; onaylamak yerine iade edin.');
         const next = advanceReport(existing, actor, now, flow);
@@ -394,7 +405,8 @@ export const applyReportOp = (ws: WorkspaceData, ctx: ToolContext, op: ReportOp,
         return { ws: appendAudit({ ...ws, weeklyReports: reports.map(x => (x.id === next.id ? next : x)) }, 'report.approve', `${summary} — Claude (MCP) ile`, project.id), summary };
     }
     const base = existing || createReport({ kind: 'project', projectId: project.id, departmentCode: projectDepartment(ws, project), year: op.year, week: op.week }, actor, now);
-    const r = saveReport(ws, id, { ...base, ...op.content }, actor, { advance: op.gonder, dictionary, now });
+    const evm = op.gonder ? reportEvmSnapshot(ws, project.id, now) : undefined;
+    const r = saveReport(ws, id, { ...base, ...op.content }, actor, { advance: op.gonder, dictionary, now, evm });
     if (!r) throw new Error(op.gonder ? 'Gönderilemedi: yetki, aşama, biçim hatası ya da akış kuralı (geçen haftanın planı, PY puanı).' : 'Kaydedilemedi: yetki ya da aşama değişmiş.');
     const summary = `"${project.name}" ${weekKey(op)} haftalık raporu ${op.gonder ? `gönderildi → ${STAGE_LABELS[r.report.stage]}` : 'taslak olarak kaydedildi'}`;
     const next = { ...ws, weeklyReports: r.reports };

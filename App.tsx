@@ -84,9 +84,11 @@ import { appendEvalRun } from './utils/planning/evaluation';
 import { appendModelEval } from './utils/planning/ml/estimateModel';
 import { JiraImportOptions, mergeJiraIssues } from './utils/planning/jiraImport';
 import { linkJiraKeys } from './utils/planning/jiraExport';
+import { departmentLeadIds } from './utils/staffing';
 import { applyJiraSync, JiraPushOutcome, pullIssueIntoTasks, runFullSync, sourceLabel, writeSyncState } from './utils/planning/jiraSync';
 import { markPushed } from './utils/planning/jiraFieldSync';
 import { ensureJiraPeople } from './utils/planning/jiraPeople';
+import { reportEvmSnapshot } from './utils/evm';
 import { useJiraAutoSync } from './components/modern/planning/useJiraAutoSync';
 import { fetchIntegrationHealth, fetchJiraSyncPage, JiraIssueRecord, updateJiraIssue } from './utils/integrations';
 import ModernPortfolio from './components/modern/ModernPortfolio';
@@ -245,6 +247,8 @@ const App: React.FC = () => {
 
   // ---- Kimlik + kapsam ----
   const identity = useMemo(() => (workspace ? identityOf(workspace) : { role: 'py' as UserRole }), [workspace]);
+  // Bölüm sorumluları uygun kişi aramasında aday sayılmaz (B-008)
+  const departmentLeads = useMemo(() => departmentLeadIds(workspace?.departments), [workspace?.departments]);
   // Ekran yetkileri (admin değiştirebilir; not gizliliği kilitli)
   const canExecutive = can(identity, 'screen.executive');
   const canAdmin = can(identity, 'screen.admin');
@@ -854,7 +858,9 @@ const App: React.FC = () => {
     const ws = workspaceRef.current;
     if (!ws) return false;
     const dictionary = lintDictionary(reportDictionary(reportSettingsOf(ws)), ws.projects);
-    const res = saveReport(ws, identityOf(ws), draft, actorOf(ws), { advance, dictionary });
+    const fromDraft = (ws.weeklyReports || []).find(r => r.id === draft.id)?.stage ?? 'draft';
+    const evm = advance && fromDraft === 'draft' && draft.kind === 'project' ? reportEvmSnapshot(ws, draft.projectId) : undefined;
+    const res = saveReport(ws, identityOf(ws), draft, actorOf(ws), { advance, dictionary, evm });
     if (!res) return false;
     let next: WorkspaceData = { ...ws, weeklyReports: res.reports };
     // Taslaktan gönderimde AI maddelerinin akıbeti öneri günlüğüne (yalnız sayılar)
@@ -1564,6 +1570,7 @@ const App: React.FC = () => {
         <ModernAllocation
           allocations={workspace.allocations}
           people={workspace.people}
+          departmentLeadIds={departmentLeads}
           projects={workspace.projects}
           planLocks={workspace.planLocks}
           leaves={workspace.leaves || []}
@@ -1585,6 +1592,7 @@ const App: React.FC = () => {
         <AllocationView
           allocations={workspace.allocations}
           people={workspace.people}
+          departmentLeadIds={departmentLeads}
           projects={workspace.projects}
           planLocks={workspace.planLocks}
           leaves={workspace.leaves || []}

@@ -22,6 +22,17 @@ const simulate = (tohum = 2026, end = END) => {
 };
 
 describe('pilot simülasyonu', () => {
+    it('B-016: görev ayrılığı tarihinden sonra KLK raporu bölüm onayı olmadan PYB desteğe gider; öncesi değişmez', () => {
+        const { ws } = simulate(2026, '2026-11-21');
+        const klk = PROJECTS.find(p => p.jiraKey === 'KLK')!;
+        const rep = (week: number) => (ws.weeklyReports || []).find(r => r.projectId === klk.id && r.week === week)!;
+        // H46 (12 Kasım, sınırdan önce): eski akış, kendi bölüm onayı geçmişte kalır
+        expect(rep(46).history.map(h => h.action)).toContain('bs_approve');
+        // H47 (19 Kasım): bölüm onayı yok, PYB destekte
+        expect(rep(47).stage).toBe('pyds_review');
+        expect(rep(47).history.map(h => h.action)).toEqual(['create', 'submit']);
+    }, 120_000);
+
     it('aynı tohum aynı veriyi, farklı tohum farklı veriyi üretir', () => {
         const a = serializeWorkspace(simulate().ws, false).replace(/"exportDate":"[^"]+"/, '');
         const b = serializeWorkspace(simulate().ws, false).replace(/"exportDate":"[^"]+"/, '');

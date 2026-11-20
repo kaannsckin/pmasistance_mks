@@ -873,6 +873,29 @@ timeline
 
 ---
 
+## 💻 Bilgisayarda çalıştırma (exe)
+
+Kurulum ya da Node.js gerektirmeyen tek dosyalık sürüm: arayüz ve sunucu (AI vekili, Jira, Teams, e-posta) `PlanAsistan.exe` içindedir.
+
+1. GitHub sayfasındaki **Releases** bölümünden `PlanAsistan-win-x64.zip` dosyasını indirip bir klasöre açın.
+2. `PlanAsistan.exe` dosyasına çift tıklayın; tarayıcıda `http://localhost:5180` açılır. Kapatmak için komut penceresini kapatın.
+3. Jira ya da yapay zekâ için exe'nin yanında oluşan `planasistan.env` dosyasını Not Defteri ile düzenleyin (ör. `JIRA_BASE_URL`, `JIRA_TOKEN`) ve uygulamayı yeniden açın.
+4. **Yapay zekâ (TÜBİTAK BİLGEM):** uygulamada *Yönetici konsolu → Yapay zekâ → TÜBİTAK ile kur* bölümüne yalnız API anahtarınızı yapıştırın; adres, model (`general` / `code`) ve önerilen ayarlar kendiliğinden gelir. Ortam değişkeniyle: `AI_PROVIDER=tubitak` + `AI_API_KEY`.
+
+- **Vercel ayarları kendiliğinden gelmez:** Jira ve AI değerlerini Vercel → *Settings → Environment Variables* ekranından `planasistan.env`'e kopyalayın (ya da `vercel env pull planasistan.env`). AI anahtarı uygulamadaki *Yönetici konsolu → Yapay zekâ* panelinden de girilebilir. Vercel'de panelden girilmiş AI ayarlarını ortak kullanmak için `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` ve aynı `AI_CONFIG_SECRET` gerekir; service-role anahtarı tam yetkili olduğundan yalnız gerekiyorsa.
+- **Veriler:** projeler tarayıcıda, bu bilgisayarda tutulur. Vercel sürümüyle aynı projeleri görmek için uygulamadaki bulut eşitleme ekranında Supabase adresini ve anon anahtarını girip aynı hesapla oturum açın (her bilgisayarda bir kez). Panelden girilen AI ayarları şifreli olarak `planasistan-veri/` klasöründedir.
+- **Erişim koruması:** yerel sürümde varsayılan olarak kapalıdır (`AI_AUTH_MODE=none`); Vercel'den kopyalanan `AI_ACCESS_TOKEN` ya da Supabase anahtarları bunu değiştirmez. İstenirse `AI_AUTH_MODE` açıkça yazılır.
+- **Erişim:** sunucu yalnız `127.0.0.1`'e bağlanır; ağdaki başka bilgisayarlar ve başka siteler erişemez.
+- **İlk açılış:** exe imzasız olduğu için Windows "kişisel bilgisayarınızı korudu" uyarısı gösterebilir → *Ek bilgi* → *Yine de çalıştır*.
+- **Kaynaktan:** Node.js kuruluysa depoyu indirip `PlanAsistan-Baslat.cmd` dosyasına çift tıklamak da aynı yerel sürümü açar (ilk açılışta bağımlılıkları kurup derler; güncellemeden sonra `dist` ve `dist-local` klasörlerini silin).
+
+```bash
+npm run build:exe                      # release/PlanAsistan-win-x64.zip
+npm run build:exe -- win-x64 linux-x64 # birden çok hedef
+```
+
+Exe her `main` push'unda derlenip Windows'ta açılış denemesinden geçer (Actions → *Exe* → *PlanAsistan* dosyası); `v1.0.0` gibi bir etiket gönderildiğinde zip'ler Releases'a yüklenir.
+
 ## 🛠️ Yerel geliştirme
 
 Node.js 20 ya da üstü gerekir.
@@ -956,7 +979,8 @@ Tam liste: [`.env.example`](.env.example) · [docs/AI_KURULUM.md](docs/AI_KURULU
 
 1. **Supabase Realtime:** Ekip üyelerinin değişikliklerini sayfa yenilemeden anlık görme; hücre bazlı canlı eşzamanlılık.
 2. **Normalize veritabanı şeması:** Tahsis/görev verilerinin ayrı tablolara açılması → alan bazlı yazma RBAC'ının sunucuda zorlanması ve çakışmasız eşzamanlı düzenleme.
-3. Supabase kurulum doğrulaması (`supabase/dogrula.mjs`).
+
+Supabase kurulum doğrulaması `supabase/dogrula.mjs` ile yapılır ([supabase/KURULUM.md](supabase/KURULUM.md)).
 
 Pilot sürecindeki geliştirmeler: [docs/pilot/BACKLOG.md](docs/pilot/BACKLOG.md)
 

@@ -127,16 +127,26 @@ const deptHeadOf = (ws: WsLike, id: Identity, dept: string): boolean =>
 export const isWeekPublished = (ws: WsLike, year: number, week: number): boolean =>
     (ws.weeklyPublications || []).some(p => p.year === year && p.week === week);
 
+/**
+ * Yayın, o ana kadar onaylanmış raporları dondurur (müdürlüğe sunulan paket
+ * değişmez). Yayın anında hâlâ akışta olan rapor dondurulmaz: akışa devam
+ * eder, onaylandığında yayınlanmış haftaya geç rapor olarak katılır (B-030:
+ * önceden bu raporlar ara aşamada kalıcı olarak sıkışıyordu).
+ */
+export const isReportFrozen = (ws: WsLike, r: Pick<WeeklyReport, 'year' | 'week' | 'stage'>): boolean =>
+    r.stage === 'approved' && isWeekPublished(ws, r.year, r.week);
+
 /** Raporun içeriğini şu an kim düzenleyebilir (aşamaya göre tek sahip) */
 export const canEditReport = (ws: WsLike, id: Identity, r: WeeklyReport): boolean => {
-    if (isWeekPublished(ws, r.year, r.week)) return false;
+    if (isReportFrozen(ws, r)) return false;
     switch (r.stage) {
         case 'draft': {
             if (r.kind === 'department') return deptHeadOf(ws, id, r.departmentCode);
             const p = ws.projects.find(x => x.id === r.projectId);
             return !!p && ownsProject(p, id);
         }
-        case 'bs_review': return deptHeadOf(ws, id, r.departmentCode);
+        // PY kendi bölümünün sorumlusuysa kendi raporunu onaylayamaz (B-016); eski kayıtlarda PYB destek ilerletir
+        case 'bs_review': return selfReviewed(ws, r) ? isReportSteward(id) : deptHeadOf(ws, id, r.departmentCode);
         case 'pyds_review':
         case 'approved': return isReportSteward(id);
     }
@@ -148,6 +158,24 @@ export const canEditReport = (ws: WsLike, id: Identity, r: WeeklyReport): boolea
 export const DEFAULT_REPORT_FLOW: ReportFlow = { bsReview: true, pydsReview: true, requirePmScore: false, requirePlanReview: false, aiOnPublish: true };
 
 export const reportFlowOf = (ws: Partial<Pick<WorkspaceData, 'reportSettings'>> | undefined): ReportFlow => ({ ...DEFAULT_REPORT_FLOW, ...(ws?.reportSettings?.flow || {}) });
+
+/**
+ * Görev ayrılığı (B-016): proje raporunun PY'si aynı zamanda raporun
+ * bölümünün sorumlusuysa bölüm sorumlusu onayı kendi raporunu onaylamak olur.
+ * Bu raporda o adım atlanır; rapor doğrudan PYB destek biçim denetimine gider.
+ */
+export const selfReviewed = (ws: Pick<WorkspaceData, 'projects'> & Partial<Pick<WorkspaceData, 'departments'>>, r: Pick<WeeklyReport, 'kind' | 'projectId' | 'departmentCode'>): boolean => {
+    if (r.kind !== 'project') return false;
+    const pm = ws.projects.find(p => p.id === r.projectId)?.pmPersonId;
+    const lead = (ws.departments || []).find(d => d.code === r.departmentCode)?.leadPersonId;
+    return !!pm && pm === lead;
+};
+
+/** Bu raporun akışı: kurum ayarı, PY bölüm sorumlusuysa bölüm onayı olmadan */
+export const reportFlowFor = (ws: Partial<Pick<WorkspaceData, 'reportSettings' | 'departments'>> & Pick<WorkspaceData, 'projects'>, r: Pick<WeeklyReport, 'kind' | 'projectId' | 'departmentCode'>): ReportFlow => {
+    const flow = reportFlowOf(ws);
+    return selfReviewed(ws, r) ? { ...flow, bsReview: false } : flow;
+};
 
 /** Akışın aşamaları (ekranlardaki adım göstergesi için) */
 export const flowStages = (flow: ReportFlow, kind: WeeklyReport['kind'] = 'project'): ReportStage[] =>
@@ -297,7 +325,7 @@ type SaveWs = WsLike & Pick<WorkspaceData, 'people'>;
  */
 export const saveReport = (
     ws: SaveWs, id: Identity, draft: WeeklyReport, actor: Actor,
-    o: { advance?: boolean; dictionary?: Abbreviation[]; now?: Date } = {},
+    o: { advance?: boolean; dictionary?: Abbreviation[]; now?: Date; evm?: WeeklyReport['evmSnapshot'] } = {},
 ): { reports: WeeklyReport[]; report: WeeklyReport; from: ReportStage } | null => {
     const now = o.now || new Date();
     const reports = ws.weeklyReports || [];
@@ -317,10 +345,12 @@ export const saveReport = (
     const content = { thisWeek: draft.thisWeek, nextWeek: draft.nextWeek, abbreviations: draft.abbreviations, worklog: draft.worklog, aiDraft: draft.aiDraft, pmScore, pmScoreNote, planReview };
     let r: WeeklyReport = existing ? editReport(existing, content, actor, now) : { ...createReport({ kind: draft.kind, projectId: draft.projectId, departmentCode: draft.departmentCode, year: draft.year, week: draft.week }, actor, now), ...content, id: draft.id };
     if (o.advance) {
-        const flow = reportFlowOf(ws);
+        const flow = reportFlowFor(ws, r);
         if (lintCounts(lintReport(r, o.dictionary)).errors > 0 || !nextStage(r, flow)) return null;
         if (flowBlockers(r, flow, previousPlansOf(reports, r)).length) return null;
         r = advanceReport(r, actor, now, flow);
+        // Taslaktan gönderimde o anın EVM'si raporla saklanır (B-029)
+        if ((existing?.stage ?? 'draft') === 'draft' && o.evm) r = { ...r, evmSnapshot: o.evm };
     }
     return { reports: existing ? reports.map(x => (x.id === r.id ? r : x)) : [...reports, r], report: r, from: existing?.stage || 'draft' };
 };
@@ -339,7 +369,8 @@ export const setReportAiAssessment = (ws: Pick<WorkspaceData, 'weeklyReports'>, 
 export const returnReportIn = (ws: SaveWs, id: Identity, reportId: string, actor: Actor, note: string, now: Date = new Date()): { reports: WeeklyReport[]; report: WeeklyReport } | null => {
     const reports = ws.weeklyReports || [];
     const r = reports.find(x => x.id === reportId);
-    const flow = reportFlowOf(ws);
+    if (!r) return null;
+    const flow = reportFlowFor(ws, r);
     if (!r || r.stage === 'draft' || !canEditReport(ws, id, r) || !returnStage(r, flow)) return null;
     const next = returnReport(r, actor, note, now, flow);
     return { reports: reports.map(x => (x.id === r.id ? next : x)), report: next };
