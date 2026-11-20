@@ -3,9 +3,28 @@
 Her sürümün başlığı `## vX.Y.Z` biçimindedir; GitHub sürüm sayfası bu bölümü
 buradan alır (`.github/workflows/exe.yml`).
 
+## v3.2.0
+
+Jira worklog'larından iş güçleri: kim, hangi kayıtta, ne kadar zaman harcadı ve maliyeti. Asistan uzun yanıtlarda yarıda kalmıyor.
+
+### Yenilikler
+
+**İş güçleri (Ekip ve tahsis → İş güçleri)**
+- Jira kaydıyla eşitlenen görevlerin worklog'ları (billing hours) kişi kırılımıyla çekilir: kayıtta kim, hangi gün, kaç saat çalışmış.
+- Arka planda yenilenir: Jira'daki harcanan süresi değişen kayıtlar dakikada en çok 50'şer istenir; "Jira'dan yenile" ile tümü yeniden çekilir.
+- Kişi, kayıt (ATL-12) ya da konuya göre arama; dönem ve proje süzgeci; Kişiler ve Kayıtlar görünümü.
+- Kişi ayrıntısı: hangi kayıtta ne kadar zaman harcadığı, payı, aylık dağılımı ve maliyeti (ünvanın aylık maliyeti ÷ ayın iş saati).
+- Worklog yazarları havuzdaki kişilerle e-posta, yoksa ad soyad üzerinden eşleşir; eşleşmeyenler ve maliyeti tanımsız saatler ayrıca gösterilir.
+- "Gerçekleşen tahsise işle": seçili dönemin saatleri adam-ay olarak gerçekleşen tahsise yazılır (yalnız boş aylar ya da üzerine yaz).
+- Görev ayrıntısında "Harcanan süre (Jira)": kayıtta kim kaç saat çalışmış ve maliyeti.
+
+**Asistan**
+- Uzun yanıtlar artık yarıda kesilmiyor: yanıt sınıra takılırsa asistan kaldığı yerden kendiliğinden devam eder (en çok iki kez); yanıtlar kısa tutulur, uzun listeler özetlenip ilgili ekran önerilir.
+- Yeni Jira yetenekleri: iş gücü raporu (kişi, kayıt ya da proje bazında saat ve maliyet) ve bir kaydın Jira'daki worklog'larını doğrudan okuma.
+
 ## v3.1.0
 
-Jira tarzı yapılandırılabilir pano ve iş akışları; Jira worklog'larından iş güçleri ve maliyet; asistanın ajan modu.
+Jira tarzı yapılandırılabilir pano ve iş akışları; asistanın ajan modu.
 
 ### Yenilikler
 
@@ -22,18 +41,7 @@ Jira tarzı yapılandırılabilir pano ve iş akışları; Jira worklog'larında
 - Projeye özel bileşen ve sürüm listeleri, proje rolleri ve bildirim şeması.
 - İsteğe bağlı: durum geçişleri Jira'ya da yazılır (geçiş notu yorum, harcanan süre worklog olarak).
 
-**İş güçleri (Ekip ve tahsis → İş güçleri)**
-- Jira kaydıyla eşitlenen görevlerin worklog'ları (billing hours) kişi kırılımıyla çekilir: kayıtta kim, hangi gün, kaç saat çalışmış.
-- Arka planda yenilenir: Jira'daki harcanan süresi değişen kayıtlar dakikada en çok 50'şer istenir; "Jira'dan yenile" ile tümü yeniden çekilir.
-- Kişi, kayıt (ATL-12) ya da konuya göre arama; dönem ve proje süzgeci; Kişiler ve Kayıtlar görünümü.
-- Kişi ayrıntısı: hangi kayıtta ne kadar zaman harcadığı, payı, aylık dağılımı ve maliyeti (ünvanın aylık maliyeti ÷ ayın iş saati).
-- Worklog yazarları havuzdaki kişilerle e-posta, yoksa ad soyad üzerinden eşleşir; eşleşmeyenler ve maliyeti tanımsız saatler ayrıca gösterilir.
-- "Gerçekleşen tahsise işle": seçili dönemin saatleri adam-ay olarak gerçekleşen tahsise yazılır (yalnız boş aylar ya da üzerine yaz).
-- Görev ayrıntısında "Harcanan süre (Jira)": kayıtta kim kaç saat çalışmış ve maliyeti.
-
 **Asistan**
-- Uzun yanıtlar artık yarıda kesilmiyor: yanıt sınıra takılırsa asistan kaldığı yerden kendiliğinden devam eder (en çok iki kez); yanıtlar kısa tutulur, uzun listeler özetlenip ilgili ekran önerilir.
-- Yeni Jira yetenekleri: iş gücü raporu (kişi, kayıt ya da proje bazında saat ve maliyet) ve bir kaydın Jira'daki worklog'larını doğrudan okuma.
 - Dosya ekleme: eklenen dosyaların metni soruyla birlikte yorumlanır.
 - Ajan modu: asistan istenen ekranı, görevi, kişi profilini ya da pencereyi açar (veri değiştirmez).
 - Jira'dan okuma: kayıtların Jira'daki güncel hâli, Jira'da arama ve bağlantı bilgisi.
