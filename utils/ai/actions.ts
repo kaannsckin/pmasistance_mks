@@ -12,6 +12,7 @@ import { effectiveScheme, missingRequiredFields, allowedIssueTypes } from '../pr
 import { initialStatus, resolveTransition, taskStatusLabel, taskWorkflow } from '../workflow';
 import { projectRolesOf } from '../projectRoles';
 import { applyTransition, conditionProblem, inputProblems, ruleFor, TransitionActor, TransitionEffect } from '../transitions';
+import { applyPoolAction, describePoolAction, isPoolAction, PoolAction, validatePoolAction } from './poolActions';
 
 /** Öneriyi uygulayan kişi (aktif kimlik) — geçiş koşulları için */
 const actorOf = (ws: WorkspaceData): TransitionActor => {
@@ -28,6 +29,8 @@ const actorOf = (ws: WorkspaceData): TransitionActor => {
  */
 
 export type AiAction =
+    // Veri havuzu (ünvan/maliyet, kişi, bölüm) — projeye bağlı değil; bkz. poolActions.ts
+    | PoolAction
     | { type: 'risk_ekle'; projectId: string; title: string; description?: string; probability: RiskLevel; impact: RiskLevel; mitigation?: string; ownerPersonId?: string }
     | { type: 'gorev_ekle'; projectId: string; name: string; priority: Task['priority']; resourceName?: string; dueDate?: string; time?: { best: number; avg: number; worst: number }; notes?: string; issueType?: IssueType; labels?: string[] }
     /** status: hedef kategori; workflowKey verilirse belirli iş akışı durumu (ör. TESTING) — geçiş kuralları uygulanır */
@@ -112,6 +115,7 @@ const monthLabel = (y: number, m: number) => `${MONTHS[m - 1]} ${y}`;
 
 /** Uygulamadan önce (ve öneri anında) doğrulama — sorun varsa Türkçe açıklama, yoksa null */
 export const validateAction = (ws: WorkspaceData, action: AiAction): string | null => {
+    if (isPoolAction(action)) return validatePoolAction(ws, action);
     const id = identityOf(ws);
     const project = projectOf(ws, action.projectId);
     if (!project) return 'Proje bulunamadı (silinmiş olabilir).';
@@ -225,6 +229,7 @@ const decisionNote = (title: string, a: Extract<AiAction, { type: 'istek_karari'
 
 /** Öneri kartında gösterilecek başlık ve ayrıntılar */
 export const describeAction = (ws: WorkspaceData, action: AiAction): { title: string; details: { label: string; value: string }[] } => {
+    if (isPoolAction(action)) return describePoolAction(ws, action);
     const project = projectOf(ws, action.projectId);
     const pName = project?.name || '?';
     switch (action.type) {
@@ -384,6 +389,7 @@ const touch = (ws: WorkspaceData, projectId: string, fn: (p: Project) => Project
  * kontrol edilir ve sorun varsa hata fırlatılır.
  */
 export const applyAction = (ws: WorkspaceData, action: AiAction): { ws: WorkspaceData; summary: string; effects?: TransitionEffect[] } => {
+    if (isPoolAction(action)) return applyPoolAction(ws, action);
     const err = validateAction(ws, action);
     if (err) throw new Error(err);
     const project = projectOf(ws, action.projectId)!;

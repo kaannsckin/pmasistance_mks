@@ -41,6 +41,8 @@ export interface ToolContext {
     citations: Citation[];
     /** Veri girebilen rol mü (Proje Yöneticisi / Bölüm Sorumlusu + kişi seçili) — öneri araçları buna bağlı */
     canWrite: boolean;
+    /** Veri havuzunu düzenleyebilen rol mü (datapool.edit, varsayılan PYB Destek) — havuz öneri araçları buna bağlı */
+    canWritePool: boolean;
     /** Bu turda üretilen değişiklik önerileri (kullanıcı onayı bekler) */
     proposals: AiProposal[];
     /**
@@ -87,6 +89,7 @@ export const buildToolContext = (ws: WorkspaceData, now: Date = new Date()): Too
         citations: [],
         // Değişiklik önerileri admin politikasıyla kapatılabilir
         canWrite: (identity.role === 'py' || identity.role === 'bolum_sorumlu') && !!identity.personId && aiPolicyOf(ws).proposals,
+        canWritePool: can(identity, 'datapool.edit') && aiPolicyOf(ws).proposals,
         proposals: [],
     };
 };

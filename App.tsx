@@ -2354,8 +2354,9 @@ const App: React.FC = () => {
       const result = applyAction(current, action);
       summary = result.summary;
       // Onaylanan AI önerisi de yerel değişikliktir: bildirim şeması uygulanır
-      const before = current.projects.find(p => p.id === action.projectId);
-      const after = result.ws.projects.find(p => p.id === action.projectId);
+      const projectId = 'projectId' in action ? action.projectId : undefined;
+      const before = projectId ? current.projects.find(p => p.id === projectId) : undefined;
+      const after = projectId ? result.ws.projects.find(p => p.id === projectId) : undefined;
       if (before && after && before.tasks !== after.tasks) queueNotifications(result.ws, after, before.tasks, after.tasks);
       // Onaylanan durum önerisi Jira'ya bağlı görevdeyse Jira'ya da yazılır (yapılandırma açıksa)
       if (action.type === 'gorev_durumu' && before && after) {

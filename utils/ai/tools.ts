@@ -22,7 +22,9 @@ import { can } from '../permissions';
 import { AiAction, AiProposal, describeAction, validateAction } from './actions';
 import { buildWorklogReport, reportRange, resolveTargets, WorklogGroup } from './worklogReport';
 import { buildWorkforce, hourlyRate, matchWorklogPerson } from '../workforce';
-import { fullName } from '../dataPool';
+import { fullName, PERSON_ISSUE_LABELS, personIssues, trNorm, trUpper } from '../dataPool';
+import { MAX_POOL_ROWS, parseMoney, PoolNewPerson, PoolPersonChange, PoolTitle, titleCodeFor } from './poolActions';
+import { WorkspaceData } from '../../types';
 import { JsonSchema, ToolCall, ToolSpec } from './protocol';
 import { knownWorkflow, taskStatusLabel } from '../workflow';
 import { effectiveScheme } from '../projectScheme';
@@ -49,6 +51,8 @@ export interface ToolDef {
     privateOnly?: boolean;
     /** Değişiklik ÖNERİSİ üreten araç — yalnızca veri girebilen rollere sunulur */
     writeOnly?: boolean;
+    /** Veri havuzu ÖNERİSİ üreten araç — yalnız veri havuzunu düzenleyebilen rollere (PYB Destek) sunulur */
+    poolWrite?: boolean;
     /** Yalnız bu yetkiyi taşıyan rollere sunulur (ör. denetim günlüğü, veri sağlığı) */
     permission?: PermissionKey;
     /** Tarayıcı çalışma zamanı gerektirir: ui (ajan gezinmesi) ya da jira (sunucuda Jira bağlantısı) */
@@ -811,8 +815,8 @@ export const AI_TOOLS: ToolDef[] = [
 
 const PENDING_NOTE = 'Öneri hazırlandı; kullanıcı sohbetteki karttan "Uygula" derse uygulanacak. Değişikliği yaptığını SÖYLEME; kullanıcıdan kartı onaylamasını iste.';
 
-const propose = (ctx: ToolContext, action: AiAction) => {
-    const err = validateAction(ctx.ws, action);
+const propose = (ctx: ToolContext, action: AiAction, checkWs: WorkspaceData = ctx.ws) => {
+    const err = validateAction(checkWs, action);
     if (err) throw new ToolError(err);
     const d = describeAction(ctx.ws, action);
     const proposal: AiProposal = { id: `oneri-${Date.now().toString(36)}-${ctx.proposals.length + 1}`, action, title: d.title, details: d.details, status: 'pending' };
@@ -1466,13 +1470,224 @@ const WORKFORCE_TOOLS: ToolDef[] = [
     },
 ];
 
-AI_TOOLS.push(...PROPOSAL_TOOLS, ...AGENT_TOOLS, ...JIRA_TOOLS, ...WORKFORCE_TOOLS);
+// ---------------------------------------------------------------------------
+// Veri havuzu: okuma (herkes) ve ÖNERİ (yalnız veri havuzunu düzenleyebilen rol).
+// Satır listeleri tek kartta onaylanır; okunamayan satırlar "atlanan" olarak döner.
+// ---------------------------------------------------------------------------
+
+/** Dizi argümanı (bazı modeller diziyi JSON metni olarak yollar) */
+const rowsArg = (v: unknown, name: string): Args[] => {
+    let x = v;
+    if (typeof x === 'string') { try { x = JSON.parse(x); } catch { /* aşağıda hata */ } }
+    if (!Array.isArray(x) || !x.length) throw new ToolError(`${name} boş olmayan bir liste olmalı.`);
+    if (x.length > MAX_POOL_ROWS) throw new ToolError(`Tek öneride en çok ${MAX_POOL_ROWS} satır; tabloyu bölün.`);
+    return x.filter((r): r is Args => !!r && typeof r === 'object');
+};
+
+/** Bu turda önerilmiş (henüz uygulanmamış) ünvan/bölümler — aynı turdaki kişi önerisi bunlara başvurabilsin */
+const pendingPool = (ctx: ToolContext) => {
+    const titles = ctx.ws.titles.slice();
+    const departments = ctx.ws.departments.slice();
+    for (const p of ctx.proposals) {
+        if (p.status !== 'pending') continue;
+        if (p.action.type === 'unvan_kaydet') for (const t of p.action.titles) if (!titles.some(x => x.code === t.code)) titles.push({ code: t.code, name: t.name, monthlyCost: t.monthlyCost });
+        if (p.action.type === 'birim_kaydet') for (const d of p.action.departments) if (!departments.some(x => x.code === trUpper(d.code))) departments.push({ code: trUpper(d.code), name: d.name });
+    }
+    return { titles, departments, ws: { ...ctx.ws, titles, departments } };
+};
+
+const resolveTitleCode = (titles: WorkspaceData['titles'], ref: unknown): string => {
+    const t = str(ref);
+    const hit = titles.find(x => trUpper(x.code) === trUpper(t)) || titles.find(x => trNorm(x.name) === trNorm(t));
+    if (!hit) throw new ToolError(`"${t}" ünvanı havuzda yok; önce oner_unvan_kaydet ile ekleyin.`);
+    return hit.code;
+};
+
+const resolveDeptCode = (departments: WorkspaceData['departments'], ref: unknown): string => {
+    const t = str(ref);
+    const hit = departments.find(x => trUpper(x.code) === trUpper(t)) || departments.find(x => trNorm(x.name) === trNorm(t));
+    if (!hit) throw new ToolError(`"${t}" bölümü havuzda yok; önce oner_bolum_kaydet ile ekleyin.`);
+    return hit.code;
+};
+
+const aaArg = (v: unknown): number | undefined => {
+    if (v === undefined || v === null || v === '') return undefined;
+    const n = typeof v === 'number' ? v : Number(String(v).replace(',', '.').replace('%', ''));
+    if (!Number.isFinite(n)) throw new ToolError('aa sayısal olmalı (0-1,5).');
+    return n > 1.5 && n <= 150 ? Math.round(n) / 100 : Math.round(n * 100) / 100; // %80 → 0,8
+};
+
+/** Satır satır çözer; hatalı satırlar atlanır ve nedeniyle döner */
+const eachRow = <T,>(rows: Args[], fn: (r: Args, i: number) => T): { ok: T[]; skipped: string[] } => {
+    const ok: T[] = [], skipped: string[] = [];
+    rows.forEach((r, i) => {
+        try { ok.push(fn(r, i)); } catch (e) { skipped.push(`${i + 1}. satır: ${(e as Error).message}`); }
+    });
+    if (!ok.length) throw new ToolError(`Hiçbir satır önerilemedi. ${skipped.slice(0, 10).join(' ')}`);
+    return { ok, skipped };
+};
+
+const withSkipped = (out: ReturnType<typeof propose>, skipped: string[]) => (skipped.length ? { ...out, atlanan: skipped } : out);
+
+const POOL_TOOLS: ToolDef[] = [
+    {
+        label: 'Veri havuzu',
+        spec: {
+            name: 'veri_havuzu',
+            description: 'Veri havuzu listesi: ünvanlar (kısaltma, ad, 1 AA aylık maliyet, kişi sayısı), bölümler ya da kişiler (bölüm, ünvan, AA, eksikler). Havuz önerisinden önce mevcut kayıtları görmek için.',
+            parameters: S.obj({
+                tur: S.str('', ['unvan', 'bolum', 'kisi']),
+                ara: S.str('Ad/kod içinde ara'),
+                eksik: S.str('Yalnız eksiği olan kişiler', ['bolum', 'unvan', 'maliyet', 'eposta']),
+                limit: P.limit,
+            }, ['tur']),
+        },
+        run: (a, ctx) => {
+            const q = trNorm(str(a.ara));
+            const lim = clampLimit(a.limit, 50);
+            const { titles, departments, people } = ctx.ws;
+            if (str(a.tur) === 'unvan') {
+                const rows = titles.filter(t => !q || trNorm(`${t.code} ${t.name}`).includes(q));
+                return {
+                    toplam: rows.length,
+                    unvanlar: rows.slice(0, lim).map(t => ({ kisaltma: t.code, ad: t.name, aylik_maliyet_tl: t.monthlyCost, kisi: people.filter(p => p.titleCode === t.code).length })),
+                    maliyetsiz: rows.filter(t => !t.monthlyCost).map(t => t.code),
+                };
+            }
+            if (str(a.tur) === 'bolum') {
+                const rows = departments.filter(d => !q || trNorm(`${d.code} ${d.name}`).includes(q));
+                return { toplam: rows.length, bolumler: rows.slice(0, lim).map(d => ({ kod: d.code, ad: d.name, sorumlu: d.leadName, kisi: people.filter(p => p.departmentCode === d.code).length })) };
+            }
+            const want = str(a.eksik);
+            const issueKey = ({ bolum: 'department', unvan: 'title', maliyet: 'cost', eposta: 'email' } as const)[want as 'bolum'];
+            const rows = people
+                .map(p => ({ p, iss: personIssues(p, departments, titles) }))
+                .filter(({ p, iss }) => (!q || trNorm(`${fullName(p)} ${p.departmentCode} ${p.titleCode || ''}`).includes(q)) && (!issueKey || iss.includes(issueKey)));
+            return {
+                toplam: rows.length,
+                kisiler: rows.slice(0, lim).map(({ p, iss }) => ({
+                    ad: fullName(p), bolum: p.departmentCode || undefined, unvan: p.titleCode ? titles.find(t => t.code === p.titleCode)?.name || p.titleCode : undefined,
+                    aa: p.availableAA, ...(ctx.canWritePool ? { eposta: p.email } : {}), ...(iss.length ? { eksik: iss.map(i => PERSON_ISSUE_LABELS[i]) } : {}),
+                })),
+            };
+        },
+    },
+    {
+        label: 'Ünvan önerisi',
+        poolWrite: true,
+        spec: {
+            name: 'oner_unvan_kaydet',
+            description: 'Ünvan ekle/güncelle ÖNERİR (onaysız uygulanmaz): ad ve 1 AA aylık maliyet (TL). Var olan ünvan adı/kısaltmasıyla eşleşir ve güncellenir; yoksa eklenir. Tüm tabloyu TEK çağrıda ver; toplam/ortalama ve grup başlığı satırlarını katma.',
+            parameters: S.obj({
+                unvanlar: {
+                    type: 'array',
+                    items: S.obj({ ad: S.str(''), kisaltma: S.str('Yoksa üretilir'), aylik_maliyet: S.num('TL') }, ['ad']),
+                },
+            }, ['unvanlar']),
+        },
+        run: (a, ctx) => {
+            const taken = ctx.ws.titles.map(t => t.code);
+            const { ok, skipped } = eachRow(rowsArg(a.unvanlar, 'unvanlar'), r => {
+                const name = str(r.ad).replace(/\s+/g, ' ');
+                if (!name) throw new ToolError('ad boş.');
+                if (/^(genel )?(toplam|ortalama|ort\.?)\b/i.test(name)) throw new ToolError(`"${name}" bir toplam/ortalama satırı; ünvan değil.`);
+                const given = trUpper(str(r.kisaltma));
+                const cur = (given && ctx.ws.titles.find(t => t.code === given)) || ctx.ws.titles.find(t => trNorm(t.name) === trNorm(name));
+                const hasCost = r.aylik_maliyet !== undefined && r.aylik_maliyet !== null && r.aylik_maliyet !== '';
+                const cost = hasCost ? parseMoney(r.aylik_maliyet) : undefined;
+                if (hasCost && cost === undefined) throw new ToolError(`"${name}" maliyeti okunamadı (${String(r.aylik_maliyet)}).`);
+                const code = cur?.code || given || titleCodeFor(name, taken);
+                taken.push(code);
+                return { code, name, ...(cost !== undefined ? { monthlyCost: cost } : {}) } as PoolTitle;
+            });
+            return withSkipped(propose(ctx, { type: 'unvan_kaydet', titles: ok }), skipped);
+        },
+    },
+    {
+        label: 'Kişi güncelleme önerisi',
+        poolWrite: true,
+        spec: {
+            name: 'oner_kisi_guncelle',
+            description: 'Havuzdaki kişilerin ünvanını, bölümünü, e-postasını ya da kullanılabilir AA\'sını güncellemeyi ÖNERİR (onaysız uygulanmaz). Birden çok kişiyi TEK çağrıda ver; yalnız değişecek alanları yaz.',
+            parameters: S.obj({
+                kisiler: {
+                    type: 'array',
+                    items: S.obj({ kisi: S.str('Ad soyad'), unvan: S.str('Ad ya da kısaltma'), bolum: S.str('Kod'), eposta: S.str(''), aa: S.num('0-1,5') }, ['kisi']),
+                },
+            }, ['kisiler']),
+        },
+        run: (a, ctx) => {
+            const pool = pendingPool(ctx);
+            const { ok, skipped } = eachRow(rowsArg(a.kisiler, 'kisiler'), r => {
+                const person = resolvePerson(ctx, str(r.kisi) || '?');
+                const c: PoolPersonChange = { personId: person.id };
+                if (str(r.unvan)) c.titleCode = resolveTitleCode(pool.titles, r.unvan);
+                if (str(r.bolum)) c.departmentCode = resolveDeptCode(pool.departments, r.bolum);
+                if (str(r.eposta)) c.email = str(r.eposta);
+                const aa = aaArg(r.aa);
+                if (aa !== undefined) c.availableAA = aa;
+                return c;
+            });
+            return withSkipped(propose(ctx, { type: 'kisi_guncelle', changes: ok }, pool.ws), skipped);
+        },
+    },
+    {
+        label: 'Kişi ekleme önerisi',
+        poolWrite: true,
+        spec: {
+            name: 'oner_kisi_ekle',
+            description: 'Veri havuzuna yeni kişi eklemeyi ÖNERİR (onaysız uygulanmaz). Havuzda olan kişiyi ekleme; oner_kisi_guncelle kullan.',
+            parameters: S.obj({
+                kisiler: {
+                    type: 'array',
+                    items: S.obj({ ad: S.str('Ad (ya da ad soyad)'), soyad: S.str(''), bolum: S.str('Kod'), unvan: S.str('Ad ya da kısaltma'), eposta: S.str(''), aa: S.num('Varsayılan 1') }, ['ad', 'bolum']),
+                },
+            }, ['kisiler']),
+        },
+        run: (a, ctx) => {
+            const pool = pendingPool(ctx);
+            const { ok, skipped } = eachRow(rowsArg(a.kisiler, 'kisiler'), r => {
+                let first = str(r.ad).replace(/\s+/g, ' '), last = str(r.soyad).replace(/\s+/g, ' ');
+                if (!last && first.includes(' ')) { const i = first.lastIndexOf(' '); last = first.slice(i + 1); first = first.slice(0, i); }
+                if (!first || !last) throw new ToolError('ad ve soyad gerekli.');
+                if (ctx.ws.people.some(p => trNorm(fullName(p)) === trNorm(`${first} ${last}`))) throw new ToolError(`${first} ${last} havuzda zaten var (oner_kisi_guncelle).`);
+                return {
+                    firstName: first, lastName: last, departmentCode: resolveDeptCode(pool.departments, r.bolum),
+                    ...(str(r.unvan) ? { titleCode: resolveTitleCode(pool.titles, r.unvan) } : {}),
+                    ...(str(r.eposta) ? { email: str(r.eposta) } : {}),
+                    availableAA: aaArg(r.aa) ?? 1,
+                } as PoolNewPerson;
+            });
+            return withSkipped(propose(ctx, { type: 'kisi_ekle', people: ok }, pool.ws), skipped);
+        },
+    },
+    {
+        label: 'Bölüm önerisi',
+        poolWrite: true,
+        spec: {
+            name: 'oner_bolum_kaydet',
+            description: 'Bölüm ekle ya da adını güncelle ÖNERİR (onaysız uygulanmaz), koda göre.',
+            parameters: S.obj({
+                bolumler: { type: 'array', items: S.obj({ kod: S.str('ör. U310'), ad: S.str('') }, ['kod', 'ad']) },
+            }, ['bolumler']),
+        },
+        run: (a, ctx) => {
+            const { ok, skipped } = eachRow(rowsArg(a.bolumler, 'bolumler'), r => {
+                if (!str(r.kod) || !str(r.ad)) throw new ToolError('kod ve ad gerekli.');
+                return { code: trUpper(str(r.kod)), name: str(r.ad) };
+            });
+            return withSkipped(propose(ctx, { type: 'birim_kaydet', departments: ok }), skipped);
+        },
+    },
+];
+
+AI_TOOLS.push(...PROPOSAL_TOOLS, ...AGENT_TOOLS, ...JIRA_TOOLS, ...WORKFORCE_TOOLS, ...POOL_TOOLS);
 
 const TOOL_MAP = new Map(AI_TOOLS.map(t => [t.spec.name, t]));
 
 /** Bu kullanıcıya sunulacak araç tanımları (yönetici rollerine not/istek araçları hiç gönderilmez) */
 const toolAvailable = (t: ToolDef, ctx: ToolContext): boolean =>
-    (!t.privateOnly || ctx.canSeePrivate) && (!t.writeOnly || ctx.canWrite) && (!t.permission || can(ctx.identity, t.permission))
+    (!t.privateOnly || ctx.canSeePrivate) && (!t.writeOnly || ctx.canWrite) && (!t.poolWrite || ctx.canWritePool) && (!t.permission || can(ctx.identity, t.permission))
     && (!t.requires || !!ctx[t.requires]);
 
 export const toolSpecsFor = (ctx: ToolContext): ToolSpec[] => AI_TOOLS.filter(t => toolAvailable(t, ctx)).map(t => t.spec);
@@ -1485,7 +1700,7 @@ export const toolKind = (name: string): 'read' | 'propose' | 'ui' | 'jira' => {
     if (!t) return 'read';
     if (t.requires === 'ui') return 'ui';
     // Onay isteyen öneriler (ör. oner_jira_esitle) Jira'ya bağlı olsa da öneri sayılır
-    if (t.writeOnly) return 'propose';
+    if (t.writeOnly || t.poolWrite) return 'propose';
     return t.requires === 'jira' ? 'jira' : 'read';
 };
 

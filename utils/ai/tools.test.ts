@@ -82,14 +82,26 @@ describe('araç kataloğu', () => {
         // ~2 100 karakter). Yönetici rolleri yazma araçlarını almadığı için onların istek boyutu değişmedi.
         // Çalışma zamanı gerektiren araçlar (ajan gezinmesi, Jira okuma/worklog/eşitleme) yalnız
         // bağlıyken gönderilir; onlarsız istek BL-15 sınırında kalır.
-        const base = JSON.stringify(AI_TOOLS.filter(t => !t.requires).map(t => t.spec)).length;
+        // Ölçü, bir isteğe GERÇEKTEN giden araçlardır: veri havuzu öneri araçları yalnız veri havuzunu
+        // düzenleyen role (PYB Destek), proje öneri araçları yalnız PY/Bölüm Sorumlusu'na gider; ikisi
+        // aynı istekte bulunmaz. Her rolün temel isteği BL-15 sınırında kalır.
         const runtime = JSON.stringify(AI_TOOLS.filter(t => t.requires).map(t => t.spec)).length;
-        console.log(`çalışma zamanısız: ${base}, çalışma zamanlı: ${runtime}`);
+        let base = 0;
+        for (const role of ['py', 'mudur', 'bolum_sorumlu', 'pyb_destek', 'pyb_sorumlu', 'admin'] as UserRole[]) {
+            const ctx = buildToolContext(buildWs(role, role === 'py' || role === 'bolum_sorumlu' ? 'p1' : null), NOW);
+            const specs = toolSpecsFor(ctx);
+            const size = JSON.stringify(specs).length;
+            console.log(`${role}: ${specs.length} araç, ${size} karakter`);
+            expect(specs.length).toBeLessThanOrEqual(40);
+            base = Math.max(base, size);
+        }
+        console.log(`çalışma zamanısız en büyük istek: ${base}, çalışma zamanlı: ${runtime}`);
         expect(base).toBeLessThan(18_000);
         // 5 000 → 7 000: ajan + Jira okuma araçlarına Jira worklog raporu, eşitleme önerisi, iş gücü
         // raporu ve kayıt worklog'u eklendi. Yalnız Jira bağlıyken gönderilir; temel istek BL-15'te kalır.
         expect(runtime).toBeLessThan(7_000);
-        expect(AI_TOOLS.length).toBeLessThanOrEqual(40);
+        // Katalog toplamı: rol başına en çok 40 araç gider (yukarıda); katalog, rollere ayrılan araçlarla büyür
+        expect(AI_TOOLS.length).toBeLessThanOrEqual(48);
     });
 
     it('her araç parametresiz çalışır (duman testi) ve sicil sızdırmaz', async () => {

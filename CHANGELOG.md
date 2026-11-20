@@ -5,7 +5,7 @@ buradan alır (`.github/workflows/exe.yml`).
 
 ## v3.2.0
 
-Jira worklog'larından iş güçleri: kim, hangi kayıtta, ne kadar zaman harcadı ve maliyeti. Asistan uzun yanıtlarda yarıda kalmıyor.
+Jira worklog'larından iş güçleri: kim, hangi kayıtta, ne kadar zaman harcadı ve maliyeti. Asistan uzun yanıtlarda yarıda kalmıyor ve veri havuzuna (ünvan, maliyet, kişi, bölüm) öneri hazırlayabiliyor.
 
 ### Yenilikler
 
@@ -21,6 +21,9 @@ Jira worklog'larından iş güçleri: kim, hangi kayıtta, ne kadar zaman harcad
 **Asistan**
 - Uzun yanıtlar artık yarıda kesilmiyor: yanıt sınıra takılırsa asistan kaldığı yerden kendiliğinden devam eder (en çok iki kez); yanıtlar kısa tutulur, uzun listeler özetlenip ilgili ekran önerilir.
 - Yeni Jira yetenekleri: iş gücü raporu (kişi, kayıt ya da proje bazında saat ve maliyet) ve bir kaydın Jira'daki worklog'larını doğrudan okuma.
+- Veri havuzu önerileri (PYB Destek): ünvan ve aylık maliyet ekleme/güncelleme, kişi ekleme, kişinin ünvanını, bölümünü, e-postasını ya da AA'sını güncelleme, bölüm ekleme. Ekteki Excel tablosu tek kartta onaylanır; havuzdaki ünvanlar adına göre eşleşir, yenilere kısaltma üretilir, toplam/ortalama satırları atlanır. Her kart "Uygula" denmeden uygulanmaz, denetim günlüğüne yazılır ve geri alınabilir.
+- Veri havuzunu listeleme: ünvanlar ve maliyetleri, bölümler, eksiği olan kişiler.
+- Eklenen Excel dosyaları boş hücreler atılarak okunur ve tek mesaj sınırı iki katına çıktı; büyük tablolar artık yarıda kesilmiyor.
 
 ## v3.1.0
 
