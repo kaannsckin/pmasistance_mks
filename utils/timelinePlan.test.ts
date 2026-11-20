@@ -39,7 +39,7 @@ describe('unitCapacities', () => {
 describe('buildLanes', () => {
     const lanes = buildLanes(buildProject());
 
-    it('havuz + sürümler; plana dahil olmayan görev gösterilmez', () => {
+    it('havuz + sprintler; plana dahil olmayan görev gösterilmez', () => {
         expect(lanes.map(l => l.version)).toEqual([0, 1, 2]);
         expect(lanes[2].tasks.map(t => t.id)).toEqual(['d']);
         expect(lanes[0].start).toBeUndefined();
@@ -64,13 +64,13 @@ describe('buildLanes', () => {
         expect(buildLanes(p)[1].overloaded).toEqual([]);
     });
 
-    it('takvim panoyla aynı: sürüm 1 6–24 Temmuz, test 27–30 Temmuz', () => {
+    it('takvim panoyla aynı: sprint 1 6–24 Temmuz, test 27–30 Temmuz', () => {
         const s1 = lanes[1];
         expect([s1.start!.getDate(), s1.end!.getDate(), s1.testStart!.getDate(), s1.testEnd!.getDate()]).toEqual([6, 24, 27, 30]);
         expect(lanes[2].start!.getDate()).toBe(31);
     });
 
-    it('boş sürüm eklenebilir', () => {
+    it('boş sprint eklenebilir', () => {
         const more = buildLanes(buildProject(), 2);
         expect(more).toHaveLength(5);
         expect(more[4].tasks).toHaveLength(0);
@@ -82,7 +82,7 @@ describe('aralık ve konum', () => {
     const lanes = buildLanes(buildProject());
     const range = laneRange(lanes)!;
 
-    it('ilk sürüm başından son test bitişine', () => {
+    it('ilk sprint başından son test bitişine', () => {
         expect(range.start.getDate()).toBe(6);
         expect(range.end.getMonth()).toBe(7); // Ağustos
     });

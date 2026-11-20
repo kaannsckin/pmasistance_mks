@@ -1,6 +1,6 @@
 
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { View, Task, Resource, TaskStatus, Note, CustomerRequest, Objective, Project, Person, WorkspaceData, RagStatus, ProjectStatus, UserRole, PlanLockStatus, WorkPackage, UiStyle, ModernTheme, ColorMode, PermissionKey, EstimateLogEntry, JiraSyncSettings, ReleasePlan, GoldenItem, EvalRun, ModelEvalRun } from './types';
+import { View, Task, Resource, TaskStatus, Note, CustomerRequest, Objective, Project, Person, WorkspaceData, RagStatus, ProjectStatus, UserRole, PlanLockStatus, WorkPackage, UiStyle, ModernTheme, ColorMode, PermissionKey, EstimateLogEntry, JiraSyncSettings, ReleasePlan, GoldenItem, EvalRun, ModelEvalRun, BoardConfig, ProjectScheme, WorkflowConfig, TransitionRule, ProjectComponent, ProjectVersion, ProjectRoleDef } from './types';
 import { INITIAL_TASKS, INITIAL_RESOURCES, INITIAL_OBJECTIVES } from './constants';
 import {
   WORKSPACE_STORAGE_KEY,
@@ -30,6 +30,15 @@ import { resetReportGuide, saveDepartmentGuide, saveReportGuide } from './utils/
 import { setReportExemplar } from './utils/ai/reportExamples';
 import { applyRuleAction, RuleAction, ruleActionLabel } from './utils/ai/reportRules';
 import { stampLifecycle } from './utils/planning/lifecycle';
+import { canTransition, DEFAULT_WORKFLOW, resolveTransition, taskStatusLabel, taskWorkflow, workflowKey, workflowOptions, WorkflowStatus } from './utils/workflow';
+import { applyTransition, conditionProblem, needsInput, ruleFor, TransitionActor, TransitionEffect, TransitionInput, TransitionNeeds, transitionNeeds } from './utils/transitions';
+import TransitionDialog from './components/modern/TransitionDialog';
+import { describeNotify, fetchIntegrationHealth, fetchJiraSyncPage, JiraIssueRecord, sendNotification, updateJiraIssue } from './utils/integrations';
+import { boardForProject, DEFAULT_SCHEME_ID, effectiveScheme, migrateTasksToWorkflow, schemeOf, schemeUsage, validateProjectWorkflow, validateScheme } from './utils/projectScheme';
+import ProjectWorkflowSheet from './components/modern/ProjectWorkflowSheet';
+import ProjectListsSheet from './components/modern/ProjectListsSheet';
+import { cleanRoleMembers, projectRolesOf } from './utils/projectRoles';
+import { buildDeliveries, detectTaskEvents, NotificationDelivery } from './utils/notifications';
 import { AllocationSuggestion, ApplyMode, applyAllocationSuggestions } from './utils/taskToAllocation';
 import { applyBilledHoursActuals, planBilledHoursPoolAdditions, suggestBilledHoursActuals, BilledApplyMode, BilledHoursOptions, BilledHoursRecord } from './utils/billedHours';
 import { buildTodoItems, TodoItem } from './utils/todoItems';
@@ -64,6 +73,7 @@ import GibImportModal, { GibImportChoice } from './components/GibImportModal';
 import { applyGibImport, formatPercent, GibImportPackage } from './utils/gibFindings';
 import { CommandItem } from './components/CommandPalette';
 import { AssistantProvider } from './components/assistant/AssistantContext';
+import { dialogProblem, DIALOGS, resolveScreen, SCREENS, UiCommand, UiEnv, UiResult } from './utils/ai/uiActions';
 import AssistantPanel, { AssistantCommandPalette } from './components/assistant/AssistantPanel';
 import { buildSuggestions } from './utils/ai/suggestions';
 import { RagRef } from './utils/rag/sources';
@@ -90,9 +100,8 @@ import { markPushed } from './utils/planning/jiraFieldSync';
 import { ensureJiraPeople } from './utils/planning/jiraPeople';
 import { reportEvmSnapshot } from './utils/evm';
 import { useJiraAutoSync } from './components/modern/planning/useJiraAutoSync';
-import { fetchIntegrationHealth, fetchJiraSyncPage, JiraIssueRecord, updateJiraIssue } from './utils/integrations';
 import ModernPortfolio from './components/modern/ModernPortfolio';
-import ModernBoard from './components/modern/ModernBoard';
+import ProjectBoard from './components/modern/ProjectBoard';
 import ModernProjectOverview from './components/modern/ModernProjectOverview';
 import ModernTaskList from './components/modern/ModernTaskList';
 import ModernAllocation from './components/modern/ModernAllocation';
@@ -178,12 +187,21 @@ const App: React.FC = () => {
   const [isPaletteOpen, setIsPaletteOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isWpManagerOpen, setIsWpManagerOpen] = useState(false);
+  // Klasik arayüzde "Pano" sekmesi: Jira tarzı durum panosu ya da sprint planı
+  const [classicBoardMode, setClassicBoardMode] = useState<'status' | 'sprint'>('status');
   const [isGibImportOpen, setIsGibImportOpen] = useState(false);
   // Modern arayüz: dar ekranda kenar çubuğu çekmecesi, "yeni proje" isteği, sürprizler
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [newProjectRequest, setNewProjectRequest] = useState(0);
   const [egg, setEgg] = useState<EggEvent | null>(null);
   const [undo, setUndo] = useState<{ message: string; snapshot: WorkspaceData } | null>(null);
+  // İş akışı kuralı bildirimi (izin verilmeyen geçiş, eksik zorunlu alan)
+  const [flowNotice, setFlowNotice] = useState<string | null>(null);
+  // Projeye özel iş akışı penceresi (proje kimliği)
+  const [workflowSheetProject, setWorkflowSheetProject] = useState<string | null>(null);
+  // Bileşen ve sürüm listeleri penceresi (proje kimliği)
+  const [listsSheetProject, setListsSheetProject] = useState<string | null>(null);
+  useEffect(() => { if (!flowNotice) return; const id = window.setTimeout(() => setFlowNotice(null), 6000); return () => window.clearTimeout(id); }, [flowNotice]);
   const [storageFull, setStorageFull] = useState(false);
   const [storageWarnClosed, setStorageWarnClosed] = useState(false);
   const undoTimer = useRef<number | undefined>(undefined);
@@ -240,6 +258,11 @@ const App: React.FC = () => {
   }, []);
 
   const settings = workspace?.settings;
+  // Aktif projenin admin yapılandırma şeması (iş akışı, kayıt türleri, zorunlu alanlar, pano)
+  const activeScheme = useMemo(
+    () => effectiveScheme({ projectSchemes: workspace?.projectSchemes }, workspace?.projects.find(p => p.id === workspace.activeProjectId)),
+    [workspace?.projectSchemes, workspace?.projects, workspace?.activeProjectId]
+  );
   const activeProject = useMemo(
     () => workspace?.projects.find(p => p.id === workspace.activeProjectId) ?? null,
     [workspace]
@@ -436,6 +459,49 @@ const App: React.FC = () => {
     setUndo(null);
   }, [undo]);
 
+  // ---- Bildirim şeması: yerel görev değişikliklerinden olay → alıcılar ----
+  // Güncelleyici içinde kuyruğa alınır (anahtarla tekilleştirilir), çizimden sonra gönderilir.
+  const notifyQueue = useRef<NotificationDelivery[]>([]);
+  const notifySent = useRef<Set<string>>(new Set());
+  const notifyWarned = useRef(false);
+  const queueNotifications = (ws: WorkspaceData, project: Project, prev: Task[], next: Task[]) => {
+    const scheme = effectiveScheme(ws, project);
+    if (!scheme.notifications?.length) return;
+    const events = detectTaskEvents(prev, next);
+    if (!events.length) return;
+    const id = identityOf(ws);
+    const me = ws.people.find(x => x.id === id.personId);
+    notifyQueue.current.push(...buildDeliveries(events, scheme.notifications, {
+      project, people: ws.people, wf: scheme.workflow, roleDefs: projectRolesOf(ws), actorName: me ? `${me.firstName} ${me.lastName}`.trim() : undefined,
+    }));
+  };
+  useEffect(() => {
+    // Kuyruk içinde de tekilleştir (güncelleyici iki kez çalışabilir — React StrictMode)
+    const pending: NotificationDelivery[] = [...new Map<string, NotificationDelivery>(notifyQueue.current.filter(d => !notifySent.current.has(d.key)).map(d => [d.key, d])).values()];
+    notifyQueue.current = [];
+    if (!pending.length) return;
+    pending.forEach(d => notifySent.current.add(d.key));
+    if (notifySent.current.size > 1000) notifySent.current = new Set([...notifySent.current].slice(-500));
+    (async () => {
+      let health;
+      try { health = await fetchIntegrationHealth(); } catch { return; }
+      for (const d of pending) {
+        const emails: string[] = [...new Set<string>(d.recipients.map(r => r.email).filter((e): e is string => !!e))];
+        const byEmail = health.email && emails.length > 0;
+        const byTeams = d.teams && health.teams;
+        if (!byEmail && !byTeams) {
+          if (!notifyWarned.current) { notifyWarned.current = true; setFlowNotice(`Bildirim gönderilemedi (${d.recipients.map(r => r.name).join(', ') || 'Teams'}): ${!health.email && !health.teams ? 'e-posta/Teams sunucuda yapılandırılmadı' : 'alıcının e-posta adresi yok'}.`); }
+          continue;
+        }
+        try {
+          const r = await sendNotification({ subject: d.subject, text: d.text, ...(byEmail ? { email: { to: emails } } : {}), ...(byTeams ? { teams: true } : {}) }, health.authMode);
+          const res = describeNotify(r);
+          if (!res.ok) setFlowNotice(`Bildirim: ${res.text}`);
+        } catch (e) { setFlowNotice(`Bildirim gönderilemedi: ${(e as Error).message}`); }
+      }
+    })();
+  }, [workspace]);
+
   // Belirli bir projeyi günceller (null → etkin proje)
   const updateProjectById = useCallback((id: string | null, updater: (p: Project) => Project) => {
     updateWorkspace(ws => ({
@@ -447,6 +513,7 @@ const App: React.FC = () => {
         const now = new Date();
         // Yerel değişikliklerde kayıt yaşam döngüsü damgalanır (açılış, başlama, kapanış, durum günlüğü)
         const tasks = next.tasks !== p.tasks ? stampLifecycle(p.tasks, next.tasks, now) : next.tasks;
+        if (tasks !== p.tasks) queueNotifications(ws, { ...next, tasks }, p.tasks, tasks);
         return { ...next, tasks, updatedAt: now.toISOString() };
       }),
     }));
@@ -1122,6 +1189,113 @@ const App: React.FC = () => {
     } : ws));
   }, [updateWorkspace]);
 
+  // ---- Proje panosu yapılandırması (kolonlar, kurallar, hızlı filtreler, kulvarlar) ----
+  const handleSaveBoardConfig = useCallback((projectId: string, boardConfig: BoardConfig | undefined) => {
+    updateWorkspace(ws => {
+      const project = ws.projects.find(p => p.id === projectId);
+      if (!project) return ws;
+      const isAdmin = can(identityOf(ws), 'screen.admin');
+      // Proje sahibi yalnız şema izin veriyorsa; admin her zaman
+      if (!isAdmin && (!canEditProjectContent(ws, identityOf(ws), projectId) || !schemeOf(ws, project).allowProjectBoard)) return ws;
+      const next = { ...ws, projects: ws.projects.map(p => (p.id === projectId ? { ...p, boardConfig, updatedAt: new Date().toISOString() } : p)) };
+      return appendAudit(next, 'config.update', boardConfig
+        ? `"${project.name}" panosu yapılandırıldı: ${boardConfig.columns.map(c => c.name).join(' → ')} · ${boardConfig.quickFilters.length} hızlı filtre`
+        : `"${project.name}" panosu varsayılan ayarlara döndü`, projectId);
+    });
+  }, [updateWorkspace]);
+
+  // ---- Proje yapılandırma şemaları (admin): kaydet / sil / projeye ata ----
+  // İş akışı değişince yeni akışta olmayan durumdaki yerel görevler aynı kategorinin ilk durumuna taşınır
+  const migrateProjects = (ws: WorkspaceData, ids: Set<string>): { ws: WorkspaceData; moved: number } => {
+    let moved = 0;
+    const projects = ws.projects.map(p => {
+      if (!ids.has(p.id)) return p;
+      const r = migrateTasksToWorkflow(p.tasks, effectiveScheme(ws, p).workflow);
+      moved += r.moved;
+      return r.moved ? { ...p, tasks: r.tasks, updatedAt: new Date().toISOString() } : p;
+    });
+    return { ws: moved ? { ...ws, projects } : ws, moved };
+  };
+  const handleSaveScheme = useCallback((scheme: ProjectScheme): string | null => {
+    const problems = validateScheme(scheme);
+    if (problems.length) return problems[0];
+    let error: string | null = null;
+    updateWorkspace(ws => {
+      if (!can(identityOf(ws), 'screen.admin')) { error = 'Yalnız yönetici şema düzenleyebilir.'; return ws; }
+      const list = ws.projectSchemes || [];
+      const exists = list.some(x => x.id === scheme.id);
+      const saved = { ...scheme, updatedAt: new Date().toISOString() };
+      const next0 = { ...ws, projectSchemes: exists ? list.map(x => (x.id === scheme.id ? saved : x)) : [...list, saved] };
+      const users = new Set(schemeUsage(next0, scheme.id).map(p => p.id));
+      const { ws: next, moved } = migrateProjects(next0, users);
+      return appendAudit(next, 'config.update', `Proje yapılandırması "${scheme.name}" ${exists || scheme.id === DEFAULT_SCHEME_ID ? 'güncellendi' : 'oluşturuldu'}: ${scheme.workflow.statuses.length} durum, geçişler ${scheme.workflow.transitions ? 'tanımlı' : 'serbest'}, ${users.size} proje${moved ? ` · ${moved} görev yeni iş akışına taşındı` : ''}`);
+    });
+    return error;
+  }, [updateWorkspace]);
+  const handleDeleteScheme = useCallback((schemeId: string) => {
+    updateWorkspace(ws => {
+      if (!can(identityOf(ws), 'screen.admin') || schemeId === DEFAULT_SCHEME_ID) return ws;
+      const scheme = (ws.projectSchemes || []).find(x => x.id === schemeId);
+      if (!scheme) return ws;
+      const affected = new Set<string>(ws.projects.filter(p => p.schemeId === schemeId).map(p => p.id));
+      const next0 = { ...ws, projectSchemes: (ws.projectSchemes || []).filter(x => x.id !== schemeId), projects: ws.projects.map(p => (affected.has(p.id) ? { ...p, schemeId: undefined } : p)) };
+      const { ws: next, moved } = migrateProjects(next0, affected);
+      return appendAudit(next, 'config.update', `Proje yapılandırması "${scheme.name}" silindi; ${affected.size} proje varsayılana döndü${moved ? ` · ${moved} görev taşındı` : ''}`);
+    });
+  }, [updateWorkspace]);
+  // Projeye özel iş akışı: admin ya da (yapılandırma izin veriyorsa) proje sahibi
+  const handleSaveProjectWorkflow = useCallback((projectId: string, wf: WorkflowConfig | undefined) => {
+    updateWorkspace(ws => {
+      const project = ws.projects.find(p => p.id === projectId);
+      if (!project) return ws;
+      const scheme = schemeOf(ws, project);
+      const who = identityOf(ws);
+      if (!can(who, 'screen.admin') && !(scheme.allowProjectWorkflow && canEditProjectContent(ws, who, projectId))) return ws;
+      if (wf && validateProjectWorkflow(scheme, wf).length) return ws;
+      const next0 = { ...ws, projects: ws.projects.map(p => (p.id === projectId ? { ...p, workflowOverride: wf, updatedAt: new Date().toISOString() } : p)) };
+      const { ws: next, moved } = migrateProjects(next0, new Set([projectId]));
+      return appendAudit(next, 'config.update', wf
+        ? `"${project.name}" projeye özel iş akışı kaydedildi: ${wf.statuses.length} durum, ${wf.transitions ? `${Object.values(wf.transitions).reduce((n, l) => n + l.length, 0)} geçiş` : 'serbest geçiş'}${moved ? ` · ${moved} görev taşındı` : ''}`
+        : `"${project.name}" projeye özel iş akışı kaldırıldı ("${scheme.name}" akışına dönüldü)${moved ? ` · ${moved} görev taşındı` : ''}`, projectId);
+    });
+  }, [updateWorkspace]);
+  // Projenin bileşen ve sürüm listeleri: proje sahibi ya da admin (görev başvurularıyla birlikte)
+  const handleSaveProjectLists = useCallback((projectId: string, patch: { components: ProjectComponent[]; versions: ProjectVersion[]; tasks: Task[]; roleMembers?: Project['roleMembers'] }, summary: string) => {
+    updateWorkspace(ws => {
+      const project = ws.projects.find(p => p.id === projectId);
+      const who = identityOf(ws);
+      if (!project || !(can(who, 'screen.admin') || canEditProjectContent(ws, who, projectId))) return ws;
+      // Yalnız bileşen/sürüm başvuruları değişen görevler alınır (pencere açıkken yapılan diğer değişiklikler ezilmez)
+      const byId = new Map(patch.tasks.map(t => [t.id, t]));
+      const tasks = project.tasks.map(t => {
+        const n = byId.get(t.id);
+        return n && (JSON.stringify(n.components) !== JSON.stringify(t.components) || n.fixVersion !== t.fixVersion) ? { ...t, components: n.components, fixVersion: n.fixVersion } : t;
+      });
+      const next = { ...ws, projects: ws.projects.map(p => (p.id === projectId ? { ...p, components: patch.components, versions: patch.versions, roleMembers: patch.roleMembers, tasks, updatedAt: new Date().toISOString() } : p)) };
+      return appendAudit(next, 'config.update', `"${project.name}" proje ayarları: ${summary} · ${patch.components.length} bileşen, ${patch.versions.length} sürüm`, projectId);
+    });
+  }, [updateWorkspace]);
+  // Proje rolü tanımları (admin): silinen rolün üyelikleri projelerden temizlenir
+  const handleSaveProjectRoles = useCallback((defs: ProjectRoleDef[]) => {
+    updateWorkspace(ws => {
+      if (!can(identityOf(ws), 'screen.admin')) return ws;
+      const projects = ws.projects.map(p => {
+        const roleMembers = cleanRoleMembers(p.roleMembers, defs);
+        return JSON.stringify(roleMembers) === JSON.stringify(p.roleMembers) ? p : { ...p, roleMembers };
+      });
+      return appendAudit({ ...ws, projectRoles: defs, projects }, 'config.update', `Proje rolleri: ${defs.map(d => d.name).join(', ')}`);
+    });
+  }, [updateWorkspace]);
+  const handleAssignScheme = useCallback((projectId: string, schemeId: string) => {
+    updateWorkspace(ws => {
+      const project = ws.projects.find(p => p.id === projectId);
+      if (!project || !can(identityOf(ws), 'screen.admin')) return ws;
+      const next0 = { ...ws, projects: ws.projects.map(p => (p.id === projectId ? { ...p, schemeId: schemeId === DEFAULT_SCHEME_ID ? undefined : schemeId, updatedAt: new Date().toISOString() } : p)) };
+      const { ws: next, moved } = migrateProjects(next0, new Set([projectId]));
+      return appendAudit(next, 'config.update', `"${project.name}" projesine "${schemeOf(next, next.projects.find(p => p.id === projectId)).name}" yapılandırması atandı${moved ? ` · ${moved} görev yeni iş akışına taşındı` : ''}`, projectId);
+    });
+  }, [updateWorkspace]);
+
   const handleSetJiraKey = useCallback((projectId: string, key: string) => {
     updateWorkspace(ws => (canEditProjectContent(ws, identityOf(ws), projectId)
       ? { ...ws, projects: ws.projects.map(p => (p.id === projectId ? { ...p, jiraProjectKey: key } : p)) }
@@ -1315,7 +1489,114 @@ const App: React.FC = () => {
     setIsSettingsModalOpen(false);
   };
 
+  // ---- İş akışı geçiş kapısı: koşul → doğrulayıcı (gerekirse geçiş penceresi) → uygula → sonrası işlemler ----
+  const sendTransitionEffectsRef = useRef<(e: TransitionEffect[]) => void>(() => undefined);
+  const writeBackToJiraRef = useRef<(projectId: string, task: Task, target: WorkflowStatus, input: TransitionInput, resolution: string | undefined, exact: boolean) => void>(() => undefined);
+  const [pendingTransition, setPendingTransition] = useState<null | {
+    task: Task; target: WorkflowStatus; rule: TransitionRule; needs: TransitionNeeds; extra: Partial<Task>; setKey: boolean; fromLabel: string; exact: boolean;
+  }>(null);
+  const transitionActor = (): TransitionActor => {
+    const ws = workspaceRef.current!;
+    const id = identityOf(ws);
+    const person = ws.people.find(p => p.id === id.personId);
+    return { role: id.role, personId: id.personId, name: person ? `${person.firstName} ${person.lastName}`.trim() : undefined };
+  };
+  const sendTransitionEffects = async (effects: TransitionEffect[]) => {
+    for (const e of effects) {
+      const ws = workspaceRef.current;
+      const person = ws?.people.find(p => `${p.firstName} ${p.lastName}`.trim().toLocaleLowerCase('tr-TR') === e.to.trim().toLocaleLowerCase('tr-TR'));
+      try {
+        const health = await fetchIntegrationHealth();
+        const byEmail = !!(person?.email && health.email);
+        if (!byEmail && !health.teams) { setFlowNotice(`${e.to} için bildirim gönderilemedi: e-posta/Teams sunucuda yapılandırılmadı.`); continue; }
+        const r = await sendNotification({ subject: e.subject, text: e.text, ...(byEmail ? { email: { to: [person!.email!] } } : { teams: true }) }, health.authMode);
+        const d = describeNotify(r);
+        if (!d.ok) setFlowNotice(`Bildirim (${e.to}): ${d.text}`);
+      } catch (err) {
+        setFlowNotice(`Bildirim gönderilemedi (${e.to}): ${(err as Error).message}`);
+      }
+    }
+  };
+  sendTransitionEffectsRef.current = sendTransitionEffects;
+  /**
+   * Jira'ya geri yazma: yapılandırma açıksa Jira'ya bağlı görevin geçişi Jira'da
+   * da yapılır. `exact`: belirli durum seçildiyse Jira'da aynı adlı duruma,
+   * yalnız kategori istendiyse o kategoriye götüren geçiş seçilir.
+   */
+  const writeBackToJira = async (projectId: string, task: Task, target: WorkflowStatus, input: TransitionInput, resolution: string | undefined, exact: boolean) => {
+    const ws = workspaceRef.current;
+    const project = ws?.projects.find(p => p.id === projectId);
+    if (!ws || !project || !task.jiraId || !effectiveScheme(ws, project).jiraWriteBack) return;
+    if (!canEditProjectContent(ws, identityOf(ws), projectId)) return;
+    const key = task.jiraId;
+    try {
+      const health = await fetchIntegrationHealth();
+      if (!health.jira || !health.jiraUpdate) { setFlowNotice(`${key} Jira'ya yazılamadı: sunucuda Jira güncelleme kapalı (JIRA_ALLOW_UPDATE).`); return; }
+      const status = target.category === TaskStatus.Done ? 'done' : target.category === TaskStatus.InProgress ? 'indeterminate' : 'new';
+      const r = await updateJiraIssue(key, {
+        status, ...(exact ? { statusName: target.key } : {}),
+        ...(input.comment?.trim() ? { comment: `[PlanAsistan · ${target.label}] ${input.comment.trim()}` } : {}),
+        ...(input.hours ? { worklogHours: input.hours } : {}),
+        ...(resolution ? { resolution } : {}),
+      }, health.authMode);
+      if (r.errors.length) setFlowNotice(`Jira (${key}): ${r.errors.map(e => e.message).join('; ')}${r.applied.includes('status') ? '' : ' — uygulamadaki durum bir sonraki eşitlemede Jira\'daki duruma döner.'}`);
+      if (r.applied.length) updateWorkspace(w => appendAudit(w, 'data.export', `${key} Jira'ya yazıldı (${target.label}): ${r.applied.join(', ')}`, projectId));
+    } catch (e) {
+      setFlowNotice(`${key} Jira'ya yazılamadı: ${(e as Error).message}`);
+    }
+  };
+  writeBackToJiraRef.current = writeBackToJira;
+  const finishTransition = (task: Task, target: WorkflowStatus, rule: TransitionRule, input: TransitionInput, extra: Partial<Task>, setKey: boolean, fromLabel: string, exact = false) => {
+    const r = applyTransition({ ...task, ...extra }, target, rule, input, { actor: transitionActor(), setKey, projectName: activeProject?.name, fromLabel, versions: activeProject?.versions });
+    setTasks(prev => prev.map(t => (t.id === task.id ? { ...t, ...r.task } : t)));
+    if (r.effects.length) sendTransitionEffects(r.effects);
+    if (activeProject && task.jiraId) writeBackToJira(activeProject.id, task, target, input, r.task.resolution !== task.resolution ? r.task.resolution : undefined, exact);
+  };
+  /**
+   * Görevi bir duruma (anahtar) ya da kategoriye taşıma isteği. Geçiş, koşul ve
+   * doğrulayıcılar projenin etkin iş akışına göre denetlenir; uygun değilse
+   * gerekçe gösterilir, bilgi gerekiyorsa geçiş penceresi açılır.
+   */
+  const requestTransition = (task: Task, key: string | null, opts: { category?: TaskStatus; extra?: Partial<Task>; explicitKey?: boolean } = {}): void => {
+    const wf = activeScheme.workflow;
+    const extra = opts.extra || {};
+    const cur = taskWorkflow(task, wf);
+    let target: WorkflowStatus | undefined;
+    const known = key ? wf.statuses.find(s => s.key === workflowKey(key)) : undefined;
+    if (key && !known) {
+      // İş akışında olmayan (Jira'ya özgü) durum: kural yok, olduğu gibi
+      target = workflowOptions(activeProject?.tasks || [], wf).flatMap(g => g.statuses).find(s => s.key === workflowKey(key));
+      if (!target) { setFlowNotice(`"${key}" bu projenin iş akışında yok.`); return; }
+    } else {
+      const res = resolveTransition(task, wf, key ? { key } : { category: opts.category });
+      if ('error' in res) { setFlowNotice(res.error); return; }
+      target = res.target;
+    }
+    if (target.key === cur.key && target.category === task.status) {
+      if (Object.keys(extra).length) setTasks(prev => prev.map(t => (t.id === task.id ? { ...t, ...extra } : t)));
+      return;
+    }
+    const rule = known || !key ? ruleFor(wf, cur.key, target.key) : {};
+    const ws = workspaceRef.current!;
+    const cond = conditionProblem(rule, task, transitionActor(), ws.people, { roleMembers: activeProject?.roleMembers, roleDefs: projectRolesOf(ws) });
+    if (cond) { setFlowNotice(cond); return; }
+    const needs = transitionNeeds(rule, { ...task, ...extra });
+    if (needs.blocking) { setFlowNotice(needs.blocking); return; }
+    const setKey = !!opts.explicitKey || !!wf.transitions || !!task.jiraStatus || wf !== DEFAULT_WORKFLOW;
+    // Jira'ya geri yazmada belirli durum mu, yalnız kategori mi istendi
+    const exact = !!opts.explicitKey || wf !== DEFAULT_WORKFLOW;
+    if (needsInput(needs)) { setPendingTransition({ task, target, rule, needs, extra, setKey, fromLabel: cur.label, exact }); return; }
+    finishTransition(task, target, rule, {}, extra, setKey, cur.label, exact);
+  };
+
   const handleUpdateTask = (updatedTask: Task) => {
+    const existing = activeProject?.tasks.find(t => t.id === updatedTask.id);
+    // Durum değiştiyse iş akışı kapısından geçer (koşul, doğrulayıcı, sonrası işlem)
+    if (existing && (existing.status !== updatedTask.status || (existing.jiraStatus || '') !== (updatedTask.jiraStatus || ''))) {
+      const { status: _s, jiraStatus: _j, ...rest } = updatedTask;
+      requestTransition(existing, updatedTask.jiraStatus || null, { category: updatedTask.status, extra: rest, explicitKey: !!updatedTask.jiraStatus });
+      return;
+    }
     setTasks(prev => prev.map(t => t.id === updatedTask.id ? updatedTask : t));
   };
 
@@ -1347,8 +1628,14 @@ const App: React.FC = () => {
     ));
   }, [updateProjectById, updateWorkspace]);
 
-  const saveTaskFromForm = (t: Task) => {
+  const saveTaskFromForm = (formTask: Task) => {
     const requestId = convertingRequestId;
+    // Kayıtlı görevde durum değiştiyse: önce diğer alanlar eski durumla kaydedilir, durum geçiş kapısından geçer
+    const existingTask = activeProject?.tasks.find(x => x.id === formTask.id);
+    const flow = existingTask && (existingTask.status !== formTask.status || (existingTask.jiraStatus || '') !== (formTask.jiraStatus || ''))
+      ? { key: formTask.jiraStatus || null, category: formTask.status } : null;
+    const t = flow && existingTask ? { ...formTask, status: existingTask.status, jiraStatus: existingTask.jiraStatus } : formTask;
+    if (flow && existingTask) setTimeout(() => requestTransition({ ...existingTask, ...t }, flow.key, { category: flow.category, explicitKey: !!flow.key }), 0);
     updateActiveProject(p => {
       // Formda olmayan alanlar (yaşam döngüsü damgaları, Jira alanları) korunur
       const tasks = p.tasks.some(x => x.id === t.id) ? p.tasks.map(x => x.id === t.id ? { ...x, ...t } : x) : [...p.tasks, t];
@@ -1382,6 +1669,9 @@ const App: React.FC = () => {
 
   // Admin konsolu her zaman modern arayüzle açılır
   const isModern = settings?.uiStyle === 'modern' || consoleMode;
+  // Klasik arayüzde gömülen modern parçalar klasik renk seçimini (zümrüt, mor, turuncu…) alır;
+  // modern temalar (mt-*) yalnız modern arayüzde uygulanır (bkz. modern.css, .m-embed)
+  const modernScope = `ui-modern m-embed theme-${settings?.theme || 'classic'}`;
   isModernRef.current = isModern;
   // Proje bağlamındaki ekranlar (modern arayüzde proje başlığı ve segment gezinme gösterilir)
   const inProjectView = !!activeProject && MODERN_PROJECT_VIEWS.includes(currentView) &&
@@ -1426,9 +1716,16 @@ const App: React.FC = () => {
           cloudLinked={!!loadCloudConfig()?.workspaceId}
           onOpenCloud={() => setIsCloudModalOpen(true)}
           onOpenProfile={() => setIsProfileOpen(true)}
+          onSaveScheme={handleSaveScheme}
+          onDeleteScheme={handleDeleteScheme}
+          onAssignScheme={handleAssignScheme}
+          onSaveProjectBoard={handleSaveBoardConfig}
+          onOpenProjectWorkflow={id => setWorkflowSheetProject(id)}
+          onOpenProjectLists={id => setListsSheetProject(id)}
+          onSaveProjectRoles={handleSaveProjectRoles}
         />
       );
-      return isModern ? page : <div className="ui-modern rounded-3xl p-4 sm:p-6">{page}</div>;
+      return isModern ? page : <div className={`${modernScope} rounded-3xl p-4 sm:p-6`}>{page}</div>;
     }
 
     if (currentView === View.Executive || notesBlocked) {
@@ -1479,7 +1776,7 @@ const App: React.FC = () => {
           onSetStatus={handleSetExpectationStatus}
         />
       );
-      return isModern ? page : <div className="ui-modern rounded-3xl p-4 sm:p-6">{page}</div>;
+      return isModern ? page : <div className={`${modernScope} rounded-3xl p-4 sm:p-6`}>{page}</div>;
     }
 
     // Haftalık rapor ve müşteri görüşmeleri (aktif proje gerektirmez)
@@ -1525,7 +1822,7 @@ const App: React.FC = () => {
           onDelete={handleDeleteMeeting}
         />
       );
-      return isModern ? page : <div className="ui-modern rounded-3xl p-4 sm:p-6">{page}</div>;
+      return isModern ? page : <div className={`${modernScope} rounded-3xl p-4 sm:p-6`}>{page}</div>;
     }
 
     // Çalışma alanı seviyesi ekranlar (aktif proje gerektirmez)
@@ -1669,7 +1966,53 @@ const App: React.FC = () => {
 
     const { tasks, resources, notes, customerRequests, objectives } = activeProject;
     const ps = activeProject.settings;
-    const changeTaskStatus = (id: string, s: TaskStatus) => setTasks(prev => prev.map(t => t.id === id ? { ...t, status: s } : t));
+    const wf = activeScheme.workflow;
+    // Yalnız kategori isteyen kontroller (işaretle, eski menüler): iş akışında izin verilen o kategorideki ilk duruma
+    const changeTaskStatus = (id: string, s: TaskStatus) => {
+      const task = tasks.find(t => t.id === id);
+      if (task) requestTransition(task, null, { category: s });
+    };
+    // Pano sürükle-bırak: durum değişiyorsa geçiş kapısı (etiket kuralı ek alan olarak gider)
+    const moveBoardTask = (id: string, patch: Partial<Task>) => {
+      const task = tasks.find(t => t.id === id);
+      if (!task) return;
+      const statusChange = (patch.status !== undefined && patch.status !== task.status) || ('jiraStatus' in patch && (patch.jiraStatus || '') !== (task.jiraStatus || ''));
+      if (!statusChange) { setTasks(prev => prev.map(t => t.id === id ? { ...t, ...patch } : t)); return; }
+      requestTransition(task, patch.jiraStatus || null, { category: patch.status, explicitKey: !!patch.jiraStatus, extra: 'labels' in patch ? { labels: patch.labels } : {} });
+    };
+    const changeTaskWorkflow = (id: string, key: string) => {
+      const task = tasks.find(t => t.id === id);
+      if (task) requestTransition(task, key, { explicitKey: true });
+    };
+    const projectBoard = boardForProject(activeScheme, activeProject);
+    const boardMe = (() => { const p = workspace.people.find(x => x.id === workspace.currentPersonId); return p ? `${p.firstName} ${p.lastName}`.trim() : undefined; })();
+    const renderProjectBoard = () => (
+      <ProjectBoard
+        tasks={tasks}
+        config={projectBoard.config}
+        boardSource={projectBoard.source}
+        workflow={wf}
+        schemeName={activeScheme.id === DEFAULT_SCHEME_ID && activeScheme.workflowSource !== 'project' ? undefined : `${activeScheme.name}${activeScheme.workflowSource === 'project' ? ' · özel akış' : ''}`}
+        onOpenLists={canEditProjectContent(workspace, identity, activeProject.id) ? () => setListsSheetProject(activeProject.id) : undefined}
+        onOpenWorkflow={activeScheme.allowProjectWorkflow && canEditProjectContent(workspace, identity, activeProject.id) ? () => setWorkflowSheetProject(activeProject.id) : undefined}
+        canConfigure={activeScheme.allowProjectBoard && canEditProjectContent(workspace, identity, activeProject.id)}
+        onSaveConfig={cfg => handleSaveBoardConfig(activeProject.id, cfg)}
+        onMoveTask={moveBoardTask}
+        onStatusChange={changeTaskStatus}
+        onWorkflowChange={changeTaskWorkflow}
+        onViewTask={viewTask}
+        onEditTask={editTask}
+        onDeleteTask={deleteTask}
+        onNotifyTask={notifyTask}
+        onNewTask={newTask}
+        onCelebrate={celebrate}
+        sprintNames={ps.sprintNames || {}}
+        me={boardMe}
+        wpNames={new Map(activeProject.workPackages.map(w => [w.id, w.name]))}
+        minPriority={roleView.minTaskPriority}
+        sortKey={roleView.taskSort}
+      />
+    );
     const viewTask = (t: Task) => { setViewingTask(t); setIsDetailModalOpen(true); };
     const editTask = (t: Task) => { setEditingTask(t); setIsFormModalOpen(true); };
     const deleteTask = (taskId: string) => { if (window.confirm('Emin misiniz?')) setTasks(prev => prev.filter(t => t.id !== taskId)); };
@@ -1682,7 +2025,7 @@ const App: React.FC = () => {
       setIsFormModalOpen(true);
     };
 
-    // Sürüm ekleme/silme (klasik pano ve modern zaman çizelgesi ortak)
+    // Sprint ekleme/silme (klasik pano ve modern zaman çizelgesi ortak)
     const insertSprint = (n: number) => setTasks(prev => prev.map(t => t.version >= n ? { ...t, version: t.version + 1 } : t));
     const deleteSprint = (n: number) => setTasks(prev => prev.map(t => t.version === n ? { ...t, version: 0, status: TaskStatus.Backlog } : t.version > n ? { ...t, version: t.version - 1 } : t));
     if (isModern && currentView === View.Kanban) {
@@ -1822,23 +2165,7 @@ const App: React.FC = () => {
         />
       );
     }
-    if (isModern && currentView === View.Roadmap) {
-      return (
-        <ModernBoard
-          tasks={tasks}
-          sprintNames={ps.sprintNames || {}}
-          onStatusChange={changeTaskStatus}
-          onViewTask={viewTask}
-          onEditTask={editTask}
-          onDeleteTask={deleteTask}
-          onNotifyTask={notifyTask}
-          onNewTask={newTask}
-          onCelebrate={celebrate}
-          minPriority={roleView.minTaskPriority}
-          sortKey={roleView.taskSort}
-        />
-      );
-    }
+    if (isModern && currentView === View.Roadmap) return renderProjectBoard();
     if (isModern && currentView === View.Tasks) {
       return (
         <ModernTaskList
@@ -1846,6 +2173,8 @@ const App: React.FC = () => {
           resources={resources}
           sprintNames={ps.sprintNames || {}}
           onStatusChange={changeTaskStatus}
+          onWorkflowChange={changeTaskWorkflow}
+          workflow={wf}
           onViewTask={viewTask}
           onEditTask={editTask}
           onDeleteTask={deleteTask}
@@ -1884,6 +2213,14 @@ const App: React.FC = () => {
         );
       case View.Kanban:
         return (
+          <div className="flex flex-col gap-4">
+          <div role="tablist" aria-label="Pano görünümü" className="self-start inline-flex p-1 rounded-xl bg-gray-100 dark:bg-gray-800">
+            {([['status', 'Durum panosu'], ['sprint', 'Sprint planı']] as const).map(([k, label]) => (
+              <button key={k} role="tab" aria-selected={classicBoardMode === k} onClick={() => setClassicBoardMode(k)}
+                className={`px-3 py-1.5 rounded-lg text-sm font-bold ${classicBoardMode === k ? 'bg-white dark:bg-gray-700 shadow-sm' : 'text-gray-500'}`} style={classicBoardMode === k ? { color: 'var(--app-primary)' } : undefined}>{label}</button>
+            ))}
+          </div>
+          {classicBoardMode === 'status' ? <div className={`${modernScope} rounded-3xl p-4 sm:p-6`} style={{ background: 'var(--m-bg)' }}>{renderProjectBoard()}</div> : (
           <KanbanView
             tasks={tasks} resources={resources}
             sprintDuration={ps.sprintDuration} projectStartDate={ps.projectStartDate}
@@ -1897,6 +2234,8 @@ const App: React.FC = () => {
             onNewTask={() => { setEditingTask(null); setIsFormModalOpen(true); }}
             onViewTaskDetails={(taskId) => { const t = tasks.find(x => x.id === taskId); if(t) { setViewingTask(t); setIsDetailModalOpen(true); } }}
           />
+          )}
+          </div>
         );
       case View.Overview: // klasik arayüzde karşılığı pano
       case View.Roadmap:
@@ -1992,8 +2331,23 @@ const App: React.FC = () => {
     try {
       const result = applyAction(current, action);
       summary = result.summary;
+      // Onaylanan AI önerisi de yerel değişikliktir: bildirim şeması uygulanır
+      const before = current.projects.find(p => p.id === action.projectId);
+      const after = result.ws.projects.find(p => p.id === action.projectId);
+      if (before && after && before.tasks !== after.tasks) queueNotifications(result.ws, after, before.tasks, after.tasks);
+      // Onaylanan durum önerisi Jira'ya bağlı görevdeyse Jira'ya da yazılır (yapılandırma açıksa)
+      if (action.type === 'gorev_durumu' && before && after) {
+        const oldT = before.tasks.find(t => t.id === action.taskId);
+        const newT = after.tasks.find(t => t.id === action.taskId);
+        if (oldT?.jiraId && newT) {
+          const wfA = effectiveScheme(result.ws, after).workflow;
+          writeBackToJiraRef.current(after.id, oldT, taskWorkflow(newT, wfA), { comment: action.comment, hours: action.hours }, newT.resolution !== oldT.resolution ? newT.resolution : undefined, !!action.workflowKey || wfA !== DEFAULT_WORKFLOW);
+        }
+      }
       setWorkspace(result.ws);
       workspaceRef.current = result.ws;
+      // Geçişin sonrası işlemi: atanana bildirim (AI önerisi de kullanıcının geçişi gibi)
+      if (result.effects?.length) sendTransitionEffectsRef.current(result.effects);
     } catch (e) {
       return { ok: false, message: (e as Error).message || 'Uygulanamadı.' };
     }
@@ -2007,6 +2361,60 @@ const App: React.FC = () => {
     handleOpenProject(ref.projectId);
     setCurrentView(ref.view);
   }, [handleOpenProject]);
+
+  // Ajan modu: asistanın arayüz komutları. Yetki, menüdeki/komut paletindeki
+  // kuralların aynısıyla GÜNCEL durumdan yeniden denetlenir; veri değişmez.
+  const uiEnvRef = useRef<Omit<UiEnv, 'activeProjectId'>>(null!);
+  uiEnvRef.current = {
+    modern: isModern, consoleMode, canExecutive, canAdmin, canNotes, canAudit, canDataHealth,
+    projectSections: roleView.projectSections, visibleProjectIds: visibleProjectIdSet,
+  };
+  const handleAssistantUiCommand = useCallback((cmd: UiCommand): UiResult => {
+    const ws = workspaceRef.current;
+    if (!ws) return { ok: false, message: 'Çalışma alanı hazır değil.' };
+    const base = uiEnvRef.current;
+    const targetProjectId = 'projectId' in cmd && cmd.projectId ? cmd.projectId : ws.activeProjectId;
+    const env: UiEnv = { ...base, activeProjectId: targetProjectId && base.visibleProjectIds.has(targetProjectId) ? targetProjectId : null };
+    const project = env.activeProjectId ? ws.projects.find(p => p.id === env.activeProjectId) : undefined;
+    if ('projectId' in cmd && cmd.projectId && !project) return { ok: false, message: 'Bu proje kullanıcının yetki kapsamında değil.' };
+    const openProject = () => {
+      if (project && ws.activeProjectId !== project.id) updateWorkspace(w => ({ ...w, activeProjectId: project.id }));
+    };
+    switch (cmd.type) {
+      case 'screen': {
+        const r = resolveScreen(cmd.screen, env);
+        if ('error' in r) return { ok: false, message: r.error };
+        if (SCREENS[cmd.screen].project) openProject();
+        setCurrentView(r.view);
+        return { ok: true, message: `${SCREENS[cmd.screen].label} ekranı açıldı${SCREENS[cmd.screen].project && project ? ` (${project.name})` : ''}.` };
+      }
+      case 'task': {
+        const task = project?.tasks.find(t => t.id === cmd.taskId);
+        if (!project || !task) return { ok: false, message: 'Görev bulunamadı.' };
+        const list = resolveScreen('gorevler', env);
+        openProject();
+        if (!('error' in list) && !MODERN_PROJECT_VIEWS.includes(currentViewRef.current)) setCurrentView(list.view);
+        setViewingTask(task);
+        setIsDetailModalOpen(true);
+        return { ok: true, message: `"${task.name}" görevinin ayrıntısı açıldı (${project.name}).` };
+      }
+      case 'person': {
+        const person = ws.people.find(p => p.id === cmd.personId);
+        if (!person || base.consoleMode) return { ok: false, message: 'Kişi profili açılamadı.' };
+        setViewingPersonId(person.id);
+        return { ok: true, message: `${person.firstName} ${person.lastName} profil penceresi açıldı.`.replace(/\s+/g, ' ') };
+      }
+      case 'dialog': {
+        const problem = dialogProblem(cmd.dialog, env);
+        if (problem) return { ok: false, message: problem };
+        if (cmd.dialog === 'veri_sagligi') setIsHealthModalOpen(true);
+        else if (cmd.dialog === 'denetim_gunlugu') setIsAuditModalOpen(true);
+        else if (cmd.dialog === 'is_paketleri') setIsWpManagerOpen(true);
+        else setIsProfileOpen(true);
+        return { ok: true, message: `${DIALOGS[cmd.dialog]} penceresi açıldı.` };
+      }
+    }
+  }, [updateWorkspace]);
   const aiSuggestions = useMemo(
     () => buildSuggestions(identity, activeProject && visibleProjects.some(p => p.id === activeProject.id) ? activeProject.name : undefined),
     [identity, activeProject, visibleProjects]
@@ -2064,7 +2472,7 @@ const App: React.FC = () => {
   }, [workspace, visibleProjects, identity, handleOpenProject, activeProject, consoleMode, canAudit, canDataHealth, isModern, roleView]);
 
   return (
-    <AssistantProvider enabled={isAIEnabled && !consoleMode} chat={aiPolicy.chat} embedded={aiPolicy.embedded} getWorkspace={getAssistantWorkspace} getView={getAssistantView} onNavigate={handleAssistantNavigate} onApplyAction={handleApplyAiAction}>
+    <AssistantProvider enabled={isAIEnabled && !consoleMode} chat={aiPolicy.chat} embedded={aiPolicy.embedded} getWorkspace={getAssistantWorkspace} getView={getAssistantView} onNavigate={handleAssistantNavigate} onApplyAction={handleApplyAiAction} onUiCommand={handleAssistantUiCommand}>
     <div className={`min-h-screen font-sans theme-${settings?.theme || 'classic'} ${isModern ? `ui-modern mt-${modernTheme}` : 'bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100'}`}>
       {isModern ? (
         <div className="flex min-h-screen">
@@ -2184,9 +2592,12 @@ const App: React.FC = () => {
           history={{ projects: workspace.projects, projectId: activeProject.id, visibleProjectIds: visibleProjectIdSet }}
           onClose={closeTaskForm}
           onSave={saveTaskFromForm}
+          scheme={activeScheme}
+          projectComponents={activeProject.components}
+          projectVersions={activeProject.versions}
         />
       ) : (
-        <TaskFormModal task={editingTask} resources={activeProject.resources} people={workspace.people} workPackages={activeProject.workPackages} tasks={activeProject.tasks} objectives={activeProject.objectives} onClose={closeTaskForm} onSave={saveTaskFromForm} />
+        <TaskFormModal task={editingTask} resources={activeProject.resources} people={workspace.people} workPackages={activeProject.workPackages} tasks={activeProject.tasks} objectives={activeProject.objectives} onClose={closeTaskForm} onSave={saveTaskFromForm} scheme={activeScheme} projectComponents={activeProject.components} projectVersions={activeProject.versions} />
       ))}
       {isWpManagerOpen && activeProject && workspace && isModern && (
         <WorkPackagesSheet
@@ -2216,6 +2627,7 @@ const App: React.FC = () => {
           onEdit={(t: Task) => { setIsDetailModalOpen(false); setEditingTask(t); setIsFormModalOpen(true); }}
           onSave={handleUpdateTask}
           onJiraPull={canEditProjectContent(workspace, identity, activeProject.id) ? issue => handleJiraPull(activeProject.id, issue) : undefined}
+          workflow={activeScheme.workflow}
         />
       ) : (
         <TaskDetailModal task={liveViewingTask} onClose={() => setIsDetailModalOpen(false)} onEdit={(t) => { setIsDetailModalOpen(false); setEditingTask(t); setIsFormModalOpen(true); }} onSave={handleUpdateTask} />
@@ -2298,7 +2710,7 @@ const App: React.FC = () => {
       {isProfileOpen && workspace && (() => {
         const sheet = <ProfileSwitcherSheet workspace={workspace} onSelect={handleChangeIdentity} onClose={() => setIsProfileOpen(false)} />;
         // Klasik arayüzde modern pencere kendi stil kabında açılır
-        return isModern ? sheet : <div className="ui-modern">{sheet}</div>;
+        return isModern ? sheet : <div className={modernScope}>{sheet}</div>;
       })()}
       {isPaletteOpen && (
         <AssistantCommandPalette items={commandItems} onClose={() => setIsPaletteOpen(false)} modern={isModern} />
@@ -2335,6 +2747,45 @@ const App: React.FC = () => {
           <i className="fa-solid fa-triangle-exclamation mt-0.5" aria-hidden="true"></i>
           <span className="text-sm flex-1">Tarayıcı depolaması dolu: son değişiklikler bu tarayıcıya kaydedilemedi. Sayfayı kapatmadan önce bulut eşitlemesini kullanın ya da "Yedeği indir" ile yedek alın.</span>
           <button type="button" onClick={() => setStorageWarnClosed(true)} className="opacity-70 hover:opacity-100" aria-label="Uyarıyı kapat"><i aria-hidden="true" className="fa-solid fa-xmark text-sm"></i></button>
+        </div>
+      )}
+      {pendingTransition && workspace && (() => {
+        const pt = pendingTransition;
+        const dlg = (
+          <TransitionDialog task={pt.task} fromLabel={pt.fromLabel} toLabel={pt.target.label} rule={pt.rule} needs={pt.needs}
+            assignees={[...new Set([...(activeProject?.resources || []).map(r => r.name), ...workspace.people.map(p => `${p.firstName} ${p.lastName}`.trim())])].filter(Boolean)}
+            workPackages={activeProject?.workPackages || []}
+            components={(activeProject?.components || []).map(c => c.name)}
+            versions={(activeProject?.versions || []).filter(v => v.status === 'unreleased').map(v => v.name)}
+            onCancel={() => setPendingTransition(null)}
+            onConfirm={input => { finishTransition(pt.task, pt.target, pt.rule, input, pt.extra, pt.setKey, pt.fromLabel, pt.exact); setPendingTransition(null); }} />
+        );
+        return isModern ? dlg : <div className={modernScope}>{dlg}</div>;
+      })()}
+      {listsSheetProject && workspace && (() => {
+        const p = workspace.projects.find(x => x.id === listsSheetProject);
+        if (!p) return null;
+        const sheet = (
+          <ProjectListsSheet project={p} roleDefs={projectRolesOf(workspace)} pool={[...workspace.people].sort((a, b) => `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`, 'tr'))} canEdit={can(identity, 'screen.admin') || canEditProjectContent(workspace, identity, p.id)}
+            people={[...new Set([...p.resources.map(r => r.name), ...workspace.people.map(x => `${x.firstName} ${x.lastName}`.trim())])].filter(Boolean).sort((a, b) => a.localeCompare(b, 'tr'))}
+            onClose={() => setListsSheetProject(null)}
+            onSave={(patch, summary) => { handleSaveProjectLists(p.id, patch, summary); setListsSheetProject(null); }} />
+        );
+        return isModern ? sheet : <div className={modernScope}>{sheet}</div>;
+      })()}
+      {workflowSheetProject && workspace && (() => {
+        const p = workspace.projects.find(x => x.id === workflowSheetProject);
+        if (!p) return null;
+        const sheet = <ProjectWorkflowSheet project={p} scheme={schemeOf(workspace, p)} people={workspace.people} roleDefs={projectRolesOf(workspace)} onClose={() => setWorkflowSheetProject(null)} onSave={wf => { handleSaveProjectWorkflow(p.id, wf); setWorkflowSheetProject(null); }} />;
+        return isModern ? sheet : <div className={modernScope}>{sheet}</div>;
+      })()}
+      {flowNotice && (
+        <div className={isModern ? '' : modernScope}>
+          <div role="alert" className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[250] flex items-center gap-3 m-tone-bad m-pop rounded-2xl px-4 py-2.5 max-w-[92vw]" style={{ boxShadow: 'var(--m-pop-shadow, 0 10px 30px rgba(0,0,0,.2))', border: '1px solid var(--m-bad)' }}>
+            <i aria-hidden="true" className="fa-solid fa-route text-xs"></i>
+            <span className="text-[13px] font-semibold">{flowNotice}</span>
+            <button aria-label="Kapat" onClick={() => setFlowNotice(null)} className="opacity-70 hover:opacity-100 bg-transparent border-0 cursor-pointer" style={{ color: 'inherit' }} title="Kapat"><i aria-hidden="true" className="fa-solid fa-xmark text-xs"></i></button>
+          </div>
         </div>
       )}
       {undo && (

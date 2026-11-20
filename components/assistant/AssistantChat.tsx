@@ -6,6 +6,9 @@ import { AiProposal } from '../../utils/ai/actions';
 import { browserSettingsExpired } from '../../utils/ai/client';
 import { Citation, RAG_SOURCE_LABELS } from '../../utils/rag/sources';
 import { useAssistant } from './AssistantContext';
+import { ATTACHMENT_EXTENSIONS } from '../../utils/ai/attachments';
+import { toolKind } from '../../utils/ai/tools';
+import { fmtFileSize, useChatAttachments } from './useChatAttachments';
 
 /**
  * Sohbet arayüzü — yan panelde (compact) ve Zekâ sekmesinde (page) aynı
@@ -20,20 +23,27 @@ interface Props {
   onExpand?: () => void;
 }
 
+const STEP_KIND: Record<ReturnType<typeof toolKind>, { icon: string; title: string }> = {
+  read: { icon: 'fa-database', title: 'Uygulama verisinden okundu' },
+  propose: { icon: 'fa-pen', title: 'Değişiklik önerisi hazırlandı (onayınızı bekler)' },
+  ui: { icon: 'fa-compass', title: 'Asistan ekranı sizin için değiştirdi' },
+  jira: { icon: 'fa-cloud', title: "Jira'dan güncel veri okundu" },
+};
+
 const StepChips: React.FC<{ steps: AgentStep[] }> = ({ steps }) => (
   <div className="flex flex-wrap gap-1.5 mb-2">
-    {steps.map(s => (
+    {steps.map(s => { const kind = STEP_KIND[toolKind(s.name)]; return (
       <span
         key={s.id}
         className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
           s.status === 'error' ? 'border-red-200 bg-red-50 text-red-600 dark:border-red-800 dark:bg-red-900/30 dark:text-red-300'
             : 'border-indigo-100 bg-indigo-50 text-indigo-600 dark:border-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300'}`}
-        title={s.status === 'error' ? 'Araç bir hata döndürdü' : 'Uygulama verisinden okundu'}
+        title={s.status === 'error' ? 'Araç bir hata döndürdü' : kind.title}
       >
-        <i aria-hidden="true" className={`fa-solid ${s.status === 'running' ? 'fa-circle-notch fa-spin' : s.status === 'error' ? 'fa-triangle-exclamation' : 'fa-database'} text-[9px]`}></i>
+        <i aria-hidden="true" className={`fa-solid ${s.status === 'running' ? 'fa-circle-notch fa-spin' : s.status === 'error' ? 'fa-triangle-exclamation' : kind.icon} text-[9px]`}></i>
         {s.label}
       </span>
-    ))}
+    ); })}
   </div>
 );
 
@@ -154,6 +164,7 @@ const AssistantChat: React.FC<Props> = ({ variant, suggestions, onClose, onExpan
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const compact = variant === 'panel';
+  const att = useChatAttachments();
 
   useEffect(() => { a.ensureReady(); }, [a.ensureReady]);
 
@@ -167,9 +178,10 @@ const AssistantChat: React.FC<Props> = ({ variant, suggestions, onClose, onExpan
 
   const submit = (text?: string) => {
     const t = (text ?? input).trim();
-    if (!t || a.isStreaming) return;
-    if (text === undefined) setInput('');
-    a.send(t);
+    const withFiles = text === undefined ? att.files : [];
+    if ((!t && !withFiles.length) || a.isStreaming || att.reading > 0) return;
+    if (text === undefined) { setInput(''); att.clear(); }
+    a.send(t, withFiles);
   };
 
   const header = (
@@ -262,7 +274,7 @@ const AssistantChat: React.FC<Props> = ({ variant, suggestions, onClose, onExpan
     <div className={`h-full flex flex-col items-center justify-center text-center ${compact ? 'px-2' : 'max-w-2xl mx-auto'}`}>
       <i aria-hidden="true" className="fa-solid fa-comment-dots text-5xl mb-4 text-indigo-200 dark:text-indigo-800"></i>
       <h3 className="text-lg font-black text-gray-800 dark:text-white mb-1">Size nasıl yardımcı olabilirim?</h3>
-      <p className="text-xs text-gray-400 mb-5">Portföy, tahsis, kapasite, risk ve görevler hakkında sorun — yanıtlar, yetkinizdeki uygulama verisinden hesaplanır.</p>
+      <p className="text-xs text-gray-400 mb-5">Portföy, tahsis, kapasite, risk ve görevler hakkında sorun{a.jiraEnabled ? ', Jira kayıtlarını sorgulatın' : ''}; dosya ekleyin ya da "riskler ekranını aç" gibi komutlar verin. Yanıtlar yetkinizdeki veriden hesaplanır.</p>
       <div className={`grid gap-2 w-full ${compact ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'}`}>
         {suggestions.map(s => (
           <button key={s.label} onClick={() => submit(s.prompt)} className="text-left px-3 py-2 text-xs font-semibold text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 hover:border-indigo-300 hover:text-indigo-600 rounded-xl transition-colors">
@@ -304,7 +316,20 @@ const AssistantChat: React.FC<Props> = ({ variant, suggestions, onClose, onExpan
                   )}
                 </>
               ) : (
-                <div className="whitespace-pre-wrap break-words">{msg.content}</div>
+                <>
+                  <div className="whitespace-pre-wrap break-words">{msg.content}</div>
+                  {msg.attachments && msg.attachments.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {msg.attachments.map(f => (
+                        <span key={f.name} title={f.truncated ? 'Dosya uzun olduğu için modele kısaltılarak gönderildi' : `${f.chars.toLocaleString('tr-TR')} karakter`} className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white/20">
+                          <i aria-hidden="true" className="fa-solid fa-paperclip"></i>
+                          <span className="max-w-[160px] truncate">{f.name}</span>
+                          <span className="opacity-80">· {fmtFileSize(f.size)}{f.truncated ? ' · kısaltıldı' : ''}</span>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -313,8 +338,14 @@ const AssistantChat: React.FC<Props> = ({ variant, suggestions, onClose, onExpan
     </div>
   );
 
+  const ready = a.phase === 'ready' && a.enabled;
   return (
-    <div className="h-full flex flex-col bg-white dark:bg-gray-800 overflow-hidden">
+    <div className="relative h-full flex flex-col bg-white dark:bg-gray-800 overflow-hidden" {...(ready ? att.dropProps : {})}>
+      {att.dragging && (
+        <div className="absolute inset-2 z-10 rounded-2xl border-2 border-dashed border-indigo-400 bg-indigo-50/90 dark:bg-indigo-900/60 flex items-center justify-center pointer-events-none text-sm font-bold text-indigo-700 dark:text-indigo-200">
+          <i aria-hidden="true" className="fa-solid fa-paperclip mr-2"></i>Dosyayı sohbete eklemek için bırakın
+        </div>
+      )}
       {preview && <SourcePreview c={preview} onClose={() => setPreview(null)} onOpenKb={() => { setPreview(null); a.setKbOpen(true); }} />}
       {header}
       <div ref={scrollRef} className={`flex-grow overflow-y-auto ${compact ? 'p-4' : 'p-8'} custom-scrollbar`}>
@@ -322,7 +353,27 @@ const AssistantChat: React.FC<Props> = ({ variant, suggestions, onClose, onExpan
       </div>
       {a.phase === 'ready' && a.enabled && (
         <div className={`flex-none ${compact ? 'p-3' : 'p-6'} bg-gray-50/80 dark:bg-gray-900/40 border-t dark:border-gray-700`}>
+          {(att.files.length > 0 || att.reading > 0 || att.errors.length > 0) && (
+            <div className={`${compact ? '' : 'max-w-4xl mx-auto'} mb-2 space-y-1`}>
+              <div className="flex flex-wrap gap-1.5">
+                {att.files.map(f => (
+                  <span key={f.id} title={`${f.text.length.toLocaleString('tr-TR')} karakter metin`} className="inline-flex items-center gap-1.5 text-xs pl-2.5 pr-1 py-1 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200">
+                    <i aria-hidden="true" className="fa-solid fa-paperclip text-gray-400"></i>
+                    <span className="max-w-[180px] truncate">{f.name}</span>
+                    <span className="text-gray-400">{fmtFileSize(f.size)}</span>
+                    <button aria-label={`${f.name} ekini kaldır`} onClick={() => att.remove(f.id)} className="w-5 h-5 rounded-full text-gray-400 hover:text-red-500 hover:bg-gray-100 dark:hover:bg-gray-700"><i aria-hidden="true" className="fa-solid fa-xmark text-[10px]"></i></button>
+                  </span>
+                ))}
+                {att.reading > 0 && <span role="status" className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-300"><i aria-hidden="true" className="fa-solid fa-circle-notch fa-spin"></i>Dosya okunuyor…</span>}
+              </div>
+              {att.errors.map(e => <p key={e} role="alert" className="text-xs text-red-600">{e}</p>)}
+            </div>
+          )}
           <div className={`${compact ? '' : 'max-w-4xl mx-auto'} relative`}>
+            <input ref={att.fileRef} type="file" multiple accept={ATTACHMENT_EXTENSIONS.join(',')} className="hidden" onChange={e => { att.add(e.target.files).then(() => inputRef.current?.focus()); }} />
+            <button aria-label="Dosya ekle" onClick={att.pick} disabled={att.full} title="Dosya ekle (PDF, Word, Excel, CSV, metin) — sürükleyip bırakabilirsiniz" className="absolute left-2 bottom-2.5 w-10 h-10 text-gray-400 hover:text-indigo-600 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-40 flex items-center justify-center">
+              <i aria-hidden="true" className="fa-solid fa-paperclip"></i>
+            </button>
             <textarea
               ref={inputRef}
               rows={compact ? 2 : 1}
@@ -331,20 +382,21 @@ const AssistantChat: React.FC<Props> = ({ variant, suggestions, onClose, onExpan
               onKeyDown={e => {
                 if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); }
               }}
-              placeholder="Sorunuzu yazın… (Shift+Enter: yeni satır)"
-              className="w-full pl-4 pr-14 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-sm outline-none focus:border-indigo-300 resize-none max-h-40 text-sm"
+              onPaste={att.onPaste}
+              placeholder="Sorunuzu yazın ya da dosya ekleyin… (Shift+Enter: yeni satır)"
+              className="w-full pl-12 pr-14 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-sm outline-none focus:border-indigo-300 resize-none max-h-40 text-sm"
             />
             {a.isStreaming ? (
               <button aria-label="Yanıtı durdur" onClick={a.stop} title="Yanıtı durdur" className="absolute right-2 bottom-2.5 w-10 h-10 bg-red-500 text-white rounded-xl shadow hover:bg-red-600 flex items-center justify-center">
                 <i aria-hidden="true" className="fa-solid fa-stop"></i>
               </button>
             ) : (
-              <button aria-label="Gönder" onClick={() => submit()} disabled={!input.trim()} title="Gönder" className="absolute right-2 bottom-2.5 w-10 h-10 bg-indigo-600 text-white rounded-xl shadow hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center">
+              <button aria-label="Gönder" onClick={() => submit()} disabled={(!input.trim() && !att.files.length) || att.reading > 0} title="Gönder" className="absolute right-2 bottom-2.5 w-10 h-10 bg-indigo-600 text-white rounded-xl shadow hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center">
                 <i aria-hidden="true" className="fa-solid fa-paper-plane"></i>
               </button>
             )}
           </div>
-          <p className="text-[10px] text-gray-400 mt-1.5 text-center">Asistan değişiklikleri yalnızca önerir; siz "Uygula" demeden hiçbir veri değişmez. Önemli kararlardan önce sayıları ilgili ekranda doğrulayın.</p>
+          <p className="text-[10px] text-gray-400 mt-1.5 text-center">Asistan ekranları sizin yerinize açabilir; veri değişikliklerini yalnızca önerir — siz "Uygula" demeden hiçbir veri değişmez. Ekler yalnız bu sohbette kullanılır.</p>
         </div>
       )}
     </div>

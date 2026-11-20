@@ -183,6 +183,8 @@ export interface JiraSyncSource {
     projectKey?: string;
     labels?: string[];
     filterId?: string;
+    /** Serbest metin (özet/açıklama/yorum); tek başına kaynak sayılmaz, yukarıdakilerden biriyle birlikte */
+    text?: string;
 }
 export interface JiraMeta {
     user: string;
@@ -202,6 +204,10 @@ export interface JiraUpdateChanges {
     status?: 'new' | 'indeterminate' | 'done';
     comment?: string;
     worklogHours?: number;
+    /** Hedef Jira durum adı (ör. TESTING); verilirse geçiş buna göre seçilir */
+    statusName?: string;
+    /** Geçişte yazılacak çözüm */
+    resolution?: string;
 }
 export interface JiraUpdateResult {
     applied: string[];
@@ -244,11 +250,14 @@ export const fetchJiraMeta = (authMode: AiAuthMode, signal?: AbortSignal): Promi
 
 /** Kapsamlı okuma: `keys` (anahtarı bilinen kayıtların güncel hâli) ya da `source` (kaynaktaki açık kayıtlar, sayfa sayfa) */
 export const fetchJiraSyncPage = (
-    o: { keys: string[] } | { source: JiraSyncSource; cursor?: string | null },
+    o: { keys: string[] } | { source: JiraSyncSource; cursor?: string | null; openOnly?: boolean; pageSize?: number },
     authMode: AiAuthMode,
     signal?: AbortSignal,
 ): Promise<JiraSyncPage> =>
-    jiraSync<Partial<JiraSyncPage>>({ op: 'search', ...('keys' in o ? { keys: o.keys } : { source: o.source, cursor: o.cursor ?? undefined, openOnly: true }) }, authMode, signal)
+    jiraSync<Partial<JiraSyncPage>>({
+        op: 'search',
+        ...('keys' in o ? { keys: o.keys } : { source: o.source, cursor: o.cursor ?? undefined, openOnly: o.openOnly ?? true, ...(o.pageSize ? { pageSize: o.pageSize } : {}) }),
+    }, authMode, signal)
         .then(j => ({ issues: j.issues || [], total: typeof j.total === 'number' ? j.total : null, next: j.next || null, missing: j.missing || [] }));
 
 /** Jira kaydını günceller (alan, durum geçişi, yorum, worklog); sonuç alan bazında döner */

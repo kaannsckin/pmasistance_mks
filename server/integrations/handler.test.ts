@@ -335,6 +335,7 @@ describe('Jira canlı eşitleme (jira-sync)', () => {
         expect(buildSyncJql({ JIRA_ALLOWED_PROJECTS: 'mks, ABC' }, { filterId: '12345' })).toBe('project in ("MKS", "ABC") AND filter = 12345 AND statusCategory != Done ORDER BY key ASC');
         expect(buildSyncJql({}, { labels: ['x'] }, false)).toBe('labels in ("x") ORDER BY key ASC');
         expect(buildKeysJql(['MKS-1', 'MKS-2'])).toBe('key in ("MKS-1", "MKS-2") ORDER BY key ASC');
+        expect(buildSyncJql({}, { projectKey: 'MKS', text: 'giriş hatası' }, false)).toBe('project = "MKS" AND text ~ "giriş hatası" ORDER BY key ASC');
     });
 
     it('kapsamsız ya da geçersiz kaynak reddedilir; serbest JQL kabul edilmez', async () => {
@@ -343,6 +344,8 @@ describe('Jira canlı eşitleme (jira-sync)', () => {
         expect((await run({ op: 'search', jql: 'ORDER BY key' }, fetchImpl)).status).toBe(400);
         expect((await run({ op: 'search', source: { labels: ['a" OR project = X'] } }, fetchImpl)).status).toBe(400);
         expect((await run({ op: 'search', source: { filterId: '1 OR 1=1' } }, fetchImpl)).status).toBe(400);
+        expect((await run({ op: 'search', source: { projectKey: 'MKS', text: 'a" OR project = X' } }, fetchImpl)).status).toBe(400);
+        expect((await run({ op: 'search', source: { text: 'yalniz metin' } }, fetchImpl)).status).toBe(400);
         expect((await run({ op: 'search', keys: ['MKS-1", "X-1'] }, fetchImpl)).status).toBe(400);
         expect((await run({ op: 'search', source: { projectKey: 'XYZ' } }, fetchImpl, { ...env, JIRA_ALLOWED_PROJECTS: 'MKS' })).status).toBe(403);
         expect((await run({ op: 'search', keys: ['XYZ-1'] }, fetchImpl, { ...env, JIRA_ALLOWED_PROJECTS: 'MKS' })).status).toBe(403);
@@ -386,6 +389,51 @@ describe('Jira canlı eşitleme (jira-sync)', () => {
         });
         const denied = await run({ op: 'meta' }, (async () => jsonRes(401, {})) as unknown as typeof fetch);
         expect(denied.status).toBe(502);
+    });
+
+    it('güncelleme: belirli Jira durumuna geçiş (ad ile) ve çözüm; ekranda çözüm yoksa çözümsüz yeniden dener', async () => {
+        const on = { ...env, JIRA_ALLOW_UPDATE: '1' };
+        const posts: Record<string, unknown>[] = [];
+        let resolutionRejected = true;
+        const transitions = [
+            { id: '41', name: 'Teste gönder', to: { name: 'Testing', statusCategory: { key: 'indeterminate' } } },
+            { id: '51', name: 'Çöz', to: { name: 'Resolved', statusCategory: { key: 'done' } } },
+            { id: '61', name: 'Kapat', to: { name: 'Closed', statusCategory: { key: 'done' } } },
+        ];
+        const fetchImpl = (async (url: string, init?: RequestInit) => {
+            const method = init?.method || 'GET';
+            const m = meta(url);
+            if (m) return m;
+            if (url.includes('?fields=status')) return jsonRes(200, { fields: { status: { name: 'Analysis', statusCategory: { key: 'indeterminate' } } } });
+            if (url.endsWith('/transitions') && method === 'GET') return jsonRes(200, { transitions });
+            if (url.endsWith('/transitions')) {
+                const body = JSON.parse(String(init!.body));
+                posts.push(body);
+                if (body.fields?.resolution && resolutionRejected) return jsonRes(400, { errors: { resolution: 'Alan ekranda yok.' } });
+                return new Response(null, { status: 204 });
+            }
+            if (url.includes('/search?')) return jsonRes(200, { issues: [raw('MKS-1', '6')], total: 1 });
+            return jsonRes(404, {});
+        }) as unknown as typeof fetch;
+        // "Çözüldü" ≠ kategori seçimi: aynı kategoride Resolved ve Closed varken ada göre Resolved seçilir
+        let res = await run({ op: 'update', key: 'MKS-1', changes: { status: 'done', statusName: 'RESOLVED', resolution: 'Düzeltildi' } }, fetchImpl, on);
+        let body = await res.json() as { applied: string[]; errors: { field: string; message: string }[] };
+        expect(posts.map(p => (p.transition as { id: string }).id)).toEqual(['51', '51']);
+        expect(posts[0]).toEqual({ transition: { id: '51' }, fields: { resolution: { name: 'Fixed' } } });
+        expect(body.applied).toEqual(['status']);
+        expect(body.errors[0].field).toBe('resolution');
+        // Çözüm ekranda varsa birlikte yazılır
+        posts.length = 0; resolutionRejected = false;
+        res = await run({ op: 'update', key: 'MKS-1', changes: { statusName: 'Testing' } }, fetchImpl, on);
+        body = await res.json() as { applied: string[]; errors: { field: string; message: string }[] };
+        expect(posts).toEqual([{ transition: { id: '41' } }]);
+        expect(body.applied).toEqual(['status']);
+        // Geçiş yoksa Jira'daki geçişler listelenir
+        res = await run({ op: 'update', key: 'MKS-1', changes: { statusName: 'Blocked' } }, fetchImpl, on);
+        body = await res.json() as { applied: string[]; errors: { field: string; message: string }[] };
+        expect(body.errors[0].message).toBe('Jira iş akışı bu kayıt için "Blocked" durumuna doğrudan geçişe izin vermiyor (Jira\'daki geçişler: Testing, Resolved, Closed).');
+        // Geçersiz ad reddedilir (enjeksiyon yok)
+        expect((await run({ op: 'update', key: 'MKS-1', changes: { statusName: 'a"; drop' } }, fetchImpl, on)).status).toBe(400);
     });
 
     it('güncelleme: kapalıysa reddedilir; alan, durum geçişi, yorum ve worklog ayrı ayrı uygulanır', async () => {

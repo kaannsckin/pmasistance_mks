@@ -3,11 +3,11 @@ import { calculatePertFuzzyPert } from './timeline';
 import { buildSprintWindows } from './taskToAllocation';
 
 /**
- * Zaman çizelgesi (sürüm planı) hesapları. Klasik sürüm panosuyla aynı
- * kurallar: sürüm = hafta × 5 iş günü, ardından test dönemi; kapasite birim
+ * Zaman çizelgesi (sprint planı) hesapları. Klasik sprint panosuyla aynı
+ * kurallar: sprint = hafta × 5 iş günü, ardından test dönemi; kapasite birim
  * bazında efor günü (net iş günü × katılım), yük = PERT eforu. Katılım oranı
  * yalnız kapasitede bir kez sayılır: %50 katılımlı kişinin 6 günlük işi 6 gün
- * yüktür, kişinin 11 günlük sürümdeki kapasitesi 5,5 gündür.
+ * yüktür, kişinin 11 günlük sprintteki kapasitesi 5,5 gündür.
  */
 
 export interface LaneUnitLoad {
@@ -33,10 +33,10 @@ export interface SprintLane {
 
 const UNASSIGNED = 'Atanmamış';
 
-/** Görevin sürüme yüklediği efor (gün): PERT. Katılım kapasite tarafında sayılır. */
+/** Görevin sprinte yüklediği efor (gün): PERT. Katılım kapasite tarafında sayılır. */
 export const taskLoadDays = (task: Task): number => calculatePertFuzzyPert(task.time).pert;
 
-/** Bir sürümde birim başına kapasite (gün): (hafta×5 − test günü) × katılım */
+/** Bir sprintte birim başına kapasite (gün): (hafta×5 − test günü) × katılım */
 export const unitCapacities = (project: Project): Map<string, number> => {
     const weeks = project.settings.sprintDuration || 3;
     const testDays = project.settings.globalTestDays || 4;
@@ -50,8 +50,8 @@ export const unitCapacities = (project: Project): Map<string, number> => {
 };
 
 /**
- * Havuz + sürüm şeritleri. Sürüm planına dahil olmayan görevler gösterilmez.
- * `extraLanes`: henüz görevi olmayan, kullanıcının eklediği boş sürümler.
+ * Havuz + sprint şeritleri. Sprint planına dahil olmayan görevler gösterilmez.
+ * `extraLanes`: henüz görevi olmayan, kullanıcının eklediği boş sprintler.
  */
 export const buildLanes = (project: Project, extraLanes = 0): SprintLane[] => {
     const planned = project.tasks.filter(t => t.includeInSprints !== false);
@@ -90,7 +90,7 @@ export const buildLanes = (project: Project, extraLanes = 0): SprintLane[] => {
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
 
-/** Plan aralığı: ilk sürüm başı → son test bitişi */
+/** Plan aralığı: ilk sprint başı → son test bitişi */
 export const laneRange = (lanes: SprintLane[]): { start: Date; end: Date } | null => {
     const dated = lanes.filter(l => l.start && l.testEnd);
     if (!dated.length) return null;
@@ -116,7 +116,7 @@ export const segmentPct = (from: Date, to: Date, range: { start: Date; end: Date
     return { left, width };
 };
 
-/** Bugünün düştüğü sürüm (test dönemi dahil); yoksa null */
+/** Bugünün düştüğü sprint (test dönemi dahil); yoksa null */
 export const currentLaneVersion = (lanes: SprintLane[], now: Date = new Date()): number | null => {
     const t = dayStart(now);
     const hit = lanes.find(l => l.start && l.testEnd && dayStart(l.start) <= t && t <= dayStart(l.testEnd));

@@ -1,0 +1,528 @@
+import React, { useMemo, useState } from 'react';
+import { BoardConfig, IssueType, NotificationEvent, NotificationRule, Person, ProjectRoleDef, ProjectScheme, SchemeRequiredField, TaskStatus, WorkflowConfig, WorkflowStatusDef, WorkspaceData } from '../../../types';
+import { boardConfigOf, statusKeyLabel } from '../../../utils/board';
+import {
+    boardForProject, copyScheme, createScheme, DEFAULT_SCHEME_ID, ISSUE_TYPE_OPTIONS, linearTransitions, REQUIRED_FIELD_LABELS,
+    SCHEME_TEMPLATES, SchemeTemplateKey, schemeOf, schemesOf, schemeUsage, validateScheme,
+} from '../../../utils/projectScheme';
+import { CATEGORY_LABELS, CATEGORY_ORDER, WORKFLOW_STATUSES, workflowKey } from '../../../utils/workflow';
+import BoardSettings from '../BoardSettings';
+import WorkflowDesigner from './WorkflowDesigner';
+import { newRoleId, projectRolesOf } from '../../../utils/projectRoles';
+import { describeNotificationRule, NOTIFICATION_EVENT_LABELS, suggestedNotificationRules } from '../../../utils/notifications';
+import { dropRuleKeys, renameRuleKeys } from '../../../utils/transitions';
+import { Icon } from '../icons';
+import { Sheet } from '../ui';
+
+/**
+ * Yönetici konsolu › Proje yapılandırması. Jira'nın şema modeli: iş akışı,
+ * kayıt türleri, alan kuralları ve pano bir "yapılandırma"da toplanır;
+ * yapılandırma projelere atanır ve paylaşılır (değişiklik hepsine yansır).
+ */
+
+interface Props {
+    workspace: WorkspaceData;
+    onSaveScheme: (s: ProjectScheme) => string | null;
+    onDeleteScheme: (id: string) => void;
+    onAssignScheme: (projectId: string, schemeId: string) => void;
+    onSaveProjectBoard: (projectId: string, cfg: BoardConfig | undefined) => void;
+    onOpenProjectWorkflow: (projectId: string) => void;
+    onOpenProjectLists: (projectId: string) => void;
+    onSaveProjectRoles: (defs: ProjectRoleDef[]) => void;
+}
+
+const CAT_TONE: Record<TaskStatus, string> = {
+    [TaskStatus.Backlog]: 'm-fill-2 m-text-2',
+    [TaskStatus.ToDo]: 'm-fill-2 m-text',
+    [TaskStatus.InProgress]: 'm-accent-tint',
+    [TaskStatus.Done]: 'm-tone-ok',
+};
+const REQUIRED_FIELDS = Object.keys(REQUIRED_FIELD_LABELS) as SchemeRequiredField[];
+
+const Pill: React.FC<{ s: WorkflowStatusDef; initial?: boolean }> = ({ s, initial }) => (
+    <span className={`inline-flex items-center gap-1 h-6 px-2 rounded-md text-[12px] font-bold whitespace-nowrap ${CAT_TONE[s.category]}`} title={`${s.key} · ${CATEGORY_LABELS[s.category]}${initial ? ' · başlangıç' : ''}`}>
+        {initial && <span aria-label="başlangıç" className="w-1.5 h-1.5 rounded-full" style={{ background: 'currentColor' }}></span>}{s.label}
+    </span>
+);
+
+/** Kategori sütunlarında akış önizlemesi */
+const FlowPreview: React.FC<{ wf: WorkflowConfig }> = ({ wf }) => (
+    <div className="flex items-start gap-1.5 flex-wrap">
+        {CATEGORY_ORDER.filter(c => wf.statuses.some(s => s.category === c)).map((c, i, arr) => (
+            <React.Fragment key={c}>
+                <div className="flex flex-col gap-1 items-start">
+                    <span className="text-[11px] m-text-3 font-semibold">{CATEGORY_LABELS[c]}</span>
+                    <div className="flex flex-wrap gap-1">{wf.statuses.filter(s => s.category === c).map(s => <Pill key={s.key} s={s} initial={s.key === wf.initial} />)}</div>
+                </div>
+                {i < arr.length - 1 && <span className="m-text-3 mt-5"><Icon name="chevronRight" size={14} /></span>}
+            </React.Fragment>
+        ))}
+    </div>
+);
+
+type Tab = 'general' | 'workflow' | 'fields' | 'notify' | 'board';
+
+/** Bildirim şeması düzenleyici: olay → alıcılar */
+const NotificationEditor: React.FC<{ rules: NotificationRule[]; onChange: (r: NotificationRule[] | undefined) => void; wf: WorkflowConfig; people: Person[]; roleDefs: ProjectRoleDef[] }> = ({ rules, onChange, wf, people, roleDefs }) => {
+    const set = (i: number, patch: Partial<NotificationRule>) => onChange(rules.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+    const setTo = (i: number, patch: Partial<NotificationRule['to']>) => set(i, { to: { ...rules[i].to, ...patch } });
+    const toggle = <T,>(arr: T[] | undefined, v: T): T[] | undefined => { const n = arr?.includes(v) ? arr.filter(x => x !== v) : [...(arr || []), v]; return n.length ? n : undefined; };
+    const nid = () => `bil-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+    const fullName = (p: Person) => `${p.firstName} ${p.lastName}`.trim();
+    return (
+        <div className="flex flex-col gap-3">
+            <p className="m-0 text-[13.5px] m-text-2">Jira bildirim şeması gibi: bir olay olduğunda kimlere e-posta (ve istenirse Teams kanalına mesaj) gideceği. Değişikliği yapan kişiye bildirim gitmez; Jira eşitlemesinden gelen değişiklikler bildirim üretmez. E-posta için kişinin havuzda e-posta adresi ve sunucuda e-posta yapılandırması gerekir.</p>
+            {rules.length === 0 && <p className="m-0 text-[14px] m-text-3">Bildirim kuralı yok.</p>}
+            {rules.map((r, i) => (
+                <div key={r.id} className="m-surface rounded-xl p-3 flex flex-col gap-2" style={{ boxShadow: 'inset 0 0 0 1px var(--m-sep)' }}>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <select aria-label="Olay" className="m-input !h-9 !py-0 !w-auto text-[14px] font-semibold" value={r.event} onChange={e => set(i, { event: e.target.value as NotificationEvent, statuses: undefined })}>
+                            {(Object.keys(NOTIFICATION_EVENT_LABELS) as NotificationEvent[]).map(ev => <option key={ev} value={ev}>{NOTIFICATION_EVENT_LABELS[ev]}</option>)}
+                        </select>
+                        <span className="flex-1 text-[12.5px] m-text-3">{describeNotificationRule(r, people, roleDefs, wf)}</span>
+                        <button type="button" className="m-icon-btn !w-8 !h-8" aria-label="Kuralı sil" onClick={() => onChange(rules.filter((_, j) => j !== i).length ? rules.filter((_, j) => j !== i) : undefined)}><Icon name="trash" size={14} /></button>
+                    </div>
+                    {r.event === 'transitioned' && (
+                        <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="text-[12.5px] m-text-3 mr-1">Yalnız şu durumlara girince (boş: her geçiş):</span>
+                            {wf.statuses.map(st => <button key={st.key} type="button" className={`m-pill ${r.statuses?.includes(st.key) ? 'is-active' : ''}`} aria-pressed={!!r.statuses?.includes(st.key)} onClick={() => set(i, { statuses: toggle(r.statuses, st.key) })}>{st.label}</button>)}
+                        </div>
+                    )}
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[13.5px]">
+                        <span className="text-[12.5px] m-text-3">Alıcılar:</span>
+                        <label className="flex items-center gap-1.5"><input type="checkbox" checked={!!r.to.assignee} onChange={e => setTo(i, { assignee: e.target.checked || undefined })} />Atanan</label>
+                        <label className="flex items-center gap-1.5"><input type="checkbox" checked={!!r.to.pm} onChange={e => setTo(i, { pm: e.target.checked || undefined })} />Proje yöneticisi</label>
+                        {roleDefs.map(d => <label key={d.id} className="flex items-center gap-1.5"><input type="checkbox" checked={!!r.to.roles?.includes(d.id)} onChange={() => setTo(i, { roles: toggle(r.to.roles, d.id) })} />{d.name} rolü</label>)}
+                        <label className="flex items-center gap-1.5"><input type="checkbox" checked={!!r.to.teams} onChange={e => setTo(i, { teams: e.target.checked || undefined })} />Teams kanalı</label>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                        {(r.to.people || []).map(id => { const p = people.find(x => x.id === id); return <button key={id} type="button" className="m-pill is-active" onClick={() => setTo(i, { people: toggle(r.to.people, id) })}>{p ? fullName(p) : id} ×</button>; })}
+                        <select aria-label="Kişi ekle" className="m-input !h-8 !py-0 !w-auto text-[13px]" value="" onChange={e => e.target.value && setTo(i, { people: toggle(r.to.people, e.target.value) })}>
+                            <option value="">+ Kişi ekle…</option>
+                            {people.filter(p => !(r.to.people || []).includes(p.id)).map(p => <option key={p.id} value={p.id}>{fullName(p)}{p.email ? '' : ' (e-posta yok)'}</option>)}
+                        </select>
+                    </div>
+                </div>
+            ))}
+            <div className="flex flex-wrap gap-2">
+                <button type="button" className="m-btn m-btn-gray !min-h-[34px] !px-3 text-[14px]" onClick={() => onChange([...rules, { id: nid(), event: 'transitioned', to: { assignee: true } }])}><Icon name="plus" size={14} />Kural ekle</button>
+                {rules.length === 0 && <button type="button" className="m-btn m-btn-plain !min-h-[34px] !px-3 text-[14px]" onClick={() => onChange(suggestedNotificationRules(nid))}>Önerilen kuralları ekle</button>}
+            </div>
+        </div>
+    );
+};
+
+const SchemeEditor: React.FC<{
+    initial: ProjectScheme;
+    workspace: WorkspaceData;
+    isNew: boolean;
+    onClose: () => void;
+    onSave: (s: ProjectScheme) => string | null;
+}> = ({ initial, workspace, isNew, onClose, onSave }) => {
+    const [s, setS] = useState<ProjectScheme>(() => JSON.parse(JSON.stringify(initial)));
+    const [tab, setTab] = useState<Tab>('general');
+    const [wfView, setWfView] = useState<'diagram' | 'table'>('diagram');
+    const [boardOpen, setBoardOpen] = useState(false);
+    const [saveError, setSaveError] = useState<string | null>(null);
+    const users = useMemo(() => schemeUsage(workspace, s.id), [workspace, s.id]);
+    const usedTasks = useMemo(() => users.flatMap(p => p.tasks), [users]);
+    const errors = validateScheme(s);
+    const wf = s.workflow;
+    const setWf = (patch: Partial<WorkflowConfig>) => setS(x => ({ ...x, workflow: { ...x.workflow, ...patch } }));
+    const keys = wf.statuses.map(x => x.key);
+
+    const updateStatus = (i: number, patch: Partial<WorkflowStatusDef>) => {
+        const old = wf.statuses[i];
+        const statuses = wf.statuses.map((x, j) => (j === i ? { ...x, ...patch } : x));
+        // Anahtar değişirse başlangıç ve geçişlerdeki adı da güncellenir
+        if (patch.key !== undefined && patch.key !== old.key) {
+            const nk = patch.key;
+            const tr = wf.transitions ? Object.fromEntries(Object.entries(wf.transitions as Record<string, string[]>).map(([f, tos]) => [f === old.key ? nk : f, tos.map(t => (t === old.key ? nk : t))])) : undefined;
+            setWf({ statuses, initial: wf.initial === old.key ? nk : wf.initial, ...(tr ? { transitions: tr } : {}), rules: renameRuleKeys(wf.rules, old.key, nk) });
+        } else setWf({ statuses });
+    };
+    const moveStatus = (i: number, d: -1 | 1) => {
+        const j = i + d;
+        if (j < 0 || j >= wf.statuses.length) return;
+        const statuses = [...wf.statuses];
+        [statuses[i], statuses[j]] = [statuses[j], statuses[i]];
+        setWf({ statuses });
+    };
+    const removeStatus = (i: number) => {
+        const k = wf.statuses[i].key;
+        const statuses = wf.statuses.filter((_, j) => j !== i);
+        const tr = wf.transitions ? Object.fromEntries(Object.entries(wf.transitions as Record<string, string[]>).filter(([f]) => f !== k).map(([f, tos]) => [f, tos.filter(t => t !== k)])) : undefined;
+        setWf({ statuses, initial: wf.initial === k ? statuses[0]?.key || '' : wf.initial, ...(tr ? { transitions: tr } : {}), rules: dropRuleKeys(wf.rules, k) });
+    };
+    const addStatus = (def?: WorkflowStatusDef) => {
+        const d = def || { key: `DURUM ${wf.statuses.length + 1}`, label: 'Yeni durum', category: TaskStatus.InProgress };
+        const tr = wf.transitions ? { ...wf.transitions, [d.key]: [] } : undefined;
+        setWf({ statuses: [...wf.statuses, { ...d }], ...(tr ? { transitions: tr } : {}) });
+    };
+    const suggestions = WORKFLOW_STATUSES.filter(x => !keys.includes(x.key));
+    const toggleTransition = (from: string, to: string) => {
+        const tr = { ...(wf.transitions || {}) };
+        const list = tr[from] || [];
+        tr[from] = list.includes(to) ? list.filter(x => x !== to) : [...list, to];
+        setWf({ transitions: tr });
+    };
+    const usage = (k: string) => usedTasks.filter(t => t.jiraStatus && workflowKey(t.jiraStatus) === k).length;
+
+    const save = () => {
+        const clean: ProjectScheme = { ...s, workflow: { ...wf, statuses: wf.statuses.map(x => ({ ...x, key: workflowKey(x.key), label: x.label.trim() })), initial: workflowKey(wf.initial) } };
+        const err = onSave(clean);
+        if (err) setSaveError(err);
+        else onClose();
+    };
+
+    const board = s.board ? boardConfigOf(s.board, wf) : boardConfigOf(undefined, wf);
+    const tabs: { key: Tab; label: string }[] = [
+        { key: 'general', label: 'Genel' },
+        { key: 'workflow', label: `İş akışı (${wf.statuses.length})` },
+        { key: 'fields', label: 'Kayıt türleri ve alanlar' },
+        { key: 'notify', label: `Bildirimler (${s.notifications?.length || 0})` },
+        { key: 'board', label: 'Pano' },
+    ];
+
+    return (
+        <Sheet xxl title={isNew ? 'Yeni proje yapılandırması' : `Yapılandırma: ${initial.name}`}
+            subtitle={users.length ? `${users.length} proje kullanıyor — değişiklik hepsine uygulanır: ${users.slice(0, 4).map(p => p.name).join(', ')}${users.length > 4 ? '…' : ''}` : 'Henüz hiçbir projeye atanmadı.'}
+            onClose={onClose}
+            footer={(
+                <>
+                    {(errors.length > 0 || saveError) ? <span role="alert" className="flex-1 text-[13px] m-ink-bad">{saveError || errors[0]}{errors.length > 1 ? ` (+${errors.length - 1})` : ''}</span> : <span className="flex-1 text-[13px] m-text-3">Kaydedilince projelerdeki yerel görevler yeni akışta olmayan durumlardan aynı kategorinin ilk durumuna taşınır; Jira'ya bağlı görevler Jira'nın durumunu korur.</span>}
+                    <button type="button" className="m-btn m-btn-gray" onClick={onClose}>Vazgeç</button>
+                    <button type="button" className="m-btn m-btn-primary" disabled={errors.length > 0} onClick={save}><Icon name="check" size={16} />Kaydet</button>
+                </>
+            )}>
+            {boardOpen && (
+                <BoardSettings tasks={usedTasks} config={board} isCustom={!!s.board} people={[...new Set(usedTasks.map(t => t.resourceName).filter(Boolean))]} workflow={wf}
+                    resetLabel="İş akışından otomatik oluştur"
+                    onClose={() => setBoardOpen(false)}
+                    onSave={c => { setS(x => ({ ...x, board: c })); setBoardOpen(false); }} />
+            )}
+            <div role="tablist" className="flex gap-1 p-1 rounded-xl m-fill-2 self-start flex-wrap">
+                {tabs.map(t => (
+                    <button key={t.key} type="button" role="tab" aria-selected={tab === t.key} onClick={() => setTab(t.key)}
+                        className={`h-8 px-3 rounded-lg border-0 cursor-pointer text-[14px] ${tab === t.key ? 'm-surface font-semibold m-text' : 'bg-transparent m-text-2'}`}>{t.label}</button>
+                ))}
+            </div>
+
+            {tab === 'general' && (
+                <div className="flex flex-col gap-4">
+                    <label className="flex flex-col gap-1"><span className="text-[13px] font-semibold m-text-2">Ad</span>
+                        <input className="m-input" value={s.name} maxLength={60} onChange={e => setS(x => ({ ...x, name: e.target.value }))} />
+                    </label>
+                    <label className="flex flex-col gap-1"><span className="text-[13px] font-semibold m-text-2">Açıklama</span>
+                        <textarea className="m-input" rows={2} value={s.description || ''} maxLength={300} onChange={e => setS(x => ({ ...x, description: e.target.value }))} />
+                    </label>
+                    <label className="flex items-start gap-2 cursor-pointer">
+                        <input type="checkbox" className="mt-1" checked={s.allowProjectBoard} onChange={e => setS(x => ({ ...x, allowProjectBoard: e.target.checked }))} />
+                        <span className="flex flex-col"><span className="text-[15px] m-text font-semibold">Proje yöneticisi panoyu kendi projesi için özelleştirebilir</span>
+                            <span className="text-[13px] m-text-3">Kapalıysa projeler bu yapılandırmanın panosunu kullanır, "Panoyu yapılandır" yalnız burada (admin) yapılır.</span></span>
+                    </label>
+                    <label className="flex items-start gap-2 cursor-pointer">
+                        <input type="checkbox" className="mt-1" checked={!!s.jiraWriteBack} onChange={e => setS(x => ({ ...x, jiraWriteBack: e.target.checked || undefined }))} />
+                        <span className="flex flex-col"><span className="text-[15px] m-text font-semibold">Durum geçişlerini Jira'ya da yaz</span>
+                            <span className="text-[13px] m-text-3">Jira'ya bağlı görev uygulamada bir duruma geçince Jira'da da aynı adlı duruma (yalnız kategori istendiyse o kategoriye) geçirilir; geçiş notu Jira'ya yorum, harcanan süre worklog, çözüm resolution olarak yazılır. Sunucuda <code>JIRA_ALLOW_UPDATE=1</code> ve jetonun düzenleme izni gerekir; yalnız proje içeriğini düzenleyebilen kullanıcıların geçişleri yazılır. Jira geçişi reddederse uyarı gösterilir ve sonraki eşitlemede Jira'daki durum geçerli olur.</span></span>
+                    </label>
+                    <label className="flex items-start gap-2 cursor-pointer">
+                        <input type="checkbox" className="mt-1" checked={!!s.allowProjectWorkflow} onChange={e => setS(x => ({ ...x, allowProjectWorkflow: e.target.checked }))} />
+                        <span className="flex flex-col"><span className="text-[15px] m-text font-semibold">Proje yöneticisi kendi projesinin iş akışını özelleştirebilir</span>
+                            <span className="text-[13px] m-text-3">Jira'daki "genişletilmiş proje yönetimi" gibi: yalnız bu yapılandırmanın durumlarını kullanır (yeni durum ekleyemez); okları/geçişleri ve başlangıcı değiştirebilir, durum çıkarabilir. Kapalıysa iş akışı yalnız buradan değişir.</span></span>
+                    </label>
+                    <div className="m-surface rounded-xl p-3 flex flex-col gap-2" style={{ boxShadow: 'inset 0 0 0 1px var(--m-sep)' }}>
+                        <span className="text-[13px] font-semibold m-text-2">Özet</span>
+                        <FlowPreview wf={wf} />
+                        <span className="text-[13px] m-text-3">Geçişler: {wf.transitions ? `${Object.values(wf.transitions as Record<string, string[]>).reduce((n, l) => n + l.length, 0)} tanımlı geçiş` : 'serbest'} · Kayıt türleri: {s.issueTypes?.length ? s.issueTypes.map(t => ISSUE_TYPE_OPTIONS.find(o => o.value === t)?.label).join(', ') : 'hepsi'} · Zorunlu: {s.requiredFields?.length ? s.requiredFields.map(f => REQUIRED_FIELD_LABELS[f]).join(', ') : 'yok'} · Pano: {s.board ? `${board.columns.length} kolon (özel)` : `${board.columns.length} kolon (iş akışından)`}</span>
+                    </div>
+                </div>
+            )}
+
+            {tab === 'workflow' && (
+                <div className="flex flex-col gap-4">
+                    <div className="m-segmented self-start" role="group" aria-label="İş akışı görünümü">
+                        <button type="button" className="m-segment" aria-pressed={wfView === 'diagram'} onClick={() => setWfView('diagram')}>Diyagram</button>
+                        <button type="button" className="m-segment" aria-pressed={wfView === 'table'} onClick={() => setWfView('table')}>Tablo</button>
+                    </div>
+                    {wfView === 'diagram' ? <WorkflowDesigner value={wf} onChange={next => setS(x => ({ ...x, workflow: next }))} usage={usage} people={workspace.people} roleDefs={projectRolesOf(workspace)} /> : (<>
+                    <FlowPreview wf={wf} />
+                    <div className="flex flex-col">
+                        <div className="grid gap-2 px-1 pb-1 text-[12px] font-semibold m-text-3" style={{ gridTemplateColumns: '56px 1fr 1fr 150px 70px 70px 32px' }}>
+                            <span></span><span>Ad (Türkçe)</span><span>Jira adı (eşleme)</span><span>Kategori</span><span>Başlangıç</span><span>Görev</span><span></span>
+                        </div>
+                        {wf.statuses.map((x, i) => (
+                            <div key={i} className="grid gap-2 items-center py-1.5 border-t m-sep" style={{ gridTemplateColumns: '56px 1fr 1fr 150px 70px 70px 32px', borderTopStyle: 'solid', borderTopWidth: 1 }}>
+                                <span className="flex">
+                                    <button type="button" className="m-icon-btn !w-7 !h-7" aria-label={`${x.label} yukarı`} disabled={i === 0} onClick={() => moveStatus(i, -1)}><Icon name="arrowUp" size={13} /></button>
+                                    <button type="button" className="m-icon-btn !w-7 !h-7" aria-label={`${x.label} aşağı`} disabled={i === wf.statuses.length - 1} onClick={() => moveStatus(i, 1)}><Icon name="arrowDown" size={13} /></button>
+                                </span>
+                                <input aria-label="Durum adı" className="m-input !h-9 !py-0 text-[14px]" value={x.label} maxLength={40} onChange={e => updateStatus(i, { label: e.target.value })} />
+                                <input aria-label="Jira adı" className="m-input !h-9 !py-0 text-[13px]" style={{ textTransform: 'uppercase' }} value={x.key} maxLength={40} onChange={e => updateStatus(i, { key: e.target.value.toUpperCase() })} />
+                                <select aria-label="Kategori" className="m-input !h-9 !py-0 text-[13px]" value={x.category} onChange={e => updateStatus(i, { category: e.target.value as TaskStatus })}>
+                                    {CATEGORY_ORDER.map(c => <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>)}
+                                </select>
+                                <input type="radio" name="initial" aria-label={`${x.label} başlangıç durumu`} className="justify-self-center" checked={wf.initial === x.key} onChange={() => setWf({ initial: x.key })} />
+                                <span className="text-[13px] m-text-3 m-tabular text-center">{usage(x.key) || '—'}</span>
+                                <button type="button" className="m-icon-btn !w-7 !h-7" aria-label={`${x.label} durumunu sil`} disabled={wf.statuses.length <= 1} onClick={() => removeStatus(i)}><Icon name="trash" size={14} /></button>
+                            </div>
+                        ))}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                        <button type="button" className="m-btn m-btn-gray !min-h-[34px] !px-3 text-[14px]" onClick={() => addStatus()}><Icon name="plus" size={14} />Durum ekle</button>
+                        {suggestions.length > 0 && <span className="text-[13px] m-text-3 ml-2 mr-1">Hazır:</span>}
+                        {suggestions.map(x => <button key={x.key} type="button" className="m-pill" onClick={() => addStatus(x)} title={`${x.key} · ${CATEGORY_LABELS[x.category]}`}><Icon name="plus" size={12} />{x.label}</button>)}
+                    </div>
+
+                    <fieldset className="m-surface rounded-xl p-3 flex flex-col gap-3 border-0" style={{ boxShadow: 'inset 0 0 0 1px var(--m-sep)' }}>
+                        <legend className="px-1 text-[15px] font-semibold m-text">Geçişler</legend>
+                        <div className="flex flex-wrap gap-4 text-[14px]">
+                            <label className="flex items-center gap-1.5 cursor-pointer"><input type="radio" name="tr" checked={!wf.transitions} onChange={() => setS(x => ({ ...x, workflow: { statuses: x.workflow.statuses, initial: x.workflow.initial } }))} />Serbest — her durumdan her duruma (Jira "All" geçişi)</label>
+                            <label className="flex items-center gap-1.5 cursor-pointer"><input type="radio" name="tr" checked={!!wf.transitions} onChange={() => setWf({ transitions: linearTransitions(wf) })} />Tanımlı geçişler</label>
+                        </div>
+                        {wf.transitions && (
+                            <>
+                                <div className="flex flex-wrap gap-2">
+                                    <button type="button" className="m-btn m-btn-plain !min-h-[32px] !px-2.5 text-[13px]" onClick={() => setWf({ transitions: linearTransitions(wf) })}>Doğrusal akış (ileri + geri)</button>
+                                    <button type="button" className="m-btn m-btn-plain !min-h-[32px] !px-2.5 text-[13px]" onClick={() => setWf({ transitions: Object.fromEntries(keys.map(k => [k, keys.filter(t => t !== k)])) })}>Hepsini aç</button>
+                                    <button type="button" className="m-btn m-btn-plain !min-h-[32px] !px-2.5 text-[13px]" onClick={() => setWf({ transitions: Object.fromEntries(keys.map(k => [k, []])) })}>Temizle</button>
+                                </div>
+                                <div className="overflow-x-auto">
+                                    <table className="border-collapse text-[13px]">
+                                        <thead>
+                                            <tr>
+                                                <th className="text-left p-1.5 m-text-3 font-semibold whitespace-nowrap">Nereden ↓ · Nereye →</th>
+                                                {wf.statuses.map(x => <th key={x.key} className="p-1.5"><Pill s={x} /></th>)}
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {wf.statuses.map(f => (
+                                                <tr key={f.key} className="border-t m-sep" style={{ borderTopStyle: 'solid', borderTopWidth: 1 }}>
+                                                    <th className="text-left p-1.5"><Pill s={f} initial={f.key === wf.initial} /></th>
+                                                    {wf.statuses.map(t => (
+                                                        <td key={t.key} className="p-1.5 text-center">
+                                                            {f.key === t.key ? <span className="m-text-3">·</span> : (
+                                                                <input type="checkbox" aria-label={`${f.label} → ${t.label}`} checked={!!wf.transitions![f.key]?.includes(t.key)} onChange={() => toggleTransition(f.key, t.key)} />
+                                                            )}
+                                                        </td>
+                                                    ))}
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <p className="m-0 text-[12.5px] m-text-3">Kullanıcılar görev menüsünde, durum seçicide ve panoda yalnız işaretli geçişleri yapabilir. Jira eşitlemesi Jira'daki durumu her zaman uygular.</p>
+                            </>
+                        )}
+                    </fieldset>
+                    </>)}
+                </div>
+            )}
+
+            {tab === 'fields' && (
+                <div className="flex flex-col gap-5">
+                    <fieldset className="border-0 p-0 m-0 flex flex-col gap-2">
+                        <legend className="text-[15px] font-semibold m-text mb-1">Kayıt türleri</legend>
+                        <div className="flex flex-wrap gap-4 text-[14px]">
+                            {ISSUE_TYPE_OPTIONS.map(o => {
+                                const on = !s.issueTypes?.length || s.issueTypes.includes(o.value);
+                                return (
+                                    <label key={o.value} className="flex items-center gap-1.5 cursor-pointer">
+                                        <input type="checkbox" checked={on} onChange={e => setS(x => {
+                                            const cur: IssueType[] = x.issueTypes?.length ? x.issueTypes : ISSUE_TYPE_OPTIONS.map(y => y.value);
+                                            const next = e.target.checked ? [...cur, o.value] : cur.filter(y => y !== o.value);
+                                            return { ...x, issueTypes: next.length === ISSUE_TYPE_OPTIONS.length ? undefined : next };
+                                        })} />{o.label}
+                                    </label>
+                                );
+                            })}
+                        </div>
+                        <p className="m-0 text-[12.5px] m-text-3">Görev formunda yalnız seçili türler sunulur.</p>
+                    </fieldset>
+                    <fieldset className="border-0 p-0 m-0 flex flex-col gap-2">
+                        <legend className="text-[15px] font-semibold m-text mb-1">Zorunlu alanlar</legend>
+                        <div className="flex flex-wrap gap-4 text-[14px]">
+                            {REQUIRED_FIELDS.map(f => (
+                                <label key={f} className="flex items-center gap-1.5 cursor-pointer">
+                                    <input type="checkbox" checked={!!s.requiredFields?.includes(f)} onChange={e => setS(x => ({ ...x, requiredFields: e.target.checked ? [...(x.requiredFields || []), f] : (x.requiredFields || []).filter(y => y !== f) }))} />{REQUIRED_FIELD_LABELS[f]}
+                                </label>
+                            ))}
+                        </div>
+                        <p className="m-0 text-[12.5px] m-text-3">Görev eklenirken ve düzenlenirken bu alanlar boşsa kaydedilmez (Jira alan yapılandırması gibi).</p>
+                    </fieldset>
+                </div>
+            )}
+
+            {tab === 'notify' && <NotificationEditor rules={s.notifications || []} onChange={n => setS(x => ({ ...x, notifications: n }))} wf={wf} people={workspace.people} roleDefs={projectRolesOf(workspace)} />}
+
+            {tab === 'board' && (
+                <div className="flex flex-col gap-3">
+                    <p className="m-0 text-[14px] m-text-2">{s.board ? 'Bu yapılandırmanın özel bir panosu var.' : 'Pano iş akışından otomatik oluşturuluyor: Yapılacak · süreçteki her durum ayrı kolon · Tamamlandı.'} {s.allowProjectBoard ? 'Proje yöneticileri kendi projelerinde özelleştirebilir.' : 'Projeler bu panoyu kullanır.'}</p>
+                    <div className="flex flex-wrap gap-2">
+                        {board.columns.map(c => (
+                            <div key={c.id} className="m-surface rounded-xl p-2.5 w-[180px] flex flex-col gap-1.5" style={{ boxShadow: 'inset 0 0 0 1px var(--m-sep)' }}>
+                                <span className="text-[13px] font-bold m-text" style={{ textTransform: 'uppercase' }}>{c.name}</span>
+                                <span className="flex flex-wrap gap-1">{c.statuses.filter(k => k.startsWith('jira:')).map(k => <span key={k} className="inline-flex h-5 px-1.5 rounded text-[11px] font-semibold m-fill-2 m-text-2">{statusKeyLabel(k, wf)}</span>)}</span>
+                                {(c.min || c.max || c.labels?.length) ? <span className="text-[11.5px] m-text-3">{[c.min ? `en az ${c.min}` : '', c.max ? `en çok ${c.max}` : '', c.labels?.length ? `etiket: ${c.labels.join(', ')}` : ''].filter(Boolean).join(' · ')}</span> : null}
+                            </div>
+                        ))}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                        <button type="button" className="m-btn m-btn-primary !min-h-[36px] !px-3 text-[14px]" onClick={() => setBoardOpen(true)}><Icon name="sliders" size={15} />Panoyu düzenle</button>
+                        {s.board && <button type="button" className="m-btn m-btn-plain !min-h-[36px] !px-3 text-[14px]" onClick={() => setS(x => ({ ...x, board: undefined }))}>İş akışından yeniden oluştur</button>}
+                    </div>
+                </div>
+            )}
+        </Sheet>
+    );
+};
+
+/** Proje rolü tanımları (kurum geneli); üyeler projelerde atanır */
+const ProjectRolesEditor: React.FC<{ defs: ProjectRoleDef[]; workspace: WorkspaceData; onSave: (d: ProjectRoleDef[]) => void }> = ({ defs, workspace, onSave }) => {
+    const [draft, setDraft] = useState<ProjectRoleDef[]>(() => defs.map(d => ({ ...d })));
+    const dirty = JSON.stringify(draft) !== JSON.stringify(defs);
+    const usedIn = (id: string) => workspace.projects.filter(p => (p.roleMembers?.[id] || []).length).length;
+    const invalid = draft.some(d => !d.name.trim()) || new Set(draft.map(d => d.name.trim().toLocaleLowerCase('tr-TR'))).size !== draft.length;
+    return (
+        <section aria-label="Proje rolleri" className="m-surface rounded-2xl p-4 flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+                <h2 className="m-0 flex-1 text-[20px] font-semibold m-text">Proje rolleri <span className="text-[15px] font-normal m-text-3">{draft.length}</span></h2>
+                <button type="button" className="m-btn m-btn-gray !min-h-[34px] !px-3 text-[14px]" onClick={() => setDraft(d => [...d, { id: newRoleId('rol'), name: 'Yeni rol' }])}><Icon name="plus" size={14} />Rol ekle</button>
+                <button type="button" className="m-btn m-btn-primary !min-h-[34px] !px-3 text-[14px]" disabled={!dirty || invalid} onClick={() => onSave(draft.map(d => ({ ...d, name: d.name.trim() })))}><Icon name="check" size={14} />Kaydet</button>
+            </div>
+            <p className="m-0 text-[13px] m-text-3">Jira'daki proje rolleri gibi: rolü burada tanımlarsınız, her projenin üyelerini proje yöneticisi "Proje ayarları › Roller"den atar. Geçiş koşulları ve bildirimler kişi yerine role bağlanınca aynı yapılandırma her ekipte çalışır.</p>
+            {draft.map((d, i) => (
+                <div key={d.id} className="grid gap-2 items-center py-1.5 border-t m-sep" style={{ gridTemplateColumns: 'minmax(140px, 220px) 1fr auto 36px', borderTopStyle: 'solid', borderTopWidth: 1 }}>
+                    <input aria-label="Rol adı" className="m-input !h-9 !py-0 text-[14px]" value={d.name} maxLength={40} onChange={e => setDraft(l => l.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} />
+                    <input aria-label="Açıklama" className="m-input !h-9 !py-0 text-[13px]" value={d.description || ''} placeholder="Açıklama" onChange={e => setDraft(l => l.map((x, j) => (j === i ? { ...x, description: e.target.value || undefined } : x)))} />
+                    <span className="text-[12.5px] m-text-3 whitespace-nowrap">{usedIn(d.id)} projede üye var</span>
+                    <button type="button" className="m-icon-btn !w-8 !h-8" aria-label={`${d.name} rolünü sil`} onClick={() => { if (!usedIn(d.id) || window.confirm(`"${d.name}" ${usedIn(d.id)} projede kullanılıyor; üyelikler silinsin mi?`)) setDraft(l => l.filter((_, j) => j !== i)); }}><Icon name="trash" size={14} /></button>
+                </div>
+            ))}
+            {invalid && <p role="alert" className="m-0 text-[13px] m-ink-bad">Rol adları boş ya da aynı olamaz.</p>}
+        </section>
+    );
+};
+
+const ProjectSchemes: React.FC<Props> = ({ workspace, onSaveScheme, onDeleteScheme, onAssignScheme, onSaveProjectBoard, onOpenProjectWorkflow, onOpenProjectLists, onSaveProjectRoles }) => {
+    const schemes = schemesOf(workspace);
+    const [editing, setEditing] = useState<{ scheme: ProjectScheme; isNew: boolean } | null>(null);
+    const [picking, setPicking] = useState(false);
+    const [boardProject, setBoardProject] = useState<string | null>(null);
+    const projects = [...workspace.projects].sort((a, b) => a.name.localeCompare(b.name, 'tr'));
+    const bp = boardProject ? workspace.projects.find(p => p.id === boardProject) : undefined;
+    const bpScheme = bp ? schemeOf(workspace, bp) : undefined;
+
+    return (
+        <div className="flex flex-col gap-6">
+            {editing && <SchemeEditor initial={editing.scheme} isNew={editing.isNew} workspace={workspace} onClose={() => setEditing(null)} onSave={onSaveScheme} />}
+            {bp && bpScheme && (
+                <BoardSettings tasks={bp.tasks} config={boardForProject(bpScheme, bp).config} isCustom={!!bp.boardConfig} people={[...new Set(bp.tasks.map(t => t.resourceName).filter(Boolean))]}
+                    workflow={bpScheme.workflow} resetLabel={`Yapılandırmanın panosuna dön (${bpScheme.name})`}
+                    onClose={() => setBoardProject(null)} onSave={c => { onSaveProjectBoard(bp.id, c); setBoardProject(null); }} />
+            )}
+            {picking && (
+                <Sheet wide title="Yeni yapılandırma" subtitle="Bir şablonla başlayın; sonra durumları, geçişleri, alanları ve panoyu düzenleyin." onClose={() => setPicking(false)}>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                        {SCHEME_TEMPLATES.map(t => {
+                            const preview = createScheme(t.key as SchemeTemplateKey, t.name);
+                            return (
+                                <button key={t.key} type="button" className="m-surface m-row-link rounded-2xl p-4 text-left flex flex-col gap-2 border-0 cursor-pointer" style={{ boxShadow: 'inset 0 0 0 1px var(--m-sep)', font: 'inherit' }}
+                                    onClick={() => { setPicking(false); setEditing({ scheme: createScheme(t.key as SchemeTemplateKey, t.name), isNew: true }); }}>
+                                    <span className="text-[16px] font-semibold m-text">{t.name}</span>
+                                    <span className="text-[13px] m-text-3">{t.description}</span>
+                                    <FlowPreview wf={preview.workflow} />
+                                </button>
+                            );
+                        })}
+                    </div>
+                    {schemes.length > 0 && (
+                        <div className="flex flex-col gap-2">
+                            <h3 className="m-0 text-[15px] font-semibold m-text">ya da kayıtlı bir yapılandırmadan başla</h3>
+                            <div className="flex flex-wrap gap-2">
+                                {schemes.map(x => <button key={x.id} type="button" className="m-pill" onClick={() => { setPicking(false); setEditing({ scheme: copyScheme(x), isNew: true }); }}><Icon name="copy" size={12} />{x.name}</button>)}
+                            </div>
+                            <p className="m-0 text-[12.5px] m-text-3">Çizdiğiniz iş akışı (oklar ve kutu yerleşimi dahil) kopyalanır; yeni yapılandırmada değiştirebilirsiniz.</p>
+                        </div>
+                    )}
+                </Sheet>
+            )}
+
+            <section className="m-surface rounded-2xl p-4 flex flex-col gap-2" aria-label="Nasıl çalışır">
+                <p className="m-0 text-[14.5px] m-text-2 leading-relaxed">
+                    <b className="m-text">Jira'daki şema mantığı:</b> bir <b>yapılandırma</b>; iş akışını (durumlar, başlangıç, izin verilen geçişler), kayıt türlerini, zorunlu alanları ve panoyu birlikte tanımlar.
+                    Yapılandırmayı projelere atarsınız; birden çok proje aynı yapılandırmayı paylaşabilir ve değişiklik hepsine uygulanır. Atanmamış projeler <b>Varsayılan</b>'ı kullanır.
+                    Hesaplar (ilerleme, EVM, tahmin) her durumun <b>kategorisini</b> (Bekleyen · Yapılacak · Süreçte · Tamamlandı) kullanır.
+                </p>
+            </section>
+
+            <section aria-label="Yapılandırmalar" className="flex flex-col gap-3">
+                <div className="flex items-center gap-2">
+                    <h2 className="m-0 flex-1 text-[20px] font-semibold m-text">Yapılandırmalar <span className="text-[15px] font-normal m-text-3">{schemes.length}</span></h2>
+                    <button type="button" className="m-btn m-btn-primary !min-h-[38px]" onClick={() => setPicking(true)}><Icon name="plus" size={16} />Yeni yapılandırma</button>
+                </div>
+                <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))' }}>
+                    {schemes.map(sc => {
+                        const users = schemeUsage(workspace, sc.id);
+                        return (
+                            <article key={sc.id} className="m-surface rounded-2xl p-4 flex flex-col gap-3">
+                                <div className="flex items-start gap-2">
+                                    <div className="flex-1 min-w-0">
+                                        <h3 className="m-0 text-[16px] font-semibold m-text flex items-center gap-2">{sc.name}{sc.id === DEFAULT_SCHEME_ID && <span className="inline-flex h-5 px-1.5 rounded text-[11px] font-semibold m-fill-2 m-text-2">varsayılan</span>}</h3>
+                                        {sc.description && <p className="m-0 mt-0.5 text-[13px] m-text-3">{sc.description}</p>}
+                                    </div>
+                                    <span className="inline-flex items-center h-6 px-2 rounded-full text-[12px] font-semibold m-tone-accent whitespace-nowrap">{users.length} proje</span>
+                                </div>
+                                <FlowPreview wf={sc.workflow} />
+                                <p className="m-0 text-[12.5px] m-text-3">
+                                    {sc.workflow.transitions ? 'Tanımlı geçişler' : 'Serbest geçiş'} · {sc.issueTypes?.length ? `${sc.issueTypes.length} kayıt türü` : 'tüm kayıt türleri'}
+                                    {sc.requiredFields?.length ? ` · zorunlu: ${sc.requiredFields.map(f => REQUIRED_FIELD_LABELS[f].toLocaleLowerCase('tr-TR')).join(', ')}` : ''} · pano {sc.allowProjectBoard ? 'projede özelleştirilebilir' : 'yapılandırmadan'}
+                                </p>
+                                <div className="flex gap-1.5 flex-wrap">
+                                    <button type="button" className="m-btn m-btn-gray !min-h-[34px] !px-3 text-[14px]" onClick={() => setEditing({ scheme: sc, isNew: false })}><Icon name="pencil" size={14} />Düzenle</button>
+                                    <button type="button" className="m-btn m-btn-plain !min-h-[34px] !px-3 text-[14px]" onClick={() => setEditing({ scheme: copyScheme(sc), isNew: true })}><Icon name="copy" size={14} />Kopyala</button>
+                                    {sc.id !== DEFAULT_SCHEME_ID && (
+                                        <button type="button" className="m-btn m-btn-plain !min-h-[34px] !px-3 text-[14px] m-ink-bad"
+                                            onClick={() => { if (window.confirm(`"${sc.name}" silinsin mi?${users.length ? ` ${users.length} proje Varsayılan yapılandırmaya döner.` : ''}`)) onDeleteScheme(sc.id); }}><Icon name="trash" size={14} />Sil</button>
+                                    )}
+                                </div>
+                            </article>
+                        );
+                    })}
+                </div>
+            </section>
+
+            <ProjectRolesEditor defs={projectRolesOf(workspace)} workspace={workspace} onSave={onSaveProjectRoles} />
+
+            <section aria-label="Projeler" className="m-surface rounded-2xl p-4 flex flex-col gap-2">
+                <h2 className="m-0 text-[20px] font-semibold m-text">Projeler <span className="text-[15px] font-normal m-text-3">{projects.length}</span></h2>
+                {projects.length === 0 && <p className="m-0 text-[14px] m-text-3">Henüz proje yok.</p>}
+                {projects.map(p => {
+                    const sc = schemeOf(workspace, p);
+                    const b = boardForProject(sc, p);
+                    return (
+                        <div key={p.id} className="grid items-center gap-3 py-2 border-t m-sep" style={{ gridTemplateColumns: 'minmax(160px, 1.4fr) minmax(180px, 1fr) auto', borderTopStyle: 'solid', borderTopWidth: 1 }}>
+                            <span className="min-w-0 flex flex-col">
+                                <span className="text-[15px] m-text truncate">{p.name}</span>
+                                <span className="text-[12.5px] m-text-3">{p.tasks.length} görev{p.jiraProjectKey ? ` · Jira ${p.jiraProjectKey}` : ''}</span>
+                            </span>
+                            <select aria-label={`${p.name} yapılandırması`} className="m-input !h-9 !py-0 text-[14px]" value={sc.id}
+                                onChange={e => { const next = schemes.find(x => x.id === e.target.value); if (next && window.confirm(`"${p.name}" projesine "${next.name}" yapılandırması atansın mı? Yeni akışta olmayan durumdaki yerel görevler aynı kategorinin ilk durumuna taşınır.`)) onAssignScheme(p.id, next.id); }}>
+                                {schemes.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
+                            </select>
+                            <span className="flex items-center gap-2 justify-end">
+                                {sc.allowProjectWorkflow && p.workflowOverride && <span className="inline-flex items-center h-6 px-2 rounded-full text-[12px] font-semibold m-tone-warn">Özel akış</span>}
+                                <span className={`inline-flex items-center h-6 px-2 rounded-full text-[12px] font-semibold ${b.source === 'project' ? 'm-tone-warn' : 'm-fill-2 m-text-2'}`}>{b.source === 'project' ? 'Özel pano' : 'Yapılandırmanın panosu'}</span>
+                                {sc.allowProjectWorkflow && <button type="button" className="m-btn m-btn-plain !min-h-[32px] !px-2.5 text-[13px]" onClick={() => onOpenProjectWorkflow(p.id)}><Icon name="activity" size={14} />Akış</button>}
+                                <button type="button" className="m-btn m-btn-plain !min-h-[32px] !px-2.5 text-[13px]" onClick={() => setBoardProject(p.id)}><Icon name="sliders" size={14} />Pano</button>
+                                <button type="button" className="m-btn m-btn-plain !min-h-[32px] !px-2.5 text-[13px]" onClick={() => onOpenProjectLists(p.id)} title={`${(p.components || []).length} bileşen, ${(p.versions || []).length} sürüm`}><Icon name="grid" size={14} />Listeler</button>
+                            </span>
+                        </div>
+                    );
+                })}
+            </section>
+        </div>
+    );
+};
+
+export default ProjectSchemes;

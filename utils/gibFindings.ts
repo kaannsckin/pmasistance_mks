@@ -871,7 +871,7 @@ export const findImportedProject = (projects: Project[], pkg: Pick<GibImportPack
 };
 
 /**
- * Excel'in sahip olduğu alanlar (yeniden aktarımda güncellenir); yaşam döngüsü ve sürüm uygulamada kalır.
+ * Excel'in sahip olduğu alanlar (yeniden aktarımda güncellenir); yaşam döngüsü ve sprint uygulamada kalır.
  * `jiraOwned`: projenin Jira eşitleme ayarında Jira'dan alınan alanlar; bunlar Excel'le ezilmez.
  */
 const mergeTask = (old: Task, next: Task, statusFromSheet: boolean, now: Date, jiraOwned: Set<JiraSyncFieldId> = new Set()): Task => {

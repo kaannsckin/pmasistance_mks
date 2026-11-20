@@ -103,6 +103,9 @@ export const splitWorkspaceDoc = (ws: WorkspaceData): { core: Record<string, unk
         rolePermissionsRev: ws.rolePermissionsRev,
         profiles: ws.profiles || [],
         viewConfig: ws.viewConfig || {},
+        // Admin'in proje yapılandırma şemaları (iş akışı, alanlar, pano) tüm kullanıcılara uygulanır
+        projectSchemes: ws.projectSchemes || [],
+        projectRoles: ws.projectRoles,
         healthConfig: ws.healthConfig || {},
         aiPolicy: ws.aiPolicy || {},
         // Kayıt tahmini öneri günlüğü (öğrenme döngüsü; kişi adı içermez)

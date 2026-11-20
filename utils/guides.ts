@@ -32,14 +32,14 @@ export interface Guide {
 
 const PLANNING: Guide = {
     id: 'planning',
-    version: 2,
+    version: 3,
     title: 'Planlama asistanı rehberi',
     steps: [
         {
             id: 'welcome', icon: 'rocket', title: 'Planlama asistanı',
             summary: 'Yeni kayıtların süresini, sürüm planlarını ve teslim tarihini, ekibinizin geçmişte işleri gerçekte ne kadar sürede kapattığına bakarak tahmin eder.',
             how: [
-                'Yeni kayıt: tek bir kaydın süresi, eforu, önemi ve hangi sürüme sığacağı.',
+                'Yeni kayıt: tek bir kaydın süresi, eforu, önemi ve hangi sprinte sığacağı.',
                 'Sürüm planı: bir sürümün kayıtlarını altı adımda planlayıp görevlere aktarma.',
                 'Plan simülasyonu: açık işlerle olasılıklı teslim tarihi (P50 · P80 · P95).',
                 "Jira'dan geçmiş: tahminlerin öğrendiği kapanmış kayıtları içe alma.",
@@ -54,7 +54,7 @@ const PLANNING: Guide = {
                 '"Jira\'dan geçmiş" düğmesine basın; proje anahtarı (ör. MKS) projeden dolu gelir.',
                 'Dönemi (ör. son 12 ay) ve kapsamı seçin: yalnız kapanmış kayıtlar ya da açık kayıtlar dahil.',
                 '"Jira\'dan getir" ile önizlemeyi görün: kaç kayıt yeni, kaçı güncellenecek, eğitime uygun kayıt sayısı nasıl değişecek.',
-                '"Aktar" ile kayıtları birleştirin. Uygulamadaki sürüm, öncül, iş paketi ve kendi tahminleriniz korunur.',
+                '"Aktar" ile kayıtları birleştirin. Uygulamadaki sprint, öncül, iş paketi ve kendi tahminleriniz korunur.',
             ],
             scenario: { title: 'Örnek senaryo', text: 'MKS projesinde son 2 yılda 1.240 kayıt bulunur: 1.180 yeni, 60 güncellenecek. Önizleme "Eğitime uygun kapanmış: 35 → 1.020" der. Aktarımdan sonra yeni kayıt önerileri onlarca benzer kayda dayanır.' },
             tip: 'Jira bağlantısı sunucuda yapılandırılmamışsa aynı alanları görev listesindeki "İçe / dışa aktar › Jira CSV dosyasından" ile alabilirsiniz (durum geçmişi hariç).',
@@ -66,9 +66,9 @@ const PLANNING: Guide = {
                 'Başlığı ve açıklamayı yazın; türü, birimi ve varsa iş paketini seçin.',
                 'Öneri kartında kapanma süresi (P50–P80 iş günü), efor (iyimser · olası · kötümser), önem ve tür önerisini görün. "Dayanak kayıtlar" önerinin neye dayandığını gösterir.',
                 '"Kayda yazılacak tahmin" bölümünden kaynağı seçin: önerilen, kendi tahmininiz, geçmiş sapmaya göre düzeltilmiş, AI ya da model.',
-                '"Hangi sürüme sığar?" her sürüm için olasılığı gösterir. Sürümü seçip "Kayıtlara gönder"e basın.',
+                '"Hangi sprinte sığar?" her sprint için olasılığı gösterir. Sprinti seçip "Kayıtlara gönder"e basın.',
             ],
-            scenario: { title: 'Örnek senaryo', text: '"Giriş ekranında oturum zaman aşımı hatası" yazdınız. Asistan 14 benzer kayıt bulur: kapanma 3–5 iş günü, efor 1,5 · 2 · 4 gün, önem Yüksek. Sürüm 12 için olasılık %85, sürüm 11 için %40 çıkar; kaydı sürüm 12\'ye gönderirsiniz.' },
+            scenario: { title: 'Örnek senaryo', text: '"Giriş ekranında oturum zaman aşımı hatası" yazdınız. Asistan 14 benzer kayıt bulur: kapanma 3–5 iş günü, efor 1,5 · 2 · 4 gün, önem Yüksek. Sprint 12 için olasılık %85, sprint 11 için %40 çıkar; kaydı sprint 12\'ye gönderirsiniz.' },
         },
         {
             id: 'blind-ai', icon: 'sparkles', title: 'Kör tahmin ve AI önerisi', mode: 'record',
@@ -110,7 +110,7 @@ const PLANNING: Guide = {
             id: 'simulate', icon: 'timeline', title: 'Plan simülasyonu', mode: 'simulate',
             summary: 'Projenin açık kayıtları ekip kapasitesiyle binlerce kez çizelgelenir; teslim tarihi tek bir tarih değil, olasılık olarak verilir.',
             how: [
-                'Kapsamı (tüm açık kayıtlar ya da bir sürüme kadar), hedef tarihi ve test süresini seçin.',
+                'Kapsamı (tüm açık kayıtlar ya da bir sprinte kadar), hedef tarihi ve test süresini seçin.',
                 'Sonuçta P50 (yarı yarıya), P80 (taahhüt için önerilen) ve P95 tarihlerini, hedefe yetişme olasılığını ve dağılım grafiğini görün.',
                 '"Teslimi belirleyen kayıtlar" kritik yoldaki ve belirsizliğe en çok katkı yapan işleri sıralar.',
                 'Senaryo deneyin: kayıt çıkarın, ek kişi ekleyin ya da birim içinde serbest dağıtımı açın.',
@@ -145,14 +145,14 @@ const PLANNING: Guide = {
 
 const FORECAST: Guide = {
     id: 'forecast',
-    version: 2,
+    version: 3,
     title: 'Tahmin kalitesi rehberi',
     steps: [
         {
             id: 'overview', icon: 'target', title: 'Tahmin kalitesi',
             summary: 'Planlama asistanının tahminleri ne kadar güvenilir? Bu bölüm tahminleri geleceği görmeden, geçmiş verilerle sınar.',
             how: [
-                'Her kayıt yalnız kendisinden önce kapanmış kayıtlarla tahmin edilir; her geçmiş sürüm başladığı günkü verilerle simüle edilir.',
+                'Her kayıt yalnız kendisinden önce kapanmış kayıtlarla tahmin edilir; her geçmiş sprint başladığı günkü verilerle simüle edilir.',
                 'Dürüst bir aralıkta gerçeklerin yaklaşık yarısı P50\'nin, yaklaşık %80\'i P80\'in altında kalır.',
                 'Kartlar: geriye dönük testler, kalibrasyon, makine öğrenmesi modeli, altın set ve kalite kapısı, ince ayar kararı, öneri isabeti.',
             ],
@@ -170,14 +170,14 @@ const FORECAST: Guide = {
             scenario: { title: 'Örnek senaryo', text: 'Test, P80\'in kayıtların %62 kadarında tuttuğunu söyler; Test birimindeki hatalarda oran %40\'a düşer. Kalibrasyon kartında Test · Hata grubunun son 90 günde belirgin uzadığını görürsünüz: yeni test ortamı süreleri uzatmıştır.' },
         },
         {
-            id: 'release-backtest', icon: 'flag', title: 'Sürüm simülasyonu — geriye dönük test',
-            summary: 'Tamamlanmış sürümler başladıkları günkü tahminlerle yeniden simüle edilir; gerçek bitişin P50 ve P80 tarihlerine yetişip yetişmediği ölçülür.',
+            id: 'release-backtest', icon: 'flag', title: 'Sprint simülasyonu — geriye dönük test',
+            summary: 'Tamamlanmış sprintler başladıkları günkü tahminlerle yeniden simüle edilir; gerçek bitişin P50 ve P80 tarihlerine yetişip yetişmediği ölçülür.',
             how: [
-                '"Testi çalıştır" her tamamlanmış sürümü, o güne kadar kapanmış kayıtların kalibrasyonuyla simüle eder.',
+                '"Testi çalıştır" her tamamlanmış sprinti, o güne kadar kapanmış kayıtların kalibrasyonuyla simüle eder.',
                 'P80 tarihine yetişme oranı %80 civarı olmalıdır; tek nokta plan genelde çok daha az tutar.',
-                'Anlamlı bir oran için en az beş tamamlanmış sürüm gerekir.',
+                'Anlamlı bir oran için en az beş tamamlanmış sprint gerekir.',
             ],
-            scenario: { title: 'Örnek senaryo', text: 'Son 8 sürümün 7\'si P80 tarihine yetişmiş, tek nokta plan ise yalnız 2 sürümde tutmuş. Yönetime taahhüdü neden P80 tarihiyle vermek gerektiğini bu tabloyla gösterirsiniz.' },
+            scenario: { title: 'Örnek senaryo', text: 'Son 8 sprintin 7\'si P80 tarihine yetişmiş, tek nokta plan ise yalnız 2 sprintte tutmuş. Yönetime taahhüdü neden P80 tarihiyle vermek gerektiğini bu tabloyla gösterirsiniz.' },
         },
         {
             id: 'calibration', icon: 'gauge', title: 'Kalibrasyon',

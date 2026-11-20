@@ -1,4 +1,4 @@
-import { PermissionKey, ProjectStatus, RagStatus, RiskStatus, Task, TaskStatus } from '../../types';
+import { IssueType, PermissionKey, ProjectStatus, RagStatus, RiskStatus, Task, TaskStatus } from '../../types';
 import { normalizeEnumArgs } from './enumAliases';
 import { inMonthEstimates, InMonthEstimate } from '../inMonthActual';
 import { getPlanLockStatus, inferAllocationRole, MONTH_INDEXES, ROLE_LABELS, summarizeByProject } from '../allocations';
@@ -22,6 +22,10 @@ import { can } from '../permissions';
 import { AiAction, AiProposal, describeAction, validateAction } from './actions';
 import { buildWorklogReport, reportRange, resolveTargets, WorklogGroup } from './worklogReport';
 import { JsonSchema, ToolCall, ToolSpec } from './protocol';
+import { knownWorkflow, taskStatusLabel } from '../workflow';
+import { effectiveScheme } from '../projectScheme';
+import { DIALOG_KEYS, DIALOGS, DialogKey, SCREEN_KEYS, SCREENS, ScreenKey } from './uiActions';
+import type { JiraIssueRecord } from '../integrations';
 import {
     clampLimit, maskSicil, matchByText, months12, personName, r2, resolveDepartmentCode, resolvePerson,
     resolveProject, resolveYear, ToolContext, ToolError,
@@ -45,8 +49,8 @@ export interface ToolDef {
     writeOnly?: boolean;
     /** Yalnız bu yetkiyi taşıyan rollere sunulur (ör. denetim günlüğü, veri sağlığı) */
     permission?: PermissionKey;
-    /** Yalnız Jira bağlıyken sunulur (tarayıcıdaki asistan; ctx.jira) */
-    requiresJira?: boolean;
+    /** Tarayıcı çalışma zamanı gerektirir: ui (ajan gezinmesi) ya da jira (sunucuda Jira bağlantısı) */
+    requires?: 'ui' | 'jira';
     run: (args: Args, ctx: ToolContext) => unknown | Promise<unknown>;
 }
 
@@ -103,6 +107,10 @@ const taskRow = (t: Task, ctx: ToolContext, projectName: string, wpNames: Map<st
     proje: projectName,
     gorev: t.name,
     durum: TASK_STATUS_TR[t.status] || t.status,
+    is_durumu: t.jiraStatus ? taskStatusLabel(t) : undefined,
+    bilesen: t.components?.length ? t.components.join(', ') : undefined,
+    hedef_surum: t.fixVersion || undefined,
+    cozum: t.resolution || undefined,
     oncelik: t.priority,
     atanan: t.resourceName || undefined,
     bitis: t.dueDate ? t.dueDate.slice(0, 10) : undefined,
@@ -141,7 +149,7 @@ export const AI_TOOLS: ToolDef[] = [
         label: 'Bilgi tabanı araması',
         spec: {
             name: 'bilgi_ara',
-            description: 'Serbest metin bilgi tabanında anlam ve anahtar kelime araması: haftalık notlar, görev açıklama/yorumları, risk açıklama ve aksiyonları, müşteri istekleri, PESTEL/SWOT maddeleri, hedefler, proje durum notları, uygulamanın kullanım kılavuzu ve Bilgi Bankası\'na yüklenen kurumsal dokümanlar. "Nasıl yapılır" soruları, geçmiş kararlar/konuşmalar, notlarda veya dokümanlarda geçen konular için kullan. Sayısal sorular için yapısal araçları tercih et. Yanıtta kullandığın bilgiyi [no] biçiminde kaynak numarasıyla belirt.',
+            description: 'Serbest metin bilgi tabanında anlam ve anahtar kelime araması: haftalık notlar, görev açıklama/yorumları, risk açıklama ve aksiyonları, müşteri istekleri, PESTEL/SWOT maddeleri, hedefler, proje durum notları, uygulamanın kullanım kılavuzu ve Bilgi Bankası\'na yüklenen kurumsal dokümanlar. "Nasıl yapılır" soruları, geçmiş kararlar/konuşmalar, notlarda veya dokümanlarda geçen konular için kullan. Sayısal sorular için yapısal araçları tercih et.',
             parameters: S.obj({
                 sorgu: S.str('Aranacak konu; doğal dilde, anahtar kelimeleri içeren kısa bir ifade.'),
                 kaynak: S.str('Yalnızca bu kaynak türünde ara (isteğe bağlı): not, gorev, risk, istek, analiz (PESTEL/SWOT), hedef, proje, kilavuz (kullanım kılavuzu), dokuman (kurumsal dokümanlar).', RAG_TYPES),
@@ -827,7 +835,7 @@ const PROPOSAL_TOOLS: ToolDef[] = [
         writeOnly: true,
         spec: {
             name: 'oner_risk_ekle',
-            description: 'Projeye yeni risk eklemeyi ÖNERİR (kullanıcı onaylamadan uygulanmaz). Kullanıcı açıkça risk eklemek istediğinde ya da notlardan/gecikmelerden net bir risk çıkardığında kullan.',
+            description: 'Projeye yeni risk eklemeyi ÖNERİR (onaysız uygulanmaz). Kullanıcı açıkça risk eklemek istediğinde ya da notlardan/gecikmelerden net bir risk çıkardığında kullan.',
             parameters: S.obj({
                 proje: P.project,
                 baslik: S.str('Risk başlığı (kısa, net).'),
@@ -852,17 +860,19 @@ const PROPOSAL_TOOLS: ToolDef[] = [
         writeOnly: true,
         spec: {
             name: 'oner_gorev_ekle',
-            description: 'Projeye yeni görev eklemeyi ÖNERİR (kullanıcı onaylamadan uygulanmaz).',
+            description: 'Projeye yeni görev eklemeyi ÖNERİR (onaysız uygulanmaz).',
             parameters: S.obj({
                 proje: P.project,
                 ad: S.str('Görev adı.'),
                 oncelik: S.str('Öncelik (varsayılan Medium).', ['Blocker', 'High', 'Medium', 'Low']),
-                atanan: S.str('Atanacak kişinin adı soyadı (veri havuzundan).'),
-                bitis: S.str('Bitiş tarihi YYYY-AA-GG.'),
+                atanan: S.str('Ad soyad'),
+                bitis: S.str('YYYY-AA-GG'),
                 sure_iyimser: S.num('İyimser süre (gün).'),
                 sure_ortalama: S.num('Ortalama süre (gün).'),
                 sure_kotumser: S.num('Kötümser süre (gün).'),
-                aciklama: S.str('Görev açıklaması.'),
+                aciklama: S.str('Açıklama'),
+                tur: S.str('', ['bug', 'feature', 'improvement', 'task', 'other']),
+                etiketler: S.str('virgülle'),
             }, ['ad']),
         },
         run: (a, ctx) => {
@@ -877,6 +887,8 @@ const PROPOSAL_TOOLS: ToolDef[] = [
                 dueDate: str(a.bitis) || undefined,
                 time: hasTime ? { best: days(a.sure_iyimser), avg: days(a.sure_ortalama), worst: days(a.sure_kotumser) } : undefined,
                 notes: str(a.aciklama) || undefined,
+                ...(['bug', 'feature', 'improvement', 'task', 'other'].includes(str(a.tur)) ? { issueType: str(a.tur) as IssueType } : {}),
+                ...(str(a.etiketler) ? { labels: str(a.etiketler).split(',').map(x => x.trim()).filter(Boolean) } : {}),
             });
         },
     },
@@ -885,21 +897,34 @@ const PROPOSAL_TOOLS: ToolDef[] = [
         writeOnly: true,
         spec: {
             name: 'oner_gorev_durumu',
-            description: 'Bir görevin durumunu değiştirmeyi ÖNERİR (kullanıcı onaylamadan uygulanmaz).',
+            description: 'Görev durumunu değiştirmeyi ÖNERİR (onaysız uygulanmaz). İş akışı kuralları uygulanır; kural not/süre isterse gecis_notu/harcanan_saat ver.',
             parameters: S.obj({
                 proje: P.project,
-                gorev: S.str('Görevin adı (kısmi olabilir).'),
-                durum: S.str('Yeni durum.', ['Backlog', 'ToDo', 'InProgress', 'Done']),
-            }, ['gorev', 'durum']),
+                gorev: S.str('Ad ya da Jira anahtarı'),
+                is_durumu: S.str('Hedef durum (ör. Testte)'),
+                durum: S.str('ya da kategori', ['Backlog', 'ToDo', 'InProgress', 'Done']),
+                gecis_notu: S.str(''),
+                harcanan_saat: S.num(''),
+            }, ['gorev']),
         },
         run: (a, ctx) => {
             const project = resolveProject(ctx, a.proje);
-            const status = str(a.durum) as TaskStatus;
-            if (!Object.values(TaskStatus).includes(status)) throw new ToolError('Durum Backlog, ToDo, InProgress ya da Done olmalı.');
-            const hits = matchByText(project.tasks, str(a.gorev), t => [t.name]);
+            const key = str(a.is_durumu);
+            let status = str(a.durum) as TaskStatus;
+            if (!key && !Object.values(TaskStatus).includes(status)) throw new ToolError('is_durumu ya da durum (Backlog, ToDo, InProgress, Done) gerekli.');
+            const hits = matchByText(project.tasks, str(a.gorev), t => [t.name, t.jiraId]);
             if (hits.length === 0) throw new ToolError(`"${str(a.gorev)}" adlı görev ${project.name} projesinde bulunamadı.`);
             if (hits.length > 1) throw new ToolError(`"${str(a.gorev)}" birden fazla görevle eşleşti: ${hits.slice(0, 8).map(t => t.name).join(', ')}.`);
-            return propose(ctx, { type: 'gorev_durumu', projectId: project.id, taskId: hits[0].id, status });
+            if (key) {
+                const s = knownWorkflow(key, effectiveScheme(ctx.ws, project).workflow);
+                if (s) status = s.category;
+                else status = status && Object.values(TaskStatus).includes(status) ? status : hits[0].status;
+            }
+            const hours = Number(a.harcanan_saat);
+            return propose(ctx, {
+                type: 'gorev_durumu', projectId: project.id, taskId: hits[0].id, status, ...(key ? { workflowKey: key } : {}),
+                ...(str(a.gecis_notu) ? { comment: str(a.gecis_notu) } : {}), ...(Number.isFinite(hours) && hours > 0 ? { hours } : {}),
+            });
         },
     },
     {
@@ -1065,7 +1090,7 @@ const PROPOSAL_TOOLS: ToolDef[] = [
     {
         label: 'Jira eşitleme önerisi',
         writeOnly: true,
-        requiresJira: true,
+        requires: 'jira',
         spec: {
             name: 'oner_jira_esitle',
             description: 'Projeyi Jira ile eşitlemeyi ÖNERİR (onaysız çalışmaz); proje ayarındaki alan seçimiyle.',
@@ -1075,9 +1100,247 @@ const PROPOSAL_TOOLS: ToolDef[] = [
     },
 ];
 
+// ---------------------------------------------------------------------------
+// Ajan araçları — arayüzü yönetir (ekran değiştirir, kayıt açar). Veri
+// DEĞİŞTİRMEZ; kullanıcının menüden yapabileceği gezinmenin aynısıdır.
+// ---------------------------------------------------------------------------
+
+const uiRun = (ctx: ToolContext, cmd: Parameters<NonNullable<ToolContext['ui']>['run']>[0]) => {
+    if (!ctx.ui) throw new ToolError('Arayüz komutları bu oturumda kullanılamıyor.');
+    const r = ctx.ui.run(cmd);
+    if (!r.ok) throw new ToolError(r.message);
+    // Aynı turda sonraki araçlar yeni açık projeyi varsayılan alsın
+    if ('projectId' in cmd && cmd.projectId) ctx.activeProjectId = cmd.projectId;
+    return { tamam: true, sonuc: r.message };
+};
+
+const SCREEN_HELP = SCREEN_KEYS.map(k => `${k}=${SCREENS[k].label}${SCREENS[k].project ? ' (proje)' : ''}`).join('; ');
+
+const AGENT_TOOLS: ToolDef[] = [
+    {
+        label: 'Ekran açıldı',
+        requires: 'ui',
+        spec: {
+            name: 'ekrana_git',
+            description: `Uygulamada ekran değiştirir (kullanıcının ekranı hemen değişir; veri değişmez). Kullanıcı bir ekranı "aç/göster/git/götür" dediğinde ya da yanıtı en iyi bir ekran gösterecekse kullan. "(proje)" ekranları bir proje gerektirir: proje verilirse önce o proje açılır, verilmezse açık proje kullanılır. Ekranlar: ${SCREEN_HELP}.`,
+            parameters: S.obj({
+                ekran: S.str('Açılacak ekran.', SCREEN_KEYS),
+                proje: S.str('Proje adı ya da kodu (proje ekranlarında; isteğe bağlı).'),
+            }, ['ekran']),
+        },
+        run: (a, ctx) => {
+            const screen = str(a.ekran) as ScreenKey;
+            if (!SCREENS[screen]) throw new ToolError(`Bilinmeyen ekran "${str(a.ekran)}". Geçerli: ${SCREEN_KEYS.join(', ')}.`);
+            const project = str(a.proje) ? resolveProject(ctx, a.proje) : undefined;
+            return uiRun(ctx, { type: 'screen', screen, ...(project ? { projectId: project.id } : {}) });
+        },
+    },
+    {
+        label: 'Görev açıldı',
+        requires: 'ui',
+        spec: {
+            name: 'gorev_ac',
+            description: 'Bir görevin ayrıntı penceresini açar (ilgili proje de açılır). Kullanıcı bir görevi görmek/açmak istediğinde kullan.',
+            parameters: S.obj({
+                proje: P.project,
+                gorev: S.str('Görevin adı (kısmi olabilir) ya da Jira anahtarı.'),
+            }, ['gorev']),
+        },
+        run: (a, ctx) => {
+            const project = resolveProject(ctx, a.proje);
+            const q = str(a.gorev);
+            const hits = matchByText(project.tasks, q, t => [t.name, t.jiraId]);
+            if (hits.length === 0) throw new ToolError(`"${q}" adlı görev ${project.name} projesinde bulunamadı.`);
+            if (hits.length > 1) throw new ToolError(`"${q}" birden fazla görevle eşleşti: ${hits.slice(0, 8).map(t => t.name).join(', ')}.`);
+            return uiRun(ctx, { type: 'task', projectId: project.id, taskId: hits[0].id });
+        },
+    },
+    {
+        label: 'Kişi profili açıldı',
+        requires: 'ui',
+        spec: {
+            name: 'kisi_profili_ac',
+            description: 'Bir kişinin profil penceresini (tahsisler, doluluk, projeler) açar.',
+            parameters: S.obj({ kisi: S.str('Kişinin adı soyadı.') }, ['kisi']),
+        },
+        run: (a, ctx) => uiRun(ctx, { type: 'person', personId: resolvePerson(ctx, a.kisi).id }),
+    },
+    {
+        label: 'Pencere açıldı',
+        requires: 'ui',
+        spec: {
+            name: 'pencere_ac',
+            description: `Uygulama penceresi açar: ${DIALOG_KEYS.map(k => `${k}=${DIALOGS[k]}`).join('; ')}.`,
+            parameters: S.obj({ pencere: S.str('Açılacak pencere.', DIALOG_KEYS) }, ['pencere']),
+        },
+        run: (a, ctx) => {
+            const dialog = str(a.pencere) as DialogKey;
+            if (!DIALOGS[dialog]) throw new ToolError(`Bilinmeyen pencere "${str(a.pencere)}".`);
+            return uiRun(ctx, { type: 'dialog', dialog });
+        },
+    },
+];
+
+// ---------------------------------------------------------------------------
+// Jira araçları — SALT OKUNUR; sunucu proxy'si üzerinden (jeton yalnız sunucuda,
+// JIRA_ALLOWED_PROJECTS sunucuda uygulanır). Uygulamada bir projeye bağlı Jira
+// anahtarları yalnız o projeyi görebilen kullanıcıya açılır.
+// ---------------------------------------------------------------------------
+
+const JIRA_KEY_RE = /^[A-Za-z][A-Za-z0-9_]{1,19}-\d{1,9}$/;
+const JIRA_PROJECT_RE = /^[A-Za-z][A-Za-z0-9_]{1,19}$/;
+const SEC_TO_HOURS = (v: number | null) => (v === null ? undefined : r2(v / 3600));
+const STATUS_CAT_TR: Record<string, string> = { new: 'Yapılacak', indeterminate: 'Devam ediyor', done: 'Tamamlandı' };
+
+/** Jira proje anahtarı, kapsam dışındaki bir uygulama projesine bağlıysa reddeder */
+const assertJiraKeyInScope = (ctx: ToolContext, jiraProjectKey: string) => {
+    const k = jiraProjectKey.toUpperCase();
+    const linked = ctx.ws.projects.filter(p => (p.jiraProjectKey || '').trim().toUpperCase() === k);
+    if (linked.length && !linked.some(p => ctx.visibleProjectIds.has(p.id))) {
+        throw new ToolError(`${k} Jira projesi kullanıcının yetki kapsamındaki bir projeye bağlı değil; gösterilemez.`);
+    }
+};
+
+const appTaskOf = (ctx: ToolContext, key: string) => {
+    for (const p of ctx.scoped.projects) {
+        const t = p.tasks.find(x => (x.jiraId || '').toUpperCase() === key.toUpperCase());
+        if (t) return { proje: p.name, gorev: t.name, durum: TASK_STATUS_TR[t.status] || t.status };
+    }
+    return undefined;
+};
+
+const jiraRow = (ctx: ToolContext, i: JiraIssueRecord, detail: boolean) => ({
+    anahtar: i.key,
+    ozet: i.summary,
+    tur: i.issueType || undefined,
+    durum: i.status,
+    durum_kategorisi: i.statusCategory ? STATUS_CAT_TR[i.statusCategory] : undefined,
+    oncelik: i.priority || undefined,
+    atanan: i.assignee || undefined,
+    olusturma: i.created ? i.created.slice(0, 10) : undefined,
+    guncelleme: i.updated ? i.updated.slice(0, 10) : undefined,
+    termin: i.due || undefined,
+    cozulme: i.resolved ? i.resolved.slice(0, 10) : undefined,
+    surum: i.fixVersions.length ? i.fixVersions.join(', ') : undefined,
+    bilesen: i.components.length ? i.components.join(', ') : undefined,
+    etiket: i.labels.length ? i.labels.join(', ') : undefined,
+    story_point: i.storyPoints ?? undefined,
+    tahmin_saat: SEC_TO_HOURS(i.originalEstimateSeconds),
+    harcanan_saat: SEC_TO_HOURS(i.timeSpentSeconds),
+    engelleyen: i.blockedBy.length ? i.blockedBy.join(', ') : undefined,
+    uygulamada: appTaskOf(ctx, i.key),
+    ...(detail ? {
+        aciklama: short(i.description, 1500),
+        durum_gecmisi: i.transitions.slice(-8).map(t => `${t.at.slice(0, 10)}: ${t.from} → ${t.to}`),
+    } : { aciklama: short(i.description, 160) }),
+});
+
+const jiraFail = (e: unknown): never => {
+    if (e instanceof ToolError) throw e;
+    throw new ToolError(`Jira'dan okunamadı: ${(e as Error)?.message || 'bilinmeyen hata'}`);
+};
+
+const JIRA_TOOLS: ToolDef[] = [
+    {
+        label: 'Jira kaydı',
+        requires: 'jira',
+        spec: {
+            name: 'jira_kayit_getir',
+            description: 'Anahtarı bilinen Jira kayıtlarının Jira\'daki GÜNCEL hâlini getirir (durum, atanan, öncelik, termin, sürüm, story point, tahmin/harcanan süre, açıklama, durum geçmişi) ve uygulamadaki karşılık gelen görevi gösterir. Örn. "MKS-123 ne durumda?".',
+            parameters: S.obj({
+                anahtarlar: S.str('Jira anahtarları, virgülle ayrılmış (en çok 20). Örn. "MKS-12, MKS-15".'),
+            }, ['anahtarlar']),
+        },
+        run: async (a, ctx) => {
+            if (!ctx.jira) throw new ToolError('Jira bağlantısı bu oturumda kullanılamıyor.');
+            const raw = Array.isArray(a.anahtarlar) ? a.anahtarlar.map(String) : str(a.anahtarlar).split(/[\s,;]+/);
+            const keys = [...new Set(raw.map(k => k.trim().toUpperCase()).filter(Boolean))];
+            if (!keys.length) throw new ToolError('En az bir Jira anahtarı verin (örn. MKS-12).');
+            if (keys.length > 20) throw new ToolError('Bir seferde en çok 20 anahtar sorgulanabilir.');
+            const bad = keys.filter(k => !JIRA_KEY_RE.test(k));
+            if (bad.length) throw new ToolError(`Geçersiz Jira anahtarı: ${bad.join(', ')} (biçim: PROJE-123).`);
+            keys.forEach(k => assertJiraKeyInScope(ctx, k.split('-')[0]));
+            const page = await ctx.jira.byKeys(keys).catch(jiraFail);
+            const detail = page.issues.length <= 5;
+            return {
+                kayit_sayisi: page.issues.length,
+                kayitlar: page.issues.map(i => jiraRow(ctx, i, detail)),
+                ...(page.missing.length ? { bulunamayan: page.missing, not: 'Bulunamayan kayıtlar silinmiş, taşınmış ya da jetonun erişimi dışında olabilir.' } : {}),
+            };
+        },
+    },
+    {
+        label: 'Jira araması',
+        requires: 'jira',
+        spec: {
+            name: 'jira_kayit_ara',
+            description: 'Jira\'da kayıt arar: bir Jira projesi, etiket ya da kayıtlı (sık kullanılan) filtre içinde; isteğe bağlı serbest metinle. Varsayılan yalnız açık kayıtlar. Kaynak verilmezse açık uygulama projesinin Jira anahtarı kullanılır. Hangi proje/filtrelere erişildiğini görmek için jira_baglanti kullan. Sayım/dağılım sonuçta özetlenir.',
+            parameters: S.obj({
+                jira_proje: S.str('Jira proje anahtarı (örn. MKS).'),
+                etiket: S.str('Jira etiketi (virgülle birden çok).'),
+                filtre_id: S.str('Kayıtlı Jira filtresinin numarası.'),
+                metin: S.str('Özet/açıklama/yorumda geçen kelimeler (harf, rakam, boşluk).'),
+                kapali_dahil: S.bool('true ise kapanmış kayıtlar da gelir (varsayılan false).'),
+                limit: S.int('En fazla kaç kayıt listelensin (varsayılan 20, en çok 50).'),
+            }),
+        },
+        run: async (a, ctx) => {
+            if (!ctx.jira) throw new ToolError('Jira bağlantısı bu oturumda kullanılamıyor.');
+            let projectKey = str(a.jira_proje).toUpperCase();
+            const labels = str(a.etiket).split(',').map(l => l.trim()).filter(Boolean);
+            const filterId = str(a.filtre_id);
+            if (!projectKey && !labels.length && !filterId) {
+                const active = ctx.scoped.projects.find(p => p.id === ctx.activeProjectId);
+                projectKey = (active?.jiraProjectKey || '').trim().toUpperCase();
+                if (!projectKey) throw new ToolError('Jira kaynağı belirtilmedi ve açık projenin Jira anahtarı yok. jira_proje, etiket ya da filtre_id verin (jira_baglanti ile listelenebilir).');
+            }
+            if (projectKey && !JIRA_PROJECT_RE.test(projectKey)) throw new ToolError(`Geçersiz Jira proje anahtarı: ${projectKey}.`);
+            if (projectKey) assertJiraKeyInScope(ctx, projectKey);
+            const limit = clampLimit(a.limit, 20, 50);
+            const page = await ctx.jira.search(
+                { ...(projectKey ? { projectKey } : {}), ...(labels.length ? { labels } : {}), ...(filterId ? { filterId } : {}), ...(str(a.metin) ? { text: str(a.metin) } : {}) },
+                { openOnly: a.kapali_dahil !== true, pageSize: Math.max(limit, 50) },
+            ).catch(jiraFail);
+            const hiddenKeys = new Set(ctx.ws.projects.filter(p => p.jiraProjectKey && !ctx.visibleProjectIds.has(p.id)).map(p => p.jiraProjectKey!.trim().toUpperCase()));
+            const visibleProjects = new Set(ctx.ws.projects.filter(p => p.jiraProjectKey && ctx.visibleProjectIds.has(p.id)).map(p => p.jiraProjectKey!.trim().toUpperCase()));
+            const issues = page.issues.filter(i => { const k = i.key.split('-')[0].toUpperCase(); return !hiddenKeys.has(k) || visibleProjects.has(k); });
+            const count = (f: (i: JiraIssueRecord) => string) => issues.reduce<Record<string, number>>((m, i) => { const k = f(i) || '—'; m[k] = (m[k] || 0) + 1; return m; }, {});
+            return {
+                kaynak: { jira_proje: projectKey || undefined, etiket: labels.length ? labels : undefined, filtre_id: filterId || undefined, metin: str(a.metin) || undefined, yalniz_acik: a.kapali_dahil !== true },
+                toplam: page.total ?? undefined,
+                bu_sayfada: issues.length,
+                ...(page.next ? { not: 'Daha fazla kayıt var; dağılımlar yalnız bu sayfaya göredir. Daha dar filtre kullanın.' } : {}),
+                durum_dagilimi: count(i => i.status),
+                atanan_dagilimi: count(i => i.assignee),
+                oncelik_dagilimi: count(i => i.priority),
+                kayitlar: issues.slice(0, limit).map(i => jiraRow(ctx, i, false)),
+            };
+        },
+    },
+    {
+        label: 'Jira bağlantısı',
+        requires: 'jira',
+        spec: {
+            name: 'jira_baglanti',
+            description: 'Jira bağlantısını sınar ve erişilebilen Jira projelerini ve kayıtlı (sık kullanılan) filtreleri listeler; uygulama projelerinin bağlı olduğu Jira anahtarlarını gösterir.',
+            parameters: S.obj(),
+        },
+        run: async (_a, ctx) => {
+            if (!ctx.jira) throw new ToolError('Jira bağlantısı bu oturumda kullanılamıyor.');
+            const m = await ctx.jira.meta().catch(jiraFail);
+            return {
+                baglanti: 'tamam',
+                jira_projeleri: m.projects.slice(0, 60).map(p => ({ anahtar: p.key, ad: p.name })),
+                kayitli_filtreler: m.filters.slice(0, 30).map(f => ({ id: f.id, ad: f.name })),
+                uygulama_baglantilari: ctx.scoped.projects.filter(p => p.jiraProjectKey).map(p => ({ proje: p.name, jira_proje: p.jiraProjectKey })),
+            };
+        },
+    },
+];
+
 AI_TOOLS.push({
     label: 'Jira worklog raporu',
-    requiresJira: true,
+    requires: 'jira',
     spec: {
         name: 'jira_worklog_raporu',
         description: 'Projelerin Jira worklog raporu (Tempo gibi): ay ya da aralıkta saat; proje, kişi, kayıt, gün, hafta kırılımı. Uygulama projesi → yalnız onun Jira kayıtları; Jira anahtarı (MPS) → Jira projesinin tamamı. En çok 92 gün.',
@@ -1100,17 +1363,29 @@ AI_TOOLS.push({
     },
 });
 
-AI_TOOLS.push(...PROPOSAL_TOOLS);
+
+AI_TOOLS.push(...PROPOSAL_TOOLS, ...AGENT_TOOLS, ...JIRA_TOOLS);
 
 const TOOL_MAP = new Map(AI_TOOLS.map(t => [t.spec.name, t]));
 
 /** Bu kullanıcıya sunulacak araç tanımları (yönetici rollerine not/istek araçları hiç gönderilmez) */
 const toolAvailable = (t: ToolDef, ctx: ToolContext): boolean =>
-    (!t.privateOnly || ctx.canSeePrivate) && (!t.writeOnly || ctx.canWrite) && (!t.permission || can(ctx.identity, t.permission)) && (!t.requiresJira || !!ctx.jira);
+    (!t.privateOnly || ctx.canSeePrivate) && (!t.writeOnly || ctx.canWrite) && (!t.permission || can(ctx.identity, t.permission))
+    && (!t.requires || !!ctx[t.requires]);
 
 export const toolSpecsFor = (ctx: ToolContext): ToolSpec[] => AI_TOOLS.filter(t => toolAvailable(t, ctx)).map(t => t.spec);
 
 export const toolLabel = (name: string): string => TOOL_MAP.get(name)?.label || name;
+
+/** Araç türü (arayüzde simge): okuma, öneri, arayüz komutu ya da Jira */
+export const toolKind = (name: string): 'read' | 'propose' | 'ui' | 'jira' => {
+    const t = TOOL_MAP.get(name);
+    if (!t) return 'read';
+    if (t.requires === 'ui') return 'ui';
+    // Onay isteyen öneriler (ör. oner_jira_esitle) Jira'ya bağlı olsa da öneri sayılır
+    if (t.writeOnly) return 'propose';
+    return t.requires === 'jira' ? 'jira' : 'read';
+};
 
 const serialize = (value: unknown): string => {
     const s = JSON.stringify(value, (_k, v) => (v === undefined ? undefined : v));

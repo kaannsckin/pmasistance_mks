@@ -497,7 +497,7 @@ export const createPlanAsistanMcp = (o: PlanAsistanMcpOptions): McpServerOptions
             } catch (e) {
                 // Kaynak şu an okunamıyor: salt-okunur katalog sunulur, her çağrı nedeni döndürür
                 log(`araç listesi kapsamsız sunuldu: ${(e as Error).message}`);
-                specs = AI_TOOLS.filter(t => !t.writeOnly).map(t => t.spec);
+                specs = AI_TOOLS.filter(t => !t.writeOnly && !t.requires).map(t => t.spec);
             }
             return [STATUS_SPEC, ...specs.map(toMcpTool), ...reports, ...jira, ...(canApply ? [APPLY_SPEC] : [])];
         },

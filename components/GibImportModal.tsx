@@ -201,7 +201,7 @@ const GibImportModal: React.FC<Props> = ({
                             <p className="text-[11px] text-gray-400">
                                 {target === NEW
                                     ? `"${projectName.trim() || defaultProjectName}" adıyla yeni proje açılır; ${s.findings} bulgu görev olarak eklenir.`
-                                    : 'Bulgular Test No ile eşleşir: Excel alanları güncellenir; durum yalnız Excel\'de "Durum" yazılıysa değişir. Uygulamada eklenen görevler, notlar ve sürüm planı korunur.'}
+                                    : 'Bulgular Test No ile eşleşir: Excel alanları güncellenir; durum yalnız Excel\'de "Durum" yazılıysa değişir. Uygulamada eklenen görevler, notlar ve sprint planı korunur.'}
                                 {pm === NEW && ' Yeni kişi "Tanımsız" bölümle açılır; bölümünü Veri Havuzu\'ndan atayın.'}
                                 {' '}Bulut bağlıysa değişiklik otomatik gönderilir.
                             </p>

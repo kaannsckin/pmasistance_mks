@@ -80,10 +80,15 @@ describe('araç kataloğu', () => {
         console.log(`araç tanımları: ${AI_TOOLS.length} adet, ${size} karakter`);
         // 16 000'den 18 000'e: PY'nin risk güncelleme, istek kararı ve not araçları (kısaltılmış tanımlarla
         // ~2 100 karakter). Yönetici rolleri yazma araçlarını almadığı için onların istek boyutu değişmedi.
-        // Jira araçları (worklog raporu, eşitleme önerisi) yalnız Jira bağlıyken gönderilir (BL-15).
-        const withoutJira = JSON.stringify(AI_TOOLS.filter(t => !t.requiresJira).map(t => t.spec)).length;
-        expect(withoutJira).toBeLessThan(18_000);
-        expect(size).toBeLessThan(19_500);
+        // Çalışma zamanı gerektiren araçlar (ajan gezinmesi, Jira okuma/worklog/eşitleme) yalnız
+        // bağlıyken gönderilir; onlarsız istek BL-15 sınırında kalır.
+        const base = JSON.stringify(AI_TOOLS.filter(t => !t.requires).map(t => t.spec)).length;
+        const runtime = JSON.stringify(AI_TOOLS.filter(t => t.requires).map(t => t.spec)).length;
+        console.log(`çalışma zamanısız: ${base}, çalışma zamanlı: ${runtime}`);
+        expect(base).toBeLessThan(18_000);
+        // 5 000'den 6 000'e: ajan + Jira okuma araçlarına Jira worklog raporu ve eşitleme önerisi eklendi
+        expect(runtime).toBeLessThan(6_000);
+        expect(AI_TOOLS.length).toBeLessThanOrEqual(40);
     });
 
     it('her araç parametresiz çalışır (duman testi) ve sicil sızdırmaz', async () => {
@@ -334,5 +339,114 @@ describe('pilot bulgularından gelen iyileştirmeler', () => {
         const full = (await run('kapasite_talep', { yil: 2026 }, ws)).json;
         expect(full.uyari).toBeUndefined();
         expect(full.not).toBeUndefined();
+    });
+});
+
+describe('ajan modu: arayüz komutları', () => {
+    const withUi = (ws = buildWs()) => {
+        const ctx = buildToolContext(ws, NOW);
+        const run = vi.fn((_cmd: unknown) => ({ ok: true, message: 'açıldı' }));
+        ctx.ui = { run };
+        return { ctx, run };
+    };
+
+    it('arayüz araçları yalnız çalışma zamanı bağlıysa sunulur', () => {
+        const names = (ctx: ReturnType<typeof buildToolContext>) => toolSpecsFor(ctx).map(t => t.name);
+        expect(names(buildToolContext(buildWs(), NOW))).not.toContain('ekrana_git');
+        expect(names(withUi().ctx)).toEqual(expect.arrayContaining(['ekrana_git', 'gorev_ac', 'kisi_profili_ac', 'pencere_ac']));
+        expect(buildSystemPrompt(withUi().ctx)).toContain('Ajan yetenekleri');
+        expect(buildSystemPrompt(buildToolContext(buildWs(), NOW))).not.toContain('Ajan yetenekleri');
+    });
+
+    it('ekran ve görev komutları kapsam içinde çözülür; açık proje güncellenir', async () => {
+        const { ctx, run } = withUi();
+        expect((await executeTool({ name: 'ekrana_git', arguments: { ekran: 'riskler', proje: 'ALT-01' } }, ctx)).ok).toBe(true);
+        expect(run).toHaveBeenLastCalledWith({ type: 'screen', screen: 'riskler', projectId: 'altay' });
+        expect((await executeTool({ name: 'gorev_ac', arguments: { gorev: 'test planı' } }, ctx)).ok).toBe(true);
+        expect(run).toHaveBeenLastCalledWith({ type: 'task', projectId: 'altay', taskId: 't2' });
+        expect((await executeTool({ name: 'kisi_profili_ac', arguments: { kisi: 'Zeynep Şahin' } }, ctx)).ok).toBe(true);
+        expect(run).toHaveBeenLastCalledWith({ type: 'person', personId: 'p3' });
+        // Kapsam dışı proje ve geçersiz ekran arayüze hiç ulaşmaz
+        run.mockClear();
+        expect((await executeTool({ name: 'ekrana_git', arguments: { ekran: 'gorevler', proje: 'Gizli Proje' } }, ctx)).ok).toBe(false);
+        expect((await executeTool({ name: 'ekrana_git', arguments: { ekran: 'yok' } }, ctx)).ok).toBe(false);
+        expect(run).not.toHaveBeenCalled();
+    });
+
+    it('arayüzün reddi modele hata olarak döner', async () => {
+        const { ctx, run } = withUi();
+        run.mockReturnValue({ ok: false, message: 'Yönetim ekranı bu rolde açık değil.' });
+        const out = await executeTool({ name: 'ekrana_git', arguments: { ekran: 'yonetim' } }, ctx);
+        expect(out.ok).toBe(false);
+        expect(JSON.parse(out.content).hata).toMatch(/açık değil/);
+    });
+});
+
+describe('Jira araçları', () => {
+    const issue = (key: string, extra: Record<string, unknown> = {}) => ({
+        key, summary: `Özet ${key}`, description: 'Açıklama', issueType: 'Bug', status: 'Devam Ediyor', statusCategory: 'indeterminate' as const,
+        priority: 'High', created: '2026-07-01T10:00:00Z', resolved: null, components: [], labels: [], fixVersions: ['1.2'],
+        originalEstimateSeconds: 7200, timeSpentSeconds: 3600, storyPoints: 3, assignee: 'Ayşe Kaya', blockedBy: [],
+        transitions: [{ at: '2026-07-02T10:00:00Z', from: 'Açık', to: 'Devam Ediyor', fromCategory: 'new' as const, toCategory: 'indeterminate' as const }],
+        due: '2026-07-30', updated: '2026-07-10T10:00:00Z', ...extra,
+    });
+    const withJira = () => {
+        const ws = buildWs();
+        ws.projects[0].jiraProjectKey = 'ALT';
+        ws.projects[0].tasks[1].jiraId = 'ALT-2';
+        ws.projects[1].jiraProjectKey = 'GZL';
+        const ctx = buildToolContext(ws, NOW);
+        const jira = {
+            meta: vi.fn(async () => ({ user: 'svc', projects: [{ key: 'ALT', name: 'Altay' }], filters: [{ id: '10', name: 'Sprint', jql: 'x' }] })),
+            byKeys: vi.fn(async (keys: string[]) => ({ issues: keys.filter(k => k !== 'ALT-9').map(k => issue(k)), total: null, next: null, missing: keys.filter(k => k === 'ALT-9') })),
+            search: vi.fn(async () => ({ issues: [issue('ALT-1'), issue('ALT-2', { assignee: 'Mehmet Demir' }), issue('GZL-1')], total: 3, next: null, missing: [] })),
+            worklogs: vi.fn(async () => []),
+        };
+        ctx.jira = jira;
+        return { ctx, jira };
+    };
+
+    it('Jira bağlı değilse araçlar sunulmaz', () => {
+        expect(toolSpecsFor(buildToolContext(buildWs(), NOW)).some(t => t.name.startsWith('jira_'))).toBe(false);
+        expect(toolSpecsFor(withJira().ctx).map(t => t.name)).toEqual(expect.arrayContaining(['jira_kayit_getir', 'jira_kayit_ara', 'jira_baglanti']));
+    });
+
+    it('anahtarla güncel kayıt ve uygulamadaki karşılığı', async () => {
+        const { ctx, jira } = withJira();
+        const out = await executeTool({ name: 'jira_kayit_getir', arguments: { anahtarlar: 'alt-2, ALT-9' } }, ctx);
+        expect(out.ok).toBe(true);
+        expect(jira.byKeys).toHaveBeenCalledWith(['ALT-2', 'ALT-9']);
+        const r = JSON.parse(out.content);
+        expect(r.kayitlar[0]).toMatchObject({ anahtar: 'ALT-2', durum: 'Devam Ediyor', tahmin_saat: 2, harcanan_saat: 1, uygulamada: { proje: 'ALTAY Sistemi', gorev: 'Test planı' } });
+        expect(r.kayitlar[0].durum_gecmisi).toEqual(['2026-07-02: Açık → Devam Ediyor']);
+        expect(r.bulunamayan).toEqual(['ALT-9']);
+    });
+
+    it('kapsam dışı uygulama projesine bağlı Jira anahtarı okunmaz', async () => {
+        const { ctx, jira } = withJira();
+        expect((await executeTool({ name: 'jira_kayit_getir', arguments: { anahtarlar: 'GZL-1' } }, ctx)).ok).toBe(false);
+        expect((await executeTool({ name: 'jira_kayit_ara', arguments: { jira_proje: 'GZL' } }, ctx)).ok).toBe(false);
+        expect((await executeTool({ name: 'jira_kayit_getir', arguments: { anahtarlar: 'X" OR 1=1' } }, ctx)).ok).toBe(false);
+        expect(jira.byKeys).not.toHaveBeenCalled();
+    });
+
+    it('arama: kaynak verilmezse açık projenin Jira anahtarı; gizli projenin kayıtları süzülür', async () => {
+        const { ctx, jira } = withJira();
+        const r = JSON.parse((await executeTool({ name: 'jira_kayit_ara', arguments: { metin: 'giriş hatası', limit: 5 } }, ctx)).content);
+        expect(jira.search).toHaveBeenCalledWith({ projectKey: 'ALT', text: 'giriş hatası' }, { openOnly: true, pageSize: 50 });
+        expect(r.kayitlar.map((k: { anahtar: string }) => k.anahtar)).toEqual(['ALT-1', 'ALT-2']);
+        expect(r.atanan_dagilimi).toEqual({ 'Ayşe Kaya': 1, 'Mehmet Demir': 1 });
+        await executeTool({ name: 'jira_kayit_ara', arguments: { etiket: 'a, b', kapali_dahil: true } }, ctx);
+        expect(jira.search).toHaveBeenLastCalledWith({ labels: ['a', 'b'] }, { openOnly: false, pageSize: 50 });
+    });
+
+    it('Jira hatası modele açıklamayla döner', async () => {
+        const { ctx, jira } = withJira();
+        jira.meta.mockRejectedValueOnce(new Error('Jira bağlantısı yapılandırılmadı'));
+        const out = await executeTool({ name: 'jira_baglanti', arguments: {} }, ctx);
+        expect(out.ok).toBe(false);
+        expect(JSON.parse(out.content).hata).toMatch(/Jira'dan okunamadı: Jira bağlantısı/);
+        const ok = JSON.parse((await executeTool({ name: 'jira_baglanti', arguments: {} }, ctx)).content);
+        expect(ok.uygulama_baglantilari).toEqual([{ proje: 'ALTAY Sistemi', jira_proje: 'ALT' }]);
     });
 });

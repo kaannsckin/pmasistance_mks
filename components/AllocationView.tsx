@@ -124,11 +124,11 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, de
     if (!project) return;
     const result = suggestAllocationsFromTasks(project, people, year);
     if (result.taskCount === 0) {
-      alert('Bu projede planlanmış görev yok (Backlog dışında sürüme atanmış görev gerekli).');
+      alert('Bu projede planlanmış görev yok (Backlog dışında sprinte atanmış görev gerekli).');
       return;
     }
     if (result.suggestions.length === 0) {
-      alert('Görevlerden bu yıl için AA önerisi çıkmadı (süre tahmini girilmiş, sürüme atanmış görev gerekli).');
+      alert('Görevlerden bu yıl için AA önerisi çıkmadı (süre tahmini girilmiş, sprinte atanmış görev gerekli).');
       return;
     }
     setSuggestModal({ projectId, projectName: project.name, result });
@@ -836,7 +836,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, de
             <div className="sticky top-0 bg-white dark:bg-gray-900 px-5 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between z-10">
               <div>
                 <h3 className="text-base font-semibold text-gray-800 dark:text-white">{suggestModal.source === 'jira' ? 'Jira Atamalarından Tahsis Önerisi' : 'Görev Planından Tahsis Önerisi'}</h3>
-                <p className="text-xs text-gray-400">{suggestModal.projectName} · {year} · {suggestModal.source === 'jira' ? `${suggestModal.result.taskCount} atanmış açık Jira kaydı; kalan efor bugünden termine yayıldı` : `${suggestModal.result.taskCount} görev, ${suggestModal.result.sprintCount} sürüm`}</p>
+                <p className="text-xs text-gray-400">{suggestModal.projectName} · {year} · {suggestModal.source === 'jira' ? `${suggestModal.result.taskCount} atanmış açık Jira kaydı; kalan efor bugünden termine yayıldı` : `${suggestModal.result.taskCount} görev, ${suggestModal.result.sprintCount} sprint`}</p>
               </div>
               <button aria-label="Kapat" onClick={() => setSuggestModal(null)} className="w-9 h-9 rounded-xl text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"><i aria-hidden="true" className="fa-solid fa-times"></i></button>
             </div>

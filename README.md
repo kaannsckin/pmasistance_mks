@@ -490,7 +490,7 @@ classDiagram
 | `Snapshot` | Baseline: portföy plan-gerçekleşen fotoğrafı (elle, kilitte, aylık) |
 | `WeeklyReport` · `PmoRating` | Haftalık rapor (aşamalar, PY puanı, AI değerlendirmesi) ve PMO sağlık puanı |
 | `ManagementExpectation` | PY / bölüm sorumlusundan yönetime beklenti ve yanıtı |
-| `Task` | Görev: PERT tahmini (`TimeEstimate`), öncül, sürüm, yaşam döngüsü zamanları, Jira alanları, açılış tahmini (`TaskForecast`) |
+| `Task` | Görev: PERT tahmini (`TimeEstimate`), öncül, sprint, yaşam döngüsü zamanları, Jira alanları, açılış tahmini (`TaskForecast`) |
 | `ReleasePlan` | Sürüm sihirbazı: kalemler, kilometre taşları, donmuş taban çizgisi |
 | `Risk` · `PestelItem` · `SwotItem` | Risk kaydı (olasılık × etki) ve stratejik analizler |
 | `Objective` · `KeyResult` | OKR; görevler anahtar sonuca bağlanabilir |
@@ -505,8 +505,11 @@ classDiagram
 
 | Özellik | Açıklama |
 |---|---|
-| **Otomatik planlama** | Topolojik liste çizelgeleme + kritik zincir önceliklendirmesi ile görevleri sürüm (sprint) takvimine yerleştirir; termin (EDD) ve kapasite farkındalıklı |
-| **Kanban panosu** | Sürüm bazlı, sürükle-bırak; plan uyarıları (aşırı büyük görev, öncül döngüsü) banner ile |
+| **Otomatik planlama** | Topolojik liste çizelgeleme + kritik zincir önceliklendirmesi ile görevleri sprint takvimine yerleştirir; termin (EDD) ve kapasite farkındalıklı |
+| **Proje panosu (Jira tarzı)** | Kolon ekle / sil / sırala; durumları (uygulama + Jira durum adları) kolonlara sürükleyerek eşle, eşlenmemiş durumlar paneli; etiket kuralı (süreç önce: etiket, aynı aşamanın alt kolonunu seçer — ya da etiket önce); min/max WIP uyarısı; hızlı filtreler (sadece benim işlerim, son güncellenenler, gecikenler, etiketten tek tıkla); kişi avatarları, arama; kulvarlar (Expedite, kişi, öncelik, iş paketi); tamamlananlarda "son N gün" (15 / 109). Ayar projeyle saklanır, denetim günlüğüne yazılır — `utils/board.ts` |
+| **Proje yapılandırması (admin)** | Jira'nın şema modeli: iş akışı (durumlar, başlangıç, geçiş matrisi), kayıt türleri, zorunlu alanlar ve pano tek yapılandırmada; şablondan oluşturulur (Basit, Yazılım geliştirme, Destek / hata takibi, Tam liste), projelere atanır ve paylaşılır. İş akışı diyagramda kutular ve koyu oklarla çizilir (sürükle-bağla). Geçişler menü, form, pano ve AI önerilerinde uygulanır; izin verilirse proje yöneticisi kendi projesinin akışını yapılandırmanın durumlarıyla özelleştirir (Jira genişletilmiş proje yönetimi) Geçiş kuralları: koşul (rol/kişi/atanan), doğrulayıcı (not, süre, alanlar, alt görevler — geçiş penceresi), sonrası işlem (etiket, atama, bildirim). Projeye özel bileşen ve sürüm listeleri (sorumlu, yayınlama), proje rolleri, bildirim şeması, geçişte alan güncelleme (Çözüm dahil) ve geçişlerin Jira'ya geri yazılması — [docs/PROJE_YAPILANDIRMA.md](docs/PROJE_YAPILANDIRMA.md) |
+| **İş akışı durumları** | Jira'daki gibi ayrıntılı durumlar, Türkçe adlarıyla: Bekleyen, Ertelendi · Yapılacak, Açık, Yeniden Açıldı · Geliştirmede, Analizde, Kod İncelemede, Testte, Engellendi · Çözüldü, Tamamlandı, Kapandı, Reddedildi; Jira'dan gelen projeye özgü durumlar da seçilebilir. Her durum bir kategoriye bağlıdır (ilerleme, EVM, tahmin kategoriyi kullanır); Jira anahtarıyla saklandığı için Jira eşitlemesi ve pano kolon kurallarıyla uyumludur — `utils/workflow.ts` |
+| **Sprint planı** | Sprint bazlı, sürükle-bırak; plan uyarıları (aşırı büyük görev, öncül döngüsü) banner ile (klasik arayüzde Pano › Sprint planı) |
 | **Analiz ve zaman çizelgesi** | Proje bitiş tarihi ve kritik yolu hesaplayan Gantt şeması |
 | **Diğer** | OKR / Hedefler, Haftalık Notlar, Müşteri İstekleri, Risk kaydı (5×5 matris) |
 | **Kayıt yaşam döngüsü** | Açılış, ilk başlama, kapanış ve durum geçişleri otomatik kaydedilir; kapanma süresi Türkiye iş günü takvimiyle ölçülür; kayıt türü (hata / özellik / iyileştirme / görev) |
@@ -578,7 +581,7 @@ flowchart LR
     S2 --> S3["3️⃣ Öneriler<br/>geçmiş kayıt · AI ·<br/>ML modeli"]
     S3 --> S4["4️⃣ Simülasyon<br/>P50/P80/P95 teslim,<br/>kapsam önerisi"]
     S4 --> S5["5️⃣ Kilometre taşları<br/>P50/P80 tarih,<br/>hedef olasılığı"]
-    S5 --> S6["6️⃣ Aktarım<br/>görevler · sürümler ·<br/>hedefler · baseline"]
+    S5 --> S6["6️⃣ Aktarım<br/>görevler · sprintler ·<br/>hedefler · baseline"]
 ```
 
 | Kip | Ne yapar |
@@ -614,7 +617,7 @@ flowchart LR
 <summary><b>Tahmin kalitesi ve ince ayar kararı</b></summary>
 
 - **Benzer kayıt tahmini — geriye dönük test:** son 100/200/500 kapanmış kayıt yalnız kendisinden önce kapanmış kayıtlarla tahmin edilir (zaman ayrımlı, sızıntı yok); P50/P80/P90 kalibrasyonu, efor hatası, aralık kapsaması, birim × tür kırılımı.
-- **Sürüm simülasyonu — geriye dönük test:** tamamlanmış her sürüm, başladığı gün bilinenlerle yeniden simüle edilir; gerçek bitişin P50/P80'e yetişme oranı.
+- **Sprint simülasyonu — geriye dönük test:** tamamlanmış her sprint, başladığı gün bilinenlerle yeniden simüle edilir; gerçek bitişin P50/P80'e yetişme oranı.
 - **Kalibrasyon:** birim × tür bazında gerçekleşen ÷ tahmin oranı ve son 90 gündeki kayma.
 - **Altın set ve kalite kapısı:** PY/PMO onaylı kayıtlarda AI önerisi önemi ve türü söylenmeden çalıştırılır. Eşikler: efor hatası geçmiş tahmine göre en çok ×1,1 · önem isabeti ≥ %60 · aralık kapsaması ≥ %60 (en az 10 yanıt). İstem ya da model değişince sonuç "eski" sayılır. Kapı zorunluysa ve geçilmediyse AI tahmin önerisi kapanır.
 - **İnce ayar kararı:** veri yetersiz / gerekmiyor / düşünülebilir / önerilir. "Veri kümesini hazırla" sohbet biçiminde JSONL eğitim ve doğrulama dosyaları ve veri kartı üretir (zaman ayrımlı bağlam, altın set dışarıda, son %15 doğrulama, kişi adları maskeli). Ayrıntı: [docs/INCE_AYAR_KARARI.md](docs/INCE_AYAR_KARARI.md).
@@ -653,6 +656,9 @@ sequenceDiagram
 | **Araçlar** | Portföy sağlığı, proje detayı, görev/risk arama, kişi profili, uygun kişi, doluluk, departman karnesi, kapasite-talep, tahsis, öngörü, EVM, maliyet, veri sağlığı, son değişiklikler, notlar, durum raporu |
 | **Bilgi tabanı (RAG)** | Notlar, görev/risk açıklamaları, istekler, PESTEL/SWOT, kullanım kılavuzu ve Bilgi Bankası dokümanları; artımlı dizinleme, numaralı kaynak, doğruluk değerlendirme seti |
 | **Onaylı değişiklik** | "Şu riski ekle", "görevi tamamlandı yap" → öneri kartı → onay → yetki ve plan kilidi yeniden doğrulanır → denetim günlüğü → geri alınabilir |
+| **Ajan modu** | "ATLAS'ın risklerini aç", "Ayşe'nin profilini göster" → asistan ekranı/kaydı sizin yerinize açar (veri değişmez; menüdeki yetkilerle sınırlı) |
+| **Dosya ekleme** | Sohbete PDF, Word, Excel, CSV, metin, JSON ekleyin (📎, sürükle-bırak, yapıştır); metin tarayıcıda çıkarılır, dosya yüklenmez |
+| **Jira'dan okuma** | "MKS-42 ne durumda?", "MKS'de açık hataları kime atanmış?" → Jira'daki güncel kayıt, arama ve dağılımlar (salt okunur, jeton sunucuda) |
 | **Ekran içi AI** | Durum raporundan e-posta, yönetici brifingi, risk önerisi, PESTEL/SWOT taslağı, PERT süre tahmini |
 | **Haftalık rapor asistanı** | Notlar, worklog, görüşmeler ve kapanan işlerden kılavuza uygun taslak; dayanak denetimi (girdide olmayan rakam/tarih/ad vurgulanır); kurum, bölüm, proje ve kişi bazında ölçülebilir öğrenme — [docs/RAPOR_AI.md](docs/RAPOR_AI.md) |
 | **Güvenlik** | Anahtar yalnız sunucuda; erişim kodu ya da Supabase üyeliği; hız sınırı; köken denetimi; yanıtlar HTML yorumlanmadan gösterilir |
@@ -726,7 +732,7 @@ flowchart LR
 
     subgraph SYS["PlanAsistan"]
         direction TB
-        U1(["Görev ve sürüm planla"])
+        U1(["Görev ve sprint planla"])
         U2(["Jira'dan aktar /<br/>Jira'ya gönder"])
         U3(["Risk, RAG, not,<br/>istek yönet"])
         U4(["Haftalık rapor yaz<br/>ve puanla"])

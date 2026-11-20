@@ -3,6 +3,34 @@
 Her sürümün başlığı `## vX.Y.Z` biçimindedir; GitHub sürüm sayfası bu bölümü
 buradan alır (`.github/workflows/exe.yml`).
 
+## v3.1.0
+
+Jira tarzı yapılandırılabilir pano ve iş akışları; asistanın ajan modu.
+
+### Yenilikler
+
+**Pano**
+- Yapılandırılabilir proje panosu: kolonlar, kolona durum ve etiket kuralları, WIP sınırı (en az / en çok), hızlı filtreler, kulvarlar (acil işler, kişi, öncelik, iş paketi, bileşen, hedef sürüm), panoda arama ve kişiye göre süzme.
+- Kart taşınınca projenin iş akışı kuralları uygulanır; tanımsız geçişte uyarı verilir.
+- Telefonda kolonlar sekmeyle seçilir.
+
+**İş akışı ve proje yapılandırması (Yönetici konsolu → Proje yapılandırması)**
+- Türkçe, ayrıntılı iş akışı durumları (Analizde, Kod İncelemede, Testte, Engellendi…); hesaplar her durumun kategorisini kullanır.
+- Jira'daki şema mantığıyla yapılandırmalar: iş akışı, kayıt türleri, zorunlu alanlar ve pano birlikte tanımlanır, projelere atanır.
+- İş akışı tasarımcısı; projeye özel iş akışı (izin verilirse proje yöneticisi düzenler).
+- Geçiş kuralları: koşullar, doğrulayıcılar, sonrası işlemler; geçişte alan güncelleme ve Çözüm alanı.
+- Projeye özel bileşen ve sürüm listeleri, proje rolleri ve bildirim şeması.
+- İsteğe bağlı: durum geçişleri Jira'ya da yazılır (geçiş notu yorum, harcanan süre worklog olarak).
+
+**Asistan**
+- Dosya ekleme: eklenen dosyaların metni soruyla birlikte yorumlanır.
+- Ajan modu: asistan istenen ekranı, görevi, kişi profilini ya da pencereyi açar (veri değiştirmez).
+- Jira'dan okuma: kayıtların Jira'daki güncel hâli, Jira'da arama ve bağlantı bilgisi.
+
+**Diğer**
+- Planlama sürümleri "sprint" olarak adlandırıldı.
+- Yeni ekranlar dört temaya ve gece moduna uyumlu; klasik arayüze gömülen modern parçalar klasik renk seçimini korur.
+
 ## v3.0.0 — 20 Kasım 2026
 
 PlanAsistan'ın ilk resmi sürümü ve ilk masaüstü paketi.

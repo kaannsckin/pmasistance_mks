@@ -214,7 +214,7 @@ describe('kilometre taşları', () => {
 });
 
 describe('aktarım', () => {
-    it('görevler, hedef ve anahtar sonuçlar, termin, sürüm takvimi, taban çizgisi ve günlük', () => {
+    it('görevler, hedef ve anahtar sonuçlar, termin, sprint takvimi, taban çizgisi ve günlük', () => {
         const proj = project();
         let p = plan([...plan().items, itemFromTask(proj.tasks[1]), newItem({ name: 'Çıkarılan', ownEstimateDays: 1, excluded: true })]);
         p.items[1].predecessorId = p.items[0].id;
@@ -255,7 +255,7 @@ describe('aktarım', () => {
         proj.releasePlans = [p];
         const sim = buildReleaseSimulation(proj, p, buildHistory([]), {}, { now: NOW, iterations: 200 });
         const result = runMonteCarlo(sim.built.input);
-        // Havuz görevi bu arada başka bir plana aktarıldı (sürüm 3)
+        // Havuz görevi bu arada başka bir plana aktarıldı (sprint 3)
         const moved = { ...proj, tasks: proj.tasks.map(t => (t.id === 'havuz' ? { ...t, version: 3 } : t)) };
         const c = commitReleasePlan(moved, p, { built: sim.built, result }, { now: NOW });
         expect(c.skipped.map(x => x.name)).toEqual(['Havuzdaki iş']);

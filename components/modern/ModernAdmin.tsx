@@ -19,6 +19,8 @@ import {
 } from '../../utils/viewConfig';
 import { flowStages, reportFlowOf, reportSettingsOf, STAGE_LABELS, WEEKDAYS } from '../../utils/weeklyReport';
 import { AdminSection, ADMIN_SECTIONS } from './adminSections';
+import ProjectSchemes from './admin/ProjectSchemes';
+import type { BoardConfig, ProjectRoleDef, ProjectScheme } from '../../types';
 import { Icon } from './icons';
 import { PROJECT_STATUS_LABEL } from './ModernProjectHeader';
 import { AuditLogPanel } from './sheets/AuditLogSheet';
@@ -74,6 +76,13 @@ export interface ModernAdminProps {
     cloudLinked: boolean;
     onOpenCloud: () => void;
     onOpenProfile: () => void;
+    onSaveScheme: (s: ProjectScheme) => string | null;
+    onDeleteScheme: (id: string) => void;
+    onAssignScheme: (projectId: string, schemeId: string) => void;
+    onSaveProjectBoard: (projectId: string, cfg: BoardConfig | undefined) => void;
+    onOpenProjectWorkflow: (projectId: string) => void;
+    onOpenProjectLists: (projectId: string) => void;
+    onSaveProjectRoles: (defs: ProjectRoleDef[]) => void;
 }
 
 const SHORT_ROLE: Record<UserRole, string> = {
@@ -898,6 +907,7 @@ const ModernAdmin: React.FC<ModernAdminProps> = props => {
                 </div>
             )}
             {active.key === 'permissions' && <PermissionMatrix {...props} />}
+            {active.key === 'projects' && <ProjectSchemes {...props} />}
             {active.key === 'views' && <ViewSettings {...props} />}
             {active.key === 'report' && <ReportFlowSettings {...props} />}
             {active.key === 'health' && <HealthMethodSettings {...props} />}

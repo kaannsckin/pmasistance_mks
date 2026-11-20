@@ -20,7 +20,7 @@ import { formatDay, toIsoDay } from '../calendarRange';
  *  3. Öneriler (geçmiş kayıtlar + AI; satır satır kabul / düzelt / çıkar)
  *  4. Simülasyon (sürüm, projedeki diğer açık işlerle birlikte; kapsam önerisi)
  *  5. Kilometre taşları (iş paketine / önceliğe göre ya da AI; olasılıklı tarih)
- *  6. Aktarım (görevler, hedef + anahtar sonuçlar, termin, sürüm takvimi,
+ *  6. Aktarım (görevler, hedef + anahtar sonuçlar, termin, sprint takvimi,
  *     taban çizgisi, öneri günlüğü)
  */
 
@@ -50,7 +50,7 @@ export const createReleasePlan = (project: Pick<Project, 'settings'>, now: Date 
 export const newItem = (partial: Partial<ReleasePlanItem> = {}): ReleasePlanItem => ({ id: newId('ri'), name: '', ...partial });
 
 /**
- * Havuzdaki (sürümü atanmamış) açık görevden satır. Ekibin kendi tahmini
+ * Havuzdaki (sprinti atanmamış) açık görevden satır. Ekibin kendi tahmini
  * "kendi tahminim" olur ve aralığı korunur; geçmişten / AI'dan / modelden
  * üretilmiş tahmin kendi tahmin sayılmaz (yeniden kalibre edilmesin, model
  * onu ekip tahmini sanmasın), "Elle" seçeneğinde hazır bekler.
@@ -377,7 +377,7 @@ export interface CommitResult {
     updated: number;
     /** Planın Hedefler ekranına eklenen hedefi (kilometre taşı varsa) */
     objectiveId?: string;
-    /** Havuzdan alınan ama bu arada başka bir sürüme / plana geçmiş görevler (aktarılmaz) */
+    /** Havuzdan alınan ama bu arada başka bir sprinte / plana geçmiş görevler (aktarılmaz) */
     skipped: { itemId: string; name: string }[];
     /** satır → görev, kilometre taşı → anahtar sonuç */
     taskIdOf: Record<string, string>;
@@ -386,7 +386,7 @@ export interface CommitResult {
 
 /**
  * Planı projeye aktarır: kabul edilen satırlar görev olur (havuzdan
- * alınanlar güncellenir), her kayıt simülasyondaki P50 bitişine göre sürüm
+ * alınanlar güncellenir), her kayıt simülasyondaki P50 bitişine göre sprint
  * takvimine yerleşir, termini kilometre taşının hedefi (yoksa P80'i) olur;
  * sürüm bir hedef, kilometre taşları anahtar sonuç olarak açılır. Plan ve
  * tahminler taban çizgisi olarak donar; her satırın kararı günlüğe yazılır.
@@ -403,7 +403,7 @@ export const commitReleasePlan = (
     const day = (offset: number) => toIsoDay(dateAtOffset(start, Math.max(1, Math.ceil(offset))));
     const statById = new Map(sim.result.tasks.map(t => [t.id, t]));
     const byId = new Map(project.tasks.map(t => [t.id, t]));
-    // Havuzdan alınan görev bu arada başka bir sürüme ya da hedefe bağlandıysa (başka bir plan
+    // Havuzdan alınan görev bu arada başka bir sprinte ya da hedefe bağlandıysa (başka bir plan
     // aktarıldı, elle atandı) üzerine yazılmaz; satır aktarılmaz, kullanıcıya bildirilir
     const takenElsewhere = (i: ReleasePlanItem) => {
         const t = i.sourceTaskId ? byId.get(i.sourceTaskId) : undefined;
@@ -429,8 +429,8 @@ export const commitReleasePlan = (
         keyResults: milestones.map(m => ({ id: krIds.get(m.id)!, name: `${m.name}${msP80(m) ? ` (P80 ${formatDay(msP80(m))})` : ''}` })),
     };
 
-    // Sürüm takvimi: kaydın P50 bitişini içeren sürüm. Sihirbaz sürümü mevcut sürümlerden
-    // sonra simüle ettiği için kayıtlar son mevcut sürümden önceye alınmaz (aynı varsayım).
+    // Sprint takvimi: kaydın P50 bitişini içeren sprint. Sihirbaz sürümü mevcut sprintlerden
+    // sonra simüle ettiği için kayıtlar son mevcut sprintten önceye alınmaz (aynı varsayım).
     const sources = new Set(plan.items.map(i => i.sourceTaskId).filter(Boolean) as string[]);
     const maxVersion = Math.max(0, ...project.tasks.filter(t => !sources.has(t.id) && t.includeInSprints !== false).map(t => t.version || 0));
     const windows = buildSprintWindows(project, maxVersion + 400);
@@ -543,7 +543,7 @@ export const commitGroups = (built: BuiltSimulation, c: CommitResult): SimGroup[
 
 /**
  * Taban çizgisini aktarılan planın kendi simülasyonundan kesinleştirir:
- * aktarımda kayıtlar sürüm takvimine yerleştiği için çizelgeleme sırası
+ * aktarımda kayıtlar sprint takvimine yerleştiği için çizelgeleme sırası
  * sihirbazdakinden farklıdır. Böylece aktarımdan hemen sonraki "güncel
  * tahmin" taban çizgisiyle aynı çıkar. Anahtar sonuç adlarındaki ve hedefi
  * olmayan kilometre taşı terminlerindeki P80 de buna göre güncellenir.

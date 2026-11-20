@@ -239,7 +239,8 @@ const processDataArray = (data: (string|number)[][]): { tasks: Task[], resources
     const colMap: { [key: string]: number } = {
         name: headers.indexOf('Tasklar'),
         priority: headers.indexOf('Öncelik'),
-        version: headers.indexOf('SÜRÜM'),
+        // Sprint sütunu: yeni dışa aktarımlar "Sprint", eski dosyalar "SÜRÜM" başlığını taşır
+        version: headers.findIndex(h => ['SPRINT', 'SÜRÜM'].includes(h.toUpperCase())),
         predecessor: headers.indexOf('Öncül'),
         unit: headers.indexOf('Birim'),
         resourceName: headers.indexOf('Kaynak Adı'),

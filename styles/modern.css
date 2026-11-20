@@ -103,6 +103,15 @@
   --m-segment-on: #636366;
 }
 
+/* Klasik arayüze gömülen modern parçalar (App: m-embed): modern tema (mt-*) yerine
+   klasik arayüzde seçili vurgu rengini erişilebilir tonlarıyla alır */
+.ui-modern.m-embed.theme-emerald { --m-accent: #0F766E; --m-accent-ink: #0B5C56; --m-accent-tint: #E0F2EF; --app-ring: rgba(15, 118, 110, 0.2); }
+.ui-modern.m-embed.theme-purple  { --m-accent: #5B3FD0; --m-accent-ink: #47309F; --m-accent-tint: #EEEAFB; --app-ring: rgba(91, 63, 208, 0.2); }
+.ui-modern.m-embed.theme-orange  { --m-accent: #B54708; --m-accent-ink: #8C3706; --m-accent-tint: #FDEFE4; --app-ring: rgba(181, 71, 8, 0.2); }
+.dark .ui-modern.m-embed.theme-emerald { --m-accent: #3CCFB4; --m-accent-ink: #7ADFCB; --m-accent-tint: rgba(60, 207, 180, 0.16); }
+.dark .ui-modern.m-embed.theme-purple  { --m-accent: #A48BFF; --m-accent-ink: #C2B2FF; --m-accent-tint: rgba(164, 139, 255, 0.18); }
+.dark .ui-modern.m-embed.theme-orange  { --m-accent: #FF9F5A; --m-accent-ink: #FFC08F; --m-accent-tint: rgba(255, 159, 90, 0.16); }
+
 /* 1b. Temalar ---------------------------------------------------------------
  * Kök kapta mt-<tema> sınıfı (Ayarlar → Görünüm). Her tema gündüz bloğunda
  * yapı + renkleri, gece bloğunda (.dark …) gündüz bloğunun TÜM renklerini

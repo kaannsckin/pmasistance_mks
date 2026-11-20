@@ -66,6 +66,205 @@ export interface Task {
   actualHours?: number; // harcanan efor (Jira "Time Spent" / worklog)
   storyPoints?: number;
   fixVersion?: string; // kaynak sistemdeki hedef sürüm
+  jiraStatus?: string; // Jira'daki durum adı (ör. "ANALYSIS"); pano kolon eşlemesinde kullanılır
+  components?: string[]; // Projenin bileşen listesinden (Jira "Component/s")
+  resolution?: string; // Çözüm (Jira "Resolution"): Düzeltildi, Yapılmayacak, Tekrar …
+  updatedAt?: string; // son değişiklik (Jira "Updated" ya da panoda taşıma) — "Son güncellenenler" filtresi
+}
+
+// ---------------------------------------------------------------- Proje panosu (Jira tarzı yapılandırma)
+
+/** Pano kolonuna eşlenen durum: uygulama durumu (`app:ToDo`) ya da Jira durum adı (`jira:ANALYSIS`) */
+export type BoardStatusKey = `app:${TaskStatus}` | `jira:${string}`;
+
+export interface BoardColumnConfig {
+  id: string;
+  name: string;
+  statuses: BoardStatusKey[];
+  /** Etiket kuralı: görevde bu etiketlerden biri varsa bu kolon (kural önceliğine göre) */
+  labels?: string[];
+  /** WIP sınırları (Jira "Min/Max") */
+  min?: number;
+  max?: number;
+  /** Kart bu kolona taşınınca uygulamadaki durum */
+  targetStatus: TaskStatus;
+}
+
+export interface BoardQuickFilter {
+  id: string;
+  name: string;
+  /** me: atanan oturumdaki kişi; diğer koşullar VE ile birleşir */
+  assignee?: 'me' | string;
+  labels?: string[];
+  priorities?: Task['priority'][];
+  issueTypes?: IssueType[];
+  overdue?: boolean;
+  /** Son N günde güncellenen */
+  recentDays?: number;
+  /** Bu bileşenlerden biri */
+  components?: string[];
+  /** Bu hedef sürümlerden biri */
+  fixVersions?: string[];
+}
+
+// ---------------------------------------------------------------- Proje yapılandırma şeması (Jira "scheme" modeli)
+
+/** İş akışı durumu: Jira anahtarı (eşleme), Türkçe adı ve ana kategorisi */
+export interface WorkflowStatusDef {
+  key: string;
+  label: string;
+  category: TaskStatus;
+}
+
+export interface WorkflowConfig {
+  statuses: WorkflowStatusDef[];
+  /** İzin verilen geçişler (anahtar → gidilebilecek anahtarlar). Yoksa serbest: her durumdan her duruma */
+  transitions?: Record<string, string[]>;
+  /** Yeni kaydın başlangıç durumu */
+  initial: string;
+  /** Diyagramdaki durum kutularının konumları (tasarımcı; yoksa otomatik yerleşim) */
+  layout?: Record<string, { x: number; y: number }>;
+  /**
+   * Geçiş kuralları (Jira koşul / doğrulayıcı / sonrası işlem). Anahtar
+   * "KAYNAK>HEDEF" (tek geçiş) ya da "*>HEDEF" (o duruma giren tüm geçişler);
+   * ikisi birlikte uygulanır.
+   */
+  rules?: Record<string, TransitionRule>;
+}
+
+export interface TransitionRule {
+  // --- Koşullar: geçişi kim yapabilir (boşsa herkes)
+  /** Bu rollerden biri ya da `people` listesindeki biri */
+  roles?: UserRole[];
+  /** Havuz kişi kimlikleri */
+  people?: string[];
+  /** Yalnız görevin atananı */
+  assigneeOnly?: boolean;
+  /** Projede bu proje rollerinden birinin üyesi (ör. Test ekibi) */
+  projectRoles?: string[];
+  // --- Doğrulayıcılar: geçişte istenen bilgi
+  /** Geçiş notu (göreve yorum olarak eklenir) */
+  requireComment?: boolean;
+  /** Harcanan süre (saat; görevin harcanan süresine eklenir) */
+  requireHours?: boolean;
+  /** Dolu olması gereken alanlar (boşsa geçiş penceresinde istenir) */
+  requireFields?: SchemeRequiredField[];
+  /** Tüm alt görevler tamamlanmış olmalı */
+  requireSubtasksDone?: boolean;
+  // --- Sonrası işlemler: geçiş sonrası otomatik
+  addLabels?: string[];
+  removeLabels?: string[];
+  /** Atananı değiştir: geçişi yapan kişi, atamayı kaldır ya da belirli kişi (ad soyad) */
+  assign?: 'actor' | 'none' | string;
+  /** Atanan kişiye bildirim (e-posta; yoksa Teams kanalı) */
+  notifyAssignee?: boolean;
+  /** Alan güncelle (Jira "update issue field") */
+  setFields?: {
+    priority?: Task['priority'];
+    /** 'clear' temizle, sayı: bugünden N gün sonra */
+    dueDate?: 'clear' | number;
+    /** 'clear' temizle, 'next' yayın tarihi en yakın yayınlanmamış sürüm, ya da sürüm adı */
+    fixVersion?: 'clear' | 'next' | string;
+    /** 'clear' temizle ya da çözüm değeri */
+    resolution?: 'clear' | string;
+  };
+}
+
+export type SchemeRequiredField = 'resourceName' | 'dueDate' | 'estimate' | 'issueType' | 'labels' | 'workPackage' | 'component' | 'fixVersion' | 'resolution';
+
+export type NotificationEvent = 'created' | 'transitioned' | 'done' | 'reopened' | 'assigned' | 'commented';
+
+/** Bildirim kuralı (Jira "notification scheme" satırı) */
+export interface NotificationRule {
+  id: string;
+  event: NotificationEvent;
+  /** 'transitioned' için: yalnız bu durumlara girişte (boş: her geçişte) */
+  statuses?: string[];
+  to: {
+    assignee?: boolean;
+    /** Projenin proje yöneticisi */
+    pm?: boolean;
+    /** Proje rolü üyeleri */
+    roles?: string[];
+    /** Havuz kişi kimlikleri */
+    people?: string[];
+    /** Teams kanalına da gönder */
+    teams?: boolean;
+  };
+}
+
+/** Proje rolü (Jira "project role"): tanımı kurum geneli, üyeleri proje bazında */
+export interface ProjectRoleDef {
+  id: string;
+  name: string;
+  description?: string;
+}
+
+/** Projenin bileşeni (Jira "Component"): modül/alan; sorumlusu varsayılan atanan olabilir */
+export interface ProjectComponent {
+  id: string;
+  name: string;
+  description?: string;
+  /** Bileşen sorumlusu (ad soyad) */
+  lead?: string;
+  /** Bu bileşenle açılan atanmamış göreve sorumlu atanır */
+  assignLead?: boolean;
+}
+
+/** Projenin sürümü (Jira "Version/Release"): görevlerin hedef sürümü (fixVersion) */
+export interface ProjectVersion {
+  id: string;
+  name: string;
+  description?: string;
+  startDate?: string;
+  releaseDate?: string;
+  status: 'unreleased' | 'released' | 'archived';
+  releasedAt?: string;
+}
+
+/**
+ * Proje yapılandırma şeması — admin tanımlar, projelere atar (birden çok
+ * proje aynı şemayı paylaşabilir): iş akışı ve geçişler, kayıt türleri,
+ * zorunlu alanlar, pano. Atanmamış proje yerleşik "Varsayılan" şemayı kullanır.
+ */
+export interface ProjectScheme {
+  id: string;
+  name: string;
+  description?: string;
+  workflow: WorkflowConfig;
+  /** Kullanılabilen kayıt türleri (yok/boş: hepsi) */
+  issueTypes?: IssueType[];
+  /** Yeni kayıtta ve düzenlemede zorunlu alanlar */
+  requiredFields?: SchemeRequiredField[];
+  /** Şemanın panosu (yoksa iş akışından otomatik) */
+  board?: BoardConfig;
+  /** Proje sahibi panoyu kendi projesi için özelleştirebilir */
+  allowProjectBoard: boolean;
+  /** Bildirim şeması: olay → alıcılar */
+  notifications?: NotificationRule[];
+  /** Jira'ya bağlı görevlerde durum geçişini Jira'da da yap (not → yorum, süre → worklog, çözüm → resolution) */
+  jiraWriteBack?: boolean;
+  /**
+   * Proje sahibi kendi projesinin iş akışını özelleştirebilir (Jira "genişletilmiş
+   * proje yönetimi" gibi): yalnız bu yapılandırmanın durumlarını kullanır, yeni
+   * durum ekleyemez; geçişleri ve başlangıcı değiştirebilir, durum çıkarabilir.
+   */
+  allowProjectWorkflow?: boolean;
+  updatedAt?: string;
+}
+
+export type BoardSwimlane = 'none' | 'expedite' | 'assignee' | 'priority' | 'workPackage' | 'component' | 'fixVersion';
+
+export interface BoardConfig {
+  columns: BoardColumnConfig[];
+  /** status: önce durum eşlemesi, aynı durumun kolonları arasında etiket seçer; label: etiket kuralı her zaman önce */
+  rulePriority: 'status' | 'label';
+  quickFilters: BoardQuickFilter[];
+  swimlane: BoardSwimlane;
+  /** Expedite kulvarı: bu önceliklerden ya da etiketlerden biri */
+  expedite?: { priorities?: Task['priority'][]; labels?: string[] };
+  /** Tamamlanma kolonlarında yalnız son N günde kapananlar (0/yok: hepsi) */
+  doneDays?: number;
 }
 
 export type IssueType = 'bug' | 'feature' | 'improvement' | 'task' | 'other';
@@ -292,7 +491,7 @@ export interface Sprint {
     responsible?: string;
     assignedTaskIds?: string[];
     foundDefects?: string;
-    duration?: number; // Sürüm bazlı test günü
+    duration?: number; // Sprint bazlı test günü
   };
 }
 
@@ -344,7 +543,7 @@ export interface ProjectData {
     isAIEnabled?: boolean;
     tagColors?: Record<string, string>;
     titleCosts?: Record<string, number>;
-    sprintNames?: Record<number, string>; // Özel sürüm isimleri
+    sprintNames?: Record<number, string>; // Özel sprint isimleri
     globalTestDays?: number; // Genel test günü sayısı
     manMonthTableColor?: string; // Adam/Ay tablo ana rengi
     costTableColor?: string; // Maliyet tablo ana rengi
@@ -527,6 +726,12 @@ export interface Project {
   pmPersonId?: string; // Proje Yöneticisi (havuzdaki kişi) — RBAC sahipliği
   jiraProjectKey?: string; // Jira proje anahtarı (worklog çekmek için, ör. MKS)
   jiraSync?: JiraSyncSettings; // Jira canlı eşitleme kaynağı ve otomatik eşitleme aralığı
+  boardConfig?: BoardConfig; // Projeye özel pano (şema izin veriyorsa; yoksa şemanın panosu)
+  schemeId?: string; // Admin'in atadığı yapılandırma şeması (yoksa varsayılan)
+  workflowOverride?: WorkflowConfig; // Projeye özel iş akışı (şema izin veriyorsa; yalnız şemanın durumlarıyla)
+  components?: ProjectComponent[]; // Projenin bileşen listesi
+  versions?: ProjectVersion[]; // Projenin sürüm listesi (görevlerin hedef sürümü)
+  roleMembers?: Record<string, string[]>; // Proje rolü → havuz kişi kimlikleri
   risks?: Risk[];
   pestelItems?: PestelItem[]; // PESTEL dış çevre analizi
   swotItems?: SwotItem[]; // SWOT stratejik analizi
@@ -683,6 +888,10 @@ export interface WorkspaceData {
   currentRole?: UserRole;
   /** Aktif kimlik: py/bölüm sorumlusu rollerinde kapsamı belirleyen havuz kişisi */
   currentPersonId?: string;
+  /** Admin'in proje yapılandırma şemaları (iş akışı, kayıt türleri, zorunlu alanlar, pano) */
+  projectSchemes?: ProjectScheme[];
+  /** Proje rolü tanımları (yoksa hazır roller); üyeler projede atanır */
+  projectRoles?: ProjectRoleDef[];
   // Veri havuzu
   people: Person[];
   departments: Department[];

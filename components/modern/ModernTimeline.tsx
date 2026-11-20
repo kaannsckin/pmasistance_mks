@@ -9,9 +9,9 @@ import { COLUMN_META, columnOf, daysLate, initialsOf, PRIORITY_META, sprintLabel
 import { Field, Sheet } from './ui';
 
 /**
- * Modern zaman çizelgesi (sürüm planı). Üstte tüm sürümleri ve test
- * dönemlerini tek şeritte gösteren zaman çizelgesi; altında sürüm sütunları.
- * Görevler sütunlar arasında sürüklenir; her sürümde birim kapasitesi izlenir.
+ * Modern zaman çizelgesi (sprint planı). Üstte tüm sprintleri ve test
+ * dönemlerini tek şeritte gösteren zaman çizelgesi; altında sprint sütunları.
+ * Görevler sütunlar arasında sürüklenir; her sprintte birim kapasitesi izlenir.
  */
 
 export interface CalendarSettings {
@@ -101,7 +101,7 @@ const CalendarSheet: React.FC<{ value: CalendarSettings; onClose: () => void; on
             title="Takvim"
             onClose={onClose}
             footer={<>
-                <span className="flex-1 text-[13px] m-text-3">Tüm sürüm tarihleri yeniden hesaplanır.</span>
+                <span className="flex-1 text-[13px] m-text-3">Tüm sprint tarihleri yeniden hesaplanır.</span>
                 <button type="button" className="m-btn m-btn-plain" onClick={onClose}>Vazgeç</button>
                 <button type="button" className="m-btn m-btn-primary" disabled={!start} onClick={() => onSave({ projectStartDate: start, sprintDuration: weeks, globalTestDays: testDays })}>Kaydet</button>
             </>}
@@ -110,12 +110,12 @@ const CalendarSheet: React.FC<{ value: CalendarSettings; onClose: () => void; on
                 <input id="tl-start" type="date" className="m-input" value={start} onChange={e => setStart(e.target.value)} />
             </Field>
             <div className="flex flex-col gap-1.5">
-                <span className="text-[13px] font-semibold m-text-2">Sürüm süresi</span>
-                <div className="m-segmented self-start" role="group" aria-label="Sürüm süresi">
+                <span className="text-[13px] font-semibold m-text-2">Sprint süresi</span>
+                <div className="m-segmented self-start" role="group" aria-label="Sprint süresi">
                     {[1, 2, 3, 4, 5, 6].map(w => <button key={w} type="button" className="m-segment" aria-pressed={weeks === w} onClick={() => setWeeks(w)}>{w} hf</button>)}
                 </div>
             </div>
-            <Field label="Test dönemi (iş günü)" htmlFor="tl-test" hint="Her sürümün ardından test ve canlıya alma için ayrılan süre">
+            <Field label="Test dönemi (iş günü)" htmlFor="tl-test" hint="Her sprintin ardından test ve canlıya alma için ayrılan süre">
                 <input id="tl-test" type="number" min={0} max={20} className="m-input m-tabular" value={testDays} onChange={e => setTestDays(Math.max(0, Math.min(20, parseInt(e.target.value, 10) || 0)))} />
             </Field>
         </Sheet>
@@ -144,12 +144,12 @@ const ModernTimeline: React.FC<ModernTimelineProps> = ({ project, canEdit, onMov
 
     const autoPlan = () => {
         const placed = project.tasks.some(t => (t.version || 0) > 0 && t.status !== TaskStatus.Done);
-        if (placed && !window.confirm('Otomatik plan, bitmemiş görevlerin sürümlerini öncül ilişkileri ve kapasiteye göre yeniden dağıtır. Devam edilsin mi?')) return;
+        if (placed && !window.confirm('Otomatik plan, bitmemiş görevlerin sprintlerini öncül ilişkileri ve kapasiteye göre yeniden dağıtır. Devam edilsin mi?')) return;
         try {
             const r = planTaskVersionsDetailed(project.tasks, project.resources, weeks, testDays);
             onPlanGenerated(r.tasks);
             setExtra(0);
-            setResult({ warnings: r.warnings, text: `${r.stats.plannedTaskCount} görev ${r.stats.sprintCount} sürüme dağıtıldı (${num(r.stats.totalEffortDays)} gün iş).` });
+            setResult({ warnings: r.warnings, text: `${r.stats.plannedTaskCount} görev ${r.stats.sprintCount} sprinte dağıtıldı (${num(r.stats.totalEffortDays)} gün iş).` });
         } catch (e) {
             setResult({ warnings: [], text: e instanceof Error ? e.message : 'Plan oluşturulamadı.' });
         }
@@ -201,7 +201,7 @@ const ModernTimeline: React.FC<ModernTimelineProps> = ({ project, canEdit, onMov
                 <div className="flex items-center gap-2 min-h-[36px]">
                     {isRenaming ? (
                         <input
-                            aria-label="Sürüm adı"
+                            aria-label="Sprint adı"
                             className="m-input flex-1"
                             style={{ minHeight: 36 }}
                             autoFocus
@@ -220,10 +220,10 @@ const ModernTimeline: React.FC<ModernTimelineProps> = ({ project, canEdit, onMov
                     {canEdit && !isRenaming && (
                         <LaneMenu label={`${label} işlemleri`} items={[
                             { label: 'Yeniden adlandır', run: () => setRenaming({ v: l.version, name: names[l.version] || '' }) },
-                            { label: 'Önüne yeni sürüm ekle', run: () => onInsertSprint(l.version) },
+                            { label: 'Önüne yeni sprint ekle', run: () => onInsertSprint(l.version) },
                             {
-                                label: 'Sürümü sil', danger: true, run: () => {
-                                    if (window.confirm(`${label} silinsin mi? İçindeki ${l.tasks.length} görev Havuz'a taşınır, sonraki sürümler bir öne kayar.`)) onDeleteSprint(l.version);
+                                label: 'Sprinti sil', danger: true, run: () => {
+                                    if (window.confirm(`${label} silinsin mi? İçindeki ${l.tasks.length} görev Havuz'a taşınır, sonraki sprintler bir öne kayar.`)) onDeleteSprint(l.version);
                                 },
                             },
                         ]} />
@@ -249,7 +249,7 @@ const ModernTimeline: React.FC<ModernTimelineProps> = ({ project, canEdit, onMov
         <div className="flex flex-col gap-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="m-0 text-[15px] m-text-2">
-                    {sprints.length ? `${sprints.length} sürüm · ${dm(range?.start)} – ${dm(range?.end)}` : 'Henüz sürüm yok'} · sürüm {weeks} hafta + {testDays} gün test
+                    {sprints.length ? `${sprints.length} sprint · ${dm(range?.start)} – ${dm(range?.end)}` : 'Henüz sprint yok'} · sprint {weeks} hafta + {testDays} gün test
                     {excluded > 0 && <span className="m-text-3"> · {excluded} görev plan dışı</span>}
                 </p>
                 <div className="flex flex-wrap items-center gap-2.5">
@@ -324,7 +324,7 @@ const ModernTimeline: React.FC<ModernTimelineProps> = ({ project, canEdit, onMov
                                 <span className="text-[13px] m-text-3 m-tabular">{pool.tasks.length}</span>
                                 <button type="button" className="m-icon-btn" aria-label="Havuzu daralt" onClick={() => setPoolOpen(false)}><Icon name="chevronLeft" /></button>
                             </div>
-                            <p className="m-0 px-3 pb-2 text-[13px] m-text-3">Henüz bir sürüme atanmamış görevler</p>
+                            <p className="m-0 px-3 pb-2 text-[13px] m-text-3">Henüz bir sprinte atanmamış görevler</p>
                             <div className="flex flex-col gap-2 px-2.5 pb-3">
                                 {pool.tasks.map(t => <TaskChip key={t.id} task={t} draggable={canEdit} onOpen={() => onViewTask(t)} />)}
                                 {pool.tasks.length === 0 && <span className="px-1 py-6 text-center text-[14px] m-text-3">Havuz boş</span>}
@@ -366,7 +366,7 @@ const ModernTimeline: React.FC<ModernTimelineProps> = ({ project, canEdit, onMov
                         <div className="w-[200px] flex-none flex flex-col gap-2.5">
                             <button type="button" onClick={() => setExtra(e => Math.min(10, e + 1))} className="m-row-link rounded-2xl min-h-[96px] flex flex-col items-center justify-center gap-1.5 text-[15px] font-semibold m-accent" style={{ border: '2px dashed var(--m-sep)' }}>
                                 <Icon name="plus" size={20} strokeWidth={2.2} />
-                                Sürüm ekle
+                                Sprint ekle
                             </button>
                             <button type="button" onClick={onNewTask} className="m-row-link rounded-2xl min-h-[52px] flex items-center justify-center gap-1.5 text-[15px] m-text-2" style={{ border: '2px dashed var(--m-sep)' }}>
                                 <Icon name="plus" size={16} />

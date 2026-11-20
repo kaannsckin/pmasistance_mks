@@ -26,7 +26,7 @@ export const DEFAULT_SPREAD = { low: 0.8, high: 1.6 };
 const BASE_SCORE: Record<Task['priority'], number> = { Blocker: 4, High: 3, Medium: 2, Low: 1 };
 const UNASSIGNED_UNIT = 'Atanmamış';
 
-export type SimScope = 'open' | number; // sayı: "Sürüm N'e kadar (dahil)"
+export type SimScope = 'open' | number; // sayı: "Sprint N'e kadar (dahil)"
 
 export interface SimOptions {
     now?: Date;

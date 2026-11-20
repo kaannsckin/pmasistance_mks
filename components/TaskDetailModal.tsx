@@ -1,4 +1,5 @@
 
+import { taskStatusLabel } from '../utils/workflow';
 import React, { useState } from 'react';
 import { Task } from '../types';
 
@@ -68,11 +69,11 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, onEdit
             <DetailItem label="Öncelik" value={task.priority} icon="fa-triangle-exclamation" />
             <DetailItem label="Kaynak Adı" value={task.resourceName} icon="fa-user" />
             <DetailItem label="Birim" value={task.unit} icon="fa-cube" />
-            <DetailItem label="Sürüm" value={task.version} icon="fa-layer-group" />
-            <DetailItem label="Durum" value={task.status} icon="fa-tasks-alt" />
+            <DetailItem label="Sprint" value={task.version} icon="fa-layer-group" />
+            <DetailItem label="Durum" value={taskStatusLabel(task)} icon="fa-tasks-alt" />
             <DetailItem label="Öncül" value={task.predecessor ? `Task ${task.predecessor}` : 'Yok'} icon="fa-link" />
             <DetailItem label="PERT Süresi (gün)" value={pertTime} icon="fa-calculator" />
-            <DetailItem label="Sürüm Planlaması" value={task.includeInSprints !== false ? 'Dahil' : 'Hariç'} icon="fa-calendar-check" />
+            <DetailItem label="Sprint Planlaması" value={task.includeInSprints !== false ? 'Dahil' : 'Hariç'} icon="fa-calendar-check" />
           </div>
 
           <div>

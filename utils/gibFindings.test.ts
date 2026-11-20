@@ -349,7 +349,7 @@ describe('applyGibImport', () => {
     it('yeniden aktarım: Test No ile günceller, uygulamadaki işi korur', () => {
         const first = applyGibImport(createEmptyWorkspace(), pkg, { projectName: 'GİB', newPmName: 'MKS', now });
         const pid = first.projectId;
-        // Uygulamada: I-01 sürüme alınıp "Süreçte"ye çekildi, elle bir görev eklendi, not yazıldı
+        // Uygulamada: I-01 sprinte alınıp "Süreçte"ye çekildi, elle bir görev eklendi, not yazıldı
         const edited = {
             ...first.workspace,
             projects: first.workspace.projects.map(p => p.id !== pid ? p : {

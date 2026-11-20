@@ -52,7 +52,7 @@ Kurallar: Yalnız `claude/pilot-veri` dalına yaz ve gönder (izin bu talimatla 
      | Tür | Ne zaman |
      |---|---|
      | Haftalık koordinasyon | Pazartesi |
-     | Sprint değerlendirme | Projenin sürümü bittiğinde (sürüm süresi 3 hafta); her gün değil |
+     | Sprint değerlendirme | Projenin sprinti bittiğinde (sprint süresi 3 hafta); her gün değil |
      | Hata triyajı | Yeniden açılma ya da yüksek öncelikli hata olduğunda |
      | Teknik karar kaydı | Tahmini çok aşan kapanış ya da mimari seçim olduğunda |
      | Müşteri görüşmesi | İki haftada bir ya da müşteri isteği geldiğinde |

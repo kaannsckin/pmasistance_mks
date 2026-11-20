@@ -136,7 +136,7 @@ const KanbanView: React.FC<KanbanViewProps> = ({ tasks, resources, sprintDuratio
     const sprintMap = new Map<number, Sprint>();
     
     for (let i = 0; i <= maxVersion; i++) {
-        const title = i === 0 ? 'Backlog' : (sprintNames[i] || `Sürüm ${i}`);
+        const title = i === 0 ? 'Backlog' : (sprintNames[i] || `Sprint ${i}`);
         sprintMap.set(i, { id: i, title: title, tasks: [], unitLoads: {} });
     }
 
@@ -223,7 +223,7 @@ const KanbanView: React.FC<KanbanViewProps> = ({ tasks, resources, sprintDuratio
                 <i aria-hidden="true" className="fa-solid fa-layer-group text-sm"></i>
              </div>
              <div>
-                <h2 className="text-base font-black text-gray-800 dark:text-white leading-none">Sürüm Planlama</h2>
+                <h2 className="text-base font-black text-gray-800 dark:text-white leading-none">Sprint Planlama</h2>
                 <div className="flex items-center space-x-3 mt-1.5">
                     <span className="text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest flex items-center">
                         <i aria-hidden="true" className="fa-solid fa-calendar-day mr-1.5 text-primary" style={{ color: 'var(--app-primary)' }}></i>{new Date(projectStartDate).toLocaleDateString('tr-TR')}

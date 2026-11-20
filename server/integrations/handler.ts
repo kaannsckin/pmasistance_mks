@@ -388,11 +388,14 @@ export interface JiraSyncSource {
     projectKey?: string;
     labels?: string[];
     filterId?: string;
+    /** Serbest metin araması (text ~); yalnız harf, rakam, boşluk, nokta, alt çizgi — JQL'e kaçış gerektirmez */
+    text?: string;
 }
 export const JIRA_SYNC_KEYS_MAX = 100;
 const ISSUE_KEY_RE = /^[A-Za-z][A-Za-z0-9_]{1,19}-\d{1,9}$/;
 const LABEL_RE = /^[^\s"\\,()]{1,100}$/;
 const FILTER_RE = /^\d{1,12}$/;
+const TEXT_RE = /^[\p{L}\p{N}][\p{L}\p{N} ._]{1,99}$/u;
 
 const allowedProjects = (env: Env): string[] => (clean(env.JIRA_ALLOWED_PROJECTS) || '').split(',').map(k => k.trim().toUpperCase()).filter(k => KEY_RE.test(k));
 const quoted = (list: string[]) => list.map(v => `"${v}"`).join(', ');
@@ -403,12 +406,14 @@ export const checkSyncSource = (env: Env, raw: unknown): { source: JiraSyncSourc
     const projectKey = r.projectKey ? String(r.projectKey).trim().toUpperCase() : undefined;
     const labels = Array.isArray(r.labels) ? [...new Set(r.labels.map(l => String(l).trim()).filter(Boolean))] : [];
     const filterId = r.filterId ? String(r.filterId).trim() : undefined;
+    const text = r.text ? String(r.text).replace(/\s+/g, ' ').trim() : undefined;
     if (!projectKey && !labels.length && !filterId) return { error: 'Eşitleme kaynağı gerekli: proje, etiket ya da kayıtlı filtre seçin (tüm Jira taranmaz).', status: 400 };
     if ((projectKey && !KEY_RE.test(projectKey)) || labels.length > 10 || labels.some(l => !LABEL_RE.test(l)) || (filterId && !FILTER_RE.test(filterId))) {
         return { error: 'Geçersiz proje anahtarı, etiket ya da filtre.', status: 400 };
     }
+    if (text && !TEXT_RE.test(text)) return { error: 'Arama metni yalnız harf, rakam, boşluk, nokta ve alt çizgi içerebilir (2–100 karakter).', status: 400 };
     if (projectKey && !jiraProjectAllowed(env, projectKey)) return { error: `${projectKey} projesi bu sunucuda Jira erişimine açık değil.`, status: 403 };
-    return { source: { ...(projectKey ? { projectKey } : {}), ...(labels.length ? { labels } : {}), ...(filterId ? { filterId } : {}) } };
+    return { source: { ...(projectKey ? { projectKey } : {}), ...(labels.length ? { labels } : {}), ...(filterId ? { filterId } : {}), ...(text ? { text } : {}) } };
 };
 
 /** Kaynak JQL'i: yalnız açık kayıtlar (istenirse); izin listesi varsa sorgu ona da daraltılır */
@@ -418,6 +423,7 @@ export const buildSyncJql = (env: Env, source: JiraSyncSource, openOnly = true):
         source.projectKey ? `project = "${source.projectKey}"` : allowed.length ? `project in (${quoted(allowed)})` : '',
         source.labels?.length ? `labels in (${quoted(source.labels)})` : '',
         source.filterId ? `filter = ${source.filterId}` : '',
+        source.text ? `text ~ "${source.text}"` : '',
         openOnly ? 'statusCategory != Done' : '',
     ].filter(Boolean).join(' AND ') + ' ORDER BY key ASC';
 };
@@ -496,6 +502,10 @@ export interface JiraUpdateChanges {
     status?: JiraStatusCategory;
     comment?: string;
     worklogHours?: number;
+    /** Hedef Jira durum adı (ör. TESTING): verilirse geçiş bu duruma göre seçilir, yoksa kategoriye göre */
+    statusName?: string;
+    /** Geçişte yazılacak çözüm (Türkçe ad ya da Jira adı; ekranda yoksa geçiş çözümsüz yeniden denenir) */
+    resolution?: string;
 }
 export interface JiraUpdateResult {
     applied: string[];
@@ -509,6 +519,13 @@ const TRANSITION_HINTS: Record<JiraStatusCategory, RegExp> = {
     indeterminate: /in ?progress|start|devam|surec|basla/,
     done: /done|close|resolve|tamam|kapat|cozul|bitti/,
 };
+/** Uygulamadaki Türkçe çözüm adlarının Jira'daki standart karşılıkları */
+const RESOLUTION_MAP: Record<string, string> = {
+    'duzeltildi': 'Fixed', 'tamamlandi': 'Done', 'yapilmayacak': "Won't Do", 'tekrar (duplicate)': 'Duplicate', 'tekrar': 'Duplicate',
+    'tekrarlanamadi': 'Cannot Reproduce', 'hata degil': 'Not a Bug',
+};
+export const jiraResolutionName = (name: string): string => RESOLUTION_MAP[foldName(name)] || name.trim();
+
 const jiraErrorText = (body: { errors?: Record<string, unknown>; errorMessages?: unknown[] }, status: number): string =>
     [...Object.entries(body.errors || {}).map(([k, v]) => `${k}: ${str(v)}`), ...(Array.isArray(body.errorMessages) ? body.errorMessages.map(str) : [])].filter(Boolean).join('; ') || `HTTP ${status}`;
 
@@ -557,19 +574,33 @@ export const updateJiraIssue = async (env: Env, key: string, changes: JiraUpdate
         break;
     }
 
-    // 2) Durum geçişi: hedef kategoriye götüren iş akışı adımı
-    if (changes.status) {
+    // 2) Durum geçişi: belirli durum adı verildiyse ona, yoksa hedef kategoriye götüren iş akışı adımı
+    if (changes.status || changes.statusName) {
         const cur = await call('GET', `${path}?fields=status`);
-        const current = asCategory(((cur.body.fields as { status?: { statusCategory?: { key?: unknown } } } | undefined)?.status?.statusCategory?.key));
-        if (current !== changes.status) {
+        const st = (cur.body.fields as { status?: { name?: unknown; statusCategory?: { key?: unknown } } } | undefined)?.status;
+        const current = asCategory(st?.statusCategory?.key);
+        const wantName = changes.statusName ? foldName(changes.statusName) : '';
+        const already = wantName ? foldName(str(st?.name)) === wantName : current === changes.status;
+        if (!already) {
             const t = await call('GET', `${path}/transitions`);
-            const options = (Array.isArray(t.body.transitions) ? t.body.transitions as { id?: unknown; name?: unknown; to?: { name?: unknown; statusCategory?: { key?: unknown } } }[] : [])
-                .filter(x => asCategory(x.to?.statusCategory?.key) === changes.status);
-            const pick = options.find(x => TRANSITION_HINTS[changes.status!].test(foldName(`${str(x.name)} ${str(x.to?.name)}`))) || options[0];
-            if (!pick) errors.push({ field: 'status', message: 'Jira iş akışı bu kayıt için istenen duruma doğrudan geçişe izin vermiyor.' });
-            else {
-                const r = await call('POST', `${path}/transitions`, { transition: { id: str(pick.id) } });
-                if (r.ok) applied.push('status');
+            const all = Array.isArray(t.body.transitions) ? t.body.transitions as { id?: unknown; name?: unknown; to?: { name?: unknown; statusCategory?: { key?: unknown } } }[] : [];
+            let pick = wantName ? all.find(x => foldName(str(x.to?.name)) === wantName) || all.find(x => foldName(str(x.name)) === wantName) : undefined;
+            if (!pick && changes.status && !wantName) {
+                const options = all.filter(x => asCategory(x.to?.statusCategory?.key) === changes.status);
+                pick = options.find(x => TRANSITION_HINTS[changes.status!].test(foldName(`${str(x.name)} ${str(x.to?.name)}`))) || options[0];
+            }
+            if (!pick) {
+                const avail = all.map(x => str(x.to?.name) || str(x.name)).filter(Boolean);
+                errors.push({ field: 'status', message: `Jira iş akışı bu kayıt için ${changes.statusName ? `"${changes.statusName}" durumuna` : 'istenen duruma'} doğrudan geçişe izin vermiyor${avail.length ? ` (Jira'daki geçişler: ${avail.join(', ')})` : ''}.` });
+            } else {
+                const resolution = changes.resolution ? jiraResolutionName(changes.resolution) : undefined;
+                let r = await call('POST', `${path}/transitions`, { transition: { id: str(pick.id) }, ...(resolution ? { fields: { resolution: { name: resolution } } } : {}) });
+                // Çözüm alanı geçiş ekranında yoksa çözümsüz yeniden dene
+                if (!r.ok && resolution && r.status === 400) {
+                    r = await call('POST', `${path}/transitions`, { transition: { id: str(pick.id) } });
+                    if (r.ok) errors.push({ field: 'resolution', message: "Jira geçiş ekranında çözüm alanı yok; çözüm yazılmadı." });
+                }
+                if (r.ok) { applied.push('status'); if (resolution && !errors.some(e => e.field === 'resolution')) applied.push('resolution'); }
                 else errors.push({ field: 'status', message: jiraErrorText(r.body, r.status) });
             }
         }
@@ -933,6 +964,8 @@ export const handleIntegrationRequest = async (request: Request, rawEnv: Env, op
                     status: asCategory(c.status) || undefined,
                     comment: typeof c.comment === 'string' ? c.comment.trim().slice(0, 30000) || undefined : undefined,
                     worklogHours: hours(c.worklogHours, 24),
+                    statusName: typeof c.statusName === 'string' && /^[\p{L}\p{N} ._'()&/-]{1,60}$/u.test(c.statusName.trim()) ? c.statusName.trim() : undefined,
+                    resolution: typeof c.resolution === 'string' && /^[\p{L}\p{N} ._'()-]{1,60}$/u.test(c.resolution.trim()) ? c.resolution.trim() : undefined,
                 };
                 if (!Object.values(changes).some(v => v !== undefined)) return json(400, { error: 'Güncellenecek geçerli alan yok.', code: 'bad_request' });
                 return json(200, await updateJiraIssue(env, key, changes, opts.fetchImpl, opts.now));

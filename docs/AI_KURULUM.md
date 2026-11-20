@@ -52,6 +52,44 @@ Tarayıcı (asistan paneli) ──► /api/ai/chat  (proxy: anahtar burada) ─�
 - Her uygulama denetim günlüğüne **"AI önerisi uygulandı"** (`ai.apply`) olarak yazılır ve ekranın altında **Geri Al** sunulur. Aynı karta çift tıklama iki kez uygulamaz.
 - Müdür, PYB Sorumlusu ve PYB Destek rollerine öneri araçları hiç sunulmaz.
 
+## Ajan modu: ekranları asistan yönetir
+
+Asistan, kullanıcının menüden yapabileceği gezinmeyi onun yerine yapar — **veri değiştirmez**, bu yüzden onay beklemez:
+
+| Araç | Ne yapar |
+|---|---|
+| `ekrana_git` | Ekran değiştirir (portföy, tahsis, takvim, risk raporu, haftalık rapor, yönetim…; proje ekranlarında önce verilen projeyi açar: genel bakış, pano, görevler, planlama, riskler, ekip, hedefler, istekler, günlük) |
+| `gorev_ac` | Görev ayrıntı penceresini açar (ad ya da Jira anahtarıyla) |
+| `kisi_profili_ac` | Kişi profil penceresini açar |
+| `pencere_ac` | Veri sağlığı, denetim günlüğü, iş paketleri, profil seçimi |
+
+- Yetki **menüyle aynıdır** ve komut uygulanırken güncel durumla yeniden denetlenir (`utils/ai/uiActions.ts`, `App.tsx` → `handleAssistantUiCommand`): Yönetim ekranı yalnız yetkili rollere, Günlük/İstekler notları görebilen rollere, proje ekranları yalnız kapsamdaki projelere ve admin'in gizlemediği sekmelere açılır. Reddedilen komut modele gerekçesiyle döner.
+- Tam ekran asistandayken ekran değişirse sohbet yan panelde sürer. Bir turda en çok 10 araç adımı (veri → ekran → öneri zinciri) çalışır.
+- Sohbetteki adım etiketleri türünü gösterir: veri okuma, öneri, ekran değişikliği, Jira.
+
+## Sohbete dosya ekleme
+
+Sohbet kutusundaki 📎 düğmesi, sürükle-bırak ya da yapıştırma ile mesaja en çok **5 dosya** eklenir: PDF, Word (.docx), Excel (.xlsx/.xls — her sayfa CSV metnine çevrilir), CSV/TSV, Markdown, metin, JSON, log, XML (en çok 20 MB).
+
+- Metin **tarayıcıda** çıkarılır; dosyanın kendisi hiçbir yere yüklenmez. Yalnız çıkarılan metin, kullanıcı mesajına `<<<EK …>>>` bloğu olarak eklenip (ad maskelemesinden geçerek) modele gider.
+- Tek mesaj sınırı (20.000 karakter) aşılmaz: bütçe eklere paylaştırılır, uzun dosya kısaltılır ve hem modele hem kullanıcıya (çipte "kısaltıldı") bildirilir (`utils/ai/attachments.ts`).
+- Ek içeriği **veri** olarak işaretlenir; sistem talimatı, ekteki yönergelerin uygulanmamasını söyler (istem enjeksiyonuna karşı).
+- Ekler yalnız o sohbette kullanılır (sonraki sorularda da bağlamdadır); kalıcı kaynak için dokümanı **Bilgi Bankası**'na yükleyin. Taranmış (görüntü) PDF'lerde metin yoktur — OCR yapılmaz; görsel dosyalar desteklenmez.
+
+## Jira'dan veri okuma
+
+Sunucuda Jira yapılandırılmışsa (`JIRA_BASE_URL` + jeton; bkz. `.env.example`) asistana salt okunur Jira araçları açılır:
+
+| Araç | Ne yapar |
+|---|---|
+| `jira_kayit_getir` | Anahtarı verilen kayıtların (en çok 20) Jira'daki **güncel** hâli: durum, atanan, öncelik, termin, sürüm, story point, tahmin/harcanan süre, açıklama, durum geçmişi; uygulamadaki karşılık gelen görev |
+| `jira_kayit_ara` | Jira projesi, etiket ya da kayıtlı filtre içinde (verilmezse açık projenin Jira anahtarı) isteğe bağlı serbest metinle arama; durum/atanan/öncelik dağılımı. Varsayılan yalnız açık kayıtlar |
+| `jira_baglanti` | Bağlantı sınaması; erişilebilen Jira projeleri ve sık kullanılan filtreler |
+
+- Jeton yalnız sunucudadır; istekler `/api/integrations/jira-sync` üzerinden gider ve `JIRA_ALLOWED_PROJECTS` sunucuda uygulanır. Tarayıcıdan/modelden **serbest JQL kabul edilmez**; serbest metin yalnız harf, rakam, boşluk, nokta ve alt çizgi içerebilir ve proje/etiket/filtre kaynağıyla birlikte kullanılır.
+- Uygulamada bir projeye bağlı Jira anahtarı (`jiraProjectKey`), yalnız o projeyi görebilen kullanıcıya açılır; aramada kapsam dışı projelere ait kayıtlar süzülür.
+- Asistan Jira'ya **yazmaz**; güncelleme için görev ayrıntısındaki "Jira'yı güncelle" bölümü kullanılır (`JIRA_ALLOW_UPDATE`).
+
 **Ekranlara gömülü AI** (Ayarlar'da AI açıksa görünür; çıktı hiçbir zaman kendiliğinden kaydedilmez):
 
 | Ekran | Düğme | Ne yapar |

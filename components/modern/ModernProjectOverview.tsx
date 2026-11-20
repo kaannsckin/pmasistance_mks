@@ -19,7 +19,7 @@ import { BAND_META, Card, LinkButton, rowSep } from './ui';
 
 /**
  * Modern proje "Genel bakış" sekmesi. PM projeye girdiğinde tek ekranda:
- * sağlık ve ilerleme, aktif sürüm, haftalık durum, yaklaşan terminler,
+ * sağlık ve ilerleme, aktif sprint, haftalık durum, yaklaşan terminler,
  * riskler, ekip yükü ve hedefler. Her kart ilgili sekmeye götürür.
  */
 
@@ -196,9 +196,9 @@ const ModernProjectOverview: React.FC<ModernProjectOverviewProps> = ({ workspace
                         </div>
                     </Card>
                 ) : (
-                    <Card title="Şu anki sürüm" labelledBy="po-sprint" action={<LinkButton onClick={() => onNavigate(sprint ? View.Roadmap : View.Kanban)}>{sprint ? 'Pano' : 'Zaman çizelgesi'}</LinkButton>}>
+                    <Card title="Şu anki sprint" labelledBy="po-sprint" action={<LinkButton onClick={() => onNavigate(sprint ? View.Roadmap : View.Kanban)}>{sprint ? 'Pano' : 'Zaman çizelgesi'}</LinkButton>}>
                         {!sprint ? (
-                            <EmptyLine>Görevler henüz sürümlere dağıtılmamış.</EmptyLine>
+                            <EmptyLine>Görevler henüz sprintlere dağıtılmamış.</EmptyLine>
                         ) : (
                             <div className="flex flex-col gap-2.5">
                                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -216,7 +216,7 @@ const ModernProjectOverview: React.FC<ModernProjectOverviewProps> = ({ workspace
                                     <span className="inline-flex items-center gap-1.5"><span aria-hidden="true" className="w-2 h-2 rounded-full" style={{ background: 'var(--m-accent)' }}></span>{sprint.inProgress} süreçte</span>
                                     <span className="inline-flex items-center gap-1.5"><span aria-hidden="true" className="w-2 h-2 rounded-full m-fill" style={{ boxShadow: 'inset 0 0 0 1px var(--m-chevron)' }}></span>{sprint.total - sprint.done - sprint.inProgress} yapılacak</span>
                                 </div>
-                                {sprint.laterTasks > 0 && <span className="text-[14px] m-text-3">Sonraki sürümlerde {sprint.laterTasks} görev bekliyor</span>}
+                                {sprint.laterTasks > 0 && <span className="text-[14px] m-text-3">Sonraki sprintlerde {sprint.laterTasks} görev bekliyor</span>}
                             </div>
                         )}
                     </Card>

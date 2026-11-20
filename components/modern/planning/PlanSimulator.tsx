@@ -12,7 +12,7 @@ import SimChart, { ChartMarker } from './SimChart';
 /**
  * Plan simülasyonu: projenin açık kayıtları ekip kapasitesiyle binlerce kez
  * çizelgelenir; teslim tarihi tek bir gün değil olasılık dağılımı olarak
- * verilir. Senaryolar: kapsam (sürüme kadar, kayıt çıkarma), hedef tarih,
+ * verilir. Senaryolar: kapsam (sprinte kadar, kayıt çıkarma), hedef tarih,
  * test süresi, birim içinde serbest dağıtım ve ek kişi. İkinci yöntem
  * (geçmiş haftalık kapanış hızı) sonucu bağımsız olarak sınar.
  */
@@ -37,10 +37,10 @@ interface Outcome {
 const fmt = (start: string, offset: number) => dateAtOffset(start, offset).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric' });
 const pct = (v: number) => `%${Math.round(v * 100)}`;
 const num = (v: number) => v.toLocaleString('tr-TR', { maximumFractionDigits: 1 });
-/** "Sürüm 1–3" (sürüme kadar, öncekiler dahil); özel adlı sürümün adı parantezde */
+/** "Sprint 1–3" (sprinte kadar, öncekiler dahil); özel adlı sprintin adı parantezde */
 const scopeLabel = (v: number, names?: Record<number, string>) => {
     const custom = names?.[v]?.trim();
-    return v === 1 ? sprintLabel(1, names) : `Sürüm 1–${v}${custom ? ` (${custom})` : ''}`;
+    return v === 1 ? sprintLabel(1, names) : `Sprint 1–${v}${custom ? ` (${custom})` : ''}`;
 };
 const probInk = (p: number) => (p >= 0.8 ? 'm-ink-ok' : p >= 0.5 ? 'm-ink-warn' : 'm-ink-bad');
 
@@ -270,7 +270,7 @@ const PlanSimulator: React.FC<Props> = ({ project, history, people, leaves, visi
                             <summary className="cursor-pointer text-[15px] font-semibold m-accent min-h-[36px] flex items-center">Nasıl hesaplanıyor?</summary>
                             <div className="text-[14px] m-text-2 flex flex-col gap-1.5 mt-1">
                                 <p className="m-0">Her tekrarda her kaydın eforu tahmin aralığından (beta-PERT) çekilir ve bu birim ve türde geçmişte gerçekleşen ÷ tahmin oranlarından biriyle çarpılır. Tahmini olmayan kayıtlarda benzer kapanmış kayıtların gerçek eforları kullanılır.</p>
-                                <p className="m-0">Kayıtlar öncelik ve sürüm sırasıyla, öncülleri bitmeden başlamayacak biçimde kişilere yerleştirilir. Kişi aynı anda bir iş yürütür; günlük kapasitesi katılım oranı, aylık planı ve izinleri kadardır. Atanmamış kayıtlar birimde en erken boşalan kişiye gider. Hafta sonları ve resmi tatiller düşülür; son kayıttan sonra test süresi eklenir.</p>
+                                <p className="m-0">Kayıtlar öncelik ve sprint sırasıyla, öncülleri bitmeden başlamayacak biçimde kişilere yerleştirilir. Kişi aynı anda bir iş yürütür; günlük kapasitesi katılım oranı, aylık planı ve izinleri kadardır. Atanmamış kayıtlar birimde en erken boşalan kişiye gider. Hafta sonları ve resmi tatiller düşülür; son kayıttan sonra test süresi eklenir.</p>
                                 <p className="m-0">P80, tekrarların %80'inde teslimin o tarihte ya da önce gerçekleştiği gündür. Taahhüt için P80, iç hedef için P50 önerilir.</p>
                             </div>
                         </details>

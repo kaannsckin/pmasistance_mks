@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Allocation, TaskStatus, UserRole, WorkspaceData } from '../../types';
 import { createEmptyWorkspace, createProject } from '../workspace';
 import { AiAction, applyAction, describeAction, validateAction } from './actions';
+import { createScheme } from '../projectScheme';
 
 const build = (role: UserRole = 'py', personId: string | null = 'pm'): WorkspaceData => {
     const mine = createProject('ALTAY');
@@ -152,5 +153,100 @@ describe('risk güncelleme, istek kararı, not', () => {
         expect(note).toMatchObject({ tags: ['karar'], weekNumber: 43, year: 2026 });
         expect(validateAction(withData(), { type: 'not_ekle', projectId: 'altay', content: '  ' })).toMatch(/boş/);
         expect(validateAction(withData(), { type: 'not_ekle', projectId: 'altay', content: 'x', day: '22.10.2026' })).toMatch(/YYYY/);
+    });
+});
+
+describe('AI önerileri ve proje yapılandırması', () => {
+    const withScheme = (patch: Partial<import('../../types').ProjectScheme> = {}): WorkspaceData => {
+        const ws = build();
+        const scheme = { ...createScheme('support', 'Destek'), id: 'sps', ...patch };
+        return { ...ws, projectSchemes: [scheme], projects: ws.projects.map(p => (p.id === 'altay' ? { ...p, schemeId: 'sps', tasks: p.tasks.map(t => ({ ...t, jiraStatus: 'OPEN' })) } : p)) };
+    };
+
+    it('izinsiz geçiş reddedilir ve izinli geçişler söylenir; izinli geçiş ayrıntılı durumu yazar', () => {
+        const ws = withScheme();
+        expect(validateAction(ws, { type: 'gorev_durumu', projectId: 'altay', taskId: 't1', status: TaskStatus.InProgress, workflowKey: 'TESTING' }))
+            .toBe('"Açık" → "Testte" geçişi projenin iş akışında tanımlı değil. İzinli geçişler: Analizde, Kapandı.');
+        // Kategori isteği izinli ilk duruma çevrilir (Açık → Tamamlandı = Kapandı)
+        const done: AiAction = { type: 'gorev_durumu', projectId: 'altay', taskId: 't1', status: TaskStatus.Done };
+        expect(validateAction(ws, done)).toBeNull();
+        expect(describeAction(ws, done).details[1].value).toBe('Açık → Kapandı');
+        const r = applyAction(ws, done);
+        expect(r.ws.projects[0].tasks[0]).toMatchObject({ status: TaskStatus.Done, jiraStatus: 'CLOSED' });
+        // Türkçe adla belirli durum
+        const an = applyAction(ws, { type: 'gorev_durumu', projectId: 'altay', taskId: 't1', status: TaskStatus.InProgress, workflowKey: 'analizde' });
+        expect(an.ws.projects[0].tasks[0]).toMatchObject({ status: TaskStatus.InProgress, jiraStatus: 'ANALYSIS' });
+        expect(validateAction(ws, { type: 'gorev_durumu', projectId: 'altay', taskId: 't1', status: TaskStatus.ToDo, workflowKey: 'Yok böyle' })).toMatch(/iş akışında yok/);
+    });
+
+    it('serbest akışta (varsayılan) eski davranış: yalnız kategori değişir', () => {
+        const a = applyAction(build(), { type: 'gorev_durumu', projectId: 'altay', taskId: 't1', status: TaskStatus.Done });
+        expect(a.ws.projects[0].tasks[0].status).toBe(TaskStatus.Done);
+        expect(a.ws.projects[0].tasks[0].jiraStatus).toBeUndefined();
+    });
+
+    it('görev önerisi: başlangıç durumu, kayıt türü ve zorunlu alanlar', () => {
+        const ws = withScheme({ requiredFields: ['resourceName', 'dueDate'], issueTypes: ['bug', 'task'] });
+        const add: AiAction = { type: 'gorev_ekle', projectId: 'altay', name: 'Giriş hatası', priority: 'High' };
+        expect(validateAction(ws, add)).toBe('Projenin yapılandırmasında (Destek) zorunlu alan eksik: Atanan kişi, Bitiş tarihi.');
+        expect(validateAction(ws, { ...add, resourceName: 'Can Er', dueDate: '2026-12-01', issueType: 'feature' })).toMatch(/kayıt türü kullanılamıyor/);
+        const ok = { ...add, resourceName: 'Can Er', dueDate: '2026-12-01', issueType: 'bug' as const };
+        expect(validateAction(ws, ok)).toBeNull();
+        const created = applyAction(ws, ok).ws.projects[0].tasks.find(t => t.name === 'Giriş hatası')!;
+        expect(created).toMatchObject({ status: TaskStatus.ToDo, jiraStatus: 'OPEN', issueType: 'bug' });
+    });
+
+    it('projeye özel akış (izin verilmişse) önerilere de uygulanır', () => {
+        const ws = withScheme({ allowProjectWorkflow: true });
+        const own = { statuses: ws.projectSchemes![0].workflow.statuses, initial: 'OPEN', transitions: { 'OPEN': ['TESTING'], 'TESTING': ['CLOSED'] } };
+        const ws2 = { ...ws, projects: ws.projects.map(p => (p.id === 'altay' ? { ...p, workflowOverride: own } : p)) };
+        expect(validateAction(ws2, { type: 'gorev_durumu', projectId: 'altay', taskId: 't1', status: TaskStatus.InProgress, workflowKey: 'TESTING' })).toBeNull();
+        expect(validateAction(ws2, { type: 'gorev_durumu', projectId: 'altay', taskId: 't1', status: TaskStatus.InProgress, workflowKey: 'ANALYSIS' })).toMatch(/İzinli geçişler: Testte/);
+        // İzin kapalıysa projeye özel akış yok sayılır
+        const ws3 = { ...ws2, projectSchemes: [{ ...ws2.projectSchemes![0], allowProjectWorkflow: false }] };
+        expect(validateAction(ws3, { type: 'gorev_durumu', projectId: 'altay', taskId: 't1', status: TaskStatus.InProgress, workflowKey: 'ANALYSIS' })).toBeNull();
+    });
+});
+
+describe('AI önerileri ve geçiş kuralları', () => {
+    const ws0 = (rules: Record<string, import('../../types').TransitionRule>) => {
+        const ws = build();
+        const scheme = { ...createScheme('support', 'Destek'), id: 'sps' };
+        scheme.workflow = { ...scheme.workflow, rules };
+        return { ...ws, projectSchemes: [scheme], projects: ws.projects.map(p => (p.id === 'altay' ? { ...p, schemeId: 'sps', tasks: p.tasks.map(t => ({ ...t, jiraStatus: 'OPEN', resourceName: 'Can Er' })) } : p)) };
+    };
+    const toAnalysis: AiAction = { type: 'gorev_durumu', projectId: 'altay', taskId: 't1', status: TaskStatus.InProgress, workflowKey: 'ANALYSIS' };
+
+    it('koşul: yetkisiz kişinin geçişi reddedilir', () => {
+        expect(validateAction(ws0({ 'OPEN>ANALYSIS': { people: ['dev'] } }), toAnalysis)).toBe('Bu geçişi yalnız Can Er yapabilir.');
+        expect(validateAction(ws0({ 'OPEN>ANALYSIS': { roles: ['py'] } }), toAnalysis)).toBeNull();
+    });
+
+    it('doğrulayıcı: not/süre öneride verilmezse reddedilir, verilirse yoruma ve süreye yazılır', () => {
+        const ws = ws0({ '*>ANALYSIS': { requireComment: true, requireHours: true, addLabels: ['analiz'] } });
+        expect(validateAction(ws, toAnalysis)).toMatch(/Geçiş notu gerekli\. Harcanan süre \(saat\) gerekli\..*Öneride geçiş notu/);
+        const full = { ...toAnalysis, comment: 'Kök neden araştırılıyor', hours: 2 };
+        expect(validateAction(ws, full)).toBeNull();
+        expect(describeAction(ws, full).details.map(d => d.label)).toEqual(['Proje', 'Durum', 'Geçiş notu', 'Harcanan süre']);
+        const t = applyAction(ws, full).ws.projects[0].tasks[0];
+        expect(t).toMatchObject({ jiraStatus: 'ANALYSIS', actualHours: 2, labels: ['analiz'] });
+        expect(t.comments?.[0].text).toBe('[Açık → Analizde] Kök neden araştırılıyor');
+    });
+
+    it('sonrası işlem: bildirim etkisi döner', () => {
+        const r = applyAction(ws0({ '*>ANALYSIS': { notifyAssignee: true } }), toAnalysis);
+        expect(r.effects?.map(e => e.to)).toEqual(['Can Er']);
+    });
+});
+
+describe('AI önerileri ve proje rolleri', () => {
+    it('geçiş proje rolüne bağlıysa yalnız rol üyesi adına öneri uygulanır', () => {
+        const ws = build();
+        const scheme = { ...createScheme('support', 'Destek'), id: 'sps' };
+        scheme.workflow = { ...scheme.workflow, rules: { 'OPEN>ANALYSIS': { projectRoles: ['analist'] } } };
+        const make = (members: Record<string, string[]>) => ({ ...ws, projectSchemes: [scheme], projects: ws.projects.map(p => (p.id === 'altay' ? { ...p, schemeId: 'sps', roleMembers: members, tasks: p.tasks.map(t => ({ ...t, jiraStatus: 'OPEN' })) } : p)) });
+        const a: AiAction = { type: 'gorev_durumu', projectId: 'altay', taskId: 't1', status: TaskStatus.InProgress, workflowKey: 'ANALYSIS' };
+        expect(validateAction(make({ analist: ['dev'] }), a)).toBe('Bu geçişi yalnız Analist rolü yapabilir.');
+        expect(validateAction(make({ analist: ['pm'] }), a)).toBeNull();
     });
 });

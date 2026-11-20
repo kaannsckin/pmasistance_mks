@@ -1,3 +1,4 @@
+import { reconcileWorkflow } from '../workflow';
 import { IssueType, Task, TaskStatus } from '../../types';
 import { workdaysBetween } from './workdays';
 
@@ -53,7 +54,8 @@ export const stampLifecycle = (prev: Task[], next: Task[], now: Date = new Date(
         }
         if (old.status === t.status || t.statusLog !== old.statusLog) return t; // değişmedi ya da çağıran zaten damgaladı
         changed = true;
-        return withStatus({ ...t, status: old.status }, t.status, now);
+        // Yalnız kategori değiştiyse eskimiş ayrıntılı durum (ör. "Testte") temizlenir
+        return withStatus({ ...reconcileWorkflow(old, t), status: old.status }, t.status, now);
     });
     return changed ? out : next;
 };

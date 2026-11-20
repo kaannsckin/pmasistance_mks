@@ -57,14 +57,14 @@ describe('overviewStats', () => {
 });
 
 describe('currentSprint', () => {
-    it('bitmemiş görevi olan ilk sürümü seçer; takvim panoyla aynı', () => {
+    it('bitmemiş görevi olan ilk sprinti seçer; takvim panoyla aynı', () => {
         const s = currentSprint(buildProject(), NOW)!;
         expect(s.version).toBe(2);
         expect(s.label).toBe('Beta');
-        expect(s.total).toBe(3); // sürümden hariç tutulan 'x' sayılmaz
+        expect(s.total).toBe(3); // sprintten hariç tutulan 'x' sayılmaz
         expect(s.done).toBe(0);
         expect(s.inProgress).toBe(1);
-        // Sürüm 1: 6–24 Temmuz, test 27–30 Temmuz → Sürüm 2: 31 Temmuz – 20 Ağustos
+        // Sprint 1: 6–24 Temmuz, test 27–30 Temmuz → Sprint 2: 31 Temmuz – 20 Ağustos
         expect(s.start.getMonth()).toBe(6);
         expect(s.start.getDate()).toBe(31);
         expect(s.end.getMonth()).toBe(7);
@@ -73,7 +73,7 @@ describe('currentSprint', () => {
         expect(s.laterTasks).toBe(1);
     });
 
-    it('her şey bittiyse son sürüm; sürümsüz projede null', () => {
+    it('her şey bittiyse son sprint; sprintsiz projede null', () => {
         const p = buildProject();
         p.tasks = p.tasks.map(t => ({ ...t, status: TaskStatus.Done }));
         const s = currentSprint(p, NOW)!;
@@ -82,7 +82,7 @@ describe('currentSprint', () => {
         expect(currentSprint({ ...p, tasks: [task('z', 0, TaskStatus.ToDo)] }, NOW)).toBeNull();
     });
 
-    it('takvimi geçmiş sürümde kalan gün negatif', () => {
+    it('takvimi geçmiş sprintte kalan gün negatif', () => {
         const s = currentSprint(buildProject(), new Date(2026, 7, 25))!;
         expect(s.daysLeft).toBe(-5);
     });

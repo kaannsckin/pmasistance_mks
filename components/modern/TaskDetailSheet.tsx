@@ -1,5 +1,7 @@
+import WorkflowSelect from './WorkflowSelect';
+import { taskStatusLabel } from '../../utils/workflow';
 import React, { useState } from 'react';
-import { Project, Task, TaskStatus } from '../../types';
+import { Project, Task, TaskStatus, WorkflowConfig } from '../../types';
 import { calculatePertFuzzyPert } from '../../utils/timeline';
 import { relativeTime } from '../../utils/recentChanges';
 import { ISSUE_TYPE_LABELS, taskDurations } from '../../utils/planning/lifecycle';
@@ -24,12 +26,13 @@ interface TaskDetailSheetProps {
     onSave: (task: Task) => void;
     /** Jira'daki hâli göreve uygular; verilirse Jira bölümü görünür (yalnız proje içeriğini düzenleyebilen) */
     onJiraPull?: (issue: JiraIssueRecord) => void;
+    /** Projenin iş akışı (admin şeması): yalnız izin verilen geçişler */
+    workflow?: WorkflowConfig;
 }
 
-const STATUSES: TaskStatus[] = [TaskStatus.Backlog, TaskStatus.ToDo, TaskStatus.InProgress, TaskStatus.Done];
 const num = (v: number) => v.toLocaleString('tr-TR', { maximumFractionDigits: 1 });
 
-const TaskDetailSheet: React.FC<TaskDetailSheetProps> = ({ task, project, authorName, canEdit, onClose, onEdit, onSave, onJiraPull }) => {
+const TaskDetailSheet: React.FC<TaskDetailSheetProps> = ({ task, project, authorName, canEdit, onClose, onEdit, onSave, onJiraPull, workflow }) => {
     const [comment, setComment] = useState('');
     const pred = task.predecessor ? project.tasks.find(t => t.id === task.predecessor) : undefined;
     const wp = task.workPackageId ? project.workPackages.find(w => w.id === task.workPackageId) : undefined;
@@ -61,7 +64,10 @@ const TaskDetailSheet: React.FC<TaskDetailSheetProps> = ({ task, project, author
         ['Yaşam döngüsü', lifecycle ? <>{lifecycle}{closedIn !== null && <span className="ml-2 font-semibold">{closedIn} iş gününde {dur.cycleDays !== null ? 'tamamlandı' : 'kapandı'}</span>}{dur.reopened > 0 && <span className="ml-2 m-ink-warn">{dur.reopened} kez yeniden açıldı</span>}</> : <span className="m-text-3">Kayıt yok</span>],
         ['Sorumlu', task.resourceName || <span className="m-ink-warn">Atanmadı</span>],
         ['Birim', task.unit || '—'],
-        ['Sürüm', sprintLabel(task.version, project.settings.sprintNames)],
+        ['Sprint', sprintLabel(task.version, project.settings.sprintNames)],
+        ...(task.fixVersion ? [['Hedef sürüm', task.fixVersion] as [string, React.ReactNode]] : []),
+        ...(task.components?.length ? [['Bileşen', task.components.join(', ')] as [string, React.ReactNode]] : []),
+        ...(task.resolution ? [['Çözüm', task.resolution] as [string, React.ReactNode]] : []),
         ['Termin', task.dueDate ? <>{shortDate(task.dueDate)}{late > 0 && <span className="ml-2 m-ink-bad font-semibold">{late} gün gecikti</span>}</> : '—'],
         ['Süre', pert > 0 ? `${num(pert)} gün (PERT) · ${task.time.best} / ${task.time.avg} / ${task.time.worst}${task.estimateSource === 'reference' ? ' · geçmiş kayıtlardan' : ''}` : <span className="m-ink-warn">Tahmin yok</span>],
         ...(task.forecast ? [['Açılış tahmini', <>
@@ -72,7 +78,7 @@ const TaskDetailSheet: React.FC<TaskDetailSheetProps> = ({ task, project, author
         ['İş paketi', wp?.name || '—'],
         ['Hedef', objective ? `${objective.name}${kr ? ` · ${kr.name}` : ''}` : '—'],
         ['Jira', task.jiraId ? `${task.jiraId}${task.fixVersion ? ` · ${task.fixVersion}` : ''}${task.storyPoints ? ` · ${task.storyPoints} SP` : ''}${task.actualHours ? ` · ${task.actualHours} sa harcandı` : ''}` : '—'],
-        ['Planlama', task.includeInSprints !== false ? 'Sürüm planına dahil' : 'Sürüm planı dışında'],
+        ['Planlama', task.includeInSprints !== false ? 'Sprint planına dahil' : 'Sprint planı dışında'],
     ];
 
     return (
@@ -95,13 +101,14 @@ const TaskDetailSheet: React.FC<TaskDetailSheetProps> = ({ task, project, author
             </div>
 
             {canEdit ? (
-                <div className="m-segmented self-start" role="group" aria-label="Durum">
-                    {STATUSES.map(s => (
-                        <button key={s} type="button" className="m-segment" aria-pressed={task.status === s} onClick={() => task.status !== s && onSave({ ...task, status: s })}>{TASK_STATUS_LABELS[s]}</button>
-                    ))}
+                <div className="flex items-center gap-2 self-start">
+                    <span className="text-[13px] font-semibold m-text-2">Durum</span>
+                    <WorkflowSelect className="m-input !w-auto !h-9 !py-0" value={task} tasks={project.tasks} workflow={workflow} from={task}
+                        onChange={p => (p.status !== task.status || p.jiraStatus !== task.jiraStatus) && onSave({ ...task, ...p })} />
+                    <span className="text-[12.5px] m-text-3">{TASK_STATUS_LABELS[task.status]}</span>
                 </div>
             ) : (
-                <span className="self-start inline-flex items-center h-7 px-3 rounded-full text-[13px] font-semibold m-tone-accent">{TASK_STATUS_LABELS[task.status]}</span>
+                <span className="self-start inline-flex items-center h-7 px-3 rounded-full text-[13px] font-semibold m-tone-accent" title={TASK_STATUS_LABELS[task.status]}>{taskStatusLabel(task, workflow)}</span>
             )}
 
             <dl className="m-0 grid gap-x-5 gap-y-2 text-[15px]" style={{ gridTemplateColumns: 'auto 1fr' }}>

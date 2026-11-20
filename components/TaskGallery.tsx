@@ -170,7 +170,7 @@ const TaskGallery: React.FC<TaskGalleryProps> = ({ tasks, resources, onEditTask,
           </div>
           <FilterDropdown label="Birim" value={filterUnit} onChange={setFilterUnit} options={uniqueUnits} />
           <FilterDropdown label="Kaynak Adı" value={filterResource} onChange={setFilterResource} options={uniqueResources} />
-          <FilterDropdown label="Sürüm" value={filterVersion} onChange={setFilterVersion} options={uniqueVersions} />
+          <FilterDropdown label="Sprint" value={filterVersion} onChange={setFilterVersion} options={uniqueVersions} />
            <div>
             <label htmlFor="filter-status" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Durum</label>
             <select

@@ -5,6 +5,8 @@ import { Identity, identityOf, visibleProjectIds } from '../rbac';
 import type { RagHit } from '../rag/retriever';
 import type { Citation, RagSourceType } from '../rag/sources';
 import type { AiProposal } from './actions';
+import type { UiCommand, UiResult } from './uiActions';
+import type { JiraMeta, JiraSyncPage, JiraSyncSource } from '../integrations';
 
 /**
  * AI araçlarının veri kapsamı — asistan, kullanıcının arayüzde görebildiğinden
@@ -42,10 +44,19 @@ export interface ToolContext {
     /** Bu turda üretilen değişiklik önerileri (kullanıcı onayı bekler) */
     proposals: AiProposal[];
     /**
-     * Jira bağlantısı (tarayıcı çalışma zamanı bağlar; sunucuda Jira yapılandırılmışsa).
-     * Yoksa Jira araçları (worklog raporu, eşitleme önerisi) sunulmaz.
+     * Ajan modu: arayüz komutları (ekran değiştir, proje/görev/kişi aç). Tarayıcı
+     * çalışma zamanı bağlar; yoksa gezinme araçları sunulmaz. Veri değiştirmez.
+     */
+    ui?: { run: (cmd: UiCommand) => UiResult };
+    /**
+     * Jira bağlantısı (sunucu proxy'si üzerinden; jeton yalnız sunucuda). Sunucuda
+     * Jira yapılandırılmışsa tarayıcı bağlar; yoksa Jira araçları (okuma, worklog
+     * raporu, eşitleme önerisi) sunulmaz.
      */
     jira?: {
+        meta: () => Promise<JiraMeta>;
+        byKeys: (keys: string[]) => Promise<JiraSyncPage>;
+        search: (source: JiraSyncSource, o: { openOnly: boolean; pageSize: number }) => Promise<JiraSyncPage>;
         worklogs: (projectKey: string, from: string, to: string) => Promise<WorklogEntry[]>;
     };
 }

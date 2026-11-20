@@ -11,7 +11,7 @@ import { analyzeRecords } from './recordQuality';
  * Jira'dan gelen alanlar güncellenir: başlık, açıklama, tür, önem, durum,
  * açılış / işe başlama / kapanış anları, durum geçişleri, tahmin ve harcanan
  * süre, story point, düzeltme sürümü; sorumlu ve birim (bileşen) Jira'da
- * doluysa. Uygulamadaki planlama alanları korunur: sürüm, öncül, iş paketi,
+ * doluysa. Uygulamadaki planlama alanları korunur: sprint, öncül, iş paketi,
  * hedef bağlantısı, termin, alt görevler, yorumlar, açılıştaki tahmin ve
  * kendi tahmininiz (tahmin yoksa Jira'nınki yazılır; termin yoksa Jira'daki
  * termin — duedate — yazılır).
@@ -84,6 +84,9 @@ export const issueToTask = (issue: JiraIssueRecord, opts: JiraImportOptions, id 
         ...(issue.storyPoints ? { storyPoints: issue.storyPoints } : {}),
         ...(issue.fixVersions[0] ? { fixVersion: issue.fixVersions[0] } : {}),
         ...(issue.due ? { dueDate: issue.due } : {}),
+        ...(issue.status ? { jiraStatus: issue.status } : {}),
+        ...(issue.components.length ? { components: issue.components } : {}),
+        ...(issue.updated ? { updatedAt: issue.updated } : {}),
     };
 };
 
@@ -104,6 +107,9 @@ const updateFrom = (e: Task, fresh: Task, issue: JiraIssueRecord): Task => ({
     statusLog: fresh.statusLog ?? e.statusLog,
     unit: issue.components.length ? fresh.unit : e.unit,
     labels: fresh.labels ?? e.labels,
+    jiraStatus: fresh.jiraStatus ?? e.jiraStatus,
+    components: issue.components.length ? fresh.components : e.components,
+    updatedAt: fresh.updatedAt ?? e.updatedAt,
     resourceName: issue.assignee || e.resourceName,
     originalEstimateHours: fresh.originalEstimateHours ?? e.originalEstimateHours,
     actualHours: fresh.actualHours ?? e.actualHours,

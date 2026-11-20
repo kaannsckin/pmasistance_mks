@@ -139,7 +139,7 @@ export const estimateLogCsv = (ws: Pick<WorkspaceData, 'estimateLog'> & { projec
         'Geçmiş yöntem', 'Geçmiş n', 'Geçmiş güven', 'Geçmiş efor (iyimser)', 'Geçmiş efor (olası)', 'Geçmiş efor (kötümser)', 'Geçmiş kapanma P50', 'Geçmiş kapanma P80', 'Geçmiş önem',
         'AI istem sürümü', 'AI model', 'AI tür', 'AI önem', 'AI efor (iyimser)', 'AI efor (olası)', 'AI efor (kötümser)', 'AI güven', 'AI işaretler', 'AI dayanak sayısı',
         'ML sürümü', 'ML efor (iyimser)', 'ML efor (olası)', 'ML efor (kötümser)', 'ML kapanma P50', 'ML kapanma P80', 'ML önem',
-        'Nihai kaynak', 'Nihai önem', 'Nihai tür', 'Nihai efor (olası)', 'Sürüm',
+        'Nihai kaynak', 'Nihai önem', 'Nihai tür', 'Nihai efor (olası)', 'Sprint',
         'Gerçek efor', 'Gerçek kapanma (iş günü)', 'Kapandı'];
     const rows = (ws.estimateLog || []).map(e => {
         const a = e.taskId ? actual.get(e.taskId) : undefined;

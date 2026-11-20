@@ -19,7 +19,7 @@ const triggerDownload = (blob: Blob, filename: string) => {
 
 export const exportToExcel = (tasks: Task[], resources: Resource[]) => {
     const taskHeaders = [
-        'Tasklar', 'Öncelik', 'SÜRÜM', 'Öncül', 'Birim', 'Kaynak Adı', 
+        'Tasklar', 'Öncelik', 'Sprint', 'Öncül', 'Birim', 'Kaynak Adı', 
         'Zaman', 'Jira Kayıt no', 'NOT', 'Durum', 'İş Paketi ID', 'Etiketler', 'Planlamaya Dahil'
     ];
     const taskData = tasks.map(task => [
@@ -137,7 +137,7 @@ export const exportSprintPlanToExcel = (sprints: Sprint[]) => {
     const ws = XLSX.utils.aoa_to_sheet(matrix);
     ws['!cols'] = [{ wch: 40 }, ...activeSprints.flatMap(() => [{ wch: 40 }, { wch: 15 }])];
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Sürüm Planı');
+    XLSX.utils.book_append_sheet(wb, ws, 'Sprint Planı');
     const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'binary' });
     const s2ab = (s: string) => {
         const buf = new ArrayBuffer(s.length);
@@ -146,7 +146,7 @@ export const exportSprintPlanToExcel = (sprints: Sprint[]) => {
         return buf;
     };
     const blob = new Blob([s2ab(wbout)], { type: "application/octet-stream" });
-    triggerDownload(blob, `surum_plani_${new Date().toISOString().slice(0,10)}.xlsx`);
+    triggerDownload(blob, `sprint_plani_${new Date().toISOString().slice(0,10)}.xlsx`);
 };
 
 export const exportToJiraCsv = (tasks: Task[]) => {

@@ -1,10 +1,11 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { Resource, Task, TaskSortKey, TaskStatus } from '../../types';
+import { Resource, Task, TaskSortKey, TaskStatus, WorkflowConfig } from '../../types';
 import { exportToExcel, exportToJiraCsv, exportToMsProjectCsv } from '../../utils/exporter';
 import { parseCustomCsv, parseImportedFile, parseJiraCsv } from '../../utils/importer';
 import { Icon } from './icons';
 import { ViewFilterNote } from './ui';
 import TaskActionsMenu from './TaskActionsMenu';
+import { taskStatusLabel } from '../../utils/workflow';
 import { MIN_PRIORITY_OPTIONS, taskComparator, TaskPriority, taskPassesView } from '../../utils/viewConfig';
 import { BoardColumn, celebrationFor, COLUMN_META, columnOf, daysLate, initialsOf, missingEstimate, PRIORITY_META, shortDate, sprintLabel, uniq } from './taskMeta';
 
@@ -13,6 +14,10 @@ interface ModernTaskListProps {
     resources: Resource[];
     sprintNames?: Record<number, string>;
     onStatusChange: (id: string, status: TaskStatus) => void;
+    /** Ayrıntılı iş akışı durumu (Analizde, Testte, Çözüldü …) */
+    onWorkflowChange?: (id: string, key: string) => void;
+    /** Projenin iş akışı (admin şeması) */
+    workflow?: WorkflowConfig;
     onViewTask: (task: Task) => void;
     onEditTask: (task: Task) => void;
     onDeleteTask: (id: string) => void;
@@ -30,7 +35,7 @@ const lower = (s: string) => s.toLocaleLowerCase('tr-TR');
 
 type ImportKind = 'excel' | 'jira' | 'csv';
 
-const ModernTaskList: React.FC<ModernTaskListProps> = ({ tasks, resources, sprintNames, onStatusChange, onViewTask, onEditTask, onDeleteTask, onNotifyTask, onDataImport, onCelebrate, minPriority = 'Low' as TaskPriority, sortKey = 'smart' as TaskSortKey }) => {
+const ModernTaskList: React.FC<ModernTaskListProps> = ({ tasks, resources, sprintNames, onStatusChange, onWorkflowChange, workflow, onViewTask, onEditTask, onDeleteTask, onNotifyTask, onDataImport, onCelebrate, minPriority = 'Low' as TaskPriority, sortKey = 'smart' as TaskSortKey }) => {
     const [query, setQuery] = useState('');
     const [status, setStatus] = useState<string>('all');
     const [person, setPerson] = useState<string>('all');
@@ -122,8 +127,8 @@ const ModernTaskList: React.FC<ModernTaskListProps> = ({ tasks, resources, sprin
                     <option value="all">Herkes</option>
                     {people.map(p => <option key={p} value={p}>{p}</option>)}
                 </select>
-                <select aria-label="Sürüm" className={`m-pill ${sprint !== 'all' ? 'is-active' : ''}`} value={sprint} onChange={e => setSprint(e.target.value)}>
-                    <option value="all">Tüm sürümler</option>
+                <select aria-label="Sprint" className={`m-pill ${sprint !== 'all' ? 'is-active' : ''}`} value={sprint} onChange={e => setSprint(e.target.value)}>
+                    <option value="all">Tüm sprintler</option>
                     {versions.map(v => <option key={v} value={String(v)}>{sprintLabel(v, sprintNames)}</option>)}
                 </select>
                 {units.length > 1 && (
@@ -195,7 +200,7 @@ const ModernTaskList: React.FC<ModernTaskListProps> = ({ tasks, resources, sprin
                         <div className="m-surface rounded-2xl overflow-x-auto">
                             <div style={{ minWidth: 820 }}>
                                 <div aria-hidden="true" className="grid items-center gap-3 pl-2 pr-4 pt-2.5 pb-2 text-[13px] m-text-3" style={{ gridTemplateColumns: GRID }}>
-                                    <span></span><span>Görev</span><span>Atanan</span><span>Sürüm</span><span>Öncelik</span><span>Bitiş</span><span></span>
+                                    <span></span><span>Görev</span><span>Atanan</span><span>Sprint</span><span>Öncelik</span><span>Bitiş</span><span></span>
                                 </div>
                                 {rows.map(t => {
                                     const late = daysLate(t);
@@ -215,7 +220,10 @@ const ModernTaskList: React.FC<ModernTaskListProps> = ({ tasks, resources, sprin
                                             </button>
                                             <button type="button" onClick={() => onViewTask(t)} className="min-w-0 flex flex-col gap-0.5 text-left bg-transparent border-0 p-0 cursor-pointer" style={{ font: 'inherit' }}>
                                                 <span className={`text-[15px] font-semibold truncate ${isDone ? 'm-text-2' : 'm-text'}`}>{t.name}</span>
-                                                <span className="text-[13px] m-text-3 truncate">{[t.jiraId, t.unit].filter(Boolean).join(' · ') || 'Numara yok'}</span>
+                                                <span className="text-[13px] m-text-3 truncate flex items-center gap-1.5">
+                                                    {t.jiraStatus && <span title={t.jiraStatus} className="inline-flex items-center h-5 px-1.5 rounded text-[11.5px] font-semibold m-fill-2 m-text-2 flex-none">{taskStatusLabel(t, workflow)}</span>}
+                                                    <span className="truncate">{[t.jiraId, t.unit].filter(Boolean).join(' · ') || 'Numara yok'}</span>
+                                                </span>
                                             </button>
                                             <span className="flex items-center gap-2 text-[15px] min-w-0">
                                                 {t.resourceName ? (
@@ -232,7 +240,7 @@ const ModernTaskList: React.FC<ModernTaskListProps> = ({ tasks, resources, sprin
                                                 {late > 0 && <span className="text-[13px] m-ink-bad">{late} gün gecikti</span>}
                                                 {late === 0 && missingEstimate(t) && <span className="text-[13px] m-ink-warn">Süre tahmini yok</span>}
                                             </span>
-                                            <TaskActionsMenu task={t} onStatusChange={changeStatus} onEdit={onEditTask} onDelete={onDeleteTask} onNotify={onNotifyTask} />
+                                            <TaskActionsMenu task={t} onStatusChange={changeStatus} onWorkflowChange={onWorkflowChange} workflowTasks={tasks} workflow={workflow} onEdit={onEditTask} onDelete={onDeleteTask} onNotify={onNotifyTask} />
                                         </div>
                                     );
                                 })}

@@ -256,11 +256,11 @@ describe('simülasyon girdisi', () => {
         expect(b).toMatchObject({ lane: -1, pred: 0 });
         expect(d.dist).toEqual({ kind: 'pert', min: 3.2, mode: 4, max: 6.4 });
         expect(f.lane).toBe(-2);
-        // öncül önce gelir (b sürüm 1'de olsa da a'yı bekler)
+        // öncül önce gelir (b sprint 1'de olsa da a'yı bekler)
         expect(built.input.order.indexOf(0)).toBeLessThan(built.input.order.indexOf(1));
         expect(built.warnings.map(w => w.kind).sort()).toEqual(['default_spread', 'no_estimate', 'no_team']);
         expect(built.input.lanes[1].base).toBe(0.5);
-        // Sürüm 1'e kadar kapsamı
+        // Sprint 1'e kadar kapsamı
         expect(buildSimulation(p, buildHistory([p]), {}, { now: NOW, scope: 1 }).tasks.map(t => t.id)).toEqual(['b', 'd']);
         const r = runMonteCarlo(built.input);
         expect(r.release.p50).toBeGreaterThan(r.devEnd.p50);
@@ -319,8 +319,8 @@ describe('simülasyon girdisi', () => {
     });
 });
 
-describe('yeni kayıt hangi sürüme sığar', () => {
-    it('boş sürüme sığar; dolu sürümde olasılık düşer ve sonraki önerilir', () => {
+describe('yeni kayıt hangi sprinte sığar', () => {
+    it('boş sprinte sığar; dolu sprintte olasılık düşer ve sonraki önerilir', () => {
         const p = createProject('F', {
             settings: { sprintDuration: 2, projectStartDate: '2026-10-05', globalTestDays: 2 },
             resources: [res('Ayşe')],
@@ -339,7 +339,7 @@ describe('yeni kayıt hangi sürüme sığar', () => {
         expect(none.recommended).toBeNull();
     });
 
-    it('bitmiş sürümde kalan açık işler ilk açık sürüme devreder; tahminsiz işler benzer kayıtlardan', () => {
+    it('bitmiş sprintte kalan açık işler ilk açık sprinte devreder; tahminsiz işler benzer kayıtlardan', () => {
         const settings = { sprintDuration: 2, projectStartDate: '2026-09-21', globalTestDays: 2 };
         const left = Array.from({ length: 3 }, (_, i) => task(`k${i}`, { version: 1, resourceName: 'Ayşe', time: { best: 5, avg: 5, worst: 5 } }));
         const p = createProject('C', { settings, resources: [res('Ayşe')], tasks: left });

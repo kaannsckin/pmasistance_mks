@@ -1,6 +1,9 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { View, WorkspaceData } from '../../types';
-import { AgentStep, runAgentTurn } from '../../utils/ai/agent';
+import { AgentStep, AGENT_MAX_STEPS, runAgentTurn } from '../../utils/ai/agent';
+import { AttachmentInfo, ChatAttachment, composeUserContent } from '../../utils/ai/attachments';
+import { UiCommand, UiResult } from '../../utils/ai/uiActions';
+import { fetchIntegrationHealth, fetchJiraMeta, fetchJiraSyncPage, fetchJiraWorklogs, IntegrationHealth } from '../../utils/integrations';
 import { AiAction, AiProposal } from '../../utils/ai/actions';
 import { AiError, configureMasking, embedTexts, fetchAiStatus, hasCredentials, saveAccessToken, streamChat } from '../../utils/ai/client';
 import { buildMasker, collectMaskEntries, Masker } from '../../utils/ai/masking';
@@ -10,7 +13,6 @@ import { buildToolContext } from '../../utils/ai/scope';
 import { buildSystemPrompt } from '../../utils/ai/systemPrompt';
 import { executeTool, toolLabel, toolSpecsFor } from '../../utils/ai/tools';
 import { Citation, RagRef } from '../../utils/rag/sources';
-import { fetchIntegrationHealth, fetchJiraWorklogs, IntegrationHealth } from '../../utils/integrations';
 import { configureEmbedder, rebuildIndex, searchKnowledge, searchMode, syncIndex } from '../../utils/rag/service';
 
 /**
@@ -29,6 +31,10 @@ export interface UiMessage {
   citations?: Citation[];
   /** Kullanıcı onayı bekleyen değişiklik önerileri */
   proposals?: AiProposal[];
+  /** Kullanıcı mesajına eklenen dosyalar (özet) */
+  attachments?: AttachmentInfo[];
+  /** Modele giden içerik (ek blokları dahil); sonraki turlarda geçmiş olarak gönderilir */
+  modelContent?: string;
 }
 
 export interface ApplyResult {
@@ -53,7 +59,9 @@ interface AssistantApi {
   /** Durum kontrolünü (ilk kullanımda) başlatır */
   ensureReady: () => void;
   recheck: () => void;
-  send: (prompt: string) => void;
+  send: (prompt: string, attachments?: ChatAttachment[]) => void;
+  /** Sunucuda Jira bağlantısı var mı (asistanın Jira araçları) */
+  jiraEnabled: boolean;
   /** Paneli açar ve (hazırsa) soruyu gönderir */
   ask: (prompt: string) => void;
   stop: () => void;
@@ -96,10 +104,12 @@ interface ProviderProps {
   onNavigate?: (ref: RagRef) => void;
   /** Onaylanan öneriyi uygular (App: yetki/kilit yeniden doğrulanır, denetim + geri-al) */
   onApplyAction?: (action: AiAction) => ApplyResult | Promise<ApplyResult>;
+  /** Ajan modu: asistanın arayüz komutları (ekran değiştir, kayıt aç); App yetkiyi yeniden denetler */
+  onUiCommand?: (cmd: UiCommand) => UiResult;
   children: React.ReactNode;
 }
 
-export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, chat = true, embedded = true, getWorkspace, getView, onNavigate, onApplyAction, children }) => {
+export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, chat = true, embedded = true, getWorkspace, getView, onNavigate, onApplyAction, onUiCommand, children }) => {
   const [phase, setPhase] = useState<AssistantPhase>('idle');
   const [status, setStatus] = useState<AiStatus | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -107,6 +117,7 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, chat = tru
   const [isStreaming, setIsStreaming] = useState(false);
   const [isOpen, setOpen] = useState(false);
   const [isKbOpen, setKbOpen] = useState(false);
+  const [integrations, setIntegrations] = useState<IntegrationHealth | null>(null);
   const messagesRef = useRef<UiMessage[]>([]);
   const abortRef = useRef<AbortController | null>(null);
   const pendingAsk = useRef<string | null>(null);
@@ -146,25 +157,42 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, chat = tru
       : null);
   }, [status]);
 
-  // Jira bağlantısı (sunucuda yapılandırılmışsa): worklog raporu ve eşitleme önerisi araçları için
-  const jiraHealth = useRef<IntegrationHealth | null>(null);
+  // Sunucu entegrasyonları (Jira): asistan hazır olunca ve her açılışta yeniden sorulur;
+  // Yönetici konsolundan girilen Jira ayarı yeniden başlatmadan araçlara yansır
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || phase !== 'ready') return;
     const c = new AbortController();
-    fetchIntegrationHealth(c.signal).then(h => { jiraHealth.current = h; }).catch(() => undefined);
+    fetchIntegrationHealth(c.signal).then(h => setIntegrations(h)).catch(() => undefined);
     return () => c.abort();
-  }, [enabled, isOpen]);
+  }, [enabled, phase, isOpen]);
 
-  /** Kullanıcının güncel kapsamında araç bağlamı + RAG çalışma zamanı */
-  const makeContext = useCallback(() => {
+  /** Kullanıcının güncel kapsamında araç bağlamı + RAG, arayüz (ajan) ve Jira çalışma zamanları */
+  const makeContext = useCallback((signal?: AbortSignal) => {
     const ws = getWorkspace();
     if (!ws) return null;
     const ctx = buildToolContext(ws);
     ctx.rag = { search: (q, o) => searchKnowledge(ctx, q, o), mode: searchMode };
-    const h = jiraHealth.current;
-    if (h?.jira) ctx.jira = { worklogs: (projectKey, from, to) => fetchJiraWorklogs({ projectKey, from, to }, h.authMode) };
+    if (onUiCommand) {
+      ctx.ui = {
+        run: cmd => {
+          const r = onUiCommand(cmd);
+          // Tam ekran asistandayken ekran değişirse sohbet yan panelde sürer
+          if (r.ok) setOpen(true);
+          return r;
+        },
+      };
+    }
+    if (integrations?.jira) {
+      const mode = integrations.authMode;
+      ctx.jira = {
+        meta: () => fetchJiraMeta(mode, signal),
+        byKeys: keys => fetchJiraSyncPage({ keys }, mode, signal),
+        search: (source, o) => fetchJiraSyncPage({ source, openOnly: o.openOnly, pageSize: o.pageSize }, mode, signal),
+        worklogs: (projectKey, from, to) => fetchJiraWorklogs({ projectKey, from, to }, mode),
+      };
+    }
     return ctx;
-  }, [getWorkspace]);
+  }, [getWorkspace, onUiCommand, integrations]);
 
   // Panel açılıp asistan hazır olunca dizin arka planda kurulur (ilk soruyu bekletmesin)
   useEffect(() => {
@@ -197,24 +225,31 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, chat = tru
   const update = (id: number, patch: Partial<UiMessage>) =>
     setMessages(prev => prev.map(m => (m.id === id ? { ...m, ...patch } : m)));
 
-  const send = useCallback(async (raw: string) => {
+  const send = useCallback(async (raw: string, files: ChatAttachment[] = []) => {
     const prompt = raw.trim();
-    const ctx = makeContext();
-    if (!prompt || !ctx || !status || abortRef.current) return;
+    if ((!prompt && !files.length) || !status || abortRef.current) return;
+    const ctrl = new AbortController();
+    const ctx = makeContext(ctrl.signal);
+    if (!ctx) return;
 
     const system = buildSystemPrompt(ctx, { view: getView() });
-    // Önceki turlar yalnızca görünen metinleriyle gider (araç ayrıntıları tekrar gönderilmez)
+    const composed = composeUserContent(prompt, files);
+    const attachments: AttachmentInfo[] = composed.infos.map((info, i) => ({ ...info, size: files[i].size }));
+    // Önceki turlar yalnızca görünen metinleriyle (ekler dahil) gider; araç ayrıntıları tekrar gönderilmez
     const history: ChatMessage[] = [
       ...messagesRef.current
-        .filter(m => (m.role === 'user' || m.role === 'assistant') && m.content.trim())
-        .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
-      { role: 'user', content: prompt },
+        .filter(m => (m.role === 'user' || m.role === 'assistant') && (m.modelContent || m.content).trim())
+        .map(m => ({ role: m.role as 'user' | 'assistant', content: m.modelContent || m.content })),
+      { role: 'user', content: composed.content },
     ];
 
     const replyId = nextId++;
-    setMessages(prev => [...prev, { id: nextId++, role: 'user', content: prompt }, { id: replyId, role: 'assistant', content: '', streaming: true, steps: [] }]);
+    setMessages(prev => [
+      ...prev,
+      { id: nextId++, role: 'user', content: prompt || composed.content.split('\n')[0], ...(files.length ? { attachments, modelContent: composed.content } : {}) },
+      { id: replyId, role: 'assistant', content: '', streaming: true, steps: [] },
+    ]);
     setIsStreaming(true);
-    const ctrl = new AbortController();
     abortRef.current = ctrl;
 
     try {
@@ -227,6 +262,7 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, chat = tru
         onText: text => update(replyId, { content: text }),
         onSteps: steps => update(replyId, { steps, citations: [...ctx.citations], proposals: [...ctx.proposals] }),
         labelFor: toolLabel,
+        maxSteps: AGENT_MAX_STEPS,
       });
       const notes: string[] = [];
       if (result.stopReason && TRUNCATED_REASONS.has(result.stopReason)) notes.push('*(Yanıt uzunluk sınırında kesildi.)*');
@@ -346,7 +382,8 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, chat = tru
   const api = useMemo<AssistantApi>(() => ({
     enabled, chatEnabled: enabled && chat, embeddedEnabled: enabled && embedded, phase, status, authError, messages, isStreaming, isOpen, setOpen,
     ensureReady, recheck, send, ask, stop, clear, saveToken, isKbOpen, setKbOpen, refreshIndex, navigate, resolveProposal, complete,
-  }), [enabled, chat, embedded, phase, status, authError, messages, isStreaming, isOpen, ensureReady, recheck, send, ask, stop, clear, saveToken, isKbOpen, refreshIndex, navigate, resolveProposal, complete]);
+    jiraEnabled: !!integrations?.jira,
+  }), [enabled, chat, embedded, phase, status, authError, messages, isStreaming, isOpen, ensureReady, recheck, send, ask, stop, clear, saveToken, isKbOpen, refreshIndex, navigate, resolveProposal, complete, integrations]);
 
   return <Ctx.Provider value={api}>{children}</Ctx.Provider>;
 };

@@ -1,6 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AgentStep } from '../../utils/ai/agent';
 import { AiProposal } from '../../utils/ai/actions';
+import { ATTACHMENT_EXTENSIONS, AttachmentInfo } from '../../utils/ai/attachments';
+import { fmtFileSize as fmtKb, useChatAttachments } from '../assistant/useChatAttachments';
+import { toolKind } from '../../utils/ai/tools';
 import { extractText, SUPPORTED_EXTENSIONS } from '../../utils/rag/extract';
 import { addUploadedDoc, indexStatus, listUploadedDocs, onDocsChange, removeUploadedDoc, retriever } from '../../utils/rag/service';
 import { Citation, RAG_SOURCE_LABELS, RagSourceType, UploadedDoc } from '../../utils/rag/sources';
@@ -20,13 +23,37 @@ const SOURCE_ICON: Record<Citation['type'], string> = {
     not: 'pen', gorev: 'list', risk: 'shield', istek: 'inbox', analiz: 'activity', hedef: 'target', proje: 'briefcase', kilavuz: 'book', dokuman: 'report',
 };
 
+const STEP_KIND: Record<ReturnType<typeof toolKind>, { icon: string; title: string }> = {
+    read: { icon: 'database', title: 'Uygulama verisinden okundu' },
+    propose: { icon: 'pencil', title: 'Değişiklik önerisi hazırlandı (onayınızı bekler)' },
+    ui: { icon: 'compass', title: 'Asistan ekranı sizin için değiştirdi' },
+    jira: { icon: 'cloud', title: "Jira'dan güncel veri okundu" },
+};
+
 const StepChips: React.FC<{ steps: AgentStep[] }> = ({ steps }) => (
     <div className="flex flex-wrap gap-1.5 mb-2">
-        {steps.map(s => (
-            <span key={s.id} title={s.status === 'error' ? 'Araç bir hata döndürdü' : 'Uygulama verisinden okundu'}
-                className={`inline-flex items-center gap-1 h-6 px-2 rounded-full text-[12px] font-semibold ${s.status === 'error' ? 'm-tone-bad' : 'm-tone-accent'}`}>
-                <Icon name={s.status === 'running' ? 'refresh' : s.status === 'error' ? 'alert' : 'database'} size={12} className={s.status === 'running' ? 'animate-spin' : undefined} />
-                {s.label}
+        {steps.map(s => {
+            const kind = STEP_KIND[toolKind(s.name)];
+            return (
+                <span key={s.id} title={s.status === 'error' ? 'Araç bir hata döndürdü' : kind.title}
+                    className={`inline-flex items-center gap-1 h-6 px-2 rounded-full text-[12px] font-semibold ${s.status === 'error' ? 'm-tone-bad' : 'm-tone-accent'}`}>
+                    <Icon name={s.status === 'running' ? 'refresh' : s.status === 'error' ? 'alert' : kind.icon} size={12} className={s.status === 'running' ? 'animate-spin' : undefined} />
+                    {s.label}
+                </span>
+            );
+        })}
+    </div>
+);
+
+/** Gönderilmiş mesajdaki ekler (kullanıcı balonunun içinde) */
+const SentAttachments: React.FC<{ items: AttachmentInfo[] }> = ({ items }) => (
+    <div className="flex flex-wrap gap-1.5 mt-2">
+        {items.map(f => (
+            <span key={f.name} title={f.truncated ? 'Dosya uzun olduğu için modele kısaltılarak gönderildi' : `${f.chars.toLocaleString('tr-TR')} karakter`}
+                className="inline-flex items-center gap-1 h-6 px-2 rounded-full text-[12px] font-semibold" style={{ background: 'rgba(255,255,255,.18)' }}>
+                <Icon name="paperclip" size={12} />
+                <span className="max-w-[180px] truncate">{f.name}</span>
+                <span className="opacity-80">· {fmtKb(f.size)}{f.truncated ? ' · kısaltıldı' : ''}</span>
             </span>
         ))}
     </div>
@@ -114,9 +141,13 @@ export const ModernChat: React.FC<{
     const [input, setInput] = useState('');
     const [token, setToken] = useState('');
     const [preview, setPreview] = useState<Citation | null>(null);
+    const att = useChatAttachments();
+    const { files, reading, errors: fileErrors, dragging, fileRef } = att;
     const scrollRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLTextAreaElement>(null);
     const panel = variant === 'panel';
+    const addFiles = (list: FileList | null) => { att.add(list).then(() => inputRef.current?.focus()); };
+
 
     useEffect(() => { a.ensureReady(); }, [a.ensureReady]);
     useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [a.messages]);
@@ -124,9 +155,10 @@ export const ModernChat: React.FC<{
 
     const submit = (text?: string) => {
         const t = (text ?? input).trim();
-        if (!t || a.isStreaming) return;
-        if (text === undefined) setInput('');
-        a.send(t);
+        const withFiles = text === undefined ? files : [];
+        if ((!t && !withFiles.length) || a.isStreaming || reading > 0) return;
+        if (text === undefined) { setInput(''); att.clear(); }
+        a.send(t, withFiles);
     };
 
     const center = (icon: string, title: string, body: React.ReactNode) => (
@@ -176,7 +208,7 @@ export const ModernChat: React.FC<{
         <div className={`h-full flex flex-col items-center justify-center gap-3 text-center ${panel ? '' : 'max-w-2xl mx-auto'}`}>
             <span className="w-12 h-12 rounded-full m-tone-accent flex items-center justify-center"><Icon name="sparkles" size={22} /></span>
             <h3 className="m-0 text-[20px] font-semibold m-text">Size nasıl yardımcı olabilirim?</h3>
-            <p className="m-0 text-[14px] m-text-3 max-w-[46ch]">Portföy, tahsis, kapasite, risk ve görevler hakkında sorun — yanıtlar yetkinizdeki uygulama verisinden hesaplanır.</p>
+            <p className="m-0 text-[14px] m-text-3 max-w-[46ch]">Portföy, tahsis, kapasite, risk ve görevler hakkında sorun{a.jiraEnabled ? ", Jira kayıtlarını sorgulatın" : ''}; dosya ekleyin ya da "riskler ekranını aç" gibi komutlar verin. Yanıtlar yetkinizdeki veriden hesaplanır.</p>
             <div className={`grid gap-2 w-full mt-1 ${panel ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'}`}>
                 {suggestions.map(s => (
                     <button key={s.label} type="button" onClick={() => submit(s.prompt)} className="m-surface m-row-link rounded-xl px-3.5 py-2.5 text-[14px] text-left">{s.label}</button>
@@ -200,7 +232,12 @@ export const ModernChat: React.FC<{
                                     <SourceList content={msg.content} citations={msg.citations} onOpen={c => (c.ref.kind === 'project-view' ? a.navigate(c.ref) : setPreview(c))} />
                                 )}
                             </>
-                        ) : <div className="whitespace-pre-wrap break-words">{msg.content}</div>}
+                        ) : (
+                            <>
+                                <div className="whitespace-pre-wrap break-words">{msg.content}</div>
+                                {msg.attachments && msg.attachments.length > 0 && <SentAttachments items={msg.attachments} />}
+                            </>
+                        )}
                     </div>
                 </div>
             ))}
@@ -208,8 +245,14 @@ export const ModernChat: React.FC<{
     );
 
     const ready = a.phase === 'ready' && a.enabled;
+    const dropProps = ready ? att.dropProps : {};
     return (
-        <div className="h-full flex flex-col m-bg overflow-hidden">
+        <div className="relative h-full flex flex-col m-bg overflow-hidden" {...dropProps}>
+            {dragging && (
+                <div className="absolute inset-0 z-10 m-2 rounded-2xl flex items-center justify-center pointer-events-none m-tone-accent" style={{ border: '2px dashed var(--m-accent)' }}>
+                    <span className="flex items-center gap-2 text-[15px] font-semibold"><Icon name="paperclip" size={18} />Dosyayı sohbete eklemek için bırakın</span>
+                </div>
+            )}
             {preview && <SourcePreview c={preview} onClose={() => setPreview(null)} onOpenKb={() => { setPreview(null); a.setKbOpen(true); }} />}
             <header className={`flex-none flex items-center gap-2 border-b m-sep ${panel ? 'px-4 py-2.5' : 'px-6 py-3'}`} style={{ borderBottomStyle: 'solid', borderBottomWidth: 1 }}>
                 <span className="w-9 h-9 rounded-full m-accent-bg flex items-center justify-center flex-none"><Icon name="sparkles" size={18} /></span>
@@ -227,7 +270,25 @@ export const ModernChat: React.FC<{
             </div>
             {ready && (
                 <div className={`flex-none border-t m-sep ${panel ? 'p-3' : 'px-6 py-4'}`} style={{ borderTopStyle: 'solid', borderTopWidth: 1 }}>
+                    {(files.length > 0 || reading > 0 || fileErrors.length > 0) && (
+                        <div className={`flex flex-col gap-1.5 mb-2 ${panel ? '' : 'max-w-3xl mx-auto'}`}>
+                            <div className="flex flex-wrap gap-1.5">
+                                {files.map(f => (
+                                    <span key={f.id} className="inline-flex items-center gap-1.5 h-8 pl-2.5 pr-1 rounded-full m-fill-2 text-[13px] m-text" title={`${f.text.length.toLocaleString('tr-TR')} karakter metin`}>
+                                        <Icon name="paperclip" size={14} className="m-text-3" />
+                                        <span className="max-w-[200px] truncate">{f.name}</span>
+                                        <span className="m-text-3">{fmtKb(f.size)}</span>
+                                        <button type="button" className="m-icon-btn !w-6 !h-6" aria-label={`${f.name} ekini kaldır`} onClick={() => att.remove(f.id)}><Icon name="x" size={13} /></button>
+                                    </span>
+                                ))}
+                                {reading > 0 && <span role="status" className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-full m-tone-accent text-[13px]"><Icon name="refresh" size={14} className="animate-spin" />Dosya okunuyor…</span>}
+                            </div>
+                            {fileErrors.map(e => <p key={e} role="alert" className="m-0 text-[13px] m-ink-bad">{e}</p>)}
+                        </div>
+                    )}
                     <form className={`relative ${panel ? '' : 'max-w-3xl mx-auto'}`} onSubmit={e => { e.preventDefault(); submit(); }}>
+                        <input ref={fileRef} type="file" multiple accept={ATTACHMENT_EXTENSIONS.join(',')} className="hidden" onChange={e => addFiles(e.target.files)} />
+                        <button type="button" className="absolute left-2 bottom-2 w-10 h-10 rounded-full border-0 cursor-pointer flex items-center justify-center m-icon-btn disabled:opacity-40" aria-label="Dosya ekle" title="Dosya ekle (PDF, Word, Excel, CSV, metin) — sürükleyip bırakabilirsiniz" disabled={att.full} onClick={att.pick}><Icon name="paperclip" size={18} /></button>
                         <textarea
                             ref={inputRef}
                             aria-label="Asistana soru"
@@ -235,16 +296,17 @@ export const ModernChat: React.FC<{
                             value={input}
                             onChange={e => setInput(e.target.value)}
                             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); } }}
-                            placeholder="Sorunuzu yazın… (Shift+Enter: yeni satır)"
-                            className="m-input py-3 pr-14 resize-none max-h-40 leading-relaxed"
+                            placeholder="Sorunuzu yazın ya da dosya ekleyin… (Shift+Enter: yeni satır)"
+                            onPaste={att.onPaste}
+                            className="m-input py-3 pl-14 pr-14 resize-none max-h-40 leading-relaxed"
                         />
                         {a.isStreaming ? (
                             <button type="button" className="absolute right-2 bottom-2 w-10 h-10 rounded-full border-0 cursor-pointer flex items-center justify-center m-tone-bad" aria-label="Yanıtı durdur" onClick={a.stop}><Icon name="stop" size={16} /></button>
                         ) : (
-                            <button type="submit" className="absolute right-2 bottom-2 w-10 h-10 rounded-full border-0 cursor-pointer flex items-center justify-center m-accent-bg disabled:opacity-40 disabled:cursor-not-allowed" aria-label="Gönder" disabled={!input.trim()}><Icon name="arrowUp" size={18} strokeWidth={2.4} /></button>
+                            <button type="submit" className="absolute right-2 bottom-2 w-10 h-10 rounded-full border-0 cursor-pointer flex items-center justify-center m-accent-bg disabled:opacity-40 disabled:cursor-not-allowed" aria-label="Gönder" disabled={(!input.trim() && !files.length) || reading > 0}><Icon name="arrowUp" size={18} strokeWidth={2.4} /></button>
                         )}
                     </form>
-                    <p className="m-0 mt-1.5 text-[12px] m-text-3 text-center">Asistan değişiklikleri yalnızca önerir; siz "Uygula" demeden hiçbir veri değişmez. Önemli kararlardan önce sayıları ilgili ekranda doğrulayın.</p>
+                    <p className="m-0 mt-1.5 text-[12px] m-text-3 text-center">Asistan ekranları sizin yerinize açabilir; veri değişikliklerini yalnızca önerir — siz "Uygula" demeden hiçbir veri değişmez. Ekler yalnız bu sohbette kullanılır.</p>
                 </div>
             )}
         </div>

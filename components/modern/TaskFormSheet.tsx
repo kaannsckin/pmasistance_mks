@@ -1,5 +1,8 @@
+import WorkflowSelect from './WorkflowSelect';
+import { defaultAssigneeFor } from '../../utils/projectLists';
+import { allowedIssueTypes, missingRequiredFields, REQUIRED_FIELD_LABELS } from '../../utils/projectScheme';
 import React, { useEffect, useMemo, useState } from 'react';
-import { Objective, Person, Project, Resource, Task, TaskStatus, WorkPackage } from '../../types';
+import { Objective, Person, Project, ProjectComponent, ProjectScheme, ProjectVersion, Resource, Task, TaskStatus, WorkPackage } from '../../types';
 import { EMBED_SYSTEM, parsePertEstimate, pertEstimatePrompt } from '../../utils/ai/embedded';
 import { buildHistory } from '../../utils/planning/history';
 import { ISSUE_TYPE_LABELS } from '../../utils/planning/lifecycle';
@@ -27,11 +30,15 @@ interface TaskFormSheetProps {
     history?: { projects: Project[]; projectId: string; visibleProjectIds: ReadonlySet<string> };
     onClose: () => void;
     onSave: (task: Task) => void;
+    /** Admin'in projeye atadığı yapılandırma şeması: iş akışı, kayıt türleri, zorunlu alanlar */
+    scheme?: ProjectScheme;
+    /** Projenin bileşen ve sürüm listeleri */
+    projectComponents?: ProjectComponent[];
+    projectVersions?: ProjectVersion[];
 }
 
 type Draft = Omit<Task, 'id' | 'availability'>;
 
-const STATUSES: TaskStatus[] = [TaskStatus.Backlog, TaskStatus.ToDo, TaskStatus.InProgress, TaskStatus.Done];
 const PRIORITIES: Task['priority'][] = ['Blocker', 'High', 'Medium', 'Low'];
 
 const emptyDraft = (resources: Resource[]): Draft => ({
@@ -44,7 +51,7 @@ const fromTask = (t: Task): Draft => ({
     name: t.name, priority: t.priority, version: t.version, predecessor: t.predecessor, unit: t.unit, resourceName: t.resourceName,
     time: { ...t.time }, jiraId: t.jiraId, notes: t.notes, status: t.status, labels: t.labels || [], includeInSprints: t.includeInSprints ?? true,
     keyResultId: t.keyResultId, workPackageId: t.workPackageId, dueDate: t.dueDate, subtasks: t.subtasks, comments: t.comments,
-    issueType: t.issueType, estimateSource: t.estimateSource,
+    issueType: t.issueType, estimateSource: t.estimateSource, jiraStatus: t.jiraStatus, components: t.components, fixVersion: t.fixVersion,
 });
 
 const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
@@ -54,10 +61,22 @@ const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title
     </fieldset>
 );
 
-const TaskFormSheet: React.FC<TaskFormSheetProps> = ({ task, tasks, resources, people, workPackages, objectives, sprintNames, history, onClose, onSave }) => {
+const TaskFormSheet: React.FC<TaskFormSheetProps> = ({ task, tasks, resources, people, workPackages, objectives, sprintNames, history, onClose, onSave, scheme, projectComponents = [], projectVersions = [] }) => {
+    const openVersions = projectVersions.filter(v => v.status === 'unreleased');
     // Müşteri isteğinden açılan taslak listede yoktur → "yeni görev" sayılır
     const isNew = !task || !tasks.some(t => t.id === task.id);
-    const [d, setD] = useState<Draft>(() => (task ? fromTask(task) : emptyDraft(resources)));
+    const wf = scheme?.workflow;
+    const [d, setD] = useState<Draft>(() => {
+        const base = task ? fromTask(task) : emptyDraft(resources);
+        // Yeni kayıt şemanın başlangıç durumuyla açılır (müşteri isteğinden gelen taslak da)
+        if (isNew && wf) {
+            const init = wf.statuses.find(x => x.key === wf.initial);
+            if (init) return { ...base, status: init.category, jiraStatus: init.key };
+        }
+        return base;
+    });
+    const typeOptions = scheme ? allowedIssueTypes(scheme) : (Object.keys(ISSUE_TYPE_LABELS) as NonNullable<Task['issueType']>[]);
+    const [missing, setMissing] = useState<string[]>([]);
     const [objectiveId, setObjectiveId] = useState(() => (task?.keyResultId ? objectives.find(o => o.keyResults.some(kr => kr.id === task.keyResultId))?.id || '' : ''));
     const [labelText, setLabelText] = useState(() => (task?.labels || []).join(', '));
     const [touched, setTouched] = useState(false);
@@ -114,6 +133,9 @@ const TaskFormSheet: React.FC<TaskFormSheetProps> = ({ task, tasks, resources, p
         setTouched(true);
         if (!d.name.trim() || timeError) return;
         const labels = labelText.split(',').map(s => s.trim()).filter(Boolean);
+        const miss = scheme ? missingRequiredFields(scheme, { ...d, labels }) : [];
+        setMissing(miss);
+        if (miss.length) return;
         onSave({
             ...d,
             name: d.name.trim(),
@@ -136,10 +158,11 @@ const TaskFormSheet: React.FC<TaskFormSheetProps> = ({ task, tasks, resources, p
     return (
         <Sheet
             title={isNew ? 'Yeni görev' : 'Görevi düzenle'}
+            subtitle={scheme && (scheme.requiredFields?.length || scheme.id !== 'default') ? `Proje yapılandırması: ${scheme.name}${scheme.requiredFields?.length ? ` · zorunlu: ${scheme.requiredFields.map(f => REQUIRED_FIELD_LABELS[f].toLocaleLowerCase('tr-TR')).join(', ')}` : ''}` : undefined}
             onClose={onClose}
             wide
             footer={<>
-                <span className="flex-1"></span>
+                {missing.length > 0 ? <span role="alert" className="flex-1 text-[13.5px] m-ink-bad">Zorunlu alan eksik: {missing.join(', ')}</span> : <span className="flex-1"></span>}
                 <button type="button" className="m-btn m-btn-plain" onClick={onClose}>Vazgeç</button>
                 <button type="button" className="m-btn m-btn-primary" onClick={save}>{isNew ? 'Görevi ekle' : 'Kaydet'}</button>
             </>}
@@ -152,18 +175,42 @@ const TaskFormSheet: React.FC<TaskFormSheetProps> = ({ task, tasks, resources, p
                 </Field>
 
                 <Section title="Plan">
-                    <div className="flex flex-col gap-1.5">
-                        <span className="text-[13px] font-semibold m-text-2">Durum</span>
-                        <div className="m-segmented self-start" role="group" aria-label="Durum">
-                            {STATUSES.map(s => <button key={s} type="button" className="m-segment" aria-pressed={d.status === s} onClick={() => set({ status: s })}>{TASK_STATUS_LABELS[s]}</button>)}
-                        </div>
-                    </div>
+                    <Field label="Durum" htmlFor="tf-status" hint="Jira'daki gibi ayrıntılı durum; ilerleme ve tahmin hesapları kategorisini (Bekleyen / Yapılacak / Süreçte / Tamamlandı) kullanır">
+                        <WorkflowSelect id="tf-status" value={d} tasks={tasks} onChange={set} workflow={wf} from={!isNew && task ? task : undefined} />
+                    </Field>
                     <Field label="Kayıt türü" htmlFor="tf-type" hint="Planlama simülasyonu ve AI tahmini benzer kayıtları türüne göre karşılaştırır">
                         <select id="tf-type" className="m-input" value={d.issueType || ''} onChange={e => set({ issueType: (e.target.value || undefined) as Task['issueType'] })}>
                             <option value="">Belirtilmedi</option>
-                            {(Object.keys(ISSUE_TYPE_LABELS) as NonNullable<Task['issueType']>[]).map(k => <option key={k} value={k}>{ISSUE_TYPE_LABELS[k]}</option>)}
+                            {typeOptions.map(k => <option key={k} value={k}>{ISSUE_TYPE_LABELS[k]}</option>)}
                         </select>
                     </Field>
+                    {(projectComponents.length > 0 || (d.components || []).length > 0) && (
+                        <div className="flex flex-col gap-1.5">
+                            <span className="text-[13px] font-semibold m-text-2">Bileşenler</span>
+                            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Bileşenler">
+                                {[...new Set([...projectComponents.map(c => c.name), ...(d.components || [])])].map(n => {
+                                    const on = (d.components || []).includes(n);
+                                    return (
+                                        <button key={n} type="button" aria-pressed={on} className={`m-pill ${on ? 'is-active' : ''}`}
+                                            onClick={() => {
+                                                const next = on ? (d.components || []).filter(x => x !== n) : [...(d.components || []), n];
+                                                // Jira: bileşen sorumlusu atanmamış göreve varsayılan atanan olur
+                                                const lead = !on && !d.resourceName ? defaultAssigneeFor(projectComponents, [n]) : undefined;
+                                                set({ components: next.length ? next : undefined, ...(lead ? { resourceName: lead } : {}) });
+                                            }}>{n}</button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+                    {(openVersions.length > 0 || d.fixVersion) && (
+                        <Field label="Hedef sürüm" htmlFor="tf-fixver" hint="Projenin sürüm listesinden (yayınlanmamış sürümler)">
+                            <select id="tf-fixver" className="m-input" value={d.fixVersion || ''} onChange={e => set({ fixVersion: e.target.value || undefined })}>
+                                <option value="">Belirtilmedi</option>
+                                {[...new Set([...openVersions.map(v => v.name), ...(d.fixVersion ? [d.fixVersion] : [])])].map(n => <option key={n} value={n}>{n}</option>)}
+                            </select>
+                        </Field>
+                    )}
                     <div className="flex flex-col gap-1.5">
                         <span className="text-[13px] font-semibold m-text-2">Öncelik</span>
                         <div className="m-segmented self-start" role="group" aria-label="Öncelik">
@@ -181,7 +228,7 @@ const TaskFormSheet: React.FC<TaskFormSheetProps> = ({ task, tasks, resources, p
                         <Field label="Birim" htmlFor="tf-unit">
                             <input id="tf-unit" className="m-input" value={d.unit} onChange={e => set({ unit: e.target.value })} />
                         </Field>
-                        <Field label="Sürüm" htmlFor="tf-version">
+                        <Field label="Sprint" htmlFor="tf-version">
                             <select id="tf-version" className="m-input" value={d.version} onChange={e => set({ version: parseInt(e.target.value, 10) || 0 })}>
                                 {versions.map(v => <option key={v} value={v}>{sprintLabel(v, sprintNames)}</option>)}
                             </select>
@@ -192,7 +239,7 @@ const TaskFormSheet: React.FC<TaskFormSheetProps> = ({ task, tasks, resources, p
                     </div>
                     <label className="flex items-center gap-2.5 text-[15px] m-text cursor-pointer self-start">
                         <input type="checkbox" className="w-4 h-4" checked={d.includeInSprints !== false} onChange={e => set({ includeInSprints: e.target.checked })} />
-                        Sürüm planlamasına dahil
+                        Sprint planlamasına dahil
                     </label>
                 </Section>
 

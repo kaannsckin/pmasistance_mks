@@ -66,7 +66,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({ tasks, resources, workPacka
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 w-full md:w-auto">
           <FilterDropdown label="Birim" value={filterUnit} onChange={setFilterUnit} options={uniqueUnits} />
           <FilterDropdown label="Kaynak" value={filterResource} onChange={setFilterResource} options={uniqueResources} />
-          <FilterDropdown label="Sürüm" value={filterVersion} onChange={setFilterVersion} options={uniqueVersions} />
+          <FilterDropdown label="Sprint" value={filterVersion} onChange={setFilterVersion} options={uniqueVersions} />
           <FilterDropdown label="İş Paketi" value={filterWorkPackage} onChange={setFilterWorkPackage} options={uniqueWorkPackages} />
         </div>
       </div>
@@ -126,7 +126,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({ tasks, resources, workPacka
                 </div>
                 <div className="p-6 grid grid-cols-2 gap-4">
                      <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg text-center">
-                        <p className="text-gray-500 text-xs uppercase font-bold">Toplam Sürüm</p>
+                        <p className="text-gray-500 text-xs uppercase font-bold">Toplam Sprint</p>
                         <p className="text-2xl font-bold text-gray-800 dark:text-white mt-1">
                             {new Set(tasks.map(t => t.version)).size - (tasks.some(t => t.version === 0) ? 1 : 0)}
                         </p>

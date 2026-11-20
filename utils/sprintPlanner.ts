@@ -136,19 +136,19 @@ const compareByCriticality = (a: TaskMeta & { dueTime: number }, b: TaskMeta & {
 };
 
 /**
- * Görevleri sürümlere (sprintlere) yerleştirir.
+ * Görevleri sprintlere yerleştirir.
  *
  * Algoritma: öncelik + termin + kritik zincir sıralı "liste çizelgeleme".
  * Görevler topolojik kısıt altında işlenir — bir görev, tüm planlanabilir
  * öncülleri yerleştirilmeden sıraya giremez. Böylece ardılın öncülünden önceki
- * bir sürüme atanması (eski algoritmadaki bağımlılık ihlali) imkânsız hale gelir.
+ * bir sprinte atanması (eski algoritmadaki bağımlılık ihlali) imkânsız hale gelir.
  *
  * Kurallar:
  *  - Tamamlanmış görevler ve plan dışı bırakılanlar yerlerini korur.
- *  - Ardıl, öncülüyle aynı sürümde olamaz (test döngüsü nedeniyle bir sonrakine gider).
- *  - Plan dışı ama bitmemiş bir öncülün sürümü belliyse (version > 0) ardıl ondan sonraya atanır.
+ *  - Ardıl, öncülüyle aynı sprintte olamaz (test döngüsü nedeniyle bir sonrakine gider).
+ *  - Plan dışı ama bitmemiş bir öncülün sprinti belliyse (version > 0) ardıl ondan sonraya atanır.
  *  - Sprint kapasitesine sığmayan dev görevler Backlog'a atılmaz; kaynağın boş olduğu
- *    ilk sürüme taşma uyarısıyla yerleştirilir.
+ *    ilk sprinte taşma uyarısıyla yerleştirilir.
  */
 export const planTaskVersionsDetailed = (
     tasks: Task[],
@@ -239,7 +239,7 @@ export const planTaskVersionsDetailed = (
         const duration = m.duration;
         const resourceName = task.resourceName || 'Atanmamış';
 
-        // Öncül kısıtından minimum sürümü belirle
+        // Öncül kısıtından minimum sprinti belirle
         let minSprint = 1;
         let blockedByPred = false;
         const pred = task.predecessor ? taskById.get(task.predecessor) : undefined;
@@ -249,10 +249,10 @@ export const planTaskVersionsDetailed = (
                 if (predSprint === undefined || predSprint === 0) {
                     blockedByPred = predSprint === 0; // Öncül planlanamadıysa ardıl da planlanamaz
                 } else {
-                    minSprint = predSprint + 1; // Aynı sürüm yasak: bir sonrakinden başla
+                    minSprint = predSprint + 1; // Aynı sprint yasak: bir sonrakinden başla
                 }
             } else if (pred.status !== TaskStatus.Done && pred.includeInSprints === false && pred.version > 0) {
-                // Elle sabitlenmiş, bitmemiş öncül: onun sürümünden sonraya planla
+                // Elle sabitlenmiş, bitmemiş öncül: onun sprintinden sonraya planla
                 minSprint = pred.version + 1;
             }
             // Tamamlanmış öncül kısıt oluşturmaz.
@@ -273,7 +273,7 @@ export const planTaskVersionsDetailed = (
         let assignedSprint = -1;
 
         if (duration > sprintCapacityDays) {
-            // Dev görev: kaynağın tamamen boş olduğu ilk sürüme taşarak yerleştir
+            // Dev görev: kaynağın tamamen boş olduğu ilk sprinte taşarak yerleştir
             for (let s = minSprint; s <= MAX_SPRINTS; s++) {
                 if (usageOf(s, resourceName) === 0) {
                     assignedSprint = s;
@@ -286,7 +286,7 @@ export const planTaskVersionsDetailed = (
                     taskId: task.id,
                     taskName: task.name,
                     type: 'oversized',
-                    message: `"${task.name}" (${Math.ceil(duration)} gün) tek sprint kapasitesinden (${sprintCapacityDays} gün) büyük; Sürüm ${assignedSprint}'e taşarak yerleştirildi. Görevi bölmeyi düşünün.`,
+                    message: `"${task.name}" (${Math.ceil(duration)} gün) tek sprint kapasitesinden (${sprintCapacityDays} gün) büyük; Sprint ${assignedSprint}'e taşarak yerleştirildi. Görevi bölmeyi düşünün.`,
                 });
             }
         } else {
@@ -306,7 +306,7 @@ export const planTaskVersionsDetailed = (
                 taskId: task.id,
                 taskName: task.name,
                 type: 'unplaced',
-                message: `"${task.name}" ${MAX_SPRINTS} sürüm içinde uygun kapasite bulunamadığı için Backlog'a alındı.`,
+                message: `"${task.name}" ${MAX_SPRINTS} sprint içinde uygun kapasite bulunamadığı için Backlog'a alındı.`,
             });
             return;
         }
