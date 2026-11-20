@@ -362,7 +362,7 @@ const ModernWeeklyReport: React.FC<ModernWeeklyReportProps> = ({
                                                 </div>
                                                 <div className="flex flex-wrap gap-1.5">
                                                     {(['approved', 'pyds_review', 'bs_review', 'draft'] as const).map(s => d.byStage[s] > 0 && <Pill key={s} tone={STAGE_TONE[s]}>{STAGE_LABELS[s]}: {d.byStage[s]}</Pill>)}
-                                                    {d.missing.length > 0 && <Pill tone="m-fill m-text-3" title={d.missing.map(m => m.name).join(', ')}>Yazılmadı: {d.missing.length}</Pill>}
+                                                    {d.missing.length > 0 && <Pill tone="m-fill m-text-2" title={d.missing.map(m => m.name).join(', ')}>Yazılmadı: {d.missing.length}</Pill>}
                                                 </div>
                                                 {d.missing.length > 0 && <span className="text-[13px] m-text-3">{d.missing.map(m => `${m.name}${m.pmName ? ` (${m.pmName})` : ''}`).join(' · ')}</span>}
                                             </div>

@@ -560,12 +560,22 @@ export interface ProjectAiProfile {
 /** Arayüz tercihi: klasik (mevcut) ya da modern (sade, iOS tarzı) */
 export type UiStyle = 'classic' | 'modern';
 
+/** Modern arayüz teması — yalnız renk değil; yazı, köşe, gölge ve yüzey dili */
+export type ModernTheme = 'bubble' | 'aurora' | 'pro' | 'clay';
+
+/** Gündüz / gece tercihi; 'system' işletim sistemini izler */
+export type ColorMode = 'system' | 'light' | 'dark';
+
 export interface WorkspaceSettings {
   isLocalPersistenceEnabled?: boolean;
   isAIEnabled?: boolean;
+  /** Klasik arayüzün vurgu rengi (classic | emerald | purple | orange) */
   theme?: string;
+  /** Eski sürümlerle uyum için tutulur; asıl kaynak colorMode */
   isDarkMode?: boolean;
+  colorMode?: ColorMode;
   uiStyle?: UiStyle;
+  modernTheme?: ModernTheme;
 }
 
 // ---------------------------------------------------------------------------

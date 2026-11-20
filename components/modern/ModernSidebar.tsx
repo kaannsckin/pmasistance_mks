@@ -169,6 +169,9 @@ const ModernSidebar: React.FC<ModernSidebarProps> = (props) => {
                     <kbd className="text-[12px] px-1.5 rounded-[5px] border m-sep font-sans">⌘K</kbd>
                 </button>}
 
+                {/* Yalnız orta bölüm kayar: proje listesi uzasa da logo, arama ve
+                    alttaki profil/ayarlar her zaman görünür kalır */}
+                <div className="flex-1 min-h-0 overflow-y-auto -mx-3 px-3 flex flex-col gap-5">
                 {consoleMode ? (
                     <div className="flex flex-col gap-0.5">
                         <span className="pl-2.5 pb-1 text-[13px] font-semibold m-text-3">Yönetici konsolu</span>
@@ -225,6 +228,7 @@ const ModernSidebar: React.FC<ModernSidebarProps> = (props) => {
                     )}
                 </div>
                 </>}
+                </div>
 
                 <div className="mt-auto flex flex-col gap-1.5">
                     {assistant?.chatEnabled && !consoleMode && (

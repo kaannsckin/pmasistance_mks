@@ -2,7 +2,7 @@
  * Modern arayüz (Ayarlar → Arayüz → Modern). Kök öğede .ui-modern sınıfı varken
  * geçerlidir; klasik arayüzü etkilemez.
  *
- *  1. Tasarım değişkenleri (açık / koyu, tema renkleri)
+ *  1. Tasarım değişkenleri (açık / koyu) ve temalar (Baloncuk, Aurora, Pro, Kil)
  *  2. Modern bileşenlerin küçük yardımcı sınıfları (.m-*)
  *  3. Henüz yeniden yazılmamış ekranlar için yumuşatma katmanı
  *  4. Animasyonlar (roket, kutlama, uzay modu) — "hareketi azalt"a saygılı
@@ -47,51 +47,267 @@
   --app-accent-light: var(--m-accent-tint);
   --app-ring: rgba(0, 102, 214, 0.2);
 
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Geist', system-ui, sans-serif;
-  background: var(--m-bg);
+  /* Tema yapısı: temalar bunları değiştirerek renkten fazlasını (yazı, köşe,
+     gölge, zemin, kenar çubuğu) dönüştürür. Varsayılanlar eski görünümdür. */
+  --m-font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Geist Variable', system-ui, sans-serif;
+  --m-bg-image: none;
+  --m-accent-fill: var(--m-accent);
+  --m-btn-shadow: none;
+  --m-segment-on: var(--m-surface);
+  --m-surface-pop: var(--m-surface);
+  --m-sidebar-bg: var(--m-surface);
+  --m-sidebar-blur: none;
+  --m-card-shadow: none;
+  --m-radius-card: 16px;
+  --m-radius-btn: 12px;
+  --m-radius-ctl: 12px;
+  --m-radius-pill: 22px;
+
+  font-family: var(--m-font);
+  background-color: var(--m-bg);
+  background-image: var(--m-bg-image);
+  background-attachment: fixed;
   color: var(--m-label);
   -webkit-font-smoothing: antialiased;
 }
 
-/* Tema rengi seçimi modern arayüzde erişilebilir tonlara eşlenir */
-.ui-modern.theme-emerald { --m-accent: #0F766E; --m-accent-ink: #0B5C56; --m-accent-tint: #E0F2EF; --app-ring: rgba(15, 118, 110, 0.2); }
-.ui-modern.theme-purple  { --m-accent: #5B3FD0; --m-accent-ink: #47309F; --m-accent-tint: #EEEAFB; --app-ring: rgba(91, 63, 208, 0.2); }
-.ui-modern.theme-orange  { --m-accent: #B54708; --m-accent-ink: #8C3706; --m-accent-tint: #FDEFE4; --app-ring: rgba(181, 71, 8, 0.2); }
+/* Koyu görünüm: <html class="dark"> (Ayarlar → Gündüz / Gece / Sistem). Tailwind'in
+   dark: sınıfları da aynı sınıfı izler; eski ekranlarla modern parçalar birlikte koyulaşır */
+.dark .ui-modern.ui-modern {
+  --m-bg: #000000;
+  --m-surface: #1C1C1E;
+  --m-fill: #2C2C2E;
+  --m-fill-2: #242426;
+  --m-sep: #38383A;
+  --m-label: #F2F2F7;
+  --m-label-2: #D1D1D6;
+  --m-label-3: #AEAEB2;
+  --m-chevron: #8E8E93;
+  --m-accent: #4DA2FF;
+  --m-accent-ink: #79B8FF;
+  --m-accent-tint: rgba(77, 162, 255, 0.18);
+  --m-on-accent: #00172F;
+  --m-ok: #30D158;  --m-ok-ink: #7EE29A;  --m-ok-tint: rgba(48, 209, 88, 0.16);
+  --m-warn: #FF9F0A; --m-warn-ink: #FFC56B; --m-warn-tint: rgba(255, 159, 10, 0.16);
+  --m-on-ok: #000000; --m-on-warn: #000000; --m-on-bad: #000000;
+  --m-bad: #FF453A;  --m-bad-ink: #FF8A82;  --m-bad-tint: rgba(255, 69, 58, 0.16);
+  --m-hold: #8E8E93; --m-hold-ink: #C7C7CC; --m-hold-tint: rgba(142, 142, 147, 0.2);
+  --m-series-1: #3987E5; --m-series-2: #D95926;
+  --m-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  --m-pop-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+  --m-heat-low-bg: #242426;   --m-heat-low-ink: #C7C7CC;
+  --m-heat-ok-bg: rgba(77, 162, 255, 0.2);  --m-heat-ok-ink: #A9D1FF;
+  --m-heat-full-bg: #2F6DB8;  --m-heat-full-ink: #FFFFFF;
+  --m-heat-over-bg: #FF453A;  --m-heat-over-ink: #1C0000;
+  --m-heat-leave-bg: rgba(255, 159, 10, 0.18); --m-heat-leave-ink: #FFC56B;
+  --m-segment-on: #636366;
+}
 
-/* Koyu görünüm: Tailwind'in dark: sınıflarıyla aynı sinyali (sistem tercihi)
-   izler ki eski ekranlarla modern parçalar aynı anda koyulaşsın */
-@media (prefers-color-scheme: dark) {
-  .ui-modern.ui-modern {
-    --m-bg: #000000;
-    --m-surface: #1C1C1E;
-    --m-fill: #2C2C2E;
-    --m-fill-2: #242426;
-    --m-sep: #38383A;
-    --m-label: #F2F2F7;
-    --m-label-2: #D1D1D6;
-    --m-label-3: #AEAEB2;
-    --m-chevron: #8E8E93;
-    --m-accent: #4DA2FF;
-    --m-accent-ink: #79B8FF;
-    --m-accent-tint: rgba(77, 162, 255, 0.18);
-    --m-on-accent: #00172F;
-    --m-ok: #30D158;  --m-ok-ink: #7EE29A;  --m-ok-tint: rgba(48, 209, 88, 0.16);
-    --m-warn: #FF9F0A; --m-warn-ink: #FFC56B; --m-warn-tint: rgba(255, 159, 10, 0.16);
-    --m-on-ok: #000000; --m-on-warn: #000000; --m-on-bad: #000000;
-    --m-bad: #FF453A;  --m-bad-ink: #FF8A82;  --m-bad-tint: rgba(255, 69, 58, 0.16);
-    --m-hold: #8E8E93; --m-hold-ink: #C7C7CC; --m-hold-tint: rgba(142, 142, 147, 0.2);
-    --m-series-1: #3987E5; --m-series-2: #D95926;
-    --m-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
-    --m-pop-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
-    --m-heat-low-bg: #242426;   --m-heat-low-ink: #C7C7CC;
-    --m-heat-ok-bg: rgba(77, 162, 255, 0.2);  --m-heat-ok-ink: #A9D1FF;
-    --m-heat-full-bg: #3D7CC9;  --m-heat-full-ink: #FFFFFF;
-    --m-heat-over-bg: #FF453A;  --m-heat-over-ink: #1C0000;
-    --m-heat-leave-bg: rgba(255, 159, 10, 0.18); --m-heat-leave-ink: #FFC56B;
+/* 1b. Temalar ---------------------------------------------------------------
+ * Kök kapta mt-<tema> sınıfı (Ayarlar → Görünüm). Her tema gündüz bloğunda
+ * yapı + renkleri, gece bloğunda (.dark …) gündüz bloğunun TÜM renklerini
+ * yeniden tanımlar; yoksa gündüz değeri koyu temel paletin üstüne yazılır.
+ * Durum renkleri (ok/warn/bad), grafik serileri ve ısı haritası tüm temalarda
+ * ortaktır; renk körlüğü denetiminden geçmiş paleti bozmayız.
+ */
+
+/* Baloncuk (varsayılan): yumuşak ışıklı zemin, buzlu cam menü, hap butonlar */
+.ui-modern.ui-modern.mt-bubble {
+  --m-bg-image: radial-gradient(1100px 620px at 100% -8%, rgba(0, 122, 255, 0.10), transparent 62%), radial-gradient(900px 560px at -8% 108%, rgba(255, 45, 85, 0.07), transparent 62%);
+  --m-radius-card: 22px;
+  --m-radius-btn: 999px;
+  --m-card-shadow: 0 6px 20px rgba(30, 40, 80, 0.07), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --m-sidebar-bg: rgba(255, 255, 255, 0.72);
+  --m-sidebar-blur: blur(20px) saturate(1.6);
+  --m-btn-shadow: 0 4px 12px rgba(0, 102, 214, 0.28);
+}
+.dark .ui-modern.ui-modern.mt-bubble {
+  --m-bg-image: radial-gradient(1100px 620px at 100% -8%, rgba(10, 132, 255, 0.18), transparent 62%), radial-gradient(900px 560px at -8% 108%, rgba(255, 55, 95, 0.10), transparent 62%);
+  --m-card-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+  --m-sidebar-bg: rgba(28, 28, 30, 0.72);
+  --m-btn-shadow: 0 4px 14px rgba(77, 162, 255, 0.22);
+}
+
+/* Aurora: renk bulutlu zemin, yarı saydam cam yüzeyler, gradyan vurgu */
+.ui-modern.ui-modern.mt-aurora {
+  --m-font: 'Plus Jakarta Sans Variable', 'Geist Variable', system-ui, sans-serif;
+  --m-radius-card: 20px;
+  --m-glass: blur(22px) saturate(1.5);
+  --m-sidebar-blur: var(--m-glass);
+  --m-bg: #EAF4F6;
+  --m-bg-image: none;
+  --m-aurora-image: radial-gradient(900px 700px at 8% -5%, rgba(45, 212, 191, 0.42), transparent 65%), radial-gradient(800px 650px at 100% 25%, rgba(56, 189, 248, 0.32), transparent 65%), radial-gradient(900px 600px at 55% 110%, rgba(190, 242, 100, 0.38), transparent 65%);
+  --m-surface: rgba(255, 255, 255, 0.62);
+  --m-surface-pop: rgba(255, 255, 255, 0.94);
+  --m-fill: rgba(11, 37, 48, 0.09);
+  --m-fill-2: rgba(11, 37, 48, 0.05);
+  --m-sep: rgba(11, 37, 48, 0.11);
+  --m-label: #0B2530; --m-label-2: #244450; --m-label-3: #45616B; --m-chevron: #6B8790;
+  --m-accent: #0F766E; --m-accent-2: #0369A1; --m-accent-ink: #0B5C56;
+  --m-accent-tint: rgba(15, 118, 110, 0.13); --m-on-accent: #FFFFFF;
+  --m-accent-fill: linear-gradient(135deg, var(--m-accent), var(--m-accent-2));
+  --app-ring: rgba(15, 118, 110, 0.22);
+  --m-card-shadow: 0 8px 30px rgba(10, 60, 70, 0.10), inset 0 0 0 1px rgba(255, 255, 255, 0.7);
+  --m-sidebar-bg: rgba(255, 255, 255, 0.42);
+  --m-btn-shadow: 0 6px 18px rgba(15, 118, 110, 0.28);
+  --m-segment-on: rgba(255, 255, 255, 0.92);
+}
+.dark .ui-modern.ui-modern.mt-aurora {
+  --m-bg: #03101A;
+  --m-aurora-image: radial-gradient(900px 700px at 8% -5%, rgba(45, 212, 191, 0.26), transparent 65%), radial-gradient(800px 650px at 100% 30%, rgba(139, 92, 246, 0.22), transparent 65%), radial-gradient(900px 600px at 50% 110%, rgba(56, 189, 248, 0.16), transparent 65%);
+  --m-surface: rgba(255, 255, 255, 0.06);
+  --m-surface-pop: rgba(14, 28, 38, 0.96);
+  --m-fill: rgba(255, 255, 255, 0.10);
+  --m-fill-2: rgba(255, 255, 255, 0.06);
+  --m-sep: rgba(255, 255, 255, 0.10);
+  --m-label: #E6FFFB; --m-label-2: #C2E0DF; --m-label-3: #94B6B9; --m-chevron: #7F9EA2;
+  --m-accent: #5EEAD4; --m-accent-2: #A78BFA; --m-accent-ink: #99F6E4;
+  --m-accent-tint: rgba(94, 234, 212, 0.15); --m-on-accent: #042F2E;
+  --app-ring: rgba(94, 234, 212, 0.25);
+  --m-card-shadow: 0 8px 30px rgba(0, 0, 0, 0.35), inset 0 0 0 1px rgba(255, 255, 255, 0.10);
+  --m-sidebar-bg: rgba(255, 255, 255, 0.04);
+  --m-btn-shadow: 0 6px 18px rgba(94, 234, 212, 0.18);
+  --m-segment-on: rgba(255, 255, 255, 0.16);
+}
+/* Renk bulutları ayrı, sabit bir katmanda: hareket yalnız transform olduğundan
+   sayfayı yeniden boyatmaz (bkz. 4b, yavaş süzülme) */
+.ui-modern.mt-aurora { isolation: isolate; }
+.ui-modern.mt-aurora::before {
+  content: ""; position: fixed; inset: -12%; z-index: -1; pointer-events: none;
+  background-image: var(--m-aurora-image);
+}
+/* Kaydırılan içeriğin üstünde duran yüzeyler buzlu cam olur; kartlar düz saydam
+   kalır (zemin sabit olduğundan bulanıklığa gerek yok, onlarca kartta da hızlı) */
+.ui-modern.mt-aurora .m-surface.m-pop,
+.ui-modern.mt-aurora .sticky.m-surface { -webkit-backdrop-filter: var(--m-glass); backdrop-filter: var(--m-glass); }
+.ui-modern.mt-aurora .m-input:not(.m-search) { background-color: rgba(255, 255, 255, 0.75); }
+.dark .ui-modern.mt-aurora .m-input:not(.m-search) { background-color: rgba(255, 255, 255, 0.07); }
+
+/* Pro: sık, ince çerçeveli, gölgesiz; masaüstünde yoğun yerleşim */
+.ui-modern.ui-modern.mt-pro {
+  --m-font: 'Inter Variable', 'Geist Variable', system-ui, sans-serif;
+  --m-radius-card: 10px;
+  --m-radius-btn: 8px;
+  --m-radius-ctl: 8px;
+  --m-radius-pill: 8px;
+  --m-bg: #FBFBFC;
+  --m-surface: #FFFFFF;
+  --m-surface-pop: #FFFFFF;
+  --m-fill: #EEEEF1;
+  --m-fill-2: #F4F4F6;
+  --m-sep: #E6E6EA;
+  --m-label: #1A1A1E; --m-label-2: #45454D; --m-label-3: #686872; --m-chevron: #8A8A94;
+  --m-accent: #4F5BD5; --m-accent-ink: #3A44B0; --m-accent-tint: #ECEEFD; --m-on-accent: #FFFFFF;
+  --app-ring: rgba(79, 91, 213, 0.22);
+  --m-card-shadow: 0 0 0 1px var(--m-sep), 0 1px 2px rgba(0, 0, 0, 0.03);
+  --m-sidebar-bg: #F6F6F8;
+  --m-segment-on: #FFFFFF;
+  --m-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  --m-pop-shadow: 0 8px 24px rgba(0, 0, 0, 0.10), 0 0 0 1px #E6E6EA;
+}
+.dark .ui-modern.ui-modern.mt-pro {
+  --m-bg: #0E0E10;
+  --m-surface: #161619;
+  --m-surface-pop: #1B1B1F;
+  --m-fill: #26262B;
+  --m-fill-2: #1E1E22;
+  --m-sep: #2A2A30;
+  --m-label: #EDEDF0; --m-label-2: #C4C4CC; --m-label-3: #9A9AA4; --m-chevron: #7C7C86;
+  --m-accent: #8B93F2; --m-accent-ink: #B3B8FA; --m-accent-tint: rgba(139, 147, 242, 0.16); --m-on-accent: #0B0C1F;
+  --app-ring: rgba(139, 147, 242, 0.28);
+  --m-card-shadow: 0 0 0 1px var(--m-sep);
+  --m-sidebar-bg: #121214;
+  --m-segment-on: #2E2E34;
+  --m-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --m-pop-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), 0 0 0 1px #2A2A30;
+}
+/* Kenar çubuğunda seçili öğe dolgu yerine sakin bir zemin */
+.ui-modern.mt-pro .m-sidebar .m-accent-bg { background: var(--m-fill); color: var(--m-label); }
+.ui-modern.mt-pro .m-chat-user { border-radius: 10px; }
+/* Yoğunluk yalnız fareyle: dokunmatik ekranlarda 44px dokunma hedefi korunur */
+@media (pointer: fine) {
+  .ui-modern.mt-pro .m-btn { min-height: 34px; padding: 0 12px; font-size: 14px; }
+  .ui-modern.mt-pro .m-icon-btn { width: 34px; height: 34px; }
+  .ui-modern.mt-pro .m-input, .ui-modern.mt-pro .m-pill { min-height: 34px; font-size: 14px; }
+  .ui-modern.mt-pro .m-segment { min-height: 30px; padding: 0 12px; font-size: 13px; }
+  .ui-modern.mt-pro .min-h-\[44px\] { min-height: 34px; }
+  .ui-modern.mt-pro .min-h-\[40px\] { min-height: 32px; }
+  .ui-modern.mt-pro .text-\[15px\] { font-size: 14px; }
+  .ui-modern.mt-pro .text-\[17px\] { font-size: 15.5px; }
+  .ui-modern.mt-pro .m-surface.p-5 { padding: 16px; }
+}
+
+/* Kil: kabarık, dokunsal yüzeyler; içe gömük alanlar, kabarık butonlar */
+.ui-modern.ui-modern.mt-clay {
+  --m-font: 'Nunito Variable', 'Geist Variable', system-ui, sans-serif;
+  --m-radius-card: 24px;
+  --m-radius-btn: 16px;
+  --m-radius-ctl: 14px;
+  --m-bg: #E6EBF7;
+  --m-surface: #F4F6FD;
+  --m-surface-pop: #F4F6FD;
+  --m-fill: #DCE2F0;
+  --m-fill-2: #E9EDF7;
+  --m-sep: rgba(100, 110, 160, 0.16);
+  --m-label: #2A2F4A; --m-label-2: #454B6B; --m-label-3: #5E6485; --m-chevron: #7A80A0;
+  /* Mercan yalnız dolgu (birincil buton, seçili menü). Yazı, bağlantı, bilgi notu
+     ve "süreçte" gibi durumlar çivit: kırmızı "gecikti/kritik" ile karışmasın */
+  --m-accent: #4A55B8; --m-accent-ink: #363F96; --m-accent-tint: #DFE3FA; --m-on-accent: #FFFFFF;
+  --m-accent-fill: linear-gradient(145deg, #D9573F, #B83A27);
+  --app-ring: rgba(74, 85, 184, 0.22);
+  --m-card-shadow: 8px 8px 20px rgba(110, 120, 170, 0.24), -6px -6px 16px rgba(255, 255, 255, 0.85), inset 2px 2px 4px rgba(255, 255, 255, 0.7), inset -2px -2px 5px rgba(110, 120, 170, 0.10);
+  --m-raise: 4px 4px 10px rgba(110, 120, 170, 0.25), -3px -3px 8px rgba(255, 255, 255, 0.85), inset 1px 1px 2px rgba(255, 255, 255, 0.7);
+  --m-inset: inset 3px 3px 6px rgba(110, 120, 170, 0.22), inset -3px -3px 6px rgba(255, 255, 255, 0.8);
+  --m-sidebar-bg: #EEF2FB;
+  --m-segment-on: #F4F6FD;
+  --m-btn-shadow: 4px 4px 10px rgba(194, 65, 45, 0.30), inset 2px 2px 3px rgba(255, 255, 255, 0.35), inset -2px -2px 4px rgba(0, 0, 0, 0.12);
+  --m-shadow: 3px 3px 8px rgba(110, 120, 170, 0.25), -2px -2px 6px rgba(255, 255, 255, 0.8);
+  --m-pop-shadow: 10px 10px 30px rgba(110, 120, 170, 0.30), -6px -6px 16px rgba(255, 255, 255, 0.7);
+}
+.dark .ui-modern.ui-modern.mt-clay {
+  --m-bg: #22253A;
+  --m-surface: #2C3049;
+  --m-surface-pop: #2F3350;
+  --m-fill: #1D2033;
+  --m-fill-2: #262A40;
+  --m-sep: rgba(255, 255, 255, 0.07);
+  --m-label: #EEF0FF; --m-label-2: #C9CCE6; --m-label-3: #B3B8D6; --m-chevron: #8A8FB0;
+  --m-accent: #A9B1FF; --m-accent-ink: #C9CEFF; --m-accent-tint: rgba(169, 177, 255, 0.16); --m-on-accent: #1B1E3A;
+  --m-accent-fill: linear-gradient(145deg, #FFA28E, #F2785F);
+  --app-ring: rgba(169, 177, 255, 0.28);
+  --m-card-shadow: 8px 8px 20px rgba(0, 0, 0, 0.42), -4px -4px 12px rgba(255, 255, 255, 0.035), inset 2px 2px 4px rgba(255, 255, 255, 0.06), inset -3px -3px 6px rgba(0, 0, 0, 0.22);
+  --m-raise: 4px 4px 10px rgba(0, 0, 0, 0.38), -2px -2px 6px rgba(255, 255, 255, 0.04), inset 1px 1px 2px rgba(255, 255, 255, 0.06);
+  --m-inset: inset 3px 3px 6px rgba(0, 0, 0, 0.38), inset -2px -2px 5px rgba(255, 255, 255, 0.05);
+  --m-sidebar-bg: #282B42;
+  --m-segment-on: #353A58;
+  --m-btn-shadow: 4px 4px 10px rgba(0, 0, 0, 0.35), inset 2px 2px 3px rgba(255, 255, 255, 0.3), inset -2px -2px 4px rgba(0, 0, 0, 0.15);
+  --m-shadow: 3px 3px 8px rgba(0, 0, 0, 0.35);
+  --m-pop-shadow: 10px 10px 30px rgba(0, 0, 0, 0.5);
+}
+.ui-modern.mt-clay .m-input { border-color: transparent; background-color: var(--m-fill-2); box-shadow: var(--m-inset); }
+.ui-modern.mt-clay .m-input:focus { box-shadow: var(--m-inset), 0 0 0 3px var(--app-ring); }
+.ui-modern.mt-clay .m-segmented { box-shadow: var(--m-inset); }
+.ui-modern.mt-clay .m-btn-gray, .ui-modern.mt-clay .m-pill { background-color: var(--m-surface); box-shadow: var(--m-raise); }
+.ui-modern.mt-clay .m-sidebar .m-accent-bg, .ui-modern.mt-clay .m-chat-user { box-shadow: var(--m-btn-shadow); }
+.ui-modern.mt-clay .m-btn-primary:active:not(:disabled), .ui-modern.mt-clay .m-btn-gray:active:not(:disabled) { box-shadow: var(--m-inset); }
+
+/* Temaların ortak uygulama noktaları -------------------------------------- */
+/* Kartlar (m-surface + rounded-2xl): köşe ve gölge temadan */
+.ui-modern .m-surface.rounded-2xl:not(.m-pop) { border-radius: var(--m-radius-card); box-shadow: var(--m-card-shadow); }
+/* Açılır menüler ve sayfalar: saydam temalarda bile okunaklı zemin */
+.ui-modern .m-surface.m-pop { background-color: var(--m-surface-pop); }
+/* Kenar çubuğu */
+.ui-modern .m-sidebar.m-surface { background-color: var(--m-sidebar-bg); -webkit-backdrop-filter: var(--m-sidebar-blur); backdrop-filter: var(--m-sidebar-blur); }
+/* Dar ekranda kenar çubuğu içeriğin üstüne açılan çekmece: saydam temalarda da okunaklı */
+@media (max-width: 1023px) {
+  .ui-modern .m-sidebar.m-surface { background-color: var(--m-surface-pop); }
+}
+/* Baloncuk ve Kil: geniş ekranda kenar çubuğu zeminden ayrık, yüzen bir panel */
+@media (min-width: 1024px) {
+  .ui-modern.mt-bubble .m-sidebar.m-surface, .ui-modern.mt-clay .m-sidebar.m-surface {
+    margin: 12px 0 12px 12px; top: 12px; height: calc(100vh - 24px);
+    border-right-width: 0; border-radius: var(--m-radius-card); box-shadow: var(--m-card-shadow);
   }
-  .ui-modern.theme-emerald { --m-accent: #3CCFB4; --m-accent-ink: #7ADFCB; --m-accent-tint: rgba(60, 207, 180, 0.16); }
-  .ui-modern.theme-purple  { --m-accent: #A48BFF; --m-accent-ink: #C2B2FF; --m-accent-tint: rgba(164, 139, 255, 0.18); }
-  .ui-modern.theme-orange  { --m-accent: #FF9F5A; --m-accent-ink: #FFC08F; --m-accent-tint: rgba(255, 159, 90, 0.16); }
 }
 
 /* 2. Yardımcı sınıflar ---------------------------------------------------- */
@@ -103,7 +319,7 @@
 .ui-modern .m-text-2 { color: var(--m-label-2); }
 .ui-modern .m-text-3 { color: var(--m-label-3); }
 .ui-modern .m-accent { color: var(--m-accent); }
-.ui-modern .m-accent-bg { background-color: var(--m-accent); color: var(--m-on-accent); }
+.ui-modern .m-accent-bg { background: var(--m-accent-fill); color: var(--m-on-accent); }
 .ui-modern .m-accent-tint { background-color: var(--m-accent-tint); color: var(--m-accent-ink); }
 .ui-modern .m-sep { border-color: var(--m-sep); }
 .ui-modern .m-shadow { box-shadow: var(--m-shadow); }
@@ -122,12 +338,12 @@
 
 .ui-modern .m-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-  min-height: 44px; padding: 0 16px; border-radius: 12px; border: 0;
+  min-height: 44px; padding: 0 16px; border-radius: var(--m-radius-btn); border: 0;
   font: inherit; font-size: 15px; font-weight: 600; cursor: pointer;
-  transition: filter 0.15s ease, background-color 0.15s ease;
+  transition: filter 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
 }
 .ui-modern .m-btn:disabled { opacity: 0.45; cursor: not-allowed; }
-.ui-modern .m-btn-primary { background: var(--m-accent); color: var(--m-on-accent); }
+.ui-modern .m-btn-primary { background: var(--m-accent-fill); color: var(--m-on-accent); box-shadow: var(--m-btn-shadow); }
 .ui-modern .m-btn-primary:hover:not(:disabled) { filter: brightness(0.92); }
 .ui-modern .m-btn-gray { background: var(--m-fill); color: var(--m-label); }
 .ui-modern .m-btn-gray:hover:not(:disabled) { filter: brightness(0.96); }
@@ -138,13 +354,13 @@
 
 .ui-modern .m-icon-btn {
   width: 44px; height: 44px; flex: none; display: inline-flex; align-items: center; justify-content: center;
-  border: 0; border-radius: 12px; background: transparent; color: var(--m-label-3); cursor: pointer;
+  border: 0; border-radius: var(--m-radius-ctl); background: transparent; color: var(--m-label-3); cursor: pointer;
 }
 .ui-modern .m-icon-btn:hover { background: var(--m-fill-2); color: var(--m-label); }
 
 .ui-modern .m-pill {
   display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 14px 0 16px;
-  border-radius: 22px; border: 0; background: var(--m-surface); color: var(--m-label);
+  border-radius: var(--m-radius-pill); border: 0; background: var(--m-surface); color: var(--m-label);
   font: inherit; font-size: 15px; font-weight: 500; cursor: pointer;
 }
 .ui-modern select.m-pill {
@@ -154,21 +370,20 @@
 }
 .ui-modern .m-pill.is-active { background-color: var(--m-accent-tint); color: var(--m-accent-ink); font-weight: 600; }
 
-.ui-modern .m-segmented { display: inline-flex; flex-wrap: wrap; padding: 2px; border-radius: 12px; background: var(--m-fill); }
+.ui-modern .m-segmented { display: inline-flex; flex-wrap: wrap; padding: 2px; border-radius: var(--m-radius-ctl); background: var(--m-fill); }
 .ui-modern .m-segment {
-  min-height: 40px; padding: 0 16px; border: 0; border-radius: 10px; background: transparent;
+  min-height: 40px; padding: 0 16px; border: 0; border-radius: calc(var(--m-radius-ctl) - 2px); background: transparent;
   color: var(--m-label); font: inherit; font-size: 14px; font-weight: 500; cursor: pointer;
   display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
 }
 .ui-modern .m-segment[aria-pressed="true"], .ui-modern .m-segment[aria-current="page"], .ui-modern .m-segment[aria-selected="true"] {
-  background: var(--m-surface); box-shadow: var(--m-shadow); font-weight: 600;
+  background: var(--m-segment-on); box-shadow: var(--m-shadow); font-weight: 600;
 }
-@media (prefers-color-scheme: dark) {
-  .ui-modern .m-segment[aria-pressed="true"], .ui-modern .m-segment[aria-current="page"], .ui-modern .m-segment[aria-selected="true"] { background: #636366; }
-}
+/* Seçili bölüm zemini koyu temalarda açıklaştığı için içindeki soluk sayılar ana yazı rengini alır */
+.ui-modern .m-segment[aria-pressed="true"] .m-text-3, .ui-modern .m-segment[aria-current="page"] .m-text-3, .ui-modern .m-segment[aria-selected="true"] .m-text-3 { color: var(--m-label); }
 
 .ui-modern .m-input {
-  min-height: 44px; width: 100%; box-sizing: border-box; padding: 0 14px; border-radius: 12px;
+  min-height: 44px; width: 100%; box-sizing: border-box; padding: 0 14px; border-radius: var(--m-radius-ctl);
   border: 1px solid var(--m-sep); background: var(--m-surface); color: var(--m-label); font: inherit; font-size: 15px;
 }
 .ui-modern .m-input:focus { outline: none; border-color: var(--m-accent); box-shadow: 0 0 0 3px var(--app-ring); }
@@ -202,6 +417,9 @@
 .ui-modern .m-md thead { background: var(--m-fill-2); }
 
 /* 3. Yeniden yazılmamış ekranlar için yumuşatma -------------------------- */
+/* Eski ekranlardaki vurgu zeminli düğmeler (bg-primary + text-white): gece
+   temalarında vurgu açık renk olduğundan yazı temanın vurgu-üstü rengini alır */
+.ui-modern .bg-primary.text-white { color: var(--m-on-accent); }
 /* Büyük harf + harf aralıklı mini başlıklar (pencereler dahil) sade yazılır */
 .ui-modern .uppercase { text-transform: none; }
 .ui-modern [class*="tracking-"]:not([class*="tracking-[-"]) { letter-spacing: normal; }
@@ -210,11 +428,9 @@
 .ui-modern .m-legacy [class*="text-[11px]"] { font-size: 12.5px; }
 .ui-modern .m-legacy .shadow-sm, .ui-modern .m-legacy .shadow, .ui-modern .m-legacy .shadow-md { box-shadow: none; }
 .ui-modern .m-legacy .shadow-lg, .ui-modern .m-legacy .shadow-xl, .ui-modern .m-legacy .shadow-2xl { box-shadow: var(--m-shadow); }
-@media (prefers-color-scheme: light) {
-  .ui-modern .m-legacy .bg-gray-50 { background-color: var(--m-bg); }
-  .ui-modern .m-legacy .border-gray-100, .ui-modern .m-legacy .border-gray-200 { border-color: var(--m-sep); }
-  .ui-modern .text-gray-300, .ui-modern .text-gray-400 { color: var(--m-label-3); }
-}
+html:not(.dark) .ui-modern .m-legacy .bg-gray-50 { background-color: var(--m-bg); }
+html:not(.dark) .ui-modern .m-legacy .border-gray-100, html:not(.dark) .ui-modern .m-legacy .border-gray-200 { border-color: var(--m-sep); }
+html:not(.dark) .ui-modern .text-gray-300, html:not(.dark) .ui-modern .text-gray-400 { color: var(--m-label-3); }
 .ui-modern .m-legacy .rounded-2xl { border-radius: 16px; }
 
 /* 4. Animasyonlar ---------------------------------------------------------- */
@@ -259,8 +475,125 @@
 .m-space-rocket { position: absolute; left: -60px; top: 60%; color: #FFFFFF; font-size: 34px; animation: m-cross 3.6s cubic-bezier(0.45, 0, 0.55, 1) forwards; }
 @keyframes m-cross { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(115vw, -40vh) rotate(0deg); } }
 
+
+/* 4b. Tema hareketleri ve temalara özel sürprizler -------------------------
+ * Her temanın hareket dili ayrı: Baloncuk yaylanır, Aurora süzülür, Pro
+ * neredeyse anlıktır, Kil hamur gibi ezilir. Hepsi "hareketi azalt"ta kapanır.
+ * Sayfa girişi animasyonu yalnız başlangıç karesini uygular (fill: backwards);
+ * bittikten sonra transform kalmaz, içerideki fixed pencereler kaymaz.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  .ui-modern main > * { animation: m-enter-rise 0.42s cubic-bezier(0.34, 1.56, 0.64, 1) backwards; }
+  .ui-modern [role="dialog"].m-pop, .ui-modern [role="dialog"].m-bg { animation: m-dialog-in 0.32s cubic-bezier(0.34, 1.56, 0.64, 1) backwards; }
+
+  /* Baloncuk: yaylanan basma */
+  .ui-modern.mt-bubble .m-btn, .ui-modern.mt-bubble .m-pill, .ui-modern.mt-bubble .m-segment, .ui-modern.mt-bubble .m-icon-btn {
+    transition: transform 0.35s cubic-bezier(0.34, 1.8, 0.64, 1), filter 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .ui-modern.mt-bubble .m-btn:active:not(:disabled), .ui-modern.mt-bubble .m-pill:active, .ui-modern.mt-bubble .m-segment:active, .ui-modern.mt-bubble .m-icon-btn:active { transform: scale(0.94); transition-duration: 0.08s; }
+
+  /* Aurora: bulutlar yavaşça süzülür, kartlar üstüne gelince hafif parlar, sayfa bulanıklıktan belirir */
+  .ui-modern.mt-aurora::before { animation: m-aurora-drift 38s ease-in-out infinite alternate; }
+  .ui-modern.mt-aurora main > * { animation: m-enter-blur 0.5s ease-out backwards; }
+  .ui-modern.mt-aurora .m-surface.rounded-2xl:not(.m-pop) { transition: box-shadow 0.35s ease; }
+  .ui-modern.mt-aurora .m-surface.rounded-2xl:not(.m-pop):hover { box-shadow: var(--m-card-shadow), 0 0 0 1px var(--m-accent-tint), 0 14px 40px var(--m-accent-tint); }
+
+  /* Pro: kısa ve sade; zıplama yok */
+  .ui-modern.mt-pro main > * { animation: m-enter-fade 0.14s ease-out backwards; }
+  .ui-modern.mt-pro [role="dialog"].m-pop, .ui-modern.mt-pro [role="dialog"].m-bg { animation: m-enter-fade 0.12s ease-out backwards; }
+  .ui-modern.mt-pro .m-btn, .ui-modern.mt-pro .m-row-link, .ui-modern.mt-pro .m-segment, .ui-modern.mt-pro .m-icon-btn { transition-duration: 0.08s; }
+
+  /* Kil: basınca hamur gibi ezilir, bırakınca yaylanır; sayfa hafifçe şişerek gelir */
+  .ui-modern.mt-clay main > * { animation: m-enter-pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) backwards; }
+  .ui-modern.mt-clay .m-btn, .ui-modern.mt-clay .m-pill, .ui-modern.mt-clay .m-segment, .ui-modern.mt-clay .m-icon-btn, .ui-modern.mt-clay .m-sidebar .m-accent-bg {
+    transition: transform 0.45s cubic-bezier(0.34, 2, 0.64, 1), box-shadow 0.2s ease, filter 0.15s ease, background-color 0.15s ease;
+  }
+  .ui-modern.mt-clay .m-btn:active:not(:disabled), .ui-modern.mt-clay .m-pill:active, .ui-modern.mt-clay .m-segment:active, .ui-modern.mt-clay .m-icon-btn:active { transform: scale(1.04, 0.9); transition-duration: 0.1s; }
+}
+@keyframes m-enter-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes m-enter-blur { from { opacity: 0; filter: blur(6px); } to { opacity: 1; filter: none; } }
+@keyframes m-enter-fade { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
+@keyframes m-enter-pop { from { opacity: 0; transform: scale(0.985); } to { opacity: 1; transform: none; } }
+@keyframes m-dialog-in { from { opacity: 0; transform: translateY(12px) scale(0.97); } to { opacity: 1; transform: none; } }
+@keyframes m-aurora-drift {
+  0% { transform: translate3d(0, 0, 0) scale(1) rotate(0deg); }
+  50% { transform: translate3d(-4%, 3%, 0) scale(1.08) rotate(2deg); }
+  100% { transform: translate3d(3%, -2%, 0) scale(1.04) rotate(-2deg); }
+}
+
+/* Sürpriz: pop (Baloncuk) */
+.m-bubble {
+  position: absolute; bottom: -90px; border-radius: 50%;
+  background: radial-gradient(circle at 30% 28%, rgba(255, 255, 255, 0.95) 0 8%, rgba(255, 255, 255, 0.18) 22%, rgba(120, 190, 255, 0.10) 60%, rgba(255, 140, 200, 0.16) 100%);
+  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.75), inset -6px -8px 14px rgba(255, 105, 180, 0.22), inset 6px 6px 12px rgba(0, 170, 255, 0.22), 0 4px 14px rgba(0, 60, 140, 0.12);
+  animation: m-bubble-rise var(--dur, 2.8s) cubic-bezier(0.3, 0.6, 0.5, 1) var(--delay, 0s) forwards; opacity: 0;
+}
+@keyframes m-bubble-rise {
+  0% { transform: translate(0, 0) scale(0.7); opacity: 0; }
+  10% { opacity: 1; }
+  82% { transform: translate(var(--sway), var(--rise)) scale(1); opacity: 1; }
+  90% { transform: translate(var(--sway), var(--rise)) scale(1.35); opacity: 0.7; box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.9); }
+  100% { transform: translate(var(--sway), var(--rise)) scale(1.7); opacity: 0; }
+}
+
+/* Sürpriz: aurora */
+.m-aurora-veil { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 120%, #06303A 0%, #020A14 70%); animation: m-veil 4.3s ease-in-out forwards; }
+.m-aurora-band {
+  position: absolute; left: -25%; width: 150%; height: 34vh; opacity: 0; filter: blur(26px); mix-blend-mode: screen;
+  background: linear-gradient(90deg, transparent 0%, var(--c1) 30%, var(--c2) 62%, transparent 100%);
+  border-radius: 50%; animation: m-aurora-wave 3.8s ease-in-out forwards;
+}
+@keyframes m-aurora-wave {
+  0% { opacity: 0; transform: translateX(-12%) skewY(-7deg) scaleY(0.5); }
+  30% { opacity: 0.95; }
+  55% { transform: translateX(3%) skewY(5deg) scaleY(1.15); }
+  80% { opacity: 0.85; }
+  100% { opacity: 0; transform: translateX(14%) skewY(-4deg) scaleY(0.8); }
+}
+
+/* Sürpriz: ship (Pro) */
+.m-ship-bar { position: fixed; top: 0; left: 0; height: 3px; width: 100%; z-index: 1001; pointer-events: none; transform-origin: left; background: var(--m-accent, #4F5BD5); animation: m-ship-bar 2.2s cubic-bezier(0.6, 0, 0.2, 1) forwards; }
+@keyframes m-ship-bar { 0% { transform: scaleX(0); opacity: 1; } 85% { transform: scaleX(1); opacity: 1; } 100% { transform: scaleX(1); opacity: 0; } }
+.m-ship-card { position: fixed; right: max(20px, env(safe-area-inset-right, 0px)); bottom: max(20px, env(safe-area-inset-bottom, 0px)); z-index: 1001; width: min(300px, calc(100vw - 40px)); padding: 14px 16px; border-radius: var(--m-radius-card, 12px); display: flex; flex-direction: column; gap: 10px; animation: m-dialog-in 0.25s ease-out backwards; }
+.m-ship-step { animation: m-ship-step 0.3s ease-out backwards; }
+@keyframes m-ship-step { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: none; } }
+
+/* Sürpriz: boing (Kil) — kök kaba kısa süre m-boing eklenir */
+.ui-modern.m-boing .m-surface.rounded-2xl:not(.m-pop), .ui-modern.m-boing article.m-surface, .ui-modern.m-boing .m-btn { animation: m-jelly 0.9s cubic-bezier(0.3, 0.7, 0.4, 1) both; }
+.ui-modern.m-boing .m-surface.rounded-2xl:nth-child(even), .ui-modern.m-boing article.m-surface:nth-child(even) { animation-delay: 0.08s; }
+.ui-modern.m-boing .m-surface.rounded-2xl:nth-child(3n), .ui-modern.m-boing article.m-surface:nth-child(3n) { animation-delay: 0.16s; }
+@keyframes m-jelly {
+  0% { transform: scale(1, 1); } 25% { transform: scale(1.06, 0.92); } 40% { transform: scale(0.95, 1.06); }
+  55% { transform: scale(1.03, 0.97); } 70% { transform: scale(0.99, 1.02); } 100% { transform: scale(1, 1); }
+}
+
+/* Sürpriz rehberi: yumurta sallanır, çatlar, ödül belirir; satırlar sırayla gelir */
+.m-egg-card { animation: m-dialog-in 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) backwards; }
+.m-egg { position: relative; width: 56px; height: 70px; flex: none; margin-top: 6px; animation: m-egg-wobble 0.5s ease-in-out 0.05s both; transform-origin: 50% 90%; }
+.m-egg-half {
+  position: absolute; inset: 0; border-radius: 50% 50% 50% 50% / 60% 60% 42% 42%;
+  background: radial-gradient(circle at 34% 28%, #FFFFFF 0 18%, #F6EFE3 55%, #E7DCC8 100%);
+  box-shadow: inset -4px -6px 10px rgba(120, 90, 40, 0.16), 0 4px 10px rgba(0, 0, 0, 0.12);
+}
+.m-egg-top { clip-path: polygon(0 0, 100% 0, 100% 52%, 86% 44%, 72% 55%, 57% 45%, 43% 56%, 29% 45%, 14% 55%, 0 47%); animation: m-egg-crack 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.5s forwards; transform-origin: 20% 50%; }
+.m-egg-bottom { clip-path: polygon(0 47%, 14% 55%, 29% 45%, 43% 56%, 57% 45%, 72% 55%, 86% 44%, 100% 52%, 100% 100%, 0 100%); }
+.m-egg-prize { position: absolute; left: 50%; top: 34%; transform: translate(-50%, -50%) scale(0); color: var(--m-accent, #0066D6); animation: m-egg-prize 0.5s cubic-bezier(0.34, 1.8, 0.64, 1) 0.6s forwards; z-index: 1; }
+.m-egg-glow { position: absolute; left: 50%; top: 34%; width: 10px; height: 10px; border-radius: 50%; transform: translate(-50%, -50%) scale(0); background: var(--m-accent-tint, rgba(0, 102, 214, 0.2)); animation: m-egg-glow 0.9s ease-out 0.55s forwards; }
+.m-egg-head { animation: m-enter-rise 0.4s ease-out 0.15s backwards; }
+.m-egg-item { animation: m-enter-rise 0.38s cubic-bezier(0.34, 1.4, 0.64, 1) backwards; }
+.m-egg-mine { box-shadow: var(--m-card-shadow), 0 0 0 2px var(--m-accent); }
+@keyframes m-egg-wobble { 0%, 100% { transform: rotate(0); } 20% { transform: rotate(-9deg); } 40% { transform: rotate(8deg); } 60% { transform: rotate(-5deg); } 80% { transform: rotate(3deg); } }
+@keyframes m-egg-crack { to { transform: translate(-3px, -11px) rotate(-26deg); } }
+@keyframes m-egg-prize { to { transform: translate(-50%, -50%) scale(1); } }
+@keyframes m-egg-glow { 0% { transform: translate(-50%, -50%) scale(0); opacity: 1; } 100% { transform: translate(-50%, -50%) scale(9); opacity: 0; } }
+
 @media (prefers-reduced-motion: reduce) {
-  .m-rocket, .m-trail, .m-streak, .m-hyper-ring, .m-hyper-star, .m-hyper-veil, .m-confetti, .m-space, .m-space-star, .m-space-rocket {
+  .m-rocket, .m-trail, .m-streak, .m-hyper-ring, .m-hyper-star, .m-hyper-veil, .m-confetti, .m-space, .m-space-star, .m-space-rocket,
+  .m-bubble, .m-aurora-band, .m-aurora-veil, .m-ship-bar, .m-ship-card, .m-ship-step, .m-egg-card, .m-egg, .m-egg-head, .m-egg-item {
     animation: none !important; transition: none !important;
   }
+  /* Rehberdeki yumurta hareketsiz: çatlamış hâliyle durur */
+  .m-egg-top { animation: none !important; transform: translate(-3px, -11px) rotate(-26deg); }
+  .m-egg-prize { animation: none !important; transform: translate(-50%, -50%) scale(1); }
+  .m-egg-glow { display: none; }
 }
