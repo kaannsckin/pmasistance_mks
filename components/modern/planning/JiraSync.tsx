@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { JiraSyncSettings, Project } from '../../../types';
-import { fetchIntegrationHealth, fetchJiraMeta, fetchJiraSyncPage, IntegrationHealth, JiraIssueRecord, JiraMeta } from '../../../utils/integrations';
+import { JiraSyncDirection, JiraSyncFieldId, JiraSyncSettings, Project } from '../../../types';
+import { fetchIntegrationHealth, fetchJiraMeta, fetchJiraSyncPage, IntegrationHealth, JiraIssueRecord, JiraMeta, updateJiraIssue } from '../../../utils/integrations';
 import { JiraImportOptions } from '../../../utils/planning/jiraImport';
-import { AUTO_SYNC_OPTIONS, hasSyncWork, JIRA_SYNC_EVENT, linkedOpenKeys, parseLabels, readSyncState, runProjectSync, sourceLabel, sourceOf, writeSyncState } from '../../../utils/planning/jiraSync';
+import { AUTO_SYNC_OPTIONS, hasSyncWork, JIRA_SYNC_EVENT, JiraPushOutcome, linkedSyncKeys, parseLabels, readSyncState, runFullSync, sourceLabel, sourceOf, writeSyncState } from '../../../utils/planning/jiraSync';
+import { DIRECTION_LABEL, EXCEL_TRACKING_FIELDS, fieldPolicy, JIRA_SYNC_FIELDS } from '../../../utils/planning/jiraFieldSync';
 import { relativeTime } from '../../../utils/recentChanges';
 import { Icon } from '../icons';
 import { Field } from '../ui';
@@ -17,7 +18,7 @@ import { Field } from '../ui';
 interface Props {
     project: Project;
     onSaveSettings: (settings: JiraSyncSettings) => void;
-    onApply: (issues: JiraIssueRecord[], opts: JiraImportOptions, addNew: boolean, label: string) => void;
+    onApply: (issues: JiraIssueRecord[], opts: JiraImportOptions, addNew: boolean, label: string, pushed?: JiraPushOutcome) => void;
     onClose: () => void;
 }
 
@@ -35,6 +36,9 @@ const JiraSync: React.FC<Props> = ({ project, onSaveSettings, onApply, onClose }
     const [filterId, setFilterId] = useState(saved?.filterId || '');
     const [discover, setDiscover] = useState(!!saved?.discover);
     const [autoMinutes, setAutoMinutes] = useState(saved?.autoMinutes || 0);
+    // Alan seçimi: kayıtlı ayar yoksa "tümü Jira'dan" (eski davranış) gösterilir
+    const [fields, setFields] = useState<Record<JiraSyncFieldId, JiraSyncDirection> | null>(saved?.fields ? fieldPolicy(saved) : null);
+    const [autoPeople, setAutoPeople] = useState(!!saved?.autoPeople);
     const [busy, setBusy] = useState<number | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [state, setState] = useState(() => readSyncState(project.id));
@@ -59,11 +63,15 @@ const JiraSync: React.FC<Props> = ({ project, onSaveSettings, onApply, onClose }
         ...(filterId.trim() ? { filterId: filterId.trim(), ...(filterName ? { filterName } : saved?.filterId === filterId.trim() && saved.filterName ? { filterName: saved.filterName } : {}) } : {}),
         discover,
         autoMinutes,
-    }), [projectKey, labelList, filterId, filterName, discover, autoMinutes, saved]);
+        ...(fields ? { fields } : {}),
+        ...(autoPeople ? { autoPeople } : {}),
+    }), [projectKey, labelList, filterId, filterName, discover, autoMinutes, fields, autoPeople, saved]);
+    const shownFields = fields || fieldPolicy(undefined);
+    const setField = (id: JiraSyncFieldId, d: JiraSyncDirection) => setFields({ ...shownFields, [id]: d });
     const invalid = (!!projectKey.trim() && !KEY_RE.test(projectKey.trim())) || labelList.some(l => !LABEL_RE.test(l)) || (!!filterId.trim() && !/^\d{1,12}$/.test(filterId.trim()));
     const needsSource = discover && !sourceOf(draft);
     const dirty = JSON.stringify(draft) !== JSON.stringify(saved || { discover: false, autoMinutes: 0 });
-    const linked = useMemo(() => linkedOpenKeys(project.tasks).length, [project.tasks]);
+    const linked = useMemo(() => linkedSyncKeys(project.tasks, draft).length, [project.tasks, draft]);
     const candidate = { ...project, jiraSync: draft };
     const canRun = !!health?.jira && !invalid && !needsSource && busy === null && hasSyncWork(candidate);
 
@@ -75,8 +83,9 @@ const JiraSync: React.FC<Props> = ({ project, onSaveSettings, onApply, onClose }
         abort.current = c;
         setBusy(0);
         try {
-            const r = await runProjectSync(candidate, o => fetchJiraSyncPage(o, health.authMode, c.signal), setBusy);
-            if (r.preview.added || r.preview.updated) onApply(r.fetched.issues, r.opts, r.addNew, 'elle');
+            const update = health.jiraUpdate ? (key: string, changes: Parameters<typeof updateJiraIssue>[1]) => updateJiraIssue(key, changes, health.authMode, c.signal) : null;
+            const r = await runFullSync(candidate, o => fetchJiraSyncPage(o, health.authMode, c.signal), update, setBusy);
+            if (r.shouldApply) onApply(r.issues, r.opts, r.addNew, 'elle', r.pushed);
             writeSyncState(project.id, { at: new Date().toISOString(), ok: true, text: r.text });
         } catch (e) {
             if ((e as Error)?.name !== 'AbortError') setError(e instanceof Error ? e.message : String(e));
@@ -90,7 +99,7 @@ const JiraSync: React.FC<Props> = ({ project, onSaveSettings, onApply, onClose }
             <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                     <h3 id="js-title" className="m-0 text-[17px] font-semibold m-text">Jira eşitleme</h3>
-                    <p className="m-0 mt-0.5 text-[14px] m-text-3">Uygulamada Jira anahtarı olan açık kayıtlar Jira'daki güncel hâliyle yenilenir (kapananlar kapanır). Tüm Jira taranmaz: yeni kayıt yalnız seçtiğiniz proje, etiket ya da kayıtlı filtreden gelir. Jeton yalnız sunucudadır.</p>
+                    <p className="m-0 mt-0.5 text-[14px] m-text-3">Uygulamada Jira anahtarı olan kayıtlar seçtiğiniz alanlarda Jira ile eşitlenir (Jira'dan alınır, Jira'ya yazılır ya da çift yönlü). Tüm Jira taranmaz: yeni kayıt yalnız seçtiğiniz proje, etiket ya da kayıtlı filtreden gelir. Jeton yalnız sunucudadır.</p>
                 </div>
                 <button type="button" className="m-icon-btn" aria-label="Kapat" onClick={() => { abort.current?.abort(); onClose(); }}><Icon name="x" size={18} /></button>
             </div>
@@ -101,8 +110,8 @@ const JiraSync: React.FC<Props> = ({ project, onSaveSettings, onApply, onClose }
                 <>
                     <p className="m-0 text-[14px] m-text-2 flex flex-wrap items-center gap-x-3 gap-y-1">
                         {meta ? <span className="m-ink-ok flex items-center gap-1"><Icon name="check" size={16} />Bağlı: {meta.user || 'Jira'}</span> : metaError ? <span className="m-ink-bad">{metaError}</span> : <span className="m-text-3">Bağlantı denetleniyor…</span>}
-                        <span>Bağlı açık kayıt: <strong className="m-tabular">{num(linked)}</strong></span>
-                        {health && <span className="m-text-3">Jira'ya yazma: {health.jiraUpdate ? 'açık (görev ayrıntısından)' : 'kapalı (JIRA_ALLOW_UPDATE)'}</span>}
+                        <span>Eşitlenecek bağlı kayıt: <strong className="m-tabular">{num(linked)}</strong></span>
+                        {health && <span className="m-text-3">Jira'ya yazma: {health.jiraUpdate ? 'açık' : 'kapalı (JIRA_ALLOW_UPDATE)'}</span>}
                     </p>
                     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                         <Field label="Proje" htmlFor="js-project">
@@ -142,9 +151,39 @@ const JiraSync: React.FC<Props> = ({ project, onSaveSettings, onApply, onClose }
                             </select>
                         </Field>
                     </div>
+                    <fieldset className="m-0 p-0 border-0 flex flex-col gap-2">
+                        <legend className="text-[15px] font-semibold m-text mb-1">Alanlar ve yön</legend>
+                        <p className="m-0 text-[13px] m-text-3">
+                            Her alan için yön seçin. <strong>Çift yönlü</strong>: son eşitlemeden beri hangi taraf değiştiyse o kazanır; iki taraf da değiştiyse Jira esas alınır ve çakışma bildirilir.
+                            Uygulamadan Jira'ya yalnız durum, termin, öncelik ve başlık yazılabilir.
+                            {!fields && ' Şu an eski davranış geçerli: tüm alanlar Jira\'dan alınır.'}
+                        </p>
+                        <div className="grid gap-x-4 gap-y-2 sm:grid-cols-2">
+                            {JIRA_SYNC_FIELDS.map(f => (
+                                <label key={f.id} className="flex items-center justify-between gap-3 text-[14px] m-text min-w-0" title={f.hint}>
+                                    <span className="truncate">{f.label}</span>
+                                    <select className="m-input max-w-[190px]" value={shownFields[f.id]} disabled={busy !== null} onChange={e => setField(f.id, e.target.value as JiraSyncDirection)}>
+                                        {(f.pushable ? ['off', 'pull', 'push', 'both'] as const : ['off', 'pull'] as const).map(d => <option key={d} value={d}>{DIRECTION_LABEL[d]}</option>)}
+                                    </select>
+                                </label>
+                            ))}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <button type="button" className="m-btn m-btn-gray" disabled={busy !== null} onClick={() => setFields({ ...EXCEL_TRACKING_FIELDS })}>Excel takibi önerisi</button>
+                            {fields && <button type="button" className="m-btn m-btn-plain" disabled={busy !== null} onClick={() => setFields(null)}>Eski davranışa dön (tümü Jira'dan)</button>}
+                            <span className="text-[13px] m-text-3">Öneri: durum, atanan, termin, harcanan süre ve sürüm Jira'dan; başlık, not, etiket ve öncelik Excel'de kalır.</span>
+                        </div>
+                        <label className="flex items-center gap-2.5 text-[15px] m-text min-h-[40px] cursor-pointer">
+                            <input type="checkbox" className="w-4 h-4" checked={autoPeople} disabled={busy !== null} onChange={e => setAutoPeople(e.target.checked)} />
+                            Jira'daki atanan kişileri Veri Havuzu'na ve proje ekibine otomatik ekle
+                        </label>
+                        {fields && Object.values(fields).some(d => d === 'push' || d === 'both') && health && !health.jiraUpdate && (
+                            <p role="alert" className="m-0 text-[14px] m-ink-warn">Jira'ya yazan alan seçtiniz ama sunucuda JIRA_ALLOW_UPDATE kapalı; bu alanlar yazılmaz, yalnız bekleyen olarak bildirilir.</p>
+                        )}
+                    </fieldset>
                     {invalid && <p role="alert" className="m-0 text-[14px] m-ink-bad">Proje anahtarı, etiket ya da filtre numarası geçersiz.</p>}
                     {needsSource && <p role="alert" className="m-0 text-[14px] m-ink-warn">Yeni kayıt eklemek için proje, etiket ya da kayıtlı filtre seçin.</p>}
-                    {!needsSource && !invalid && !linked && !discover && <p className="m-0 text-[14px] m-text-3">Bu projede Jira anahtarı olan açık kayıt yok; kaynak seçip "yeni açık kayıtları da ekle"yi açabilirsiniz.</p>}
+                    {!needsSource && !invalid && !linked && !discover && <p className="m-0 text-[14px] m-text-3">Bu projede eşitlenecek Jira anahtarlı kayıt yok; kaynak seçip "yeni açık kayıtları da ekle"yi açabilirsiniz.</p>}
                     <div className="flex flex-wrap items-center gap-2">
                         <button type="button" className="m-btn m-btn-primary" disabled={!canRun} onClick={run}>
                             <Icon name="refresh" size={18} />{busy !== null ? `Eşitleniyor… ${num(busy)}` : 'Şimdi eşitle'}

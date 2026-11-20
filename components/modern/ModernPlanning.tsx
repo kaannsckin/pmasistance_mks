@@ -3,6 +3,7 @@ import { EstimateLogEntry, JiraSyncSettings, Project, ReleasePlan, Task, Workspa
 import { CommitResult } from '../../utils/planning/releasePlan';
 import { JiraIssueRecord } from '../../utils/integrations';
 import { JiraImportOptions } from '../../utils/planning/jiraImport';
+import { JiraPushOutcome } from '../../utils/planning/jiraSync';
 import { modelEstimateEnabled } from '../../utils/planning/ml/runModel';
 import { useEstimateModel } from './planning/useEstimateModel';
 import { aiPolicyOf } from '../../utils/ai/policy';
@@ -45,7 +46,7 @@ interface Props {
     onLinkJira?: (key: string, links: Record<string, string>) => void;
     /** Jira canlı eşitleme: ayarı kaydeder ve çekilen kayıtları görevlere uygular (yalnız düzenleyebilen) */
     onSaveJiraSync?: (settings: JiraSyncSettings) => void;
-    onApplyJiraSync?: (issues: JiraIssueRecord[], opts: JiraImportOptions, addNew: boolean, label: string) => void;
+    onApplyJiraSync?: (issues: JiraIssueRecord[], opts: JiraImportOptions, addNew: boolean, label: string, pushed?: JiraPushOutcome) => void;
 }
 
 type Mode = 'record' | 'release' | 'simulate';

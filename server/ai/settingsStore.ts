@@ -65,7 +65,7 @@ export const decryptSecret = async (enc: string, secret: string): Promise<string
 
 const clean = (v: string | undefined) => v?.trim() || undefined;
 
-export const supabaseBackend = (url: string, serviceKey: string, fetchImpl: typeof fetch = fetch): SettingsBackend => {
+export const supabaseBackend = (url: string, serviceKey: string, fetchImpl: typeof fetch = fetch, rowId = 'ai'): SettingsBackend => {
     const base = `${url.replace(/\/+$/, '')}/rest/v1/app_settings`;
     const headers = { apikey: serviceKey, authorization: `Bearer ${serviceKey}`, 'content-type': 'application/json' };
     const fail = async (res: Response, what: string) => {
@@ -75,15 +75,15 @@ export const supabaseBackend = (url: string, serviceKey: string, fetchImpl: type
     return {
         kind: 'supabase',
         async load() {
-            const res = await fetchImpl(`${base}?id=eq.ai&select=data`, { headers });
+            const res = await fetchImpl(`${base}?id=eq.${rowId}&select=data`, { headers });
             if (!res.ok) await fail(res, 'okunamadı');
             const rows = await res.json() as { data?: StoredAiSettings }[];
             return rows[0]?.data || null;
         },
         async save(s) {
             const res = s
-                ? await fetchImpl(base, { method: 'POST', headers: { ...headers, prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify({ id: 'ai', data: s }) })
-                : await fetchImpl(`${base}?id=eq.ai`, { method: 'DELETE', headers });
+                ? await fetchImpl(base, { method: 'POST', headers: { ...headers, prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify({ id: rowId, data: s }) })
+                : await fetchImpl(`${base}?id=eq.${rowId}`, { method: 'DELETE', headers });
             if (!res.ok) await fail(res, 'yazılamadı');
         },
     };

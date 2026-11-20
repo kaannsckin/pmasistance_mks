@@ -1,4 +1,4 @@
-import { Person, Project, WorkspaceData } from '../../types';
+import { Person, Project, WorkspaceData, WorklogEntry } from '../../types';
 import { can } from '../permissions';
 import { aiPolicyOf } from './policy';
 import { Identity, identityOf, visibleProjectIds } from '../rbac';
@@ -41,6 +41,13 @@ export interface ToolContext {
     canWrite: boolean;
     /** Bu turda üretilen değişiklik önerileri (kullanıcı onayı bekler) */
     proposals: AiProposal[];
+    /**
+     * Jira bağlantısı (tarayıcı çalışma zamanı bağlar; sunucuda Jira yapılandırılmışsa).
+     * Yoksa Jira araçları (worklog raporu, eşitleme önerisi) sunulmaz.
+     */
+    jira?: {
+        worklogs: (projectKey: string, from: string, to: string) => Promise<WorklogEntry[]>;
+    };
 }
 
 export const buildToolContext = (ws: WorkspaceData, now: Date = new Date()): ToolContext => {

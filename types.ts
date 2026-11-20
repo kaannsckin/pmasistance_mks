@@ -59,6 +59,7 @@ export interface Task {
   startedAt?: string; // ilk kez "Süreçte"ye geçtiği an
   resolvedAt?: string; // son kapanış (yeniden açılınca silinir)
   statusLog?: TaskStatusChange[]; // durum geçişleri (en yeni sonda, en çok 50)
+  jiraBase?: Partial<Record<JiraSyncFieldId, string>>; // çift yönlü eşitlemede son eşitlenen Jira değerleri (hangi tarafın değiştiğini bulmak için)
   estimateSource?: 'user' | 'ai' | 'jira' | 'import' | 'reference' | 'model'; // reference: benzer kapanmış kayıtların gerçek sürelerinden; model: klasik ML modeli
   forecast?: TaskForecast; // açılışta yapılan süre tahmini (kayıt kapanınca isabeti ölçülür)
   originalEstimateHours?: number; // kaynak sistemdeki ilk tahmin (Jira "Original Estimate")
@@ -502,7 +503,19 @@ export interface JiraSyncSettings {
   discover: boolean;
   /** Otomatik eşitleme aralığı (dakika); 0 = kapalı */
   autoMinutes: number;
+  /**
+   * Alan bazında eşitleme yönü. Verilmezse eski davranış: Jira'dan gelen
+   * tüm alanlar alınır, uygulamadan Jira'ya yalnız görev ayrıntısından elle yazılır.
+   */
+  fields?: Partial<Record<JiraSyncFieldId, JiraSyncDirection>>;
+  /** Jira'daki atanan kişiler Veri Havuzu'na ve proje ekibine otomatik eklensin mi */
+  autoPeople?: boolean;
 }
+
+/** Eşitlenebilen alanlar (uygulama ↔ Jira) */
+export type JiraSyncFieldId = 'status' | 'assignee' | 'dueDate' | 'priority' | 'summary' | 'description' | 'labels' | 'estimate' | 'components' | 'fixVersion' | 'issueType';
+/** off: eşitlenmez · pull: Jira → uygulama · push: uygulama → Jira · both: çift yönlü (son eşitlemeden beri değişen taraf kazanır) */
+export type JiraSyncDirection = 'off' | 'pull' | 'push' | 'both';
 
 export interface Project {
   id: string;

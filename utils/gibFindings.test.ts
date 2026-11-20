@@ -116,6 +116,24 @@ const TESTS: unknown[][] = [
     ['D-04', 'D', 'Olması beklenen', 2, '', '', 'Test edilemedi'],
 ];
 
+// Teslim planı ve GİB yanıtı sayfaları: Genel Liste'den formülle gelen sütunlar boş, elle girilenler dolu
+const ARALIK: unknown[][] = [
+    ['Aralık teslimi · geliştirme planı'],
+    ['Test No', 'Önem Kademesi', 'Başlık', 'Alt küme', 'Karar kaynağı', 'Sunumdaki başlık', 'Toplantı kararı / notu', null, 'Alt küme', 'Madde'],
+    ['I-01', null, null, 'Aralık planı', 'Geliştirme planı (MS0)', 'Slayt 4 · Parola', 'Aralık teslimatında.', null, 'Aralık planı', 1],
+    ['Z-99', null, null, 'Aralık planı', '', '', '', null, 'Toplam', 1],
+];
+const YANIT: unknown[][] = [
+    ['Kurumdan yanıt beklenen konular'],
+    ['Test No', 'Başlık', 'Alt küme', 'Karar kaynağı', 'Sunumdaki başlık', 'Toplantı kararı / notu', 'Yanıt durumu', 'Yanıt / açıklama'],
+    ['D-04', null, 'Yanıta bağlı', '13.11 toplantısı', 'Slayt 7', 'Beklenen: topoloji bilgisi', 'Bekleniyor', ''],
+];
+const ONCELIKLI: unknown[][] = [
+    ['Öncelikli Bulgular'],
+    ['5.1 Sıra', 'Test No', 'Başlık', 'Bulgu (Rapor 5.1)', 'Olası Etki (Rapor 5.1)'],
+    [1, 'I-01', 'Parola', 'Uzun parola yok', 'Kaba kuvvet saldırısına açık.'],
+];
+
 const WORKBOOK: WorkbookMatrices = {
     'Giriş': GIRIS,
     'Milestone': MILESTONE,
@@ -126,6 +144,9 @@ const WORKBOOK: WorkbookMatrices = {
     'Test Kalemleri': TESTS,
     'Genel Liste': GENEL,
     'GİB rapor ve roplantı çıktıları': MEETINGS,
+    'Aralık Teslimi': ARALIK,
+    'GİB’den Yanıt Beklenenler': YANIT,
+    'Öncelikli Bulgular': ONCELIKLI,
 };
 
 const NOW = '2026-11-06T09:00:00.000Z';
@@ -197,7 +218,7 @@ describe('parseGibWorkbook', () => {
 
     it('etiketler, tarihler ve atananlar', () => {
         const t = byId.get('gib-I-01')!;
-        expect(t.labels).toEqual(['MS0', 'Rapor 5.1', 'Zorunlu', 'PoC: Karşılanmadı', 'Hızlı aksiyon', 'EMS', 'İstemci']);
+        expect(t.labels).toEqual(['MS0', 'Rapor 5.1', 'Zorunlu', 'PoC: Karşılanmadı', 'Hızlı aksiyon', 'EMS', 'İstemci', 'Aralık teslimi']);
         expect(t.dueDate).toBe('2026-11-24');
         expect(t.issueType).toBe('bug');
         const two = byId.get('gib-I-02')!;
@@ -259,6 +280,25 @@ describe('parseGibWorkbook', () => {
         expect(pkg.tagColors.MS0).toBeDefined();
     });
 
+    it('teslim planı, GİB yanıtı ve olası etki: etiket + not; Genel Liste\'de olmayan madde bildirilir', () => {
+        const i01 = pkg.tasks.find(t => t.id === 'gib-I-01')!;
+        const d04 = pkg.tasks.find(t => t.id === 'gib-D-04')!;
+        expect(i01.labels).toContain('Aralık teslimi');
+        expect(i01.notes).toContain('Olası etki: Kaba kuvvet saldırısına açık.');
+        expect(i01.notes).toContain('Aralık teslimi: Aralık planı · karar: Geliştirme planı (MS0) · Slayt 4 · Parola');
+        expect(i01.notes).toContain('Toplantı notu: Aralık teslimatında.');
+        expect(d04.labels).toContain('GİB yanıtı bekleniyor');
+        expect(d04.notes).toContain('GİB yanıtı: Bekleniyor');
+        expect(pkg.summary.plans).toEqual({ 'Aralık teslimi': 1, 'GİB yanıtı bekleniyor': 1 });
+        expect(pkg.warnings.some(w => w.includes('Z-99'))).toBe(true);
+        expect(pkg.tagColors['Aralık teslimi']).toBeDefined();
+    });
+
+    it('Jira eşitleme önerisi: Jira No önekinden proje, Excel alanlarını ezmeyen alan seçimi, kişiler otomatik', () => {
+        expect(pkg.jiraSync).toMatchObject({ projectKey: 'ABC', discover: false, autoMinutes: 0, autoPeople: true });
+        expect(pkg.jiraSync?.fields).toMatchObject({ status: 'pull', assignee: 'pull', dueDate: 'pull', summary: 'off', description: 'off', labels: 'off', priority: 'off' });
+    });
+
     it('Genel Liste yoksa anlaşılır hata', () => {
         expect(() => parseGibWorkbook({ Sayfa1: [] })).toThrow(/Genel Liste/);
     });
@@ -286,6 +326,7 @@ describe('applyGibImport', () => {
         expect(project.tasks).toHaveLength(4);
         expect(project.pmPersonId).toBe(res.pmPersonId);
         expect(project.jiraProjectKey).toBe('ABC');
+        expect(project.jiraSync?.fields?.status).toBe('pull');
         expect(project.settings.projectStartDate).toBe('2026-11-01');
         expect(project.workPackages).toHaveLength(2);
         expect(project.customerRequests).toHaveLength(2);
@@ -318,6 +359,7 @@ describe('applyGibImport', () => {
                     { ...p.tasks[0], id: 'manual-1', name: 'Elle eklenen' },
                 ],
                 aiProfile: { ...p.aiProfile, summary: 'PY özeti' },
+                jiraSync: undefined, // Jira eşitlemesi kurulmamış: durum Excel'den
             }),
         };
         expect(findImportedProject(edited.projects, pkg)?.id).toBe(pid);
@@ -344,6 +386,26 @@ describe('applyGibImport', () => {
         expect(project.aiProfile?.summary).toBe('PY özeti');
         expect(res.workspace.projects).toHaveLength(1);
         expect(res.workspace.people).toHaveLength(1);
+    });
+
+    it('yeniden aktarım Jira\'dan alınan alanları (durum, atanan, termin) ezmez; Excel alanları güncellenir', () => {
+        const first = applyGibImport(createEmptyWorkspace(), pkg, { projectName: 'GİB', newPmName: 'MKS', now });
+        const pid = first.projectId;
+        // Jira eşitlemesi I-02'yi kapattı, atadı ve termin verdi
+        const synced = {
+            ...first.workspace,
+            projects: first.workspace.projects.map(p => p.id !== pid ? p : {
+                ...p,
+                tasks: p.tasks.map(t => t.id === 'gib-I-02' ? { ...t, status: TaskStatus.Done, resourceName: 'Zeynep Ak', dueDate: '2026-12-31' } : t),
+            }),
+        };
+        const genel2 = GENEL.map(r => [...r]);
+        genel2[3][15] = 'Analizde'; // Excel'deki eski durum
+        genel2[3][5] = 'Hesap kilitleme (güncel)';
+        const pkg2 = parseGibWorkbook({ ...WORKBOOK, 'Genel Liste': genel2 }, { now: NOW });
+        const res = applyGibImport(synced, pkg2, { projectId: pid, projectName: 'GİB', pmPersonId: first.pmPersonId, now });
+        const t2 = res.workspace.projects.find(p => p.id === pid)!.tasks.find(t => t.id === 'gib-I-02')!;
+        expect(t2).toMatchObject({ status: TaskStatus.Done, resourceName: 'Zeynep Ak', dueDate: '2026-12-31', name: 'I-02 · Hesap kilitleme (güncel)' });
     });
 
     it('başka projeler etkilenmez', () => {

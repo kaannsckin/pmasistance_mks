@@ -53,6 +53,7 @@ const SourceList: React.FC<{ content: string; citations: Citation[]; onOpen: (c:
 
 const PROPOSAL_STATUS: Record<AiProposal['status'], { label: string; tone: string }> = {
     pending: { label: 'Onayınızı bekliyor', tone: 'm-tone-warn' },
+    running: { label: 'Çalışıyor…', tone: 'm-tone-accent' },
     applied: { label: 'Uygulandı', tone: 'm-tone-ok' },
     rejected: { label: 'Vazgeçildi', tone: 'm-tone-hold' },
     failed: { label: 'Uygulanamadı', tone: 'm-tone-bad' },

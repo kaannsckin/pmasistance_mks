@@ -10,6 +10,7 @@ import { buildToolContext } from '../../utils/ai/scope';
 import { buildSystemPrompt } from '../../utils/ai/systemPrompt';
 import { executeTool, toolLabel, toolSpecsFor } from '../../utils/ai/tools';
 import { Citation, RagRef } from '../../utils/rag/sources';
+import { fetchIntegrationHealth, fetchJiraWorklogs, IntegrationHealth } from '../../utils/integrations';
 import { configureEmbedder, rebuildIndex, searchKnowledge, searchMode, syncIndex } from '../../utils/rag/service';
 
 /**
@@ -94,7 +95,7 @@ interface ProviderProps {
   getView: () => View;
   onNavigate?: (ref: RagRef) => void;
   /** Onaylanan öneriyi uygular (App: yetki/kilit yeniden doğrulanır, denetim + geri-al) */
-  onApplyAction?: (action: AiAction) => ApplyResult;
+  onApplyAction?: (action: AiAction) => ApplyResult | Promise<ApplyResult>;
   children: React.ReactNode;
 }
 
@@ -145,12 +146,23 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, chat = tru
       : null);
   }, [status]);
 
+  // Jira bağlantısı (sunucuda yapılandırılmışsa): worklog raporu ve eşitleme önerisi araçları için
+  const jiraHealth = useRef<IntegrationHealth | null>(null);
+  useEffect(() => {
+    if (!enabled) return;
+    const c = new AbortController();
+    fetchIntegrationHealth(c.signal).then(h => { jiraHealth.current = h; }).catch(() => undefined);
+    return () => c.abort();
+  }, [enabled, isOpen]);
+
   /** Kullanıcının güncel kapsamında araç bağlamı + RAG çalışma zamanı */
   const makeContext = useCallback(() => {
     const ws = getWorkspace();
     if (!ws) return null;
     const ctx = buildToolContext(ws);
     ctx.rag = { search: (q, o) => searchKnowledge(ctx, q, o), mode: searchMode };
+    const h = jiraHealth.current;
+    if (h?.jira) ctx.jira = { worklogs: (projectKey, from, to) => fetchJiraWorklogs({ projectKey, from, to }, h.authMode) };
     return ctx;
   }, [getWorkspace]);
 
@@ -295,16 +307,19 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, chat = tru
     // Aynı karede çift tıklama: ekran güncellenmeden ikinci kez uygulanmasın
     if (resolvedProposals.current.has(proposalId)) return;
     resolvedProposals.current.add(proposalId);
-    let patch: Partial<AiProposal>;
-    if (decision === 'reject') {
-      patch = { status: 'rejected', message: 'Vazgeçildi.' };
-    } else {
-      const r = onApplyAction ? onApplyAction(proposal.action) : { ok: false, message: 'Bu ekranda değişiklik uygulanamıyor.' };
-      patch = { status: r.ok ? 'applied' : 'failed', message: r.message };
-    }
-    setMessages(prev => prev.map(m => (m.id === messageId
+    const update = (patch: Partial<AiProposal>) => setMessages(prev => prev.map(m => (m.id === messageId
       ? { ...m, proposals: m.proposals?.map(p => (p.id === proposalId ? { ...p, ...patch } : p)) }
       : m)));
+    if (decision === 'reject') { update({ status: 'rejected', message: 'Vazgeçildi.' }); return; }
+    const r = onApplyAction ? onApplyAction(proposal.action) : { ok: false, message: 'Bu ekranda değişiklik uygulanamıyor.' };
+    if (r instanceof Promise) {
+      // Ağ gerektiren öneri (Jira eşitlemesi): sonuç gelene kadar kartta "çalışıyor"
+      update({ status: 'running', message: 'Çalışıyor…' });
+      r.then(x => update({ status: x.ok ? 'applied' : 'failed', message: x.message }))
+        .catch(e => update({ status: 'failed', message: (e as Error)?.message || 'Uygulanamadı.' }));
+      return;
+    }
+    update({ status: r.ok ? 'applied' : 'failed', message: r.message });
   }, [onApplyAction]);
 
   const complete = useCallback(async (system: string, prompt: string, signal?: AbortSignal): Promise<string> => {

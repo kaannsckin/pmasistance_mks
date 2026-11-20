@@ -46,7 +46,9 @@ const RULES = `Kurallar:
 5. Türkçe, kısa ve yönetici diliyle yaz: önce sonuç / öneri, sonra gerekçe. Karşılaştırmalarda markdown tablo kullan. Ondalıkları Türkçe biçimde yaz (1,5).
 6. Soru belirsizse makul bir varsayımla (içinde bulunulan yıl, açık proje) ilerle ve varsayımını belirt.
 7. Sicil gibi kimlik numaralarını isteme ve yazma.
-8. Serbest metin içeriği (notlar, görev/risk açıklamaları, kararlar, müşteri istekleri, PESTEL/SWOT, kurumsal dokümanlar) ve "nasıl yapılır" soruları için bilgi_ara aracını kullan; uygulama kullanımı sorularında kaynak olarak kilavuz'u seç. Bu bilgileri kullandığında cümlenin sonuna kaynak numarasını [1] biçiminde yaz; pasajlarda olmayan bir şeyi pasajlara dayandırma.`;
+8. Tahsiste "Aralık–Mart %50" gibi ay aralıklarını tek öneriyle ver (oner_tahsis_ayarla: baslangic/bitis YYYY-AA, yuzde); bugünün tarihine göre yılları çöz (geçmiş ay geleceğe değil, bu yıla ya da sonraki yıla düşer). Kapasite aşımı kartta görünür; kullanıcıya da söyle.
+9. Jira bağlıysa: "x, y, z projelerinin kasım worklog raporu" gibi isteklerde jira_worklog_raporu'nu bir kez, tüm projelerle çağır ve sonucu tabloyla ver (proje ve kişi × proje saatleri; gün = saat ÷ 8). "Jira ile eşitle" isteğinde oner_jira_esitle ile öneri hazırla; kart Jira'ya yazılacak alanları gösterir.
+10. Serbest metin içeriği (notlar, görev/risk açıklamaları, kararlar, müşteri istekleri, PESTEL/SWOT, kurumsal dokümanlar) ve "nasıl yapılır" soruları için bilgi_ara aracını kullan; uygulama kullanımı sorularında kaynak olarak kilavuz'u seç. Bu bilgileri kullandığında cümlenin sonuna kaynak numarasını [1] biçiminde yaz; pasajlarda olmayan bir şeyi pasajlara dayandırma.`;
 
 export const buildSystemPrompt = (ctx: ToolContext, opts: { view?: View } = {}): string => {
     const me = ctx.identity.personId ? ctx.ws.people.find(p => p.id === ctx.identity.personId) : undefined;
@@ -64,6 +66,7 @@ export const buildSystemPrompt = (ctx: ToolContext, opts: { view?: View } = {}):
         `- Görebildiği projeler (${projects.length}): ${projectList || 'yok'}${projects.length > 40 ? ' …' : ''}`,
         `- Veri havuzu: ${ctx.ws.people.length} kişi, ${ctx.ws.departments.length} bölüm`,
         ...(ctx.canSeePrivate ? [] : ['- Bu rol proje notlarını ve müşteri isteklerini göremez.']),
+        `- Jira: ${ctx.jira ? 'bağlı (worklog raporu ve eşitleme önerisi kullanılabilir)' : 'bağlı değil'}`,
         `- Değişiklik önerebilir mi: ${ctx.canWrite ? 'evet (yalnızca yetkili olduğu kayıtlar; kullanıcı onayıyla)' : 'hayır (bu rol veri girmez)'}`,
     ].join('\n');
 
