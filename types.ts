@@ -64,6 +64,11 @@ export interface Task {
   forecast?: TaskForecast; // açılışta yapılan süre tahmini (kayıt kapanınca isabeti ölçülür)
   originalEstimateHours?: number; // kaynak sistemdeki ilk tahmin (Jira "Original Estimate")
   actualHours?: number; // harcanan efor (Jira "Time Spent" / worklog)
+  /**
+   * Jira worklog'ları (billing hours): kim, hangi gün, kaç saat. Eşitlemede
+   * actualHours değişince yenilenir; forHours o anki actualHours'tur.
+   */
+  jiraWorklog?: TaskJiraWorklog;
   storyPoints?: number;
   fixVersion?: string; // kaynak sistemdeki hedef sürüm
   jiraStatus?: string; // Jira'daki durum adı (ör. "ANALYSIS"); pano kolon eşlemesinde kullanılır
@@ -1028,6 +1033,13 @@ export interface ReportEvent {
 }
 
 /** Jira worklog kaydı (dosyadan ya da Jira API'den) */
+/** Görevin Jira worklog özeti: satırlar Jira'daki kişi adı (ve varsa e-posta) ile */
+export interface TaskJiraWorklog {
+  at: string; // çekildiği an (ISO)
+  forHours: number; // çekildiğindeki actualHours (değişince yeniden çekilir)
+  entries: { author: string; email?: string; date: string; hours: number }[];
+}
+
 export interface WorklogEntry {
   date: string; // ISO tarih
   author: string;

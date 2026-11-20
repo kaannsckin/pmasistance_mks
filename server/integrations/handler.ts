@@ -69,6 +69,8 @@ export const integrationStatus = (env: Env): IntegrationStatus => ({
 export interface JiraWorklog {
     date: string;
     author: string;
+    /** Jira'nın verdiği e-posta (izin varsa); havuzdaki kişiyle eşleştirmede isimden önce kullanılır */
+    authorEmail?: string;
     issueKey: string;
     summary: string;
     hours: number;
@@ -89,7 +91,7 @@ const jiraAuth = (env: Env): string => {
     return `Basic ${Buffer.from(raw).toString('base64')}`;
 };
 
-type JiraWorklogRaw = { started?: string; timeSpentSeconds?: number; comment?: unknown; author?: { displayName?: string; name?: string } };
+type JiraWorklogRaw = { started?: string; timeSpentSeconds?: number; comment?: unknown; author?: { displayName?: string; name?: string; emailAddress?: string } };
 type JiraIssueRaw = { key: string; fields?: { summary?: string; worklog?: { total?: number; maxResults?: number; worklogs?: JiraWorklogRaw[] } } };
 
 const commentText = (c: unknown): string | undefined => {
@@ -167,10 +169,57 @@ export const fetchJiraWorklogs = async (env: Env, projectKey: string, from: stri
             if (!DATE_RE.test(date) || date < from || date > to) return;
             const hours = Math.round(((w.timeSpentSeconds || 0) / 3600) * 100) / 100;
             if (!(hours > 0)) return;
-            out.push({ date, author: w.author?.displayName || w.author?.name || '', issueKey: issue.key, summary: issue.fields?.summary || '', hours, comment: commentText(w.comment), source: 'jira' });
+            out.push(worklogEntry(issue.key, issue.fields?.summary || '', w, date, hours));
         });
     }
     return out.sort((a, b) => a.date.localeCompare(b.date) || a.issueKey.localeCompare(b.issueKey));
+};
+
+const worklogEntry = (issueKey: string, summary: string, w: JiraWorklogRaw, date: string, hours: number): JiraWorklog => {
+    const email = clean(w.author?.emailAddress);
+    return {
+        date, author: w.author?.displayName || w.author?.name || '', ...(email ? { authorEmail: email.toLowerCase() } : {}),
+        issueKey, summary, hours, comment: commentText(w.comment), source: 'jira',
+    };
+};
+
+export const MAX_WORKLOG_KEYS = 50;
+
+/**
+ * Belirli kayıtların TÜM worklog'ları (tarih sınırı yok): görev Jira kaydıyla
+ * eşitlenince kim kaç saat harcamış (billing hours) buradan gelir. Aynı anda en
+ * çok 4 istek; bulunamayan/erişilemeyen kayıtlar `missing` olarak döner.
+ */
+export const fetchJiraIssueWorklogs = async (env: Env, keys: string[], fetchImpl?: typeof fetch): Promise<{ entries: JiraWorklog[]; missing: string[] }> => {
+    const base = clean(env.JIRA_BASE_URL)!.replace(/\/+$/, '');
+    const f = fetchImpl || upstreamFetch(base, env);
+    const headers = { authorization: jiraAuth(env), accept: 'application/json' };
+    const entries: JiraWorklog[] = [];
+    const missing: string[] = [];
+    const one = async (key: string) => {
+        const logs: JiraWorklogRaw[] = [];
+        for (let startAt = 0, page = 0; page < 20; page++) { // Cloud sayfalar (en çok 20 × 1000); Server tümünü bir kerede verir
+            const res = await f(`${base}/rest/api/2/issue/${encodeURIComponent(key)}/worklog?startAt=${startAt}&maxResults=1000`, { headers });
+            if (res.status === 404) { missing.push(key); return; }
+            if (res.status === 401 || res.status === 403) throw Object.assign(new Error('Jira erişimi reddedildi (yetki ya da jeton hatalı).'), { status: 502 });
+            if (!res.ok) throw Object.assign(new Error(`Jira yanıtı başarısız (HTTP ${res.status}).`), { status: 502 });
+            const body = await res.json() as { worklogs?: JiraWorklogRaw[]; total?: number };
+            const got = body.worklogs || [];
+            logs.push(...got);
+            startAt += got.length;
+            if (!got.length || typeof body.total !== 'number' || startAt >= body.total) break;
+        }
+        logs.forEach(w => {
+            const date = (w.started || '').slice(0, 10);
+            const hours = Math.round(((w.timeSpentSeconds || 0) / 3600) * 100) / 100;
+            if (DATE_RE.test(date) && hours > 0) entries.push(worklogEntry(key, '', w, date, hours));
+        });
+    };
+    const queue = [...keys];
+    await Promise.all(Array.from({ length: Math.min(4, queue.length) }, async () => {
+        for (let k = queue.shift(); k; k = queue.shift()) await one(k);
+    }));
+    return { entries: entries.sort((a, b) => a.issueKey.localeCompare(b.issueKey) || a.date.localeCompare(b.date)), missing: missing.sort() };
 };
 
 // ---------------------------------------------------------------- Jira kayıt geçmişi
@@ -885,6 +934,23 @@ export const handleIntegrationRequest = async (request: Request, rawEnv: Env, op
         body = await request.json() as Record<string, unknown>;
     } catch {
         return json(400, { error: 'Geçersiz istek gövdesi.', code: 'bad_request' });
+    }
+
+    if (opts.route === 'jira-worklogs' && Array.isArray(body.keys)) {
+        // Kayıt bazında tüm worklog'lar (görev eşitlemesindeki billing hours)
+        if (!status.jira) return json(501, { error: "Jira bağlantısı yapılandırılmadı (kurum içi izin ve sunucu ayarı gerekir).", code: 'config' });
+        const keys = [...new Set(body.keys.map(k => String(k).trim().toUpperCase()))];
+        if (!keys.length || keys.length > MAX_WORKLOG_KEYS || keys.some(k => !ISSUE_KEY_RE.test(k))) {
+            return json(400, { error: `1–${MAX_WORKLOG_KEYS} geçerli Jira kayıt anahtarı gerekir (ör. MKS-12).`, code: 'bad_request' });
+        }
+        const blocked = [...new Set(keys.map(k => k.split('-')[0]))].filter(p => !jiraProjectAllowed(env, p));
+        if (blocked.length) return json(403, { error: `${blocked.join(', ')} projesi bu sunucuda Jira erişimine açık değil.`, code: 'forbidden' });
+        try {
+            return json(200, await fetchJiraIssueWorklogs(env, keys, opts.fetchImpl));
+        } catch (e) {
+            const err = e as Error & { status?: number };
+            return json(err.status || 502, { error: err.status ? err.message : `Jira'ya ulaşılamadı: ${describeNetworkError(e)}`, code: 'upstream' });
+        }
     }
 
     if (opts.route === 'jira-worklogs') {

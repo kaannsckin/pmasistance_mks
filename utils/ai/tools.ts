@@ -21,6 +21,8 @@ import { summarizeWorkPackages } from '../workPackages';
 import { can } from '../permissions';
 import { AiAction, AiProposal, describeAction, validateAction } from './actions';
 import { buildWorklogReport, reportRange, resolveTargets, WorklogGroup } from './worklogReport';
+import { buildWorkforce, hourlyRate, matchWorklogPerson } from '../workforce';
+import { fullName } from '../dataPool';
 import { JsonSchema, ToolCall, ToolSpec } from './protocol';
 import { knownWorkflow, taskStatusLabel } from '../workflow';
 import { effectiveScheme } from '../projectScheme';
@@ -1364,7 +1366,107 @@ AI_TOOLS.push({
 });
 
 
-AI_TOOLS.push(...PROPOSAL_TOOLS, ...AGENT_TOOLS, ...JIRA_TOOLS);
+// ---------------------------------------------------------------------------
+// İş güçleri (billing hours): görevlerin Jira worklog'larından kim, hangi
+// kayıtta, ne kadar zaman ve maliyeti. Kayıtlı veriden okunur (eşitlemede
+// gelir); jira_kayit_worklog ise Jira'dan canlı getirir.
+// ---------------------------------------------------------------------------
+
+const WORKFORCE_TOOLS: ToolDef[] = [
+    {
+        label: 'İş gücü raporu',
+        requires: 'jira',
+        spec: {
+            name: 'is_gucu_raporu',
+            description: 'Jira worklog\'larından (billing hours) kim, hangi kayıtta kaç saat harcamış ve maliyeti. "X hangi işte ne kadar çalıştı", "ATL-12\'de kaç kişi kaç saat" için.',
+            parameters: S.obj({
+                kisi: S.str('Kişi adı (kısmi).'),
+                kayit: S.str('Jira anahtarı ya da özet (kısmi).'),
+                projeler: S.str('Virgülle; boşsa tümü.'),
+                ay: S.str('2026-11 ya da Kasım; boşsa tüm zamanlar.'),
+                baslangic: S.str('YYYY-AA-GG.'),
+                bitis: S.str('YYYY-AA-GG.'),
+                grupla: S.str('', ['kisi', 'kayit', 'proje']),
+                limit: S.int('Varsayılan 15, en çok 40.'),
+            }),
+        },
+        run: (a, ctx) => {
+            const names = str(a.projeler).split(/[,;\n]/).map(x => x.trim()).filter(Boolean);
+            const projects = names.length ? names.map(n => resolveProject(ctx, n)) : ctx.scoped.projects;
+            const range: { from?: string; to?: string } = str(a.ay) || str(a.baslangic) || str(a.bitis) ? reportRange(a, ctx.now) : {};
+            const query = str(a.kisi) || str(a.kayit);
+            const r = buildWorkforce(ctx.ws, projects, { ...range, query });
+            const limit = clampLimit(a.limit, 15, 40);
+            const by = str(a.grupla) || 'kisi';
+            const money = (v: number | null) => (v === null ? undefined : Math.round(v));
+            const rows = by === 'kayit'
+                ? r.records.slice(0, limit).map(x => ({ anahtar: x.issueKey, ozet: short(x.summary, 80), proje: x.projectName, saat: x.hours, maliyet_tl: money(x.cost), kisiler: x.people.slice(0, 6).map(p => `${p.name} ${p.hours} sa`) }))
+                : by === 'proje'
+                    ? [...new Set(r.records.map(x => x.projectName))].map(name => {
+                        const recs = r.records.filter(x => x.projectName === name);
+                        return { proje: name, saat: r2(recs.reduce((s, x) => s + x.hours, 0)), maliyet_tl: recs.reduce((s, x) => s + x.cost, 0), kayit_sayisi: recs.length };
+                    }).sort((x, y) => y.saat - x.saat).slice(0, limit)
+                    : r.people.slice(0, limit).map(p => ({
+                        kisi: p.name, havuzda: !!p.person, unvan: p.person?.titleCode, birim: p.person?.departmentCode,
+                        saat: p.hours, gun: r2(p.hours / 8), maliyet_tl: p.uncostedHours === p.hours ? undefined : p.cost, kayit_sayisi: p.records,
+                        en_cok: [...new Map(p.entries.map(e => [e.taskId, e])).values()]
+                            .map(e => ({ k: e.issueKey, s: r2(p.entries.filter(x => x.taskId === e.taskId).reduce((t, x) => t + x.hours, 0)) }))
+                            .sort((x, y) => y.s - x.s).slice(0, query ? 10 : 3).map(x => `${x.k} ${x.s} sa`),
+                    }));
+            return {
+                donem: range.from ? `${range.from} – ${range.to}` : 'tüm zamanlar',
+                toplam_saat: r.totalHours, toplam_gun: r2(r.totalHours / 8), toplam_maliyet_tl: r.totalCost,
+                ...(r.uncostedHours ? { maliyetlenemeyen_saat: r.uncostedHours, not: 'Ünvanı/ünvan maliyeti olmayan ya da havuzda bulunmayan kişilerin saati maliyete katılmadı.' } : {}),
+                kisi_sayisi: r.people.length, kayit_sayisi: r.records.length,
+                ...(r.unmatchedAuthors.length ? { havuzda_olmayan: r.unmatchedAuthors.slice(0, 10) } : {}),
+                ...(r.pendingTasks ? { bekleyen: `${r.pendingTasks} kaydın worklog'u henüz alınmadı (eşitleme sürüyor).` } : {}),
+                ...(r.syncedTasks === 0 ? { uyari: 'Hiçbir görevin worklog\'u alınmamış; görevler Jira ile eşitlenince veri gelir.' } : {}),
+                gruplama: by,
+                satirlar: rows,
+                ...(by === 'kisi' && r.people.length > limit ? { kalan: r.people.length - limit } : {}),
+                ...(by === 'kayit' && r.records.length > limit ? { kalan: r.records.length - limit } : {}),
+            };
+        },
+    },
+    {
+        label: 'Jira worklog',
+        requires: 'jira',
+        spec: {
+            name: 'jira_kayit_worklog',
+            description: 'Jira kayıtlarında kim kaç saat harcamış: Jira\'dan CANLI (kişi, saat, son tarih, maliyet). Kayıt uygulamada yoksa ya da veri eskiyse.',
+            parameters: S.obj({ anahtarlar: S.str('Virgülle, en çok 20 (MKS-12, MKS-15).') }, ['anahtarlar']),
+        },
+        run: async (a, ctx) => {
+            if (!ctx.jira) throw new ToolError('Jira bağlantısı bu oturumda kullanılamıyor.');
+            const keys = [...new Set(str(a.anahtarlar).split(/[\s,;]+/).map(k => k.trim().toUpperCase()).filter(Boolean))];
+            if (!keys.length) throw new ToolError('En az bir Jira anahtarı verin (örn. MKS-12).');
+            if (keys.length > 20) throw new ToolError('Bir seferde en çok 20 anahtar sorgulanabilir.');
+            const bad = keys.filter(k => !JIRA_KEY_RE.test(k));
+            if (bad.length) throw new ToolError(`Geçersiz Jira anahtarı: ${bad.join(', ')} (biçim: PROJE-123).`);
+            keys.forEach(k => assertJiraKeyInScope(ctx, k.split('-')[0]));
+            const res = await ctx.jira.issueWorklogs(keys).catch(jiraFail);
+            const kayitlar = keys.filter(k => !res.missing.includes(k)).map(k => {
+                const rows = res.entries.filter(e => e.issueKey === k);
+                const by = new Map<string, { kisi: string; saat: number; maliyet: number | null; son: string }>();
+                rows.forEach(e => {
+                    const person = matchWorklogPerson(ctx.ws.people, e.author, e.authorEmail);
+                    const name = person ? fullName(person) : e.author;
+                    const rate = hourlyRate(person, ctx.ws.titles, e.date);
+                    const x = by.get(name) || { kisi: name, saat: 0, maliyet: 0, son: '' };
+                    x.saat += e.hours;
+                    x.maliyet = x.maliyet === null || rate === null ? null : x.maliyet + rate * e.hours;
+                    if (e.date > x.son) x.son = e.date;
+                    by.set(name, x);
+                });
+                const kisiler = [...by.values()].sort((p, q) => q.saat - p.saat).map(x => ({ kisi: x.kisi, saat: r2(x.saat), son_tarih: x.son, maliyet_tl: x.maliyet === null ? undefined : Math.round(x.maliyet) }));
+                return { anahtar: k, uygulamada: appTaskOf(ctx, k), kisi_sayisi: kisiler.length, toplam_saat: r2(rows.reduce((s, e) => s + e.hours, 0)), kisiler };
+            });
+            return { kayitlar, ...(res.missing.length ? { bulunamayan: res.missing } : {}) };
+        },
+    },
+];
+
+AI_TOOLS.push(...PROPOSAL_TOOLS, ...AGENT_TOOLS, ...JIRA_TOOLS, ...WORKFORCE_TOOLS);
 
 const TOOL_MAP = new Map(AI_TOOLS.map(t => [t.spec.name, t]));
 

@@ -33,7 +33,7 @@ import { stampLifecycle } from './utils/planning/lifecycle';
 import { canTransition, DEFAULT_WORKFLOW, resolveTransition, taskStatusLabel, taskWorkflow, workflowKey, workflowOptions, WorkflowStatus } from './utils/workflow';
 import { applyTransition, conditionProblem, needsInput, ruleFor, TransitionActor, TransitionEffect, TransitionInput, TransitionNeeds, transitionNeeds } from './utils/transitions';
 import TransitionDialog from './components/modern/TransitionDialog';
-import { describeNotify, fetchIntegrationHealth, fetchJiraSyncPage, JiraIssueRecord, sendNotification, updateJiraIssue } from './utils/integrations';
+import { describeNotify, fetchIntegrationHealth, fetchJiraSyncPage, JiraIssueRecord, JiraIssueWorklog, sendNotification, updateJiraIssue } from './utils/integrations';
 import { boardForProject, DEFAULT_SCHEME_ID, effectiveScheme, migrateTasksToWorkflow, schemeOf, schemeUsage, validateProjectWorkflow, validateScheme } from './utils/projectScheme';
 import ProjectWorkflowSheet from './components/modern/ProjectWorkflowSheet';
 import ProjectListsSheet from './components/modern/ProjectListsSheet';
@@ -100,6 +100,8 @@ import { markPushed } from './utils/planning/jiraFieldSync';
 import { ensureJiraPeople } from './utils/planning/jiraPeople';
 import { reportEvmSnapshot } from './utils/evm';
 import { useJiraAutoSync } from './components/modern/planning/useJiraAutoSync';
+import { refreshWorklogsNow, useJiraWorklogRefresh } from './components/modern/planning/useJiraWorklogRefresh';
+import { applyIssueWorklogs } from './utils/workforce';
 import ModernPortfolio from './components/modern/ModernPortfolio';
 import ProjectBoard from './components/modern/ProjectBoard';
 import ModernProjectOverview from './components/modern/ModernProjectOverview';
@@ -1368,6 +1370,25 @@ const App: React.FC = () => {
     handleApplyJiraSync,
   );
 
+  // ---- Jira worklog'ları (billing hours): harcanan süresi değişen kayıtların kim/kaç saat kırılımı ----
+  const handleApplyWorklogs = useCallback((requested: string[], entries: JiraIssueWorklog[], missing: string[]) => {
+    updateWorkspace(ws => {
+      const now = new Date();
+      const projects = ws.projects.map(p => applyIssueWorklogs(p, requested, entries, missing, now));
+      return projects.every((p, i) => p === ws.projects[i]) ? ws : { ...ws, projects };
+    });
+  }, [updateWorkspace]);
+  const worklogProjects = useCallback(() => {
+    const ws = workspaceRef.current;
+    return ws ? ws.projects.filter(p => p.tasks.some(t => t.jiraId) && canEditProjectContent(ws, identityOf(ws), p.id)) : [];
+  }, []);
+  useJiraWorklogRefresh(worklogProjects, handleApplyWorklogs);
+  const handleRefreshWorklogs = useCallback(async (projectIds: string[], force: boolean) => {
+    const editable = new Set(worklogProjects().map(p => p.id));
+    const targets = (workspaceRef.current?.projects || []).filter(p => projectIds.includes(p.id) && editable.has(p.id));
+    return refreshWorklogsNow(targets, handleApplyWorklogs, force);
+  }, [worklogProjects, handleApplyWorklogs]);
+
   // ---- Planlama: Jira'da açılan kayıtların anahtarları görevlere yazılır ----
   const handleLinkJira = useCallback((projectId: string, key: string, links: Record<string, string>) => {
     updateWorkspace(ws => {
@@ -1865,6 +1886,7 @@ const App: React.FC = () => {
     if (currentView === View.Allocations && isModern) {
       return (
         <ModernAllocation
+          workforce={{ projects: visibleProjects, onRefresh: handleRefreshWorklogs }}
           allocations={workspace.allocations}
           people={workspace.people}
           departmentLeadIds={departmentLeads}
@@ -2628,6 +2650,8 @@ const App: React.FC = () => {
           onSave={handleUpdateTask}
           onJiraPull={canEditProjectContent(workspace, identity, activeProject.id) ? issue => handleJiraPull(activeProject.id, issue) : undefined}
           workflow={activeScheme.workflow}
+          people={workspace.people}
+          titles={workspace.titles}
         />
       ) : (
         <TaskDetailModal task={liveViewingTask} onClose={() => setIsDetailModalOpen(false)} onEdit={(t) => { setIsDetailModalOpen(false); setEditingTask(t); setIsFormModalOpen(true); }} onSave={handleUpdateTask} />

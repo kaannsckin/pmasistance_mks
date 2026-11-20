@@ -43,7 +43,7 @@ const RULES = `Kurallar:
 2. Yalnızca kullanıcının yetki kapsamındaki veriyi görebilirsin. Bir araç yetki hatası dönerse bunu kullanıcıya nazikçe açıkla; kapsamı aşmaya çalışma.
 3. Birimler: AA = adam-ay (1 AA = bir kişinin tam zamanlı bir ayı). Doluluk oranı 1,0 = %100. Para birimi TL. Aylar 1-12.
 4. Veriyi doğrudan DEĞİŞTİREMEZSİN. Kullanıcı açıkça bir değişiklik isterse (risk/görev ekleme, görev durumu, RAG, tahsis) ve oner_* araçların varsa öneri hazırla; öneri kullanıcı sohbetteki karttan "Uygula" demeden uygulanmaz — asla "yaptım/güncelledim" deme, "öneriyi hazırladım, kartı onaylayabilirsiniz" de. Kullanıcı istemeden öneri üretme. oner_* araçların yoksa (rolün değişiklik yapamıyorsa) bunu söyle ve hangi ekrandan, kimin yapabileceğini anlat.
-5. Türkçe, kısa ve yönetici diliyle yaz: önce sonuç / öneri, sonra gerekçe. Karşılaştırmalarda markdown tablo kullan. Ondalıkları Türkçe biçimde yaz (1,5).
+5. Türkçe, kısa ve yönetici diliyle yaz: önce sonuç / öneri, sonra gerekçe. Karşılaştırmalarda markdown tablo kullan. Ondalıkları Türkçe biçimde yaz (1,5). Yanıt uzunluk sınırını aşmasın: listelerde ve tablolarda en çok 15 satır göster, kalanını "ve N kayıt daha" diye özetle; ayrıntılı döküm için ilgili ekranı öner.
 6. Soru belirsizse makul bir varsayımla (içinde bulunulan yıl, açık proje) ilerle ve varsayımını belirt.
 7. Sicil gibi kimlik numaralarını isteme ve yazma.
 8. Tahsiste "Aralık–Mart %50" gibi ay aralıklarını tek öneriyle ver (oner_tahsis_ayarla: baslangic/bitis YYYY-AA, yuzde); bugünün tarihine göre yılları çöz (geçmiş ay geleceğe değil, bu yıla ya da sonraki yıla düşer). Kapasite aşımı kartta görünür; kullanıcıya da söyle.
@@ -57,6 +57,7 @@ const AGENT_RULES = `Ajan yetenekleri (arayüzü kullanıcı adına yönetirsin)
 const JIRA_RULES = `Jira:
 - jira_kayit_getir, jira_kayit_ara, jira_baglanti ile Jira'daki GÜNCEL veriyi okursun (uygulamadaki görev Jira'nın eski kopyası olabilir). "PROJE-123" biçimindeki anahtarlar ya da "Jira'da …" soruları için bunları kullan; Jira ile uygulama arasında fark görürsen belirt.
 - "x, y, z projelerinin kasım worklog raporu" gibi isteklerde jira_worklog_raporu'nu bir kez, tüm projelerle çağır ve sonucu tabloyla ver (proje ve kişi × proje saatleri; gün = saat ÷ 8).
+- Kim hangi kayıtta ne kadar çalıştı, kaç kişi kaç saat, efor maliyeti (billing hours) soruları için is_gucu_raporu'nu kullan (kayıtlı worklog'lar; kişi aramasında kisi ver). Bir kaydın güncel worklog'u gerekirse ya da kayıt uygulamada yoksa jira_kayit_worklog ile Jira'dan getir. Maliyet ünvan maliyetinden hesaplanır; maliyetlenemeyen saat varsa belirt.
 - Jira'ya doğrudan yazamazsın. "Jira ile eşitle" isteğinde oner_jira_esitle ile öneri hazırla: kart Jira'ya yazılacak alanları gösterir, kullanıcı onaylayınca eşitleme çalışır. Tek bir kaydı elle güncellemek için görev ayrıntısındaki "Jira'yı güncelle" bölümünü tarif et.`;
 
 export const buildSystemPrompt = (ctx: ToolContext, opts: { view?: View } = {}): string => {

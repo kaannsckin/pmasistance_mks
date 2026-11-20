@@ -7,6 +7,7 @@ import { AllocationSuggestion, ApplyMode } from '../../utils/taskToAllocation';
 import { buildUtilization, HeatCell, HeatLevel } from '../../utils/utilization';
 import AllocationView, { AllocationControlState, AllocationMode, AllocationTab } from '../AllocationView';
 import { Icon, IconName } from './icons';
+import ModernWorkforce from './ModernWorkforce';
 import { uniq } from './taskMeta';
 
 /**
@@ -17,6 +18,11 @@ import { uniq } from './taskMeta';
  */
 
 interface ModernAllocationProps {
+    /** İş güçleri sekmesi (Jira worklog'ları); verilmezse sekme gösterilmez */
+    workforce?: {
+        projects: Project[];
+        onRefresh?: (projectIds: string[], force: boolean) => Promise<{ records: number; entries: number; missing: string[] }>;
+    };
     allocations: Allocation[];
     people: Person[];
     projects: Project[];
@@ -87,6 +93,7 @@ const cellText = (c: HeatCell): string => (c.level === 'empty' ? '—' : c.level
 const ModernAllocation: React.FC<ModernAllocationProps> = (props) => {
     const { allocations, people, projects, leaves, identity, onViewPerson } = props;
     const thisYear = new Date().getFullYear();
+    const [page, setPage] = useState<'allocation' | 'workforce'>('allocation');
     const [ctl, setCtl] = useState<AllocationControlState>({ year: thisYear, mode: 'plan', tab: 'grid', projectFilter: 'all', deptFilter: 'all' });
     const [view, setView] = useState<ViewKey>('heat');
     const [tool, setTool] = useState<ToolKey | null>(null);
@@ -162,12 +169,40 @@ const ModernAllocation: React.FC<ModernAllocationProps> = (props) => {
     const showHeat = !tool && view === 'heat';
     const toolMeta = tool ? TOOLS.find(t => t.id === tool) : undefined;
 
+    const pageTabs = props.workforce ? (
+        <div className="m-segmented mt-3" role="tablist" aria-label="Ekip ve tahsis sayfası">
+            <button type="button" role="tab" className="m-segment" aria-selected={page === 'allocation'} onClick={() => setPage('allocation')}>Tahsis</button>
+            <button type="button" role="tab" className="m-segment" aria-selected={page === 'workforce'} onClick={() => setPage('workforce')}>İş güçleri</button>
+        </div>
+    ) : null;
+
+    if (page === 'workforce' && props.workforce) {
+        return (
+            <div className="flex flex-col gap-6">
+                <header>
+                    <p className="m-0 text-[15px] m-text-3">Jira worklog'ları · kim, hangi kayıtta, ne kadar zaman</p>
+                    <h1 className="m-0 mt-0.5 text-[34px] leading-tight font-bold tracking-[-0.02em] m-text">Ekip ve tahsis</h1>
+                    {pageTabs}
+                </header>
+                <ModernWorkforce
+                    people={people}
+                    titles={props.titles}
+                    projects={props.workforce.projects}
+                    onRefresh={props.workforce.onRefresh}
+                    onApplyActuals={canEnter ? (records, options, mode) => props.onApplyBilledHours(records, options, mode, false) : undefined}
+                    onViewPerson={onViewPerson}
+                />
+            </div>
+        );
+    }
+
     return (
         <div className="flex flex-col gap-6">
             <header className="flex flex-wrap items-end justify-between gap-4">
                 <div>
                     <p className="m-0 text-[15px] m-text-3">Adam/ay planı · {util.rows.length} kişi · {ctl.year}</p>
                     <h1 className="m-0 mt-0.5 text-[34px] leading-tight font-bold tracking-[-0.02em] m-text">Ekip ve tahsis</h1>
+                    {pageTabs}
                 </div>
                 <div className="flex flex-wrap items-center gap-2.5">
                     {!tool && (

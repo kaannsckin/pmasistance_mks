@@ -6,7 +6,7 @@ import type { RagHit } from '../rag/retriever';
 import type { Citation, RagSourceType } from '../rag/sources';
 import type { AiProposal } from './actions';
 import type { UiCommand, UiResult } from './uiActions';
-import type { JiraMeta, JiraSyncPage, JiraSyncSource } from '../integrations';
+import type { JiraIssueWorklog, JiraMeta, JiraSyncPage, JiraSyncSource } from '../integrations';
 
 /**
  * AI araçlarının veri kapsamı — asistan, kullanıcının arayüzde görebildiğinden
@@ -58,6 +58,8 @@ export interface ToolContext {
         byKeys: (keys: string[]) => Promise<JiraSyncPage>;
         search: (source: JiraSyncSource, o: { openOnly: boolean; pageSize: number }) => Promise<JiraSyncPage>;
         worklogs: (projectKey: string, from: string, to: string) => Promise<WorklogEntry[]>;
+        /** Belirli kayıtların tüm worklog'ları (kim kaç saat) */
+        issueWorklogs: (keys: string[]) => Promise<{ entries: JiraIssueWorklog[]; missing: string[] }>;
     };
 }
 

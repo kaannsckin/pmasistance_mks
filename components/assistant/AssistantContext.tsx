@@ -1,9 +1,9 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { View, WorkspaceData } from '../../types';
-import { AgentStep, AGENT_MAX_STEPS, runAgentTurn } from '../../utils/ai/agent';
+import { AgentStep, AGENT_MAX_STEPS, runAgentTurn, TRUNCATED_STOP_REASONS } from '../../utils/ai/agent';
 import { AttachmentInfo, ChatAttachment, composeUserContent } from '../../utils/ai/attachments';
 import { UiCommand, UiResult } from '../../utils/ai/uiActions';
-import { fetchIntegrationHealth, fetchJiraMeta, fetchJiraSyncPage, fetchJiraWorklogs, IntegrationHealth } from '../../utils/integrations';
+import { fetchIntegrationHealth, fetchJiraIssueWorklogs, fetchJiraMeta, fetchJiraSyncPage, fetchJiraWorklogs, IntegrationHealth } from '../../utils/integrations';
 import { AiAction, AiProposal } from '../../utils/ai/actions';
 import { AiError, configureMasking, embedTexts, fetchAiStatus, hasCredentials, saveAccessToken, streamChat } from '../../utils/ai/client';
 import { buildMasker, collectMaskEntries, Masker } from '../../utils/ai/masking';
@@ -91,7 +91,6 @@ export const useAssistant = (): AssistantApi => {
   return v;
 };
 
-const TRUNCATED_REASONS = new Set(['length', 'max_tokens']);
 
 let nextId = 1;
 
@@ -189,6 +188,7 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, chat = tru
         byKeys: keys => fetchJiraSyncPage({ keys }, mode, signal),
         search: (source, o) => fetchJiraSyncPage({ source, openOnly: o.openOnly, pageSize: o.pageSize }, mode, signal),
         worklogs: (projectKey, from, to) => fetchJiraWorklogs({ projectKey, from, to }, mode),
+        issueWorklogs: keys => fetchJiraIssueWorklogs(keys, mode),
       };
     }
     return ctx;
@@ -265,7 +265,8 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, chat = tru
         maxSteps: AGENT_MAX_STEPS,
       });
       const notes: string[] = [];
-      if (result.stopReason && TRUNCATED_REASONS.has(result.stopReason)) notes.push('*(Yanıt uzunluk sınırında kesildi.)*');
+      // Otomatik devam isteklerinden sonra hâlâ kesikse (çok uzun yanıt) kullanıcıya daraltmayı öner
+      if (result.stopReason && TRUNCATED_STOP_REASONS.has(result.stopReason)) notes.push('*(Yanıt çok uzun olduğu için tamamlanamadı; soruyu daraltarak — ör. tek proje ya da kısa dönem — tekrar sorun.)*');
       if (result.hitStepLimit) notes.push('*(Araç adımı sınırına ulaşıldı; soruyu daraltarak tekrar deneyin.)*');
       if (!result.text.trim()) {
         setMessages(prev => prev.map(m => (m.id === replyId
