@@ -32,7 +32,16 @@ export interface AgentTurnResult {
     steps: AgentStep[];
     stopReason?: string;
     hitStepLimit: boolean;
+    /** Uzunluk sınırında kesilen yanıt için kaç kez "devam et" istendi */
+    continuations: number;
 }
+
+/** Sağlayıcıların "çıktı sınırına ulaşıldı" durma nedenleri */
+export const TRUNCATED_STOP_REASONS = new Set(['length', 'max_tokens']);
+/** Kesilen yanıt en çok bu kadar kez devam ettirilir */
+export const MAX_CONTINUATIONS = 2;
+export const CONTINUE_PROMPT = 'Yanıtın uzunluk sınırında kesildi. Kaldığın yerden, son kelimeden itibaren devam et: önceki kısmı tekrar etme, yeni araç çağırma, gerekiyorsa daha kısa bitir.';
+export const SHORTER_PROMPT = 'Önceki yanıt uzunluk sınırına takıldı ve görünür metin üretilmedi. Aynı soruyu kısa yanıtla: önce sonuç, en önemli 5-10 madde ya da satır; ayrıntıyı atla.';
 
 export const DEFAULT_MAX_STEPS = 6;
 /** Ajan modu (gezinme + Jira + öneri zinciri) için asistan sohbetinin adım sınırı */
@@ -66,9 +75,13 @@ export const runAgentTurn = async (o: AgentTurnOptions): Promise<AgentTurnResult
     const steps: AgentStep[] = [];
     let shown = '';
     let stopReason: string | undefined;
+    let continuations = 0;
+    let glue = false; // devam isteğinde metin araya boş satır koymadan eklenir
+    let toolRounds = 0;
 
-    for (let i = 0; i < maxSteps; i++) {
-        const prefix = shown ? `${shown}\n\n` : '';
+    for (;;) {
+        const prefix = shown ? (glue ? shown : `${shown}\n\n`) : '';
+        glue = false;
         messages = compactToolResults(messages, budget);
         const body: ChatRequestBody = {
             system: o.system,
@@ -78,7 +91,20 @@ export const runAgentTurn = async (o: AgentTurnOptions): Promise<AgentTurnResult
         const res = await o.stream(body, full => o.onText?.(prefix + full));
         if (res.text.trim()) shown = prefix + res.text;
         stopReason = res.stopReason;
-        if (res.toolCalls.length === 0) return { text: shown, steps, stopReason, hitStepLimit: false };
+        if (res.toolCalls.length === 0) {
+            // Çıktı sınırına takıldıysa (akıl yürütme token'ları da sayılır) devamını iste
+            if (stopReason && TRUNCATED_STOP_REASONS.has(stopReason) && continuations < MAX_CONTINUATIONS) {
+                continuations++;
+                if (res.text.trim()) {
+                    messages.push({ role: 'assistant', content: res.text }, { role: 'user', content: CONTINUE_PROMPT });
+                    glue = true;
+                } else {
+                    messages.push({ role: 'user', content: SHORTER_PROMPT });
+                }
+                continue;
+            }
+            return { text: shown, steps, stopReason, hitStepLimit: false, continuations };
+        }
 
         messages.push({ role: 'assistant', content: res.text, toolCalls: res.toolCalls });
         for (const call of res.toolCalls) {
@@ -90,6 +116,6 @@ export const runAgentTurn = async (o: AgentTurnOptions): Promise<AgentTurnResult
             o.onSteps?.(steps.map(s => ({ ...s })));
             messages.push({ role: 'tool', toolCallId: call.id, name: call.name, content: out.content });
         }
+        if (++toolRounds >= maxSteps) return { text: shown, steps, stopReason, hitStepLimit: true, continuations };
     }
-    return { text: shown, steps, stopReason, hitStepLimit: true };
 };

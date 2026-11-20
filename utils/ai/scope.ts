@@ -5,8 +5,10 @@ import { Identity, identityOf, visibleProjectIds } from '../rbac';
 import type { RagHit } from '../rag/retriever';
 import type { Citation, RagSourceType } from '../rag/sources';
 import type { AiProposal } from './actions';
+import type { AiDocument } from '../export/aiDocument';
+import type { MemoryStore } from './memory';
 import type { UiCommand, UiResult } from './uiActions';
-import type { JiraMeta, JiraSyncPage, JiraSyncSource } from '../integrations';
+import type { JiraIssueWorklog, JiraMeta, JiraSyncPage, JiraSyncSource } from '../integrations';
 
 /**
  * AI araçlarının veri kapsamı — asistan, kullanıcının arayüzde görebildiğinden
@@ -41,6 +43,8 @@ export interface ToolContext {
     citations: Citation[];
     /** Veri girebilen rol mü (Proje Yöneticisi / Bölüm Sorumlusu + kişi seçili) — öneri araçları buna bağlı */
     canWrite: boolean;
+    /** Veri havuzunu düzenleyebilen rol mü (datapool.edit, varsayılan PYB Destek) — havuz öneri araçları buna bağlı */
+    canWritePool: boolean;
     /** Bu turda üretilen değişiklik önerileri (kullanıcı onayı bekler) */
     proposals: AiProposal[];
     /**
@@ -58,7 +62,20 @@ export interface ToolContext {
         byKeys: (keys: string[]) => Promise<JiraSyncPage>;
         search: (source: JiraSyncSource, o: { openOnly: boolean; pageSize: number }) => Promise<JiraSyncPage>;
         worklogs: (projectKey: string, from: string, to: string) => Promise<WorklogEntry[]>;
+        /** Belirli kayıtların tüm worklog'ları (kim kaç saat) */
+        issueWorklogs: (keys: string[]) => Promise<{ entries: JiraIssueWorklog[]; missing: string[] }>;
     };
+    /**
+     * Bu turda hazırlanan dosyalar (Excel, CSV, Word, PDF, PowerPoint). Tarayıcı
+     * bağlar (dosya orada üretilip indirilir); yoksa dosya_olustur sunulmaz.
+     */
+    files?: AiDocument[];
+    /**
+     * Asistan hafızası (bu tarayıcıda, kimlik başına). userPrompt kullanıcının bu
+     * turda KENDİ yazdığı metindir (ekler hariç): hafızaya yazma/silme yalnız
+     * kullanıcı açıkça isterse yapılır, ekteki bir talimat hafızaya yazamaz.
+     */
+    memory?: { store: MemoryStore; userPrompt: string };
 }
 
 export const buildToolContext = (ws: WorkspaceData, now: Date = new Date()): ToolContext => {
@@ -85,6 +102,7 @@ export const buildToolContext = (ws: WorkspaceData, now: Date = new Date()): Too
         citations: [],
         // Değişiklik önerileri admin politikasıyla kapatılabilir
         canWrite: (identity.role === 'py' || identity.role === 'bolum_sorumlu') && !!identity.personId && aiPolicyOf(ws).proposals,
+        canWritePool: can(identity, 'datapool.edit') && aiPolicyOf(ws).proposals,
         proposals: [],
     };
 };
@@ -184,8 +202,21 @@ export const r2 = (v: number | null | undefined): number | null =>
 
 export const months12 = (arr: number[]): number[] => arr.map(v => Math.round(v * 100) / 100);
 
+let bulkMax = 0;
+
+/**
+ * Dosyaya aktarım: bir okuma aracı tablo kaynağı olarak çalışırken liste
+ * sınırı yükselir (ekranda 50, dosyada 1 000 satır). Yalnız bu çağrı süresince.
+ */
+export const withBulkLimit = async <T,>(max: number, fn: () => T | Promise<T>): Promise<T> => {
+    const prev = bulkMax;
+    bulkMax = max;
+    try { return await fn(); } finally { bulkMax = prev; }
+};
+
 export const clampLimit = (ref: unknown, def = 20, max = 50): number => {
     const n = Number(ref);
+    if (bulkMax) return Number.isInteger(n) && n > 0 ? Math.min(n, bulkMax) : bulkMax;
     return Number.isInteger(n) && n > 0 ? Math.min(n, max) : def;
 };
 

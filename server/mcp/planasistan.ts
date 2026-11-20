@@ -192,7 +192,7 @@ const hostOf = (url: string | undefined): string => {
     try { return new URL(url || '').host; } catch { return url || '?'; }
 };
 
-const WRITE_TOOLS = new Set(AI_TOOLS.filter(t => t.writeOnly).map(t => t.spec.name));
+const WRITE_TOOLS = new Set(AI_TOOLS.filter(t => t.writeOnly || t.poolWrite).map(t => t.spec.name));
 const LABELS = new Map(AI_TOOLS.map(t => [t.spec.name, t.label]));
 
 const toMcpTool = (spec: ToolSpec): McpTool => ({
@@ -291,8 +291,8 @@ export const createPlanAsistanMcp = (o: PlanAsistanMcpOptions): McpServerOptions
             : readOnly ? readOnly
             : !policy.proposals ? 'AI değişiklik önerileri yönetici konsolunda kapatılmış (Yönetici konsolu › Yapay zekâ).'
             : undefined;
-        const writeBlock = reportBlock || (!ctx.canWrite ? `${ROLE_LABELS[role]} rolü veri girmez; değişiklikler yalnız Proje Yöneticisi ve Bölüm Sorumlusu kimliğiyle yapılır.` : undefined);
-        if (writeBlock) ctx.canWrite = false;
+        const writeBlock = reportBlock || (!ctx.canWrite && !ctx.canWritePool ? `${ROLE_LABELS[role]} rolü veri girmez; değişiklikler yalnız Proje Yöneticisi ve Bölüm Sorumlusu (veri havuzu için PYB Destek) kimliğiyle yapılır.` : undefined);
+        if (writeBlock) { ctx.canWrite = false; ctx.canWritePool = false; }
         return { loaded, ws, ctx, person, roleSource, writeBlock, reportBlock };
     };
 
@@ -497,7 +497,7 @@ export const createPlanAsistanMcp = (o: PlanAsistanMcpOptions): McpServerOptions
             } catch (e) {
                 // Kaynak şu an okunamıyor: salt-okunur katalog sunulur, her çağrı nedeni döndürür
                 log(`araç listesi kapsamsız sunuldu: ${(e as Error).message}`);
-                specs = AI_TOOLS.filter(t => !t.writeOnly && !t.requires).map(t => t.spec);
+                specs = AI_TOOLS.filter(t => !t.writeOnly && !t.poolWrite && !t.requires).map(t => t.spec);
             }
             return [STATUS_SPEC, ...specs.map(toMcpTool), ...reports, ...jira, ...(canApply ? [APPLY_SPEC] : [])];
         },

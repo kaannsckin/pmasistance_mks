@@ -3,6 +3,34 @@
 Her sürümün başlığı `## vX.Y.Z` biçimindedir; GitHub sürüm sayfası bu bölümü
 buradan alır (`.github/workflows/exe.yml`).
 
+## v3.2.0
+
+Jira worklog'larından iş güçleri: kim, hangi kayıtta, ne kadar zaman harcadı ve maliyeti. Asistan uzun yanıtlarda yarıda kalmıyor veri havuzuna (ünvan, maliyet, kişi, bölüm) öneri hazırlayabiliyor ve Excel, CSV, Word, PDF, PowerPoint dosyası verebiliyor.
+
+### Yenilikler
+
+**İş güçleri (Ekip ve tahsis → İş güçleri)**
+- Jira kaydıyla eşitlenen görevlerin worklog'ları (billing hours) kişi kırılımıyla çekilir: kayıtta kim, hangi gün, kaç saat çalışmış.
+- Arka planda yenilenir: Jira'daki harcanan süresi değişen kayıtlar dakikada en çok 50'şer istenir; "Jira'dan yenile" ile tümü yeniden çekilir.
+- Kişi, kayıt (ATL-12) ya da konuya göre arama; dönem ve proje süzgeci; Kişiler ve Kayıtlar görünümü.
+- Kişi ayrıntısı: hangi kayıtta ne kadar zaman harcadığı, payı, aylık dağılımı ve maliyeti (ünvanın aylık maliyeti ÷ ayın iş saati).
+- Worklog yazarları havuzdaki kişilerle e-posta, yoksa ad soyad üzerinden eşleşir; eşleşmeyenler ve maliyeti tanımsız saatler ayrıca gösterilir.
+- "Gerçekleşen tahsise işle": seçili dönemin saatleri adam-ay olarak gerçekleşen tahsise yazılır (yalnız boş aylar ya da üzerine yaz).
+- Görev ayrıntısında "Harcanan süre (Jira)": kayıtta kim kaç saat çalışmış ve maliyeti.
+
+**Asistan**
+- Uzun yanıtlar artık yarıda kesilmiyor: yanıt sınıra takılırsa asistan kaldığı yerden kendiliğinden devam eder (en çok iki kez); yanıtlar kısa tutulur, uzun listeler özetlenip ilgili ekran önerilir.
+- Yeni Jira yetenekleri: iş gücü raporu (kişi, kayıt ya da proje bazında saat ve maliyet) ve bir kaydın Jira'daki worklog'larını doğrudan okuma.
+- Veri havuzu önerileri (PYB Destek): ünvan ve aylık maliyet ekleme/güncelleme, kişi ekleme, kişinin ünvanını, bölümünü, e-postasını ya da AA'sını güncelleme, bölüm ekleme. Ekteki Excel tablosu tek kartta onaylanır; havuzdaki ünvanlar adına göre eşleşir, yenilere kısaltma üretilir, toplam/ortalama satırları atlanır. Her kart "Uygula" denmeden uygulanmaz, denetim günlüğüne yazılır ve geri alınabilir.
+- Veri havuzunu listeleme: ünvanlar ve maliyetleri, bölümler, eksiği olan kişiler.
+- Toplu görev güncelleme önerisi: termin (tarih ya da ± gün kaydırma), atanan, öncelik, süre ve etiketler; birden çok görev tek kartta ("geciken görevleri iki hafta kaydır", "Ayşe'nin işlerini Mehmet'e ver").
+- "Tümünü uygula": bir yanıttaki bütün öneri kartları sırayla uygulanır; tek "Geri Al" hepsini geri alır.
+- Takip önerileri: her yanıtın altında, konuşmaya özgü en çok üç sonraki adım çipi (tıklayınca sorulur).
+- Akıllı başlangıç önerileri: boş sohbette verideki duruma göre öneriler (geciken görev sayısı ve yeni termin önerisi, maliyeti eksik ünvanlar, ünvanı olmayan kişiler, bu ay kim ne kadar çalıştı).
+- Hafıza: "bundan sonra süreleri gün olarak ver, hatırla" gibi kalıcı tercihler kimlik başına bu tarayıcıda saklanır ve her soruda uygulanır; başlıktaki hafıza düğmesinden görülür ve silinir. Hafızaya yalnız kullanıcının kendi mesajındaki açık istekle yazılır (eklenen dosyadaki bir talimat yazamaz); şifre, sicil gibi hassas bilgiler kaydedilmez.
+- Dosya çıktısı: asistan istenen veriyi Excel, CSV, Word, PDF ya da PowerPoint dosyası olarak hazırlar. Sohbetteki karttan seçilen biçim, yanındaki düğmelerden diğer biçimler indirilir. Tablolar uygulamanın okuma araçlarının sonucundan doğrudan doldurulur (sayılar yeniden yazılmaz; dosyada ekrandaki 50 satır sınırı 1 000'e çıkar). Dosya tarayıcıda üretilir, hiçbir yere yüklenmez; PDF'de Türkçe karakterler için yazı tipi gömülür.
+- Eklenen Excel dosyaları boş hücreler atılarak okunur ve tek mesaj sınırı iki katına çıktı; büyük tablolar artık yarıda kesilmiyor.
+
 ## v3.1.0
 
 Jira tarzı yapılandırılabilir pano ve iş akışları; asistanın ajan modu.

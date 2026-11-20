@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { compactToolResults, runAgentTurn } from './agent';
+import { compactToolResults, CONTINUE_PROMPT, MAX_CONTINUATIONS, runAgentTurn, SHORTER_PROMPT } from './agent';
 import { StreamChatResult, trimHistory } from './client';
 import { ChatMessage, ChatRequestBody } from './protocol';
 
@@ -46,6 +46,58 @@ describe('runAgentTurn', () => {
             { role: 'tool', toolCallId: 'c1', name: 'proje_listesi', content: '{"proje_sayisi":2}' },
         ]);
         expect(bodies[1].tools).toEqual(tools);
+    });
+
+    it('uzunluk sınırında kesilen yanıtın devamını ister ve araya boşluk koymadan birleştirir', async () => {
+        const bodies: ChatRequestBody[] = [];
+        const replies: StreamChatResult[] = [
+            { text: 'ATLAS projesinde 20 görev gec', toolCalls: [], stopReason: 'length' },
+            { text: 'ikmiş; en eskisi 45 gün.', toolCalls: [], stopReason: 'stop' },
+        ];
+        const texts: string[] = [];
+        const r = await runAgentTurn({
+            system: 'sys', history: [{ role: 'user', content: 'Gecikenler?' }], tools,
+            execute: () => ({ content: '{}', ok: true }),
+            stream: async (body, onDelta) => { bodies.push(JSON.parse(JSON.stringify(body))); const rep = replies.shift()!; onDelta(rep.text); return rep; },
+            onText: t => texts.push(t),
+        });
+        expect(r.text).toBe('ATLAS projesinde 20 görev gecikmiş; en eskisi 45 gün.');
+        expect(r.continuations).toBe(1);
+        expect(r.stopReason).toBe('stop');
+        expect(texts[texts.length - 1]).toBe(r.text);
+        expect(bodies[1].messages.slice(-2)).toEqual([
+            { role: 'assistant', content: 'ATLAS projesinde 20 görev gec' },
+            { role: 'user', content: CONTINUE_PROMPT },
+        ]);
+    });
+
+    it('görünür metin yokken (akıl yürütme sınırı yedi) boş mesaj göndermeden kısa yanıt ister', async () => {
+        const bodies: ChatRequestBody[] = [];
+        const replies: StreamChatResult[] = [
+            { text: '', toolCalls: [], stopReason: 'max_tokens' },
+            { text: 'Kısa özet.', toolCalls: [], stopReason: 'stop' },
+        ];
+        const r = await runAgentTurn({
+            system: 'sys', history: [{ role: 'user', content: 'Her şeyi anlat' }], tools,
+            execute: () => ({ content: '{}', ok: true }),
+            stream: async body => { bodies.push(JSON.parse(JSON.stringify(body))); return replies.shift()!; },
+        });
+        expect(r.text).toBe('Kısa özet.');
+        expect(bodies[1].messages).toEqual([{ role: 'user', content: 'Her şeyi anlat' }, { role: 'user', content: SHORTER_PROMPT }]);
+    });
+
+    it('devam sınırından sonra durur ve kesildiğini bildirir; devam istekleri araç adımı sayılmaz', async () => {
+        let calls = 0;
+        const r = await runAgentTurn({
+            system: 'sys', history: [{ role: 'user', content: 'x' }], tools, maxSteps: 1,
+            execute: () => ({ content: '{}', ok: true }),
+            stream: async () => { calls++; return { text: `parça${calls} `, toolCalls: [], stopReason: 'length' }; },
+        });
+        expect(calls).toBe(MAX_CONTINUATIONS + 1);
+        expect(r.continuations).toBe(MAX_CONTINUATIONS);
+        expect(r.stopReason).toBe('length');
+        expect(r.hitStepLimit).toBe(false);
+        expect(r.text).toBe('parça1 parça2 parça3 ');
     });
 
     it('adım sınırında durur', async () => {

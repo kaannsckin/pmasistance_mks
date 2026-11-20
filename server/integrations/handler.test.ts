@@ -116,6 +116,39 @@ describe('Jira worklog', () => {
         expect(entries.map((e: { issueKey: string }) => e.issueKey)).toEqual(['MKS-1', 'MKS-2']);
     });
 
+    it('kayıt anahtarlarıyla tüm worklog: e-posta, sayfalama, bulunamayan kayıt', async () => {
+        const calls: string[] = [];
+        const fetchImpl = (async (url: string) => {
+            calls.push(url);
+            if (url.includes('/issue/MKS-9/')) return jsonRes(404, {});
+            if (url.includes('/issue/MKS-1/') && url.includes('startAt=0')) {
+                return jsonRes(200, { total: 2, worklogs: [{ started: '2026-10-06T09:00:00.000+0300', timeSpentSeconds: 7200, author: { displayName: 'Ayşe Kaya', emailAddress: 'Ayse.Kaya@Kurum.gov.tr' } }] });
+            }
+            if (url.includes('/issue/MKS-1/')) return jsonRes(200, { total: 2, worklogs: [{ started: '2026-11-02T09:00:00.000+0300', timeSpentSeconds: 1800, author: { name: 'ali' } }] });
+            return jsonRes(200, { total: 0, worklogs: [] });
+        }) as unknown as typeof fetch;
+        const res = await handleIntegrationRequest(post('jira-worklogs', { keys: ['mks-1', 'MKS-9', 'MKS-1'] }), env, { route: 'jira-worklogs', fetchImpl });
+        expect(res.status).toBe(200);
+        const body = await res.json();
+        expect(body.missing).toEqual(['MKS-9']);
+        expect(body.entries).toEqual([
+            { date: '2026-10-06', author: 'Ayşe Kaya', authorEmail: 'ayse.kaya@kurum.gov.tr', issueKey: 'MKS-1', summary: '', hours: 2, source: 'jira' },
+            { date: '2026-11-02', author: 'ali', issueKey: 'MKS-1', summary: '', hours: 0.5, source: 'jira' },
+        ]);
+        expect(calls.filter(c => c.includes('/issue/MKS-1/'))).toHaveLength(2); // ikinci sayfa da istendi
+    });
+
+    it('kayıt anahtarı listesi doğrulanır ve izinli projelerle sınırlanır', async () => {
+        const fetchImpl = (async () => jsonRes(200, { worklogs: [] })) as unknown as typeof fetch;
+        const call = (keys: unknown, e: Record<string, string> = env) => handleIntegrationRequest(post('jira-worklogs', { keys }), e, { route: 'jira-worklogs', fetchImpl });
+        expect((await call([])).status).toBe(400);
+        expect((await call(['MKS'])).status).toBe(400);
+        expect((await call(Array.from({ length: 51 }, (_, i) => `MKS-${i + 1}`))).status).toBe(400);
+        const res = await call(['MKS-1', 'GIZ-2'], { ...env, JIRA_ALLOWED_PROJECTS: 'MKS' });
+        expect(res.status).toBe(403);
+        expect((await res.json()).error).toContain('GIZ');
+    });
+
     it('Jira yetki hatası anlaşılır mesajla döner', async () => {
         const fetchImpl = (async () => jsonRes(401, {})) as unknown as typeof fetch;
         const res = await handleIntegrationRequest(post('jira-worklogs', { projectKey: 'MKS', from: '2026-10-05', to: '2026-10-11' }), env, { route: 'jira-worklogs', fetchImpl });

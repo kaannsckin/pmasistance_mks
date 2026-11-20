@@ -107,7 +107,8 @@ export interface EmbedResponseBody {
 /** Sunucunun kabul ettiği üst sınırlar (istemci de geçmişi buna göre kırpar) */
 export const AI_LIMITS = {
     maxMessages: 60,
-    maxCharsPerMessage: 20_000,
+    // 20 000 → 40 000: eklenen Excel/PDF'ler (ör. ünvan maliyet tablosu) kesilmeden okunabilsin; toplam sınır aynı
+    maxCharsPerMessage: 40_000,
     maxSystemChars: 40_000,
     maxTotalChars: 150_000,
     maxTools: 40,

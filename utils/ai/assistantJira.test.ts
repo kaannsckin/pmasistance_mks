@@ -48,7 +48,7 @@ const withJira = (ws: WorkspaceData) => {
     const calls: string[] = [];
     // Bu dosya yalnız worklog ve eşitleme araçlarını sınar; okuma uçları kullanılmaz
     const unused = () => Promise.reject(new Error('bu testte kullanılmaz'));
-    ctx.jira = { meta: unused, byKeys: unused, search: unused, worklogs: async (k, f, t) => { calls.push(`${k} ${f} ${t}`); return logs[k] || []; } };
+    ctx.jira = { meta: unused, byKeys: unused, search: unused, issueWorklogs: unused, worklogs: async (k, f, t) => { calls.push(`${k} ${f} ${t}`); return logs[k] || []; } };
     return { ctx, calls };
 };
 const run = async (ctx: ReturnType<typeof buildToolContext>, name: string, args: Record<string, unknown>) => {

@@ -1,10 +1,13 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { View, WorkspaceData } from '../../types';
-import { AgentStep, AGENT_MAX_STEPS, runAgentTurn } from '../../utils/ai/agent';
+import { AgentStep, AGENT_MAX_STEPS, runAgentTurn, TRUNCATED_STOP_REASONS } from '../../utils/ai/agent';
 import { AttachmentInfo, ChatAttachment, composeUserContent } from '../../utils/ai/attachments';
 import { UiCommand, UiResult } from '../../utils/ai/uiActions';
-import { fetchIntegrationHealth, fetchJiraMeta, fetchJiraSyncPage, fetchJiraWorklogs, IntegrationHealth } from '../../utils/integrations';
+import { fetchIntegrationHealth, fetchJiraIssueWorklogs, fetchJiraMeta, fetchJiraSyncPage, fetchJiraWorklogs, IntegrationHealth } from '../../utils/integrations';
 import { AiAction, AiProposal } from '../../utils/ai/actions';
+import type { AiDocument } from '../../utils/export/aiDocument';
+import { splitFollowUps } from '../../utils/ai/followUps';
+import { createMemoryStore, MemoryItem, memoryKey } from '../../utils/ai/memory';
 import { AiError, configureMasking, embedTexts, fetchAiStatus, hasCredentials, saveAccessToken, streamChat } from '../../utils/ai/client';
 import { buildMasker, collectMaskEntries, Masker } from '../../utils/ai/masking';
 import { aiPolicyOf } from '../../utils/ai/policy';
@@ -31,6 +34,10 @@ export interface UiMessage {
   citations?: Citation[];
   /** Kullanıcı onayı bekleyen değişiklik önerileri */
   proposals?: AiProposal[];
+  /** Asistanın hazırladığı dosyalar (Excel, CSV, Word, PDF, PowerPoint) */
+  files?: AiDocument[];
+  /** Yanıtın sonundaki takip önerileri (tıklanınca soru olarak gönderilir) */
+  followUps?: string[];
   /** Kullanıcı mesajına eklenen dosyalar (özet) */
   attachments?: AttachmentInfo[];
   /** Modele giden içerik (ek blokları dahil); sonraki turlarda geçmiş olarak gönderilir */
@@ -76,6 +83,12 @@ interface AssistantApi {
   navigate: (ref: RagRef) => void;
   /** Öneri kartı: uygula ya da vazgeç */
   resolveProposal: (messageId: number, proposalId: string, decision: 'apply' | 'reject') => void;
+  /** Mesajdaki bekleyen önerilerin hepsini uygular ya da hepsinden vazgeçer */
+  resolveAllProposals: (messageId: number, decision: 'apply' | 'reject') => void;
+  /** Asistan hafızası (bu tarayıcıda, kimlik başına) */
+  memory: MemoryItem[];
+  forgetMemory: (id: string) => void;
+  clearMemory: () => void;
   /** Tek seferlik AI tamamlama (araçsız) — ekranlara gömülü özellikler için */
   complete: (system: string, prompt: string, signal?: AbortSignal) => Promise<string>;
 }
@@ -91,7 +104,6 @@ export const useAssistant = (): AssistantApi => {
   return v;
 };
 
-const TRUNCATED_REASONS = new Set(['length', 'max_tokens']);
 
 let nextId = 1;
 
@@ -104,12 +116,14 @@ interface ProviderProps {
   onNavigate?: (ref: RagRef) => void;
   /** Onaylanan öneriyi uygular (App: yetki/kilit yeniden doğrulanır, denetim + geri-al) */
   onApplyAction?: (action: AiAction) => ApplyResult | Promise<ApplyResult>;
+  /** Mesajdaki bekleyen önerilerin hepsini sırayla uygular (tek geri alma) */
+  onApplyActions?: (actions: AiAction[]) => ApplyResult[];
   /** Ajan modu: asistanın arayüz komutları (ekran değiştir, kayıt aç); App yetkiyi yeniden denetler */
   onUiCommand?: (cmd: UiCommand) => UiResult;
   children: React.ReactNode;
 }
 
-export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, chat = true, embedded = true, getWorkspace, getView, onNavigate, onApplyAction, onUiCommand, children }) => {
+export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, chat = true, embedded = true, getWorkspace, getView, onNavigate, onApplyAction, onApplyActions, onUiCommand, children }) => {
   const [phase, setPhase] = useState<AssistantPhase>('idle');
   const [status, setStatus] = useState<AiStatus | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -167,10 +181,22 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, chat = tru
   }, [enabled, phase, isOpen]);
 
   /** Kullanıcının güncel kapsamında araç bağlamı + RAG, arayüz (ajan) ve Jira çalışma zamanları */
-  const makeContext = useCallback((signal?: AbortSignal) => {
+  const memoryStore = useCallback(() => {
+    const ws = getWorkspace();
+    return ws ? createMemoryStore(memoryKey(ws.currentRole || 'py', ws.currentPersonId)) : null;
+  }, [getWorkspace]);
+  const [memory, setMemory] = useState<MemoryItem[]>([]);
+  const refreshMemory = useCallback(() => setMemory(memoryStore()?.list() || []), [memoryStore]);
+  const forgetMemory = useCallback((id: string) => { memoryStore()?.remove(id); refreshMemory(); }, [memoryStore, refreshMemory]);
+  const clearMemory = useCallback(() => { memoryStore()?.clear(); refreshMemory(); }, [memoryStore, refreshMemory]);
+
+  const makeContext = useCallback((signal?: AbortSignal, userPrompt = '') => {
     const ws = getWorkspace();
     if (!ws) return null;
     const ctx = buildToolContext(ws);
+    ctx.files = [];
+    const store = createMemoryStore(memoryKey(ws.currentRole || 'py', ws.currentPersonId));
+    ctx.memory = { store, userPrompt };
     ctx.rag = { search: (q, o) => searchKnowledge(ctx, q, o), mode: searchMode };
     if (onUiCommand) {
       ctx.ui = {
@@ -189,6 +215,7 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, chat = tru
         byKeys: keys => fetchJiraSyncPage({ keys }, mode, signal),
         search: (source, o) => fetchJiraSyncPage({ source, openOnly: o.openOnly, pageSize: o.pageSize }, mode, signal),
         worklogs: (projectKey, from, to) => fetchJiraWorklogs({ projectKey, from, to }, mode),
+        issueWorklogs: keys => fetchJiraIssueWorklogs(keys, mode),
       };
     }
     return ctx;
@@ -210,6 +237,9 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, chat = tru
     if (enabled && phase === 'idle') checkStatus();
   }, [enabled, phase, checkStatus]);
 
+  // Panel açılınca (kimlik değişmiş olabilir) hafıza yeniden okunur
+  useEffect(() => { if (isOpen) refreshMemory(); }, [isOpen, refreshMemory]);
+
   useEffect(() => {
     if (isOpen) ensureReady();
   }, [isOpen, ensureReady]);
@@ -229,10 +259,10 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, chat = tru
     const prompt = raw.trim();
     if ((!prompt && !files.length) || !status || abortRef.current) return;
     const ctrl = new AbortController();
-    const ctx = makeContext(ctrl.signal);
+    const ctx = makeContext(ctrl.signal, prompt);
     if (!ctx) return;
 
-    const system = buildSystemPrompt(ctx, { view: getView() });
+    const system = buildSystemPrompt(ctx, { view: getView(), followUps: true });
     const composed = composeUserContent(prompt, files);
     const attachments: AttachmentInfo[] = composed.infos.map((info, i) => ({ ...info, size: files[i].size }));
     // Önceki turlar yalnızca görünen metinleriyle (ekler dahil) gider; araç ayrıntıları tekrar gönderilmez
@@ -259,20 +289,22 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, chat = tru
         tools: toolSpecsFor(ctx),
         execute: call => executeTool(call, ctx),
         stream: (body, onDelta) => streamChat(body, { authMode: status.authMode, signal: ctrl.signal, onDelta: (_, full) => onDelta(full) }),
-        onText: text => update(replyId, { content: text }),
-        onSteps: steps => update(replyId, { steps, citations: [...ctx.citations], proposals: [...ctx.proposals] }),
+        onText: text => update(replyId, { content: splitFollowUps(text).body }),
+        onSteps: steps => update(replyId, { steps, citations: [...ctx.citations], proposals: [...ctx.proposals], files: [...(ctx.files || [])] }),
         labelFor: toolLabel,
         maxSteps: AGENT_MAX_STEPS,
       });
       const notes: string[] = [];
-      if (result.stopReason && TRUNCATED_REASONS.has(result.stopReason)) notes.push('*(Yanıt uzunluk sınırında kesildi.)*');
+      // Otomatik devam isteklerinden sonra hâlâ kesikse (çok uzun yanıt) kullanıcıya daraltmayı öner
+      if (result.stopReason && TRUNCATED_STOP_REASONS.has(result.stopReason)) notes.push('*(Yanıt çok uzun olduğu için tamamlanamadı; soruyu daraltarak — ör. tek proje ya da kısa dönem — tekrar sorun.)*');
       if (result.hitStepLimit) notes.push('*(Araç adımı sınırına ulaşıldı; soruyu daraltarak tekrar deneyin.)*');
       if (!result.text.trim()) {
         setMessages(prev => prev.map(m => (m.id === replyId
           ? { ...m, role: 'system_alert', content: notes.length ? notes.join(' ') : 'Model boş yanıt döndü (güvenlik filtresine takılmış olabilir). Sorunuzu farklı ifade etmeyi deneyin.', streaming: false }
           : m)));
       } else {
-        update(replyId, { content: [result.text, ...notes].join('\n\n'), streaming: false });
+        const { body, followUps } = splitFollowUps(result.text);
+        update(replyId, { content: [body, ...notes].join('\n\n'), streaming: false, ...(followUps.length && !notes.length ? { followUps } : {}) });
       }
     } catch (e) {
       const err = e instanceof AiError ? e : new AiError('Beklenmeyen bir hata oluştu.', 'upstream');
@@ -293,8 +325,9 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, chat = tru
     } finally {
       setIsStreaming(false);
       abortRef.current = null;
+      refreshMemory();
     }
-  }, [makeContext, getView, status]);
+  }, [makeContext, getView, status, refreshMemory]);
 
   // Panel kapalıyken sorulan soru (komut paleti) hazır olunca gönderilir
   useEffect(() => {
@@ -358,6 +391,24 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, chat = tru
     update({ status: r.ok ? 'applied' : 'failed', message: r.message });
   }, [onApplyAction]);
 
+  const resolveAllProposals = useCallback((messageId: number, decision: 'apply' | 'reject') => {
+    const msg = messagesRef.current.find(m => m.id === messageId);
+    const pending = (msg?.proposals || []).filter(p => p.status === 'pending' && !resolvedProposals.current.has(p.id));
+    if (!pending.length) return;
+    pending.forEach(p => resolvedProposals.current.add(p.id));
+    const results = decision === 'reject'
+      ? pending.map(() => ({ ok: false, message: 'Vazgeçildi.' }))
+      : onApplyActions ? onApplyActions(pending.map(p => p.action)) : pending.map(() => ({ ok: false, message: 'Bu ekranda değişiklik uygulanamıyor.' }));
+    const byId = new Map<string, ApplyResult>(pending.map((p, i) => [p.id, results[i]]));
+    setMessages(prev => prev.map(m => (m.id === messageId
+      ? { ...m, proposals: m.proposals?.map(p => {
+        const r = byId.get(p.id);
+        if (!r) return p;
+        return { ...p, status: decision === 'reject' ? 'rejected' as const : r.ok ? 'applied' as const : 'failed' as const, message: r.message };
+      }) }
+      : m)));
+  }, [onApplyActions]);
+
   const complete = useCallback(async (system: string, prompt: string, signal?: AbortSignal): Promise<string> => {
     if (!enabled) throw new AiError('Yapay zekâ asistanı Ayarlar\'dan kapatılmış.', 'config');
     let s = phase === 'ready' ? status : null;
@@ -381,9 +432,9 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, chat = tru
 
   const api = useMemo<AssistantApi>(() => ({
     enabled, chatEnabled: enabled && chat, embeddedEnabled: enabled && embedded, phase, status, authError, messages, isStreaming, isOpen, setOpen,
-    ensureReady, recheck, send, ask, stop, clear, saveToken, isKbOpen, setKbOpen, refreshIndex, navigate, resolveProposal, complete,
+    ensureReady, recheck, send, ask, stop, clear, saveToken, isKbOpen, setKbOpen, refreshIndex, navigate, resolveProposal, resolveAllProposals, memory, forgetMemory, clearMemory, complete,
     jiraEnabled: !!integrations?.jira,
-  }), [enabled, chat, embedded, phase, status, authError, messages, isStreaming, isOpen, ensureReady, recheck, send, ask, stop, clear, saveToken, isKbOpen, refreshIndex, navigate, resolveProposal, complete, integrations]);
+  }), [enabled, chat, embedded, phase, status, authError, messages, isStreaming, isOpen, ensureReady, recheck, send, ask, stop, clear, saveToken, isKbOpen, refreshIndex, navigate, resolveProposal, resolveAllProposals, memory, forgetMemory, clearMemory, complete, integrations]);
 
   return <Ctx.Provider value={api}>{children}</Ctx.Provider>;
 };

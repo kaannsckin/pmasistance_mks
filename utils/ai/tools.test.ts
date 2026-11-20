@@ -82,13 +82,30 @@ describe('araç kataloğu', () => {
         // ~2 100 karakter). Yönetici rolleri yazma araçlarını almadığı için onların istek boyutu değişmedi.
         // Çalışma zamanı gerektiren araçlar (ajan gezinmesi, Jira okuma/worklog/eşitleme) yalnız
         // bağlıyken gönderilir; onlarsız istek BL-15 sınırında kalır.
-        const base = JSON.stringify(AI_TOOLS.filter(t => !t.requires).map(t => t.spec)).length;
-        const runtime = JSON.stringify(AI_TOOLS.filter(t => t.requires).map(t => t.spec)).length;
-        console.log(`çalışma zamanısız: ${base}, çalışma zamanlı: ${runtime}`);
+        // Ölçü, bir isteğe GERÇEKTEN giden araçlardır: veri havuzu öneri araçları yalnız veri havuzunu
+        // düzenleyen role (PYB Destek), proje öneri araçları yalnız PY/Bölüm Sorumlusu'na gider; ikisi
+        // aynı istekte bulunmaz. Her rolün temel isteği BL-15 sınırında kalır.
+        const runtime = JSON.stringify(AI_TOOLS.filter(t => t.requires === 'ui' || t.requires === 'jira').map(t => t.spec)).length;
+        // Dosya çıktısı (dosya_olustur) yalnız tarayıcı sohbetinde gider; ayrı ölçülür
+        const files = JSON.stringify(AI_TOOLS.filter(t => t.requires === 'files' || t.requires === 'memory').map(t => t.spec)).length;
+        console.log(`dosya ve hafıza araçları: ${files}`);
+        expect(files).toBeLessThan(3_000);
+        let base = 0;
+        for (const role of ['py', 'mudur', 'bolum_sorumlu', 'pyb_destek', 'pyb_sorumlu', 'admin'] as UserRole[]) {
+            const ctx = buildToolContext(buildWs(role, role === 'py' || role === 'bolum_sorumlu' ? 'p1' : null), NOW);
+            const specs = toolSpecsFor(ctx);
+            const size = JSON.stringify(specs).length;
+            console.log(`${role}: ${specs.length} araç, ${size} karakter`);
+            expect(specs.length).toBeLessThanOrEqual(40);
+            base = Math.max(base, size);
+        }
+        console.log(`çalışma zamanısız en büyük istek: ${base}, çalışma zamanlı: ${runtime}`);
         expect(base).toBeLessThan(18_000);
-        // 5 000'den 6 000'e: ajan + Jira okuma araçlarına Jira worklog raporu ve eşitleme önerisi eklendi
-        expect(runtime).toBeLessThan(6_000);
-        expect(AI_TOOLS.length).toBeLessThanOrEqual(40);
+        // 5 000 → 7 000: ajan + Jira okuma araçlarına Jira worklog raporu, eşitleme önerisi, iş gücü
+        // raporu ve kayıt worklog'u eklendi. Yalnız Jira bağlıyken gönderilir; temel istek BL-15'te kalır.
+        expect(runtime).toBeLessThan(7_000);
+        // Katalog toplamı: rol başına en çok 40 araç gider (yukarıda); katalog, rollere ayrılan araçlarla büyür
+        expect(AI_TOOLS.length).toBeLessThanOrEqual(48);
     });
 
     it('her araç parametresiz çalışır (duman testi) ve sicil sızdırmaz', async () => {
@@ -401,6 +418,7 @@ describe('Jira araçları', () => {
             byKeys: vi.fn(async (keys: string[]) => ({ issues: keys.filter(k => k !== 'ALT-9').map(k => issue(k)), total: null, next: null, missing: keys.filter(k => k === 'ALT-9') })),
             search: vi.fn(async () => ({ issues: [issue('ALT-1'), issue('ALT-2', { assignee: 'Mehmet Demir' }), issue('GZL-1')], total: 3, next: null, missing: [] })),
             worklogs: vi.fn(async () => []),
+            issueWorklogs: vi.fn(async (keys: string[]) => ({ entries: keys.includes('ALT-1') ? [{ issueKey: 'ALT-1', date: '2026-10-06', author: 'Mehmet Demir', hours: 3 }, { issueKey: 'ALT-1', date: '2026-10-07', author: 'Dış Kişi', hours: 1.5 }] : [], missing: keys.filter(k => k === 'ALT-9') })),
         };
         ctx.jira = jira;
         return { ctx, jira };
@@ -438,6 +456,37 @@ describe('Jira araçları', () => {
         expect(r.atanan_dagilimi).toEqual({ 'Ayşe Kaya': 1, 'Mehmet Demir': 1 });
         await executeTool({ name: 'jira_kayit_ara', arguments: { etiket: 'a, b', kapali_dahil: true } }, ctx);
         expect(jira.search).toHaveBeenLastCalledWith({ labels: ['a', 'b'] }, { openOnly: false, pageSize: 50 });
+    });
+
+    it('jira_kayit_worklog: kayıtta kim kaç saat; bulunamayan ve kapsam dışı kayıt', async () => {
+        const { ctx } = withJira();
+        const r = JSON.parse((await executeTool({ name: 'jira_kayit_worklog', arguments: { anahtarlar: 'alt-1, ALT-9' } }, ctx)).content);
+        expect(r.kayitlar).toHaveLength(1);
+        expect(r.kayitlar[0]).toMatchObject({ anahtar: 'ALT-1', kisi_sayisi: 2, toplam_saat: 4.5 });
+        expect(r.kayitlar[0].kisiler.map((k: { kisi: string; saat: number }) => [k.kisi, k.saat])).toEqual([['Mehmet Demir', 3], ['Dış Kişi', 1.5]]);
+        expect(r.bulunamayan).toEqual(['ALT-9']);
+        const out = await executeTool({ name: 'jira_kayit_worklog', arguments: { anahtarlar: 'GZL-1' } }, ctx);
+        expect(out.ok).toBe(false);
+    });
+
+    it('is_gucu_raporu: kayıtlı worklog\'tan kişi araması ve kayıt kırılımı; kapsam dışı proje sayılmaz', async () => {
+        const { ctx } = withJira();
+        const altay = ctx.ws.projects.find(p => p.id === 'altay')!;
+        altay.tasks[1].actualHours = 7;
+        altay.tasks[1].jiraWorklog = { at: '2026-07-10T00:00:00Z', forHours: 7, entries: [
+            { author: 'Mehmet Demir', date: '2026-07-08', hours: 5 },
+            { author: 'Ayşe Kaya', date: '2026-07-09', hours: 2 },
+        ] };
+        const gizli = ctx.ws.projects.find(p => p.id === 'gizli')!;
+        gizli.tasks = [{ ...altay.tasks[1], id: 'gx', jiraId: 'GZL-1', jiraWorklog: { at: '', forHours: 9, entries: [{ author: 'Mehmet Demir', date: '2026-07-08', hours: 9 }] } }];
+        const fresh = buildToolContext(ctx.ws, NOW);
+        fresh.jira = ctx.jira;
+        const byPerson = JSON.parse((await executeTool({ name: 'is_gucu_raporu', arguments: { kisi: 'mehmet' } }, fresh)).content);
+        expect(byPerson.toplam_saat).toBe(5); // gizli projedeki 9 saat kapsam dışı
+        expect(byPerson.satirlar[0]).toMatchObject({ kisi: 'Mehmet Demir', saat: 5, kayit_sayisi: 1, en_cok: ['ALT-2 5 sa'] });
+        const byRecord = JSON.parse((await executeTool({ name: 'is_gucu_raporu', arguments: { grupla: 'kayit', ay: '2026-07' } }, fresh)).content);
+        expect(byRecord.satirlar).toEqual([expect.objectContaining({ anahtar: 'ALT-2', saat: 7, kisiler: ['Mehmet Demir 5 sa', 'Ayşe Kaya 2 sa'] })]);
+        expect(byRecord.donem).toBe('2026-07-01 – 2026-07-15');
     });
 
     it('Jira hatası modele açıklamayla döner', async () => {

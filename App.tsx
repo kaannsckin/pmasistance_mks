@@ -33,7 +33,7 @@ import { stampLifecycle } from './utils/planning/lifecycle';
 import { canTransition, DEFAULT_WORKFLOW, resolveTransition, taskStatusLabel, taskWorkflow, workflowKey, workflowOptions, WorkflowStatus } from './utils/workflow';
 import { applyTransition, conditionProblem, needsInput, ruleFor, TransitionActor, TransitionEffect, TransitionInput, TransitionNeeds, transitionNeeds } from './utils/transitions';
 import TransitionDialog from './components/modern/TransitionDialog';
-import { describeNotify, fetchIntegrationHealth, fetchJiraSyncPage, JiraIssueRecord, sendNotification, updateJiraIssue } from './utils/integrations';
+import { describeNotify, fetchIntegrationHealth, fetchJiraSyncPage, JiraIssueRecord, JiraIssueWorklog, sendNotification, updateJiraIssue } from './utils/integrations';
 import { boardForProject, DEFAULT_SCHEME_ID, effectiveScheme, migrateTasksToWorkflow, schemeOf, schemeUsage, validateProjectWorkflow, validateScheme } from './utils/projectScheme';
 import ProjectWorkflowSheet from './components/modern/ProjectWorkflowSheet';
 import ProjectListsSheet from './components/modern/ProjectListsSheet';
@@ -75,7 +75,7 @@ import { CommandItem } from './components/CommandPalette';
 import { AssistantProvider } from './components/assistant/AssistantContext';
 import { dialogProblem, DIALOGS, resolveScreen, SCREENS, UiCommand, UiEnv, UiResult } from './utils/ai/uiActions';
 import AssistantPanel, { AssistantCommandPalette } from './components/assistant/AssistantPanel';
-import { buildSuggestions } from './utils/ai/suggestions';
+import { buildSuggestions, suggestionFacts } from './utils/ai/suggestions';
 import { RagRef } from './utils/rag/sources';
 import { AiAction, applyAction, validateAction } from './utils/ai/actions';
 import WorkPackageManager from './components/WorkPackageManager';
@@ -100,6 +100,8 @@ import { markPushed } from './utils/planning/jiraFieldSync';
 import { ensureJiraPeople } from './utils/planning/jiraPeople';
 import { reportEvmSnapshot } from './utils/evm';
 import { useJiraAutoSync } from './components/modern/planning/useJiraAutoSync';
+import { refreshWorklogsNow, useJiraWorklogRefresh } from './components/modern/planning/useJiraWorklogRefresh';
+import { applyIssueWorklogs } from './utils/workforce';
 import ModernPortfolio from './components/modern/ModernPortfolio';
 import ProjectBoard from './components/modern/ProjectBoard';
 import ModernProjectOverview from './components/modern/ModernProjectOverview';
@@ -1368,6 +1370,25 @@ const App: React.FC = () => {
     handleApplyJiraSync,
   );
 
+  // ---- Jira worklog'ları (billing hours): harcanan süresi değişen kayıtların kim/kaç saat kırılımı ----
+  const handleApplyWorklogs = useCallback((requested: string[], entries: JiraIssueWorklog[], missing: string[]) => {
+    updateWorkspace(ws => {
+      const now = new Date();
+      const projects = ws.projects.map(p => applyIssueWorklogs(p, requested, entries, missing, now));
+      return projects.every((p, i) => p === ws.projects[i]) ? ws : { ...ws, projects };
+    });
+  }, [updateWorkspace]);
+  const worklogProjects = useCallback(() => {
+    const ws = workspaceRef.current;
+    return ws ? ws.projects.filter(p => p.tasks.some(t => t.jiraId) && canEditProjectContent(ws, identityOf(ws), p.id)) : [];
+  }, []);
+  useJiraWorklogRefresh(worklogProjects, handleApplyWorklogs);
+  const handleRefreshWorklogs = useCallback(async (projectIds: string[], force: boolean) => {
+    const editable = new Set(worklogProjects().map(p => p.id));
+    const targets = (workspaceRef.current?.projects || []).filter(p => projectIds.includes(p.id) && editable.has(p.id));
+    return refreshWorklogsNow(targets, handleApplyWorklogs, force);
+  }, [worklogProjects, handleApplyWorklogs]);
+
   // ---- Planlama: Jira'da açılan kayıtların anahtarları görevlere yazılır ----
   const handleLinkJira = useCallback((projectId: string, key: string, links: Record<string, string>) => {
     updateWorkspace(ws => {
@@ -1865,6 +1886,7 @@ const App: React.FC = () => {
     if (currentView === View.Allocations && isModern) {
       return (
         <ModernAllocation
+          workforce={{ projects: visibleProjects, onRefresh: handleRefreshWorklogs }}
           allocations={workspace.allocations}
           people={workspace.people}
           departmentLeadIds={departmentLeads}
@@ -2303,7 +2325,7 @@ const App: React.FC = () => {
   const getAssistantView = useCallback(() => currentViewRef.current, []);
   // Asistanın önerdiği değişiklik kullanıcı onaylayınca: güncel veriyle yeniden
   // doğrula (yetki, plan kilidi), uygula, denetim günlüğüne yaz, geri-al sun
-  const handleApplyAiAction = useCallback((action: AiAction): { ok: boolean; message: string } | Promise<{ ok: boolean; message: string }> => {
+  const handleApplyAiAction = useCallback((action: AiAction, opts: { undo?: boolean } = {}): { ok: boolean; message: string } | Promise<{ ok: boolean; message: string }> => {
     const current = workspaceRef.current;
     if (!current) return { ok: false, message: 'Çalışma alanı hazır değil.' };
     const problem = validateAction(current, action);
@@ -2332,8 +2354,9 @@ const App: React.FC = () => {
       const result = applyAction(current, action);
       summary = result.summary;
       // Onaylanan AI önerisi de yerel değişikliktir: bildirim şeması uygulanır
-      const before = current.projects.find(p => p.id === action.projectId);
-      const after = result.ws.projects.find(p => p.id === action.projectId);
+      const projectId = 'projectId' in action ? action.projectId : undefined;
+      const before = projectId ? current.projects.find(p => p.id === projectId) : undefined;
+      const after = projectId ? result.ws.projects.find(p => p.id === projectId) : undefined;
       if (before && after && before.tasks !== after.tasks) queueNotifications(result.ws, after, before.tasks, after.tasks);
       // Onaylanan durum önerisi Jira'ya bağlı görevdeyse Jira'ya da yazılır (yapılandırma açıksa)
       if (action.type === 'gorev_durumu' && before && after) {
@@ -2351,9 +2374,23 @@ const App: React.FC = () => {
     } catch (e) {
       return { ok: false, message: (e as Error).message || 'Uygulanamadı.' };
     }
+    if (opts.undo === false) return { ok: true, message: summary };
     showUndo(`AI önerisi uygulandı: ${summary}`, current);
     return { ok: true, message: `${summary} (Geri almak için alttaki "Geri Al").` };
   }, [showUndo, handleApplyJiraSync]);
+
+  // "Tümünü uygula": öneriler sırayla (ör. önce ünvan, sonra kişi) uygulanır; tek "Geri Al" hepsini geri alır.
+  // Ağ gerektiren Jira eşitlemesi topluya girmez (kartından tek tek uygulanır).
+  const handleApplyAiActions = useCallback((actions: AiAction[]): { ok: boolean; message: string }[] => {
+    const start = workspaceRef.current;
+    if (!start) return actions.map(() => ({ ok: false, message: 'Çalışma alanı hazır değil.' }));
+    const results = actions.map(a => (a.type === 'jira_esitle'
+      ? { ok: false, message: 'Jira eşitlemesi kartından tek başına uygulanır.' }
+      : handleApplyAiAction(a, { undo: false }) as { ok: boolean; message: string }));
+    const done = results.filter(r => r.ok).length;
+    if (done) showUndo(`AI önerileri uygulandı: ${done} öneri`, start);
+    return results;
+  }, [handleApplyAiAction, showUndo]);
 
   // Asistan kaynağına tıklanınca: ilgili projeyi aç ve ekrana geç
   const handleAssistantNavigate = useCallback((ref: RagRef) => {
@@ -2416,8 +2453,15 @@ const App: React.FC = () => {
     }
   }, [updateWorkspace]);
   const aiSuggestions = useMemo(
-    () => buildSuggestions(identity, activeProject && visibleProjects.some(p => p.id === activeProject.id) ? activeProject.name : undefined),
-    [identity, activeProject, visibleProjects]
+    () => {
+      const shown = activeProject && visibleProjects.some(p => p.id === activeProject.id) ? activeProject : undefined;
+      const facts = workspace ? suggestionFacts(workspace, shown, {
+        canEditProject: !!shown && canEditProjectContent(workspace, identity, shown.id),
+        canEditPool: can(identity, 'datapool.edit'),
+      }) : {};
+      return buildSuggestions(identity, shown?.name, facts);
+    },
+    [identity, activeProject, visibleProjects, workspace]
   );
   // Header tek satır 4rem; proje seçiliyken bağlam çubuğuyla 6.75rem
   const showProjectBar = !!activeProject;
@@ -2472,7 +2516,7 @@ const App: React.FC = () => {
   }, [workspace, visibleProjects, identity, handleOpenProject, activeProject, consoleMode, canAudit, canDataHealth, isModern, roleView]);
 
   return (
-    <AssistantProvider enabled={isAIEnabled && !consoleMode} chat={aiPolicy.chat} embedded={aiPolicy.embedded} getWorkspace={getAssistantWorkspace} getView={getAssistantView} onNavigate={handleAssistantNavigate} onApplyAction={handleApplyAiAction} onUiCommand={handleAssistantUiCommand}>
+    <AssistantProvider enabled={isAIEnabled && !consoleMode} chat={aiPolicy.chat} embedded={aiPolicy.embedded} getWorkspace={getAssistantWorkspace} getView={getAssistantView} onNavigate={handleAssistantNavigate} onApplyAction={handleApplyAiAction} onApplyActions={handleApplyAiActions} onUiCommand={handleAssistantUiCommand}>
     <div className={`min-h-screen font-sans theme-${settings?.theme || 'classic'} ${isModern ? `ui-modern mt-${modernTheme}` : 'bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100'}`}>
       {isModern ? (
         <div className="flex min-h-screen">
@@ -2628,6 +2672,8 @@ const App: React.FC = () => {
           onSave={handleUpdateTask}
           onJiraPull={canEditProjectContent(workspace, identity, activeProject.id) ? issue => handleJiraPull(activeProject.id, issue) : undefined}
           workflow={activeScheme.workflow}
+          people={workspace.people}
+          titles={workspace.titles}
         />
       ) : (
         <TaskDetailModal task={liveViewingTask} onClose={() => setIsDetailModalOpen(false)} onEdit={(t) => { setIsDetailModalOpen(false); setEditingTask(t); setIsFormModalOpen(true); }} onSave={handleUpdateTask} />

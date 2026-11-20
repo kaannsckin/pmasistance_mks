@@ -1,7 +1,7 @@
 import { Project, ProjectData, ProjectSettings, WorkspaceData } from '../types';
 import { migrateRolePermissions, PERMISSIONS_REV } from './permissions';
 
-export const APP_VERSION = '3.1.0';
+export const APP_VERSION = '3.2.0';
 export const WORKSPACE_SCHEMA_VERSION = 3; // 3: veri havuzu + tahsis + plan kilidi
 
 /** v2 çalışma alanı anahtarı */
