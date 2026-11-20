@@ -1,6 +1,6 @@
 
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { View, Task, Resource, TaskStatus, Note, CustomerRequest, Objective, Project, Person, WorkspaceData, RagStatus, ProjectStatus, UserRole, PlanLockStatus, WorkPackage, UiStyle, PermissionKey, EstimateLogEntry, JiraSyncSettings, ReleasePlan, GoldenItem, EvalRun, ModelEvalRun, BoardConfig, ProjectScheme, WorkflowConfig, TransitionRule, ProjectComponent, ProjectVersion, ProjectRoleDef } from './types';
+import { View, Task, Resource, TaskStatus, Note, CustomerRequest, Objective, Project, Person, WorkspaceData, RagStatus, ProjectStatus, UserRole, PlanLockStatus, WorkPackage, UiStyle, ModernTheme, ColorMode, PermissionKey, EstimateLogEntry, JiraSyncSettings, ReleasePlan, GoldenItem, EvalRun, ModelEvalRun, BoardConfig, ProjectScheme, WorkflowConfig, TransitionRule, ProjectComponent, ProjectVersion, ProjectRoleDef } from './types';
 import { INITIAL_TASKS, INITIAL_RESOURCES, INITIAL_OBJECTIVES } from './constants';
 import {
   WORKSPACE_STORAGE_KEY,
@@ -33,7 +33,7 @@ import { stampLifecycle } from './utils/planning/lifecycle';
 import { canTransition, DEFAULT_WORKFLOW, resolveTransition, taskStatusLabel, taskWorkflow, workflowKey, workflowOptions, WorkflowStatus } from './utils/workflow';
 import { applyTransition, conditionProblem, needsInput, ruleFor, TransitionActor, TransitionEffect, TransitionInput, TransitionNeeds, transitionNeeds } from './utils/transitions';
 import TransitionDialog from './components/modern/TransitionDialog';
-import { describeNotify, fetchIntegrationHealth, sendNotification, updateJiraIssue } from './utils/integrations';
+import { describeNotify, fetchIntegrationHealth, fetchJiraSyncPage, JiraIssueRecord, sendNotification, updateJiraIssue } from './utils/integrations';
 import { boardForProject, DEFAULT_SCHEME_ID, effectiveScheme, migrateTasksToWorkflow, schemeOf, schemeUsage, validateProjectWorkflow, validateScheme } from './utils/projectScheme';
 import ProjectWorkflowSheet from './components/modern/ProjectWorkflowSheet';
 import ProjectListsSheet from './components/modern/ProjectListsSheet';
@@ -43,6 +43,7 @@ import { AllocationSuggestion, ApplyMode, applyAllocationSuggestions } from './u
 import { applyBilledHoursActuals, planBilledHoursPoolAdditions, suggestBilledHoursActuals, BilledApplyMode, BilledHoursOptions, BilledHoursRecord } from './utils/billedHours';
 import { buildTodoItems, TodoItem } from './utils/todoItems';
 import { loadCloudConfig, scheduleAutoPush } from './utils/cloudSync';
+import { isDarkResolved, resolveColorMode, resolveModernTheme } from './utils/theme';
 import { joinStored, openIndexedDbStore, requestPersistentStorage, WorkspacePersister } from './utils/workspaceStore';
 import CloudSyncModal from './components/CloudSyncModal';
 import Header from './components/Header';
@@ -93,9 +94,12 @@ import { appendEvalRun } from './utils/planning/evaluation';
 import { appendModelEval } from './utils/planning/ml/estimateModel';
 import { JiraImportOptions, mergeJiraIssues } from './utils/planning/jiraImport';
 import { linkJiraKeys } from './utils/planning/jiraExport';
-import { applyJiraSync, pullIssueIntoTasks, sourceLabel } from './utils/planning/jiraSync';
+import { departmentLeadIds } from './utils/staffing';
+import { applyJiraSync, JiraPushOutcome, pullIssueIntoTasks, runFullSync, sourceLabel, writeSyncState } from './utils/planning/jiraSync';
+import { markPushed } from './utils/planning/jiraFieldSync';
+import { ensureJiraPeople } from './utils/planning/jiraPeople';
+import { reportEvmSnapshot } from './utils/evm';
 import { useJiraAutoSync } from './components/modern/planning/useJiraAutoSync';
-import { JiraIssueRecord } from './utils/integrations';
 import ModernPortfolio from './components/modern/ModernPortfolio';
 import ProjectBoard from './components/modern/ProjectBoard';
 import ModernProjectOverview from './components/modern/ModernProjectOverview';
@@ -116,7 +120,7 @@ import {
   canEditExpectation, canRespondExpectation, CATEGORY_LABELS, createExpectation, ExpectationDraft, isOwnExpectation,
   respondExpectation, setExpectationStatus, updateExpectationDraft, URGENCY_LABELS, urgencyCounts, visibleExpectations,
 } from './utils/expectations';
-import { Celebration, EggEvent, HyperdriveOverlay, SpaceMode } from './components/modern/Eggs';
+import { AuroraSweep, Boing, BubblePop, Celebration, EggEvent, EggGuide, HyperdriveOverlay, ShipIt, SpaceMode } from './components/modern/Eggs';
 import ModernWeeklyReport from './components/modern/ModernWeeklyReport';
 import ModernAdmin from './components/modern/ModernAdmin';
 import ProfileSwitcherSheet from './components/modern/ProfileSwitcherSheet';
@@ -139,7 +143,7 @@ import {
 } from './utils/customerMeetings';
 import { reportAttention } from './utils/reportAttention';
 import { Icon } from './components/modern/icons';
-import { createSequenceDetector } from './utils/easterEggs';
+import { createSequenceDetector, createWordDetector, EggTrigger, TYPED_EGGS } from './utils/easterEggs';
 
 const THEME_COLORS: Record<string, string> = {
   classic: '#2563eb',
@@ -266,6 +270,8 @@ const App: React.FC = () => {
 
   // ---- Kimlik + kapsam ----
   const identity = useMemo(() => (workspace ? identityOf(workspace) : { role: 'py' as UserRole }), [workspace]);
+  // Bölüm sorumluları uygun kişi aramasında aday sayılmaz (B-008)
+  const departmentLeads = useMemo(() => departmentLeadIds(workspace?.departments), [workspace?.departments]);
   // Ekran yetkileri (admin değiştirebilir; not gizliliği kilitli)
   const canExecutive = can(identity, 'screen.executive');
   const canAdmin = can(identity, 'screen.admin');
@@ -341,15 +347,31 @@ const App: React.FC = () => {
   }, []);
 
   // ---- Tema / gece modu ----
+  // Gündüz/Gece/Sistem tercihi <html class="dark"> ile uygulanır; Tailwind'in
+  // dark: sınıfları ve modern.css aynı sinyali okur. 'Sistem' seçiliyken işletim
+  // sistemi tercihi değiştikçe görünüm de anında değişir.
+  const colorMode = resolveColorMode(settings);
+  const modernTheme = resolveModernTheme(settings);
+  const [systemDark, setSystemDark] = useState(() => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-color-scheme: dark)').matches);
   useEffect(() => {
-    if (settings?.isDarkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-    const themeColor = getComputedStyle(document.documentElement).getPropertyValue('--app-primary').trim();
-    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', themeColor);
-  }, [settings?.isDarkMode, settings?.theme]);
+    const mq = window.matchMedia?.('(prefers-color-scheme: dark)');
+    if (!mq) return;
+    const onChange = (e: MediaQueryListEvent) => setSystemDark(e.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+  const isDark = isDarkResolved(colorMode, systemDark);
+  useEffect(() => {
+    // Çalışma alanı yüklenene dek index.html'deki erken karar geçerli kalsın
+    if (!settings) return;
+    document.documentElement.classList.toggle('dark', isDark);
+    document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
+    try { localStorage.setItem('pm-color-mode', colorMode); } catch { /* gizli pencere vb. */ }
+    // Tema değişkenleri kök öğede değil uygulama kabında; tarayıcı çubuğu rengi oradan okunur
+    const host = document.querySelector('.ui-modern') || document.documentElement;
+    const themeColor = getComputedStyle(host).getPropertyValue(host === document.documentElement ? '--app-primary' : '--m-bg').trim();
+    if (themeColor) document.querySelector('meta[name="theme-color"]')?.setAttribute('content', themeColor);
+  }, [settings, isDark, colorMode, modernTheme]);
 
   // ---- Kalıcılık ----
   useEffect(() => {
@@ -406,13 +428,21 @@ const App: React.FC = () => {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  // Sürpriz: Konami kodu (↑↑↓↓←→←→BA) → uzay modu (yazı alanlarında dinlenmez)
+  // Sürpriz: Konami kodu (↑↑↓↓←→←→BA) → uzay modu; modern arayüzde yazılan
+  // kelimeler: "egg"/"yumurta" → rehber, "pop" · "aurora" · "ship" · "boing" → tema
+  // sürprizleri (yazı alanlarında ve Ctrl/⌘ kısayollarında dinlenmez)
+  const isModernRef = useRef(false);
   useEffect(() => {
     const feed = createSequenceDetector();
+    const word = createWordDetector(TYPED_EGGS);
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement | null;
       if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
-      if (feed(e.key)) setEgg({ kind: 'space' });
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (feed(e.key)) { setEgg({ kind: 'space' }); return; }
+      const hit = word(e.key);
+      if (!hit || !isModernRef.current) return;
+      setEgg(hit === 'egg' || hit === 'yumurta' ? { kind: 'guide' } : { kind: hit });
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -895,7 +925,9 @@ const App: React.FC = () => {
     const ws = workspaceRef.current;
     if (!ws) return false;
     const dictionary = lintDictionary(reportDictionary(reportSettingsOf(ws)), ws.projects);
-    const res = saveReport(ws, identityOf(ws), draft, actorOf(ws), { advance, dictionary });
+    const fromDraft = (ws.weeklyReports || []).find(r => r.id === draft.id)?.stage ?? 'draft';
+    const evm = advance && fromDraft === 'draft' && draft.kind === 'project' ? reportEvmSnapshot(ws, draft.projectId) : undefined;
+    const res = saveReport(ws, identityOf(ws), draft, actorOf(ws), { advance, dictionary, evm });
     if (!res) return false;
     let next: WorkspaceData = { ...ws, weeklyReports: res.reports };
     // Taslaktan gönderimde AI maddelerinin akıbeti öneri günlüğüne (yalnız sayılar)
@@ -1292,14 +1324,30 @@ const App: React.FC = () => {
     });
   }, [updateWorkspace]);
 
-  const handleApplyJiraSync = useCallback((projectId: string, issues: JiraIssueRecord[], opts: JiraImportOptions, addNew: boolean, label: string) => {
+  const handleApplyJiraSync = useCallback((projectId: string, issues: JiraIssueRecord[], opts: JiraImportOptions, addNew: boolean, label: string, pushed?: JiraPushOutcome) => {
     updateWorkspace(ws => {
       const project = ws.projects.find(p => p.id === projectId);
       if (!project || !canEditProjectContent(ws, identityOf(ws), projectId)) return ws;
-      const r = applyJiraSync(project.tasks, issues, opts, addNew, ws.projects.filter(p => p.id !== projectId).flatMap(p => p.tasks.map(t => t.id)));
-      if (!r.added && !r.updated) return ws;
-      const next = { ...ws, projects: ws.projects.map(p => (p.id === projectId ? { ...p, tasks: r.tasks, updatedAt: new Date().toISOString() } : p)) };
-      return appendAudit(next, 'data.import', `"${project.name}" · Jira eşitleme (${label}): ${r.updated} güncellenen${r.closed ? ` (${r.closed} kapanan)` : ''}, ${r.added} yeni kayıt`, projectId);
+      const r = applyJiraSync(project.tasks, issues, opts, addNew, ws.projects.filter(p => p.id !== projectId).flatMap(p => p.tasks.map(t => t.id)), project.jiraSync);
+      const tasks = pushed?.done.length ? markPushed(r.tasks, pushed.done) : r.tasks;
+      // Jira'daki atanan kişiler: Veri Havuzu'na ve proje ekibine (ayar açıksa)
+      const ppl = project.jiraSync?.autoPeople ? ensureJiraPeople(ws.people, project.resources, tasks, issues) : null;
+      const peopleChanged = !!ppl && (ppl.people !== ws.people || ppl.resources !== project.resources);
+      const tasksChanged = JSON.stringify(tasks) !== JSON.stringify(project.tasks);
+      if (!tasksChanged && !peopleChanged) return ws;
+      const next = {
+        ...ws,
+        ...(ppl ? { people: ppl.people } : {}),
+        projects: ws.projects.map(p => (p.id === projectId ? { ...p, tasks, ...(ppl ? { resources: ppl.resources } : {}), updatedAt: new Date().toISOString() } : p)),
+      };
+      const parts = [
+        `${r.updated} güncellenen${r.closed ? ` (${r.closed} kapanan)` : ''}, ${r.added} yeni kayıt`,
+        pushed?.done.length ? `Jira'ya yazılan: ${pushed.done.map(d => d.key).slice(0, 10).join(', ')}${pushed.done.length > 10 ? '…' : ''}` : '',
+        r.conflicts ? `çakışma (Jira esas): ${(r.conflictKeys || []).slice(0, 5).join('; ')}` : '',
+        ppl?.addedPeople.length ? `havuza eklenen kişi: ${ppl.addedPeople.join(', ')}` : '',
+        ppl?.addedResources.length ? `ekibe eklenen: ${ppl.addedResources.join(', ')}` : '',
+      ].filter(Boolean);
+      return appendAudit(next, 'data.import', `"${project.name}" · Jira eşitleme (${label}): ${parts.join(' · ')}`, projectId);
     });
   }, [updateWorkspace]);
 
@@ -1404,7 +1452,20 @@ const App: React.FC = () => {
     if (uiStyle === 'classic') setCurrentView(v => (v === View.Overview ? View.Roadmap : v));
   }, [updateWorkspace]);
 
-  const handleSaveSettings = (newDuration: number, newDate: string, enabled: boolean, aiEnabled: boolean, newTheme: string, dark: boolean) => {
+  // Görünüm (modern tema, gündüz/gece): ayarlar penceresinde seçildiği an uygulanır
+  const handleSetAppearance = useCallback((patch: { modernTheme?: ModernTheme; colorMode?: ColorMode }) => {
+    updateWorkspace(ws => ({
+      ...ws,
+      settings: {
+        ...ws.settings,
+        ...patch,
+        // Eski sürümler isDarkMode okur; açık bir seçim yapıldıysa onu da güncel tut
+        ...(patch.colorMode && patch.colorMode !== 'system' ? { isDarkMode: patch.colorMode === 'dark' } : {}),
+      },
+    }));
+  }, [updateWorkspace]);
+
+  const handleSaveSettings = (newDuration: number, newDate: string, enabled: boolean, aiEnabled: boolean, newTheme: string) => {
     updateWorkspace(ws => ({
       ...ws,
       settings: {
@@ -1412,7 +1473,6 @@ const App: React.FC = () => {
         isLocalPersistenceEnabled: enabled,
         isAIEnabled: aiEnabled,
         theme: newTheme,
-        isDarkMode: dark,
       },
     }));
     if (activeProject) {
@@ -1609,8 +1669,10 @@ const App: React.FC = () => {
 
   // Admin konsolu her zaman modern arayüzle açılır
   const isModern = settings?.uiStyle === 'modern' || consoleMode;
-  // Klasik arayüzde gömülen modern parçalar da seçili renk temasını (zümrüt, mor, turuncu…) alır
-  const modernScope = `ui-modern theme-${settings?.theme || 'classic'}`;
+  // Klasik arayüzde gömülen modern parçalar klasik renk seçimini (zümrüt, mor, turuncu…) alır;
+  // modern temalar (mt-*) yalnız modern arayüzde uygulanır (bkz. modern.css, .m-embed)
+  const modernScope = `ui-modern m-embed theme-${settings?.theme || 'classic'}`;
+  isModernRef.current = isModern;
   // Proje bağlamındaki ekranlar (modern arayüzde proje başlığı ve segment gezinme gösterilir)
   const inProjectView = !!activeProject && MODERN_PROJECT_VIEWS.includes(currentView) &&
     !notesBlocked;
@@ -1805,6 +1867,7 @@ const App: React.FC = () => {
         <ModernAllocation
           allocations={workspace.allocations}
           people={workspace.people}
+          departmentLeadIds={departmentLeads}
           projects={workspace.projects}
           planLocks={workspace.planLocks}
           leaves={workspace.leaves || []}
@@ -1826,6 +1889,7 @@ const App: React.FC = () => {
         <AllocationView
           allocations={workspace.allocations}
           people={workspace.people}
+          departmentLeadIds={departmentLeads}
           projects={workspace.projects}
           planLocks={workspace.planLocks}
           leaves={workspace.leaves || []}
@@ -2006,7 +2070,7 @@ const App: React.FC = () => {
           onImportJira={(key, issues, opts, label) => handleImportJiraHistory(activeProject.id, key, issues, opts, label)}
           onLinkJira={(key, links) => handleLinkJira(activeProject.id, key, links)}
           onSaveJiraSync={settings => handleSetJiraSync(activeProject.id, settings)}
-          onApplyJiraSync={(issues, opts, addNew, label) => handleApplyJiraSync(activeProject.id, issues, opts, addNew, label)}
+          onApplyJiraSync={(issues, opts, addNew, label, pushed) => handleApplyJiraSync(activeProject.id, issues, opts, addNew, label, pushed)}
         />
       );
     }
@@ -2239,11 +2303,30 @@ const App: React.FC = () => {
   const getAssistantView = useCallback(() => currentViewRef.current, []);
   // Asistanın önerdiği değişiklik kullanıcı onaylayınca: güncel veriyle yeniden
   // doğrula (yetki, plan kilidi), uygula, denetim günlüğüne yaz, geri-al sun
-  const handleApplyAiAction = useCallback((action: AiAction): { ok: boolean; message: string } => {
+  const handleApplyAiAction = useCallback((action: AiAction): { ok: boolean; message: string } | Promise<{ ok: boolean; message: string }> => {
     const current = workspaceRef.current;
     if (!current) return { ok: false, message: 'Çalışma alanı hazır değil.' };
     const problem = validateAction(current, action);
     if (problem) return { ok: false, message: problem };
+    if (action.type === 'jira_esitle') {
+      // Planlama › Jira eşitleme'deki "Şimdi eşitle" ile aynı yol: oku, (seçildiyse) Jira'ya yaz, uygula, damgala
+      return (async () => {
+        const project = current.projects.find(p => p.id === action.projectId)!;
+        const health = await fetchIntegrationHealth();
+        if (!health.jira) return { ok: false, message: 'Jira bağlantısı yapılandırılmamış (Yönetici konsolu › Entegrasyonlar).' };
+        const update = health.jiraUpdate ? (key: string, changes: Parameters<typeof updateJiraIssue>[1]) => updateJiraIssue(key, changes, health.authMode) : null;
+        try {
+          const r = await runFullSync(project, o => fetchJiraSyncPage(o, health.authMode), update);
+          if (r.shouldApply) handleApplyJiraSync(project.id, r.issues, r.opts, r.addNew, 'asistan', r.pushed);
+          writeSyncState(project.id, { at: new Date().toISOString(), ok: true, text: r.text });
+          if (r.preview.updated || r.preview.added) showUndo(`Jira eşitlemesi uygulandı: ${project.name}`, current);
+          return { ok: true, message: `${project.name}: ${r.text}${r.pushed?.done.length ? " (Jira'ya yazılanlar geri alınmaz)" : ''}` };
+        } catch (e) {
+          writeSyncState(project.id, { at: new Date().toISOString(), ok: false, text: (e as Error).message });
+          return { ok: false, message: (e as Error).message || 'Jira eşitlemesi başarısız.' };
+        }
+      })();
+    }
     let summary = '';
     try {
       const result = applyAction(current, action);
@@ -2270,7 +2353,7 @@ const App: React.FC = () => {
     }
     showUndo(`AI önerisi uygulandı: ${summary}`, current);
     return { ok: true, message: `${summary} (Geri almak için alttaki "Geri Al").` };
-  }, [showUndo]);
+  }, [showUndo, handleApplyJiraSync]);
 
   // Asistan kaynağına tıklanınca: ilgili projeyi aç ve ekrana geç
   const handleAssistantNavigate = useCallback((ref: RagRef) => {
@@ -2382,6 +2465,7 @@ const App: React.FC = () => {
     if (activeProject && isModern && roleView.projectSections.has('planning')) items.push({ id: 'v-planning', group: 'Ekranlar', label: `Planlama asistanı — ${activeProject.name}`, icon: 'fa-chart-area', keywords: 'planlama simulasyon monte carlo tahmin olasilik surum yeni kayit benzer', run: go(View.Planning) });
     if (activeProject) items.push({ id: 'a-wp', group: 'Aksiyonlar', label: `İş Paketleri — ${activeProject.name}`, icon: 'fa-briefcase', keywords: 'is paketi work package gorev', run: () => setIsWpManagerOpen(true) });
     items.push({ id: 'egg-rocket', group: 'Sürpriz', label: 'Roketi fırlat', icon: 'fa-rocket', keywords: 'roket rocket uzay', hidden: true, run: () => setEgg({ kind: 'hyper' }) });
+    if (isModern) items.push({ id: 'egg-guide', group: 'Sürpriz', label: 'Sürpriz rehberi', icon: 'fa-egg', keywords: 'egg yumurta surpriz easter', hidden: true, run: () => setEgg({ kind: 'guide' }) });
     visibleProjects.forEach(p => items.push({ id: `p-${p.id}`, group: 'Projeler', label: p.name, sublabel: 'Projeyi aç', icon: 'fa-folder-open', keywords: p.code || '', run: () => handleOpenProject(p.id) }));
     workspace.people.forEach(p => items.push({ id: `k-${p.id}`, group: 'Kişiler', label: `${p.firstName} ${p.lastName}`.trim(), sublabel: `${p.departmentCode || ''} · kişi profili`, icon: 'fa-user', keywords: p.sicil || '', run: () => setViewingPersonId(p.id) }));
     return items;
@@ -2389,7 +2473,7 @@ const App: React.FC = () => {
 
   return (
     <AssistantProvider enabled={isAIEnabled && !consoleMode} chat={aiPolicy.chat} embedded={aiPolicy.embedded} getWorkspace={getAssistantWorkspace} getView={getAssistantView} onNavigate={handleAssistantNavigate} onApplyAction={handleApplyAiAction} onUiCommand={handleAssistantUiCommand}>
-    <div className={`min-h-screen font-sans theme-${settings?.theme || 'classic'} ${isModern ? 'ui-modern' : 'bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100'}`}>
+    <div className={`min-h-screen font-sans theme-${settings?.theme || 'classic'} ${isModern ? `ui-modern mt-${modernTheme}` : 'bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100'}`}>
       {isModern ? (
         <div className="flex min-h-screen">
           <ModernSidebar
@@ -2556,7 +2640,10 @@ const App: React.FC = () => {
           isLocalPersistenceEnabled={settings?.isLocalPersistenceEnabled !== false}
           isAIEnabled={settings?.isAIEnabled !== false}
           currentTheme={settings?.theme || 'classic'}
-          isDarkMode={settings?.isDarkMode || false}
+          colorMode={colorMode}
+          modernTheme={modernTheme}
+          onChangeAppearance={handleSetAppearance}
+          isModernActive={isModern}
           currentUiStyle={settings?.uiStyle || 'classic'}
           onChangeUiStyle={handleSetUiStyle}
           onSave={handleSaveSettings} onClose={() => setIsSettingsModalOpen(false)} onResetData={handleResetData}
@@ -2644,6 +2731,17 @@ const App: React.FC = () => {
       {egg?.kind === 'hyper' && <HyperdriveOverlay onDone={() => setEgg(null)} />}
       {egg?.kind === 'space' && <SpaceMode onDone={() => setEgg(null)} />}
       {egg?.kind === 'celebrate' && <Celebration message={egg.message} onDone={() => setEgg(null)} />}
+      {egg?.kind === 'pop' && <BubblePop onDone={() => setEgg(null)} />}
+      {egg?.kind === 'aurora' && <AuroraSweep onDone={() => setEgg(null)} />}
+      {egg?.kind === 'ship' && <ShipIt onDone={() => setEgg(null)} />}
+      {egg?.kind === 'boing' && <Boing onDone={() => setEgg(null)} />}
+      {egg?.kind === 'guide' && (
+        <EggGuide
+          theme={modernTheme}
+          onClose={() => setEgg(null)}
+          onTry={(id: EggTrigger) => setEgg(id === 'celebrate' ? { kind: 'celebrate', message: 'Örnek kutlama: Sürüm 3 tamamlandı!' } : id === 'rocket' ? { kind: 'hyper' } : { kind: id })}
+        />
+      )}
       {storageFull && !storageWarnClosed && (
         <div role="alert" className="fixed top-3 left-1/2 -translate-x-1/2 z-[260] w-[min(640px,calc(100vw-32px))] flex items-start gap-3 bg-amber-50 dark:bg-amber-950 text-amber-900 dark:text-amber-100 border border-amber-300 dark:border-amber-800 rounded-xl shadow-2xl px-4 py-3">
           <i className="fa-solid fa-triangle-exclamation mt-0.5" aria-hidden="true"></i>

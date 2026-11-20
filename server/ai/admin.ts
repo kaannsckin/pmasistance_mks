@@ -1,5 +1,5 @@
 import { clientIp, safeEqual } from './auth.js';
-import { Env, readAiConfig } from './config.js';
+import { Env, readAiConfig, TUBITAK_AI_BASE_URL } from './config.js';
 import { buildEmbedRequest, parseEmbedResponse, readEmbeddingConfig } from './embeddings.js';
 import { upstreamErrorMessage } from './errors.js';
 import { buildUpstreamRequest, extractUpstreamError, parseUpstreamEvents } from './providers.js';
@@ -7,6 +7,8 @@ import { createRateLimiter } from './rateLimit.js';
 import { GEMINI_BASE_URL, geminiKeyAlias, listGeminiModels, pickGeminiChatModel } from './gemini.js';
 import { EDITABLE_KEYS, EditableKey, effectiveEnv, loadSettings, prepareEnv, resolveSettingsStore, saveSettings, SECRET_KEYS, secretHint } from './settingsStore.js';
 import { parseSSE } from './sse.js';
+import { applyIntegrationDraft, envIntegrationValues, IntegrationValues, loadIntegrationSettings, maskIntegration, resolveIntegrationStore, saveIntegrationSettings, validateIntegration } from '../integrations/settings.js';
+import { fetchJiraMeta, integrationStatus } from '../integrations/handler.js';
 import { describeNetworkError, upstreamFetch } from './tls.js';
 
 /**
@@ -137,6 +139,7 @@ export const handleAiAdmin = async (request: Request, env: Env, opts: AdminOptio
     let body: Record<string, unknown>;
     try { body = await request.json() as Record<string, unknown>; } catch { return json(400, { error: 'İstek gövdesi JSON değil.', code: 'bad_request' }, cors); }
     const action = body.action;
+    if (typeof action === 'string' && action.startsWith('integrations-')) return handleIntegrationAdmin(action, body, env, opts, cors);
     const { store, problem: storeProblem } = resolveSettingsStore(env, opts);
     let stored: Draft = {};
     let updatedAt: string | undefined;
@@ -186,8 +189,8 @@ export const handleAiAdmin = async (request: Request, env: Env, opts: AdminOptio
                 const chat = list.filter(m => m.methods.includes('generateContent')).map(m => m.id);
                 return json(200, { models: chat, recommended: pickGeminiChatModel(list) }, cors);
             }
-            if (provider === 'openai') {
-                const base = (clean(e.AI_BASE_URL) || 'https://api.openai.com/v1').replace(/\/+$/, '');
+            if (provider === 'openai' || provider === 'tubitak') {
+                const base = (clean(e.AI_BASE_URL) || (provider === 'tubitak' ? TUBITAK_AI_BASE_URL : 'https://api.openai.com/v1')).replace(/\/+$/, '');
                 const res = await (opts.fetchImpl || upstreamFetch(base, e))(`${base}/models`, { headers: { authorization: `Bearer ${key}` } });
                 if (!res.ok) return json(200, { models: [], error: forPanel(upstreamErrorMessage(res.status, extractUpstreamError(await res.text().catch(() => '')))) }, cors);
                 const j = await res.json().catch(() => ({})) as { data?: { id?: string }[] };
@@ -216,6 +219,59 @@ export const handleAiAdmin = async (request: Request, env: Env, opts: AdminOptio
         }
         console.info(`[ai] panel ayarları ${action === 'clear' ? 'silindi' : 'güncellendi'}`);
         return json(200, { ok: true }, cors);
+    }
+
+    return json(400, { error: 'Bilinmeyen işlem.', code: 'bad_request' }, cors);
+};
+
+// ---------------------------------------------------------------- entegrasyon ayarları (Jira, Teams, e-posta)
+
+const handleIntegrationAdmin = async (action: string, body: Record<string, unknown>, env: Env, opts: AdminOptions, cors: Record<string, string>): Promise<Response> => {
+    const { backend, secret, problem } = resolveIntegrationStore(env, opts);
+    let stored: IntegrationValues = {};
+    let updatedAt: string | undefined;
+    if (backend && secret) {
+        try { ({ values: stored, updatedAt } = await loadIntegrationSettings(backend, secret)); } catch (e) {
+            return json(502, { error: (e as Error).message, code: 'upstream' }, cors);
+        }
+    }
+    const statusOf = (v: IntegrationValues) => integrationStatus({ ...env, ...v });
+
+    if (action === 'integrations-get') {
+        return json(200, {
+            store: { available: !!backend, kind: backend?.kind, problem },
+            updatedAt,
+            panel: maskIntegration(stored),
+            env: maskIntegration(envIntegrationValues(env)),
+            status: statusOf(stored),
+        }, cors);
+    }
+
+    if (action === 'integrations-test') {
+        // Taslakla (kaydetmeden) Jira bağlantısı: jeton sahibi ve izinli projeler
+        const draft = body.values ? applyIntegrationDraft(stored, body.values) : stored;
+        const bad = validateIntegration(draft);
+        if (bad) return json(200, { jira: { ok: false, error: bad } }, cors);
+        const e = { ...env, ...draft };
+        if (!statusOf(draft).jira) return json(200, { jira: { ok: false, error: 'Jira adresi ve jeton (ya da e-posta + API jetonu) gerekli.' } }, cors);
+        try {
+            const meta = await fetchJiraMeta(e, opts.fetchImpl);
+            return json(200, { jira: { ok: true, user: meta.user, projects: meta.projects.map(p => p.key).slice(0, 50) } }, cors);
+        } catch (err) {
+            return json(200, { jira: { ok: false, error: (err as Error).message } }, cors);
+        }
+    }
+
+    if (action === 'integrations-save' || action === 'integrations-clear') {
+        if (!backend || !secret) return json(503, { error: problem, code: 'config' }, cors);
+        const next = action === 'integrations-clear' ? {} : applyIntegrationDraft(stored, body.values);
+        const bad = validateIntegration(next);
+        if (bad) return json(400, { error: `Kaydedilmedi: ${bad}`, code: 'bad_request' }, cors);
+        try { await saveIntegrationSettings(backend, secret, next); } catch (e) {
+            return json(502, { error: (e as Error).message, code: 'upstream' }, cors);
+        }
+        console.info(`[entegrasyon] panel ayarları ${action === 'integrations-clear' ? 'silindi' : 'güncellendi'}`);
+        return json(200, { ok: true, status: statusOf(next) }, cors);
     }
 
     return json(400, { error: 'Bilinmeyen işlem.', code: 'bad_request' }, cors);

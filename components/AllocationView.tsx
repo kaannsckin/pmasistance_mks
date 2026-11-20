@@ -8,7 +8,9 @@ import {
 } from '../utils/allocations';
 import { buildRoleAnalysis, EFFORT_TYPE_LABELS, EffortType, summarizeGaps } from '../utils/roleAnalysis';
 import { AllocationSuggestion, ApplyMode, suggestAllocationsFromTasks, SuggestionResult } from '../utils/taskToAllocation';
-import { canAddAllocationToProject, canEditActualCell, canEditAllocationCell, canEditPlanCell, Identity, visiblePersonIds } from '../utils/rbac';
+import { allocationEditBlock, canAddAllocationToProject, canEditActualCell, canEditAllocationCell, canEditPlanCell, Identity, visiblePersonIds } from '../utils/rbac';
+import { fetchIntegrationHealth, fetchJiraWorklogs, IntegrationHealth } from '../utils/integrations';
+import { projectJiraKeys, suggestAllocationsFromJira, worklogsToBilled, yearRange } from '../utils/jiraAllocation';
 import { effectiveCapacity } from '../utils/availability';
 import { allPersonRoles, findAvailablePeople } from '../utils/staffing';
 import ScenarioView from './ScenarioView';
@@ -21,6 +23,8 @@ import { BilledApplyMode, BilledHoursOptions, BilledHoursRecord } from '../utils
 interface AllocationViewProps {
   allocations: Allocation[];
   people: Person[];
+  /** Bölüm sorumluları: uygun kişi aramasında aday sayılmaz (B-008) */
+  departmentLeadIds?: ReadonlySet<string>;
   projects: Project[];
   planLocks: PlanLock[];
   leaves: Leave[];
@@ -74,7 +78,7 @@ const LOCK_STYLES: Record<PlanLockStatus, { label: string; cls: string; icon: st
   locked: { label: 'Kilitli', cls: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-300', icon: 'fa-lock' },
 };
 
-const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, projects, planLocks, leaves, titles, currentRole, identity, onSetCell, onAddAllocation, onDeleteAllocation, onLockAction, onApplySuggestions, onApplyBilledHours, control }) => {
+const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, departmentLeadIds, projects, planLocks, leaves, titles, currentRole, identity, onSetCell, onAddAllocation, onDeleteAllocation, onLockAction, onApplySuggestions, onApplyBilledHours, control }) => {
   const wsLike = useMemo(() => ({ people, projects, allocations }), [people, projects, allocations]);
   // Kimlik kapsamına göre hücre/satır düzenlenebilirliği (RBAC)
   const canEnter = identity.role === 'py' || identity.role === 'bolum_sorumlu';
@@ -95,7 +99,15 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
   const setProjectFilter = (v: string) => (control ? control.onChange({ projectFilter: v }) : setProjectFilterState(v));
   const setDeptFilter = (v: string) => (control ? control.onChange({ deptFilter: v }) : setDeptFilterState(v));
   const [newRow, setNewRow] = useState({ personId: '', projectId: '', workPackageId: '', role: '' });
-  const [suggestModal, setSuggestModal] = useState<{ projectId: string; projectName: string; result: SuggestionResult } | null>(null);
+  const [suggestModal, setSuggestModal] = useState<{ projectId: string; projectName: string; result: SuggestionResult; source?: 'jira' } | null>(null);
+  // Hücre birimi: AA (adam-ay, 1 = tam zamanlı) ya da yüzde (%100 = 1 AA); cihazda hatırlanır
+  const [unit, setUnitState] = useState<'aa' | 'pct'>(() => { try { return localStorage.getItem('planasistan.allocUnit') === 'pct' ? 'pct' : 'aa'; } catch { return 'aa'; } });
+  const setUnit = (u: 'aa' | 'pct') => { setUnitState(u); try { localStorage.setItem('planasistan.allocUnit', u); } catch { /* depolama kapalı */ } };
+  const [jiraProjectId, setJiraProjectId] = useState('');
+  const [jiraBusy, setJiraBusy] = useState(false);
+  const [jiraMsg, setJiraMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [health, setHealth] = useState<IntegrationHealth | null>(null);
+  useEffect(() => { const c = new AbortController(); fetchIntegrationHealth(c.signal).then(setHealth).catch(() => undefined); return () => c.abort(); }, []);
   const [showBilled, setShowBilled] = useState(false);
   const [applyMode, setApplyMode] = useState<ApplyMode>('fill');
   const [staff, setStaff] = useState({ role: '', from: 1, to: 12, aa: 0.5 });
@@ -120,6 +132,42 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
       return;
     }
     setSuggestModal({ projectId, projectName: project.name, result });
+  };
+
+  // ---- Jira → tahsis ----
+  const openJiraPlan = (projectId: string) => {
+    const project = projects.find(p => p.id === projectId);
+    if (!project) return;
+    const result = suggestAllocationsFromJira(project, people, year);
+    if (!result.suggestions.length) {
+      setJiraMsg({ ok: false, text: `Jira'dan plan çıkmadı: ${result.taskCount ? 'bu yıla düşen kalan efor yok' : 'birine atanmış, eforu olan açık Jira kaydı yok'}${result.skipped ? ` (${result.skipped} kayıt atanmamış ya da eforsuz)` : ''}. Önce Planlama › Jira eşitleme ile atananları çekin.` });
+      return;
+    }
+    setJiraMsg(null);
+    setSuggestModal({ projectId, projectName: project.name, result, source: 'jira' });
+  };
+
+  const pullJiraActuals = async (projectId: string) => {
+    const project = projects.find(p => p.id === projectId);
+    if (!project || !health?.jira) return;
+    const key = project.jiraProjectKey || [...projectJiraKeys(project)][0]?.split('-')[0];
+    if (!key) { setJiraMsg({ ok: false, text: 'Projenin Jira proje anahtarı yok.' }); return; }
+    setJiraBusy(true);
+    setJiraMsg(null);
+    try {
+      const entries = await fetchJiraWorklogs({ projectKey: key, ...yearRange(year) }, health.authMode);
+      const r = worklogsToBilled(entries, project, year);
+      if (!r.records.length) { setJiraMsg({ ok: false, text: `${year} için bu projenin Jira kayıtlarında worklog yok${r.skipped ? ` (${key} projesinde başka kayıtlara yazılmış ${r.skipped} worklog dışarıda bırakıldı)` : ''}.` }); return; }
+      const people = [...new Set(r.records.map(x => x.personName))];
+      if (!window.confirm(`Jira worklog'ları: ${people.length} kişi, ${fmt(r.hours)} saat (${year}). Gerçekleşen tahsise yazılsın mı? Worklog'u olan aylar Jira'daki değerle değiştirilir; havuzda olmayan kişiler Veri Havuzu'na eklenir.`)) return;
+      onApplyBilledHours(r.records, { year }, 'overwrite', true);
+      setMode('actual');
+      setJiraMsg({ ok: true, text: `Gerçekleşen Jira'dan alındı: ${people.length} kişi, ${fmt(r.hours)} saat.${r.skipped ? ` ${r.skipped} worklog başka projelerin kayıtlarına ait olduğu için alınmadı.` : ''}` });
+    } catch (e) {
+      setJiraMsg({ ok: false, text: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setJiraBusy(false);
+    }
   };
 
   const personMap = useMemo(() => new Map(people.map(p => [p.id, p])), [people]);
@@ -195,19 +243,24 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
     const value = a[field][month];
     const person = personMap.get(a.personId);
     const isOver = field === 'plan' && person && overSet.has(`${person.id}:${month}`) && (value || 0) > 0;
+    const pct = unit === 'pct';
+    const shown = value === undefined ? '' : pct ? Math.round(value * 1000) / 10 : value;
+    const block = editableCell ? null : allocationEditBlock(wsLike, identity, planLocks, a.projectId, a.personId, year, field === 'plan' ? 'plan' : 'actual');
     return (
       <input
         type="number"
         min={0}
-        max={1.5}
-        step={0.05}
-        value={value ?? ''}
+        max={pct ? 150 : 1.5}
+        step={pct ? 5 : 0.05}
+        value={shown}
         disabled={!editableCell}
+        aria-label={`${personName(a.personId)} ${MONTHS_TR[month - 1]} ${field === 'plan' ? 'plan' : 'gerçekleşen'} (${pct ? '%' : 'AA'})`}
         onChange={e => {
-          const raw = e.target.value;
-          onSetCell(a.id, field, month, raw === '' ? undefined : parseFloat(raw));
+          const raw = e.target.value.replace(',', '.');
+          const n = parseFloat(raw);
+          onSetCell(a.id, field, month, raw === '' || !Number.isFinite(n) ? undefined : pct ? Math.round(n * 10) / 1000 : n);
         }}
-        title={isOver && person ? `Aşırı tahsis: ${personName(person.id)} ${MONTHS_TR[month - 1]} toplamı ${fmt(personMonthTotal(yearAllocations, person.id, year, month, 'plan'))} / kapasite ${fmt(person.availableAA)}` : undefined}
+        title={block || (isOver && person ? `Aşırı tahsis: ${personName(person.id)} ${MONTHS_TR[month - 1]} toplamı ${fmt(personMonthTotal(yearAllocations, person.id, year, month, 'plan'))} / kapasite ${fmt(person.availableAA)}` : undefined)}
         className={`w-14 text-center text-xs rounded-md border px-1 py-1 focus:outline-none transition-colors
           ${isOver
             ? 'bg-red-50 dark:bg-red-900/30 border-red-300 dark:border-red-700 text-red-600 dark:text-red-300 font-semibold'
@@ -272,8 +325,46 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
   const monthTotalsFor = (list: Allocation[], field: EffortField): number[] =>
     MONTH_INDEXES.map(m => list.reduce((sum, a) => sum + (a[field][m] || 0), 0));
 
+  const jiraProjects = projects.filter(p => projectJiraKeys(p).size > 0 && canAddAllocationToProject(wsLike, identity, p.id));
+  const jiraTarget = jiraProjects.find(p => p.id === jiraProjectId) || jiraProjects[0];
+  const jiraPlanBlock = jiraTarget ? allocationEditBlock(wsLike, identity, planLocks, jiraTarget.id, null, year, 'plan') : null;
   const renderGrid = () => (
     <div className="space-y-5">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-3 flex flex-wrap items-center gap-2 text-[11px]">
+        <span className="font-semibold text-gray-400">Birim</span>
+        <div className="flex rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden" role="group" aria-label="Tahsis birimi">
+          {(['aa', 'pct'] as const).map(u => (
+            <button key={u} type="button" aria-pressed={unit === u} onClick={() => setUnit(u)} className={`px-2.5 py-1 font-semibold ${unit === u ? 'text-white' : 'text-gray-500 dark:text-gray-300'}`} style={unit === u ? { backgroundColor: 'var(--app-primary)' } : {}}>
+              {u === 'aa' ? 'AA' : '%'}
+            </button>
+          ))}
+        </div>
+        <span className="text-gray-400">{unit === 'pct' ? '%100 = tam zamanlı (1 AA); hücreye 50 yazın → yarı zamanlı' : '1 AA = tam zamanlı bir ay; % girmek için birimi değiştirin'}</span>
+        {jiraProjects.length > 0 && (
+          <span className="flex flex-wrap items-center gap-2 ml-auto">
+            <span className="font-semibold text-gray-400"><i aria-hidden="true" className="fa-solid fa-link mr-1"></i>Jira'dan</span>
+            {jiraProjects.length > 1 && (
+              <select aria-label="Jira projesi" value={jiraTarget?.id || ''} onChange={e => setJiraProjectId(e.target.value)} className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1 text-[11px] text-gray-700 dark:text-gray-200">
+                {jiraProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            )}
+            <button type="button" disabled={!jiraTarget || !!jiraPlanBlock} title={jiraPlanBlock || 'Jira\'da atanmış açık işlerin kalan eforunu termine kadar aylara yayar (önizleme)'} onClick={() => jiraTarget && openJiraPlan(jiraTarget.id)} className="font-semibold px-2.5 py-1 rounded-lg border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-200 hover:border-primary/40 disabled:opacity-40">
+              <i aria-hidden="true" className="fa-solid fa-wand-magic-sparkles mr-1"></i>Plan (atamalar)
+            </button>
+            <button type="button" disabled={!jiraTarget || !health?.jira || jiraBusy} title={health?.jira ? 'Bu projenin Jira kayıtlarına yazılan worklog\'ları kişi × ay gerçekleşen AA\'ya yazar' : 'Jira bağlantısı yapılandırılmadı (Yönetici konsolu › Entegrasyonlar)'} onClick={() => jiraTarget && pullJiraActuals(jiraTarget.id)} className="font-semibold px-2.5 py-1 rounded-lg border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-200 hover:border-primary/40 disabled:opacity-40">
+              <i aria-hidden="true" className={`fa-solid ${jiraBusy ? 'fa-spinner fa-spin' : 'fa-clock-rotate-left'} mr-1`}></i>Gerçekleşen (worklog)
+            </button>
+          </span>
+        )}
+        {jiraMsg && <p role="status" className={`w-full m-0 ${jiraMsg.ok ? 'text-emerald-600' : 'text-amber-600'}`}>{jiraMsg.text}</p>}
+        {jiraTarget && jiraPlanBlock && <p className="w-full m-0 text-amber-600"><i aria-hidden="true" className="fa-solid fa-lock mr-1"></i>{jiraTarget.name}: {jiraPlanBlock}</p>}
+      </div>
+      {canEnter && addableProjects.length === 0 && (
+        <div role="alert" className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl px-4 py-3 text-[11px] text-amber-700 dark:text-amber-300">
+          <i aria-hidden="true" className="fa-solid fa-circle-info mr-1"></i>
+          {identity.role === 'py' ? (identity.personId ? 'PY olarak sahibi olduğunuz proje yok; tahsis yalnız PY\'si olduğunuz projelere girilir. Rol seçiminde doğru kişiyi seçin ya da proje kartından projenin PY\'si olarak kendinizi atayın.' : 'Rol seçiminde kim olduğunuzu (kişiyi) seçin; tahsis girişi kişiye bağlıdır.') : 'Bölümünüzde tahsis girilebilecek kişi yok.'}
+        </div>
+      )}
       {canEnter && (
         <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-3 flex flex-wrap items-center gap-2">
           <span className="text-[11px] font-semibold text-gray-400 mr-1">Yeni Satır</span>
@@ -359,6 +450,10 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
                 {lockActions(projectId, canManageProject)}
               </div>
             </div>
+            {(() => {
+              const block = canEnter ? allocationEditBlock(wsLike, identity, planLocks, projectId, null, year, mode === 'actual' ? 'actual' : 'plan') : null;
+              return block && mode !== 'compare' ? <p className="m-0 px-4 py-2 text-[11px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-100 dark:border-amber-800"><i aria-hidden="true" className="fa-solid fa-lock mr-1"></i>{block}</p> : null;
+            })()}
             <div className="overflow-x-auto">
               <table className="w-full min-w-[1100px]">
                 <thead>
@@ -483,7 +578,7 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
     const roles = allPersonRoles(people);
     const lo = Math.min(staff.from, staff.to), hi = Math.max(staff.from, staff.to);
     const months = MONTH_INDEXES.filter(m => m >= lo && m <= hi);
-    const candidates = findAvailablePeople(people, allocations, leaves, { role: staff.role || undefined, year, months, requiredAA: staff.aa });
+    const candidates = findAvailablePeople(people, allocations, leaves, { role: staff.role || undefined, year, months, requiredAA: staff.aa, exclude: departmentLeadIds });
     const fitCount = candidates.filter(c => c.fits).length;
     const windowLabel = lo === hi ? MONTHS_TR[lo - 1] : `${MONTHS_TR[lo - 1]}–${MONTHS_TR[hi - 1]}`;
 
@@ -740,8 +835,8 @@ const AllocationView: React.FC<AllocationViewProps> = ({ allocations, people, pr
           <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto border border-gray-100 dark:border-gray-700" onClick={e => e.stopPropagation()}>
             <div className="sticky top-0 bg-white dark:bg-gray-900 px-5 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between z-10">
               <div>
-                <h3 className="text-base font-semibold text-gray-800 dark:text-white">Görev Planından Tahsis Önerisi</h3>
-                <p className="text-xs text-gray-400">{suggestModal.projectName} · {year} · {suggestModal.result.taskCount} görev, {suggestModal.result.sprintCount} sprint</p>
+                <h3 className="text-base font-semibold text-gray-800 dark:text-white">{suggestModal.source === 'jira' ? 'Jira Atamalarından Tahsis Önerisi' : 'Görev Planından Tahsis Önerisi'}</h3>
+                <p className="text-xs text-gray-400">{suggestModal.projectName} · {year} · {suggestModal.source === 'jira' ? `${suggestModal.result.taskCount} atanmış açık Jira kaydı; kalan efor bugünden termine yayıldı` : `${suggestModal.result.taskCount} görev, ${suggestModal.result.sprintCount} sprint`}</p>
               </div>
               <button aria-label="Kapat" onClick={() => setSuggestModal(null)} className="w-9 h-9 rounded-xl text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"><i aria-hidden="true" className="fa-solid fa-times"></i></button>
             </div>

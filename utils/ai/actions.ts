@@ -1,5 +1,7 @@
 import { Allocation, IssueType, Project, RagStatus, Resource, RiskLevel, RiskStatus, Task, TaskStatus, WorkspaceData } from '../../types';
-import { createAllocation, getPlanLockStatus, setAllocationCell } from '../allocations';
+import { createAllocation, getPlanLockStatus, inferAllocationRole, personMonthTotal, setAllocationCell } from '../allocations';
+import { linkedSyncKeys, sourceLabel, sourceOf } from '../planning/jiraSync';
+import { fieldPolicy, hasFieldPolicy, JIRA_SYNC_FIELDS } from '../planning/jiraFieldSync';
 import { stampLifecycle } from '../planning/lifecycle';
 import { appendAudit } from '../audit';
 import { canEditActualCell, canEditPlanCell, canEditProjectContent, identityOf } from '../rbac';
@@ -32,12 +34,16 @@ export type AiAction =
     | { type: 'gorev_durumu'; projectId: string; taskId: string; status: TaskStatus; workflowKey?: string; comment?: string; hours?: number }
     | { type: 'rag_guncelle'; projectId: string; rag: RagStatus; ragNote?: string }
     | { type: 'tahsis_ayarla'; personId: string; projectId: string; year: number; month: number; field: 'plan' | 'actual'; value: number }
+    // Ay aralığı (yıl geçebilir: 2026-12 → 2027-03); her ayın değeri aynı
+    | { type: 'tahsis_araligi'; personId: string; projectId: string; from: string; to: string; field: 'plan' | 'actual'; value: number }
+    // Jira eşitlemesi: onaylanınca proje ayarındaki alan seçimiyle çalışır (Jira'ya yazan alan varsa Jira'ya da yazar)
+    | { type: 'jira_esitle'; projectId: string }
     | { type: 'risk_guncelle'; projectId: string; riskId: string; status?: RiskStatus; probability?: RiskLevel; impact?: RiskLevel; mitigation?: string; ownerPersonId?: string; reason?: string }
     // Kabul: istekten görev açılır ve istek "göreve dönüştü" olur; ret: "reddedildi". Gerekçe projenin günlüğüne not olarak düşer.
     | { type: 'istek_karari'; projectId: string; requestId: string; decision: 'kabul' | 'ret'; reason: string; day?: string; task?: { name?: string; priority: Task['priority']; resourceName?: string; dueDate?: string; time?: { best: number; avg: number; worst: number } } }
     | { type: 'not_ekle'; projectId: string; content: string; day?: string };
 
-export type ProposalStatus = 'pending' | 'applied' | 'rejected' | 'failed';
+export type ProposalStatus = 'pending' | 'running' | 'applied' | 'rejected' | 'failed';
 
 export interface AiProposal {
     id: string;
@@ -67,11 +73,69 @@ export const findAllocationRow = (ws: WorkspaceData, personId: string, projectId
     return rows.find(a => !a.workPackageId && !a.role) || rows[0];
 };
 
+/** Aralık tahsisi en çok bu kadar ay */
+export const MAX_RANGE_MONTHS = 24;
+const YM_RE = /^(\d{4})-(\d{2})$/;
+
+/** "2026-12" → "2027-03" arası aylar (dahil); geçersizse null */
+export const monthsBetween = (from: string, to: string): { year: number; month: number }[] | null => {
+    const a = YM_RE.exec(from), b = YM_RE.exec(to);
+    if (!a || !b) return null;
+    let y = +a[1], m = +a[2];
+    const ey = +b[1], em = +b[2];
+    if (m < 1 || m > 12 || em < 1 || em > 12 || y < 2000 || ey > 2100) return null;
+    const out: { year: number; month: number }[] = [];
+    while (y < ey || (y === ey && m <= em)) {
+        out.push({ year: y, month: m });
+        if (out.length > MAX_RANGE_MONTHS) return out;
+        m++; if (m > 12) { m = 1; y++; }
+    }
+    return out;
+};
+
+const tahsisBlock = (ws: WorkspaceData, project: Project, personId: string, field: 'plan' | 'actual', year: number): string | null => {
+    const id = identityOf(ws);
+    if (field === 'plan') {
+        if (!canEditPlanCell(ws, id, ws.planLocks, project.id, personId, year)) {
+            return getPlanLockStatus(ws.planLocks, project.id, year) !== 'draft'
+                ? `${project.name} · ${year} planı onayda/kilitli; plan değiştirilemez (gerçekleşen girilebilir).`
+                : 'Bu kişinin bu projedeki planını düzenleme yetkiniz yok.';
+        }
+    } else if (!canEditActualCell(ws, id, project.id, personId)) {
+        return 'Bu kişinin bu projedeki gerçekleşenini girme yetkiniz yok.';
+    }
+    return null;
+};
+
+const fmtAA = (v: number) => v.toLocaleString('tr-TR', { maximumFractionDigits: 2 });
+const monthLabel = (y: number, m: number) => `${MONTHS[m - 1]} ${y}`;
+
 /** Uygulamadan önce (ve öneri anında) doğrulama — sorun varsa Türkçe açıklama, yoksa null */
 export const validateAction = (ws: WorkspaceData, action: AiAction): string | null => {
     const id = identityOf(ws);
     const project = projectOf(ws, action.projectId);
     if (!project) return 'Proje bulunamadı (silinmiş olabilir).';
+
+    if (action.type === 'tahsis_araligi') {
+        if (!ws.people.some(p => p.id === action.personId)) return 'Kişi veri havuzunda bulunamadı.';
+        const months = monthsBetween(action.from, action.to);
+        if (!months || !months.length) return 'Ay aralığı YYYY-AA biçiminde ve başlangıç bitişten önce olmalı.';
+        if (months.length > MAX_RANGE_MONTHS) return `Aralık en çok ${MAX_RANGE_MONTHS} ay olabilir.`;
+        if (!Number.isFinite(action.value) || action.value < 0 || action.value > 1.5) return 'Adam-ay değeri 0 ile 1,5 (%0–%150) arasında olmalı.';
+        for (const y of [...new Set(months.map(x => x.year))]) {
+            const b = tahsisBlock(ws, project, action.personId, action.field, y);
+            if (b) return b;
+        }
+        return null;
+    }
+
+    if (action.type === 'jira_esitle') {
+        if (!canEditProjectContent(ws, id, action.projectId)) return `"${project.name}" projesinde Jira eşitlemesi yalnız projenin PY'si tarafından yapılır.`;
+        if (!linkedSyncKeys(project.tasks, project.jiraSync).length && !(project.jiraSync?.discover && sourceOf(project.jiraSync))) {
+            return `"${project.name}" projesinde Jira anahtarlı kayıt ya da eşitleme kaynağı yok (Planlama › Jira eşitleme).`;
+        }
+        return null;
+    }
 
     if (action.type === 'tahsis_ayarla') {
         if (!ws.people.some(p => p.id === action.personId)) return 'Kişi veri havuzunda bulunamadı.';
@@ -262,6 +326,44 @@ export const describeAction = (ws: WorkspaceData, action: AiAction): { title: st
                 ],
             };
         }
+        case 'tahsis_araligi': {
+            const months = monthsBetween(action.from, action.to) || [];
+            const person = ws.people.find(p => p.id === action.personId);
+            const changes = months.map(({ year, month }) => {
+                const cur = findAllocationRow(ws, action.personId, action.projectId, year)?.[action.field][month] || 0;
+                const total = personMonthTotal(ws.allocations, action.personId, year, month, action.field) - cur + action.value;
+                return { year, month, cur, total };
+            });
+            const over = person && action.field === 'plan' ? changes.filter(c => c.total > (person.availableAA ?? 1) + 0.001) : [];
+            const first = months[0], last = months[months.length - 1];
+            const curList = [...new Set(changes.map(c => fmtAA(c.cur)))];
+            return {
+                title: `${action.field === 'plan' ? 'Plan' : 'Gerçekleşen'} tahsis: ${fullName(ws, action.personId) || '?'} · ${first ? monthLabel(first.year, first.month) : '?'} – ${last ? monthLabel(last.year, last.month) : '?'}`,
+                details: [
+                    { label: 'Proje', value: pName },
+                    { label: 'Aylar', value: `${months.length} ay` },
+                    { label: 'Her ay', value: `%${Math.round(action.value * 100)} (${fmtAA(action.value)} AA)` },
+                    { label: 'Şu an', value: curList.length === 1 ? `${curList[0]} AA` : changes.map(c => `${MONTHS[c.month - 1].slice(0, 3)} ${fmtAA(c.cur)}`).join(' · ') },
+                    ...(over.length ? [{ label: 'Kapasite aşımı', value: over.map(c => `${monthLabel(c.year, c.month)}: toplam ${fmtAA(c.total)} / ${fmtAA(person!.availableAA ?? 1)} AA`).join(' · ') }] : []),
+                ],
+            };
+        }
+        case 'jira_esitle': {
+            const keys = project ? linkedSyncKeys(project.tasks, project.jiraSync).length : 0;
+            const policy = fieldPolicy(project?.jiraSync);
+            const by = (d: string[]) => JIRA_SYNC_FIELDS.filter(f => d.includes(policy[f.id])).map(f => f.label).join(', ');
+            const pull = by(['pull', 'both']);
+            const push = by(['push', 'both']);
+            return {
+                title: `Jira eşitle: ${pName}`,
+                details: [
+                    { label: 'Kayıt', value: `${keys} Jira anahtarlı kayıt${project?.jiraSync?.discover && sourceOf(project.jiraSync) ? ` + kaynaktaki yeni açık kayıtlar (${sourceLabel(project.jiraSync)})` : ''}` },
+                    { label: 'Jira\'dan alınacak', value: hasFieldPolicy(project?.jiraSync) ? (pull || '—') : 'tüm alanlar (alan seçimi yapılmamış)' },
+                    ...(push ? [{ label: 'Jira\'ya YAZILACAK', value: `${push} — Jira'ya yazılan değer uygulamadaki "Geri al" ile geri alınmaz` }] : []),
+                    ...(project?.jiraSync?.autoPeople ? [{ label: 'Kişiler', value: 'Jira\'daki atananlar havuza ve ekibe eklenir' }] : []),
+                ],
+            };
+        }
     }
 };
 
@@ -359,7 +461,9 @@ export const applyAction = (ws: WorkspaceData, action: AiAction): { ws: Workspac
             let base = ws;
             let row = findAllocationRow(ws, action.personId, action.projectId, action.year);
             if (!row) {
-                const created = createAllocation(ws.allocations, action.personId, action.projectId, action.year);
+                // Rol boş kalırsa kapasite-talep sahte "Rol atanmamış" açığı gösterir (B-025)
+                const role = inferAllocationRole(ws.allocations, ws.people.find(p => p.id === action.personId), action.projectId);
+                const created = createAllocation(ws.allocations, action.personId, action.projectId, action.year, undefined, role);
                 if (!created) throw new Error('Tahsis satırı oluşturulamadı.');
                 base = { ...ws, allocations: [...ws.allocations, created] };
                 row = created;
@@ -368,6 +472,27 @@ export const applyAction = (ws: WorkspaceData, action: AiAction): { ws: Workspac
             summary = `${fullName(ws, action.personId)} · ${project.name} · ${MONTHS[action.month - 1]} ${action.year} ${action.field === 'plan' ? 'plan' : 'gerçekleşen'}: ${action.value.toLocaleString('tr-TR')} AA`;
             break;
         }
+        case 'tahsis_araligi': {
+            let base = ws;
+            const months = monthsBetween(action.from, action.to)!;
+            for (const { year, month } of months) {
+                let row = findAllocationRow(base, action.personId, action.projectId, year);
+                if (!row) {
+                    const created = createAllocation(base.allocations, action.personId, action.projectId, year);
+                    if (!created) throw new Error('Tahsis satırı oluşturulamadı.');
+                    base = { ...base, allocations: [...base.allocations, created] };
+                    row = created;
+                }
+                base = setAllocationCell(base, row.id, action.field, month, action.value || undefined);
+            }
+            next = base;
+            const f = months[0], l = months[months.length - 1];
+            summary = `${fullName(ws, action.personId)} · ${project.name} · ${monthLabel(f.year, f.month)} – ${monthLabel(l.year, l.month)} ${action.field === 'plan' ? 'plan' : 'gerçekleşen'}: her ay %${Math.round(action.value * 100)} (${fmtAA(action.value)} AA)`;
+            break;
+        }
+        case 'jira_esitle':
+            // Ağ gerektirir: uygulama katmanı (App) eşitlemeyi çalıştırır
+            throw new Error('Jira eşitlemesi uygulama içinde çalıştırılır.');
         case 'risk_guncelle': {
             const risk = project.risks!.find(r => r.id === action.riskId)!;
             const updated = {

@@ -59,6 +59,7 @@ export interface Task {
   startedAt?: string; // ilk kez "Süreçte"ye geçtiği an
   resolvedAt?: string; // son kapanış (yeniden açılınca silinir)
   statusLog?: TaskStatusChange[]; // durum geçişleri (en yeni sonda, en çok 50)
+  jiraBase?: Partial<Record<JiraSyncFieldId, string>>; // çift yönlü eşitlemede son eşitlenen Jira değerleri (hangi tarafın değiştiğini bulmak için)
   estimateSource?: 'user' | 'ai' | 'jira' | 'import' | 'reference' | 'model'; // reference: benzer kapanmış kayıtların gerçek sürelerinden; model: klasik ML modeli
   forecast?: TaskForecast; // açılışta yapılan süre tahmini (kayıt kapanınca isabeti ölçülür)
   originalEstimateHours?: number; // kaynak sistemdeki ilk tahmin (Jira "Original Estimate")
@@ -701,7 +702,19 @@ export interface JiraSyncSettings {
   discover: boolean;
   /** Otomatik eşitleme aralığı (dakika); 0 = kapalı */
   autoMinutes: number;
+  /**
+   * Alan bazında eşitleme yönü. Verilmezse eski davranış: Jira'dan gelen
+   * tüm alanlar alınır, uygulamadan Jira'ya yalnız görev ayrıntısından elle yazılır.
+   */
+  fields?: Partial<Record<JiraSyncFieldId, JiraSyncDirection>>;
+  /** Jira'daki atanan kişiler Veri Havuzu'na ve proje ekibine otomatik eklensin mi */
+  autoPeople?: boolean;
 }
+
+/** Eşitlenebilen alanlar (uygulama ↔ Jira) */
+export type JiraSyncFieldId = 'status' | 'assignee' | 'dueDate' | 'priority' | 'summary' | 'description' | 'labels' | 'estimate' | 'components' | 'fixVersion' | 'issueType';
+/** off: eşitlenmez · pull: Jira → uygulama · push: uygulama → Jira · both: çift yönlü (son eşitlemeden beri değişen taraf kazanır) */
+export type JiraSyncDirection = 'off' | 'pull' | 'push' | 'both';
 
 export interface Project {
   id: string;
@@ -752,12 +765,22 @@ export interface ProjectAiProfile {
 /** Arayüz tercihi: klasik (mevcut) ya da modern (sade, iOS tarzı) */
 export type UiStyle = 'classic' | 'modern';
 
+/** Modern arayüz teması — yalnız renk değil; yazı, köşe, gölge ve yüzey dili */
+export type ModernTheme = 'bubble' | 'aurora' | 'pro' | 'clay';
+
+/** Gündüz / gece tercihi; 'system' işletim sistemini izler */
+export type ColorMode = 'system' | 'light' | 'dark';
+
 export interface WorkspaceSettings {
   isLocalPersistenceEnabled?: boolean;
   isAIEnabled?: boolean;
+  /** Klasik arayüzün vurgu rengi (classic | emerald | purple | orange) */
   theme?: string;
+  /** Eski sürümlerle uyum için tutulur; asıl kaynak colorMode */
   isDarkMode?: boolean;
+  colorMode?: ColorMode;
   uiStyle?: UiStyle;
+  modernTheme?: ModernTheme;
 }
 
 // ---------------------------------------------------------------------------
@@ -1015,6 +1038,22 @@ export interface WorklogEntry {
   source: 'file' | 'jira';
 }
 
+/**
+ * Rapor gönderildiği andaki proje EVM'si (B-029). Denetleyen rapordaki
+ * rakamları bununla karşılaştırır; canlı EVM bugünü gösterir ve tamamlanan
+ * işlerle günden güne değişir.
+ */
+export interface ReportEvmSnapshot {
+  at: string; // ISO: gönderim anı
+  year: number;
+  statusMonth: number; // gerçekleşeni girilmiş son ay (0 = başlamadı)
+  costed: boolean;
+  percentComplete: number; // 0..1
+  spi: number | null;
+  cpi: number | null;
+  eac: number;
+}
+
 export interface WeeklyReport {
   id: string;
   year: number; // ISO hafta yılı
@@ -1028,6 +1067,8 @@ export interface WeeklyReport {
   stage: ReportStage;
   returnNote?: string; // iade gerekçesi (bir önceki aşamaya)
   worklog?: WorklogEntry[];
+  /** Gönderim anındaki EVM (taslaktan ilk gönderimde ve her yeniden gönderimde yazılır) */
+  evmSnapshot?: ReportEvmSnapshot;
   /** AI'nın son önerisi — onaylı son hâliyle birlikte ince ayar veri setine girer */
   aiDraft?: ReportAiDraft;
   /** PY'nin bu hafta projenin genel sağlığına verdiği puan (1–10); sağlık modelinin girdisi */

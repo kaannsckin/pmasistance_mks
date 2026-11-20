@@ -1,18 +1,24 @@
-
 import React, { useState, useEffect } from 'react';
-import { UiStyle } from '../types';
+import { ColorMode, ModernTheme, UiStyle } from '../types';
+import { COLOR_MODES, MODERN_THEMES } from '../utils/theme';
 
 interface SettingsModalProps {
   sprintDuration: number;
   projectStartDate: string;
   isLocalPersistenceEnabled: boolean;
   isAIEnabled: boolean;
+  /** Klasik arayüzün vurgu rengi (Kaydet ile uygulanır) */
   currentTheme: string;
-  isDarkMode: boolean;
+  /** Gündüz / Gece / Sistem ve modern tema — seçildiği an uygulanır */
+  colorMode: ColorMode;
+  modernTheme: ModernTheme;
+  onChangeAppearance: (patch: { modernTheme?: ModernTheme; colorMode?: ColorMode }) => void;
+  /** Ekranda modern arayüz mü görünüyor (konsol modu dahil) */
+  isModernActive: boolean;
   /** Arayüz tercihi — kartlara tıklanınca hemen uygulanır (kaydet beklenmez) */
   currentUiStyle: UiStyle;
   onChangeUiStyle: (style: UiStyle) => void;
-  onSave: (duration: number, date: string, enabled: boolean, aiEnabled: boolean, theme: string, isDarkMode: boolean) => void;
+  onSave: (duration: number, date: string, enabled: boolean, aiEnabled: boolean, theme: string) => void;
   onClose: () => void;
   onResetData?: () => void;
 }
@@ -60,6 +66,61 @@ const UiPreview: React.FC<{ kind: UiStyle }> = ({ kind }) => kind === 'modern' ?
   </div>
 );
 
+/** Modern tema kartlarındaki küçük önizleme — her temanın yüzey ve köşe dili */
+const THEME_PREVIEW: Record<ModernTheme, { bg: string; side: React.CSSProperties; card: React.CSSProperties; btn: React.CSSProperties; line: string }> = {
+  bubble: {
+    bg: 'radial-gradient(120% 90% at 100% 0%, #D9E8FF 0%, transparent 60%), radial-gradient(90% 80% at 0% 100%, #FFE1EC 0%, transparent 60%), #F2F2F7',
+    side: { background: 'rgba(255,255,255,0.75)', borderRadius: 8, margin: 4, boxShadow: '0 2px 6px rgba(30,40,80,0.10)' },
+    card: { background: '#FFFFFF', borderRadius: 8, boxShadow: '0 2px 6px rgba(30,40,80,0.10)' },
+    btn: { background: '#0066D6', borderRadius: 999 },
+    line: '#1C1C1E',
+  },
+  aurora: {
+    bg: 'radial-gradient(70% 70% at 10% 10%, rgba(45,212,191,0.6), transparent 70%), radial-gradient(60% 60% at 95% 30%, rgba(56,189,248,0.5), transparent 70%), radial-gradient(70% 60% at 60% 110%, rgba(190,242,100,0.55), transparent 70%), #EAF4F6',
+    side: { background: 'rgba(255,255,255,0.4)', borderRight: '1px solid rgba(255,255,255,0.8)' },
+    card: { background: 'rgba(255,255,255,0.55)', borderRadius: 7, border: '1px solid rgba(255,255,255,0.85)' },
+    btn: { background: 'linear-gradient(135deg, #0F766E, #0369A1)', borderRadius: 4 },
+    line: '#0B2530',
+  },
+  pro: {
+    bg: '#FBFBFC',
+    side: { background: '#F3F3F5', borderRight: '1px solid #E6E6EA' },
+    card: { background: '#FFFFFF', borderRadius: 3, border: '1px solid #E6E6EA' },
+    btn: { background: '#4F5BD5', borderRadius: 3 },
+    line: '#1A1A1E',
+  },
+  clay: {
+    bg: '#E6EBF7',
+    side: { background: '#EEF2FB', borderRadius: 10, margin: 4, boxShadow: '3px 3px 6px rgba(110,120,170,0.3), -2px -2px 5px #FFFFFF' },
+    card: { background: '#F4F6FD', borderRadius: 10, boxShadow: '3px 3px 6px rgba(110,120,170,0.3), -2px -2px 5px #FFFFFF' },
+    btn: { background: 'linear-gradient(145deg, #D9573F, #B83A27)', borderRadius: 6, boxShadow: '1px 1px 3px rgba(184,58,39,0.4)' },
+    line: '#2A2F4A',
+  },
+};
+
+const ThemePreview: React.FC<{ id: ModernTheme }> = ({ id }) => {
+  const p = THEME_PREVIEW[id];
+  return (
+    <div aria-hidden="true" className="h-16 w-full rounded-lg overflow-hidden flex" style={{ background: p.bg }}>
+      <div className="w-1/3 flex flex-col gap-1 p-1.5" style={p.side}>
+        <div className="h-1.5 w-5 rounded-sm" style={{ background: p.line }}></div>
+        <div className="h-1.5 rounded-sm" style={{ ...p.btn, opacity: 0.85 }}></div>
+        <div className="h-1.5 rounded-sm" style={{ background: p.line, opacity: 0.15 }}></div>
+      </div>
+      <div className="flex-1 p-1.5 flex flex-col gap-1">
+        <div className="flex items-center justify-between">
+          <div className="h-2 w-8 rounded-sm" style={{ background: p.line }}></div>
+          <div className="h-2.5 w-7" style={p.btn}></div>
+        </div>
+        <div className="flex-1 flex gap-1">
+          <div className="flex-1" style={p.card}></div>
+          <div className="flex-1" style={p.card}></div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const UI_STYLES: { id: UiStyle; name: string; hint: string }[] = [
   { id: 'classic', name: 'Klasik', hint: 'Alışık olduğunuz görünüm' },
   { id: 'modern', name: 'Modern', hint: 'Sade, kenar menülü yeni görünüm' },
@@ -71,7 +132,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   isLocalPersistenceEnabled,
   isAIEnabled,
   currentTheme,
-  isDarkMode,
+  colorMode,
+  modernTheme,
+  onChangeAppearance,
+  isModernActive,
   currentUiStyle,
   onChangeUiStyle,
   onSave,
@@ -83,7 +147,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   const [persistenceEnabled, setPersistenceEnabled] = useState(isLocalPersistenceEnabled);
   const [aiEnabled, setAiEnabled] = useState(isAIEnabled);
   const [theme, setTheme] = useState(currentTheme || 'classic');
-  const [dark, setDark] = useState(isDarkMode);
 
   useEffect(() => {
     setDuration(sprintDuration);
@@ -91,11 +154,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     setPersistenceEnabled(isLocalPersistenceEnabled);
     setAiEnabled(isAIEnabled);
     setTheme(currentTheme || 'classic');
-    setDark(isDarkMode);
-  }, [sprintDuration, projectStartDate, isLocalPersistenceEnabled, isAIEnabled, currentTheme, isDarkMode]);
+  }, [sprintDuration, projectStartDate, isLocalPersistenceEnabled, isAIEnabled, currentTheme]);
 
   const handleSave = () => {
-    onSave(duration, startDate, persistenceEnabled, aiEnabled, theme, dark);
+    onSave(duration, startDate, persistenceEnabled, aiEnabled, theme);
   };
 
   return (
@@ -140,30 +202,70 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               <p className="text-xs text-gray-600 dark:text-gray-400">Seçim hemen uygulanır; istediğiniz zaman buradan geri dönebilirsiniz.</p>
           </section>
 
-          <section className="space-y-4 pt-6 border-t dark:border-gray-700">
-              <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest">Görünüm & Temalar</h3>
-                  <button 
-                    onClick={() => setDark(!dark)}
-                    className={`flex items-center space-x-2 px-3 py-1.5 rounded-xl border transition-all ${dark ? 'bg-gray-700 border-gray-600 text-amber-400' : 'bg-amber-50 border-amber-100 text-amber-600'}`}
-                  >
-                      <i aria-hidden="true" className={`fa-solid ${dark ? 'fa-moon' : 'fa-sun'} text-xs`}></i>
-                      <span className="text-[10px] font-black uppercase tracking-tighter">{dark ? 'GECE MODU' : 'GÜNDÜZ MODU'}</span>
-                  </button>
+          <section className="space-y-4 pt-6 border-t dark:border-gray-700" aria-labelledby="appearance-title">
+              <div className="flex flex-wrap justify-between items-center gap-3">
+                  <h3 id="appearance-title" className="text-xs font-black text-gray-400 uppercase tracking-widest">{isModernActive ? 'Görünüm & Tema' : 'Görünüm & Renk'}</h3>
+                  <div role="radiogroup" aria-label="Gündüz / gece" className="inline-flex p-0.5 rounded-xl bg-gray-100 dark:bg-gray-700">
+                      {COLOR_MODES.map(m => {
+                          const on = colorMode === m.id;
+                          return (
+                              <button
+                                key={m.id}
+                                type="button"
+                                role="radio"
+                                aria-checked={on}
+                                onClick={() => { if (!on) onChangeAppearance({ colorMode: m.id }); }}
+                                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-[10px] text-xs font-semibold transition-colors ${on ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm' : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'}`}
+                              >
+                                  <i aria-hidden="true" className={`fa-solid ${m.id === 'system' ? 'fa-circle-half-stroke' : m.id === 'light' ? 'fa-sun' : 'fa-moon'} text-[11px]`}></i>
+                                  {m.name}
+                              </button>
+                          );
+                      })}
+                  </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                  {THEMES.map(t => (
-                      <button 
-                        key={t.id}
-                        onClick={() => setTheme(t.id)}
-                        className={`flex items-center space-x-3 p-3 rounded-xl border transition-all ${theme === t.id ? 'border-primary ring-2 ring-primary/20 bg-primary/5' : 'border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
-                        style={theme === t.id ? { borderColor: 'var(--app-primary)', backgroundColor: 'var(--app-accent-light)' } : {}}
-                      >
-                          <div className="w-4 h-4 rounded-full shadow-inner" style={{ backgroundColor: t.color }}></div>
-                          <span className={`text-xs font-bold ${theme === t.id ? 'text-primary' : 'text-gray-600 dark:text-gray-400'}`} style={theme === t.id ? { color: 'var(--app-primary)' } : {}}>{t.name}</span>
-                      </button>
-                  ))}
-              </div>
+              {isModernActive ? (
+                  <>
+                      <div role="radiogroup" aria-labelledby="appearance-title" className="grid grid-cols-2 gap-3">
+                          {MODERN_THEMES.map(t => {
+                              const selected = modernTheme === t.id;
+                              return (
+                                  <button
+                                    key={t.id}
+                                    type="button"
+                                    role="radio"
+                                    aria-checked={selected}
+                                    onClick={() => { if (!selected) onChangeAppearance({ modernTheme: t.id }); }}
+                                    className={`text-left p-2 rounded-xl border-2 transition-colors ${selected ? '' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-500'}`}
+                                    style={selected ? { borderColor: 'var(--app-primary)' } : {}}
+                                  >
+                                      <ThemePreview id={t.id} />
+                                      <span className="mt-2 flex items-center gap-1.5 text-sm font-semibold text-gray-800 dark:text-white">
+                                          {t.name}
+                                          {selected && <i className="fa-solid fa-circle-check text-xs" style={{ color: 'var(--app-primary)' }} aria-hidden="true"></i>}
+                                      </span>
+                                      <span className="block text-xs text-gray-600 dark:text-gray-400">{t.hint}</span>
+                                  </button>
+                              );
+                          })}
+                      </div>
+                      <p className="text-xs text-gray-600 dark:text-gray-400">Tema ve gündüz/gece seçimi hemen uygulanır. Her tema iki modda da çalışır.</p>
+                  </>
+              ) : (
+                  <div className="grid grid-cols-2 gap-3">
+                      {THEMES.map(t => (
+                          <button 
+                            key={t.id}
+                            onClick={() => setTheme(t.id)}
+                            className={`flex items-center space-x-3 p-3 rounded-xl border transition-all ${theme === t.id ? 'border-primary ring-2 ring-primary/20 bg-primary/5' : 'border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+                            style={theme === t.id ? { borderColor: 'var(--app-primary)', backgroundColor: 'var(--app-accent-light)' } : {}}
+                          >
+                              <div className="w-4 h-4 rounded-full shadow-inner" style={{ backgroundColor: t.color }}></div>
+                              <span className={`text-xs font-bold ${theme === t.id ? 'text-primary' : 'text-gray-600 dark:text-gray-400'}`} style={theme === t.id ? { color: 'var(--app-primary)' } : {}}>{t.name}</span>
+                          </button>
+                      ))}
+                  </div>
+              )}
           </section>
 
           <section className="space-y-4 pt-6 border-t dark:border-gray-700">
@@ -231,7 +333,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
 
         <div className="flex justify-end items-center p-4 bg-gray-50 dark:bg-gray-900/50 border-t dark:border-gray-700">
-          <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-bold text-gray-500 hover:text-gray-800 transition-colors">Vazgeç</button>
+          <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-bold text-gray-500 dark:text-gray-300 hover:text-gray-800 dark:hover:text-white transition-colors">Vazgeç</button>
           <button
             type="button" onClick={handleSave}
             className="px-8 py-2.5 rounded-xl bg-primary text-white font-bold hover:opacity-90 shadow-lg shadow-primary/20 transition-all"

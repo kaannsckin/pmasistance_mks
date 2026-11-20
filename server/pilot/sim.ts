@@ -10,7 +10,7 @@ import { isoWeekOf } from '../../utils/weeklyReport.js';
 import { createEmptyWorkspace, createProject, defaultProjectSettings } from '../../utils/workspace.js';
 import { SearchResponse, searchExport, toRawIssue } from './mockJira.js';
 import { ACTIONS, AYLAR, DECISIONS, DOMAIN_REQUESTS, DOMAIN_RISKS, gunAy, issueText, MEETINGS, pick, RISKS, SimIssueType } from './text.js';
-import { availableAAOf, DEPARTMENTS, fullName, HOURS_PER_DAY, PEOPLE, PERSONAS, personById, PILOT_BASLANGIC, PROJECTS, ROLE_NAMES, TITLES, WorldProject } from './world.js';
+import { availableAAOf, DEPARTMENTS, fullName, GOREV_AYRILIGI, HOURS_PER_DAY, PEOPLE, PERSONAS, personById, PILOT_BASLANGIC, PROJECTS, ROLE_NAMES, TITLES, WorldProject } from './world.js';
 
 /**
  * Pilot simülasyonu: kurgusal birimin günlük akışı.
@@ -877,9 +877,11 @@ export const stepDay = (state: SimState, input: WorkspaceData, day: string, opts
                     const x = key ? jira.issues.find(i => i.rec.key === key) : undefined;
                     return { itemId: item.id, text: item.text, status: (!key ? 'partial' : x?.rec.statusCategory === 'done' ? 'done' : x?.rec.statusCategory === 'indeterminate' ? 'partial' : 'slipped') as 'done' | 'partial' | 'slipped' };
                 });
+                // PY kendi bölümünün sorumlusuysa bölüm onayı atlanır (uygulamadaki reportFlowFor ile aynı)
+                const selfLead = day >= GOREV_AYRILIGI && DEPARTMENTS.find(d => d.code === pm.dept)?.lead === w.pm;
                 const report: WeeklyReport = {
                     id: `rapor-${w.id}-${year}-${week}`, year, week, kind: 'project', projectId: w.id, departmentCode: pm.dept,
-                    thisWeek, nextWeek, stage: 'bs_review',
+                    thisWeek, nextWeek, stage: selfLead ? 'pyds_review' : 'bs_review',
                     // Kayıt başlıklarındaki kısaltmalar açılımıyla (kurum kılavuzu; aksi hâlde rapor biçim hatası verir)
                     abbreviations: Object.entries(SIM_ABBREVIATIONS).filter(([abbr]) => [...thisWeek, ...nextWeek].some(i => new RegExp(`\\b${abbr}\\b`).test(i.text))).map(([abbr, expansion]) => ({ abbr, expansion })),
                     worklog: state.worklog.filter(x => x.projectId === w.id && x.date >= weekStart).map(({ projectId: _p, ...rest }) => { void _p; return rest; }),
@@ -892,7 +894,7 @@ export const stepDay = (state: SimState, input: WorkspaceData, day: string, opts
                     ],
                 };
                 ws = { ...ws, weeklyReports: [...(ws.weeklyReports || []).filter(r => r.id !== report.id), report] };
-                pd.rapor = `${year}-H${week} haftalık rapor bölüm sorumlusu onayına gönderildi`;
+                pd.rapor = `${year}-H${week} haftalık rapor ${selfLead ? 'PYB destek biçim denetimine (PY bölüm sorumlusu; bölüm onayı yok)' : 'bölüm sorumlusu onayına'} gönderildi`;
             } else {
                 pd.rapor = `${year}-H${week} haftalık rapor GÖNDERİLMEDİ (gecikti)`;
             }

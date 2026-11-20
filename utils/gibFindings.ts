@@ -1,6 +1,8 @@
 import * as XLSX from 'xlsx';
 import {
     CustomerRequest,
+    JiraSyncFieldId,
+    JiraSyncSettings,
     Person,
     Project,
     ProjectAiProfile,
@@ -11,6 +13,7 @@ import {
     WorkspaceData,
 } from '../types';
 import { withStatus } from './planning/lifecycle';
+import { EXCEL_TRACKING_FIELDS, fieldPolicy, hasFieldPolicy } from './planning/jiraFieldSync';
 import { foldTr } from './rag/text';
 import { createProject } from './workspace';
 
@@ -77,6 +80,8 @@ export interface GibImportSummary {
     pocScore?: number;
     mandatoryOpen?: number;
     testItems?: number;
+    /** Teslim planı ve GİB yanıtı sayfalarından: sayfa adı → madde sayısı */
+    plans: Record<string, number>;
 }
 
 export interface GibImportPackage {
@@ -88,6 +93,8 @@ export interface GibImportPackage {
     customerRequests: CustomerRequest[];
     aiProfile: ProjectAiProfile;
     jiraProjectKey?: string;
+    /** Jira eşitleme için önerilen ayar (Excel'in alanlarını ezmeyen) */
+    jiraSync?: JiraSyncSettings;
     projectStartDate?: string;
     tagColors: Record<string, string>;
     summary: GibImportSummary;
@@ -404,6 +411,74 @@ const readMeetingRequests = (rows: SheetMatrix | undefined, customer: string, no
     return out;
 };
 
+/**
+ * Teslim planı / GİB yanıtı sayfaları ("Aralık Teslimi", "Aralık Sonrası Teslim",
+ * "GİB'den Yanıt Beklenenler"): Test No → etiket (sayfa adı) ve not satırları.
+ * Bu sayfalardaki diğer sütunlar Genel Liste'den formülle gelir; yalnız elle
+ * girilen sütunlar okunur.
+ */
+interface PlanEntry { label: string; lines: string[] }
+
+const PLAN_SHEETS: { names: string[]; label: string }[] = [
+    { names: ['Aralık Teslimi'], label: 'Aralık teslimi' },
+    { names: ['Aralık Sonrası Teslim'], label: 'Aralık sonrası teslim' },
+    { names: ['GİB’den Yanıt Beklenenler', "GİB'den Yanıt Beklenenler", 'GİB den Yanıt'], label: 'GİB yanıtı bekleniyor' },
+];
+
+export const PLAN_TAG_COLORS: Record<string, string> = {
+    'Aralık teslimi': '#16a34a',
+    'Aralık sonrası teslim': '#7c3aed',
+    'GİB yanıtı bekleniyor': '#d97706',
+};
+
+const readPlanSheet = (rows: SheetMatrix | undefined, label: string): Map<string, PlanEntry> => {
+    const out = new Map<string, PlanEntry>();
+    if (!rows) return out;
+    const h = findHeaderRow(rows, ['Test No', 'Alt küme']);
+    if (h < 0) return out;
+    const col = columnIndex(rows[h]);
+    const cTest = col('Test No');
+    const cSubset = col('Alt küme');
+    const cSource = col('Karar kaynağı');
+    const cSlide = col('Sunumdaki başlık');
+    const cNote = col('Toplantı kararı / notu', 'Toplantı kararı');
+    const cAnswerState = col('Yanıt durumu');
+    const cAnswer = col('Yanıt / açıklama', 'Yanıt');
+    for (let i = h + 1; i < rows.length; i++) {
+        const r = rows[i];
+        const test = text(at(r, cTest));
+        if (!test || !/^[A-ZÇĞİÖŞÜ]{1,3}-\d+/i.test(test)) continue;
+        const head = [text(at(r, cSubset)), text(at(r, cSource)) ? `karar: ${text(at(r, cSource))}` : '', text(at(r, cSlide))].filter(Boolean).join(' · ');
+        const answer = cAnswerState >= 0 || cAnswer >= 0
+            ? [text(at(r, cAnswerState)), text(at(r, cAnswer))].filter(Boolean).join(' — ')
+            : '';
+        const lines = [
+            `${label}${head ? `: ${head}` : ''}`,
+            text(at(r, cNote)) ? `Toplantı notu: ${text(at(r, cNote))}` : '',
+            answer ? `GİB yanıtı: ${answer}` : '',
+        ].filter(Boolean);
+        out.set(test, { label, lines });
+    }
+    return out;
+};
+
+/** Öncelikli Bulgular: Test No → "Olası Etki (Rapor 5.1)" (yalnız bu sayfada olan bilgi) */
+const readImpacts = (rows: SheetMatrix | undefined): Map<string, string> => {
+    const out = new Map<string, string>();
+    if (!rows) return out;
+    const h = findHeaderRow(rows, ['Test No', 'Olası Etki']);
+    if (h < 0) return out;
+    const col = columnIndex(rows[h]);
+    const cTest = col('Test No');
+    const cImpact = col('Olası Etki');
+    for (let i = h + 1; i < rows.length; i++) {
+        const test = text(at(rows[i], cTest));
+        const impact = text(at(rows[i], cImpact));
+        if (test && impact) out.set(test, impact);
+    }
+    return out;
+};
+
 /** Test Kalemleri: ağırlıklı PoC skoru (güncel sonuç varsa o) ve zorunlu açık */
 const computePocScore = (
     rows: SheetMatrix | undefined,
@@ -509,6 +584,8 @@ export const parseGibWorkbook = (wb: WorkbookMatrices, opts: { now?: string; cus
     const epics = readEpics(findSheet(wb, 'Epic Listesi'));
     const pool = readTeamPool(findSheet(wb, 'EMS'));
     const predecessorPairs = readPredecessors(findSheet(wb, 'EMS Çalışması'));
+    const plans = PLAN_SHEETS.map(p => readPlanSheet(findSheet(wb, ...p.names), p.label));
+    const impacts = readImpacts(findSheet(wb, 'Öncelikli Bulgular'));
 
     const dataRows = main.slice(h + 1).filter(r => text(at(r, C.test)));
     // CR düzeyinde verilen efor, ona bağlanan maddelere eşit bölünür (Excel'deki kural)
@@ -526,7 +603,7 @@ export const parseGibWorkbook = (wb: WorkbookMatrices, opts: { now?: string; cus
         findings: 0, epics: epics.length, crs: crList.crCount, rapor51: 0, mandatory: 0,
         byMs: {}, byStatus: { Backlog: 0, ToDo: 0, InProgress: 0, Done: 0 } as Record<TaskStatus, number>,
         effortByTeam: { 'EMS': 0, 'İstemci': 0, 'Test': 0, 'Dizin': 0 }, totalEffortDays: 0, withoutEffort: 0,
-        assigned: 0, predecessors: 0, resources: 0, requests: 0,
+        assigned: 0, predecessors: 0, resources: 0, requests: 0, plans: {},
     };
 
     for (const r of dataRows) {
@@ -573,7 +650,9 @@ export const parseGibWorkbook = (wb: WorkbookMatrices, opts: { now?: string; cus
             current,
             cancelled ? 'İptal / Kapsam dışı' : '',
             ...(teams.length > 1 ? teams : []),
+            ...plans.map(p => p.get(testNo)?.label || ''),
         ].filter(Boolean);
+        plans.forEach(p => { const e = p.get(testNo); if (e) summary.plans[e.label] = (summary.plans[e.label] || 0) + 1; });
 
         const effortLine = teams.length
             ? `${teams.map(t => `${t} ${String(effort[t]).replace('.', ',')}`).join(' · ')}${srcRow ? ` (kaynak: ${src})` : ''}`
@@ -584,6 +663,7 @@ export const parseGibWorkbook = (wb: WorkbookMatrices, opts: { now?: string; cus
             tierText ? `Önem kademesi: ${tierText}` : '',
             [poc ? `PoC sonucu: ${poc}` : '', text(at(r, C.reportRef)), text(at(r, C.defect)) ? `Hata kaydı: ${text(at(r, C.defect))}` : ''].filter(Boolean).join(' · '),
             text(at(r, C.finding)) ? `Rapordaki tespit: ${text(at(r, C.finding))}` : '',
+            impacts.get(testNo) ? `Olası etki: ${impacts.get(testNo)}` : '',
             text(at(r, C.expected)) ? `Beklenen sonuç: ${text(at(r, C.expected))}` : '',
             text(at(r, C.testNote)) ? `Test notu: ${text(at(r, C.testNote))}` : '',
             current ? `Güncel sonuç: ${current}` : '',
@@ -595,6 +675,7 @@ export const parseGibWorkbook = (wb: WorkbookMatrices, opts: { now?: string; cus
             assignees.length > 1 ? `Atananlar: ${assignees.join(', ')}` : '',
             statusText ? `Excel durumu: ${statusText}` : '',
             codeLine ? `İş kodu: ${codeLine}` : '',
+            ...plans.flatMap(p => p.get(testNo)?.lines || []),
         ].filter(Boolean).join('\n');
 
         let id = `gib-${testNo}`;
@@ -689,6 +770,10 @@ export const parseGibWorkbook = (wb: WorkbookMatrices, opts: { now?: string; cus
     const prefixCount = new Map<string, number>();
     tasks.forEach(t => { const m = t.jiraId.match(/^([A-Z][A-Z0-9]+)-\d+$/); if (m) prefixCount.set(m[1], (prefixCount.get(m[1]) || 0) + 1); });
     const jiraProjectKey = [...prefixCount.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+    plans.forEach((p, k) => {
+        const unknown = [...p.keys()].filter(t => !byTestId.has(`gib-${t}`));
+        if (unknown.length) warnings.push(`"${PLAN_SHEETS[k].names[0]}" sayfasındaki ${unknown.join(', ')} Genel Liste'de yok; atlandı.`);
+    });
 
     const msList = Object.keys(summary.byMs).filter(k => k.startsWith('MS')).sort();
     const aiProfile: ProjectAiProfile = {
@@ -714,8 +799,10 @@ export const parseGibWorkbook = (wb: WorkbookMatrices, opts: { now?: string; cus
         customerRequests,
         aiProfile,
         jiraProjectKey,
+        // Excel takibi için önerilen eşitleme: Jira yalnız durum, atanan, termin, harcanan süre ve sürümü getirir
+        jiraSync: { ...(jiraProjectKey ? { projectKey: jiraProjectKey } : {}), discover: false, autoMinutes: 0, fields: { ...EXCEL_TRACKING_FIELDS }, autoPeople: true },
         projectStartDate: readStartDate(findSheet(wb, 'Milestone')),
-        tagColors: Object.fromEntries(Object.entries(MS_TAG_COLORS).filter(([k]) => tasks.some(t => t.labels?.includes(k)))),
+        tagColors: Object.fromEntries(Object.entries({ ...MS_TAG_COLORS, ...PLAN_TAG_COLORS }).filter(([k]) => tasks.some(t => t.labels?.includes(k)))),
         summary,
         warnings,
     };
@@ -783,8 +870,11 @@ export const findImportedProject = (projects: Project[], pkg: Pick<GibImportPack
     return best;
 };
 
-/** Excel'in sahip olduğu alanlar (yeniden aktarımda güncellenir); yaşam döngüsü ve sprint uygulamada kalır */
-const mergeTask = (old: Task, next: Task, statusFromSheet: boolean, now: Date): Task => {
+/**
+ * Excel'in sahip olduğu alanlar (yeniden aktarımda güncellenir); yaşam döngüsü ve sprint uygulamada kalır.
+ * `jiraOwned`: projenin Jira eşitleme ayarında Jira'dan alınan alanlar; bunlar Excel'le ezilmez.
+ */
+const mergeTask = (old: Task, next: Task, statusFromSheet: boolean, now: Date, jiraOwned: Set<JiraSyncFieldId> = new Set()): Task => {
     const merged: Task = {
         ...old,
         name: next.name,
@@ -802,6 +892,16 @@ const mergeTask = (old: Task, next: Task, statusFromSheet: boolean, now: Date): 
         predecessor: next.predecessor ?? old.predecessor,
         includeInSprints: next.includeInSprints,
     };
+    if (jiraOwned.has('summary')) merged.name = old.name;
+    if (jiraOwned.has('priority')) merged.priority = old.priority;
+    if (jiraOwned.has('description')) merged.notes = old.notes;
+    if (jiraOwned.has('labels')) merged.labels = old.labels;
+    if (jiraOwned.has('components')) merged.unit = old.unit;
+    if (jiraOwned.has('issueType')) merged.issueType = old.issueType;
+    if (jiraOwned.has('dueDate')) merged.dueDate = old.dueDate;
+    if (jiraOwned.has('assignee')) merged.resourceName = old.resourceName;
+    if (jiraOwned.has('estimate') && old.estimateSource === 'jira') { merged.time = old.time; merged.availability = old.availability; }
+    if (jiraOwned.has('status')) return merged;
     return statusFromSheet && next.status !== old.status ? withStatus(merged, next.status, now) : merged;
 };
 
@@ -856,6 +956,7 @@ export const applyGibImport = (ws: WorkspaceData, pkg: GibImportPackage, opts: G
             jiraProjectKey: pkg.jiraProjectKey,
             pmPersonId,
         });
+        if (pkg.jiraSync) project.jiraSync = pkg.jiraSync;
         project.settings = {
             ...project.settings,
             ...(pkg.projectStartDate ? { projectStartDate: pkg.projectStartDate } : {}),
@@ -864,12 +965,14 @@ export const applyGibImport = (ws: WorkspaceData, pkg: GibImportPackage, opts: G
         added = pkg.tasks.length;
     } else {
         const oldById = new Map(target.tasks.map(t => [t.id, t]));
+        const policy = hasFieldPolicy(target.jiraSync) ? fieldPolicy(target.jiraSync) : null;
+        const jiraOwned = new Set(policy ? (Object.keys(policy) as JiraSyncFieldId[]).filter(f => policy[f] === 'pull' || policy[f] === 'both') : []);
         const incomingIds = new Set(pkg.tasks.map(t => t.id));
         const tasks = pkg.tasks.map(t => {
             const old = oldById.get(t.id);
             if (!old) { added++; return t; }
             updated++;
-            return mergeTask(old, t, explicit.has(t.id), now);
+            return mergeTask(old, t, explicit.has(t.id), now, jiraOwned);
         });
         const extra = target.tasks.filter(t => !incomingIds.has(t.id));
         kept = extra.length;
@@ -885,6 +988,7 @@ export const applyGibImport = (ws: WorkspaceData, pkg: GibImportPackage, opts: G
             ],
             aiProfile: target.aiProfile ? { ...pkg.aiProfile, ...target.aiProfile } : pkg.aiProfile,
             jiraProjectKey: target.jiraProjectKey || pkg.jiraProjectKey,
+            ...(target.jiraSync || pkg.jiraSync ? { jiraSync: target.jiraSync || pkg.jiraSync } : {}),
             pmPersonId: pmPersonId ?? target.pmPersonId,
             settings: { ...target.settings, tagColors: { ...pkg.tagColors, ...(target.settings.tagColors || {}) } },
             updatedAt: nowIso,

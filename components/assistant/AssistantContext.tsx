@@ -3,7 +3,7 @@ import { View, WorkspaceData } from '../../types';
 import { AgentStep, AGENT_MAX_STEPS, runAgentTurn } from '../../utils/ai/agent';
 import { AttachmentInfo, ChatAttachment, composeUserContent } from '../../utils/ai/attachments';
 import { UiCommand, UiResult } from '../../utils/ai/uiActions';
-import { fetchIntegrationHealth, fetchJiraMeta, fetchJiraSyncPage, IntegrationHealth } from '../../utils/integrations';
+import { fetchIntegrationHealth, fetchJiraMeta, fetchJiraSyncPage, fetchJiraWorklogs, IntegrationHealth } from '../../utils/integrations';
 import { AiAction, AiProposal } from '../../utils/ai/actions';
 import { AiError, configureMasking, embedTexts, fetchAiStatus, hasCredentials, saveAccessToken, streamChat } from '../../utils/ai/client';
 import { buildMasker, collectMaskEntries, Masker } from '../../utils/ai/masking';
@@ -103,7 +103,7 @@ interface ProviderProps {
   getView: () => View;
   onNavigate?: (ref: RagRef) => void;
   /** Onaylanan öneriyi uygular (App: yetki/kilit yeniden doğrulanır, denetim + geri-al) */
-  onApplyAction?: (action: AiAction) => ApplyResult;
+  onApplyAction?: (action: AiAction) => ApplyResult | Promise<ApplyResult>;
   /** Ajan modu: asistanın arayüz komutları (ekran değiştir, kayıt aç); App yetkiyi yeniden denetler */
   onUiCommand?: (cmd: UiCommand) => UiResult;
   children: React.ReactNode;
@@ -157,13 +157,14 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, chat = tru
       : null);
   }, [status]);
 
-  // Sunucu entegrasyonları (Jira) asistan hazır olunca bir kez sorulur
+  // Sunucu entegrasyonları (Jira): asistan hazır olunca ve her açılışta yeniden sorulur;
+  // Yönetici konsolundan girilen Jira ayarı yeniden başlatmadan araçlara yansır
   useEffect(() => {
-    if (phase !== 'ready' || integrations) return;
-    let alive = true;
-    fetchIntegrationHealth().then(h => { if (alive) setIntegrations(h); }).catch(() => undefined);
-    return () => { alive = false; };
-  }, [phase, integrations]);
+    if (!enabled || phase !== 'ready') return;
+    const c = new AbortController();
+    fetchIntegrationHealth(c.signal).then(h => setIntegrations(h)).catch(() => undefined);
+    return () => c.abort();
+  }, [enabled, phase, isOpen]);
 
   /** Kullanıcının güncel kapsamında araç bağlamı + RAG, arayüz (ajan) ve Jira çalışma zamanları */
   const makeContext = useCallback((signal?: AbortSignal) => {
@@ -187,6 +188,7 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, chat = tru
         meta: () => fetchJiraMeta(mode, signal),
         byKeys: keys => fetchJiraSyncPage({ keys }, mode, signal),
         search: (source, o) => fetchJiraSyncPage({ source, openOnly: o.openOnly, pageSize: o.pageSize }, mode, signal),
+        worklogs: (projectKey, from, to) => fetchJiraWorklogs({ projectKey, from, to }, mode),
       };
     }
     return ctx;
@@ -341,16 +343,19 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, chat = tru
     // Aynı karede çift tıklama: ekran güncellenmeden ikinci kez uygulanmasın
     if (resolvedProposals.current.has(proposalId)) return;
     resolvedProposals.current.add(proposalId);
-    let patch: Partial<AiProposal>;
-    if (decision === 'reject') {
-      patch = { status: 'rejected', message: 'Vazgeçildi.' };
-    } else {
-      const r = onApplyAction ? onApplyAction(proposal.action) : { ok: false, message: 'Bu ekranda değişiklik uygulanamıyor.' };
-      patch = { status: r.ok ? 'applied' : 'failed', message: r.message };
-    }
-    setMessages(prev => prev.map(m => (m.id === messageId
+    const update = (patch: Partial<AiProposal>) => setMessages(prev => prev.map(m => (m.id === messageId
       ? { ...m, proposals: m.proposals?.map(p => (p.id === proposalId ? { ...p, ...patch } : p)) }
       : m)));
+    if (decision === 'reject') { update({ status: 'rejected', message: 'Vazgeçildi.' }); return; }
+    const r = onApplyAction ? onApplyAction(proposal.action) : { ok: false, message: 'Bu ekranda değişiklik uygulanamıyor.' };
+    if (r instanceof Promise) {
+      // Ağ gerektiren öneri (Jira eşitlemesi): sonuç gelene kadar kartta "çalışıyor"
+      update({ status: 'running', message: 'Çalışıyor…' });
+      r.then(x => update({ status: x.ok ? 'applied' : 'failed', message: x.message }))
+        .catch(e => update({ status: 'failed', message: (e as Error)?.message || 'Uygulanamadı.' }));
+      return;
+    }
+    update({ status: r.ok ? 'applied' : 'failed', message: r.message });
   }, [onApplyAction]);
 
   const complete = useCallback(async (system: string, prompt: string, signal?: AbortSignal): Promise<string> => {

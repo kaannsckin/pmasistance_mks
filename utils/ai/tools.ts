@@ -1,7 +1,7 @@
 import { IssueType, PermissionKey, ProjectStatus, RagStatus, RiskStatus, Task, TaskStatus } from '../../types';
 import { normalizeEnumArgs } from './enumAliases';
 import { inMonthEstimates, InMonthEstimate } from '../inMonthActual';
-import { getPlanLockStatus, MONTH_INDEXES, ROLE_LABELS, summarizeByProject } from '../allocations';
+import { getPlanLockStatus, inferAllocationRole, MONTH_INDEXES, ROLE_LABELS, summarizeByProject } from '../allocations';
 import { AUDIT_ACTION_LABELS } from '../audit';
 import { buildCostReport, costPeriodLabel } from '../costing';
 import { CATEGORY_LABELS, analyzeDataHealth } from '../dataHealth';
@@ -13,13 +13,14 @@ import { buildPersonProfile } from '../personProfile';
 import { recentChanges } from '../recentChanges';
 import { buildRoleAnalysis, summarizeGaps, UNASSIGNED_ROLE } from '../roleAnalysis';
 import { RISK_BAND_LABELS, RISK_STATUS_LABELS, riskBand, riskScore, summarizeRisks } from '../risks';
-import { allPersonRoles, findAvailablePeople } from '../staffing';
+import { allPersonRoles, departmentLeadIds, findAvailablePeople } from '../staffing';
 import { buildStatusReport } from '../statusReport';
 import { buildUtilization } from '../utilization';
 import { RAG_SOURCE_LABELS, RagSourceType } from '../rag/sources';
 import { summarizeWorkPackages } from '../workPackages';
 import { can } from '../permissions';
 import { AiAction, AiProposal, describeAction, validateAction } from './actions';
+import { buildWorklogReport, reportRange, resolveTargets, WorklogGroup } from './worklogReport';
 import { JsonSchema, ToolCall, ToolSpec } from './protocol';
 import { knownWorkflow, taskStatusLabel } from '../workflow';
 import { effectiveScheme } from '../projectScheme';
@@ -148,7 +149,7 @@ export const AI_TOOLS: ToolDef[] = [
         label: 'Bilgi tabanı araması',
         spec: {
             name: 'bilgi_ara',
-            description: 'Serbest metin bilgi tabanında anlam ve anahtar kelime araması: haftalık notlar, görev açıklama/yorumları, risk açıklama ve aksiyonları, müşteri istekleri, PESTEL/SWOT maddeleri, hedefler, proje durum notları, uygulamanın kullanım kılavuzu ve Bilgi Bankası\'na yüklenen kurumsal dokümanlar. "Nasıl yapılır" soruları, geçmiş kararlar/konuşmalar, notlarda veya dokümanlarda geçen konular için kullan. Sayısal sorular için yapısal araçları tercih et. Yanıtta kullandığın bilgiyi [no] biçiminde kaynak numarasıyla belirt.',
+            description: 'Serbest metin bilgi tabanında anlam ve anahtar kelime araması: haftalık notlar, görev açıklama/yorumları, risk açıklama ve aksiyonları, müşteri istekleri, PESTEL/SWOT maddeleri, hedefler, proje durum notları, uygulamanın kullanım kılavuzu ve Bilgi Bankası\'na yüklenen kurumsal dokümanlar. "Nasıl yapılır" soruları, geçmiş kararlar/konuşmalar, notlarda veya dokümanlarda geçen konular için kullan. Sayısal sorular için yapısal araçları tercih et.',
             parameters: S.obj({
                 sorgu: S.str('Aranacak konu; doğal dilde, anahtar kelimeleri içeren kısa bir ifade.'),
                 kaynak: S.str('Yalnızca bu kaynak türünde ara (isteğe bağlı): not, gorev, risk, istek, analiz (PESTEL/SWOT), hedef, proje, kilavuz (kullanım kılavuzu), dokuman (kurumsal dokümanlar).', RAG_TYPES),
@@ -455,9 +456,12 @@ export const AI_TOOLS: ToolDef[] = [
             }
             const months = MONTH_INDEXES.filter(m => m >= start && m <= end);
             const people = dept ? ctx.ws.people.filter(p => p.departmentCode === dept) : ctx.ws.people;
-            const rows = findAvailablePeople(people, ctx.ws.allocations, ctx.ws.leaves || [], { role, year, months, requiredAA: required });
+            const leads = departmentLeadIds(ctx.ws.departments);
+            const rows = findAvailablePeople(people, ctx.ws.allocations, ctx.ws.leaves || [], { role, year, months, requiredAA: required, exclude: leads });
+            const leadsSkipped = people.filter(p => leads.has(p.id) && (!role || p.roles.includes(role))).length;
             return {
                 sorgu: { rol: role || 'tümü', yil: year, aylar: `${start}-${end}`, gerekli_aa: required, bolum: dept },
+                ...(leadsSkipped ? { not: `${leadsSkipped} bölüm sorumlusu aday sayılmadı (yönetim görevi; proje tahsisi yok).` } : {}),
                 aday_sayisi: rows.length,
                 uygun_sayisi: rows.filter(r => r.fits).length,
                 adaylar: rows.slice(0, clampLimit(a.limit, 15)).map(r => ({
@@ -539,12 +543,18 @@ export const AI_TOOLS: ToolDef[] = [
             // Rolü girilmemiş tahsis satırlarının talebi hiçbir rol kapasitesiyle eşleşmez → açık şişer
             const demand = rows.reduce((s, r) => s + r.totals.planned + r.totals.proposal, 0);
             const unassigned = rows.filter(r => r.role === UNASSIGNED_ROLE).reduce((s, r) => s + r.totals.planned + r.totals.proposal, 0);
+            // Rolsüz satırın talebi kişinin rolüne yazılır (B-025); ne kadarının tahminle yazıldığı söylenir
+            const byId = new Map(ctx.ws.people.map(p => [p.id, p]));
+            const inferredAA = ctx.ws.allocations
+                .filter(x => x.year === year && !(x.role || '').trim() && (!dept || byId.get(x.personId)?.departmentCode === dept) && inferAllocationRole(ctx.ws.allocations, byId.get(x.personId), x.projectId))
+                .reduce((s, x) => s + Object.values(x.plan).reduce((t: number, v) => t + (Number(v) || 0), 0), 0);
             if (a.sadece_acik !== false) rows = rows.filter(r => r.totals.gap > 0);
             return {
                 yil: year, bolum: dept, acigi_olan_rol: gaps.rolesWithGap, toplam_acik_aa: gaps.totalGapAA,
                 ...(unassigned > 0 ? {
                     uyari: `Planlı talebin %${Math.round((unassigned / demand) * 100)}'i (${r2(unassigned)} AA) rolü girilmemiş tahsis satırlarında; bu talep hiçbir rolün kapasitesiyle eşleşmediği için "${UNASSIGNED_ROLE}" satırında açık görünür. İşe alım kararından önce Tahsis Tablosu'nda satırlara rol girilmeli.`,
                 } : {}),
+                ...(inferredAA > 0 ? { not: `Rolü girilmemiş tahsis satırlarındaki ${r2(inferredAA)} AA, kişinin projedeki ya da en sık rolüne yazıldı. Kesin analiz için Tahsis Tablosu'nda rol girilmesi önerilir.` } : {}),
                 satirlar: rows.sort((x, y) => y.totals.gap - x.totals.gap).slice(0, 30).map(r => ({
                     bolum: r.departmentCode, rol: r.role, planli_proje_aa: r2(r.totals.planned), kapasite_aa: r2(r.totals.capacity),
                     teklif_ihtiyaci_aa: r2(r.totals.proposal), acik_aa: r2(r.totals.gap),
@@ -825,7 +835,7 @@ const PROPOSAL_TOOLS: ToolDef[] = [
         writeOnly: true,
         spec: {
             name: 'oner_risk_ekle',
-            description: 'Projeye yeni risk eklemeyi ÖNERİR (kullanıcı onaylamadan uygulanmaz). Kullanıcı açıkça risk eklemek istediğinde ya da notlardan/gecikmelerden net bir risk çıkardığında kullan.',
+            description: 'Projeye yeni risk eklemeyi ÖNERİR (onaysız uygulanmaz). Kullanıcı açıkça risk eklemek istediğinde ya da notlardan/gecikmelerden net bir risk çıkardığında kullan.',
             parameters: S.obj({
                 proje: P.project,
                 baslik: S.str('Risk başlığı (kısa, net).'),
@@ -850,7 +860,7 @@ const PROPOSAL_TOOLS: ToolDef[] = [
         writeOnly: true,
         spec: {
             name: 'oner_gorev_ekle',
-            description: 'Projeye yeni görev eklemeyi ÖNERİR (kullanıcı onaylamadan uygulanmaz).',
+            description: 'Projeye yeni görev eklemeyi ÖNERİR (onaysız uygulanmaz).',
             parameters: S.obj({
                 proje: P.project,
                 ad: S.str('Görev adı.'),
@@ -1040,26 +1050,53 @@ const PROPOSAL_TOOLS: ToolDef[] = [
         writeOnly: true,
         spec: {
             name: 'oner_tahsis_ayarla',
-            description: 'Bir kişinin bir projedeki belirli ayının plan ya da gerçekleşen adam-ay değerini ayarlamayı ÖNERİR (kullanıcı onaylamadan uygulanmaz). Birden çok ay için ayrı ayrı çağır. Plan kilitliyse yalnızca gerçekleşen değiştirilebilir.',
+            description: 'Kişinin projedeki plan/gerçekleşen tahsisini bir ay ya da ay aralığı için ÖNERİR (onaysız uygulanmaz). Aralık yıl geçebilir; her aya aynı değer. Plan kilitliyse yalnız gerçekleşen.',
             parameters: S.obj({
-                kisi: S.str('Kişinin adı soyadı.'),
-                proje: S.str('Proje adı ya da kodu.'),
-                yil: P.year,
-                ay: S.int('Ay (1-12).'),
+                kisi: S.str('Ad soyad.'),
+                proje: S.str('Proje adı/kodu.'),
+                baslangic: S.str('İlk ay YYYY-AA.'),
+                bitis: S.str('Son ay YYYY-AA; tek ayda boş.'),
+                yuzde: S.num('Aylık % (0-150).'),
+                aa: S.num('Ya da aylık adam-ay (0-1,5).'),
                 alan: P.field,
-                aa: S.num('Yeni adam-ay değeri (0-1,5; 0 = boşalt).'),
-            }, ['kisi', 'proje', 'ay', 'aa']),
+                yil: S.int('Eski biçim: yıl.'),
+                ay: S.int('Eski biçim: ay 1-12.'),
+            }, ['kisi', 'proje']),
         },
         run: (a, ctx) => {
             const person = resolvePerson(ctx, a.kisi);
             const project = resolveProject(ctx, a.proje, { anyProject: true });
-            const value = Number(a.aa);
-            if (!Number.isFinite(value)) throw new ToolError('aa sayısal olmalı.');
-            return propose(ctx, {
-                type: 'tahsis_ayarla', personId: person.id, projectId: project.id, year: resolveYear(ctx, a.yil),
-                month: Number(a.ay), field: effortField(a.alan), value: Math.round(value * 100) / 100,
-            });
+            const hasPct = a.yuzde !== undefined && a.yuzde !== null && a.yuzde !== '';
+            const value = hasPct ? Number(a.yuzde) / 100 : Number(a.aa);
+            if (!Number.isFinite(value)) throw new ToolError('yuzde ya da aa sayısal olmalı.');
+            // Eski çağrılar: yil + ay (1-12)
+            const ym = (v: unknown) => {
+                const t = typeof v === 'number' ? String(v) : str(v);
+                if (/^\d{4}-\d{1,2}$/.test(t)) { const [y, m] = t.split('-'); return `${y}-${m.padStart(2, '0')}`; }
+                if (/^\d{1,2}$/.test(t)) return `${resolveYear(ctx, a.yil)}-${t.padStart(2, '0')}`;
+                return '';
+            };
+            const from = ym(a.baslangic) || ym(a.ay);
+            const to = ym(a.bitis) || from;
+            if (!from) throw new ToolError('baslangic YYYY-AA biçiminde olmalı (ör. 2026-12).');
+            const v = Math.round(value * 100) / 100;
+            if (from === to) {
+                const [y, m] = from.split('-').map(Number);
+                return propose(ctx, { type: 'tahsis_ayarla', personId: person.id, projectId: project.id, year: y, month: m, field: effortField(a.alan), value: v });
+            }
+            return propose(ctx, { type: 'tahsis_araligi', personId: person.id, projectId: project.id, from, to, field: effortField(a.alan), value: v });
         },
+    },
+    {
+        label: 'Jira eşitleme önerisi',
+        writeOnly: true,
+        requires: 'jira',
+        spec: {
+            name: 'oner_jira_esitle',
+            description: 'Projeyi Jira ile eşitlemeyi ÖNERİR (onaysız çalışmaz); proje ayarındaki alan seçimiyle.',
+            parameters: S.obj({ proje: P.project }),
+        },
+        run: (a, ctx) => propose(ctx, { type: 'jira_esitle', projectId: resolveProject(ctx, a.proje).id }),
     },
 ];
 
@@ -1301,6 +1338,32 @@ const JIRA_TOOLS: ToolDef[] = [
     },
 ];
 
+AI_TOOLS.push({
+    label: 'Jira worklog raporu',
+    requires: 'jira',
+    spec: {
+        name: 'jira_worklog_raporu',
+        description: 'Projelerin Jira worklog raporu (Tempo gibi): ay ya da aralıkta saat; proje, kişi, kayıt, gün, hafta kırılımı. Uygulama projesi → yalnız onun Jira kayıtları; Jira anahtarı (MPS) → Jira projesinin tamamı. En çok 92 gün.',
+        parameters: S.obj({
+            projeler: S.str('Virgülle projeler ya da Jira anahtarları; boşsa açık proje.'),
+            ay: S.str('2026-11 ya da Kasım; boşsa bu ay.'),
+            baslangic: S.str('Ya da YYYY-AA-GG.'),
+            bitis: S.str('YYYY-AA-GG.'),
+            grupla: S.str('proje, kisi, kayit, gun, hafta (virgülle); varsayılan proje,kisi.'),
+            kisi: S.str('Yalnız bu kişi.'),
+        }),
+    },
+    run: async (a, ctx) => {
+        if (!ctx.jira) throw new ToolError('Jira bağlantısı yapılandırılmamış (Yönetici konsolu › Entegrasyonlar).');
+        const targets = resolveTargets(ctx, a.projeler);
+        const { from, to } = reportRange(a, ctx.now);
+        const allowed: WorklogGroup[] = ['proje', 'kisi', 'kayit', 'gun', 'hafta'];
+        const groups = str(a.grupla).split(/[,\s]+/).map(g => g.toLocaleLowerCase('tr-TR').replace('kişi', 'kisi').replace('kayıt', 'kayit').replace('gün', 'gun')).filter((g): g is WorklogGroup => allowed.includes(g as WorklogGroup));
+        return buildWorklogReport({ targets, from, to, groups: groups.length ? groups : ['proje', 'kisi'], person: str(a.kisi) || undefined, fetch: ctx.jira.worklogs });
+    },
+});
+
+
 AI_TOOLS.push(...PROPOSAL_TOOLS, ...AGENT_TOOLS, ...JIRA_TOOLS);
 
 const TOOL_MAP = new Map(AI_TOOLS.map(t => [t.spec.name, t]));
@@ -1319,8 +1382,9 @@ export const toolKind = (name: string): 'read' | 'propose' | 'ui' | 'jira' => {
     const t = TOOL_MAP.get(name);
     if (!t) return 'read';
     if (t.requires === 'ui') return 'ui';
-    if (t.requires === 'jira') return 'jira';
-    return t.writeOnly ? 'propose' : 'read';
+    // Onay isteyen öneriler (ör. oner_jira_esitle) Jira'ya bağlı olsa da öneri sayılır
+    if (t.writeOnly) return 'propose';
+    return t.requires === 'jira' ? 'jira' : 'read';
 };
 
 const serialize = (value: unknown): string => {

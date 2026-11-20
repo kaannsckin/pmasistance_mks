@@ -2,6 +2,7 @@ import { authorize } from '../ai/auth.js';
 import { Env, resolveAuthMode } from '../ai/config.js';
 import { createRateLimiter } from '../ai/rateLimit.js';
 import { describeNetworkError, extraCaFor, upstreamFetch } from '../ai/tls.js';
+import { withIntegrationSettings } from './settings.js';
 
 /**
  * Kurum entegrasyonları (yalnız sunucu): Jira worklog okuma, Teams ve e-posta
@@ -203,6 +204,8 @@ export interface JiraIssueRecord {
     timeSpentSeconds: number | null;
     storyPoints: number | null;
     assignee: string;
+    /** Atanan kişinin e-postası (Jira gizlemiyorsa) */
+    assigneeEmail?: string;
     /** Bu kaydı engelleyen kayıtlar ("is blocked by") */
     blockedBy: string[];
     transitions: JiraTransition[];
@@ -303,6 +306,7 @@ export const normalizeIssue = (raw: JiraFullIssueRaw, categories: Map<string, Ji
         timeSpentSeconds: num(f.timespent),
         storyPoints: Number.isFinite(points) && points > 0 ? points : null,
         assignee: str((f.assignee as { displayName?: unknown })?.displayName) || str((f.assignee as { name?: unknown })?.name),
+        ...(str((f.assignee as { emailAddress?: unknown })?.emailAddress) ? { assigneeEmail: str((f.assignee as { emailAddress?: unknown }).emailAddress) } : {}),
         blockedBy: links
             .filter(l => /block|engel/i.test(str(l.type?.name)) && /blocked by|engellen/i.test(str(l.type?.inward)) && str(l.inwardIssue?.key))
             .map(l => str(l.inwardIssue!.key)),
@@ -833,7 +837,9 @@ const limiter = createRateLimiter(20);
 // Geçmiş aktarımı ve Jira'ya gönderme küçük parçalarla ilerler; ayrı ve daha geniş sınır
 const jiraPageLimiter = createRateLimiter(60);
 
-export const handleIntegrationRequest = async (request: Request, env: Env, opts: IntegrationOptions): Promise<Response> => {
+export const handleIntegrationRequest = async (request: Request, rawEnv: Env, opts: IntegrationOptions): Promise<Response> => {
+    // Yönetici panelinde girilen Jira / Teams / e-posta ayarları ortam değişkenlerinin üzerine
+    const env = await withIntegrationSettings(rawEnv, { isDev: opts.isDev, fetchImpl: opts.fetchImpl });
     const status = integrationStatus(env);
     // authMode gizli değildir: istemci hangi kimlik bilgisini göndereceğini bilmeli
     if (opts.route === 'health') return json(200, { ...status, authMode: resolveAuthMode(env, !!opts.isDev).mode });

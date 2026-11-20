@@ -31,6 +31,7 @@ import { DataHealthPanel } from './sheets/DataHealthSheet';
 import { BAND_META, Card, Field, rowSep } from './ui';
 import { Note, Switch, SwitchRow } from './admin/controls';
 import AiConnection from './admin/AiConnection';
+import IntegrationSettings from './admin/IntegrationSettings';
 import ForecastQuality from './admin/ForecastQuality';
 import { GuideButton, GuideTour, useGuide } from './GuideTour';
 import { useAssistantOptional } from '../assistant/AssistantContext';
@@ -669,7 +670,7 @@ const AiSettings: React.FC<Pick<ModernAdminProps, 'workspace' | 'onUpdateAiPolic
 const SOURCE_LABEL = (o: ProfileOption): { text: string; tone: string } =>
     o.source === 'defined' ? { text: 'Tanımlı', tone: 'm-tone-accent' }
         : o.source === 'auto' ? { text: o.role === 'py' ? 'Otomatik · proje sahibi' : 'Otomatik · bölüm sorumlusu', tone: 'm-tone-hold' }
-            : { text: 'Kişisiz', tone: 'm-fill m-text-3' };
+            : { text: 'Kişisiz', tone: 'm-fill m-text-2' };
 
 const ProfileManager: React.FC<Pick<ModernAdminProps, 'workspace' | 'onAddProfile' | 'onRemoveProfile'>> = ({ workspace, onAddProfile, onRemoveProfile }) => {
     const [role, setRole] = useState<UserRole>('py');
@@ -911,6 +912,7 @@ const ModernAdmin: React.FC<ModernAdminProps> = props => {
             {active.key === 'report' && <ReportFlowSettings {...props} />}
             {active.key === 'health' && <HealthMethodSettings {...props} />}
             {active.key === 'ai' && <AiSettings {...props} />}
+            {active.key === 'integrations' && <IntegrationSettings onChanged={props.onAiConnectionChanged} />}
             {active.key === 'forecast' && <ForecastQuality {...props} />}
             {active.key === 'profiles' && <ProfileManager {...props} />}
             {active.key === 'audit' && canAudit && <div className="flex flex-col gap-4"><AuditLogPanel workspace={workspace} /></div>}

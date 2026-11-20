@@ -107,7 +107,7 @@ const GibImportModal: React.FC<Props> = ({
                             <div className="border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl px-4 py-6 text-center text-gray-400 hover:border-blue-400 hover:text-blue-500 transition-colors">
                                 <div className="text-2xl mb-1"><i aria-hidden="true" className="fa-solid fa-file-arrow-up"></i></div>
                                 <div className="text-sm">Bulgu takip <b>.xlsx</b> dosyasını seçin</div>
-                                <div className="text-[11px] mt-1">Genel Liste, CR Listesi, Epic Listesi, EMS ve Test Kalemleri sayfaları okunur</div>
+                                <div className="text-[11px] mt-1">Genel Liste, CR / Epic Listesi, Öncelikli Bulgular, teslim planları, GİB yanıtları, EMS ve Test Kalemleri okunur</div>
                                 <input type="file" accept=".xlsx,.xlsm" className="hidden" onChange={e => { handleFile(e.target.files?.[0]); e.target.value = ''; }} />
                             </div>
                         </label>
@@ -145,6 +145,7 @@ const GibImportModal: React.FC<Props> = ({
                                     <div className="flex justify-between text-gray-500 dark:text-gray-400"><span>Atanmış bulgu</span><span>{s.assigned}</span></div>
                                     <div className="flex justify-between text-gray-500 dark:text-gray-400"><span>Öncül bağı</span><span>{s.predecessors}</span></div>
                                     <div className="flex justify-between text-gray-500 dark:text-gray-400"><span>Müşteri isteği</span><span>{s.requests}</span></div>
+                                    {Object.entries(s.plans || {}).map(([k, n]) => <div key={k} className="flex justify-between text-gray-500 dark:text-gray-400"><span>{k}</span><span>{n}</span></div>)}
                                 </div>
                             </div>
 

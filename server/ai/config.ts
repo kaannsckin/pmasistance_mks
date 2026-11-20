@@ -5,9 +5,21 @@ import { AiAuthMode } from '../../utils/ai/protocol.js';
  * Hiçbir değer tarayıcı paketine girmez (bkz. docs/AI_KURULUM.md).
  */
 
-export type AiProvider = 'openai' | 'azure' | 'anthropic' | 'gemini';
+export type AiProvider = 'openai' | 'azure' | 'anthropic' | 'gemini' | 'tubitak';
 
-export const AI_PROVIDERS: AiProvider[] = ['openai', 'azure', 'anthropic', 'gemini'];
+export const AI_PROVIDERS: AiProvider[] = ['openai', 'azure', 'anthropic', 'gemini', 'tubitak'];
+
+/**
+ * TÜBİTAK BİLGEM AI API: OpenAI uyumlu kurum ağ geçidi. Yalnız anahtar yeter;
+ * adres, model ve önerilen üretim ayarları buradan gelir (hepsi ortam
+ * değişkeniyle ezilebilir). Sertifika zinciri tls.ts'te hazırdır.
+ */
+export const TUBITAK_AI_BASE_URL = 'https://ai-api.bilgem.tubitak.gov.tr/v1';
+export const TUBITAK_DEFAULTS = {
+    model: 'general', // Qwen tabanlı genel model; alternatif: code
+    reasoningEffort: 'medium', // varsayılan "en yüksek" her araç adımını yavaşlatır
+    maxOutputTokens: 8192, // akıl yürütme token'ları da bu sınıra dahil
+} as const;
 
 export interface AiConfig {
     provider: AiProvider;
@@ -45,6 +57,7 @@ const DEFAULT_BASE_URLS: Record<AiProvider, string | undefined> = {
     azure: undefined, // kaynağa özel: https://KAYNAK.openai.azure.com/openai/v1
     anthropic: 'https://api.anthropic.com',
     gemini: 'https://generativelanguage.googleapis.com/v1beta',
+    tubitak: TUBITAK_AI_BASE_URL,
 };
 
 const REASONING_EFFORTS = ['none', 'minimal', 'low', 'medium', 'high'];
@@ -95,7 +108,8 @@ export const readAiConfig = (env: Env, opts: { isDev?: boolean } = {}): ConfigRe
         return { authMode: auth.mode, problem: `Geçersiz AI_PROVIDER: "${providerRaw}" (${AI_PROVIDERS.join(' | ')}).` };
     }
     const provider = providerRaw as AiProvider;
-    const model = clean(env.AI_MODEL)?.replace(/^models\//, '');
+    const tubitak = provider === 'tubitak';
+    const model = (clean(env.AI_MODEL) || (tubitak ? TUBITAK_DEFAULTS.model : undefined))?.replace(/^models\//, '');
     const base = { authMode: auth.mode, provider, model };
 
     const apiKey = clean(env.AI_API_KEY);
@@ -111,7 +125,7 @@ export const readAiConfig = (env: Env, opts: { isDev?: boolean } = {}): ConfigRe
 
     const temperature = clean(env.AI_TEMPERATURE) !== undefined ? Number(env.AI_TEMPERATURE) : undefined;
 
-    const reasoningEffort = clean(env.AI_REASONING_EFFORT)?.toLowerCase();
+    const reasoningEffort = (clean(env.AI_REASONING_EFFORT) || (tubitak ? TUBITAK_DEFAULTS.reasoningEffort : undefined))?.toLowerCase();
     if (reasoningEffort && !REASONING_EFFORTS.includes(reasoningEffort)) {
         return { ...base, problem: `Geçersiz AI_REASONING_EFFORT: "${reasoningEffort}" (${REASONING_EFFORTS.join(' | ')}).` };
     }
@@ -133,7 +147,7 @@ export const readAiConfig = (env: Env, opts: { isDev?: boolean } = {}): ConfigRe
             apiKey,
             model,
             baseUrl,
-            maxOutputTokens: positiveInt(env.AI_MAX_OUTPUT_TOKENS, 4096),
+            maxOutputTokens: positiveInt(env.AI_MAX_OUTPUT_TOKENS, tubitak ? TUBITAK_DEFAULTS.maxOutputTokens : 4096),
             temperature: temperature !== undefined && Number.isFinite(temperature) ? temperature : undefined,
             reasoningEffort,
             extraBody,

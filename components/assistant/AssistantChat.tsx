@@ -110,6 +110,7 @@ const SourcePreview: React.FC<{ c: Citation; onClose: () => void; onOpenKb: () =
 
 const PROPOSAL_STATUS: Record<AiProposal['status'], { label: string; cls: string; icon: string }> = {
   pending: { label: 'Onayınızı bekliyor', cls: 'text-amber-600 dark:text-amber-300', icon: 'fa-hourglass-half' },
+  running: { label: 'Çalışıyor', cls: 'text-blue-600 dark:text-blue-300', icon: 'fa-spinner fa-spin' },
   applied: { label: 'Uygulandı', cls: 'text-emerald-600 dark:text-emerald-300', icon: 'fa-circle-check' },
   rejected: { label: 'Vazgeçildi', cls: 'text-gray-400', icon: 'fa-ban' },
   failed: { label: 'Uygulanamadı', cls: 'text-red-600 dark:text-red-300', icon: 'fa-triangle-exclamation' },

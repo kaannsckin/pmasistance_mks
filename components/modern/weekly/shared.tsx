@@ -17,7 +17,7 @@ export const Pill: React.FC<{ tone: string; children: React.ReactNode; title?: s
 );
 
 export const StagePill: React.FC<{ stage?: ReportStage; returned?: boolean }> = ({ stage, returned }) =>
-    !stage ? <Pill tone="m-fill m-text-3">Yazılmadı</Pill>
+    !stage ? <Pill tone="m-fill m-text-2">Yazılmadı</Pill>
         : returned && stage !== 'approved' ? <Pill tone="m-tone-bad">İade edildi · {STAGE_LABELS[stage]}</Pill>
             : <Pill tone={STAGE_TONE[stage]}>{STAGE_LABELS[stage]}</Pill>;
 

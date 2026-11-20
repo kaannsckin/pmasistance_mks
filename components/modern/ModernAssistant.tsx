@@ -80,6 +80,7 @@ const SourceList: React.FC<{ content: string; citations: Citation[]; onOpen: (c:
 
 const PROPOSAL_STATUS: Record<AiProposal['status'], { label: string; tone: string }> = {
     pending: { label: 'Onayınızı bekliyor', tone: 'm-tone-warn' },
+    running: { label: 'Çalışıyor…', tone: 'm-tone-accent' },
     applied: { label: 'Uygulandı', tone: 'm-tone-ok' },
     rejected: { label: 'Vazgeçildi', tone: 'm-tone-hold' },
     failed: { label: 'Uygulanamadı', tone: 'm-tone-bad' },
@@ -221,7 +222,7 @@ export const ModernChat: React.FC<{
             {a.messages.map(msg => (
                 <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                     <div className={`min-w-0 max-w-[92%] rounded-2xl px-4 py-3 text-[15px] leading-relaxed ${
-                        msg.role === 'user' ? 'm-accent-bg rounded-br-md' : msg.role === 'system_alert' ? 'm-tone-bad' : 'm-surface m-text rounded-bl-md'}`}>
+                        msg.role === 'user' ? 'm-chat-user m-accent-bg rounded-br-md' : msg.role === 'system_alert' ? 'm-tone-bad' : 'm-chat-ai m-surface m-text rounded-bl-md'}`}>
                         {msg.role === 'assistant' ? (
                             <>
                                 {msg.steps && msg.steps.length > 0 && <StepChips steps={msg.steps} />}

@@ -77,6 +77,8 @@ export interface JiraIssueRecord {
     timeSpentSeconds: number | null;
     storyPoints: number | null;
     assignee: string;
+    /** Atanan kişinin e-postası (Jira gizlemiyorsa) */
+    assigneeEmail?: string;
     blockedBy: string[];
     transitions: { at: string; from: string; to: string; fromCategory: JiraIssueRecord['statusCategory']; toCategory: JiraIssueRecord['statusCategory'] }[];
     /** Jira'daki termin (duedate, YYYY-AA-GG); eski sunucu sürümleri göndermeyebilir */

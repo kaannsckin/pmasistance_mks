@@ -137,6 +137,16 @@ const ProjectBoard: React.FC<ProjectBoardProps> = ({
     const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
     const [dragOver, setDragOver] = useState<string | null>(null);
     const [settingsOpen, setSettingsOpen] = useState(false);
+    // Telefonda kolonlar yatay kaydırma yerine sekmeyle seçilir; tek kolon tam genişlikte
+    const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && !!window.matchMedia?.('(max-width: 639px)').matches);
+    useEffect(() => {
+        const mq = window.matchMedia?.('(max-width: 639px)');
+        if (!mq) return;
+        const on = (e: MediaQueryListEvent) => setNarrow(e.matches);
+        mq.addEventListener('change', on);
+        return () => mq.removeEventListener('change', on);
+    }, []);
+    const [phoneColumnId, setPhoneColumnId] = useState<string | null>(null);
     const now = useMemo(() => new Date(), [tasks]);
     const lanesMode = swimlane ?? cfg.swimlane;
 
@@ -194,8 +204,13 @@ const ProjectBoard: React.FC<ProjectBoardProps> = ({
         onMoveTask(id, patch);
     };
 
-    const gridCols = `repeat(${cfg.columns.length}, minmax(260px, 1fr))`;
-    const minWidth = cfg.columns.length * 272;
+    // Telefonda gösterilen kolon: seçilen, yoksa ilk "süreçte" kolonu, o da yoksa ilki
+    const phoneColumn = cfg.columns.find(c => c.id === phoneColumnId)
+        ?? cfg.columns.find(c => c.targetStatus === TaskStatus.InProgress) ?? cfg.columns[0];
+    const shownColumns = narrow && phoneColumn ? [phoneColumn] : cfg.columns;
+    const shownIds = new Set(shownColumns.map(c => c.id));
+    const gridCols = narrow ? 'minmax(0, 1fr)' : `repeat(${cfg.columns.length}, minmax(260px, 1fr))`;
+    const minWidth = narrow ? 0 : cfg.columns.length * 272;
 
     return (
         <div className="flex flex-col gap-4">
@@ -271,11 +286,24 @@ const ProjectBoard: React.FC<ProjectBoardProps> = ({
                 </p>
             )}
 
+            {narrow && cfg.columns.length > 1 && (
+                <div className="overflow-x-auto -mx-1 px-1">
+                    <div className="m-segmented" role="group" aria-label="Gösterilecek kolon" style={{ flexWrap: 'nowrap', minWidth: '100%' }}>
+                        {columns.map(({ column: c, total }) => (
+                            <button key={c.id} type="button" className="m-segment flex-1 justify-center" style={{ padding: '0 10px' }}
+                                aria-pressed={phoneColumn?.id === c.id} onClick={() => setPhoneColumnId(c.id)}>
+                                {c.name}<span className="m-text-3 m-tabular">{total}</span>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
+
             <div className="overflow-x-auto pb-2 -mx-1 px-1">
                 <div style={{ minWidth }}>
                     {/* Kolon başlıkları */}
                     <div className="grid gap-3 sticky top-0 z-[1] m-bg pb-2" style={{ gridTemplateColumns: gridCols }}>
-                        {columns.map(({ column: c, tasks: list, total }) => {
+                        {columns.filter(({ column: c }) => shownIds.has(c.id)).map(({ column: c, tasks: list, total }) => {
                             const wip = wipState(total, c);
                             const tone = wip === 'over' ? 'm-tone-bad' : wip === 'under' ? 'm-tone-warn' : 'm-fill-2';
                             return (
@@ -310,7 +338,7 @@ const ProjectBoard: React.FC<ProjectBoardProps> = ({
                                 )}
                                 {!isCollapsed && (
                                     <div className="grid gap-3 items-stretch" style={{ gridTemplateColumns: gridCols }}>
-                                        {cfg.columns.map(c => {
+                                        {shownColumns.map(c => {
                                             const list = lane.tasks.filter(t => colIndex.get(t.id) === c.id).sort(cmp);
                                             const zone = `${lane.id}:${c.id}`;
                                             const done = c.targetStatus === TaskStatus.Done;

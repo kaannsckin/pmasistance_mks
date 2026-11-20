@@ -80,9 +80,14 @@ describe('araç kataloğu', () => {
         console.log(`araç tanımları: ${AI_TOOLS.length} adet, ${size} karakter`);
         // 16 000'den 18 000'e: PY'nin risk güncelleme, istek kararı ve not araçları (kısaltılmış tanımlarla
         // ~2 100 karakter). Yönetici rolleri yazma araçlarını almadığı için onların istek boyutu değişmedi.
-        expect(JSON.stringify(AI_TOOLS.filter(t => !t.requires).map(t => t.spec)).length).toBeLessThan(18_000);
-        // Ajan (arayüz) ve Jira araçları yalnız çalışma zamanı bağlıyken gönderilir
-        expect(JSON.stringify(AI_TOOLS.filter(t => t.requires).map(t => t.spec)).length).toBeLessThan(5_000);
+        // Çalışma zamanı gerektiren araçlar (ajan gezinmesi, Jira okuma/worklog/eşitleme) yalnız
+        // bağlıyken gönderilir; onlarsız istek BL-15 sınırında kalır.
+        const base = JSON.stringify(AI_TOOLS.filter(t => !t.requires).map(t => t.spec)).length;
+        const runtime = JSON.stringify(AI_TOOLS.filter(t => t.requires).map(t => t.spec)).length;
+        console.log(`çalışma zamanısız: ${base}, çalışma zamanlı: ${runtime}`);
+        expect(base).toBeLessThan(18_000);
+        // 5 000'den 6 000'e: ajan + Jira okuma araçlarına Jira worklog raporu ve eşitleme önerisi eklendi
+        expect(runtime).toBeLessThan(6_000);
         expect(AI_TOOLS.length).toBeLessThanOrEqual(40);
     });
 
@@ -321,12 +326,19 @@ describe('pilot bulgularından gelen iyileştirmeler', () => {
         expect(r.json.gorevler[0].jira).toBe('ALT-77');
     });
 
-    it('kapasite_talep rolsüz tahsis satırlarında uyarır', async () => {
-        const r = await run('kapasite_talep', { yil: 2026 }, buildWs('pyb_destek', null));
-        expect(r.json.uyari).toContain('rolü girilmemiş');
+    it('kapasite_talep: rolsüz satır kişinin rolüne yazılır ve not düşülür; kişinin rolü yoksa uyarır (B-025)', async () => {
+        const r = await run('kapasite_talep', { yil: 2026, sadece_acik: false }, buildWs('pyb_destek', null));
+        expect(r.json.uyari).toBeUndefined();
+        expect(r.json.not).toContain('rolüne yazıldı');
+        expect((r.json.satirlar as { rol: string }[]).map(x => x.rol)).not.toContain('Rol atanmamış');
+        const roleless = buildWs('pyb_destek', null);
+        roleless.people = roleless.people.map(p => ({ ...p, roles: [] }));
+        expect((await run('kapasite_talep', { yil: 2026 }, roleless)).json.uyari).toContain('rolü girilmemiş');
         const ws = buildWs('pyb_destek', null);
         ws.allocations = ws.allocations.map(a => ({ ...a, role: 'Yazılım Geliştirme Mühendisi' }));
-        expect((await run('kapasite_talep', { yil: 2026 }, ws)).json.uyari).toBeUndefined();
+        const full = (await run('kapasite_talep', { yil: 2026 }, ws)).json;
+        expect(full.uyari).toBeUndefined();
+        expect(full.not).toBeUndefined();
     });
 });
 
@@ -388,6 +400,7 @@ describe('Jira araçları', () => {
             meta: vi.fn(async () => ({ user: 'svc', projects: [{ key: 'ALT', name: 'Altay' }], filters: [{ id: '10', name: 'Sprint', jql: 'x' }] })),
             byKeys: vi.fn(async (keys: string[]) => ({ issues: keys.filter(k => k !== 'ALT-9').map(k => issue(k)), total: null, next: null, missing: keys.filter(k => k === 'ALT-9') })),
             search: vi.fn(async () => ({ issues: [issue('ALT-1'), issue('ALT-2', { assignee: 'Mehmet Demir' }), issue('GZL-1')], total: 3, next: null, missing: [] })),
+            worklogs: vi.fn(async () => []),
         };
         ctx.jira = jira;
         return { ctx, jira };

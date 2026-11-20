@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { TaskStatus } from '../types';
-import { completesGroup, createRapidClickDetector, createSequenceDetector, KONAMI, timeGreeting } from './easterEggs';
+import { completesGroup, createRapidClickDetector, createSequenceDetector, createWordDetector, EGG_CATALOG, KONAMI, timeGreeting, TYPED_EGGS } from './easterEggs';
 
 describe('Konami dizisi', () => {
     it('dizinin tamamında tetiklenir ve sıfırlanır', () => {
@@ -59,5 +59,38 @@ describe('completesGroup', () => {
         expect(completesGroup(group, 'z', TaskStatus.Done)).toBe(false);
         expect(completesGroup(group, 'b', TaskStatus.ToDo)).toBe(false);
         expect(completesGroup([], 'b', TaskStatus.Done)).toBe(false);
+    });
+});
+
+describe('yazılan kelime', () => {
+    const type = (feed: (k: string, t?: number) => string | null, text: string, start = 0, step = 100) =>
+        [...text].map((k, i) => feed(k, start + i * step)).filter(Boolean);
+
+    it('kelime bitince bir kez tetiklenir; büyük harf de sayılır', () => {
+        const feed = createWordDetector(TYPED_EGGS);
+        expect(type(feed, 'xxPoP')).toEqual(['pop']);
+        expect(type(feed, 'egg', 1000)).toEqual(['egg']);
+    });
+
+    it('uzun duraklama ve boşluk kelimeyi böler', () => {
+        const feed = createWordDetector(TYPED_EGGS, 1500);
+        expect(feed('p', 0)).toBeNull();
+        expect(feed('o', 100)).toBeNull();
+        expect(feed('p', 5000)).toBeNull();
+        const feed2 = createWordDetector(TYPED_EGGS);
+        expect(type(feed2, 'po p')).toEqual([]);
+    });
+
+    it('Shift gibi tuşlar kelimeyi bölmez; Türkçe harfler tamponu bozmaz', () => {
+        const feed = createWordDetector(['boing']);
+        expect(['b', 'Shift', 'o', 'i', 'n', 'g'].map((k, i) => feed(k, i * 50)).pop()).toBe('boing');
+        expect(type(feed, 'şboing', 2000)).toEqual(['boing']);
+    });
+});
+
+describe('sürpriz kataloğu', () => {
+    it('her tema için bir sürpriz var; kimlikler tekil', () => {
+        expect(new Set(EGG_CATALOG.map(e => e.id)).size).toBe(EGG_CATALOG.length);
+        expect(EGG_CATALOG.filter(e => e.theme).map(e => e.theme).sort()).toEqual(['aurora', 'bubble', 'clay', 'pro']);
     });
 });

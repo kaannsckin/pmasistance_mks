@@ -1,4 +1,4 @@
-import { Person, Project, WorkspaceData } from '../../types';
+import { Person, Project, WorkspaceData, WorklogEntry } from '../../types';
 import { can } from '../permissions';
 import { aiPolicyOf } from './policy';
 import { Identity, identityOf, visibleProjectIds } from '../rbac';
@@ -49,13 +49,15 @@ export interface ToolContext {
      */
     ui?: { run: (cmd: UiCommand) => UiResult };
     /**
-     * Jira okuma (sunucu proxy'si üzerinden; jeton yalnız sunucuda). Sunucuda
-     * Jira yapılandırılmışsa tarayıcı bağlar; yoksa Jira araçları sunulmaz.
+     * Jira bağlantısı (sunucu proxy'si üzerinden; jeton yalnız sunucuda). Sunucuda
+     * Jira yapılandırılmışsa tarayıcı bağlar; yoksa Jira araçları (okuma, worklog
+     * raporu, eşitleme önerisi) sunulmaz.
      */
     jira?: {
         meta: () => Promise<JiraMeta>;
         byKeys: (keys: string[]) => Promise<JiraSyncPage>;
         search: (source: JiraSyncSource, o: { openOnly: boolean; pageSize: number }) => Promise<JiraSyncPage>;
+        worklogs: (projectKey: string, from: string, to: string) => Promise<WorklogEntry[]>;
     };
 }
 
