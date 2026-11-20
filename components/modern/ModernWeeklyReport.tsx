@@ -6,7 +6,7 @@ import { Identity, managedDepartmentCode, ownsProject } from '../../utils/rbac';
 import { relativeTime } from '../../utils/recentChanges';
 import {
     actorOf, createReport, dueDate, findReport, isoWeekOf, isReportSteward, isWeekPublished, latestPublication, lintCounts, lintDictionary, lintReport, pendingAuthors,
-    nextStage, projectDepartment, reportDictionary, reportFlowOf, reportSettingsOf, STAGE_LABELS, visibleReports, weekLabel, weekProgress,
+    nextStage, projectDepartment, reportDictionary, reportFlowFor, reportFlowOf, reportSettingsOf, STAGE_LABELS, visibleReports, weekLabel, weekProgress,
 } from '../../utils/weeklyReport';
 import { WeekPicker } from './DateRangePicker';
 import { GuideButton, GuideTour, useGuide } from './GuideTour';
@@ -140,6 +140,8 @@ const ModernWeeklyReport: React.FC<ModernWeeklyReportProps> = ({
     const lintDict = useMemo(() => lintDictionary(dictionary, workspace.projects), [dictionary, workspace.projects]);
     const reports = useMemo(() => visibleReports(workspace, identity).filter(r => r.year === year && r.week === week), [workspace, identity, year, week]);
     const published = isWeekPublished(workspace, year, week);
+    // Yayından sonra akışta kalan raporlar (iade edilen ya da yayın anında onaylanmamış): onaylanınca yayına katılır
+    const lateInFlow = published ? (workspace.weeklyReports || []).filter(r => r.year === year && r.week === week && r.stage !== 'approved').length : 0;
     const publication = (workspace.weeklyPublications || []).find(p => p.year === year && p.week === week);
     const current = isoWeekOf(new Date());
     const isCurrent = current.year === year && current.week === week;
@@ -221,7 +223,7 @@ const ModernWeeklyReport: React.FC<ModernWeeklyReportProps> = ({
                 onSave={(r: WeeklyReport) => onSaveReport(r)}
                 onAdvance={(r: WeeklyReport) => {
                     const from = (live || open).stage;
-                    const to = nextStage(live || open, reportFlowOf(workspace))?.stage;
+                    const to = nextStage(live || open, reportFlowFor(workspace, live || open))?.stage;
                     const ok = onAdvanceReport(r);
                     if (ok) {
                         setOpen(null);
@@ -277,7 +279,7 @@ const ModernWeeklyReport: React.FC<ModernWeeklyReportProps> = ({
             {!exec && published && (
                 <div role="status" className="rounded-2xl px-4 py-3 m-tone-ok flex items-center gap-3 text-[15px]">
                     <Icon name="check" size={18} strokeWidth={2.4} />
-                    Bu hafta yayınlandı{publication?.publishedByName ? ` (${publication.publishedByName})` : ''}; raporlar kilitli.
+                    Bu hafta yayınlandı{publication?.publishedByName ? ` (${publication.publishedByName})` : ''}; onaylı raporlar kilitli.{lateInFlow > 0 ? ` Akışta kalan ${lateInFlow} rapor onaylanınca yayına katılır.` : ''}
                 </div>
             )}
             {role === 'py' && !published && myUnsent > 0 && (

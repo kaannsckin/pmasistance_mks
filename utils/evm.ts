@@ -1,4 +1,4 @@
-import { Project, TaskStatus, WorkspaceData } from '../types';
+import { Project, ReportEvmSnapshot, TaskStatus, WorkspaceData } from '../types';
 import { MONTH_INDEXES } from './allocations';
 
 /**
@@ -182,4 +182,13 @@ export const buildPortfolioEVM = (
         vac: round0(bac - eac),
         costedTitleCount: ws.titles.filter(t => (t.monthlyCost || 0) > 0).length,
     };
+};
+
+/** Haftalık rapor gönderilirken saklanan EVM (B-029): denetleyen rapor tarihindeki değeri görür */
+export const reportEvmSnapshot = (ws: WorkspaceData, projectId: string | undefined, now: Date = new Date()): ReportEvmSnapshot | undefined => {
+    if (!projectId || !ws.projects.some(p => p.id === projectId)) return undefined;
+    const year = now.getFullYear();
+    const e = buildProjectEVM(ws, projectId, year, closedStatusMonth(ws, year, now));
+    const r2 = (v: number | null) => (v === null || !Number.isFinite(v) ? null : Math.round(v * 100) / 100);
+    return { at: now.toISOString(), year, statusMonth: e.statusMonth, costed: e.costed, percentComplete: Math.round(e.percentComplete * 1000) / 1000, spi: r2(e.spi), cpi: r2(e.cpi), eac: Math.round(e.eac) };
 };

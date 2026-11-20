@@ -225,6 +225,26 @@ export const personMonthTotal = (
 export const createAllocationId = (): string =>
     `alloc-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
+/**
+ * Rolü girilmemiş tahsisin rolü (B-025): kişinin aynı projedeki başka bir
+ * satırının rolü, yoksa tahsislerinde en sık kullandığı rol, yoksa havuzdaki
+ * ilk rolü. Kişinin rolü hiç yoksa undefined ("Rol atanmamış" kalır).
+ */
+export const inferAllocationRole = (
+    allocations: Allocation[],
+    person: { id: string; roles?: string[] } | undefined,
+    projectId: string,
+): string | undefined => {
+    if (!person) return undefined;
+    const mine = allocations.filter(a => a.personId === person.id && (a.role || '').trim());
+    const sameProject = mine.find(a => a.projectId === projectId);
+    if (sameProject) return sameProject.role!.trim();
+    const counts = new Map<string, number>();
+    mine.forEach(a => counts.set(a.role!.trim(), (counts.get(a.role!.trim()) || 0) + 1));
+    const top = [...counts].sort((x, y) => y[1] - x[1])[0]?.[0];
+    return top || (person.roles || []).map(r => r.trim()).find(Boolean);
+};
+
 /** Yeni tahsis satırı; aynı kişi+proje+İP+rol+yıl varsa null döner (tekrar engeli) */
 export const createAllocation = (
     existing: Allocation[],

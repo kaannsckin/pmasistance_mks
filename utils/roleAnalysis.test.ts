@@ -61,12 +61,19 @@ describe('buildRoleAnalysis', () => {
         expect(yzl.totals.gap).toBeCloseTo(0.5);
     });
 
-    it('rolsüz tahsisleri "Rol atanmamış" kovasında toplar', () => {
+    it('rolsüz tahsis kişinin rolüne yazılır (B-025); kişinin rolü yoksa "Rol atanmamış" kovasında kalır', () => {
         const { devam, teklif, people } = setup();
         const allocations = [alloc('1', 'c', devam.id, undefined, { 3: 0.7 })];
         const rows = buildRoleAnalysis(allocations, people, [devam, teklif], 2026);
-        const unassigned = rows.find(r => r.role === UNASSIGNED_ROLE && r.departmentCode === 'B700')!;
-        expect(unassigned.planned[2]).toBeCloseTo(0.7);
+        expect(rows.find(r => r.role === 'Donanım Mühendisi' && r.departmentCode === 'B700')!.planned[2]).toBeCloseTo(0.7);
+        expect(rows.find(r => r.role === UNASSIGNED_ROLE)).toBeUndefined(); // sahte açık yok
+        // Aynı projede rollü satırı olan çok rollü kişi: o rol
+        const multi = [alloc('2', 'b', devam.id, 'Takım Lideri', { 1: 0.2 }), { ...alloc('3', 'b', devam.id, undefined, { 3: 0.3 }), year: 2026 }];
+        expect(buildRoleAnalysis(multi, people, [devam, teklif], 2026).find(r => r.role === 'Takım Lideri')!.planned[2]).toBeCloseTo(0.3);
+        // Rolü olmayan kişi
+        const roleless = [...people, { ...people[2], id: 'd', roles: [] }];
+        const rows2 = buildRoleAnalysis([alloc('4', 'd', devam.id, undefined, { 3: 0.4 })], roleless, [devam, teklif], 2026);
+        expect(rows2.find(r => r.role === UNASSIGNED_ROLE && r.departmentCode === 'B700')!.planned[2]).toBeCloseTo(0.4);
     });
 
     it('farklı yılın tahsislerini dahil etmez; boş satırları eler', () => {

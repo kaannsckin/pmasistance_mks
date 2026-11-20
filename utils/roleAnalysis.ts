@@ -1,5 +1,5 @@
 import { Allocation, Leave, Person, Project } from '../types';
-import { MONTH_INDEXES } from './allocations';
+import { inferAllocationRole, MONTH_INDEXES } from './allocations';
 import { effectiveCapacity } from './availability';
 
 /**
@@ -78,7 +78,8 @@ export const buildRoleAnalysis = (
             const person = personById.get(a.personId);
             if (!person) return;
             const dept = person.departmentCode || 'Tanımsız';
-            const role = (a.role || '').trim() || UNASSIGNED_ROLE;
+            // Rolsüz satır kişinin rolüne yazılır (B-025); kişinin rolü yoksa "Rol atanmamış"
+            const role = (a.role || '').trim() || inferAllocationRole(allocations, person, a.projectId) || UNASSIGNED_ROLE;
             const project = projectById.get(a.projectId);
             const bucket: Extract<EffortType, 'planned' | 'proposal'> =
                 project?.status === 'teklif' ? 'proposal' : 'planned';

@@ -15,7 +15,7 @@ import { Identity, ownsProject } from '../../../utils/rbac';
 import { relativeTime } from '../../../utils/recentChanges';
 import {
     canEditReport, CATEGORY_META, findAbbreviations, findReport, glossaryFor, itemDisplay, lintCounts, lintDictionary, LintIssue, lintReport, locative, meetingSentence,
-    flowBlockers, newItem, nextStage, PLAN_REVIEW_LABELS, PLAN_REVIEW_STATUSES, reportFlowOf, returnStage, setPlanReview, shiftWeek, STAGE_LABELS, THIS_WEEK_CATEGORIES, weekLabel, weekStart,
+    flowBlockers, newItem, nextStage, PLAN_REVIEW_LABELS, PLAN_REVIEW_STATUSES, reportFlowFor, returnStage, setPlanReview, shiftWeek, STAGE_LABELS, THIS_WEEK_CATEGORIES, weekLabel, weekStart,
 } from '../../../utils/weeklyReport';
 import { parseWorklogRows, summarizeWorklog, worklogInWeek } from '../../../utils/worklog';
 import { useAiRun } from '../../assistant/AiButton';
@@ -316,7 +316,7 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
     const pm = project?.pmPersonId ? workspace.people.find(p => p.id === project.pmPersonId) : undefined;
     const deptName = workspace.departments.find(d => d.code === draft.departmentCode)?.name || draft.departmentCode;
     const title = draft.kind === 'department' ? `Bölüm eklemeleri — ${deptName}` : project?.name || 'Silinmiş proje';
-    const flow = reportFlowOf(workspace);
+    const flow = reportFlowFor(workspace, report);
     const next = nextStage(report, flow);
     const returnTo = returnStage(report, flow);
     const canReturn = editable && report.stage !== 'draft' && !!returnTo;
@@ -572,6 +572,21 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
                     Salt okunur: rapor şu an “{STAGE_LABELS[report.stage]}” aşamasında{report.stage === 'approved' ? '' : '; aşamanın sahibi düzenleyebilir'}.
                 </div>
             )}
+            {report.evmSnapshot && report.stage !== 'draft' && (() => {
+                const e = report.evmSnapshot;
+                const n2 = (v: number | null) => (v === null ? '—' : v.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+                return (
+                    <p className="m-0 rounded-2xl px-4 py-3 m-fill-2 text-[14px] m-text-2 flex items-start gap-3">
+                        <Icon name="activity" size={18} style={{ marginTop: 1 }} />
+                        <span>
+                            <b className="m-text">Gönderim anındaki EVM</b> ({new Date(e.at).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' })}
+                            {e.statusMonth ? `, durum ayı ${e.statusMonth}` : ''}): tamamlanma %{Math.round(e.percentComplete * 100)} · SPI {n2(e.spi)} · CPI {n2(e.cpi)}
+                            {e.costed ? ` · EAC ${Math.round(e.eac).toLocaleString('tr-TR')} TL` : ''}.
+                            {' '}Rapordaki rakamları bununla karşılaştırın; proje ekranları bugünü gösterir.
+                        </span>
+                    </p>
+                );
+            })()}
             <Notice notice={notice} onClose={() => setNotice(null)} />
 
             <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px] items-start">

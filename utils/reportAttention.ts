@@ -2,7 +2,7 @@ import { View, WorkspaceData } from '../types';
 import { awaitingOutcome, isOwnMeeting } from './customerMeetings';
 import { can } from './permissions';
 import { identityOf, managedDepartmentCode, ownsProject } from './rbac';
-import { dueDate, isoWeekOf, isReportSteward, isWeekPublished, reportSettingsOf, weekLabel } from './weeklyReport';
+import { dueDate, isoWeekOf, isReportFrozen, isReportSteward, isWeekPublished, reportSettingsOf, weekLabel } from './weeklyReport';
 
 /**
  * Haftalık rapor ve müşteri görüşmeleri için role göre hatırlatmalar:
@@ -28,7 +28,7 @@ const DAY = 86_400_000;
 export const reportAttention = (ws: WorkspaceData, now: Date = new Date()): ReportAttention => {
     const id = identityOf(ws);
     const items: AttentionItem[] = [];
-    const reports = (ws.weeklyReports || []).filter(r => !isWeekPublished(ws, r.year, r.week));
+    const reports = (ws.weeklyReports || []).filter(r => !isReportFrozen(ws, r));
     const meetings = ws.customerMeetings || [];
     const { year, week } = isoWeekOf(now);
     let reportBadge = 0;

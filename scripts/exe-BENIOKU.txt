@@ -1,0 +1,61 @@
+PlanAsistan — yerel sürüm
+=========================
+
+BAŞLATMA
+  PlanAsistan.exe dosyasına çift tıklayın. Bir komut penceresi açılır ve
+  tarayıcınızda http://localhost:5180 adresi kendiliğinden açılır.
+  Kapatmak için komut penceresini kapatın.
+
+  Kurulum ya da Node.js gerekmez. Windows ilk açılışta "Windows kişisel
+  bilgisayarınızı korudu" uyarısı gösterebilir (dosya imzasız):
+  "Ek bilgi" → "Yine de çalıştır".
+
+AYARLAR (Jira, yapay zekâ, Teams, e-posta)
+  İlk açılışta exe'nin yanında planasistan.env dosyası oluşur. Not Defteri
+  ile açın, kullanacağınız satırların başındaki # işaretini kaldırıp değeri
+  yazın, kaydedin ve PlanAsistan'ı kapatıp yeniden açın. Örnek (Jira):
+
+      JIRA_BASE_URL=https://jira.kurum.gov.tr
+      JIRA_TOKEN=<Jira'da oluşturduğunuz kişisel erişim jetonu>
+      JIRA_ALLOW_UPDATE=1
+
+  Bu dosyada jeton ve parolalar vardır: başkasıyla paylaşmayın.
+
+  Yapay zekâ (TÜBİTAK BİLGEM): uygulamada Yönetici konsolu → Yapay zekâ →
+  "TÜBİTAK ile kur" bölümüne yalnız API anahtarınızı yapıştırın. Ya da bu
+  dosyaya şu iki satırı yazın (adres ve model kendiliğinden gelir):
+
+      AI_PROVIDER=tubitak
+      AI_API_KEY=<anahtarınız>
+
+  Vercel'deki ayarlar exe'ye kendiliğinden gelmez. Vercel → Project →
+  Settings → Environment Variables ekranındaki değerleri (Jira, AI) bu
+  dosyaya kopyalayın. Vercel CLI kullanıyorsanız "vercel env pull
+  planasistan.env" komutu da aynı dosyayı üretir (gereksiz satırları silin).
+
+BULUT VERİTABANI (SUPABASE) İLE ORTAK ÇALIŞMA
+  Exe, projeleri tek başına bu bilgisayarda tutar. Vercel'deki sürümle aynı
+  projeleri görmek için uygulamada bulut eşitleme ekranını açın, Supabase
+  adresini ve "anon" anahtarını girip aynı e-posta ve parolayla oturum açın,
+  ardından buluttan çekin. Bu bilgiler tarayıcıda saklanır; her bilgisayarda
+  bir kez girilir.
+
+VERİLER NEREDE?
+  - Projeleriniz, görevler ve raporlar tarayıcınızda (bu bilgisayarda, bu
+    adrese bağlı yerel depoda) tutulur. Aynı tarayıcıyla açın; tarayıcı
+    verilerini temizlemek projeleri de siler. Düzenli yedek için uygulamadaki
+    "Dışa aktar" (JSON yedeği) ya da bulut eşitlemesini kullanın.
+  - Yapay zekâ ayarları (panelden girildiyse, şifreli) planasistan-veri
+    klasöründedir.
+  - Uygulama yalnız bu bilgisayardan erişilebilir (127.0.0.1); ağdaki başka
+    bilgisayarlar bağlanamaz.
+
+SORUN GİDERME
+  - "Port kullanımda": planasistan.env dosyasına PORT=5190 yazın. Port
+    değişince tarayıcı verileri başka adreste arar; önce eski adresten
+    yedek alın.
+  - Jira / AI adresinde sertifika (TLS) hatası: TÜBİTAK kök sertifikası
+    hazırdır; başka bir kurum sertifikası gerekiyorsa PEM dosyasının yolunu
+    AI_CA_CERTS_FILE=C:/yol/sertifika.pem olarak yazın.
+  - Jira yalnız kurum ağından erişilebiliyorsa bilgisayarın kurum ağında
+    (ya da VPN'de) olması gerekir.
