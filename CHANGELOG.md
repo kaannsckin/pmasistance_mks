@@ -23,6 +23,11 @@ Jira worklog'larından iş güçleri: kim, hangi kayıtta, ne kadar zaman harcad
 - Yeni Jira yetenekleri: iş gücü raporu (kişi, kayıt ya da proje bazında saat ve maliyet) ve bir kaydın Jira'daki worklog'larını doğrudan okuma.
 - Veri havuzu önerileri (PYB Destek): ünvan ve aylık maliyet ekleme/güncelleme, kişi ekleme, kişinin ünvanını, bölümünü, e-postasını ya da AA'sını güncelleme, bölüm ekleme. Ekteki Excel tablosu tek kartta onaylanır; havuzdaki ünvanlar adına göre eşleşir, yenilere kısaltma üretilir, toplam/ortalama satırları atlanır. Her kart "Uygula" denmeden uygulanmaz, denetim günlüğüne yazılır ve geri alınabilir.
 - Veri havuzunu listeleme: ünvanlar ve maliyetleri, bölümler, eksiği olan kişiler.
+- Toplu görev güncelleme önerisi: termin (tarih ya da ± gün kaydırma), atanan, öncelik, süre ve etiketler; birden çok görev tek kartta ("geciken görevleri iki hafta kaydır", "Ayşe'nin işlerini Mehmet'e ver").
+- "Tümünü uygula": bir yanıttaki bütün öneri kartları sırayla uygulanır; tek "Geri Al" hepsini geri alır.
+- Takip önerileri: her yanıtın altında, konuşmaya özgü en çok üç sonraki adım çipi (tıklayınca sorulur).
+- Akıllı başlangıç önerileri: boş sohbette verideki duruma göre öneriler (geciken görev sayısı ve yeni termin önerisi, maliyeti eksik ünvanlar, ünvanı olmayan kişiler, bu ay kim ne kadar çalıştı).
+- Hafıza: "bundan sonra süreleri gün olarak ver, hatırla" gibi kalıcı tercihler kimlik başına bu tarayıcıda saklanır ve her soruda uygulanır; başlıktaki hafıza düğmesinden görülür ve silinir. Hafızaya yalnız kullanıcının kendi mesajındaki açık istekle yazılır (eklenen dosyadaki bir talimat yazamaz); şifre, sicil gibi hassas bilgiler kaydedilmez.
 - Dosya çıktısı: asistan istenen veriyi Excel, CSV, Word, PDF ya da PowerPoint dosyası olarak hazırlar. Sohbetteki karttan seçilen biçim, yanındaki düğmelerden diğer biçimler indirilir. Tablolar uygulamanın okuma araçlarının sonucundan doğrudan doldurulur (sayılar yeniden yazılmaz; dosyada ekrandaki 50 satır sınırı 1 000'e çıkar). Dosya tarayıcıda üretilir, hiçbir yere yüklenmez; PDF'de Türkçe karakterler için yazı tipi gömülür.
 - Eklenen Excel dosyaları boş hücreler atılarak okunur ve tek mesaj sınırı iki katına çıktı; büyük tablolar artık yarıda kesilmiyor.
 

@@ -31,6 +31,35 @@ const STEP_KIND: Record<ReturnType<typeof toolKind>, { icon: string; title: stri
     ui: { icon: 'compass', title: 'Asistan ekranı sizin için değiştirdi' },
     jira: { icon: 'cloud', title: "Jira'dan güncel veri okundu" },
     file: { icon: 'download', title: 'Dosya hazırlandı' },
+    memory: { icon: 'pen', title: 'Hafıza güncellendi' },
+};
+
+/** Hafıza: asistanın kalıcı tercihleri (bu tarayıcıda); görüntüle ve sil */
+const MemoryPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+    const a = useAssistant();
+    return (
+        <section aria-label="Asistan hafızası" className="flex-none border-b m-sep px-4 py-3 flex flex-col gap-2" style={{ borderBottomStyle: 'solid', borderBottomWidth: 1 }}>
+            <div className="flex items-center gap-2">
+                <span className="flex-1 text-[14px] font-semibold m-text">Hafıza · {a.memory.length}</span>
+                {a.memory.length > 0 && <button type="button" className="m-btn m-btn-plain !min-h-[32px] !px-2.5 text-[13px]" onClick={() => { if (window.confirm('Asistanın hafızasındaki tüm notlar silinsin mi?')) a.clearMemory(); }}>Tümünü sil</button>}
+                <button type="button" className="m-icon-btn" aria-label="Hafızayı kapat" onClick={onClose}><Icon name="x" size={16} /></button>
+            </div>
+            {a.memory.length === 0 ? (
+                <p className="m-0 text-[13px] m-text-3">Henüz not yok. Asistana "Bundan sonra süreleri gün olarak ver, hatırla" gibi bir tercih söyleyin; her soruda buna uyar.</p>
+            ) : (
+                <ol className="m-0 p-0 list-none flex flex-col gap-1 max-h-48 overflow-y-auto">
+                    {a.memory.map((m, i) => (
+                        <li key={m.id} className="flex items-start gap-2 text-[13.5px] m-text">
+                            <span className="m-text-3 m-tabular w-5 flex-none">{i + 1}.</span>
+                            <span className="flex-1 min-w-0 break-words">{m.text}</span>
+                            <button type="button" className="m-icon-btn !w-7 !h-7 flex-none" aria-label={`Sil: ${m.text}`} title="Sil" onClick={() => a.forgetMemory(m.id)}><Icon name="trash" size={14} /></button>
+                        </li>
+                    ))}
+                </ol>
+            )}
+            <p className="m-0 text-[12px] m-text-3">Yalnız bu tarayıcıda ve bu kimlik için saklanır; her soruda asistana iletilir.</p>
+        </section>
+    );
 };
 
 const StepChips: React.FC<{ steps: AgentStep[] }> = ({ steps }) => (
@@ -89,7 +118,7 @@ const PROPOSAL_STATUS: Record<AiProposal['status'], { label: string; tone: strin
     failed: { label: 'Uygulanamadı', tone: 'm-tone-bad' },
 };
 
-const Proposals: React.FC<{ proposals: AiProposal[]; onResolve: (id: string, d: 'apply' | 'reject') => void }> = ({ proposals, onResolve }) => (
+const Proposals: React.FC<{ proposals: AiProposal[]; onResolve: (id: string, d: 'apply' | 'reject') => void; onResolveAll?: (d: 'apply' | 'reject') => void }> = ({ proposals, onResolve, onResolveAll }) => (
     <div className="mt-3 flex flex-col gap-2">
         {proposals.map((p, i) => {
             const st = PROPOSAL_STATUS[p.status];
@@ -99,7 +128,7 @@ const Proposals: React.FC<{ proposals: AiProposal[]; onResolve: (id: string, d: 
                         <span className="flex-1 text-[14px] font-semibold m-text">Öneri {i + 1}: {p.title}</span>
                         <span className={`inline-flex items-center h-6 px-2 rounded-full text-[12px] font-semibold whitespace-nowrap ${st.tone}`}>{st.label}</span>
                     </div>
-                    <dl className="m-0 grid gap-x-3 gap-y-0.5 text-[13px]" style={{ gridTemplateColumns: 'auto 1fr' }}>
+                    <dl className="m-0 grid gap-x-3 gap-y-0.5 text-[13px]" style={{ gridTemplateColumns: 'minmax(0, max-content) minmax(55%, 1fr)' }}>
                         {p.details.map(d => <React.Fragment key={d.label}><dt className="m-text-3">{d.label}</dt><dd className="m-0 m-text break-words">{d.value}</dd></React.Fragment>)}
                     </dl>
                     {p.message && p.status !== 'pending' && <p className="m-0 text-[13px] m-text-2">{p.message}</p>}
@@ -112,6 +141,13 @@ const Proposals: React.FC<{ proposals: AiProposal[]; onResolve: (id: string, d: 
                 </div>
             );
         })}
+        {onResolveAll && proposals.filter(p => p.status === 'pending').length > 1 && (
+            <div className="flex flex-wrap items-center gap-2">
+                <button type="button" className="m-btn m-btn-primary !min-h-[36px] !px-3 text-[14px]" onClick={() => onResolveAll('apply')}><Icon name="check" size={15} />Tümünü uygula ({proposals.filter(p => p.status === 'pending').length})</button>
+                <button type="button" className="m-btn m-btn-plain !min-h-[36px] !px-3 text-[14px]" onClick={() => onResolveAll('reject')}>Hepsinden vazgeç</button>
+                <span className="text-[12.5px] m-text-3">Sırayla uygulanır; tek "Geri Al" hepsini geri alır.</span>
+            </div>
+        )}
     </div>
 );
 
@@ -179,6 +215,7 @@ export const ModernChat: React.FC<{
     const [input, setInput] = useState('');
     const [token, setToken] = useState('');
     const [preview, setPreview] = useState<Citation | null>(null);
+    const [memoryOpen, setMemoryOpen] = useState(false);
     const att = useChatAttachments();
     const { files, reading, errors: fileErrors, dragging, fileRef } = att;
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -266,9 +303,18 @@ export const ModernChat: React.FC<{
                                 {msg.steps && msg.steps.length > 0 && <StepChips steps={msg.steps} />}
                                 {msg.content ? <Markdown text={msg.content} className="m-md" /> : msg.streaming ? <Dots /> : null}
                                 {msg.files && msg.files.length > 0 && <FileCards files={msg.files} />}
-                                {msg.proposals && msg.proposals.length > 0 && <Proposals proposals={msg.proposals} onResolve={(pid, d) => a.resolveProposal(msg.id, pid, d)} />}
+                                {msg.proposals && msg.proposals.length > 0 && <Proposals proposals={msg.proposals} onResolve={(pid, d) => a.resolveProposal(msg.id, pid, d)} onResolveAll={d => a.resolveAllProposals(msg.id, d)} />}
                                 {msg.citations && msg.citations.length > 0 && (
                                     <SourceList content={msg.content} citations={msg.citations} onOpen={c => (c.ref.kind === 'project-view' ? a.navigate(c.ref) : setPreview(c))} />
+                                )}
+                                {msg.followUps && msg.followUps.length > 0 && msg.id === a.messages[a.messages.length - 1]?.id && !a.isStreaming && (
+                                    <div className="mt-3 flex flex-wrap gap-1.5" aria-label="Takip önerileri">
+                                        {msg.followUps.map(f => (
+                                            <button key={f} type="button" onClick={() => a.send(f)} className="inline-flex items-center gap-1.5 min-h-[32px] px-3 rounded-full text-[13px] font-medium m-tone-accent border-0 cursor-pointer text-left">
+                                                <Icon name="sparkles" size={13} />{f}
+                                            </button>
+                                        ))}
+                                    </div>
                                 )}
                             </>
                         ) : (
@@ -299,11 +345,16 @@ export const ModernChat: React.FC<{
                     <h2 className="m-0 text-[17px] font-semibold m-text leading-tight">Asistan</h2>
                     <p className="m-0 text-[12.5px] m-text-3 truncate">{a.phase === 'ready' ? `Bağlı${a.status?.model ? ` · ${a.status.model}` : ''} · değişiklikler onayınızla` : a.phase === 'loading' ? 'Bağlanıyor…' : 'Hazır değil'}</p>
                 </div>
+                <button type="button" className="m-icon-btn relative" aria-label={`Hafıza (${a.memory.length} not)`} aria-expanded={memoryOpen} title="Asistanın hafızası" onClick={() => setMemoryOpen(o => !o)}>
+                    <Icon name="pen" size={18} />
+                    {a.memory.length > 0 && <span aria-hidden="true" className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full m-accent-bg text-[10px] font-bold flex items-center justify-center">{a.memory.length}</span>}
+                </button>
                 <button type="button" className="m-icon-btn" aria-label="Bilgi Bankası" title="Bilgi Bankası" onClick={() => a.setKbOpen(true)}><Icon name="book" size={18} /></button>
                 {a.messages.length > 0 && <button type="button" className="m-icon-btn" aria-label="Sohbeti temizle" title="Sohbeti temizle" onClick={a.clear}><Icon name="trash" size={18} /></button>}
                 {onExpand && <button type="button" className="m-icon-btn" aria-label="Tam ekranda aç" title="Tam ekranda aç" onClick={onExpand}><Icon name="expand" size={18} /></button>}
                 {onClose && <button type="button" className="m-icon-btn" aria-label="Asistanı kapat" title="Kapat (Esc)" onClick={onClose}><Icon name="x" /></button>}
             </header>
+            {memoryOpen && <MemoryPanel onClose={() => setMemoryOpen(false)} />}
             <div ref={scrollRef} className={`flex-1 overflow-y-auto ${panel ? 'p-4' : 'p-6'}`}>
                 {!ready ? phaseScreen() : a.messages.length === 0 ? empty : list}
             </div>

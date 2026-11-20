@@ -75,7 +75,7 @@ import { CommandItem } from './components/CommandPalette';
 import { AssistantProvider } from './components/assistant/AssistantContext';
 import { dialogProblem, DIALOGS, resolveScreen, SCREENS, UiCommand, UiEnv, UiResult } from './utils/ai/uiActions';
 import AssistantPanel, { AssistantCommandPalette } from './components/assistant/AssistantPanel';
-import { buildSuggestions } from './utils/ai/suggestions';
+import { buildSuggestions, suggestionFacts } from './utils/ai/suggestions';
 import { RagRef } from './utils/rag/sources';
 import { AiAction, applyAction, validateAction } from './utils/ai/actions';
 import WorkPackageManager from './components/WorkPackageManager';
@@ -2325,7 +2325,7 @@ const App: React.FC = () => {
   const getAssistantView = useCallback(() => currentViewRef.current, []);
   // Asistanın önerdiği değişiklik kullanıcı onaylayınca: güncel veriyle yeniden
   // doğrula (yetki, plan kilidi), uygula, denetim günlüğüne yaz, geri-al sun
-  const handleApplyAiAction = useCallback((action: AiAction): { ok: boolean; message: string } | Promise<{ ok: boolean; message: string }> => {
+  const handleApplyAiAction = useCallback((action: AiAction, opts: { undo?: boolean } = {}): { ok: boolean; message: string } | Promise<{ ok: boolean; message: string }> => {
     const current = workspaceRef.current;
     if (!current) return { ok: false, message: 'Çalışma alanı hazır değil.' };
     const problem = validateAction(current, action);
@@ -2374,9 +2374,23 @@ const App: React.FC = () => {
     } catch (e) {
       return { ok: false, message: (e as Error).message || 'Uygulanamadı.' };
     }
+    if (opts.undo === false) return { ok: true, message: summary };
     showUndo(`AI önerisi uygulandı: ${summary}`, current);
     return { ok: true, message: `${summary} (Geri almak için alttaki "Geri Al").` };
   }, [showUndo, handleApplyJiraSync]);
+
+  // "Tümünü uygula": öneriler sırayla (ör. önce ünvan, sonra kişi) uygulanır; tek "Geri Al" hepsini geri alır.
+  // Ağ gerektiren Jira eşitlemesi topluya girmez (kartından tek tek uygulanır).
+  const handleApplyAiActions = useCallback((actions: AiAction[]): { ok: boolean; message: string }[] => {
+    const start = workspaceRef.current;
+    if (!start) return actions.map(() => ({ ok: false, message: 'Çalışma alanı hazır değil.' }));
+    const results = actions.map(a => (a.type === 'jira_esitle'
+      ? { ok: false, message: 'Jira eşitlemesi kartından tek başına uygulanır.' }
+      : handleApplyAiAction(a, { undo: false }) as { ok: boolean; message: string }));
+    const done = results.filter(r => r.ok).length;
+    if (done) showUndo(`AI önerileri uygulandı: ${done} öneri`, start);
+    return results;
+  }, [handleApplyAiAction, showUndo]);
 
   // Asistan kaynağına tıklanınca: ilgili projeyi aç ve ekrana geç
   const handleAssistantNavigate = useCallback((ref: RagRef) => {
@@ -2439,8 +2453,15 @@ const App: React.FC = () => {
     }
   }, [updateWorkspace]);
   const aiSuggestions = useMemo(
-    () => buildSuggestions(identity, activeProject && visibleProjects.some(p => p.id === activeProject.id) ? activeProject.name : undefined),
-    [identity, activeProject, visibleProjects]
+    () => {
+      const shown = activeProject && visibleProjects.some(p => p.id === activeProject.id) ? activeProject : undefined;
+      const facts = workspace ? suggestionFacts(workspace, shown, {
+        canEditProject: !!shown && canEditProjectContent(workspace, identity, shown.id),
+        canEditPool: can(identity, 'datapool.edit'),
+      }) : {};
+      return buildSuggestions(identity, shown?.name, facts);
+    },
+    [identity, activeProject, visibleProjects, workspace]
   );
   // Header tek satır 4rem; proje seçiliyken bağlam çubuğuyla 6.75rem
   const showProjectBar = !!activeProject;
@@ -2495,7 +2516,7 @@ const App: React.FC = () => {
   }, [workspace, visibleProjects, identity, handleOpenProject, activeProject, consoleMode, canAudit, canDataHealth, isModern, roleView]);
 
   return (
-    <AssistantProvider enabled={isAIEnabled && !consoleMode} chat={aiPolicy.chat} embedded={aiPolicy.embedded} getWorkspace={getAssistantWorkspace} getView={getAssistantView} onNavigate={handleAssistantNavigate} onApplyAction={handleApplyAiAction} onUiCommand={handleAssistantUiCommand}>
+    <AssistantProvider enabled={isAIEnabled && !consoleMode} chat={aiPolicy.chat} embedded={aiPolicy.embedded} getWorkspace={getAssistantWorkspace} getView={getAssistantView} onNavigate={handleAssistantNavigate} onApplyAction={handleApplyAiAction} onApplyActions={handleApplyAiActions} onUiCommand={handleAssistantUiCommand}>
     <div className={`min-h-screen font-sans theme-${settings?.theme || 'classic'} ${isModern ? `ui-modern mt-${modernTheme}` : 'bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100'}`}>
       {isModern ? (
         <div className="flex min-h-screen">

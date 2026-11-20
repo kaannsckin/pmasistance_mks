@@ -6,6 +6,7 @@ import type { RagHit } from '../rag/retriever';
 import type { Citation, RagSourceType } from '../rag/sources';
 import type { AiProposal } from './actions';
 import type { AiDocument } from '../export/aiDocument';
+import type { MemoryStore } from './memory';
 import type { UiCommand, UiResult } from './uiActions';
 import type { JiraIssueWorklog, JiraMeta, JiraSyncPage, JiraSyncSource } from '../integrations';
 
@@ -69,6 +70,12 @@ export interface ToolContext {
      * bağlar (dosya orada üretilip indirilir); yoksa dosya_olustur sunulmaz.
      */
     files?: AiDocument[];
+    /**
+     * Asistan hafızası (bu tarayıcıda, kimlik başına). userPrompt kullanıcının bu
+     * turda KENDİ yazdığı metindir (ekler hariç): hafızaya yazma/silme yalnız
+     * kullanıcı açıkça isterse yapılır, ekteki bir talimat hafızaya yazamaz.
+     */
+    memory?: { store: MemoryStore; userPrompt: string };
 }
 
 export const buildToolContext = (ws: WorkspaceData, now: Date = new Date()): ToolContext => {

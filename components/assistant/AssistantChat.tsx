@@ -31,6 +31,35 @@ const STEP_KIND: Record<ReturnType<typeof toolKind>, { icon: string; title: stri
   ui: { icon: 'fa-compass', title: 'Asistan ekranı sizin için değiştirdi' },
   jira: { icon: 'fa-cloud', title: "Jira'dan güncel veri okundu" },
   file: { icon: 'fa-file-arrow-down', title: 'Dosya hazırlandı' },
+  memory: { icon: 'fa-bookmark', title: 'Hafıza güncellendi' },
+};
+
+/** Hafıza: asistanın kalıcı tercihleri (bu tarayıcıda); görüntüle ve sil */
+const MemoryPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+  const a = useAssistant();
+  return (
+    <section aria-label="Asistan hafızası" className="flex-none border-b border-gray-100 dark:border-gray-700 bg-indigo-50/50 dark:bg-indigo-900/10 px-4 py-3 space-y-2">
+      <div className="flex items-center gap-2">
+        <span className="flex-1 text-xs font-bold text-gray-800 dark:text-gray-100"><i aria-hidden="true" className="fa-solid fa-bookmark text-indigo-500 mr-1.5"></i>Hafıza · {a.memory.length}</span>
+        {a.memory.length > 0 && <button onClick={() => { if (window.confirm('Asistanın hafızasındaki tüm notlar silinsin mi?')) a.clearMemory(); }} className="text-[11px] font-semibold text-gray-500 hover:text-red-500">Tümünü sil</button>}
+        <button aria-label="Hafızayı kapat" onClick={onClose} className="w-6 h-6 rounded text-gray-400 hover:text-gray-700"><i aria-hidden="true" className="fa-solid fa-xmark text-xs"></i></button>
+      </div>
+      {a.memory.length === 0 ? (
+        <p className="text-[11px] text-gray-500">Henüz not yok. Asistana "Bundan sonra süreleri gün olarak ver, hatırla" gibi bir tercih söyleyin; her soruda buna uyar.</p>
+      ) : (
+        <ol className="space-y-1 max-h-40 overflow-y-auto">
+          {a.memory.map((m, i) => (
+            <li key={m.id} className="flex items-start gap-2 text-[11px] text-gray-700 dark:text-gray-200">
+              <span className="text-gray-400 w-4 flex-none">{i + 1}.</span>
+              <span className="flex-1 min-w-0 break-words">{m.text}</span>
+              <button aria-label={`Sil: ${m.text}`} title="Sil" onClick={() => a.forgetMemory(m.id)} className="text-gray-400 hover:text-red-500 flex-none"><i aria-hidden="true" className="fa-solid fa-trash text-[10px]"></i></button>
+            </li>
+          ))}
+        </ol>
+      )}
+      <p className="text-[10px] text-gray-400">Yalnız bu tarayıcıda ve bu kimlik için saklanır; her soruda asistana iletilir.</p>
+    </section>
+  );
 };
 
 const StepChips: React.FC<{ steps: AgentStep[] }> = ({ steps }) => (
@@ -155,7 +184,7 @@ const FileCards: React.FC<{ files: AiDocument[] }> = ({ files }) => {
   );
 };
 
-const ProposalCards: React.FC<{ proposals: AiProposal[]; onResolve: (id: string, d: 'apply' | 'reject') => void }> = ({ proposals, onResolve }) => (
+const ProposalCards: React.FC<{ proposals: AiProposal[]; onResolve: (id: string, d: 'apply' | 'reject') => void; onResolveAll?: (d: 'apply' | 'reject') => void }> = ({ proposals, onResolve, onResolveAll }) => (
   <div className="mt-3 space-y-2">
     {proposals.map((p, i) => {
       const st = PROPOSAL_STATUS[p.status];
@@ -165,7 +194,7 @@ const ProposalCards: React.FC<{ proposals: AiProposal[]; onResolve: (id: string,
             <div className="text-xs font-bold text-gray-800 dark:text-gray-100"><i aria-hidden="true" className="fa-solid fa-pen-to-square text-indigo-500 mr-1.5"></i>Öneri {i + 1}: {p.title}</div>
             <span className={`text-[10px] font-semibold flex-none ${st.cls}`}><i aria-hidden="true" className={`fa-solid ${st.icon} mr-1`}></i>{st.label}</span>
           </div>
-          <dl className="mt-2 grid grid-cols-[auto,1fr] gap-x-3 gap-y-0.5 text-[11px]">
+          <dl className="mt-2 grid grid-cols-[minmax(0,max-content),minmax(55%,1fr)] gap-x-3 gap-y-0.5 text-[11px]">
             {p.details.map(d => (
               <React.Fragment key={d.label}>
                 <dt className="text-gray-400">{d.label}</dt>
@@ -183,6 +212,13 @@ const ProposalCards: React.FC<{ proposals: AiProposal[]; onResolve: (id: string,
         </div>
       );
     })}
+    {onResolveAll && proposals.filter(p => p.status === 'pending').length > 1 && (
+      <div className="flex flex-wrap items-center gap-2 pt-1">
+        <button onClick={() => onResolveAll('apply')} className="text-[11px] font-bold px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white"><i aria-hidden="true" className="fa-solid fa-check-double mr-1"></i>Tümünü uygula ({proposals.filter(p => p.status === 'pending').length})</button>
+        <button onClick={() => onResolveAll('reject')} className="text-[11px] font-bold px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-500 hover:text-red-500">Hepsinden vazgeç</button>
+        <span className="text-[10px] text-gray-400">Sırayla uygulanır; tek "Geri Al" hepsini geri alır.</span>
+      </div>
+    )}
   </div>
 );
 
@@ -199,6 +235,7 @@ const AssistantChat: React.FC<Props> = ({ variant, suggestions, onClose, onExpan
   const [input, setInput] = useState('');
   const [token, setToken] = useState('');
   const [preview, setPreview] = useState<Citation | null>(null);
+  const [memoryOpen, setMemoryOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const compact = variant === 'panel';
@@ -234,6 +271,10 @@ const AssistantChat: React.FC<Props> = ({ variant, suggestions, onClose, onExpan
         </div>
       </div>
       <div className="flex items-center gap-1 flex-none">
+        <button aria-label={`Hafıza (${a.memory.length} not)`} aria-expanded={memoryOpen} onClick={() => setMemoryOpen(o => !o)} title="Asistanın hafızası" className="relative w-8 h-8 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-white dark:hover:bg-gray-800 transition-colors">
+          <i aria-hidden="true" className="fa-solid fa-bookmark text-xs"></i>
+          {a.memory.length > 0 && <span aria-hidden="true" className="absolute top-0.5 right-0.5 min-w-[14px] h-3.5 px-0.5 rounded-full bg-indigo-600 text-white text-[9px] font-bold leading-[14px]">{a.memory.length}</span>}
+        </button>
         <button aria-label="Bilgi Bankası — dizin durumu ve kurumsal dokümanlar" onClick={() => a.setKbOpen(true)} title="Bilgi Bankası — dizin durumu ve kurumsal dokümanlar" className="w-8 h-8 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-white dark:hover:bg-gray-800 transition-colors">
           <i aria-hidden="true" className="fa-solid fa-book text-xs"></i>
         </button>
@@ -344,7 +385,7 @@ const AssistantChat: React.FC<Props> = ({ variant, suggestions, onClose, onExpan
                   {msg.content ? <Markdown text={msg.content} /> : msg.streaming ? <Dots /> : null}
                   {msg.files && msg.files.length > 0 && <FileCards files={msg.files} />}
                   {msg.proposals && msg.proposals.length > 0 && (
-                    <ProposalCards proposals={msg.proposals} onResolve={(pid, d) => a.resolveProposal(msg.id, pid, d)} />
+                    <ProposalCards proposals={msg.proposals} onResolve={(pid, d) => a.resolveProposal(msg.id, pid, d)} onResolveAll={d => a.resolveAllProposals(msg.id, d)} />
                   )}
                   {msg.citations && msg.citations.length > 0 && (
                     <SourceList
@@ -352,6 +393,15 @@ const AssistantChat: React.FC<Props> = ({ variant, suggestions, onClose, onExpan
                       citations={msg.citations}
                       onOpen={c => (c.ref.kind === 'project-view' ? a.navigate(c.ref) : setPreview(c))}
                     />
+                  )}
+                  {msg.followUps && msg.followUps.length > 0 && msg.id === a.messages[a.messages.length - 1]?.id && !a.isStreaming && (
+                    <div className="mt-3 flex flex-wrap gap-1.5" aria-label="Takip önerileri">
+                      {msg.followUps.map(f => (
+                        <button key={f} onClick={() => a.send(f)} className="text-left text-[11px] font-semibold px-2.5 py-1 rounded-full border border-indigo-200 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300 bg-white dark:bg-gray-900 hover:bg-indigo-50 dark:hover:bg-indigo-900/40">
+                          <i aria-hidden="true" className="fa-solid fa-wand-magic-sparkles mr-1"></i>{f}
+                        </button>
+                      ))}
+                    </div>
                   )}
                 </>
               ) : (
@@ -387,6 +437,7 @@ const AssistantChat: React.FC<Props> = ({ variant, suggestions, onClose, onExpan
       )}
       {preview && <SourcePreview c={preview} onClose={() => setPreview(null)} onOpenKb={() => { setPreview(null); a.setKbOpen(true); }} />}
       {header}
+      {memoryOpen && <MemoryPanel onClose={() => setMemoryOpen(false)} />}
       <div ref={scrollRef} className={`flex-grow overflow-y-auto ${compact ? 'p-4' : 'p-8'} custom-scrollbar`}>
         {a.phase !== 'ready' || !a.enabled ? phaseScreen() : a.messages.length === 0 ? empty : list}
       </div>

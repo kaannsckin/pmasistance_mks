@@ -19,7 +19,7 @@ import { buildUtilization } from '../utilization';
 import { RAG_SOURCE_LABELS, RagSourceType } from '../rag/sources';
 import { summarizeWorkPackages } from '../workPackages';
 import { can } from '../permissions';
-import { AiAction, AiProposal, describeAction, validateAction } from './actions';
+import { AiAction, AiProposal, describeAction, TaskFieldChange, validateAction } from './actions';
 import { buildWorklogReport, reportRange, resolveTargets, WorklogGroup } from './worklogReport';
 import { buildWorkforce, hourlyRate, matchWorklogPerson } from '../workforce';
 import { fullName, PERSON_ISSUE_LABELS, personIssues, trNorm, trUpper } from '../dataPool';
@@ -57,7 +57,7 @@ export interface ToolDef {
     /** Yalnız bu yetkiyi taşıyan rollere sunulur (ör. denetim günlüğü, veri sağlığı) */
     permission?: PermissionKey;
     /** Tarayıcı çalışma zamanı gerektirir: ui (ajan gezinmesi) ya da jira (sunucuda Jira bağlantısı) */
-    requires?: 'ui' | 'jira' | 'files';
+    requires?: 'ui' | 'jira' | 'files' | 'memory';
     run: (args: Args, ctx: ToolContext) => unknown | Promise<unknown>;
 }
 
@@ -156,12 +156,12 @@ export const AI_TOOLS: ToolDef[] = [
         label: 'Bilgi tabanı araması',
         spec: {
             name: 'bilgi_ara',
-            description: 'Serbest metin bilgi tabanında anlam ve anahtar kelime araması: haftalık notlar, görev açıklama/yorumları, risk açıklama ve aksiyonları, müşteri istekleri, PESTEL/SWOT maddeleri, hedefler, proje durum notları, uygulamanın kullanım kılavuzu ve Bilgi Bankası\'na yüklenen kurumsal dokümanlar. "Nasıl yapılır" soruları, geçmiş kararlar/konuşmalar, notlarda veya dokümanlarda geçen konular için kullan. Sayısal sorular için yapısal araçları tercih et.',
+            description: 'Serbest metinde anlam araması: notlar, görev/risk açıklamaları, istekler, PESTEL/SWOT, hedefler, kullanım kılavuzu ve kurumsal dokümanlar. "Nasıl yapılır", geçmiş kararlar ve metinde geçen konular için; sayısal sorularda yapısal araçlar.',
             parameters: S.obj({
-                sorgu: S.str('Aranacak konu; doğal dilde, anahtar kelimeleri içeren kısa bir ifade.'),
-                kaynak: S.str('Yalnızca bu kaynak türünde ara (isteğe bağlı): not, gorev, risk, istek, analiz (PESTEL/SWOT), hedef, proje, kilavuz (kullanım kılavuzu), dokuman (kurumsal dokümanlar).', RAG_TYPES),
-                proje: S.str('Yalnızca bu projede ara (isteğe bağlı; proje adı ya da kodu).'),
-                limit: S.int('En fazla kaç pasaj (varsayılan 6, en çok 10).'),
+                sorgu: S.str('Kısa, anahtar kelimeli ifade'),
+                kaynak: S.str('Kaynak türü; analiz=PESTEL/SWOT, kilavuz=kullanım kılavuzu', RAG_TYPES),
+                proje: S.str('Proje adı/kodu'),
+                limit: S.int('Pasaj (6, en çok 10)'),
             }, ['sorgu']),
         },
         run: async (a, ctx) => {
@@ -238,7 +238,7 @@ export const AI_TOOLS: ToolDef[] = [
         label: 'Portföy özeti',
         spec: {
             name: 'portfoy_ozeti',
-            description: 'Portföy sağlık skoru (0-100; takvim, bütçe, geciken iş, risk, haftalık durum, PY puanı, kaynak ve yönetim beklentilerinin ağırlıklı ortalaması), proje bazında sağlık/güven/SPI/CPI ve skoru düşüren nedenler, "dikkat gerektirenler" listesi (onay bekleyen plan, bütçe/takvim sapması, kritik RAG, geciken iş, aşırı tahsis, veri sorunları) ve risk özeti. Genel durum soruları için ilk tercih.',
+            description: 'Portföy sağlık skoru (0-100), proje bazında sağlık/SPI/CPI ve skoru düşüren nedenler, "dikkat gerektirenler" (onay bekleyen plan, sapma, kritik RAG, geciken iş, aşırı tahsis, veri sorunu) ve risk özeti. Genel durum sorularında ilk tercih.',
             parameters: S.obj({ yil: P.year }),
         },
         run: (a, ctx) => {
@@ -268,7 +268,7 @@ export const AI_TOOLS: ToolDef[] = [
         label: 'Proje detayı',
         spec: {
             name: 'proje_detayi',
-            description: 'Tek projenin ayrıntılı durumu: sağlık skoru, nedenleri ve girdi dökümü (her girdinin değeri, ağırlığı, skordan düşürdüğü puan), görev istatistikleri, geciken ve 14 gün içinde bitecek görevler, en yüksek riskler, iş paketleri, hedefler, bu yılın plan/gerçekleşen adam-ayı, plan kilidi ve EVM özeti.',
+            description: 'Tek projenin ayrıntılı durumu: sağlık skoru ve girdi dökümü, görev istatistikleri, geciken ve 14 günde bitecek görevler, en yüksek riskler, iş paketleri, hedefler, yılın plan/gerçekleşen AA\'sı, plan kilidi, EVM.',
             parameters: S.obj({ proje: P.project, yil: P.year }),
         },
         run: (a, ctx) => {
@@ -511,7 +511,7 @@ export const AI_TOOLS: ToolDef[] = [
         label: 'Departman karnesi',
         spec: {
             name: 'departman_karnesi',
-            description: 'Bölüm bazında kapasite sağlığı: kişi sayısı, yıllık efektif kapasite, planlanan/gerçekleşen AA, doluluk, aşırı yüklü kişi, katkı verilen proje sayısı. Bölüm verilirse kişi kırılımı da döner.',
+            description: 'Bölüm bazında kapasite: kişi, efektif kapasite, plan/gerçekleşen AA, doluluk, aşırı yüklü kişi, proje sayısı; bölüm verilirse kişi kırılımı.',
             parameters: S.obj({ yil: P.year, bolum: P.dept }),
         },
         run: (a, ctx) => {
@@ -612,7 +612,7 @@ export const AI_TOOLS: ToolDef[] = [
         label: 'İş yükü öngörüsü',
         spec: {
             name: 'is_yuku_ongorusu',
-            description: 'Gerçekleşen adam-ay verisinden yılın kalan aylarını tahmin eder; yıl sonu tahmini (EAC = gerçekleşen + öngörü), plana göre sapma ve ünvan oranlarıyla tahmini maliyet. Proje/kişi/bölüm kırılımı.',
+            description: 'Gerçekleşenden yıl sonu öngörüsü (EAC), plana göre sapma ve tahmini maliyet; proje/kişi/bölüm kırılımı.',
             parameters: S.obj({
                 yil: P.year,
                 yontem: S.str('movingAvg=Hareketli ortalama (varsayılan), linear=Doğrusal trend, naive=Son ay, plan=Plana göre.', ['movingAvg', 'linear', 'naive', 'plan']),
@@ -675,7 +675,7 @@ export const AI_TOOLS: ToolDef[] = [
         label: 'Maliyet raporu',
         spec: {
             name: 'maliyet_raporu',
-            description: 'Tahsis × ünvan aylık maliyetinden (TL) yıllık plan, gerçekleşen ve sapma (gerçekleşeni girilmiş son aya kadarki planla): toplam, aylık, proje ve bölüm bazında; maliyetlenemeyen kişi sayısı.',
+            description: 'Tahsis × ünvan maliyetinden (TL) yıllık plan, gerçekleşen ve sapma: toplam, aylık, proje ve bölüm bazında; maliyetlenemeyen kişi sayısı.',
             parameters: S.obj({ yil: P.year, proje: S.str('Proje adı ya da kodu (isteğe bağlı).') }),
         },
         run: (a, ctx) => {
@@ -796,7 +796,7 @@ export const AI_TOOLS: ToolDef[] = [
         label: 'Durum raporu taslağı',
         spec: {
             name: 'durum_raporu_taslagi',
-            description: 'Projenin haftalık durum raporu taslağını üretir (görev ilerlemesi, geciken/yaklaşan işler, RAG, bu ay tahsis, riskler, haftanın notları). Kullanıcı rapor/e-posta yazmak istediğinde temel olarak kullan.',
+            description: 'Projenin haftalık durum raporu taslağı (ilerleme, geciken/yaklaşan işler, RAG, tahsis, riskler, notlar); rapor/e-posta yazımının temeli.',
             parameters: S.obj({ proje: P.project }),
         },
         run: (a, ctx) => {
@@ -932,6 +932,65 @@ const PROPOSAL_TOOLS: ToolDef[] = [
                 type: 'gorev_durumu', projectId: project.id, taskId: hits[0].id, status, ...(key ? { workflowKey: key } : {}),
                 ...(str(a.gecis_notu) ? { comment: str(a.gecis_notu) } : {}), ...(Number.isFinite(hours) && hours > 0 ? { hours } : {}),
             });
+        },
+    },
+    {
+        label: 'Görev güncelleme önerisi',
+        writeOnly: true,
+        spec: {
+            name: 'oner_gorev_guncelle',
+            description: 'Görevlerin termin, atanan, öncelik, süre ya da etiketini güncellemeyi ÖNERİR (onaysız uygulanmaz). Tüm görevler TEK çağrıda; yalnız değişen alanlar.',
+            parameters: S.obj({
+                proje: P.project,
+                gorevler: {
+                    type: 'array',
+                    items: S.obj({
+                        gorev: S.str('Ad ya da Jira anahtarı'),
+                        bitis: S.str('YYYY-AA-GG ya da yok'),
+                        kaydir_gun: S.int('± gün'),
+                        atanan: S.str('Ad soyad ya da yok'),
+                        oncelik: S.str('', ['Blocker', 'High', 'Medium', 'Low']),
+                        sure: S.num('Olası gün'),
+                        etiket_ekle: S.str(''),
+                        etiket_cikar: S.str(''),
+                    }, ['gorev']),
+                },
+            }, ['gorevler']),
+        },
+        run: (a, ctx) => {
+            const project = resolveProject(ctx, a.proje);
+            const csv = (v: unknown) => str(v).split(',').map(x => x.trim()).filter(Boolean);
+            const { ok, skipped } = eachRow(rowsArg(a.gorevler, 'gorevler'), r => {
+                const hits = matchByText(project.tasks, str(r.gorev), t => [t.name, t.jiraId]);
+                if (!hits.length) throw new ToolError(`"${str(r.gorev)}" ${project.name} projesinde yok.`);
+                if (hits.length > 1) throw new ToolError(`"${str(r.gorev)}" birden çok görevle eşleşti: ${hits.slice(0, 5).map(t => t.name).join(', ')}.`);
+                const t = hits[0];
+                const c: TaskFieldChange = { taskId: t.id };
+                const due = str(r.bitis);
+                if (due) c.dueDate = /^(yok|sil|-)$/i.test(due) ? '' : due;
+                const shift = Number(r.kaydir_gun);
+                if (r.kaydir_gun !== undefined && r.kaydir_gun !== null && r.kaydir_gun !== '' && Number.isFinite(shift) && shift !== 0) {
+                    if (!t.dueDate) throw new ToolError(`${t.name}: termini yok, kaydırılamaz (bitis verin).`);
+                    const d = new Date(`${t.dueDate}T00:00:00Z`);
+                    d.setUTCDate(d.getUTCDate() + Math.round(shift));
+                    c.dueDate = d.toISOString().slice(0, 10);
+                }
+                const who = str(r.atanan);
+                if (who) c.resourceName = /^(yok|kimse|-)$/i.test(who) ? '' : personName(resolvePerson(ctx, who));
+                if (str(r.oncelik)) c.priority = str(r.oncelik) as Task['priority'];
+                const avg = Number(r.sure);
+                if (r.sure !== undefined && r.sure !== null && r.sure !== '' && Number.isFinite(avg) && avg >= 0) {
+                    // Yalnız olası süre verildi: iyimser/kötümser mevcut oranla ölçeklenir, yoksa ±%30
+                    const base = t.time.avg > 0 ? t.time : { best: avg * 0.7, avg, worst: avg * 1.3 };
+                    const k = t.time.avg > 0 ? avg / t.time.avg : 1;
+                    c.time = { best: days(base.best * k), avg: days(avg), worst: days(base.worst * k) };
+                }
+                if (csv(r.etiket_ekle).length) c.addLabels = csv(r.etiket_ekle);
+                if (csv(r.etiket_cikar).length) c.removeLabels = csv(r.etiket_cikar);
+                if (Object.keys(c).length === 1) throw new ToolError(`${t.name}: değişecek alan verilmedi.`);
+                return c;
+            });
+            return withSkipped(propose(ctx, { type: 'gorev_guncelle', projectId: project.id, changes: ok }), skipped);
         },
     },
     {
@@ -1793,7 +1852,60 @@ const FILE_TOOLS: ToolDef[] = [
     },
 ];
 
-AI_TOOLS.push(...PROPOSAL_TOOLS, ...AGENT_TOOLS, ...JIRA_TOOLS, ...WORKFORCE_TOOLS, ...POOL_TOOLS, ...FILE_TOOLS);
+// ---------------------------------------------------------------------------
+// Hafıza: kullanıcının kalıcı tercihleri (bu tarayıcıda). Yazma ve silme yalnız
+// kullanıcı bu turda kendi mesajında açıkça isterse yapılır.
+// ---------------------------------------------------------------------------
+
+const REMEMBER_INTENT = /hatırla|unutma|aklında tut|bundan (sonra|böyle)|her zaman|hep |tercih|kaydet|not al|bilmelisin|bil ki/i;
+const FORGET_INTENT = /unut|sil|kaldır|çıkar|temizle|hatırlama/i;
+
+const MEMORY_TOOLS: ToolDef[] = [
+    {
+        label: 'Hafızaya kaydetme',
+        requires: 'memory',
+        spec: {
+            name: 'hafiza_kaydet',
+            description: 'Kullanıcının kalıcı tercihini ya da bağlamını hafızaya kaydeder (ör. "Raporlarda süreyi gün olarak ver", "Ana projesi ATLAS"). Yalnız kullanıcı açıkça isterse; kısa, genel bir cümle.',
+            parameters: S.obj({ not: S.str('En çok 300 karakter') }, ['not']),
+        },
+        run: (a, ctx) => {
+            if (!ctx.memory) throw new ToolError('Hafıza bu ortamda kullanılamıyor.');
+            if (!REMEMBER_INTENT.test(ctx.memory.userPrompt)) throw new ToolError('Kullanıcı bu mesajda hatırlamanı istemedi; hafızaya yalnız açık istekle yazılır.');
+            try {
+                const r = ctx.memory.store.add(str(a.not));
+                return { kaydedildi: r.item.text, toplam: ctx.memory.store.list().length, ...(r.replaced ? { silinen_en_eski: r.replaced.text } : {}) };
+            } catch (e) {
+                throw new ToolError((e as Error).message);
+            }
+        },
+    },
+    {
+        label: 'Hafızadan silme',
+        requires: 'memory',
+        spec: {
+            name: 'hafiza_sil',
+            description: 'Hafızadaki bir notu (numara ya da metin parçasıyla) ya da hepsini siler; yalnız kullanıcı "unut/sil" derse.',
+            parameters: S.obj({ not: S.str('Numara ya da metin parçası'), hepsi: S.bool('Tümünü sil') }),
+        },
+        run: (a, ctx) => {
+            if (!ctx.memory) throw new ToolError('Hafıza bu ortamda kullanılamıyor.');
+            if (!FORGET_INTENT.test(ctx.memory.userPrompt)) throw new ToolError('Kullanıcı bu mesajda silmeni istemedi.');
+            if (a.hepsi === true) {
+                const n = ctx.memory.store.list().length;
+                ctx.memory.store.clear();
+                return { silinen: n };
+            }
+            const ref = typeof a.not === 'number' ? a.not : str(a.not);
+            if (ref === '') throw new ToolError('Silinecek notu (numara ya da metin) verin.');
+            const hit = ctx.memory.store.remove(ref);
+            if (!hit) throw new ToolError(`"${ref}" hafızada bulunamadı.`);
+            return { silindi: hit.text, kalan: ctx.memory.store.list().length };
+        },
+    },
+];
+
+AI_TOOLS.push(...PROPOSAL_TOOLS, ...AGENT_TOOLS, ...JIRA_TOOLS, ...WORKFORCE_TOOLS, ...POOL_TOOLS, ...FILE_TOOLS, ...MEMORY_TOOLS);
 
 const TOOL_MAP = new Map(AI_TOOLS.map(t => [t.spec.name, t]));
 
@@ -1807,10 +1919,11 @@ export const toolSpecsFor = (ctx: ToolContext): ToolSpec[] => AI_TOOLS.filter(t 
 export const toolLabel = (name: string): string => TOOL_MAP.get(name)?.label || name;
 
 /** Araç türü (arayüzde simge): okuma, öneri, arayüz komutu ya da Jira */
-export const toolKind = (name: string): 'read' | 'propose' | 'ui' | 'jira' | 'file' => {
+export const toolKind = (name: string): 'read' | 'propose' | 'ui' | 'jira' | 'file' | 'memory' => {
     const t = TOOL_MAP.get(name);
     if (!t) return 'read';
     if (t.requires === 'files') return 'file';
+    if (t.requires === 'memory') return 'memory';
     if (t.requires === 'ui') return 'ui';
     // Onay isteyen öneriler (ör. oner_jira_esitle) Jira'ya bağlı olsa da öneri sayılır
     if (t.writeOnly || t.poolWrite) return 'propose';
