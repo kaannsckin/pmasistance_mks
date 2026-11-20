@@ -71,6 +71,16 @@ Hücre kapalıysa nedeni projenin başlığında ve hücrenin üzerine gelince y
 - **Plan (atamalar):** Jira'da birine atanmış açık işlerin kalan eforu (tahmin − harcanan) bugünden termine kadar iş günlerine yayılır. Termin yoksa iş bugünden başlayarak eforu kadar iş gününe yayılır. Sonuç önizlenir; "boş ayları doldur" ya da "üzerine yaz" ile tabloya yazılır.
 - **Gerçekleşen (worklog):** Projenin Jira kayıtlarına yazılan worklog'lar kişi × ay saate toplanır ve gerçekleşen AA'ya çevrilir (saat ÷ 8 ÷ ayın iş günü). Aynı Jira projesindeki başka işlere yazılanlar alınmaz. Havuzda olmayan kişiler Veri Havuzu'na eklenir.
 
+## Asistandan
+
+Asistan (sağ alttaki AI düğmesi) bu işleri onaylı öneriyle ya da raporla yapar. Öneriler sohbetteki kartta "Uygula" denmeden uygulanmaz; uygulananlar denetim günlüğüne yazılır ve geri alınabilir.
+
+- **Tahsis aralığı:** "Ayşe'yi Aralık–Mart %50 GİB'e ata" tek kart üretir (yıl geçebilir, en çok 24 ay). Kart her ayın şu anki değerini ve kapasite aşımını gösterir. Aralıktaki bir yılın planı kilitliyse öneri reddedilir.
+- **Jira eşitle:** "GİB'i Jira ile eşitle" kartı, Jira'dan alınacak ve Jira'ya yazılacak alanları gösterir. Onaylanınca Planlama › Jira eşitleme'deki "Şimdi eşitle" ile aynı iş çalışır. Uygulamadaki değişiklik geri alınabilir; Jira'ya yazılan değer geri alınmaz.
+- **Worklog raporu:** "GİB, ATL ve MPS'nin kasım worklog raporunu getir" proje başına saat ve gün, kişi × proje ve istenirse kayıt, gün ya da hafta kırılımı verir (en çok 92 gün, 10 proje). Uygulama projesi verilirse yalnız o projenin görevlerine bağlı Jira kayıtları sayılır; aynı Jira projesindeki başka işler "kapsam dışı" olarak ayrıca gösterilir. Jira anahtarı (MPS) verilirse Jira projesinin tamamı sayılır. Kaynak Jira worklog'larıdır; Jira Server/DC'de Tempo'nun yazdığı süreler de bunlara dahildir. Tempo'ya özgü alanlar (faturalanabilir süre, hesap) okunmaz.
+
+Jira araçları yalnız Jira bağlıyken sunulur. Jira eşitlemesi ve tahsis önerisi yalnız projenin PY'sine sunulur; worklog raporu, kullanıcının görebildiği projelerle sınırlıdır.
+
 ## Ayarları panelden girmek
 
 **Yönetici konsolu → Entegrasyonlar**'da `.env` / `planasistan.env` dosyasındaki Jira, Teams ve e-posta değerleri girilir: Jira adresi, jeton, izinli projeler (`JIRA_ALLOWED_PROJECTS`), Jira'ya yazma / kayıt açma, Teams webhook'u, SMTP. "Jira bağlantısını dene" kaydetmeden jeton sahibini ve erişilen projeleri gösterir.

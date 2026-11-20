@@ -80,7 +80,10 @@ describe('araç kataloğu', () => {
         console.log(`araç tanımları: ${AI_TOOLS.length} adet, ${size} karakter`);
         // 16 000'den 18 000'e: PY'nin risk güncelleme, istek kararı ve not araçları (kısaltılmış tanımlarla
         // ~2 100 karakter). Yönetici rolleri yazma araçlarını almadığı için onların istek boyutu değişmedi.
-        expect(size).toBeLessThan(18_000);
+        // Jira araçları (worklog raporu, eşitleme önerisi) yalnız Jira bağlıyken gönderilir (BL-15).
+        const withoutJira = JSON.stringify(AI_TOOLS.filter(t => !t.requiresJira).map(t => t.spec)).length;
+        expect(withoutJira).toBeLessThan(18_000);
+        expect(size).toBeLessThan(19_500);
     });
 
     it('her araç parametresiz çalışır (duman testi) ve sicil sızdırmaz', async () => {

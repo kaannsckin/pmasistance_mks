@@ -84,11 +84,11 @@ import { appendEvalRun } from './utils/planning/evaluation';
 import { appendModelEval } from './utils/planning/ml/estimateModel';
 import { JiraImportOptions, mergeJiraIssues } from './utils/planning/jiraImport';
 import { linkJiraKeys } from './utils/planning/jiraExport';
-import { applyJiraSync, JiraPushOutcome, pullIssueIntoTasks, sourceLabel } from './utils/planning/jiraSync';
+import { applyJiraSync, JiraPushOutcome, pullIssueIntoTasks, runFullSync, sourceLabel, writeSyncState } from './utils/planning/jiraSync';
 import { markPushed } from './utils/planning/jiraFieldSync';
 import { ensureJiraPeople } from './utils/planning/jiraPeople';
 import { useJiraAutoSync } from './components/modern/planning/useJiraAutoSync';
-import { JiraIssueRecord } from './utils/integrations';
+import { fetchIntegrationHealth, fetchJiraSyncPage, JiraIssueRecord, updateJiraIssue } from './utils/integrations';
 import ModernPortfolio from './components/modern/ModernPortfolio';
 import ModernBoard from './components/modern/ModernBoard';
 import ModernProjectOverview from './components/modern/ModernProjectOverview';
@@ -1956,11 +1956,30 @@ const App: React.FC = () => {
   const getAssistantView = useCallback(() => currentViewRef.current, []);
   // Asistanın önerdiği değişiklik kullanıcı onaylayınca: güncel veriyle yeniden
   // doğrula (yetki, plan kilidi), uygula, denetim günlüğüne yaz, geri-al sun
-  const handleApplyAiAction = useCallback((action: AiAction): { ok: boolean; message: string } => {
+  const handleApplyAiAction = useCallback((action: AiAction): { ok: boolean; message: string } | Promise<{ ok: boolean; message: string }> => {
     const current = workspaceRef.current;
     if (!current) return { ok: false, message: 'Çalışma alanı hazır değil.' };
     const problem = validateAction(current, action);
     if (problem) return { ok: false, message: problem };
+    if (action.type === 'jira_esitle') {
+      // Planlama › Jira eşitleme'deki "Şimdi eşitle" ile aynı yol: oku, (seçildiyse) Jira'ya yaz, uygula, damgala
+      return (async () => {
+        const project = current.projects.find(p => p.id === action.projectId)!;
+        const health = await fetchIntegrationHealth();
+        if (!health.jira) return { ok: false, message: 'Jira bağlantısı yapılandırılmamış (Yönetici konsolu › Entegrasyonlar).' };
+        const update = health.jiraUpdate ? (key: string, changes: Parameters<typeof updateJiraIssue>[1]) => updateJiraIssue(key, changes, health.authMode) : null;
+        try {
+          const r = await runFullSync(project, o => fetchJiraSyncPage(o, health.authMode), update);
+          if (r.shouldApply) handleApplyJiraSync(project.id, r.issues, r.opts, r.addNew, 'asistan', r.pushed);
+          writeSyncState(project.id, { at: new Date().toISOString(), ok: true, text: r.text });
+          if (r.preview.updated || r.preview.added) showUndo(`Jira eşitlemesi uygulandı: ${project.name}`, current);
+          return { ok: true, message: `${project.name}: ${r.text}${r.pushed?.done.length ? " (Jira'ya yazılanlar geri alınmaz)" : ''}` };
+        } catch (e) {
+          writeSyncState(project.id, { at: new Date().toISOString(), ok: false, text: (e as Error).message });
+          return { ok: false, message: (e as Error).message || 'Jira eşitlemesi başarısız.' };
+        }
+      })();
+    }
     let summary = '';
     try {
       const result = applyAction(current, action);
@@ -1972,7 +1991,7 @@ const App: React.FC = () => {
     }
     showUndo(`AI önerisi uygulandı: ${summary}`, current);
     return { ok: true, message: `${summary} (Geri almak için alttaki "Geri Al").` };
-  }, [showUndo]);
+  }, [showUndo, handleApplyJiraSync]);
 
   // Asistan kaynağına tıklanınca: ilgili projeyi aç ve ekrana geç
   const handleAssistantNavigate = useCallback((ref: RagRef) => {

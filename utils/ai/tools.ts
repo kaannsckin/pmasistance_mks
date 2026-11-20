@@ -20,6 +20,7 @@ import { RAG_SOURCE_LABELS, RagSourceType } from '../rag/sources';
 import { summarizeWorkPackages } from '../workPackages';
 import { can } from '../permissions';
 import { AiAction, AiProposal, describeAction, validateAction } from './actions';
+import { buildWorklogReport, reportRange, resolveTargets, WorklogGroup } from './worklogReport';
 import { JsonSchema, ToolCall, ToolSpec } from './protocol';
 import {
     clampLimit, maskSicil, matchByText, months12, personName, r2, resolveDepartmentCode, resolvePerson,
@@ -44,6 +45,8 @@ export interface ToolDef {
     writeOnly?: boolean;
     /** Yalnız bu yetkiyi taşıyan rollere sunulur (ör. denetim günlüğü, veri sağlığı) */
     permission?: PermissionKey;
+    /** Yalnız Jira bağlıyken sunulur (tarayıcıdaki asistan; ctx.jira) */
+    requiresJira?: boolean;
     run: (args: Args, ctx: ToolContext) => unknown | Promise<unknown>;
 }
 
@@ -1013,28 +1016,80 @@ const PROPOSAL_TOOLS: ToolDef[] = [
         writeOnly: true,
         spec: {
             name: 'oner_tahsis_ayarla',
-            description: 'Bir kişinin bir projedeki belirli ayının plan ya da gerçekleşen adam-ay değerini ayarlamayı ÖNERİR (kullanıcı onaylamadan uygulanmaz). Birden çok ay için ayrı ayrı çağır. Plan kilitliyse yalnızca gerçekleşen değiştirilebilir.',
+            description: 'Kişinin projedeki plan/gerçekleşen tahsisini bir ay ya da ay aralığı için ÖNERİR (onaysız uygulanmaz). Aralık yıl geçebilir; her aya aynı değer. Plan kilitliyse yalnız gerçekleşen.',
             parameters: S.obj({
-                kisi: S.str('Kişinin adı soyadı.'),
-                proje: S.str('Proje adı ya da kodu.'),
-                yil: P.year,
-                ay: S.int('Ay (1-12).'),
+                kisi: S.str('Ad soyad.'),
+                proje: S.str('Proje adı/kodu.'),
+                baslangic: S.str('İlk ay YYYY-AA.'),
+                bitis: S.str('Son ay YYYY-AA; tek ayda boş.'),
+                yuzde: S.num('Aylık % (0-150).'),
+                aa: S.num('Ya da aylık adam-ay (0-1,5).'),
                 alan: P.field,
-                aa: S.num('Yeni adam-ay değeri (0-1,5; 0 = boşalt).'),
-            }, ['kisi', 'proje', 'ay', 'aa']),
+                yil: S.int('Eski biçim: yıl.'),
+                ay: S.int('Eski biçim: ay 1-12.'),
+            }, ['kisi', 'proje']),
         },
         run: (a, ctx) => {
             const person = resolvePerson(ctx, a.kisi);
             const project = resolveProject(ctx, a.proje, { anyProject: true });
-            const value = Number(a.aa);
-            if (!Number.isFinite(value)) throw new ToolError('aa sayısal olmalı.');
-            return propose(ctx, {
-                type: 'tahsis_ayarla', personId: person.id, projectId: project.id, year: resolveYear(ctx, a.yil),
-                month: Number(a.ay), field: effortField(a.alan), value: Math.round(value * 100) / 100,
-            });
+            const hasPct = a.yuzde !== undefined && a.yuzde !== null && a.yuzde !== '';
+            const value = hasPct ? Number(a.yuzde) / 100 : Number(a.aa);
+            if (!Number.isFinite(value)) throw new ToolError('yuzde ya da aa sayısal olmalı.');
+            // Eski çağrılar: yil + ay (1-12)
+            const ym = (v: unknown) => {
+                const t = typeof v === 'number' ? String(v) : str(v);
+                if (/^\d{4}-\d{1,2}$/.test(t)) { const [y, m] = t.split('-'); return `${y}-${m.padStart(2, '0')}`; }
+                if (/^\d{1,2}$/.test(t)) return `${resolveYear(ctx, a.yil)}-${t.padStart(2, '0')}`;
+                return '';
+            };
+            const from = ym(a.baslangic) || ym(a.ay);
+            const to = ym(a.bitis) || from;
+            if (!from) throw new ToolError('baslangic YYYY-AA biçiminde olmalı (ör. 2026-12).');
+            const v = Math.round(value * 100) / 100;
+            if (from === to) {
+                const [y, m] = from.split('-').map(Number);
+                return propose(ctx, { type: 'tahsis_ayarla', personId: person.id, projectId: project.id, year: y, month: m, field: effortField(a.alan), value: v });
+            }
+            return propose(ctx, { type: 'tahsis_araligi', personId: person.id, projectId: project.id, from, to, field: effortField(a.alan), value: v });
         },
     },
+    {
+        label: 'Jira eşitleme önerisi',
+        writeOnly: true,
+        requiresJira: true,
+        spec: {
+            name: 'oner_jira_esitle',
+            description: 'Projeyi Jira ile eşitlemeyi ÖNERİR (onaysız çalışmaz); proje ayarındaki alan seçimiyle.',
+            parameters: S.obj({ proje: P.project }),
+        },
+        run: (a, ctx) => propose(ctx, { type: 'jira_esitle', projectId: resolveProject(ctx, a.proje).id }),
+    },
 ];
+
+AI_TOOLS.push({
+    label: 'Jira worklog raporu',
+    requiresJira: true,
+    spec: {
+        name: 'jira_worklog_raporu',
+        description: 'Projelerin Jira worklog raporu (Tempo gibi): ay ya da aralıkta saat; proje, kişi, kayıt, gün, hafta kırılımı. Uygulama projesi → yalnız onun Jira kayıtları; Jira anahtarı (MPS) → Jira projesinin tamamı. En çok 92 gün.',
+        parameters: S.obj({
+            projeler: S.str('Virgülle projeler ya da Jira anahtarları; boşsa açık proje.'),
+            ay: S.str('2026-11 ya da Kasım; boşsa bu ay.'),
+            baslangic: S.str('Ya da YYYY-AA-GG.'),
+            bitis: S.str('YYYY-AA-GG.'),
+            grupla: S.str('proje, kisi, kayit, gun, hafta (virgülle); varsayılan proje,kisi.'),
+            kisi: S.str('Yalnız bu kişi.'),
+        }),
+    },
+    run: async (a, ctx) => {
+        if (!ctx.jira) throw new ToolError('Jira bağlantısı yapılandırılmamış (Yönetici konsolu › Entegrasyonlar).');
+        const targets = resolveTargets(ctx, a.projeler);
+        const { from, to } = reportRange(a, ctx.now);
+        const allowed: WorklogGroup[] = ['proje', 'kisi', 'kayit', 'gun', 'hafta'];
+        const groups = str(a.grupla).split(/[,\s]+/).map(g => g.toLocaleLowerCase('tr-TR').replace('kişi', 'kisi').replace('kayıt', 'kayit').replace('gün', 'gun')).filter((g): g is WorklogGroup => allowed.includes(g as WorklogGroup));
+        return buildWorklogReport({ targets, from, to, groups: groups.length ? groups : ['proje', 'kisi'], person: str(a.kisi) || undefined, fetch: ctx.jira.worklogs });
+    },
+});
 
 AI_TOOLS.push(...PROPOSAL_TOOLS);
 
@@ -1042,7 +1097,7 @@ const TOOL_MAP = new Map(AI_TOOLS.map(t => [t.spec.name, t]));
 
 /** Bu kullanıcıya sunulacak araç tanımları (yönetici rollerine not/istek araçları hiç gönderilmez) */
 const toolAvailable = (t: ToolDef, ctx: ToolContext): boolean =>
-    (!t.privateOnly || ctx.canSeePrivate) && (!t.writeOnly || ctx.canWrite) && (!t.permission || can(ctx.identity, t.permission));
+    (!t.privateOnly || ctx.canSeePrivate) && (!t.writeOnly || ctx.canWrite) && (!t.permission || can(ctx.identity, t.permission)) && (!t.requiresJira || !!ctx.jira);
 
 export const toolSpecsFor = (ctx: ToolContext): ToolSpec[] => AI_TOOLS.filter(t => toolAvailable(t, ctx)).map(t => t.spec);
 
