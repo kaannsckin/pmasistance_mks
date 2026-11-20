@@ -25,6 +25,7 @@ import { buildWorkforce, hourlyRate, matchWorklogPerson } from '../workforce';
 import { fullName, PERSON_ISSUE_LABELS, personIssues, trNorm, trUpper } from '../dataPool';
 import { MAX_POOL_ROWS, parseMoney, PoolNewPerson, PoolPersonChange, PoolTitle, titleCodeFor } from './poolActions';
 import { WorkspaceData } from '../../types';
+import { DOC_FORMAT_LABELS, DOC_FORMATS, DocBlock, DocError, DocFormat, documentStats, normalizeDocument, tableFromResult } from '../export/aiDocument';
 import { JsonSchema, ToolCall, ToolSpec } from './protocol';
 import { knownWorkflow, taskStatusLabel } from '../workflow';
 import { effectiveScheme } from '../projectScheme';
@@ -32,7 +33,7 @@ import { DIALOG_KEYS, DIALOGS, DialogKey, SCREEN_KEYS, SCREENS, ScreenKey } from
 import type { JiraIssueRecord } from '../integrations';
 import {
     clampLimit, maskSicil, matchByText, months12, personName, r2, resolveDepartmentCode, resolvePerson,
-    resolveProject, resolveYear, ToolContext, ToolError,
+    resolveProject, resolveYear, ToolContext, ToolError, withBulkLimit,
 } from './scope';
 
 /**
@@ -56,7 +57,7 @@ export interface ToolDef {
     /** Yalnız bu yetkiyi taşıyan rollere sunulur (ör. denetim günlüğü, veri sağlığı) */
     permission?: PermissionKey;
     /** Tarayıcı çalışma zamanı gerektirir: ui (ajan gezinmesi) ya da jira (sunucuda Jira bağlantısı) */
-    requires?: 'ui' | 'jira';
+    requires?: 'ui' | 'jira' | 'files';
     run: (args: Args, ctx: ToolContext) => unknown | Promise<unknown>;
 }
 
@@ -1681,7 +1682,118 @@ const POOL_TOOLS: ToolDef[] = [
     },
 ];
 
-AI_TOOLS.push(...PROPOSAL_TOOLS, ...AGENT_TOOLS, ...JIRA_TOOLS, ...WORKFORCE_TOOLS, ...POOL_TOOLS);
+// ---------------------------------------------------------------------------
+// Dosya çıktısı: Excel, CSV, Word, PDF, PowerPoint. Asistan belgeyi bölümlerle
+// tanımlar; tablolar elle yazılabilir ya da bir okuma aracının sonucundan
+// doğrudan doldurulur (sayılar yeniden yazılmaz). Dosya tarayıcıda üretilir.
+// ---------------------------------------------------------------------------
+
+/** Bir turda en çok bu kadar dosya; tablo kaynağı olarak en çok bu kadar satır */
+export const MAX_FILES_PER_TURN = 5;
+const SOURCE_ROW_LIMIT = 1000;
+
+const listArg = (v: unknown): unknown[] => {
+    let x = v;
+    if (typeof x === 'string') { try { x = JSON.parse(x); } catch { return x ? [x] : []; } }
+    return Array.isArray(x) ? x : [];
+};
+
+/** Tablo kaynağı olabilecek araç: okuma aracı (öneri, ekran ve dosya araçları değil) */
+const sourceTool = (name: string, ctx: ToolContext): ToolDef => {
+    const def = TOOL_MAP.get(name);
+    if (!def || !toolAvailable(def, ctx)) throw new ToolError(`"${name}" kaynak olarak kullanılamaz (bu rolde yok ya da bilinmiyor).`);
+    if (def.writeOnly || def.poolWrite || def.requires === 'ui' || def.requires === 'files') throw new ToolError(`"${name}" bir okuma aracı değil; kaynak yalnız okuma araçları olabilir.`);
+    return def;
+};
+
+const FILE_TOOLS: ToolDef[] = [
+    {
+        label: 'Dosya hazırlama',
+        requires: 'files',
+        spec: {
+            name: 'dosya_olustur',
+            description: 'Kullanıcı Excel, CSV, Word, PDF ya da PowerPoint çıktısı isteyince dosya hazırlar; sohbette indirme kartı çıkar. Tabloyu tercihen kaynak_arac ile bir okuma aracının sonucundan doldur (sayıları kendin yazma). Tüm içeriği TEK çağrıda ver.',
+            parameters: S.obj({
+                bicim: S.str('', ['xlsx', 'csv', 'docx', 'pdf', 'pptx']),
+                baslik: S.str(''),
+                alt_baslik: S.str('Dönem, kapsam'),
+                bolumler: {
+                    type: 'array',
+                    items: S.obj({
+                        tur: S.str('', ['baslik', 'alt_baslik', 'paragraf', 'liste', 'tablo']),
+                        metin: S.str('Başlık/paragraf; tabloda tablo adı'),
+                        maddeler: { type: 'array', items: S.str('') },
+                        sutunlar: { type: 'array', items: S.str('') },
+                        satirlar: { type: 'array', items: { type: 'array', items: S.str('') } },
+                        kaynak_arac: S.str('Tablo için okuma aracı adı (ör. gorev_ara)'),
+                        kaynak_arg: S.str('O aracın argümanları, JSON'),
+                        kaynak_alan: S.str('Sonuçtaki liste alanı (ör. gorevler)'),
+                        not: S.str('Tablo altı not'),
+                    }, ['tur']),
+                },
+            }, ['bicim', 'baslik', 'bolumler']),
+        },
+        run: async (a, ctx) => {
+            if (!ctx.files) throw new ToolError('Dosya hazırlama bu ortamda kullanılamıyor.');
+            if (ctx.files.length >= MAX_FILES_PER_TURN) throw new ToolError(`Bir yanıtta en çok ${MAX_FILES_PER_TURN} dosya hazırlanabilir.`);
+            const format = str(a.bicim) as DocFormat;
+            if (!DOC_FORMATS.includes(format)) throw new ToolError('bicim xlsx, csv, docx, pdf ya da pptx olmalı.');
+            const sections = listArg(a.bolumler).filter((x): x is Args => !!x && typeof x === 'object');
+            if (!sections.length) throw new ToolError('bolumler boş olamaz.');
+            const blocks: DocBlock[] = [];
+            const sources: { arac: string; alan: string; satir: number }[] = [];
+            for (const [i, b] of sections.entries()) {
+                const tur = str(b.tur);
+                if (tur === 'baslik' || tur === 'alt_baslik') blocks.push({ kind: 'heading', text: str(b.metin), level: tur === 'baslik' ? 1 : 2 });
+                else if (tur === 'paragraf') blocks.push({ kind: 'paragraph', text: str(b.metin) });
+                else if (tur === 'liste') blocks.push({ kind: 'list', items: listArg(b.maddeler).map(x => String(x ?? '')) });
+                else if (tur === 'tablo') {
+                    const note = str(b.not) || undefined;
+                    const name = str(b.kaynak_arac);
+                    if (name) {
+                        const def = sourceTool(name, ctx);
+                        let args: Args = {};
+                        if (str(b.kaynak_arg)) { try { args = JSON.parse(str(b.kaynak_arg)); } catch { throw new ToolError(`${i + 1}. bölüm: kaynak_arg geçerli JSON değil.`); } }
+                        const result = await withBulkLimit(SOURCE_ROW_LIMIT, () => def.run(normalizeEnumArgs(def.spec.parameters, args || {}), ctx));
+                        let t: ReturnType<typeof tableFromResult>;
+                        try { t = tableFromResult(result, str(b.kaynak_alan) || undefined); } catch (e) { throw new ToolError(`${i + 1}. bölüm (${name}): ${(e as Error).message}`); }
+                        // İstenen sütunlar verildiyse yalnız onlar ve o sırayla (başlık adına göre, büyük/küçük harf duyarsız)
+                        const want = listArg(b.sutunlar).map(x => String(x));
+                        let { columns, rows } = t;
+                        if (want.length) {
+                            const idx = want.map(w => columns.findIndex(c => c.toLocaleLowerCase('tr-TR') === w.toLocaleLowerCase('tr-TR')));
+                            const missing = want.filter((_, k) => idx[k] < 0);
+                            if (missing.length) throw new ToolError(`${i + 1}. bölüm: ${missing.join(', ')} sütunu sonuçta yok. Var olanlar: ${columns.join(', ')}.`);
+                            columns = idx.map(k => columns[k]);
+                            rows = rows.map(r => idx.map(k => r[k]));
+                        }
+                        blocks.push({ kind: 'table', title: str(b.metin) || undefined, columns, rows, note });
+                        sources.push({ arac: name, alan: t.field, satir: rows.length });
+                    } else {
+                        blocks.push({ kind: 'table', title: str(b.metin) || undefined, columns: listArg(b.sutunlar).map(x => String(x ?? '')), rows: listArg(b.satirlar).map(r => (Array.isArray(r) ? r : [r])) as (string | number | null)[][], note });
+                    }
+                } else throw new ToolError(`${i + 1}. bölüm: tur baslik, alt_baslik, paragraf, liste ya da tablo olmalı.`);
+            }
+            let doc;
+            try {
+                doc = normalizeDocument({ title: str(a.baslik), subtitle: str(a.alt_baslik) || undefined, format, blocks });
+            } catch (e) {
+                if (e instanceof DocError) throw new ToolError(e.message);
+                throw e;
+            }
+            ctx.files.push(doc);
+            const st = documentStats(doc);
+            return {
+                dosya: doc.title, bicim: DOC_FORMAT_LABELS[format], tablo: st.tables, satir: st.rows,
+                tablolar: doc.blocks.filter(b => b.kind === 'table').map(b => ({ ad: (b as Extract<DocBlock, { kind: 'table' }>).title, sutunlar: (b as Extract<DocBlock, { kind: 'table' }>).columns, satir: (b as Extract<DocBlock, { kind: 'table' }>).rows.length })),
+                ...(sources.length ? { kaynaklar: sources } : {}),
+                durum: 'Dosya hazır; kullanıcı sohbetteki karttan indirir (diğer biçimler de kartta). İçeriği yanıtta tekrar yazma; neyi içerdiğini bir iki cümleyle söyle.',
+            };
+        },
+    },
+];
+
+AI_TOOLS.push(...PROPOSAL_TOOLS, ...AGENT_TOOLS, ...JIRA_TOOLS, ...WORKFORCE_TOOLS, ...POOL_TOOLS, ...FILE_TOOLS);
 
 const TOOL_MAP = new Map(AI_TOOLS.map(t => [t.spec.name, t]));
 
@@ -1695,9 +1807,10 @@ export const toolSpecsFor = (ctx: ToolContext): ToolSpec[] => AI_TOOLS.filter(t 
 export const toolLabel = (name: string): string => TOOL_MAP.get(name)?.label || name;
 
 /** Araç türü (arayüzde simge): okuma, öneri, arayüz komutu ya da Jira */
-export const toolKind = (name: string): 'read' | 'propose' | 'ui' | 'jira' => {
+export const toolKind = (name: string): 'read' | 'propose' | 'ui' | 'jira' | 'file' => {
     const t = TOOL_MAP.get(name);
     if (!t) return 'read';
+    if (t.requires === 'files') return 'file';
     if (t.requires === 'ui') return 'ui';
     // Onay isteyen öneriler (ör. oner_jira_esitle) Jira'ya bağlı olsa da öneri sayılır
     if (t.writeOnly || t.poolWrite) return 'propose';

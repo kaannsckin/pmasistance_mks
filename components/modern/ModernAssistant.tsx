@@ -4,6 +4,8 @@ import { AiProposal } from '../../utils/ai/actions';
 import { ATTACHMENT_EXTENSIONS, AttachmentInfo } from '../../utils/ai/attachments';
 import { fmtFileSize as fmtKb, useChatAttachments } from '../assistant/useChatAttachments';
 import { toolKind } from '../../utils/ai/tools';
+import { AiDocument, DOC_FORMAT_LABELS, documentStats } from '../../utils/export/aiDocument';
+import { formatsFor, useDocumentDownload } from '../assistant/useDocumentDownload';
 import { extractText, SUPPORTED_EXTENSIONS } from '../../utils/rag/extract';
 import { addUploadedDoc, indexStatus, listUploadedDocs, onDocsChange, removeUploadedDoc, retriever } from '../../utils/rag/service';
 import { Citation, RAG_SOURCE_LABELS, RagSourceType, UploadedDoc } from '../../utils/rag/sources';
@@ -28,6 +30,7 @@ const STEP_KIND: Record<ReturnType<typeof toolKind>, { icon: string; title: stri
     propose: { icon: 'pencil', title: 'Değişiklik önerisi hazırlandı (onayınızı bekler)' },
     ui: { icon: 'compass', title: 'Asistan ekranı sizin için değiştirdi' },
     jira: { icon: 'cloud', title: "Jira'dan güncel veri okundu" },
+    file: { icon: 'download', title: 'Dosya hazırlandı' },
 };
 
 const StepChips: React.FC<{ steps: AgentStep[] }> = ({ steps }) => (
@@ -111,6 +114,41 @@ const Proposals: React.FC<{ proposals: AiProposal[]; onResolve: (id: string, d: 
         })}
     </div>
 );
+
+const FileCards: React.FC<{ files: AiDocument[] }> = ({ files }) => {
+    const dl = useDocumentDownload();
+    return (
+        <div className="mt-3 flex flex-col gap-2">
+            {files.map(f => {
+                const st = documentStats(f);
+                const [main, ...rest] = formatsFor(f);
+                return (
+                    <div key={f.id} className="rounded-xl m-bg p-3 flex flex-col gap-2" style={{ boxShadow: 'inset 0 0 0 1px var(--m-sep)' }}>
+                        <div className="flex items-start gap-2.5">
+                            <span className="w-9 h-9 rounded-lg m-tone-accent flex items-center justify-center flex-none"><Icon name="report" size={18} /></span>
+                            <span className="flex-1 min-w-0">
+                                <span className="block text-[14px] font-semibold m-text break-words">{f.title}</span>
+                                <span className="block text-[12.5px] m-text-3">{[f.subtitle, st.tables ? `${st.tables} tablo · ${st.rows.toLocaleString('tr-TR')} satır` : `${f.blocks.length} bölüm`].filter(Boolean).join(' · ')}</span>
+                            </span>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                            <button type="button" className="m-btn m-btn-primary !min-h-[36px] !px-3 text-[14px]" disabled={!!dl.busy} onClick={() => dl.download(f, main)}>
+                                <Icon name="download" size={15} />{dl.busy === `${f.id}:${main}` ? 'Hazırlanıyor…' : `${DOC_FORMAT_LABELS[main]} indir`}
+                            </button>
+                            {rest.map(fmt => (
+                                <button key={fmt} type="button" className="m-btn m-btn-plain !min-h-[32px] !px-2.5 text-[13px]" disabled={!!dl.busy} onClick={() => dl.download(f, fmt)} title={`${DOC_FORMAT_LABELS[fmt]} olarak indir`}>
+                                    {dl.busy === `${f.id}:${fmt}` ? '…' : DOC_FORMAT_LABELS[fmt]}
+                                </button>
+                            ))}
+                        </div>
+                        {dl.error[f.id] && <p className="m-0 text-[13px] m-ink-bad" role="alert">{dl.error[f.id]}</p>}
+                        {!dl.error[f.id] && dl.done[f.id] && <p className="m-0 text-[12.5px] m-text-3" role="status">İndirildi: {dl.done[f.id]}</p>}
+                    </div>
+                );
+            })}
+        </div>
+    );
+};
 
 const Dots = () => (
     <span className="inline-flex items-center gap-1.5 py-1" aria-label="Yanıt yazılıyor">
@@ -227,6 +265,7 @@ export const ModernChat: React.FC<{
                             <>
                                 {msg.steps && msg.steps.length > 0 && <StepChips steps={msg.steps} />}
                                 {msg.content ? <Markdown text={msg.content} className="m-md" /> : msg.streaming ? <Dots /> : null}
+                                {msg.files && msg.files.length > 0 && <FileCards files={msg.files} />}
                                 {msg.proposals && msg.proposals.length > 0 && <Proposals proposals={msg.proposals} onResolve={(pid, d) => a.resolveProposal(msg.id, pid, d)} />}
                                 {msg.citations && msg.citations.length > 0 && (
                                     <SourceList content={msg.content} citations={msg.citations} onOpen={c => (c.ref.kind === 'project-view' ? a.navigate(c.ref) : setPreview(c))} />

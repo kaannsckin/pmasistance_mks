@@ -5,6 +5,7 @@ import { AttachmentInfo, ChatAttachment, composeUserContent } from '../../utils/
 import { UiCommand, UiResult } from '../../utils/ai/uiActions';
 import { fetchIntegrationHealth, fetchJiraIssueWorklogs, fetchJiraMeta, fetchJiraSyncPage, fetchJiraWorklogs, IntegrationHealth } from '../../utils/integrations';
 import { AiAction, AiProposal } from '../../utils/ai/actions';
+import type { AiDocument } from '../../utils/export/aiDocument';
 import { AiError, configureMasking, embedTexts, fetchAiStatus, hasCredentials, saveAccessToken, streamChat } from '../../utils/ai/client';
 import { buildMasker, collectMaskEntries, Masker } from '../../utils/ai/masking';
 import { aiPolicyOf } from '../../utils/ai/policy';
@@ -31,6 +32,8 @@ export interface UiMessage {
   citations?: Citation[];
   /** Kullanıcı onayı bekleyen değişiklik önerileri */
   proposals?: AiProposal[];
+  /** Asistanın hazırladığı dosyalar (Excel, CSV, Word, PDF, PowerPoint) */
+  files?: AiDocument[];
   /** Kullanıcı mesajına eklenen dosyalar (özet) */
   attachments?: AttachmentInfo[];
   /** Modele giden içerik (ek blokları dahil); sonraki turlarda geçmiş olarak gönderilir */
@@ -170,6 +173,7 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, chat = tru
     const ws = getWorkspace();
     if (!ws) return null;
     const ctx = buildToolContext(ws);
+    ctx.files = [];
     ctx.rag = { search: (q, o) => searchKnowledge(ctx, q, o), mode: searchMode };
     if (onUiCommand) {
       ctx.ui = {
@@ -260,7 +264,7 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, chat = tru
         execute: call => executeTool(call, ctx),
         stream: (body, onDelta) => streamChat(body, { authMode: status.authMode, signal: ctrl.signal, onDelta: (_, full) => onDelta(full) }),
         onText: text => update(replyId, { content: text }),
-        onSteps: steps => update(replyId, { steps, citations: [...ctx.citations], proposals: [...ctx.proposals] }),
+        onSteps: steps => update(replyId, { steps, citations: [...ctx.citations], proposals: [...ctx.proposals], files: [...(ctx.files || [])] }),
         labelFor: toolLabel,
         maxSteps: AGENT_MAX_STEPS,
       });

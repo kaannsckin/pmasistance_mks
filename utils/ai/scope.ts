@@ -5,6 +5,7 @@ import { Identity, identityOf, visibleProjectIds } from '../rbac';
 import type { RagHit } from '../rag/retriever';
 import type { Citation, RagSourceType } from '../rag/sources';
 import type { AiProposal } from './actions';
+import type { AiDocument } from '../export/aiDocument';
 import type { UiCommand, UiResult } from './uiActions';
 import type { JiraIssueWorklog, JiraMeta, JiraSyncPage, JiraSyncSource } from '../integrations';
 
@@ -63,6 +64,11 @@ export interface ToolContext {
         /** Belirli kayıtların tüm worklog'ları (kim kaç saat) */
         issueWorklogs: (keys: string[]) => Promise<{ entries: JiraIssueWorklog[]; missing: string[] }>;
     };
+    /**
+     * Bu turda hazırlanan dosyalar (Excel, CSV, Word, PDF, PowerPoint). Tarayıcı
+     * bağlar (dosya orada üretilip indirilir); yoksa dosya_olustur sunulmaz.
+     */
+    files?: AiDocument[];
 }
 
 export const buildToolContext = (ws: WorkspaceData, now: Date = new Date()): ToolContext => {
@@ -189,8 +195,21 @@ export const r2 = (v: number | null | undefined): number | null =>
 
 export const months12 = (arr: number[]): number[] => arr.map(v => Math.round(v * 100) / 100);
 
+let bulkMax = 0;
+
+/**
+ * Dosyaya aktarım: bir okuma aracı tablo kaynağı olarak çalışırken liste
+ * sınırı yükselir (ekranda 50, dosyada 1 000 satır). Yalnız bu çağrı süresince.
+ */
+export const withBulkLimit = async <T,>(max: number, fn: () => T | Promise<T>): Promise<T> => {
+    const prev = bulkMax;
+    bulkMax = max;
+    try { return await fn(); } finally { bulkMax = prev; }
+};
+
 export const clampLimit = (ref: unknown, def = 20, max = 50): number => {
     const n = Number(ref);
+    if (bulkMax) return Number.isInteger(n) && n > 0 ? Math.min(n, bulkMax) : bulkMax;
     return Number.isInteger(n) && n > 0 ? Math.min(n, max) : def;
 };
 

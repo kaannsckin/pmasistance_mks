@@ -8,6 +8,8 @@ import { Citation, RAG_SOURCE_LABELS } from '../../utils/rag/sources';
 import { useAssistant } from './AssistantContext';
 import { ATTACHMENT_EXTENSIONS } from '../../utils/ai/attachments';
 import { toolKind } from '../../utils/ai/tools';
+import { AiDocument, DOC_FORMAT_LABELS, documentStats } from '../../utils/export/aiDocument';
+import { formatsFor, useDocumentDownload } from './useDocumentDownload';
 import { fmtFileSize, useChatAttachments } from './useChatAttachments';
 
 /**
@@ -28,6 +30,7 @@ const STEP_KIND: Record<ReturnType<typeof toolKind>, { icon: string; title: stri
   propose: { icon: 'fa-pen', title: 'Değişiklik önerisi hazırlandı (onayınızı bekler)' },
   ui: { icon: 'fa-compass', title: 'Asistan ekranı sizin için değiştirdi' },
   jira: { icon: 'fa-cloud', title: "Jira'dan güncel veri okundu" },
+  file: { icon: 'fa-file-arrow-down', title: 'Dosya hazırlandı' },
 };
 
 const StepChips: React.FC<{ steps: AgentStep[] }> = ({ steps }) => (
@@ -117,6 +120,41 @@ const PROPOSAL_STATUS: Record<AiProposal['status'], { label: string; cls: string
 };
 
 /** AI'nın önerdiği değişiklikler — kullanıcı onaylamadan hiçbir veri değişmez */
+const FileCards: React.FC<{ files: AiDocument[] }> = ({ files }) => {
+  const dl = useDocumentDownload();
+  return (
+    <div className="mt-3 space-y-2">
+      {files.map(f => {
+        const st = documentStats(f);
+        const [main, ...rest] = formatsFor(f);
+        return (
+          <div key={f.id} className="rounded-xl border border-indigo-100 dark:border-indigo-800 bg-indigo-50/60 dark:bg-indigo-900/20 p-3">
+            <div className="flex items-start gap-2">
+              <i aria-hidden="true" className="fa-solid fa-file-lines text-indigo-500 mt-0.5"></i>
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-gray-800 dark:text-gray-100 break-words">{f.title}</p>
+                <p className="text-[11px] text-gray-500 dark:text-gray-400">{[f.subtitle, st.tables ? `${st.tables} tablo · ${st.rows.toLocaleString('tr-TR')} satır` : `${f.blocks.length} bölüm`].filter(Boolean).join(' · ')}</p>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5 mt-2">
+              <button disabled={!!dl.busy} onClick={() => dl.download(f, main)} className="text-[11px] font-bold px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white">
+                <i aria-hidden="true" className="fa-solid fa-download mr-1"></i>{dl.busy === `${f.id}:${main}` ? 'Hazırlanıyor…' : `${DOC_FORMAT_LABELS[main]} indir`}
+              </button>
+              {rest.map(fmt => (
+                <button key={fmt} disabled={!!dl.busy} onClick={() => dl.download(f, fmt)} className="text-[11px] font-semibold px-2 py-1 rounded-lg border border-indigo-200 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300 hover:bg-white dark:hover:bg-indigo-900/40 disabled:opacity-60">
+                  {dl.busy === `${f.id}:${fmt}` ? '…' : DOC_FORMAT_LABELS[fmt]}
+                </button>
+              ))}
+            </div>
+            {dl.error[f.id] && <p role="alert" className="text-[11px] text-red-600 dark:text-red-300 mt-1.5">{dl.error[f.id]}</p>}
+            {!dl.error[f.id] && dl.done[f.id] && <p role="status" className="text-[11px] text-gray-500 dark:text-gray-400 mt-1.5">İndirildi: {dl.done[f.id]}</p>}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
 const ProposalCards: React.FC<{ proposals: AiProposal[]; onResolve: (id: string, d: 'apply' | 'reject') => void }> = ({ proposals, onResolve }) => (
   <div className="mt-3 space-y-2">
     {proposals.map((p, i) => {
@@ -304,6 +342,7 @@ const AssistantChat: React.FC<Props> = ({ variant, suggestions, onClose, onExpan
                 <>
                   {msg.steps && msg.steps.length > 0 && <StepChips steps={msg.steps} />}
                   {msg.content ? <Markdown text={msg.content} /> : msg.streaming ? <Dots /> : null}
+                  {msg.files && msg.files.length > 0 && <FileCards files={msg.files} />}
                   {msg.proposals && msg.proposals.length > 0 && (
                     <ProposalCards proposals={msg.proposals} onResolve={(pid, d) => a.resolveProposal(msg.id, pid, d)} />
                   )}

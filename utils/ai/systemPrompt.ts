@@ -55,6 +55,11 @@ const POOL_RULES = `Veri havuzu önerileri:
 - Ekteki tablodan aktarırken her satırı tek öneride, TEK çağrıda ver; toplam/ortalama satırlarını ve grup başlıklarını (ör. "Proje Yönetimi") katma. Para değerlerini sayı olarak ver (234187).
 - Önce ünvan/bölüm önerisi, sonra kişi önerisi: kişi önerisi aynı turda önerilen ünvana başvurabilir; kullanıcı kartları sırayla uygular. Atlanan satır dönerse kullanıcıya nedeniyle bildir.`;
 
+const FILE_RULES = `Dosya çıktısı (Excel, CSV, Word, PDF, PowerPoint):
+- Kullanıcı "Excel/CSV/Word/PDF/sunum olarak ver, indir, dosya hazırla, rapor dosyası" derse dosya_olustur'u kullan; biçimi kullanıcının dediğinden al (belirtmezse tablo ağırlıklıysa xlsx, metin ağırlıklıysa docx). "Yapamam" deme.
+- Tabloları kaynak_arac ile ilgili okuma aracının sonucundan doldur (ör. gorev_ara + kaynak_alan "gorevler"; is_gucu_raporu, maliyet_raporu, risk_listesi, veri_havuzu); kaynakta istenen sütunları sutunlar ile seç. Sayıları elle yazman gerekirse YALNIZ araç sonuçlarından al. Dosyaya ekranda gösterdiğin 15 satır sınırı uygulanmaz.
+- Rapor dosyalarında kısa bir özet paragrafı ve başlıklar ekle. Dosyayı tek çağrıda hazırla; yanıtta içeriği tekrar yazma, kartın sohbette olduğunu ve diğer biçimlerin de indirilebildiğini söyle.`;
+
 const AGENT_RULES = `Ajan yetenekleri (arayüzü kullanıcı adına yönetirsin):
 - ekrana_git, gorev_ac, kisi_profili_ac, pencere_ac araçları kullanıcının ekranını HEMEN değiştirir (veri değişmez, onay gerekmez). Kullanıcı "aç, göster, git, götür, getir" dediğinde ya da yanıtın en iyi bir ekranda görüleceği açıksa kullan; gereksiz yere ekran değiştirme. Açtıktan sonra kullanıcıya ne açıldığını ve orada neye bakması gerektiğini kısaca söyle.
 - Çok adımlı işlerde (ör. "ATLAS'ın risklerini aç ve en yükseğini güncellemeyi öner") adımları sırayla araçlarla yap: önce veri, sonra gerekiyorsa ekran, en sonda öneri. Bir araç hata dönerse nedenini kullanıcıya açıkla, başka bir yol dene ya da dur.`;
@@ -90,6 +95,7 @@ export const buildSystemPrompt = (ctx: ToolContext, opts: { view?: View } = {}):
         context,
         RULES,
         ...(ctx.canWritePool ? [POOL_RULES] : []),
+        ...(ctx.files ? [FILE_RULES] : []),
         ...(ctx.ui ? [AGENT_RULES] : []),
         ...(ctx.jira ? [JIRA_RULES] : []),
         APP_MAP,

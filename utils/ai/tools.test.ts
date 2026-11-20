@@ -85,7 +85,11 @@ describe('araç kataloğu', () => {
         // Ölçü, bir isteğe GERÇEKTEN giden araçlardır: veri havuzu öneri araçları yalnız veri havuzunu
         // düzenleyen role (PYB Destek), proje öneri araçları yalnız PY/Bölüm Sorumlusu'na gider; ikisi
         // aynı istekte bulunmaz. Her rolün temel isteği BL-15 sınırında kalır.
-        const runtime = JSON.stringify(AI_TOOLS.filter(t => t.requires).map(t => t.spec)).length;
+        const runtime = JSON.stringify(AI_TOOLS.filter(t => t.requires === 'ui' || t.requires === 'jira').map(t => t.spec)).length;
+        // Dosya çıktısı (dosya_olustur) yalnız tarayıcı sohbetinde gider; ayrı ölçülür
+        const files = JSON.stringify(AI_TOOLS.filter(t => t.requires === 'files').map(t => t.spec)).length;
+        console.log(`dosya aracı: ${files}`);
+        expect(files).toBeLessThan(2_500);
         let base = 0;
         for (const role of ['py', 'mudur', 'bolum_sorumlu', 'pyb_destek', 'pyb_sorumlu', 'admin'] as UserRole[]) {
             const ctx = buildToolContext(buildWs(role, role === 'py' || role === 'bolum_sorumlu' ? 'p1' : null), NOW);
