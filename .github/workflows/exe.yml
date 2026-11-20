@@ -1,5 +1,12 @@
 # PlanAsistan yerel sürümü (tek dosyalık exe): derleme, Windows'ta açılış denemesi
-# ve etiketli sürümlerde (v*) GitHub Releases'a yükleme. Ayrıntı: scripts/build-exe.mjs
+# ve GitHub Releases'a yükleme. Ayrıntı: scripts/build-exe.mjs
+#
+# Sürüm üç yoldan yayımlanır (hepsinde önce paket derlenir ve Windows'ta denenir):
+#   1. main'e push: package.json sürümünün etiketi (vX.Y.Z) yoksa o sürüm yayımlanır.
+#      Yeni sürüm için package.json + APP_VERSION + CHANGELOG.md güncellenip
+#      main'e birleştirilmesi yeter.
+#   2. vX.Y.Z etiketi push'u.
+#   3. Elle çalıştırma ("surum" girişiyle).
 name: Exe
 
 on:
@@ -34,6 +41,25 @@ permissions:
   contents: read
 
 jobs:
+  # main'deki package.json sürümü henüz yayımlanmamış mı (etiketi yok mu)?
+  surum:
+    runs-on: ubuntu-latest
+    outputs:
+      etiket: ${{ steps.v.outputs.etiket }}
+      yeni: ${{ steps.v.outputs.yeni }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: package.json
+          sparse-checkout-cone-mode: false
+      - id: v
+        run: |
+          etiket="v$(node -p "require('./package.json').version")"
+          if git ls-remote --exit-code --tags origin "refs/tags/$etiket" > /dev/null; then yeni=false; else yeni=true; fi
+          echo "etiket=$etiket" >> "$GITHUB_OUTPUT"
+          echo "yeni=$yeni" >> "$GITHUB_OUTPUT"
+          echo "package.json sürümü $etiket · yayımlanmamış: $yeni"
+
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -90,13 +116,16 @@ jobs:
           Write-Host 'Windows exe denemesi geçti.'
 
   release:
-    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.surum != '')
-    needs: windows-smoke
+    if: >-
+      startsWith(github.ref, 'refs/tags/v') ||
+      (github.event_name == 'workflow_dispatch' && inputs.surum != '') ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.surum.outputs.yeni == 'true')
+    needs: [windows-smoke, surum]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     env:
-      TAG: ${{ inputs.surum || github.ref_name }}
+      TAG: ${{ inputs.surum || (startsWith(github.ref, 'refs/tags/') && github.ref_name) || needs.surum.outputs.etiket }}
     steps:
       - name: Etiket biçimi
         run: |
