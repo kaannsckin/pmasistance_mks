@@ -88,10 +88,22 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: CHANGELOG.md
+          sparse-checkout-cone-mode: false
       - uses: actions/download-artifact@v4
         with:
           name: PlanAsistan
+      # Sürüm sayfasının metni CHANGELOG.md'deki "## <etiket>" bölümünden gelir;
+      # bölüm yoksa yalnız GitHub'ın otomatik notları kullanılır
+      - name: Sürüm notları
+        run: |
+          awk -v tag="## ${GITHUB_REF_NAME}" 'index($0, tag) == 1 { on = 1; next } on && /^## / { exit } on { print }' CHANGELOG.md > notes.md
+          wc -l notes.md
       - uses: softprops/action-gh-release@v2
         with:
+          name: PlanAsistan ${{ github.ref_name }}
+          body_path: notes.md
           files: PlanAsistan-*.zip
           generate_release_notes: true
