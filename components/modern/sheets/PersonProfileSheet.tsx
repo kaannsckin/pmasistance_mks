@@ -10,6 +10,7 @@ import { Icon } from '../icons';
 import { RiskScorePill } from '../RiskParts';
 import { initialsOf } from '../taskMeta';
 import { rowSep, Sheet } from '../ui';
+import { useAssistantOptional } from '../../assistant/AssistantContext';
 
 /**
  * Kişi profili: yıllık plan / gerçekleşen doluluğu (efektif kapasiteyle),
@@ -114,6 +115,8 @@ const PersonProfileSheet: React.FC<{
         { label: 'Aşırı yük', value: overMonths.length ? `${overMonths.length} ay` : 'Yok', tone: overMonths.length ? 'm-ink-bad' : 'm-ink-ok' },
     ];
 
+    const assistant = useAssistantOptional();
+    const canAsk = !!assistant?.enabled && assistant.chatEnabled;
     return (
         <Sheet
             xl
@@ -122,6 +125,12 @@ const PersonProfileSheet: React.FC<{
             onClose={onClose}
             headerAction={
                 <div className="flex items-center">
+                    {canAsk && (
+                        <button type="button" className="m-icon-btn mr-1" aria-label="Asistana sor" title="Bu kişiyi asistana getir: iş yükü, görevleri, öneriler"
+                            onClick={() => { assistant!.askAbout({ personId, label: name }); onClose(); }}>
+                            <Icon name="sparkles" size={18} />
+                        </button>
+                    )}
                     <button type="button" className="m-icon-btn" aria-label="Önceki yıl" onClick={() => setYear(y => y - 1)}><Icon name="chevronLeft" size={18} /></button>
                     <span className="text-[15px] font-semibold m-text m-tabular w-12 text-center">{year}</span>
                     <button type="button" className="m-icon-btn" aria-label="Sonraki yıl" onClick={() => setYear(y => y + 1)}><Icon name="chevronRight" size={18} /></button>

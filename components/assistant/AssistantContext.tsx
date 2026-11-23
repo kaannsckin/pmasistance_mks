@@ -7,13 +7,15 @@ import { fetchIntegrationHealth, fetchJiraIssueWorklogs, fetchJiraMeta, fetchJir
 import { AiAction, AiProposal } from '../../utils/ai/actions';
 import type { AiDocument } from '../../utils/export/aiDocument';
 import { splitFollowUps } from '../../utils/ai/followUps';
+import { expandSlash, SlashContext } from '../../utils/ai/slashCommands';
+import { chatOwner, chatTitle, ChatSummary, deleteChat, listChats, loadChat, newChatId, saveChat, StoredMessage, summarize, toStored } from '../../utils/ai/chatStore';
 import { createMemoryStore, MemoryItem, memoryKey } from '../../utils/ai/memory';
 import { AiError, configureMasking, embedTexts, fetchAiStatus, hasCredentials, saveAccessToken, streamChat } from '../../utils/ai/client';
 import { buildMasker, collectMaskEntries, Masker } from '../../utils/ai/masking';
 import { aiPolicyOf } from '../../utils/ai/policy';
 import { AiStatus, ChatMessage } from '../../utils/ai/protocol';
 import { buildToolContext } from '../../utils/ai/scope';
-import { buildSystemPrompt } from '../../utils/ai/systemPrompt';
+import { buildSystemPrompt, ScreenFocus } from '../../utils/ai/systemPrompt';
 import { executeTool, toolLabel, toolSpecsFor } from '../../utils/ai/tools';
 import { Citation, RagRef } from '../../utils/rag/sources';
 import { configureEmbedder, rebuildIndex, searchKnowledge, searchMode, syncIndex } from '../../utils/rag/service';
@@ -72,7 +74,18 @@ interface AssistantApi {
   /** Paneli açar ve (hazırsa) soruyu gönderir */
   ask: (prompt: string) => void;
   stop: () => void;
+  /** Yeni sohbet başlatır (önceki sohbet geçmişte kalır) */
   clear: () => void;
+  /** Bu tarayıcıda saklanan sohbetler (kimlik başına, en yeni önce) */
+  chats: ChatSummary[];
+  currentChatId: string;
+  openChat: (id: string) => void;
+  removeChat: (id: string) => void;
+  /** Bir kaydı (görev / kişi) asistana sabitler ve onu sorar ("Asistana sor") */
+  askAbout: (focus: ScreenFocus, prompt?: string) => void;
+  /** Sabitlenmiş kayıt (sohbet başlığında gösterilir) */
+  pinned: ScreenFocus | null;
+  unpin: () => void;
   saveToken: (token: string) => void;
   /** Bilgi Bankası penceresi */
   isKbOpen: boolean;
@@ -113,6 +126,8 @@ interface ProviderProps {
   embedded?: boolean;
   getWorkspace: () => WorkspaceData | null;
   getView: () => View;
+  /** Ekranda açık görev / kişi ("bu görev" gibi ifadeler için) */
+  getFocus?: () => ScreenFocus | undefined;
   onNavigate?: (ref: RagRef) => void;
   /** Onaylanan öneriyi uygular (App: yetki/kilit yeniden doğrulanır, denetim + geri-al) */
   onApplyAction?: (action: AiAction) => ApplyResult | Promise<ApplyResult>;
@@ -123,7 +138,7 @@ interface ProviderProps {
   children: React.ReactNode;
 }
 
-export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, chat = true, embedded = true, getWorkspace, getView, onNavigate, onApplyAction, onApplyActions, onUiCommand, children }) => {
+export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, chat = true, embedded = true, getWorkspace, getView, getFocus, onNavigate, onApplyAction, onApplyActions, onUiCommand, children }) => {
   const [phase, setPhase] = useState<AssistantPhase>('idle');
   const [status, setStatus] = useState<AiStatus | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -255,14 +270,48 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, chat = tru
   const update = (id: number, patch: Partial<UiMessage>) =>
     setMessages(prev => prev.map(m => (m.id === id ? { ...m, ...patch } : m)));
 
+  // Sabitlenmiş kayıt: "Asistana sor" ile getirilen görev/kişi; ekranda açık bir kayıt yoksa o kullanılır
+  const [pinned, setPinned] = useState<ScreenFocus | null>(null);
+  const pinnedRef = useRef<ScreenFocus | null>(null);
+  pinnedRef.current = pinned;
+  const focusNow = useCallback((): ScreenFocus | undefined => {
+    const f = getFocus?.();
+    if (f?.taskId || f?.personId) return f;
+    return pinnedRef.current ? { ...pinnedRef.current, pinned: true } : f;
+  }, [getFocus]);
+
+  // "/" komutları için ekran bağlamı (açık proje, görev, kişi)
+  const slashContext = useCallback((): SlashContext => {
+    const ws = getWorkspace();
+    const focus = focusNow();
+    const project = ws?.projects.find(p => p.id === (focus?.projectId || ws.activeProjectId));
+    const task = project && focus?.taskId ? project.tasks.find(t => t.id === focus.taskId) : undefined;
+    const person = focus?.personId ? ws?.people.find(p => p.id === focus.personId) : undefined;
+    return {
+      projectName: project?.name,
+      taskLabel: task ? [task.jiraId, task.name].filter(Boolean).join(' ') : undefined,
+      personName: person ? `${person.firstName} ${person.lastName}`.trim() : undefined,
+      hasAnswer: messagesRef.current.some(m => m.role === 'assistant' && m.content.trim()),
+    };
+  }, [getWorkspace, focusNow]);
+
   const send = useCallback(async (raw: string, files: ChatAttachment[] = []) => {
-    const prompt = raw.trim();
-    if ((!prompt && !files.length) || !status || abortRef.current) return;
+    let prompt = raw.trim();
+    if (!status || abortRef.current) return;
+    if (prompt.startsWith('/')) {
+      const expanded = expandSlash(prompt, slashContext());
+      if (expanded && typeof expanded === 'object') {
+        setMessages(prev => [...prev, { id: nextId++, role: 'system_alert', content: expanded.error }]);
+        return;
+      }
+      if (typeof expanded === 'string') prompt = expanded;
+    }
+    if (!prompt && !files.length) return;
     const ctrl = new AbortController();
     const ctx = makeContext(ctrl.signal, prompt);
     if (!ctx) return;
 
-    const system = buildSystemPrompt(ctx, { view: getView(), followUps: true });
+    const system = buildSystemPrompt(ctx, { view: getView(), followUps: true, focus: focusNow() });
     const composed = composeUserContent(prompt, files);
     const attachments: AttachmentInfo[] = composed.infos.map((info, i) => ({ ...info, size: files[i].size }));
     // Önceki turlar yalnızca görünen metinleriyle (ekler dahil) gider; araç ayrıntıları tekrar gönderilmez
@@ -327,7 +376,7 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, chat = tru
       abortRef.current = null;
       refreshMemory();
     }
-  }, [makeContext, getView, status, refreshMemory]);
+  }, [makeContext, getView, focusNow, status, refreshMemory, slashContext]);
 
   // Panel kapalıyken sorulan soru (komut paleti) hazır olunca gönderilir
   useEffect(() => {
@@ -345,12 +394,88 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, chat = tru
     else pendingAsk.current = prompt;
   }, [enabled, phase, send]);
 
+  const askAbout = useCallback((focus: ScreenFocus, prompt = '/bu') => {
+    pinnedRef.current = focus;
+    setPinned(focus);
+    ask(prompt);
+  }, [ask]);
+  const unpin = useCallback(() => setPinned(null), []);
+
   const stop = useCallback(() => abortRef.current?.abort(), []);
+
+  // ---- Sohbet geçmişi (bu tarayıcıda, kimlik başına) ----
+  const [chats, setChats] = useState<ChatSummary[]>([]);
+  const [currentChatId, setCurrentChatId] = useState(newChatId);
+  const chatIdRef = useRef(currentChatId);
+  chatIdRef.current = currentChatId;
+  const chatOwnerRef = useRef<string | null>(null);
+  const loadedRef = useRef<UiMessage[] | null>(null); // geri yüklenen mesajlar: değişmedikçe yeniden kaydedilmez
+  const restoredRef = useRef(false);
+  const ownerNow = useCallback(() => {
+    const ws = getWorkspace();
+    return ws ? chatOwner(ws.currentRole || 'py', ws.currentPersonId) : null;
+  }, [getWorkspace]);
+  const refreshChats = useCallback(async () => {
+    const owner = ownerNow();
+    setChats(owner ? summarize(await listChats(owner)) : []);
+  }, [ownerNow]);
 
   const clear = useCallback(() => {
     abortRef.current?.abort();
+    loadedRef.current = null;
+    setPinned(null);
     setMessages([]);
+    setCurrentChatId(newChatId());
   }, []);
+
+  const openChat = useCallback(async (id: string) => {
+    if (abortRef.current) return;
+    const chat = await loadChat(id);
+    if (!chat || chat.owner !== ownerNow()) return;
+    const msgs = chat.messages as unknown as UiMessage[];
+    nextId = Math.max(nextId, ...msgs.map(m => m.id + 1));
+    loadedRef.current = msgs;
+    chatOwnerRef.current = chat.owner;
+    setPinned(null);
+    setCurrentChatId(chat.id);
+    setMessages(msgs);
+  }, [ownerNow]);
+
+  const removeChat = useCallback(async (id: string) => {
+    await deleteChat(id);
+    if (id === chatIdRef.current) clear();
+    refreshChats();
+  }, [clear, refreshChats]);
+
+  // Panel açılınca: kimlik değiştiyse yeni sohbet; oturumun ilk açılışında son sohbet geri gelir
+  useEffect(() => {
+    if (!isOpen || !chat) return;
+    const owner = ownerNow();
+    if (!owner) return;
+    if (chatOwnerRef.current && chatOwnerRef.current !== owner) { restoredRef.current = false; clear(); }
+    chatOwnerRef.current = owner;
+    (async () => {
+      const list = summarize(await listChats(owner));
+      setChats(list);
+      if (!restoredRef.current) {
+        restoredRef.current = true;
+        if (!messagesRef.current.length && list[0]) openChat(list[0].id);
+      }
+    })();
+  }, [isOpen, chat, ownerNow, clear, openChat]);
+
+  // Akış bitince sohbet kaydedilir (geri yüklenip değişmemişse kaydedilmez)
+  useEffect(() => {
+    if (isStreaming || !messages.length || messages === loadedRef.current) return;
+    const owner = chatOwnerRef.current || ownerNow();
+    if (!owner) return;
+    const id = chatIdRef.current;
+    const timer = window.setTimeout(() => {
+      const stored = toStored(messages as unknown as StoredMessage[]);
+      saveChat({ id, owner, title: chatTitle(stored), updatedAt: new Date().toISOString(), messages: stored }).then(refreshChats);
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [messages, isStreaming, ownerNow, refreshChats]);
 
   const saveToken = useCallback((token: string) => {
     const t = token.trim();
@@ -432,9 +557,9 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, chat = tru
 
   const api = useMemo<AssistantApi>(() => ({
     enabled, chatEnabled: enabled && chat, embeddedEnabled: enabled && embedded, phase, status, authError, messages, isStreaming, isOpen, setOpen,
-    ensureReady, recheck, send, ask, stop, clear, saveToken, isKbOpen, setKbOpen, refreshIndex, navigate, resolveProposal, resolveAllProposals, memory, forgetMemory, clearMemory, complete,
+    ensureReady, recheck, send, ask, stop, clear, saveToken, isKbOpen, setKbOpen, refreshIndex, navigate, resolveProposal, resolveAllProposals, memory, forgetMemory, clearMemory, chats, currentChatId, openChat, removeChat, askAbout, pinned, unpin, complete,
     jiraEnabled: !!integrations?.jira,
-  }), [enabled, chat, embedded, phase, status, authError, messages, isStreaming, isOpen, ensureReady, recheck, send, ask, stop, clear, saveToken, isKbOpen, refreshIndex, navigate, resolveProposal, resolveAllProposals, memory, forgetMemory, clearMemory, complete, integrations]);
+  }), [enabled, chat, embedded, phase, status, authError, messages, isStreaming, isOpen, ensureReady, recheck, send, ask, stop, clear, saveToken, isKbOpen, refreshIndex, navigate, resolveProposal, resolveAllProposals, memory, forgetMemory, clearMemory, chats, currentChatId, openChat, removeChat, askAbout, pinned, unpin, complete, integrations]);
 
   return <Ctx.Provider value={api}>{children}</Ctx.Provider>;
 };

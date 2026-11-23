@@ -10,6 +10,7 @@ import { ATTACHMENT_EXTENSIONS } from '../../utils/ai/attachments';
 import { toolKind } from '../../utils/ai/tools';
 import { AiDocument, DOC_FORMAT_LABELS, documentStats } from '../../utils/export/aiDocument';
 import { formatsFor, useDocumentDownload } from './useDocumentDownload';
+import { useSlashMenu } from './useSlashMenu';
 import { fmtFileSize, useChatAttachments } from './useChatAttachments';
 
 /**
@@ -32,6 +33,43 @@ const STEP_KIND: Record<ReturnType<typeof toolKind>, { icon: string; title: stri
   jira: { icon: 'fa-cloud', title: "Jira'dan güncel veri okundu" },
   file: { icon: 'fa-file-arrow-down', title: 'Dosya hazırlandı' },
   memory: { icon: 'fa-bookmark', title: 'Hafıza güncellendi' },
+};
+
+const relTime = (iso: string): string => {
+  const d = new Date(iso);
+  const days = Math.floor((Date.now() - d.getTime()) / 86_400_000);
+  return days < 1 ? d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) : days < 7 ? `${days} gün önce` : d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' });
+};
+
+/** Sohbetler: bu tarayıcıda saklanan geçmiş; aç, sil */
+const ChatHistory: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+  const a = useAssistant();
+  return (
+    <section aria-label="Sohbetler" className="flex-none border-b border-gray-100 dark:border-gray-700 bg-gray-50/80 dark:bg-gray-900/30 px-4 py-3 space-y-2">
+      <div className="flex items-center gap-2">
+        <span className="flex-1 text-xs font-bold text-gray-800 dark:text-gray-100"><i aria-hidden="true" className="fa-solid fa-clock-rotate-left text-indigo-500 mr-1.5"></i>Sohbetler · {a.chats.length}</span>
+        <button onClick={() => { a.clear(); onClose(); }} className="text-[11px] font-semibold text-indigo-600 hover:underline"><i aria-hidden="true" className="fa-solid fa-plus mr-1"></i>Yeni sohbet</button>
+        <button aria-label="Sohbetleri kapat" onClick={onClose} className="w-6 h-6 rounded text-gray-400 hover:text-gray-700"><i aria-hidden="true" className="fa-solid fa-xmark text-xs"></i></button>
+      </div>
+      {a.chats.length === 0 ? (
+        <p className="text-[11px] text-gray-500">Henüz kayıtlı sohbet yok.</p>
+      ) : (
+        <ul className="max-h-52 overflow-y-auto space-y-0.5">
+          {a.chats.map(c => (
+            <li key={c.id} className="flex items-center gap-1">
+              <button onClick={() => { a.openChat(c.id); onClose(); }} aria-current={c.id === a.currentChatId ? 'true' : undefined}
+                className={`flex-1 min-w-0 flex items-center gap-2 px-2 py-1 rounded-lg text-left text-[11px] ${c.id === a.currentChatId ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-200' : 'text-gray-700 dark:text-gray-200 hover:bg-white dark:hover:bg-gray-800'}`}>
+                <span className="flex-1 min-w-0 truncate">{c.title}</span>
+                <span className="text-[10px] text-gray-400 flex-none">{relTime(c.updatedAt)}</span>
+              </button>
+              <button aria-label={`Sohbeti sil: ${c.title}`} title="Sil" onClick={() => { if (window.confirm(`"${c.title}" sohbeti silinsin mi?`)) a.removeChat(c.id); }} className="text-gray-400 hover:text-red-500 w-6 flex-none"><i aria-hidden="true" className="fa-solid fa-trash text-[10px]"></i></button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="text-[10px] text-gray-400">Sohbetler yalnız bu tarayıcıda ve bu kimlik için saklanır (en çok 30). Yeniden açılan sohbetteki bekleyen öneriler uygulanamaz.</p>
+    </section>
+  );
 };
 
 /** Hafıza: asistanın kalıcı tercihleri (bu tarayıcıda); görüntüle ve sil */
@@ -236,6 +274,7 @@ const AssistantChat: React.FC<Props> = ({ variant, suggestions, onClose, onExpan
   const [token, setToken] = useState('');
   const [preview, setPreview] = useState<Citation | null>(null);
   const [memoryOpen, setMemoryOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const compact = variant === 'panel';
@@ -258,6 +297,7 @@ const AssistantChat: React.FC<Props> = ({ variant, suggestions, onClose, onExpan
     if (text === undefined) { setInput(''); att.clear(); }
     a.send(t, withFiles);
   };
+  const slash = useSlashMenu(input, setInput, t => submit(t));
 
   const header = (
     <div className={`flex-none ${compact ? 'px-4 py-3' : 'px-8 py-4'} border-b dark:border-gray-700 flex justify-between items-center bg-gray-50/50 dark:bg-gray-900/20`}>
@@ -271,7 +311,7 @@ const AssistantChat: React.FC<Props> = ({ variant, suggestions, onClose, onExpan
         </div>
       </div>
       <div className="flex items-center gap-1 flex-none">
-        <button aria-label={`Hafıza (${a.memory.length} not)`} aria-expanded={memoryOpen} onClick={() => setMemoryOpen(o => !o)} title="Asistanın hafızası" className="relative w-8 h-8 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-white dark:hover:bg-gray-800 transition-colors">
+        <button aria-label={`Hafıza (${a.memory.length} not)`} aria-expanded={memoryOpen} onClick={() => { setMemoryOpen(o => !o); setHistoryOpen(false); }} title="Asistanın hafızası" className="relative w-8 h-8 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-white dark:hover:bg-gray-800 transition-colors">
           <i aria-hidden="true" className="fa-solid fa-bookmark text-xs"></i>
           {a.memory.length > 0 && <span aria-hidden="true" className="absolute top-0.5 right-0.5 min-w-[14px] h-3.5 px-0.5 rounded-full bg-indigo-600 text-white text-[9px] font-bold leading-[14px]">{a.memory.length}</span>}
         </button>
@@ -279,10 +319,13 @@ const AssistantChat: React.FC<Props> = ({ variant, suggestions, onClose, onExpan
           <i aria-hidden="true" className="fa-solid fa-book text-xs"></i>
         </button>
         {a.messages.length > 0 && (
-          <button aria-label="Sohbeti temizle" onClick={a.clear} title="Sohbeti temizle" className="w-8 h-8 rounded-lg text-gray-400 hover:text-red-500 hover:bg-white dark:hover:bg-gray-800 transition-colors">
-            <i aria-hidden="true" className="fa-solid fa-broom text-xs"></i>
+          <button aria-label="Yeni sohbet" onClick={a.clear} title="Yeni sohbet (bu sohbet geçmişte kalır)" className="w-8 h-8 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-white dark:hover:bg-gray-800 transition-colors">
+            <i aria-hidden="true" className="fa-solid fa-plus text-xs"></i>
           </button>
         )}
+        <button aria-label={`Sohbetler (${a.chats.length})`} aria-expanded={historyOpen} onClick={() => { setHistoryOpen(o => !o); setMemoryOpen(false); }} title="Sohbet geçmişi" className="w-8 h-8 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-white dark:hover:bg-gray-800 transition-colors">
+          <i aria-hidden="true" className="fa-solid fa-clock-rotate-left text-xs"></i>
+        </button>
         {onExpand && (
           <button aria-label="Tam ekranda aç" onClick={onExpand} title="Tam ekranda aç" className="w-8 h-8 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-white dark:hover:bg-gray-800 transition-colors">
             <i aria-hidden="true" className="fa-solid fa-up-right-and-down-left-from-center text-xs"></i>
@@ -437,6 +480,7 @@ const AssistantChat: React.FC<Props> = ({ variant, suggestions, onClose, onExpan
       )}
       {preview && <SourcePreview c={preview} onClose={() => setPreview(null)} onOpenKb={() => { setPreview(null); a.setKbOpen(true); }} />}
       {header}
+      {historyOpen && <ChatHistory onClose={() => setHistoryOpen(false)} />}
       {memoryOpen && <MemoryPanel onClose={() => setMemoryOpen(false)} />}
       <div ref={scrollRef} className={`flex-grow overflow-y-auto ${compact ? 'p-4' : 'p-8'} custom-scrollbar`}>
         {a.phase !== 'ready' || !a.enabled ? phaseScreen() : a.messages.length === 0 ? empty : list}
@@ -464,16 +508,30 @@ const AssistantChat: React.FC<Props> = ({ variant, suggestions, onClose, onExpan
             <button aria-label="Dosya ekle" onClick={att.pick} disabled={att.full} title="Dosya ekle (PDF, Word, Excel, CSV, metin) — sürükleyip bırakabilirsiniz" className="absolute left-2 bottom-2.5 w-10 h-10 text-gray-400 hover:text-indigo-600 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-40 flex items-center justify-center">
               <i aria-hidden="true" className="fa-solid fa-paperclip"></i>
             </button>
+            {slash.open && (
+              <ul id="slash-menu" role="listbox" aria-label="Komutlar" className="absolute left-0 right-0 bottom-full mb-2 z-10 p-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg max-h-64 overflow-y-auto">
+                {slash.items.map((c, i) => (
+                  <li key={c.cmd} role="option" aria-selected={i === slash.active}>
+                    <button onMouseEnter={() => slash.setActive(i)} onClick={() => slash.choose(c)} className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-xs ${i === slash.active ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-200' : 'text-gray-700 dark:text-gray-200'}`}>
+                      <span className="font-mono font-bold w-16 flex-none">/{c.cmd}</span>
+                      <span className="flex-1">{c.label}</span>
+                      {c.arg && <span className="text-[10px] text-gray-400">{c.arg}</span>}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
             <textarea
               ref={inputRef}
               rows={compact ? 2 : 1}
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => {
+                if (slash.onKeyDown(e)) return;
                 if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); }
               }}
               onPaste={att.onPaste}
-              placeholder="Sorunuzu yazın ya da dosya ekleyin… (Shift+Enter: yeni satır)"
+              placeholder="Sorunuzu yazın, / ile komut seçin ya da dosya ekleyin…"
               className="w-full pl-12 pr-14 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-sm outline-none focus:border-indigo-300 resize-none max-h-40 text-sm"
             />
             {a.isStreaming ? (

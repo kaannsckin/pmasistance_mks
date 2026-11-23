@@ -2323,6 +2323,14 @@ const App: React.FC = () => {
   currentViewRef.current = currentView;
   const getAssistantWorkspace = useCallback(() => workspaceRef.current, []);
   const getAssistantView = useCallback(() => currentViewRef.current, []);
+  // Ekranda açık görev / kişi: asistan "bu görev", "bu kişi" ifadelerini buna göre çözer
+  const assistantFocusRef = useRef<{ projectId?: string; taskId?: string; personId?: string }>({});
+  assistantFocusRef.current = {
+    projectId: activeProject?.id,
+    taskId: isDetailModalOpen && viewingTask ? viewingTask.id : editingTask?.id,
+    personId: viewingPersonId || undefined,
+  };
+  const getAssistantFocus = useCallback(() => assistantFocusRef.current, []);
   // Asistanın önerdiği değişiklik kullanıcı onaylayınca: güncel veriyle yeniden
   // doğrula (yetki, plan kilidi), uygula, denetim günlüğüne yaz, geri-al sun
   const handleApplyAiAction = useCallback((action: AiAction, opts: { undo?: boolean } = {}): { ok: boolean; message: string } | Promise<{ ok: boolean; message: string }> => {
@@ -2516,7 +2524,7 @@ const App: React.FC = () => {
   }, [workspace, visibleProjects, identity, handleOpenProject, activeProject, consoleMode, canAudit, canDataHealth, isModern, roleView]);
 
   return (
-    <AssistantProvider enabled={isAIEnabled && !consoleMode} chat={aiPolicy.chat} embedded={aiPolicy.embedded} getWorkspace={getAssistantWorkspace} getView={getAssistantView} onNavigate={handleAssistantNavigate} onApplyAction={handleApplyAiAction} onApplyActions={handleApplyAiActions} onUiCommand={handleAssistantUiCommand}>
+    <AssistantProvider enabled={isAIEnabled && !consoleMode} chat={aiPolicy.chat} embedded={aiPolicy.embedded} getWorkspace={getAssistantWorkspace} getView={getAssistantView} getFocus={getAssistantFocus} onNavigate={handleAssistantNavigate} onApplyAction={handleApplyAiAction} onApplyActions={handleApplyAiActions} onUiCommand={handleAssistantUiCommand}>
     <div className={`min-h-screen font-sans theme-${settings?.theme || 'classic'} ${isModern ? `ui-modern mt-${modernTheme}` : 'bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100'}`}>
       {isModern ? (
         <div className="flex min-h-screen">

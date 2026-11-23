@@ -10,6 +10,8 @@ import { JiraIssueRecord } from '../../utils/integrations';
 import JiraIssuePanel from './JiraIssuePanel';
 import { TaskWorklogSummary } from './WorkforceParts';
 import { Sheet } from './ui';
+import { Icon } from './icons';
+import { useAssistantOptional } from '../assistant/AssistantContext';
 
 /**
  * Modern görev ayrıntısı: durum hızlı değişir, alt görevler işaretlenir,
@@ -85,12 +87,20 @@ const TaskDetailSheet: React.FC<TaskDetailSheetProps> = ({ task, project, author
         ['Planlama', task.includeInSprints !== false ? 'Sprint planına dahil' : 'Sprint planı dışında'],
     ];
 
+    const assistant = useAssistantOptional();
+    const canAsk = !!assistant?.enabled && assistant.chatEnabled;
     return (
         <Sheet
             title="Görev"
             onClose={onClose}
             wide
             footer={<>
+                {canAsk && (
+                    <button type="button" className="m-btn m-btn-plain" title="Bu görevi asistana getir: açıklat, termin ya da atama öner"
+                        onClick={() => { assistant!.askAbout({ projectId: project.id, taskId: task.id, label: [task.jiraId, task.name].filter(Boolean).join(' ') }); onClose(); }}>
+                        <Icon name="sparkles" size={16} />Asistana sor
+                    </button>
+                )}
                 <span className="flex-1"></span>
                 {canEdit && <button type="button" className="m-btn m-btn-gray" onClick={() => onEdit(task)}>Düzenle</button>}
                 <button type="button" className="m-btn m-btn-primary" onClick={onClose}>Tamam</button>

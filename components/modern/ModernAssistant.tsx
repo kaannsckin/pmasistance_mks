@@ -6,6 +6,7 @@ import { fmtFileSize as fmtKb, useChatAttachments } from '../assistant/useChatAt
 import { toolKind } from '../../utils/ai/tools';
 import { AiDocument, DOC_FORMAT_LABELS, documentStats } from '../../utils/export/aiDocument';
 import { formatsFor, useDocumentDownload } from '../assistant/useDocumentDownload';
+import { useSlashMenu } from '../assistant/useSlashMenu';
 import { extractText, SUPPORTED_EXTENSIONS } from '../../utils/rag/extract';
 import { addUploadedDoc, indexStatus, listUploadedDocs, onDocsChange, removeUploadedDoc, retriever } from '../../utils/rag/service';
 import { Citation, RAG_SOURCE_LABELS, RagSourceType, UploadedDoc } from '../../utils/rag/sources';
@@ -32,6 +33,43 @@ const STEP_KIND: Record<ReturnType<typeof toolKind>, { icon: string; title: stri
     jira: { icon: 'cloud', title: "Jira'dan güncel veri okundu" },
     file: { icon: 'download', title: 'Dosya hazırlandı' },
     memory: { icon: 'pen', title: 'Hafıza güncellendi' },
+};
+
+const relTime = (iso: string): string => {
+    const d = new Date(iso);
+    const days = Math.floor((Date.now() - d.getTime()) / 86_400_000);
+    return days < 1 ? d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) : days < 7 ? `${days} gün önce` : d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' });
+};
+
+/** Sohbetler: bu tarayıcıda saklanan geçmiş; aç, sil */
+const ChatHistory: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+    const a = useAssistant();
+    return (
+        <section aria-label="Sohbetler" className="flex-none border-b m-sep px-4 py-3 flex flex-col gap-2" style={{ borderBottomStyle: 'solid', borderBottomWidth: 1 }}>
+            <div className="flex items-center gap-2">
+                <span className="flex-1 text-[14px] font-semibold m-text">Sohbetler · {a.chats.length}</span>
+                <button type="button" className="m-btn m-btn-plain !min-h-[32px] !px-2.5 text-[13px]" onClick={() => { a.clear(); onClose(); }}><Icon name="plus" size={14} />Yeni sohbet</button>
+                <button type="button" className="m-icon-btn" aria-label="Sohbetleri kapat" onClick={onClose}><Icon name="x" size={16} /></button>
+            </div>
+            {a.chats.length === 0 ? (
+                <p className="m-0 text-[13px] m-text-3">Henüz kayıtlı sohbet yok.</p>
+            ) : (
+                <ul className="m-0 p-0 list-none flex flex-col max-h-60 overflow-y-auto">
+                    {a.chats.map(c => (
+                        <li key={c.id} className="flex items-center gap-1">
+                            <button type="button" onClick={() => { a.openChat(c.id); onClose(); }} aria-current={c.id === a.currentChatId ? 'true' : undefined}
+                                className={`flex-1 min-w-0 flex items-center gap-2 px-2 py-1.5 rounded-lg border-0 cursor-pointer text-left ${c.id === a.currentChatId ? 'm-tone-accent' : 'bg-transparent m-text m-row-link'}`}>
+                                <span className="flex-1 min-w-0 truncate text-[13.5px]">{c.title}</span>
+                                <span className="text-[12px] m-text-3 flex-none">{relTime(c.updatedAt)}</span>
+                            </button>
+                            <button type="button" className="m-icon-btn !w-7 !h-7 flex-none" aria-label={`Sohbeti sil: ${c.title}`} title="Sil" onClick={() => { if (window.confirm(`"${c.title}" sohbeti silinsin mi?`)) a.removeChat(c.id); }}><Icon name="trash" size={14} /></button>
+                        </li>
+                    ))}
+                </ul>
+            )}
+            <p className="m-0 text-[12px] m-text-3">Sohbetler yalnız bu tarayıcıda ve bu kimlik için saklanır (en çok 30). Yeniden açılan sohbetteki bekleyen öneriler uygulanamaz.</p>
+        </section>
+    );
 };
 
 /** Hafıza: asistanın kalıcı tercihleri (bu tarayıcıda); görüntüle ve sil */
@@ -216,6 +254,7 @@ export const ModernChat: React.FC<{
     const [token, setToken] = useState('');
     const [preview, setPreview] = useState<Citation | null>(null);
     const [memoryOpen, setMemoryOpen] = useState(false);
+    const [historyOpen, setHistoryOpen] = useState(false);
     const att = useChatAttachments();
     const { files, reading, errors: fileErrors, dragging, fileRef } = att;
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -235,6 +274,8 @@ export const ModernChat: React.FC<{
         if (text === undefined) { setInput(''); att.clear(); }
         a.send(t, withFiles);
     };
+    const slash = useSlashMenu(input, setInput, t => submit(t));
+    const pinnedLabel = a.pinned?.label || (a.pinned?.taskId ? 'görev' : 'kişi');
 
     const center = (icon: string, title: string, body: React.ReactNode) => (
         <div className="h-full flex items-center justify-center p-6">
@@ -345,15 +386,17 @@ export const ModernChat: React.FC<{
                     <h2 className="m-0 text-[17px] font-semibold m-text leading-tight">Asistan</h2>
                     <p className="m-0 text-[12.5px] m-text-3 truncate">{a.phase === 'ready' ? `Bağlı${a.status?.model ? ` · ${a.status.model}` : ''} · değişiklikler onayınızla` : a.phase === 'loading' ? 'Bağlanıyor…' : 'Hazır değil'}</p>
                 </div>
-                <button type="button" className="m-icon-btn relative" aria-label={`Hafıza (${a.memory.length} not)`} aria-expanded={memoryOpen} title="Asistanın hafızası" onClick={() => setMemoryOpen(o => !o)}>
+                <button type="button" className="m-icon-btn relative" aria-label={`Hafıza (${a.memory.length} not)`} aria-expanded={memoryOpen} title="Asistanın hafızası" onClick={() => { setMemoryOpen(o => !o); setHistoryOpen(false); }}>
                     <Icon name="pen" size={18} />
                     {a.memory.length > 0 && <span aria-hidden="true" className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full m-accent-bg text-[10px] font-bold flex items-center justify-center">{a.memory.length}</span>}
                 </button>
                 <button type="button" className="m-icon-btn" aria-label="Bilgi Bankası" title="Bilgi Bankası" onClick={() => a.setKbOpen(true)}><Icon name="book" size={18} /></button>
-                {a.messages.length > 0 && <button type="button" className="m-icon-btn" aria-label="Sohbeti temizle" title="Sohbeti temizle" onClick={a.clear}><Icon name="trash" size={18} /></button>}
+                {a.messages.length > 0 && <button type="button" className="m-icon-btn" aria-label="Yeni sohbet" title="Yeni sohbet (bu sohbet geçmişte kalır)" onClick={a.clear}><Icon name="plus" size={18} /></button>}
+                <button type="button" className="m-icon-btn" aria-label={`Sohbetler (${a.chats.length})`} aria-expanded={historyOpen} title="Sohbet geçmişi" onClick={() => { setHistoryOpen(o => !o); setMemoryOpen(false); }}><Icon name="history" size={18} /></button>
                 {onExpand && <button type="button" className="m-icon-btn" aria-label="Tam ekranda aç" title="Tam ekranda aç" onClick={onExpand}><Icon name="expand" size={18} /></button>}
                 {onClose && <button type="button" className="m-icon-btn" aria-label="Asistanı kapat" title="Kapat (Esc)" onClick={onClose}><Icon name="x" /></button>}
             </header>
+            {historyOpen && <ChatHistory onClose={() => setHistoryOpen(false)} />}
             {memoryOpen && <MemoryPanel onClose={() => setMemoryOpen(false)} />}
             <div ref={scrollRef} className={`flex-1 overflow-y-auto ${panel ? 'p-4' : 'p-6'}`}>
                 {!ready ? phaseScreen() : a.messages.length === 0 ? empty : list}
@@ -376,7 +419,28 @@ export const ModernChat: React.FC<{
                             {fileErrors.map(e => <p key={e} role="alert" className="m-0 text-[13px] m-ink-bad">{e}</p>)}
                         </div>
                     )}
+                    {a.pinned && (
+                        <div className={`mb-2 flex items-center gap-2 ${panel ? '' : 'max-w-3xl mx-auto'}`}>
+                            <span className="inline-flex items-center gap-1.5 h-7 pl-2.5 pr-1 rounded-full m-tone-accent text-[13px] max-w-full">
+                                <Icon name="sparkles" size={13} /><span className="truncate">Bağlam: {pinnedLabel}</span>
+                                <button type="button" className="m-icon-btn !w-6 !h-6" aria-label="Bağlamı kaldır" onClick={a.unpin}><Icon name="x" size={12} /></button>
+                            </span>
+                        </div>
+                    )}
                     <form className={`relative ${panel ? '' : 'max-w-3xl mx-auto'}`} onSubmit={e => { e.preventDefault(); submit(); }}>
+                        {slash.open && (
+                            <ul id="m-slash-menu" role="listbox" aria-label="Komutlar" className="absolute left-0 right-0 bottom-full mb-2 z-10 m-0 p-1.5 list-none m-surface m-pop rounded-2xl max-h-72 overflow-y-auto">
+                                {slash.items.map((c, i) => (
+                                    <li key={c.cmd} role="option" aria-selected={i === slash.active}>
+                                        <button type="button" onMouseEnter={() => slash.setActive(i)} onClick={() => slash.choose(c)} className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl border-0 cursor-pointer text-left ${i === slash.active ? 'm-tone-accent' : 'bg-transparent m-text'}`}>
+                                            <span className="font-mono text-[13.5px] font-semibold w-20 flex-none">/{c.cmd}</span>
+                                            <span className="flex-1 text-[14px]">{c.label}</span>
+                                            {c.arg && <span className="text-[12px] m-text-3">{c.arg}</span>}
+                                        </button>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
                         <input ref={fileRef} type="file" multiple accept={ATTACHMENT_EXTENSIONS.join(',')} className="hidden" onChange={e => addFiles(e.target.files)} />
                         <button type="button" className="absolute left-2 bottom-2 w-10 h-10 rounded-full border-0 cursor-pointer flex items-center justify-center m-icon-btn disabled:opacity-40" aria-label="Dosya ekle" title="Dosya ekle (PDF, Word, Excel, CSV, metin) — sürükleyip bırakabilirsiniz" disabled={att.full} onClick={att.pick}><Icon name="paperclip" size={18} /></button>
                         <textarea
@@ -385,10 +449,12 @@ export const ModernChat: React.FC<{
                             rows={panel ? 2 : 1}
                             value={input}
                             onChange={e => setInput(e.target.value)}
-                            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); } }}
-                            placeholder="Sorunuzu yazın ya da dosya ekleyin… (Shift+Enter: yeni satır)"
+                            onKeyDown={e => { if (slash.onKeyDown(e)) return; if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); } }}
+                            placeholder="Sorunuzu yazın, / ile komut seçin ya da dosya ekleyin…"
                             onPaste={att.onPaste}
-                            className="m-input py-3 pl-14 pr-14 resize-none max-h-40 leading-relaxed"
+                            className="m-input resize-none max-h-40 leading-relaxed"
+                            // .m-input dolgusu Tailwind dolgusunu ezer: ataş ve gönder düğmesine yer açılır
+                            style={{ padding: '12px 56px' }}
                         />
                         {a.isStreaming ? (
                             <button type="button" className="absolute right-2 bottom-2 w-10 h-10 rounded-full border-0 cursor-pointer flex items-center justify-center m-tone-bad" aria-label="Yanıtı durdur" onClick={a.stop}><Icon name="stop" size={16} /></button>
