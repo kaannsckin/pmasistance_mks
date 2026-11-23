@@ -25,6 +25,7 @@ import { buildWorkforce, hourlyRate, matchWorklogPerson } from '../workforce';
 import { fullName, PERSON_ISSUE_LABELS, personIssues, trNorm, trUpper } from '../dataPool';
 import { MAX_POOL_ROWS, parseMoney, PoolNewPerson, PoolPersonChange, PoolTitle, titleCodeFor } from './poolActions';
 import { WorkspaceData } from '../../types';
+import { labelFamilies, milestonePlan } from '../dashboard/data';
 import { DOC_FORMAT_LABELS, DOC_FORMATS, DocBlock, DocError, DocFormat, documentStats, normalizeDocument, tableFromResult } from '../export/aiDocument';
 import { JsonSchema, ToolCall, ToolSpec } from './protocol';
 import { knownWorkflow, taskStatusLabel } from '../workflow';
@@ -321,6 +322,20 @@ export const AI_TOOLS: ToolDef[] = [
                 swot_madde: (p.swotItems || []).length,
                 tahsis: { yil: year, plan_aa: sum('plan'), gerceklesen_aa: sum('actual'), kisi: new Set(allocs.map(x => x.personId)).size, plan_kilidi: LOCK_TR[getPlanLockStatus(ctx.ws.planLocks, p.id, year)] },
                 evm: evm && evm.costed ? evmRow(evm) : { not: 'Maliyetlenebilir tahsis yok (ünvan maliyetleri ya da tahsis eksik).' },
+                // Dashboard'daki projeye özel göstergeler (PoC skoru gibi) ve kilometre taşları (MS etiketleri)
+                ...((p.kpis || []).length ? {
+                    ozel_gostergeler: (p.kpis || []).map(k => ({
+                        ad: k.name, birim: k.unit, guncel: k.points[k.points.length - 1]?.value, son_olcum: k.points[k.points.length - 1]?.date,
+                        hedef: k.target, hedef_aciklama: k.targetLabel, baslangic: k.baseline, yuksek_iyi: k.higherIsBetter !== false,
+                        gecmis: k.points.slice(-6).map(x => `${x.date}: ${x.value}`),
+                    })),
+                } : {}),
+                ...(() => {
+                    const ms = labelFamilies(p.tasks).find(f => /^ms$/i.test(f.prefix));
+                    if (!ms) return {};
+                    const rows = milestonePlan(p.tasks, { kind: 'labels', prefix: ms.prefix }, { project: p, workflow: effectiveScheme(ctx.ws, p).workflow }, 'count', ctx.now);
+                    return { kilometre_taslari: rows.map(r => ({ tas: r.key, kayit: r.total, tamamlanan: r.done, geciken: r.overdue, bitis: r.end, durum: r.state, kumulatif_plan_yuzde: Math.round(r.cumulativePlanned * 100) })) };
+                })(),
             };
         },
     },

@@ -34,6 +34,7 @@ export const VIEW_LABELS: Record<View, string> = {
     [View.Meetings]: 'Müşteri görüşmeleri',
     [View.Admin]: 'Yönetici konsolu (yetkiler, görünüm, rapor akışı, sağlık puanı, yapay zekâ, tahmin kalitesi, makine öğrenmesi modeli ve ince ayar kararı, profiller)',
     [View.Planning]: 'Planlama asistanı (yeni kayıt tahmini, sürüm planı, plan simülasyonu)',
+    [View.Dashboard]: 'Proje dashboard\'u (kişiselleştirilebilir göstergeler, kilometre taşları, kırılımlar, projeye özel göstergeler)',
 };
 
 export const APP_MAP = `Uygulama haritası ("nasıl yapılır" sorularında ekranları buna göre tarif et):

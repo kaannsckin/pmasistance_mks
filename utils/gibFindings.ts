@@ -6,6 +6,8 @@ import {
     Person,
     Project,
     ProjectAiProfile,
+    ProjectKpi,
+    ProjectVersion,
     Resource,
     Task,
     TaskStatus,
@@ -16,6 +18,7 @@ import { withStatus } from './planning/lifecycle';
 import { EXCEL_TRACKING_FIELDS, fieldPolicy, hasFieldPolicy } from './planning/jiraFieldSync';
 import { foldTr } from './rag/text';
 import { createProject } from './workspace';
+import { addKpiPoint, upsertKpi } from './dashboard/kpi';
 
 /**
  * "PoC Bulgu Takip" Excel'i (GİB PoC çalışması) → PlanAsistan projesi.
@@ -78,6 +81,8 @@ export interface GibImportSummary {
     requests: number;
     /** Test Kalemleri'nden: ağırlıklı PoC skoru (0-1) ve zorunlu açık sayısı */
     pocScore?: number;
+    /** GİB'in ilk değerlendirmesine göre skor (güncel sonuçlar katılmadan) */
+    pocInitialScore?: number;
     mandatoryOpen?: number;
     testItems?: number;
     /** Teslim planı ve GİB yanıtı sayfalarından: sayfa adı → madde sayısı */
@@ -96,6 +101,8 @@ export interface GibImportPackage {
     /** Jira eşitleme için önerilen ayar (Excel'in alanlarını ezmeyen) */
     jiraSync?: JiraSyncSettings;
     projectStartDate?: string;
+    /** Milestone sayfasındaki MS tarihleri (proje sürümü olarak) */
+    milestones?: ProjectVersion[];
     tagColors: Record<string, string>;
     summary: GibImportSummary;
     warnings: string[];
@@ -326,6 +333,45 @@ const readStartDate = (rows: SheetMatrix | undefined): string | undefined => {
     return undefined;
 };
 
+/**
+ * Milestone sayfasındaki plan tablosu (MS | … | Başlangıç | Bitiş) → proje
+ * sürümleri (MS0…). Dashboard'daki kilometre taşı planı ve plan eğrisi bu
+ * tarihleri kullanır; görevlerin kendi terminine dokunulmaz.
+ */
+export const readMilestones = (rows: SheetMatrix | undefined): ProjectVersion[] => {
+    if (!rows) return [];
+    const h = findHeaderRow(rows, ['MS', 'Başlangıç', 'Bitiş']);
+    if (h < 0) return [];
+    const col = columnIndex(rows[h]);
+    const cMs = col('MS'), cStart = col('Başlangıç'), cEnd = col('Bitiş');
+    const out: ProjectVersion[] = [];
+    for (let i = h + 1; i < rows.length; i++) {
+        const raw = at(rows[i], cMs);
+        const t = text(raw);
+        if (t === '' || !Number.isFinite(num(raw)) || !/^\s*(ms)?\s*\d+\s*$/i.test(t)) {
+            if (out.length && /toplam|atanmam/i.test(fold(raw))) break;
+            continue;
+        }
+        const n = num(raw);
+        const start = toIsoDate(at(rows[i], cStart)), end = toIsoDate(at(rows[i], cEnd));
+        if (!start && !end) continue;
+        out.push({ id: `gib-ms${n}`, name: `MS${n}`, ...(start ? { startDate: start } : {}), ...(end ? { releaseDate: end } : {}), status: 'unreleased', description: 'PoC Bulgu Takip › Milestone planı' });
+    }
+    return out;
+};
+
+/** Aktarılan MS tarihleri proje sürümlerine yazılır (aynı kimlikte tarih güncellenir, durum korunur) */
+export const withMilestoneVersions = (project: Project, ms: ProjectVersion[] | undefined): Project => {
+    if (!ms?.length) return project;
+    const versions = [...(project.versions || [])];
+    for (const v of ms) {
+        const i = versions.findIndex(x => x.id === v.id || x.name.trim().toLocaleUpperCase('tr-TR') === v.name);
+        if (i >= 0) versions[i] = { ...versions[i], startDate: v.startDate ?? versions[i].startDate, releaseDate: v.releaseDate ?? versions[i].releaseDate };
+        else versions.push(v);
+    }
+    return { ...project, versions };
+};
+
 /** Giriş sayfasındaki tanımlar (MS0, MS1, öncelik 10 / 9 / 7,5) → proje kartı sözlüğü */
 const readGlossary = (rows: SheetMatrix | undefined): { term: string; explanation: string }[] => {
     if (!rows) return [];
@@ -483,7 +529,7 @@ const readImpacts = (rows: SheetMatrix | undefined): Map<string, string> => {
 const computePocScore = (
     rows: SheetMatrix | undefined,
     currentResult: Map<string, string>,
-): { score: number; mandatoryOpen: number; items: number } | undefined => {
+): { score: number; initialScore: number; mandatoryOpen: number; items: number } | undefined => {
     if (!rows) return undefined;
     const h = findHeaderRow(rows, ['Test No', 'Ağırlık', 'PoC Sonucu']);
     if (h < 0) return undefined;
@@ -494,6 +540,8 @@ const computePocScore = (
     const cPoc = col('PoC Sonucu');
     let weighted = 0;
     let evaluated = 0;
+    let weighted0 = 0;
+    let evaluated0 = 0;
     let mandatoryOpen = 0;
     let items = 0;
     for (let i = h + 1; i < rows.length; i++) {
@@ -505,9 +553,12 @@ const computePocScore = (
         const score = RESULT_SCORE[result];
         const w = num(at(rows[i], cWeight));
         if (score !== undefined) { weighted += w * score; evaluated += w; }
+        // İlk skor: müşterinin PoC değerlendirmesi (güncel sonuçlar hesaba katılmadan)
+        const first = RESULT_SCORE[fold(at(rows[i], cPoc))];
+        if (first !== undefined) { weighted0 += w * first; evaluated0 += w; }
         if (fold(at(rows[i], cImp)) === 'zorunlu' && (result === 'karsilanmadi' || result === 'kismen karsilandi')) mandatoryOpen++;
     }
-    return { score: evaluated > 0 ? weighted / evaluated : 0, mandatoryOpen, items };
+    return { score: evaluated > 0 ? weighted / evaluated : 0, initialScore: evaluated0 > 0 ? weighted0 / evaluated0 : 0, mandatoryOpen, items };
 };
 
 // ---------------------------------------------------------------------------
@@ -762,6 +813,7 @@ export const parseGibWorkbook = (wb: WorkbookMatrices, opts: { now?: string; cus
     const poc = computePocScore(findSheet(wb, 'Test Kalemleri'), currentResult);
     if (poc) {
         summary.pocScore = poc.score;
+        summary.pocInitialScore = poc.initialScore;
         summary.mandatoryOpen = poc.mandatoryOpen;
         summary.testItems = poc.items;
     }
@@ -802,6 +854,7 @@ export const parseGibWorkbook = (wb: WorkbookMatrices, opts: { now?: string; cus
         // Excel takibi için önerilen eşitleme: Jira yalnız durum, atanan, termin, harcanan süre ve sürümü getirir
         jiraSync: { ...(jiraProjectKey ? { projectKey: jiraProjectKey } : {}), discover: false, autoMinutes: 0, fields: { ...EXCEL_TRACKING_FIELDS }, autoPeople: true },
         projectStartDate: readStartDate(findSheet(wb, 'Milestone')),
+        milestones: readMilestones(findSheet(wb, 'Milestone')),
         tagColors: Object.fromEntries(Object.entries({ ...MS_TAG_COLORS, ...PLAN_TAG_COLORS }).filter(([k]) => tasks.some(t => t.labels?.includes(k)))),
         summary,
         warnings,
@@ -912,6 +965,31 @@ const upsertBy = <T,>(list: T[], incoming: T[], key: (x: T) => string): T[] => {
 };
 
 /** Paketi çalışma alanına uygular: PY (gerekirse havuza eklenir) + proje (yeni ya da güncelleme) */
+/** Dashboard göstergeleri: PoC skoru ve zorunlu açık; her aktarım bir ölçüm ekler (aynı gün yerine geçer) */
+export const GIB_KPI_IDS = { score: 'gib-kpi-poc', mandatory: 'gib-kpi-zorunlu' } as const;
+
+export const withGibKpis = (project: Project, summary: Pick<GibImportSummary, 'pocScore' | 'pocInitialScore' | 'mandatoryOpen' | 'findings'>, day: string): Project => {
+    let p = project;
+    const note = `Excel aktarımı · ${summary.findings} madde takipte`;
+    if (summary.pocScore !== undefined) {
+        const cur = (p.kpis || []).find(k => k.id === GIB_KPI_IDS.score);
+        const base: ProjectKpi = cur || {
+            id: GIB_KPI_IDS.score, name: 'PoC skoru', unit: 'percent', higherIsBetter: true, source: 'import', points: [],
+            ...(summary.pocInitialScore !== undefined ? { baseline: round1(summary.pocInitialScore * 100) } : {}),
+            note: 'Test Kalemleri ağırlıklı puanı (Zorunlu 3, Olması beklenen 2, İsteğe bağlı 1; karşılandı 1, kısmen 0,5).',
+        };
+        p = upsertKpi(p, addKpiPoint(base, { date: day, value: round1(summary.pocScore * 100), note }));
+    }
+    if (summary.mandatoryOpen !== undefined) {
+        const cur = (p.kpis || []).find(k => k.id === GIB_KPI_IDS.mandatory);
+        const base: ProjectKpi = cur || { id: GIB_KPI_IDS.mandatory, name: 'Zorunlu açık madde', unit: 'number', higherIsBetter: false, target: 0, source: 'import', points: [] };
+        p = upsertKpi(p, addKpiPoint(base, { date: day, value: summary.mandatoryOpen, note }));
+    }
+    return p;
+};
+
+const round1 = (v: number) => Math.round(v * 10) / 10;
+
 export const applyGibImport = (ws: WorkspaceData, pkg: GibImportPackage, opts: GibApplyOptions): GibApplyResult => {
     const now = opts.now || new Date();
     const nowIso = now.toISOString();
@@ -995,6 +1073,7 @@ export const applyGibImport = (ws: WorkspaceData, pkg: GibImportPackage, opts: G
         };
     }
 
+    project = withGibKpis(withMilestoneVersions(project, pkg.milestones), pkg.summary, nowIso.slice(0, 10));
     const projects = target ? ws.projects.map(p => (p.id === target.id ? project : p)) : [...ws.projects, project];
     return {
         workspace: { ...ws, people, projects, activeProjectId: project.id },

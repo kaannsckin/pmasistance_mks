@@ -606,3 +606,32 @@ html:not(.dark) .ui-modern .text-gray-300, html:not(.dark) .ui-modern .text-gray
   .m-egg-prize { animation: none !important; transform: translate(-50%, -50%) scale(1); }
   .m-egg-glow { display: none; }
 }
+
+/* 5. Dashboard grafikleri ------------------------------------------------- */
+/* Kategorik palet: doğrulanmış sıra (renk körlüğünde komşu çiftler ayırt edilir);
+   koyu görünüm aynı tonların koyu zemine göre seçilmiş adımlarıdır. Sıralı ölçek
+   (ısı haritası) tek ton mavidir. Durum renkleri (--m-ok/--m-warn/--m-bad) ayrıdır. */
+.ui-modern {
+  --viz-1: #2a78d6; --viz-2: #eb6834; --viz-3: #1baf7a; --viz-4: #eda100;
+  --viz-5: #e87ba4; --viz-6: #008300; --viz-7: #6250d6; --viz-8: #e34948;
+  --viz-seq: 42, 120, 214;
+  --viz-track: var(--m-fill-2);
+}
+.dark .ui-modern {
+  --viz-1: #3987e5; --viz-2: #d95926; --viz-3: #199e70; --viz-4: #c98500;
+  --viz-5: #d55181; --viz-6: #0ca30c; --viz-7: #9085e9; --viz-8: #e66767;
+  --viz-seq: 57, 135, 229;
+}
+.ui-modern .m-dash-grid { display: grid; gap: 16px; grid-template-columns: repeat(1, minmax(0, 1fr)); }
+@media (min-width: 768px) { .ui-modern .m-dash-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1200px) { .ui-modern .m-dash-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.ui-modern .m-dash-w { grid-column: span 1 / span 1; }
+@media (min-width: 768px) { .ui-modern .m-dash-w.s2, .ui-modern .m-dash-w.s3, .ui-modern .m-dash-w.s4 { grid-column: span 2 / span 2; } }
+@media (min-width: 1200px) {
+  .ui-modern .m-dash-w.s3 { grid-column: span 3 / span 3; }
+  .ui-modern .m-dash-w.s4 { grid-column: span 4 / span 4; }
+}
+.ui-modern .m-dash-w.is-editing { outline: 2px dashed var(--m-sep); outline-offset: 2px; }
+.ui-modern .m-dash-w.is-drop { outline: 2px solid var(--m-accent); }
+.ui-modern .m-dash-w.is-dragging { opacity: 0.45; }
+.ui-modern .m-viz-tip { position: absolute; pointer-events: none; z-index: 5; padding: 6px 9px; border-radius: 10px; font-size: 12.5px; line-height: 1.35; white-space: nowrap; background: var(--m-surface-pop, var(--m-surface)); color: var(--m-label); box-shadow: var(--m-pop-shadow); }

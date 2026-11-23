@@ -5,9 +5,21 @@ buradan alır (`.github/workflows/exe.yml`).
 
 ## v3.2.0
 
-Jira worklog'larından iş güçleri: kim, hangi kayıtta, ne kadar zaman harcadı ve maliyeti. Asistan uzun yanıtlarda yarıda kalmıyor veri havuzuna (ünvan, maliyet, kişi, bölüm) öneri hazırlayabiliyor ve Excel, CSV, Word, PDF, PowerPoint dosyası verebiliyor.
+Kişiselleştirilebilir proje dashboard'u; Jira worklog'larından iş güçleri: kim, hangi kayıtta, ne kadar zaman harcadı ve maliyeti. Asistan uzun yanıtlarda yarıda kalmıyor veri havuzuna (ünvan, maliyet, kişi, bölüm) öneri hazırlayabiliyor ve Excel, CSV, Word, PDF, PowerPoint dosyası verebiliyor.
 
 ### Yenilikler
+
+**Proje dashboard'u (projenin ilk ekranı)**
+- Projeye girince "Dashboard" açılır; kullanıcı bileşen ekler, çıkarır, sürükleyip sıralar, genişliğini (1/4 – tam), başlığını, süzgecini (etiket, hariç etiket, iş paketi, kişi, yalnız açık), ölçüsünü (kayıt, efor, harcanan saat) ve gösterimini seçer.
+- 16 bileşen: gösterge kartı (19 hazır gösterge: ilerleme, geciken, 14 günde bitecek, kapanma süresi, sprint, efor, kalan efor, harcanan süre, iş gücü maliyeti, plan/gerçekleşen AA, sağlık, risk, engelli, atanmamış, tahmini olmayan…), projeye özel gösterge, ilerleme halkası, durum dağılımı, kırılım (çubuk / halka / tablo), kilometre taşı planı (tarih aralığı, tamamlanma, kümülatif plan), iş paketi (epic) tablosu, çapraz tablo (ısı haritası), plan / gerçekleşen eğrisi, ekip / birim yükü, geciken ve yaklaşan, riskler, şu anki sprint, kim ne kadar çalıştı (worklog), son değişiklikler, not.
+- Gruplama: iş akışı durumu, kategori, öncelik, kişi, birim, iş paketi, kayıt türü, sprint, hedef sürüm, bileşen, termin ayı ve etiket aileleri (MS0…MS5, "PoC: …" gibi etiketler kendiliğinden bulunur) ya da seçilen etiketler.
+- Her çubuğa, hücreye ve satıra tıklayınca o kayıtların listesi açılır; listeden kayda gidilir.
+- Projeye özel göstergeler (PoC skoru gibi): birim, hedef, hedef açıklaması, başlangıç değeri, yön ve tarihli ölçüm geçmişi; dashboard'da güncel değer, son değişim, hedefe ilerleme ve eğri.
+- Hazır şablonlar: Genel bakış, Müşteri PoC / bulgu takibi, Sprint odaklı, Yönetici özeti. MS etiketli ya da özel göstergeli projede PoC şablonu kendiliğinden gelir.
+- Kişisel düzen bu tarayıcıda saklanır; proje yöneticisi "Proje varsayılanı yap" ile düzenini herkese sunar, "Varsayılana dön" kişisel düzeni siler.
+- "Asistanla yorumla": asistan dashboard'u (göstergeler, kilometre taşları, gecikmeler) yorumlar ve aksiyon önerir; asistan projenin özel göstergelerini ve kilometre taşlarını da görür.
+- PoC Bulgu Takip Excel'i aktarılınca "PoC skoru" (başlangıç değeri GİB'in ilk değerlendirmesi) ve "Zorunlu açık madde" göstergeleri açılır ve her aktarımda ölçüm eklenir; Milestone sayfasındaki MS0…MS5 tarihleri proje sürümü olur ve kilometre taşı planıyla plan eğrisinde kullanılır.
+- Grafik renkleri renk körlüğüne göre doğrulanmış palettir; gece modunda koyu zemine göre seçilmiş tonlar kullanılır.
 
 **İş güçleri (Ekip ve tahsis → İş güçleri)**
 - Jira kaydıyla eşitlenen görevlerin worklog'ları (billing hours) kişi kırılımıyla çekilir: kayıtta kim, hangi gün, kaç saat çalışmış.
@@ -32,6 +44,7 @@ Jira worklog'larından iş güçleri: kim, hangi kayıtta, ne kadar zaman harcad
 - "/" komutları: sohbet kutusunda "/" yazınca komut menüsü açılır (/ozet, /geciken, /riskler, /rapor, /isgucu, /kapasite, /excel, /pdf, /sunum, /bu, /hatirla, /unut, /yardim). Komutlar açık projeye ve ekrandaki kayda göre isteğe dönüşür; komuttan sonra yazılan metin eklenir ("/excel riskler").
 - Sohbet geçmişi: sohbetler kimlik başına bu tarayıcıda saklanır (en çok 30); sayfa yenilenince son sohbet geri gelir. "Sohbetler" listesinden eski sohbet açılır ya da silinir, "Yeni sohbet" öncekini geçmişte bırakır. Yeniden açılan sohbetteki onay bekleyen öneriler uygulanamaz.
 - Modern arayüzde sohbet kutusundaki yazı ataş simgesinin altına girmiyor.
+- Proje başlığındaki "Diğer" menü düğmesi ekran okuyucuya doğru (sekme + menü) bildiriliyor.
 - Dosya çıktısı: asistan istenen veriyi Excel, CSV, Word, PDF ya da PowerPoint dosyası olarak hazırlar. Sohbetteki karttan seçilen biçim, yanındaki düğmelerden diğer biçimler indirilir. Tablolar uygulamanın okuma araçlarının sonucundan doğrudan doldurulur (sayılar yeniden yazılmaz; dosyada ekrandaki 50 satır sınırı 1 000'e çıkar). Dosya tarayıcıda üretilir, hiçbir yere yüklenmez; PDF'de Türkçe karakterler için yazı tipi gömülür.
 - Eklenen Excel dosyaları boş hücreler atılarak okunur ve tek mesaj sınırı iki katına çıktı; büyük tablolar artık yarıda kesilmiyor.
 

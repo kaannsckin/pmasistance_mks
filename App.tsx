@@ -134,6 +134,7 @@ import ModernDataPool from './components/modern/ModernDataPool';
 import { ModernAssistantPanel, ModernChat } from './components/modern/ModernAssistant';
 import WorkPackagesSheet from './components/modern/sheets/WorkPackagesSheet';
 import PersonProfileSheet from './components/modern/sheets/PersonProfileSheet';
+import ModernDashboard from './components/modern/dashboard/ModernDashboard';
 import DataHealthSheet from './components/modern/sheets/DataHealthSheet';
 import AuditLogSheet from './components/modern/sheets/AuditLogSheet';
 import StatusReportSheet from './components/modern/sheets/StatusReportSheet';
@@ -165,7 +166,7 @@ const createSampleProject = (): Project =>
   });
 
 /** Modern arayüzde proje başlığının gösterildiği ekranlar */
-const MODERN_PROJECT_VIEWS: View[] = [View.Overview, View.Roadmap, View.Tasks, View.Kanban, View.Planning, View.Risks, View.Resources, View.Goals, View.Requests, View.Notes, View.AI];
+const MODERN_PROJECT_VIEWS: View[] = [View.Dashboard, View.Overview, View.Roadmap, View.Tasks, View.Kanban, View.Planning, View.Risks, View.Resources, View.Goals, View.Requests, View.Notes, View.AI];
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<View>(View.Portfolio);
@@ -586,8 +587,8 @@ const App: React.FC = () => {
   const setCostTableColor = makeProjectSettingSetter('costTableColor');
 
   // ---- Proje yaşam döngüsü ----
-  // Modern arayüzde proje "Genel bakış" ile açılır; klasikte pano ile
-  const projectHomeView = settings?.uiStyle === 'modern' ? View.Overview : View.Roadmap;
+  // Modern arayüzde proje dashboard ile açılır; klasikte pano ile
+  const projectHomeView = settings?.uiStyle === 'modern' ? View.Dashboard : View.Roadmap;
   const handleCreateProject = useCallback((name: string) => {
     updateWorkspace(ws => {
       const project = createProject(name);
@@ -1470,7 +1471,7 @@ const App: React.FC = () => {
   const handleSetUiStyle = useCallback((uiStyle: UiStyle) => {
     updateWorkspace(ws => ({ ...ws, settings: { ...ws.settings, uiStyle } }));
     // Genel bakış yalnız modern arayüzde var
-    if (uiStyle === 'classic') setCurrentView(v => (v === View.Overview ? View.Roadmap : v));
+    if (uiStyle === 'classic') setCurrentView(v => (v === View.Overview || v === View.Dashboard ? View.Roadmap : v));
   }, [updateWorkspace]);
 
   // Görünüm (modern tema, gündüz/gece): ayarlar penceresinde seçildiği an uygulanır
@@ -2170,6 +2171,19 @@ const App: React.FC = () => {
         />
       );
     }
+    if (isModern && currentView === View.Dashboard) {
+      return (
+        <ModernDashboard
+          workspace={workspace}
+          project={activeProject}
+          canEdit={canEditProjectContent(workspace, identity, activeProject.id)}
+          role={workspace.currentRole || 'py'}
+          personId={workspace.currentPersonId}
+          onUpdateProject={updateActiveProject}
+          onViewTask={viewTask}
+        />
+      );
+    }
     if (isModern && currentView === View.Overview) {
       return (
         <ModernProjectOverview
@@ -2259,6 +2273,7 @@ const App: React.FC = () => {
           )}
           </div>
         );
+      case View.Dashboard:
       case View.Overview: // klasik arayüzde karşılığı pano
       case View.Roadmap:
         return (
@@ -2563,7 +2578,7 @@ const App: React.FC = () => {
             onOpenHealth={canDataHealth ? () => setIsHealthModalOpen(true) : undefined}
             onOpenAudit={canAudit ? () => setIsAuditModalOpen(true) : undefined}
             onOpenAbout={() => setIsAboutModalOpen(true)}
-            onLogoLaunch={() => setCurrentView(inProjectView ? View.Overview : View.Portfolio)}
+            onLogoLaunch={() => setCurrentView(inProjectView ? View.Dashboard : View.Portfolio)}
             onHyperdrive={() => setEgg({ kind: 'hyper' })}
           />
           <div className="flex-1 min-w-0 flex flex-col">

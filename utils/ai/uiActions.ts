@@ -12,7 +12,7 @@ import { sectionOfView } from '../viewConfig';
 export type ScreenKey =
     | 'portfoy' | 'tahsis' | 'takvim' | 'risk_raporu' | 'beklentiler' | 'haftalik_rapor' | 'gorusmeler' | 'veri_havuzu'
     | 'yonetim' | 'yonetici_konsolu'
-    | 'genel_bakis' | 'pano' | 'zaman_cizelgesi' | 'gorevler' | 'planlama' | 'riskler' | 'ekip' | 'hedefler'
+    | 'dashboard' | 'genel_bakis' | 'pano' | 'zaman_cizelgesi' | 'gorevler' | 'planlama' | 'riskler' | 'ekip' | 'hedefler'
     | 'istekler' | 'gunluk' | 'asistan';
 
 export type DialogKey = 'veri_sagligi' | 'denetim_gunlugu' | 'is_paketleri' | 'profil';
@@ -37,6 +37,7 @@ export const SCREENS: Record<ScreenKey, ScreenDef> = {
     veri_havuzu: { label: 'Veri Havuzu', modern: View.DataPool, classic: View.DataPool },
     yonetim: { label: 'Yönetim (EVM, sağlık, baseline)', modern: View.Executive, classic: View.Executive },
     yonetici_konsolu: { label: 'Yönetici konsolu', modern: View.Admin, classic: View.Admin },
+    dashboard: { label: 'Proje dashboard\'u', project: true, modern: View.Dashboard, classic: View.Roadmap },
     genel_bakis: { label: 'Proje genel bakış', project: true, modern: View.Overview, classic: View.Roadmap },
     pano: { label: 'Pano', project: true, modern: View.Roadmap, classic: View.Kanban },
     zaman_cizelgesi: { label: 'Zaman çizelgesi / yol haritası', project: true, modern: View.Kanban, classic: View.Roadmap },

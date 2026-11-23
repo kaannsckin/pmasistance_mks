@@ -39,6 +39,7 @@ interface ModernProjectHeaderProps {
 }
 
 const TABS: Tab[] = [
+    { view: View.Dashboard, label: 'Dashboard', section: 'dashboard' },
     { view: View.Overview, label: 'Genel bakış', section: 'overview' },
     { view: View.Roadmap, label: 'Pano', section: 'board' },
     { view: View.Tasks, label: 'Liste', section: 'list' },
@@ -117,9 +118,11 @@ const ModernProjectHeader: React.FC<ModernProjectHeaderProps> = ({ project, owne
                             {t.label}
                         </button>
                     ))}
-                    {more.length > 0 && <div className="relative">
+                    {more.length > 0 && <div className="relative" role="presentation">
+                        {/* Sekme listesinin öğesi: menü açan sekme (ARIA: tab + aria-haspopup) */}
                         <button
                             type="button"
+                            role="tab"
                             className="m-segment"
                             aria-haspopup="menu"
                             aria-expanded={moreOpen}
