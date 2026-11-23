@@ -37,7 +37,10 @@ const extractSheet = async (file: File): Promise<string> => {
     const XLSX = await import('xlsx');
     const wb = XLSX.read(new Uint8Array(await file.arrayBuffer()), { type: 'array' });
     return wb.SheetNames.map(name => {
-        const csv = XLSX.utils.sheet_to_csv(wb.Sheets[name], { blankrows: false }).trim();
+        // strip: satır sonundaki boş hücreler atılır; yalnız ayırıcıdan oluşan satırlar da düşer.
+        // Biçimli Excel'lerde metnin yarısı boş hücre virgülü olabiliyor ve ek bütçesini yiyordu.
+        const csv = XLSX.utils.sheet_to_csv(wb.Sheets[name], { blankrows: false, strip: true })
+            .split('\n').filter(l => /[^,\s]/.test(l)).join('\n').trim();
         return csv ? `## Sayfa: ${name}\n${csv}` : '';
     }).filter(Boolean).join('\n\n');
 };

@@ -16,6 +16,7 @@ import {
 export type TaskPriority = Task['priority'];
 
 export const PROJECT_SECTIONS: { key: ProjectSectionKey; label: string; view?: View; locked?: boolean }[] = [
+    { key: 'dashboard', label: 'Dashboard', view: View.Dashboard, locked: true },
     { key: 'overview', label: 'Genel bakış', view: View.Overview, locked: true },
     { key: 'board', label: 'Pano', view: View.Roadmap },
     { key: 'list', label: 'Liste', view: View.Tasks },
@@ -95,7 +96,8 @@ const sameSet = <T>(a: T[] | undefined, b: T[]): boolean => !!a && a.length === 
 export const viewFor = (cfg: ViewConfig | undefined, role: UserRole): RoleView => {
     const c = cfg?.[role] || {};
     const sections = new Set<ProjectSectionKey>((c.projectSections || ALL_PROJECT_SECTIONS).filter(k => ALL_PROJECT_SECTIONS.includes(k)));
-    sections.add('overview'); // genel bakış her zaman açık
+    sections.add('overview'); // genel bakış ve dashboard her zaman açık
+    sections.add('dashboard');
     const statuses = c.projectStatuses?.filter(s => PROJECT_STATUS_ORDER.includes(s));
     return {
         projectSections: sections,
@@ -116,8 +118,9 @@ export const roleViewOf = (ws: Pick<WorkspaceData, 'viewConfig' | 'currentRole'>
 /** Varsayılana eşit alanları atar; boş kalan rol silinir */
 const clean = (c: RoleViewConfig): RoleViewConfig => {
     const out: RoleViewConfig = {};
-    if (c.projectSections && !sameSet(c.projectSections.includes('overview') ? c.projectSections : [...c.projectSections, 'overview'], ALL_PROJECT_SECTIONS)) {
-        out.projectSections = ALL_PROJECT_SECTIONS.filter(k => k === 'overview' || c.projectSections!.includes(k));
+    const locked = (k: ProjectSectionKey) => k === 'overview' || k === 'dashboard';
+    if (c.projectSections && !sameSet([...new Set([...c.projectSections, 'overview', 'dashboard'] as ProjectSectionKey[])], ALL_PROJECT_SECTIONS)) {
+        out.projectSections = ALL_PROJECT_SECTIONS.filter(k => locked(k) || c.projectSections!.includes(k));
     }
     if (c.execSections && !sameSet(c.execSections, ALL_EXEC_SECTIONS)) out.execSections = ALL_EXEC_SECTIONS.filter(k => c.execSections!.includes(k));
     if (c.projectStatuses && c.projectStatuses.length && !sameSet(c.projectStatuses, PROJECT_STATUS_ORDER)) out.projectStatuses = PROJECT_STATUS_ORDER.filter(s => c.projectStatuses!.includes(s));

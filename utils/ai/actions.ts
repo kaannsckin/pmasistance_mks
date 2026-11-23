@@ -12,6 +12,7 @@ import { effectiveScheme, missingRequiredFields, allowedIssueTypes } from '../pr
 import { initialStatus, resolveTransition, taskStatusLabel, taskWorkflow } from '../workflow';
 import { projectRolesOf } from '../projectRoles';
 import { applyTransition, conditionProblem, inputProblems, ruleFor, TransitionActor, TransitionEffect } from '../transitions';
+import { applyPoolAction, describePoolAction, isPoolAction, PoolAction, validatePoolAction } from './poolActions';
 
 /** Öneriyi uygulayan kişi (aktif kimlik) — geçiş koşulları için */
 const actorOf = (ws: WorkspaceData): TransitionActor => {
@@ -28,6 +29,8 @@ const actorOf = (ws: WorkspaceData): TransitionActor => {
  */
 
 export type AiAction =
+    // Veri havuzu (ünvan/maliyet, kişi, bölüm) — projeye bağlı değil; bkz. poolActions.ts
+    | PoolAction
     | { type: 'risk_ekle'; projectId: string; title: string; description?: string; probability: RiskLevel; impact: RiskLevel; mitigation?: string; ownerPersonId?: string }
     | { type: 'gorev_ekle'; projectId: string; name: string; priority: Task['priority']; resourceName?: string; dueDate?: string; time?: { best: number; avg: number; worst: number }; notes?: string; issueType?: IssueType; labels?: string[] }
     /** status: hedef kategori; workflowKey verilirse belirli iş akışı durumu (ör. TESTING) — geçiş kuralları uygulanır */
@@ -41,7 +44,42 @@ export type AiAction =
     | { type: 'risk_guncelle'; projectId: string; riskId: string; status?: RiskStatus; probability?: RiskLevel; impact?: RiskLevel; mitigation?: string; ownerPersonId?: string; reason?: string }
     // Kabul: istekten görev açılır ve istek "göreve dönüştü" olur; ret: "reddedildi". Gerekçe projenin günlüğüne not olarak düşer.
     | { type: 'istek_karari'; projectId: string; requestId: string; decision: 'kabul' | 'ret'; reason: string; day?: string; task?: { name?: string; priority: Task['priority']; resourceName?: string; dueDate?: string; time?: { best: number; avg: number; worst: number } } }
-    | { type: 'not_ekle'; projectId: string; content: string; day?: string };
+    | { type: 'not_ekle'; projectId: string; content: string; day?: string }
+    // Bir projedeki görevlerin alanlarını toplu günceller (termin, atanan, öncelik, tahmin, etiket)
+    | { type: 'gorev_guncelle'; projectId: string; changes: TaskFieldChange[] };
+
+/** Görev alanı değişikliği; verilmeyen alan değişmez. resourceName '' → atama kaldırılır, dueDate '' → termin silinir */
+export interface TaskFieldChange {
+    taskId: string;
+    dueDate?: string;
+    resourceName?: string;
+    priority?: Task['priority'];
+    time?: { best: number; avg: number; worst: number };
+    addLabels?: string[];
+    removeLabels?: string[];
+}
+
+/** Tek öneride en çok bu kadar görev */
+export const MAX_TASK_CHANGES = 100;
+const PRIORITIES: Task['priority'][] = ['Blocker', 'High', 'Medium', 'Low'];
+const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+const fmtDay = (d?: string): string => (d ? new Date(`${d}T00:00:00`).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric' }) : '—');
+const sameName = (a: string, b: string) => a.trim().toLocaleLowerCase('tr-TR') === b.trim().toLocaleLowerCase('tr-TR');
+
+/** Görevde gerçekten değişen alanların açıklaması (kart ve "değişen yok" denetimi) */
+const taskChangeParts = (t: Task, c: TaskFieldChange): string[] => {
+    const out: string[] = [];
+    if (c.dueDate !== undefined && c.dueDate !== (t.dueDate || '')) out.push(`termin: ${fmtDay(t.dueDate)} → ${fmtDay(c.dueDate || undefined)}`);
+    if (c.resourceName !== undefined && !sameName(c.resourceName, t.resourceName || '')) out.push(`atanan: ${t.resourceName || '—'} → ${c.resourceName || '—'}`);
+    if (c.priority && c.priority !== t.priority) out.push(`öncelik: ${t.priority} → ${c.priority}`);
+    if (c.time && (c.time.best !== t.time.best || c.time.avg !== t.time.avg || c.time.worst !== t.time.worst)) out.push(`süre: ${t.time.best}/${t.time.avg}/${t.time.worst} → ${c.time.best}/${c.time.avg}/${c.time.worst} gün`);
+    const labels = t.labels || [];
+    const add = (c.addLabels || []).filter(l => !labels.includes(l));
+    const rm = (c.removeLabels || []).filter(l => labels.includes(l));
+    if (add.length) out.push(`etiket +${add.join(', +')}`);
+    if (rm.length) out.push(`etiket −${rm.join(', −')}`);
+    return out;
+};
 
 export type ProposalStatus = 'pending' | 'running' | 'applied' | 'rejected' | 'failed';
 
@@ -112,6 +150,7 @@ const monthLabel = (y: number, m: number) => `${MONTHS[m - 1]} ${y}`;
 
 /** Uygulamadan önce (ve öneri anında) doğrulama — sorun varsa Türkçe açıklama, yoksa null */
 export const validateAction = (ws: WorkspaceData, action: AiAction): string | null => {
+    if (isPoolAction(action)) return validatePoolAction(ws, action);
     const id = identityOf(ws);
     const project = projectOf(ws, action.projectId);
     if (!project) return 'Proje bulunamadı (silinmiş olabilir).';
@@ -204,6 +243,22 @@ export const validateAction = (ws: WorkspaceData, action: AiAction): string | nu
             if (action.day && !/^\d{4}-\d{2}-\d{2}$/.test(action.day)) return 'Tarih YYYY-AA-GG biçiminde olmalı.';
             return null;
         }
+        case 'gorev_guncelle': {
+            if (!action.changes.length) return 'Güncellenecek görev yok.';
+            if (action.changes.length > MAX_TASK_CHANGES) return `Tek öneride en çok ${MAX_TASK_CHANGES} görev olabilir.`;
+            if (new Set(action.changes.map(c => c.taskId)).size !== action.changes.length) return 'Aynı görev birden fazla satırda; tek satırda birleştirin.';
+            const known = new Set([...ws.people.map(p => `${p.firstName} ${p.lastName}`.trim().toLocaleLowerCase('tr-TR')), ...project.resources.map(r => r.name.trim().toLocaleLowerCase('tr-TR'))]);
+            for (const c of action.changes) {
+                const t = project.tasks.find(x => x.id === c.taskId);
+                if (!t) return 'Görev bulunamadı (silinmiş olabilir).';
+                if (c.dueDate && !DAY_RE.test(c.dueDate)) return `${t.name}: termin YYYY-AA-GG biçiminde olmalı.`;
+                if (c.priority && !PRIORITIES.includes(c.priority)) return `${t.name}: öncelik Blocker, High, Medium ya da Low olmalı.`;
+                if (c.resourceName && !known.has(c.resourceName.trim().toLocaleLowerCase('tr-TR'))) return `${t.name}: "${c.resourceName}" veri havuzunda ya da proje ekibinde yok.`;
+                if (c.time && [c.time.best, c.time.avg, c.time.worst].some(v => !(v >= 0 && v <= 1000))) return `${t.name}: süre 0-1000 gün arasında olmalı.`;
+            }
+            if (!action.changes.some(c => taskChangeParts(project.tasks.find(x => x.id === c.taskId)!, c).length)) return 'Görevlerde değişen bir şey yok.';
+            return null;
+        }
         case 'not_ekle':
             if (!action.content.trim()) return 'Not boş olamaz.';
             if (action.day && !/^\d{4}-\d{2}-\d{2}$/.test(action.day)) return 'Tarih YYYY-AA-GG biçiminde olmalı.';
@@ -225,6 +280,7 @@ const decisionNote = (title: string, a: Extract<AiAction, { type: 'istek_karari'
 
 /** Öneri kartında gösterilecek başlık ve ayrıntılar */
 export const describeAction = (ws: WorkspaceData, action: AiAction): { title: string; details: { label: string; value: string }[] } => {
+    if (isPoolAction(action)) return describePoolAction(ws, action);
     const project = projectOf(ws, action.projectId);
     const pName = project?.name || '?';
     switch (action.type) {
@@ -302,6 +358,16 @@ export const describeAction = (ws: WorkspaceData, action: AiAction): { title: st
                     ...(action.decision === 'kabul' && action.task?.resourceName ? [{ label: 'Atanan', value: action.task.resourceName }] : []),
                     ...(action.decision === 'kabul' && action.task?.dueDate ? [{ label: 'Bitiş', value: action.task.dueDate }] : []),
                     ...(action.decision === 'kabul' && action.task?.time ? [{ label: 'Süre (gün)', value: `${action.task.time.best} / ${action.task.time.avg} / ${action.task.time.worst}` }] : []),
+                ],
+            };
+        }
+        case 'gorev_guncelle': {
+            const rows = action.changes.map(c => ({ c, t: project?.tasks.find(x => x.id === c.taskId) })).filter(r => r.t && taskChangeParts(r.t, r.c).length);
+            return {
+                title: `Görev güncelle: ${rows.length} görev · ${pName}`,
+                details: [
+                    ...rows.slice(0, 30).map(({ c, t }) => ({ label: t!.jiraId ? `${t!.jiraId} ${t!.name}` : t!.name, value: taskChangeParts(t!, c).join(' · ') })),
+                    ...(rows.length > 30 ? [{ label: '…', value: `ve ${rows.length - 30} görev daha` }] : []),
                 ],
             };
         }
@@ -384,6 +450,7 @@ const touch = (ws: WorkspaceData, projectId: string, fn: (p: Project) => Project
  * kontrol edilir ve sorun varsa hata fırlatılır.
  */
 export const applyAction = (ws: WorkspaceData, action: AiAction): { ws: WorkspaceData; summary: string; effects?: TransitionEffect[] } => {
+    if (isPoolAction(action)) return applyPoolAction(ws, action);
     const err = validateAction(ws, action);
     if (err) throw new Error(err);
     const project = projectOf(ws, action.projectId)!;
@@ -531,6 +598,39 @@ export const applyAction = (ws: WorkspaceData, action: AiAction): { ws: Workspac
                 next = touch(ws, project.id, p => ({ ...p, customerRequests: p.customerRequests.map(r => (r.id === req.id ? { ...r, status: 'Rejected' as const } : r)), notes: [...p.notes, note] }));
                 summary = `"${project.name}" · müşteri isteği reddedildi: ${req.title}`;
             }
+            break;
+        }
+        case 'gorev_guncelle': {
+            const byId = new Map(action.changes.map(c => [c.taskId, c]));
+            let n = 0;
+            const now = new Date().toISOString();
+            next = touch(ws, project.id, p => {
+                let resources = p.resources;
+                const tasks = p.tasks.map(t => {
+                    const c = byId.get(t.id);
+                    if (!c || !taskChangeParts(t, c).length) return t;
+                    n++;
+                    const labels = [...new Set([...(t.labels || []).filter(l => !(c.removeLabels || []).includes(l)), ...(c.addLabels || [])])];
+                    const assignee = c.resourceName !== undefined ? c.resourceName.trim() : t.resourceName;
+                    // Havuzdan atanan kişi proje kaynağı değilse eklenir (görev formuyla aynı davranış)
+                    if (assignee && !resources.some(r => sameName(r.name, assignee))) {
+                        const person = ws.people.find(pp => sameName(`${pp.firstName} ${pp.lastName}`, assignee));
+                        if (person) resources = [...resources, { id: `res-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`, name: assignee, participation: 100, unit: person.departmentCode || '', title: person.titleCode || 'Uzman' }];
+                    }
+                    const { dueDate: _drop, ...rest } = t;
+                    return {
+                        ...(c.dueDate === '' ? rest : t),
+                        ...(c.dueDate ? { dueDate: c.dueDate } : {}),
+                        resourceName: assignee,
+                        ...(c.priority ? { priority: c.priority } : {}),
+                        ...(c.time ? { time: c.time, availability: c.time.avg > 0, estimateSource: 'ai' as const } : {}),
+                        labels,
+                        updatedAt: now,
+                    };
+                });
+                return { ...p, tasks, resources };
+            });
+            summary = `"${project.name}" · ${n} görev güncellendi`;
             break;
         }
         case 'not_ekle': {

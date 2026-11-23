@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { readNdjson } from '../../utils/ai/client';
+import { AI_LIMITS } from '../../utils/ai/protocol';
 import { resetAuthCache, safeEqual } from './auth';
 import { handleAiRequest, validateChatBody } from './handler';
 import { createRateLimiter } from './rateLimit';
@@ -179,7 +180,7 @@ describe('chat', () => {
 describe('validateChatBody', () => {
     it('son mesaj kullanıcıdan olmalı ve sınırlar uygulanır', () => {
         expect(validateChatBody({ messages: [{ role: 'user', content: 'a' }, { role: 'assistant', content: 'b' }] }).error).toMatch(/Son mesaj/);
-        expect(validateChatBody({ messages: [{ role: 'user', content: 'x'.repeat(20_001) }] }).error).toMatch(/uzun/);
+        expect(validateChatBody({ messages: [{ role: 'user', content: 'x'.repeat(AI_LIMITS.maxCharsPerMessage + 1) }] }).error).toMatch(/uzun/);
         expect(validateChatBody({ system: 5, messages: [{ role: 'user', content: 'a' }] }).error).toMatch(/system/);
         expect(validateChatBody(okBody).body).toEqual(okBody);
     });

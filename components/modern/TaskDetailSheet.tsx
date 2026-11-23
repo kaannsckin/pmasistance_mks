@@ -1,14 +1,17 @@
 import WorkflowSelect from './WorkflowSelect';
 import { taskStatusLabel } from '../../utils/workflow';
 import React, { useState } from 'react';
-import { Project, Task, TaskStatus, WorkflowConfig } from '../../types';
+import { Person, Project, Task, TaskStatus, TitleDef, WorkflowConfig } from '../../types';
 import { calculatePertFuzzyPert } from '../../utils/timeline';
 import { relativeTime } from '../../utils/recentChanges';
 import { ISSUE_TYPE_LABELS, taskDurations } from '../../utils/planning/lifecycle';
 import { daysLate, initialsOf, PRIORITY_META, shortDate, sprintLabel, TASK_STATUS_LABELS } from './taskMeta';
 import { JiraIssueRecord } from '../../utils/integrations';
 import JiraIssuePanel from './JiraIssuePanel';
+import { TaskWorklogSummary } from './WorkforceParts';
 import { Sheet } from './ui';
+import { Icon } from './icons';
+import { useAssistantOptional } from '../assistant/AssistantContext';
 
 /**
  * Modern görev ayrıntısı: durum hızlı değişir, alt görevler işaretlenir,
@@ -28,11 +31,14 @@ interface TaskDetailSheetProps {
     onJiraPull?: (issue: JiraIssueRecord) => void;
     /** Projenin iş akışı (admin şeması): yalnız izin verilen geçişler */
     workflow?: WorkflowConfig;
+    /** Harcanan süre (Jira worklog) kırılımı ve maliyeti için kişi havuzu ve ünvanlar */
+    people?: Person[];
+    titles?: TitleDef[];
 }
 
 const num = (v: number) => v.toLocaleString('tr-TR', { maximumFractionDigits: 1 });
 
-const TaskDetailSheet: React.FC<TaskDetailSheetProps> = ({ task, project, authorName, canEdit, onClose, onEdit, onSave, onJiraPull, workflow }) => {
+const TaskDetailSheet: React.FC<TaskDetailSheetProps> = ({ task, project, authorName, canEdit, onClose, onEdit, onSave, onJiraPull, workflow, people, titles }) => {
     const [comment, setComment] = useState('');
     const pred = task.predecessor ? project.tasks.find(t => t.id === task.predecessor) : undefined;
     const wp = task.workPackageId ? project.workPackages.find(w => w.id === task.workPackageId) : undefined;
@@ -81,12 +87,20 @@ const TaskDetailSheet: React.FC<TaskDetailSheetProps> = ({ task, project, author
         ['Planlama', task.includeInSprints !== false ? 'Sprint planına dahil' : 'Sprint planı dışında'],
     ];
 
+    const assistant = useAssistantOptional();
+    const canAsk = !!assistant?.enabled && assistant.chatEnabled;
     return (
         <Sheet
             title="Görev"
             onClose={onClose}
             wide
             footer={<>
+                {canAsk && (
+                    <button type="button" className="m-btn m-btn-plain" title="Bu görevi asistana getir: açıklat, termin ya da atama öner"
+                        onClick={() => { assistant!.askAbout({ projectId: project.id, taskId: task.id, label: [task.jiraId, task.name].filter(Boolean).join(' ') }); onClose(); }}>
+                        <Icon name="sparkles" size={16} />Asistana sor
+                    </button>
+                )}
                 <span className="flex-1"></span>
                 {canEdit && <button type="button" className="m-btn m-btn-gray" onClick={() => onEdit(task)}>Düzenle</button>}
                 <button type="button" className="m-btn m-btn-primary" onClick={onClose}>Tamam</button>
@@ -121,6 +135,7 @@ const TaskDetailSheet: React.FC<TaskDetailSheetProps> = ({ task, project, author
             </dl>
 
             {onJiraPull && task.jiraId && <JiraIssuePanel task={task} onPull={onJiraPull} />}
+            {people && titles && <TaskWorklogSummary task={task} project={project} people={people} titles={titles} />}
 
             {task.notes && <p className="m-0 text-[15px] leading-relaxed m-text whitespace-pre-line rounded-xl m-fill-2 px-4 py-3">{task.notes}</p>}
 

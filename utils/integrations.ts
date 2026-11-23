@@ -59,6 +59,23 @@ const post = async <T>(route: string, body: unknown, authMode: AiAuthMode): Prom
 export const fetchJiraWorklogs = (o: { projectKey: string; from: string; to: string }, authMode: AiAuthMode): Promise<WorklogEntry[]> =>
     post<{ entries: WorklogEntry[] }>('jira-worklogs', o, authMode).then(r => r.entries || []);
 
+/** Jira'dan gelen worklog satırı (kayıt bazında sorgu; e-posta varsa küçük harfle) */
+export interface JiraIssueWorklog {
+    issueKey: string;
+    date: string;
+    author: string;
+    authorEmail?: string;
+    hours: number;
+}
+
+/** Sunucunun tek istekte kabul ettiği en çok kayıt sayısı */
+export const MAX_WORKLOG_KEYS = 50;
+
+/** Belirli kayıtların tüm worklog'ları (kim kaç saat: billing hours); en çok 50 anahtar */
+export const fetchJiraIssueWorklogs = (keys: string[], authMode: AiAuthMode): Promise<{ entries: JiraIssueWorklog[]; missing: string[] }> =>
+    post<{ entries: JiraIssueWorklog[]; missing: string[] }>('jira-worklogs', { keys: keys.slice(0, MAX_WORKLOG_KEYS) }, authMode)
+        .then(r => ({ entries: r.entries || [], missing: r.missing || [] }));
+
 /** Sunucunun döndürdüğü sadeleştirilmiş Jira kaydı (bkz. server/integrations/handler.ts) */
 export interface JiraIssueRecord {
     key: string;

@@ -64,6 +64,11 @@ export interface Task {
   forecast?: TaskForecast; // açılışta yapılan süre tahmini (kayıt kapanınca isabeti ölçülür)
   originalEstimateHours?: number; // kaynak sistemdeki ilk tahmin (Jira "Original Estimate")
   actualHours?: number; // harcanan efor (Jira "Time Spent" / worklog)
+  /**
+   * Jira worklog'ları (billing hours): kim, hangi gün, kaç saat. Eşitlemede
+   * actualHours değişince yenilenir; forHours o anki actualHours'tur.
+   */
+  jiraWorklog?: TaskJiraWorklog;
   storyPoints?: number;
   fixVersion?: string; // kaynak sistemdeki hedef sürüm
   jiraStatus?: string; // Jira'daki durum adı (ör. "ANALYSIS"); pano kolon eşlemesinde kullanılır
@@ -517,6 +522,7 @@ export enum View {
   Meetings, // Planlanan müşteri görüşmeleri
   Admin, // Yönetici (admin): rol yetkileri ve profiller
   Planning, // Planlama asistanı: yeni kayıt tahmini ve plan simülasyonu (modern arayüz)
+  Dashboard, // Proje dashboard'u: kişiselleştirilebilir bileşenler (modern arayüzde projenin ilk ekranı)
 }
 
 export interface UnitLoad {
@@ -583,7 +589,7 @@ export type PermissionKey =
 export type RolePermissions = Partial<Record<UserRole, PermissionKey[]>>;
 
 /** Proje içi sekmeler (admin rol bazında gizleyebilir; genel bakış her zaman açık) */
-export type ProjectSectionKey = 'overview' | 'board' | 'list' | 'timeline' | 'planning' | 'risks' | 'team' | 'goals' | 'workPackages' | 'assistant';
+export type ProjectSectionKey = 'dashboard' | 'overview' | 'board' | 'list' | 'timeline' | 'planning' | 'risks' | 'team' | 'goals' | 'workPackages' | 'assistant';
 /** Yönetim ekranı kartları (admin rol bazında gizleyebilir) */
 export type ExecSectionKey = 'summary' | 'kpis' | 'expectations' | 'meetings' | 'health' | 'attention' | 'approvals' | 'risks' | 'departments' | 'changes';
 export type TaskSortKey = 'smart' | 'priority' | 'due' | 'name';
@@ -716,6 +722,98 @@ export type JiraSyncFieldId = 'status' | 'assignee' | 'dueDate' | 'priority' | '
 /** off: eşitlenmez · pull: Jira → uygulama · push: uygulama → Jira · both: çift yönlü (son eşitlemeden beri değişen taraf kazanır) */
 export type JiraSyncDirection = 'off' | 'pull' | 'push' | 'both';
 
+// ---------------------------------------------------------------------------
+// Proje dashboard'u: kullanıcının seçip yerleştirdiği bileşenler
+// ---------------------------------------------------------------------------
+
+export type DashboardWidgetType =
+  | 'metric'        // hesaplanan tek sayı (ilerleme, geciken, efor…)
+  | 'kpi'           // projeye özel gösterge (elle / aktarım), hedef ve geçmişle
+  | 'progress'      // genel ilerleme halkası (adet ya da efor)
+  | 'statusMix'     // durum dağılımı
+  | 'breakdown'     // seçilen boyuta göre kırılım (etiket ailesi, iş paketi, kişi…)
+  | 'milestones'    // kilometre taşı (MS / sürüm / sprint) planı ve kümülatif tamamlanma
+  | 'workPackages'  // iş paketi (epic) tablosu
+  | 'pivot'         // iki boyutlu çapraz tablo (ısı haritası)
+  | 'burnup'        // plan ve gerçekleşen kümülatif eğri
+  | 'team'          // kişi / birim yükü
+  | 'deadlines'     // geciken ve yaklaşan terminler
+  | 'risks'         // risk özeti
+  | 'sprint'        // şu anki sprint
+  | 'worklog'       // Jira worklog: kim ne kadar çalıştı, maliyet
+  | 'activity'      // son değişiklikler
+  | 'note';         // serbest not
+
+/** Gruplama boyutu; labels: bir etiket ailesi (önek, ör. "MS") ya da seçilen etiketler */
+export type DashboardDim =
+  | { kind: 'status' | 'category' | 'priority' | 'assignee' | 'unit' | 'workPackage' | 'issueType' | 'sprint' | 'fixVersion' | 'component' | 'dueMonth' }
+  | { kind: 'labels'; prefix?: string; values?: string[] };
+
+export interface DashboardFilter {
+  /** Bu etiketlerden en az birini taşıyanlar */
+  labels?: string[];
+  /** Bu etiketleri taşımayanlar */
+  excludeLabels?: string[];
+  workPackageId?: string;
+  assignee?: string;
+  /** Yalnız açık (bitmemiş) kayıtlar */
+  openOnly?: boolean;
+}
+
+export type DashboardMeasure = 'count' | 'effort' | 'hours';
+
+export interface DashboardWidgetConfig {
+  filter?: DashboardFilter;
+  dim?: DashboardDim;
+  dim2?: DashboardDim;
+  measure?: DashboardMeasure;
+  /** metric: hesaplanan gösterge anahtarı */
+  metric?: string;
+  /** kpi: projedeki gösterge */
+  kpiId?: string;
+  /** note: metin */
+  text?: string;
+  limit?: number;
+  chart?: 'bar' | 'donut' | 'table';
+}
+
+export interface DashboardWidget {
+  id: string;
+  type: DashboardWidgetType;
+  title?: string;
+  /** 4 sütunlu ızgarada genişlik */
+  size: 1 | 2 | 3 | 4;
+  config?: DashboardWidgetConfig;
+}
+
+export interface DashboardLayout {
+  widgets: DashboardWidget[];
+  updatedAt?: string;
+}
+
+export interface ProjectKpiPoint {
+  date: string; // YYYY-AA-GG
+  value: number;
+  note?: string;
+}
+
+export interface ProjectKpi {
+  id: string;
+  name: string;
+  /** percent: 0-100 */
+  unit: 'percent' | 'number' | 'currency' | 'days';
+  target?: number;
+  baseline?: number;
+  /** Yüksek değer iyi mi (varsayılan evet) */
+  higherIsBetter?: boolean;
+  /** Ölçüm geçmişi; en yeni sonda */
+  points: ProjectKpiPoint[];
+  /** Hedefe ulaşılması beklenen tarih ya da teslim (ör. "Aralık 2026 teslimatı") */
+  targetLabel?: string;
+  source?: 'manual' | 'import';
+  note?: string;
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -732,6 +830,10 @@ export interface Project {
   components?: ProjectComponent[]; // Projenin bileşen listesi
   versions?: ProjectVersion[]; // Projenin sürüm listesi (görevlerin hedef sürümü)
   roleMembers?: Record<string, string[]>; // Proje rolü → havuz kişi kimlikleri
+  /** Proje dashboard'unun varsayılan düzeni (PY kaydeder; kişisel düzeni olmayan herkes bunu görür) */
+  dashboard?: DashboardLayout;
+  /** Projeye özel göstergeler (ör. PoC skoru): elle girilir ya da aktarımla güncellenir, geçmişiyle */
+  kpis?: ProjectKpi[];
   risks?: Risk[];
   pestelItems?: PestelItem[]; // PESTEL dış çevre analizi
   swotItems?: SwotItem[]; // SWOT stratejik analizi
@@ -1028,6 +1130,13 @@ export interface ReportEvent {
 }
 
 /** Jira worklog kaydı (dosyadan ya da Jira API'den) */
+/** Görevin Jira worklog özeti: satırlar Jira'daki kişi adı (ve varsa e-posta) ile */
+export interface TaskJiraWorklog {
+  at: string; // çekildiği an (ISO)
+  forHours: number; // çekildiğindeki actualHours (değişince yeniden çekilir)
+  entries: { author: string; email?: string; date: string; hours: number }[];
+}
+
 export interface WorklogEntry {
   date: string; // ISO tarih
   author: string;

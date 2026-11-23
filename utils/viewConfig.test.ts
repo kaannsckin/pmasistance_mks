@@ -13,15 +13,15 @@ const task = (name: string, priority: Task['priority'], dueDate?: string, status
 describe('viewFor', () => {
     it('ayar yoksa her şey görünür, ekranların sıralaması geçerli', () => {
         const v = viewFor(undefined, 'mudur');
-        expect(v.projectSections.size).toBe(10);
+        expect(v.projectSections.size).toBe(11);
         expect(v.execSections.size).toBe(10);
         expect(v).toMatchObject({ projectStatuses: null, minTaskPriority: 'Low', minRiskScore: 0, showClosedRisks: true, taskSort: 'smart', riskSort: 'score', projectSort: null, customized: false });
         expect(viewSummary(v)).toEqual([]);
     });
 
-    it('genel bakış gizlenemez; tüm durumlar seçiliyse süzgeç yok', () => {
+    it('genel bakış ve dashboard gizlenemez; tüm durumlar seçiliyse süzgeç yok', () => {
         const v = viewFor({ mudur: { projectSections: ['risks'], projectStatuses: ['devam', 'teklif', 'beklemede', 'tamamlandi'] } }, 'mudur');
-        expect([...v.projectSections].sort()).toEqual(['overview', 'risks']);
+        expect([...v.projectSections].sort()).toEqual(['dashboard', 'overview', 'risks']);
         expect(v.projectStatuses).toBeNull();
         expect(sectionOfView(View.Kanban)).toBe('timeline');
         expect(sectionOfView(View.Portfolio)).toBeUndefined();
