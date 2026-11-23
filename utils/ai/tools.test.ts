@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Allocation, Person, Task, TaskStatus, UserRole, WorkspaceData } from '../../types';
 import { createEmptyWorkspace, createProject } from '../workspace';
-import { TOOL_NAME_PATTERN } from './protocol';
+import { AI_LIMITS, TOOL_NAME_PATTERN } from './protocol';
 import { buildToolContext, resolveProject, ToolError } from './scope';
 import { buildSystemPrompt } from './systemPrompt';
 import { AI_TOOLS, executeTool, MAX_TOOL_RESULT_CHARS, toolSpecsFor } from './tools';
@@ -96,7 +96,7 @@ describe('araç kataloğu', () => {
             const specs = toolSpecsFor(ctx);
             const size = JSON.stringify(specs).length;
             console.log(`${role}: ${specs.length} araç, ${size} karakter`);
-            expect(specs.length).toBeLessThanOrEqual(40);
+            expect(specs.length).toBeLessThanOrEqual(AI_LIMITS.maxTools);
             base = Math.max(base, size);
         }
         console.log(`çalışma zamanısız en büyük istek: ${base}, çalışma zamanlı: ${runtime}`);
@@ -104,8 +104,7 @@ describe('araç kataloğu', () => {
         // 5 000 → 7 000: ajan + Jira okuma araçlarına Jira worklog raporu, eşitleme önerisi, iş gücü
         // raporu ve kayıt worklog'u eklendi. Yalnız Jira bağlıyken gönderilir; temel istek BL-15'te kalır.
         expect(runtime).toBeLessThan(7_000);
-        // Katalog toplamı: rol başına en çok 40 araç gider (yukarıda); katalog, rollere ayrılan araçlarla büyür
-        expect(AI_TOOLS.length).toBeLessThanOrEqual(48);
+        expect(AI_TOOLS.length).toBeLessThanOrEqual(AI_LIMITS.maxTools);
     });
 
     it('her araç parametresiz çalışır (duman testi) ve sicil sızdırmaz', async () => {

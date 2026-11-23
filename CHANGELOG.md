@@ -3,6 +3,14 @@
 Her sürümün başlığı `## vX.Y.Z` biçimindedir; GitHub sürüm sayfası bu bölümü
 buradan alır (`.github/workflows/exe.yml`).
 
+## v3.3.0
+
+- Görev listesi ve sürüm planı havuzunda JQL benzeri sorgularla arama, sıralama ve toplu seçim yapılabiliyor. Sorgu kutusunun yanındaki bilgi kartı, tek tıkla uygulanabilen senaryolar sunuyor.
+- Sık kullanılan sorgulara ad verilebiliyor ve kısayol olarak sabitlenebiliyor. Kayıtlar bu tarayıcıda proje bazında saklanıyor ve iki ekranda da kullanılabiliyor.
+- Görev listesinde seçili kayıtların önceliği, atanan kişisi ve hedef sürümü topluca değiştirilebiliyor. Önizleme her görev için mevcut ve yeni değerleri gösteriyor.
+- Sürüm planı aktarılınca proje sürümü oluşturuluyor veya aynı adlı sürüm kullanılıyor. Aktarılan kayıtlarda sürüm, görev ayrıntısında hedef sürüm olarak görünüyor. Eski planlarda boş hedef sürüm alanları dolduruluyor ve mevcut atamalar korunuyor.
+- Jira bağlı asistan sohbetlerinde istek başına araç tanımı sınırı 48’e çıkarıldı. Böylece 42 araçla açılan sohbetler kabul ediliyor.
+
 ## v3.2.0
 
 Kişiselleştirilebilir proje dashboard'u; Jira worklog'larından iş güçleri: kim, hangi kayıtta, ne kadar zaman harcadı ve maliyeti. Asistan uzun yanıtlarda yarıda kalmıyor veri havuzuna (ünvan, maliyet, kişi, bölüm) öneri hazırlayabiliyor ve Excel, CSV, Word, PDF, PowerPoint dosyası verebiliyor.

@@ -1,4 +1,4 @@
-import { Project, ProjectComponent, ProjectVersion, Task, TaskStatus } from '../types';
+import { Project, ProjectComponent, ProjectVersion, ReleasePlan, Task, TaskStatus } from '../types';
 
 /**
  * Projeye özel bileşen ve sürüm listeleri (Jira "Components" ve
@@ -15,6 +15,46 @@ export const VERSION_STATUS_LABELS: Record<ProjectVersion['status'], string> = {
     unreleased: 'Yayınlanmadı',
     released: 'Yayınlandı',
     archived: 'Arşivlendi',
+};
+
+/** Plan kendi sürümünü ya da aynı adlı mevcut proje sürümünü kullanır. */
+export const versionForReleasePlan = (versions: ProjectVersion[], plan: ReleasePlan, proposed?: ProjectVersion): ProjectVersion =>
+    versions.find(v => v.id === plan.versionId)
+    || versions.find(v => norm(v.name) === norm(proposed?.name || plan.name.trim() || 'Adsız sürüm'))
+    || proposed
+    || {
+        id: `version-${plan.id}`,
+        name: plan.name.trim() || 'Adsız sürüm',
+        description: plan.summary?.trim() || undefined,
+        releaseDate: plan.targetDate,
+        status: 'unreleased',
+    };
+
+/** Eski aktarılmış planlara proje sürümü ekler. Güncel görev atamaları korunur. */
+export const migrateReleaseVersions = (project: Project): Project => {
+    const legacy = (project.releasePlans || []).filter(p => p.status === 'committed' && !p.versionId);
+    if (!legacy.length) return project;
+
+    const versions = [...(project.versions || [])];
+    const planVersions = new Map<string, ProjectVersion>();
+    const taskVersions = new Map<string, string>();
+    // Bir görev geçmişte birkaç plana girmişse son aktarımın sürümü kullanılır.
+    legacy.sort((a, b) => (a.baseline?.at || a.updatedAt).localeCompare(b.baseline?.at || b.updatedAt));
+    for (const plan of legacy) {
+        const version = versionForReleasePlan(versions, plan);
+        if (!versions.includes(version)) versions.push(version);
+        planVersions.set(plan.id, version);
+        plan.baseline?.taskIds.forEach(id => taskVersions.set(id, version.name));
+    }
+    return {
+        ...project,
+        versions,
+        tasks: project.tasks.map(t => !t.fixVersion && taskVersions.has(t.id) ? { ...t, fixVersion: taskVersions.get(t.id) } : t),
+        releasePlans: project.releasePlans!.map(p => {
+            const version = planVersions.get(p.id);
+            return version ? { ...p, versionId: version.id } : p;
+        }),
+    };
 };
 
 /** Görevlerde geçen ama listede olmayan bileşen ve sürüm adları (Jira'dan gelenler dahil) */

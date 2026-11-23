@@ -3,6 +3,7 @@ import {
     ReleasePlanItem, Task, TaskStatus,
 } from '../../types';
 import { quarterLabel } from '../goals';
+import { versionForReleasePlan } from '../projectLists';
 import { foldTr } from '../rag/text';
 import { buildSprintWindows } from '../taskToAllocation';
 import { GROUNDED, PlanningHistory } from './history';
@@ -412,6 +413,8 @@ export const commitReleasePlan = (
     const all = includedItems(plan).filter(i => effortOf(i));
     const skipped = all.filter(takenElsewhere).map(i => ({ itemId: i.id, name: i.name.trim() }));
     const items = all.filter(i => !takenElsewhere(i));
+    const projectVersions = project.versions || [];
+    const releaseVersion = versionForReleasePlan(projectVersions, plan);
     const milestones = sanitizeMilestones(plan.milestones, plan);
     const msOf = new Map<string, ReleaseMilestone>();
     milestones.forEach(m => m.itemIds.forEach(id => msOf.set(id, m)));
@@ -451,7 +454,7 @@ export const commitReleasePlan = (
         const kept = !!src && !!r && (c === 'own' || c === 'manual') && r.best === e.best && r.likely === e.likely && r.worst === e.worst;
         return {
             name: i.name.trim(), notes: (i.notes || '').trim(), priority: priorityOf(i), issueType: typeOf(i), unit: (i.unit || '').trim(), resourceName: i.resourceName || '',
-            workPackageId: i.workPackageId, includeInSprints: true,
+            workPackageId: i.workPackageId, includeInSprints: true, fixVersion: releaseVersion.name,
             ...(kept ? { time: src!.time, estimateSource: src!.estimateSource } : { time: { best: e.best, avg: e.likely, worst: e.worst }, estimateSource: TASK_SOURCE[c] }),
             version: p50 ? versionFor(p50) : maxVersion + 1,
             keyResultId: m ? krIds.get(m.id) : undefined,
@@ -511,11 +514,12 @@ export const commitReleasePlan = (
         objectiveId: milestones.length ? objective.id : undefined,
     } : undefined;
 
-    const committed: ReleasePlan = { ...plan, milestones, status: 'committed', step: 6, updatedAt: at, baseline };
+    const committed: ReleasePlan = { ...plan, milestones, status: 'committed', step: 6, updatedAt: at, baseline, versionId: releaseVersion.id };
     return {
         project: {
             ...project,
             tasks,
+            versions: projectVersions.includes(releaseVersion) ? projectVersions : [...projectVersions, releaseVersion],
             objectives: milestones.length ? [...project.objectives, objective] : project.objectives,
             releasePlans: (project.releasePlans || []).map(p => (p.id === plan.id ? committed : p)),
         },
@@ -581,16 +585,21 @@ export const finalizeCommit = (c: CommitResult, built: BuiltSimulation, result: 
  * diğer değişiklikler korunur.
  */
 export const applyCommit = (current: Project, c: CommitResult): Project => {
+    const plans = current.releasePlans || [];
+    if (plans.some(p => p.id === c.plan.id && p.status === 'committed')) return current;
+    const versions = current.versions || [];
+    const version = versionForReleasePlan(versions, c.plan, c.project.versions?.find(v => v.id === c.plan.versionId));
+    const plan = version.id === c.plan.versionId ? c.plan : { ...c.plan, versionId: version.id };
     const ids = new Set(Object.values(c.taskIdOf));
-    const committed = new Map(c.project.tasks.filter(t => ids.has(t.id)).map(t => [t.id, t]));
+    const committed = new Map(c.project.tasks.filter(t => ids.has(t.id)).map(t => [t.id, { ...t, fixVersion: version.name }]));
     const have = new Set(current.tasks.map(t => t.id));
     const known = new Set(current.objectives.map(o => o.id));
-    const plans = current.releasePlans || [];
     return {
         ...current,
+        versions: versions.includes(version) ? versions : [...versions, version],
         tasks: [...current.tasks.map(t => (committed.has(t.id) ? { ...t, ...committed.get(t.id)! } : t)), ...[...committed.values()].filter(t => !have.has(t.id))],
         objectives: [...current.objectives, ...c.project.objectives.filter(o => !known.has(o.id) && o.id === c.objectiveId)],
-        releasePlans: plans.some(p => p.id === c.plan.id) ? plans.map(p => (p.id === c.plan.id ? c.plan : p)) : [...plans, c.plan],
+        releasePlans: plans.some(p => p.id === plan.id) ? plans.map(p => (p.id === plan.id ? plan : p)) : [...plans, plan],
     };
 };
 

@@ -31,6 +31,7 @@ import ReleasePlanner from './planning/ReleasePlanner';
 interface Props {
     project: Project;
     workspace: WorkspaceData;
+    me?: string;
     visibleProjectIds: ReadonlySet<string>;
     canEdit: boolean;
     onAddTask: (task: Task, log: EstimateLogEntry) => void;
@@ -53,7 +54,7 @@ type Mode = 'record' | 'release' | 'simulate';
 
 const num = (v: number) => v.toLocaleString('tr-TR', { maximumFractionDigits: 1 });
 
-const ModernPlanning: React.FC<Props> = ({ project, workspace, visibleProjectIds, canEdit, onAddTask, onViewTask, onOpenList, onSaveReleasePlan, onDeleteReleasePlan, onCommitReleasePlan, onOpenGoals, onImportJira, onLinkJira, onSaveJiraSync, onApplyJiraSync }) => {
+const ModernPlanning: React.FC<Props> = ({ project, workspace, me, visibleProjectIds, canEdit, onAddTask, onViewTask, onOpenList, onSaveReleasePlan, onDeleteReleasePlan, onCommitReleasePlan, onOpenGoals, onImportJira, onLinkJira, onSaveJiraSync, onApplyJiraSync }) => {
     const [mode, setMode] = useState<Mode>('record');
     const [jiraOpen, setJiraOpen] = useState(false);
     const [syncOpen, setSyncOpen] = useState(false);
@@ -120,7 +121,7 @@ const ModernPlanning: React.FC<Props> = ({ project, workspace, visibleProjectIds
             {mode === 'record' ? (
                 <NewRecordPlanner key={project.id} project={project} history={history} people={people} leaves={leaves} visibleProjectIds={visibleProjectIds} canEdit={canEdit} blindEstimate={aiPolicyOf(workspace).blindEstimate} aiBlocked={aiBlocked} ml={ml} onAddTask={onAddTask} onOpenList={onOpenList} onSendToJira={sendToJira} />
             ) : mode === 'release' ? (
-                <ReleasePlanner key={project.id} project={project} history={history} people={people} leaves={leaves} visibleProjectIds={visibleProjectIds} canEdit={canEdit} blindEstimate={aiPolicyOf(workspace).blindEstimate} aiBlocked={aiBlocked} ml={ml}
+                <ReleasePlanner key={project.id} project={project} me={me} history={history} people={people} leaves={leaves} visibleProjectIds={visibleProjectIds} canEdit={canEdit} blindEstimate={aiPolicyOf(workspace).blindEstimate} aiBlocked={aiBlocked} ml={ml}
                     onSavePlan={onSaveReleasePlan} onDeletePlan={onDeleteReleasePlan} onCommit={onCommitReleasePlan} onOpenGoals={onOpenGoals} onSendToJira={sendToJira} />
             ) : (
                 <PlanSimulator key={project.id} project={project} history={history} people={people} leaves={leaves} visibleProjectIds={visibleProjectIds} onViewTask={onViewTask} />

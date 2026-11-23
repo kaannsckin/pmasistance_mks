@@ -407,6 +407,7 @@ export interface ReleasePlan {
   createdAt: string;
   updatedAt: string;
   baseline?: ReleaseBaseline;
+  versionId?: string; // Aktarımda bağlanan proje sürümü
 }
 
 /**
@@ -1494,6 +1495,7 @@ export type AuditAction =
   | 'report.submit' | 'report.approve' | 'report.return' | 'report.publish'
   | 'meeting.submit' | 'meeting.approve' | 'meeting.reject' | 'meeting.held'
   | 'release.commit' | 'data.export'
+  | 'task.bulkEdit'
   | 'report.ai';
 
 export interface AuditEntry {

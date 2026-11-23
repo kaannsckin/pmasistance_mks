@@ -38,6 +38,8 @@ import { boardForProject, DEFAULT_SCHEME_ID, effectiveScheme, migrateTasksToWork
 import ProjectWorkflowSheet from './components/modern/ProjectWorkflowSheet';
 import ProjectListsSheet from './components/modern/ProjectListsSheet';
 import { cleanRoleMembers, projectRolesOf } from './utils/projectRoles';
+import { listId } from './utils/projectLists';
+import { BulkTaskPatch, previewBulkTaskEdit } from './utils/bulkTaskEdit';
 import { buildDeliveries, detectTaskEvents, NotificationDelivery } from './utils/notifications';
 import { AllocationSuggestion, ApplyMode, applyAllocationSuggestions } from './utils/taskToAllocation';
 import { applyBilledHoursActuals, planBilledHoursPoolAdditions, suggestBilledHoursActuals, BilledApplyMode, BilledHoursOptions, BilledHoursRecord } from './utils/billedHours';
@@ -505,22 +507,22 @@ const App: React.FC = () => {
     })();
   }, [workspace]);
 
+  const storeProjectChange = useCallback((ws: WorkspaceData, previous: Project, next: Project, now = new Date()) => {
+    if (previous === next) return ws;
+    // Yerel görev değişikliklerinde yaşam döngüsü damgaları ve bildirim şeması uygulanır.
+    const tasks = next.tasks !== previous.tasks ? stampLifecycle(previous.tasks, next.tasks, now) : next.tasks;
+    const project = { ...next, tasks, updatedAt: now.toISOString() };
+    if (tasks !== previous.tasks) queueNotifications(ws, project, previous.tasks, tasks);
+    return { ...ws, projects: ws.projects.map(p => p.id === previous.id ? project : p) };
+  }, []);
+
   // Belirli bir projeyi günceller (null → etkin proje)
   const updateProjectById = useCallback((id: string | null, updater: (p: Project) => Project) => {
-    updateWorkspace(ws => ({
-      ...ws,
-      projects: ws.projects.map(p => {
-        if (p.id !== (id ?? ws.activeProjectId)) return p;
-        const next = updater(p);
-        if (next === p) return p;
-        const now = new Date();
-        // Yerel değişikliklerde kayıt yaşam döngüsü damgalanır (açılış, başlama, kapanış, durum günlüğü)
-        const tasks = next.tasks !== p.tasks ? stampLifecycle(p.tasks, next.tasks, now) : next.tasks;
-        if (tasks !== p.tasks) queueNotifications(ws, { ...next, tasks }, p.tasks, tasks);
-        return { ...next, tasks, updatedAt: now.toISOString() };
-      }),
-    }));
-  }, [updateWorkspace]);
+    updateWorkspace(ws => {
+      const project = ws.projects.find(p => p.id === (id ?? ws.activeProjectId));
+      return project ? storeProjectChange(ws, project, updater(project)) : ws;
+    });
+  }, [storeProjectChange, updateWorkspace]);
   const updateActiveProject = useCallback((updater: (p: Project) => Project) => updateProjectById(null, updater), [updateProjectById]);
 
   // Risk güncellemesi + "Ne değişti?" günlüğü: eklenen/kapatılan riskleri yakalar
@@ -1640,15 +1642,51 @@ const App: React.FC = () => {
     updateProjectById(projectId, p => ({ ...p, releasePlans: (p.releasePlans || []).filter(x => x.id !== id || x.status === 'committed') }));
   }, [updateProjectById]);
   const handleCommitReleasePlan = useCallback((c: CommitResult) => {
-    // Aktarım anlık görüntüden hesaplandı; projenin güncel hâline uygulanır
-    updateProjectById(c.project.id, p => applyCommit(p, c));
-    updateWorkspace(ws => appendAudit(
-      { ...ws, estimateLog: c.log.reduce<EstimateLogEntry[] | undefined>((log, e) => appendEstimateLog(log, e), ws.estimateLog) },
-      'release.commit',
-      `Sürüm planı aktarıldı: ${c.plan.name || 'Adsız sürüm'} (${c.created} yeni, ${c.updated} güncellenen görev${c.plan.baseline ? `, P80 ${c.plan.baseline.p80}` : ''})`,
-      c.project.id,
-    ));
-  }, [updateProjectById, updateWorkspace]);
+    updateWorkspace(ws => {
+      const project = ws.projects.find(p => p.id === c.project.id);
+      if (!project || !canEditProjectContent(ws, identityOf(ws), project.id)) return ws;
+      const next = applyCommit(project, c);
+      if (next === project) return ws;
+      const updated = storeProjectChange(ws, project, next);
+      return appendAudit(
+        { ...updated, estimateLog: c.log.reduce<EstimateLogEntry[] | undefined>((log, e) => appendEstimateLog(log, e), ws.estimateLog) },
+        'release.commit',
+        `Sürüm planı aktarıldı: ${c.plan.name || 'Adsız sürüm'} (${c.created} yeni, ${c.updated} güncellenen görev${c.plan.baseline ? `, P80 ${c.plan.baseline.p80}` : ''})`,
+        project.id,
+      );
+    });
+  }, [storeProjectChange, updateWorkspace]);
+
+  const handleBulkEditTasks = useCallback((projectId: string, selected: ReadonlySet<string>, patch: BulkTaskPatch) => {
+    const prepare = (ws: WorkspaceData | null) => {
+      const project = ws?.projects.find(p => p.id === projectId);
+      if (!ws || !project || !canEditProjectContent(ws, identityOf(ws), projectId)) {
+        return { error: 'Bu projenin görevlerini düzenleme yetkiniz yok.' };
+      }
+      const view = roleViewOf({ viewConfig: ws.viewConfig, currentRole: identityOf(ws).role });
+      const tasks = project.tasks.filter(t => selected.has(t.id) && taskPassesView(view, t));
+      const preview = previewBulkTaskEdit(project, tasks, ws.people, effectiveScheme(ws, project).requiredFields, patch);
+      return 'error' in preview ? preview : { ...preview, project };
+    };
+    const preview = prepare(workspaceRef.current);
+    if ('error' in preview) return { error: preview.error };
+    if (!preview.changes.length) return { error: 'Uygulanacak değişiklik kalmadı.' };
+    const resourceId = listId('res');
+    const now = new Date();
+    updateWorkspace(ws => {
+      const current = prepare(ws);
+      if ('error' in current || !current.changes.length) return ws;
+      const changes = new Map(current.changes.map(({ after }) => [after.id, { ...after, updatedAt: now.toISOString() }]));
+      const { project } = current;
+      const updated = storeProjectChange(ws, project, {
+        ...project,
+        tasks: project.tasks.map(t => changes.get(t.id) || t),
+        resources: current.newResource ? [...project.resources, { id: resourceId, ...current.newResource }] : project.resources,
+      }, now);
+      return appendAudit(updated, 'task.bulkEdit', `${project.name} · ${changes.size} görev toplu düzenlendi`, projectId);
+    });
+    return { changed: preview.changes.length };
+  }, [storeProjectChange, updateWorkspace]);
 
   const saveTaskFromForm = (formTask: Task) => {
     const requestId = convertingRequestId;
@@ -2077,6 +2115,7 @@ const App: React.FC = () => {
         <ModernPlanning
           project={activeProject}
           workspace={workspace}
+          me={boardMe}
           visibleProjectIds={visibleProjectIdSet}
           canEdit={canEditProjectContent(workspace, identity, activeProject.id)}
           onAddTask={(t: Task, log: EstimateLogEntry) => {
@@ -2205,9 +2244,19 @@ const App: React.FC = () => {
     if (isModern && currentView === View.Tasks) {
       return (
         <ModernTaskList
+          key={activeProject.id}
+          projectId={activeProject.id}
           tasks={tasks}
           resources={resources}
-          sprintNames={ps.sprintNames || {}}
+          bulkEdit={canEditProjectContent(workspace, identity, activeProject.id) ? {
+            people: workspace.people,
+            versions: activeProject.versions,
+            requiredFields: activeScheme.requiredFields,
+            onApply: (selected, patch) => handleBulkEditTasks(activeProject.id, selected, patch),
+          } : undefined}
+          sprintNames={ps.sprintNames}
+          workPackages={activeProject.workPackages}
+          me={boardMe}
           onStatusChange={changeTaskStatus}
           onWorkflowChange={changeTaskWorkflow}
           workflow={wf}
