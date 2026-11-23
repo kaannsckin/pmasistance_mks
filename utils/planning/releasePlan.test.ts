@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Project, ReleasePlan, Resource, Task, TaskStatus } from '../../types';
 import { milestoneLabels, milestonePrompt, parseMilestones } from '../ai/milestoneSuggestion';
-import { createProject } from '../workspace';
+import { createProject, normalizeWorkspace } from '../workspace';
 import { buildHistory } from './history';
 import { runMonteCarlo } from './monteCarlo';
 import { buildSimulation } from './simulationInput';
@@ -231,6 +231,10 @@ describe('aktarım', () => {
         const rapor = t.find(x => x.name === 'Rapor')!;
         expect(rapor.predecessor).toBe(giris.id);
         expect(giris).toMatchObject({ estimateSource: 'user', priority: 'Blocker', includeInSprints: true });
+        expect(giris.fixVersion).toBe('Sürüm 2.0');
+        expect(t.find(x => x.id === 'havuz')!.fixVersion).toBe('Sürüm 2.0');
+        expect(t.find(x => x.id === 'mevcut')!.fixVersion).toBeUndefined();
+        expect(c.project.versions).toEqual([expect.objectContaining({ id: c.plan.versionId, name: 'Sürüm 2.0', status: 'unreleased', releaseDate: '2026-12-31' })]);
         expect(giris.version).toBeGreaterThanOrEqual(1);
         expect(giris.dueDate).toMatch(/^2026-/);
         expect(t.find(x => x.id === 'havuz')!.keyResultId).toBeTruthy(); // havuzdaki görev güncellendi
@@ -264,13 +268,38 @@ describe('aktarım', () => {
         // Değişmeden alınan model tahmini kaynağını ve aralığını korur
         expect(c.project.tasks.find(t => t.id === 'model')).toMatchObject({ estimateSource: 'model', time: { best: 1, avg: 2, worst: 4 } });
         // Aktarım sürerken projeye eklenen görev ve yeni hedef korunur
-        const now = { ...moved, tasks: [...moved.tasks, task('sonradan', { version: 0 })], objectives: [...moved.objectives, { id: 'o-yeni', name: 'Yeni hedef', keyResults: [] } as never] };
+        const existingVersion = { id: 'registered', name: 'SÜRÜM 2.0', status: 'unreleased' as const, description: 'Aktarım sırasında eklendi' };
+        const now = { ...moved, versions: [existingVersion], tasks: [...moved.tasks, task('sonradan', { version: 0 })], objectives: [...moved.objectives, { id: 'o-yeni', name: 'Yeni hedef', keyResults: [] } as never] };
         const applied = applyCommit(now, c);
         expect(applied.tasks.map(t => t.id)).toEqual(expect.arrayContaining(['sonradan', 'havuz', ...Object.values(c.taskIdOf)]));
         expect(applied.tasks).toHaveLength(now.tasks.length + c.created);
         expect(applied.objectives.map(o => o.id)).toEqual([...now.objectives.map(o => o.id), c.objectiveId]);
         expect(applied.releasePlans!.find(x => x.id === p.id)!.status).toBe('committed');
-        expect(applyCommit(applied, c).tasks).toHaveLength(applied.tasks.length); // tekrar uygulamak çoğaltmaz
+        expect(applied.versions).toEqual([existingVersion]);
+        expect(applied.releasePlans!.find(x => x.id === p.id)!.versionId).toBe(existingVersion.id);
+        expect(applied.tasks.find(t => t.id === c.taskIdOf[p.items[0].id])!.fixVersion).toBe(existingVersion.name);
+        expect(applyCommit(applied, c)).toBe(applied);
+    });
+
+    it('eski aktarılmış planların hedef sürümünü bir kez ekler ve mevcut atamaları korur', () => {
+        const proj = project();
+        const p = plan();
+        const sim = buildReleaseSimulation(proj, p, buildHistory([]), {}, { now: NOW, iterations: 100 });
+        const c = commitReleasePlan(proj, p, { built: sim.built, result: runMonteCarlo(sim.built.input) });
+        const old = {
+            ...proj,
+            releasePlans: [{ ...c.plan, versionId: undefined }, { ...p, id: 'draft' }],
+            tasks: c.project.tasks.map(t => ({ ...t, fixVersion: t.name === 'Rapor' ? 'Elle seçildi' : undefined })),
+        };
+        const [migrated] = normalizeWorkspace({ projects: [old] }).projects;
+        expect(migrated.versions?.map(v => v.name)).toEqual(['Sürüm 2.0']);
+        expect(migrated.tasks.find(t => t.name === 'Giriş')?.fixVersion).toBe('Sürüm 2.0');
+        expect(migrated.tasks.find(t => t.name === 'Rapor')?.fixVersion).toBe('Elle seçildi');
+        expect(migrated.releasePlans?.[1].versionId).toBeUndefined();
+        migrated.tasks = migrated.tasks.map(t => t.name === 'Giriş' ? { ...t, fixVersion: undefined } : t);
+        const [reloaded] = normalizeWorkspace({ projects: [migrated] }).projects;
+        expect(reloaded.tasks.find(t => t.name === 'Giriş')?.fixVersion).toBeUndefined();
+        expect(reloaded.versions).toEqual(migrated.versions);
     });
 });
 

@@ -21,6 +21,7 @@ import { useAssistantOptional } from '../../assistant/AssistantContext';
 import { Icon } from '../icons';
 import { PRIORITY_META } from '../taskMeta';
 import { Field, rowSep } from '../ui';
+import TaskQueryPicker from '../TaskQueryPicker';
 import SimChart, { ChartMarker } from './SimChart';
 import { useReleaseSimulation } from './useReleaseSimulation';
 
@@ -33,6 +34,7 @@ import { useReleaseSimulation } from './useReleaseSimulation';
 interface Props {
     project: Project;
     initial: ReleasePlan;
+    me?: string;
     history: PlanningHistory;
     people: Person[];
     leaves: Leave[];
@@ -62,7 +64,7 @@ const DECISION_META: Record<ItemDecision, { label: string; tone: string }> = {
 const probInk = (p: number) => (p >= 0.8 ? 'm-ink-ok' : p >= 0.5 ? 'm-ink-warn' : 'm-ink-bad');
 const range = (e: EffortRange) => `${num(e.best)} · ${num(e.likely)} · ${num(e.worst)} gün`;
 
-const ReleaseWizard: React.FC<Props> = ({ project, initial, history, people, leaves, visibleProjectIds, canEdit, blindEstimate, aiBlocked = false, ml = null, onSave, onCommit, onClose }) => {
+const ReleaseWizard: React.FC<Props> = ({ project, initial, me, history, people, leaves, visibleProjectIds, canEdit, blindEstimate, aiBlocked = false, ml = null, onSave, onCommit, onClose }) => {
     const [plan, setPlan] = useState<ReleasePlan>(initial);
     const latest = useRef(plan);
     latest.current = plan;
@@ -149,7 +151,7 @@ const ReleaseWizard: React.FC<Props> = ({ project, initial, history, people, lea
             </ol>
 
             {step === 1 && <StepDefine plan={plan} project={project} canEdit={canEdit} update={update} />}
-            {step === 2 && <StepItems plan={plan} project={project} canEdit={canEdit} blindEstimate={blindEstimate} update={update} />}
+            {step === 2 && <StepItems plan={plan} project={project} me={me} canEdit={canEdit} blindEstimate={blindEstimate} update={update} />}
             {step === 3 && <StepSuggestions plan={plan} project={project} history={history} visibleProjectIds={visibleProjectIds} canEdit={canEdit} aiBlocked={aiBlocked} ml={ml} update={update} />}
             {step === 4 && <StepSimulation plan={plan} project={project} history={history} ctx={ctx} visibleProjectIds={visibleProjectIds} sim={sim} canEdit={canEdit} update={update} />}
             {step === 5 && <StepMilestones plan={plan} project={project} sim={sim} canEdit={canEdit} update={update} />}
@@ -227,14 +229,21 @@ const DecimalInput: React.FC<Omit<React.InputHTMLAttributes<HTMLInputElement>, '
 const positive = (n: number | undefined) => (n !== undefined && n > 0 ? n : undefined);
 const nonNegative = (n: number | undefined) => (n !== undefined && n >= 0 ? n : 0);
 
-const StepItems: React.FC<{ plan: ReleasePlan; project: Project; canEdit: boolean; blindEstimate: boolean; update: Update }> = ({ plan, project, canEdit, blindEstimate, update }) => {
+const StepItems: React.FC<{ plan: ReleasePlan; project: Project; me?: string; canEdit: boolean; blindEstimate: boolean; update: Update }> = ({ plan, project, me, canEdit, blindEstimate, update }) => {
     const [paste, setPaste] = useState<string | null>(null);
     const [pool, setPool] = useState<Set<string> | null>(null);
     const units = useMemo<string[]>(() => [...new Set<string>([...project.resources.map(r => r.unit), ...project.tasks.map(t => t.unit)].map(u => (u || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'tr')), [project]);
     const wps = plan.workPackageIds.length ? project.workPackages.filter(w => plan.workPackageIds.includes(w.id)) : project.workPackages;
     // Bu planda ya da başka bir taslakta alınmış havuz görevi yeniden önerilmez
-    const taken = new Set((project.releasePlans || []).filter(p => p.id !== plan.id && p.status === 'draft').concat(plan).flatMap(p => p.items.map(i => i.sourceTaskId)).filter(Boolean));
-    const backlog = project.tasks.filter(t => t.status !== TaskStatus.Done && (t.version || 0) === 0 && t.includeInSprints !== false && !taken.has(t.id));
+    const backlog = useMemo(() => {
+        const otherItems = (project.releasePlans || []).filter(p => p.id !== plan.id && p.status === 'draft').flatMap(p => p.items);
+        const taken = new Set([...otherItems, ...plan.items].map(i => i.sourceTaskId));
+        return project.tasks.filter(t => t.status !== TaskStatus.Done && (t.version || 0) === 0 && t.includeInSprints !== false && !taken.has(t.id));
+    }, [project.releasePlans, project.tasks, plan.id, plan.items]);
+    const sprintNames = project.settings.sprintNames;
+    const queryContext = useMemo(() => ({ sprintNames, workPackages: project.workPackages, me }), [sprintNames, project.workPackages, me]);
+    const backlogById = useMemo(() => new Map(backlog.map(t => [t.id, t])), [backlog]);
+    const selectedPool = useMemo(() => new Set([...(pool || [])].filter(id => backlogById.has(id))), [pool, backlogById]);
     const defaultUnit = project.resources[0]?.unit || '';
     const add = (xs: ReleasePlanItem[]) => update(p => ({ ...p, items: [...p.items, ...xs] }));
     const hideHint = plan.revealed ? 'Öneriler açıldı; buradaki değişiklik kör tahmini değiştirmez.' : blindEstimate ? 'Kör tahmin açık: kendi tahminlerinizi şimdi girin; öneriler bir sonraki adımda açılır.' : 'Kendi tahmininiz isteğe bağlı; bir sonraki adımda önerilerle karşılaştırılır.';
@@ -250,7 +259,7 @@ const StepItems: React.FC<{ plan: ReleasePlan; project: Project; canEdit: boolea
                     <div className="flex flex-wrap gap-2">
                         <button type="button" className="m-btn m-btn-gray" onClick={() => add([newItem({ unit: defaultUnit })])}><Icon name="plus" size={18} strokeWidth={2.2} />Kayıt ekle</button>
                         <button type="button" className="m-btn m-btn-plain" aria-expanded={paste !== null} onClick={() => setPaste(v => (v === null ? '' : null))}><Icon name="copy" size={18} />Yapıştır</button>
-                        <button type="button" className="m-btn m-btn-plain" aria-expanded={pool !== null} disabled={!backlog.length} onClick={() => setPool(v => (v ? null : new Set()))}><Icon name="inbox" size={18} />Havuzdan ({backlog.length})</button>
+                        <button type="button" className="m-btn m-btn-plain" aria-expanded={pool !== null} disabled={!backlog.length && pool === null} onClick={() => setPool(v => (v ? null : new Set()))}><Icon name="inbox" size={18} />Havuzdan ({backlog.length})</button>
                     </div>
                 )}
             </div>
@@ -267,20 +276,15 @@ const StepItems: React.FC<{ plan: ReleasePlan; project: Project; canEdit: boolea
                 </div>
             )}
 
-            {pool && (
+            {canEdit && pool && (
                 <div className="rounded-xl m-fill-2 p-3.5 flex flex-col gap-2">
                     <span className="text-[13px] font-semibold m-text-2">Havuzdaki açık kayıtlar (sprint atanmamış)</span>
-                    <div className="flex flex-col max-h-[260px] overflow-y-auto">
-                        {backlog.map(t => (
-                            <label key={t.id} className="flex items-center gap-2.5 min-h-[40px] text-[15px] m-text cursor-pointer">
-                                <input type="checkbox" className="w-4 h-4" checked={pool.has(t.id)} onChange={e => setPool(s => { const n = new Set(s!); if (e.target.checked) n.add(t.id); else n.delete(t.id); return n; })} />
-                                <span className="flex-1 min-w-0 truncate">{t.name}</span>
-                                <span className="text-[13px] m-text-3">{PRIORITY_META[t.priority].label}</span>
-                            </label>
-                        ))}
-                    </div>
+                    <TaskQueryPicker projectId={project.id} tasks={backlog} ctx={queryContext} selected={selectedPool} onChange={setPool} label="Havuzdaki görevleri sorgula" />
                     <div className="flex gap-2">
-                        <button type="button" className="m-btn m-btn-primary" disabled={!pool.size} onClick={() => { add(backlog.filter(t => pool.has(t.id)).map(itemFromTask)); setPool(null); }}>Seçilenleri ekle ({pool.size})</button>
+                        <button type="button" className="m-btn m-btn-primary" disabled={!selectedPool.size} onClick={() => {
+                            add([...selectedPool].map(id => itemFromTask(backlogById.get(id)!)));
+                            setPool(null);
+                        }}>Seçilenleri ekle ({selectedPool.size})</button>
                         <button type="button" className="m-btn m-btn-plain" onClick={() => setPool(null)}>Vazgeç</button>
                     </div>
                 </div>
@@ -700,6 +704,7 @@ const StepCommit: React.FC<{ plan: ReleasePlan; project: Project; history: Plann
     const r = sim.result;
     const s = sim.sim;
     const preview = useMemo(() => (r && s ? commitReleasePlan(project, plan, { built: s.built, result: r }, { model }) : null), [r, s, project, plan, model]);
+    const targetVersion = preview?.project.versions?.find(v => v.id === preview.plan.versionId);
     const dates = r && s ? releaseDates(r, s.built.start, plan.testDays) : null;
     const versions = preview ? [...new Set<number>(preview.project.tasks.filter(t => preview.plan.baseline?.taskIds.includes(t.id)).map(t => t.version))].sort((a, b) => a - b) : [];
     const excluded = plan.items.filter(i => i.name.trim() && (i.excluded || !effortOf(i))).length;
@@ -713,6 +718,7 @@ const StepCommit: React.FC<{ plan: ReleasePlan; project: Project; history: Plann
                 <>
                     <ul className="m-0 pl-5 flex flex-col gap-1.5 text-[15px] m-text">
                         <li><b>{preview.created}</b> yeni görev açılır{preview.updated ? `, havuzdaki ${preview.updated} görev güncellenir` : ''}{excluded ? `; ${excluded} kayıt kapsam dışı kalır (kararı günlüğe yazılır)` : ''}.</li>
+                        {targetVersion && <li>Aktarılan görevlere hedef sürüm olarak <b>{targetVersion.name}</b> atanır.</li>}
                         {preview.skipped.length > 0 && <li className="m-ink-warn">Havuzdan alınan {preview.skipped.length} görev bu arada başka bir sprinte ya da hedefe bağlanmış veya kapanmış; aktarılmaz: {preview.skipped.map(x => `"${x.name}"`).join(', ')}.</li>}
                         <li>Görevler simülasyon takvimine göre {versions.length > 1 ? `sprint ${versions[0]}–${versions[versions.length - 1]} arasına` : `sprint ${versions[0] ?? '—'} içine`} yerleşir; termin, kilometre taşının hedef tarihi (yoksa P80'i) olur.</li>
                         {preview.plan.milestones.length > 0 && <li>"{`Sürüm: ${plan.name}`}" hedefi ve {preview.plan.milestones.length} anahtar sonuç (kilometre taşları) Hedefler ekranına eklenir.</li>}

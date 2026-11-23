@@ -1,7 +1,8 @@
 import { Project, ProjectData, ProjectSettings, WorkspaceData } from '../types';
 import { migrateRolePermissions, PERMISSIONS_REV } from './permissions';
+import { migrateReleaseVersions } from './projectLists';
 
-export const APP_VERSION = '3.2.0';
+export const APP_VERSION = '3.3.0';
 export const WORKSPACE_SCHEMA_VERSION = 3; // 3: veri havuzu + tahsis + plan kilidi
 
 /** v2 çalışma alanı anahtarı */
@@ -103,7 +104,7 @@ export const migrateLegacyWorkspace = (legacy: ProjectData, projectName = 'Proje
 /** Kayıtlı/yüklenen workspace'i normalize eder (eksik alanları tamamlar). */
 export const normalizeWorkspace = (raw: Partial<WorkspaceData>): WorkspaceData => {
     const base = createEmptyWorkspace();
-    const projects = (raw.projects || []).map(p => ({
+    const projects = (raw.projects || []).map(p => migrateReleaseVersions({
         ...createProject(p.name || 'Adsız Proje'),
         ...p,
         id: p.id || createProjectId(),

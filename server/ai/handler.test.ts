@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { readNdjson } from '../../utils/ai/client';
+import { createMemoryStore } from '../../utils/ai/memory';
 import { AI_LIMITS } from '../../utils/ai/protocol';
+import { buildToolContext } from '../../utils/ai/scope';
+import { toolSpecsFor } from '../../utils/ai/tools';
+import { createEmptyWorkspace } from '../../utils/workspace';
 import { resetAuthCache, safeEqual } from './auth';
 import { handleAiRequest, validateChatBody } from './handler';
 import { createRateLimiter } from './rateLimit';
@@ -55,6 +59,23 @@ describe('chat', () => {
         const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
         expect(url).toBe('https://api.openai.com/v1/chat/completions');
         expect((init.headers as Record<string, string>).authorization).toBe('Bearer gizli-anahtar');
+    });
+
+    it.each(['py', 'bolum_sorumlu'] as const)('Jira bağlı %s tarayıcı sohbetinin tüm araçlarını sağlayıcıya iletir', async (role) => {
+        const ctx = buildToolContext({ ...createEmptyWorkspace(), currentRole: role, currentPersonId: 'test-person' });
+        ctx.rag = { search: vi.fn(), mode: () => 'anahtar kelime' };
+        ctx.ui = { run: vi.fn() };
+        ctx.files = [];
+        ctx.memory = { store: createMemoryStore('handler-test'), userPrompt: 'merhaba' };
+        ctx.jira = { meta: vi.fn(), byKeys: vi.fn(), search: vi.fn(), worklogs: vi.fn(), issueWorklogs: vi.fn() };
+        const tools = toolSpecsFor(ctx);
+        const fetchImpl = vi.fn(async (_url: string, _init: RequestInit) => sseUpstream());
+        const res = await handleAiRequest(chatReq({ ...okBody, tools }), BASE_ENV, { isDev: true, fetchImpl, rateLimiter: freshLimiter() });
+
+        expect(res.status).toBe(200);
+        expect((await collect(readNdjson(res.body!))).at(-1)).toEqual({ type: 'done', stopReason: 'stop' });
+        const sent = JSON.parse(fetchImpl.mock.calls[0][1].body as string);
+        expect(sent.tools.map((tool: { function: { name: string } }) => tool.function.name)).toEqual(tools.map(tool => tool.name));
     });
 
     it('yayında koruma yoksa 503 döner, sağlayıcıyı çağırmaz', async () => {
@@ -198,6 +219,12 @@ describe('safeEqual', () => {
 describe('validateChatBody — araç mesajları', () => {
     const tools = [{ name: 'proje_listesi', description: 'Projeleri listeler', parameters: { type: 'object', properties: {} } }];
     const call = { id: 'c1', name: 'proje_listesi', arguments: {} };
+
+    it('araç sayısı üst sınırında kabul eder ve sınır aşılırsa reddeder', () => {
+        const atLimit = Array.from({ length: AI_LIMITS.maxTools }, (_, i) => ({ ...tools[0], name: `arac_${i}` }));
+        expect(validateChatBody({ ...okBody, tools: atLimit }).body?.tools).toHaveLength(AI_LIMITS.maxTools);
+        expect(validateChatBody({ ...okBody, tools: [...atLimit, tools[0]] }).error).toBe(`En fazla ${AI_LIMITS.maxTools} araç tanımlanabilir.`);
+    });
 
     it('geçerli araç turu kabul edilir', () => {
         const r = validateChatBody({

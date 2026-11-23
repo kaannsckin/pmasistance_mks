@@ -111,7 +111,8 @@ export const AI_LIMITS = {
     maxCharsPerMessage: 40_000,
     maxSystemChars: 40_000,
     maxTotalChars: 150_000,
-    maxTools: 40,
+    // Jira, gezinme, dosya ve hafıza araçları aynı tarayıcı isteğinde bulunabilir.
+    maxTools: 48,
     maxToolCallsPerMessage: 16,
     /** Araç tanımı / argüman / meta JSON'u için üst sınır (karakter) */
     maxToolJsonChars: 20_000,

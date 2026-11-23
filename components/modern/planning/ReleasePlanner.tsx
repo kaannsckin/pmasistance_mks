@@ -18,6 +18,7 @@ import ReleaseWizard from './ReleaseWizard';
 
 interface Props {
     project: Project;
+    me?: string;
     history: PlanningHistory;
     people: Person[];
     leaves: Leave[];
@@ -38,7 +39,7 @@ interface Props {
 const fmtDay = (iso?: string) => (iso ? new Date(`${iso}T00:00:00`).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric' }) : '—');
 const pct = (v: number) => `%${Math.round(v * 100)}`;
 
-const ReleasePlanner: React.FC<Props> = ({ project, history, people, leaves, visibleProjectIds, canEdit, blindEstimate, aiBlocked, ml, onSavePlan, onDeletePlan, onCommit, onOpenGoals, onSendToJira }) => {
+const ReleasePlanner: React.FC<Props> = ({ project, me, history, people, leaves, visibleProjectIds, canEdit, blindEstimate, aiBlocked, ml, onSavePlan, onDeletePlan, onCommit, onOpenGoals, onSendToJira }) => {
     const [openId, setOpenId] = useState<string | null>(null);
     const [justCommitted, setJustCommitted] = useState<string | null>(null);
     const projectId = project.id;
@@ -51,6 +52,7 @@ const ReleasePlanner: React.FC<Props> = ({ project, history, people, leaves, vis
             <ReleaseWizard
                 key={open.id}
                 project={project}
+                me={me}
                 initial={open}
                 history={history}
                 people={people}

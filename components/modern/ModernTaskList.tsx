@@ -1,18 +1,25 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { Resource, Task, TaskSortKey, TaskStatus, WorkflowConfig } from '../../types';
+import { Person, ProjectScheme, ProjectVersion, Resource, Task, TaskSortKey, TaskStatus, WorkflowConfig } from '../../types';
+import { BulkTaskPatch } from '../../utils/bulkTaskEdit';
 import { exportToExcel, exportToJiraCsv, exportToMsProjectCsv } from '../../utils/exporter';
 import { parseCustomCsv, parseImportedFile, parseJiraCsv } from '../../utils/importer';
+import { TaskQueryContext } from '../../utils/taskQuery';
 import { Icon } from './icons';
 import { ViewFilterNote } from './ui';
 import TaskActionsMenu from './TaskActionsMenu';
+import TaskQueryPicker from './TaskQueryPicker';
+import BulkTaskEditSheet from './BulkTaskEditSheet';
 import { taskStatusLabel } from '../../utils/workflow';
 import { MIN_PRIORITY_OPTIONS, taskComparator, TaskPriority, taskPassesView } from '../../utils/viewConfig';
 import { BoardColumn, celebrationFor, COLUMN_META, columnOf, daysLate, initialsOf, missingEstimate, PRIORITY_META, shortDate, sprintLabel, uniq } from './taskMeta';
 
 interface ModernTaskListProps {
+    projectId: string;
     tasks: Task[];
     resources: Resource[];
     sprintNames?: Record<number, string>;
+    workPackages?: TaskQueryContext['workPackages'];
+    me?: string;
     onStatusChange: (id: string, status: TaskStatus) => void;
     /** Ayrıntılı iş akışı durumu (Analizde, Testte, Çözüldü …) */
     onWorkflowChange?: (id: string, key: string) => void;
@@ -27,6 +34,12 @@ interface ModernTaskListProps {
     /** Admin görünüm ayarı: en düşük öncelik ve sıralama */
     minPriority?: TaskPriority;
     sortKey?: TaskSortKey;
+    bulkEdit?: {
+        people: Person[];
+        versions?: ProjectVersion[];
+        requiredFields: ProjectScheme['requiredFields'];
+        onApply: (selected: ReadonlySet<string>, patch: BulkTaskPatch) => { changed: number } | { error: string };
+    };
 }
 
 const GROUPS: BoardColumn[] = [TaskStatus.InProgress, TaskStatus.ToDo, TaskStatus.Done];
@@ -35,8 +48,12 @@ const lower = (s: string) => s.toLocaleLowerCase('tr-TR');
 
 type ImportKind = 'excel' | 'jira' | 'csv';
 
-const ModernTaskList: React.FC<ModernTaskListProps> = ({ tasks, resources, sprintNames, onStatusChange, onWorkflowChange, workflow, onViewTask, onEditTask, onDeleteTask, onNotifyTask, onDataImport, onCelebrate, minPriority = 'Low' as TaskPriority, sortKey = 'smart' as TaskSortKey }) => {
+const ModernTaskList: React.FC<ModernTaskListProps> = ({ projectId, tasks, resources, sprintNames, workPackages, me, onStatusChange, onWorkflowChange, workflow, onViewTask, onEditTask, onDeleteTask, onNotifyTask, onDataImport, onCelebrate, minPriority = 'Low' as TaskPriority, sortKey = 'smart' as TaskSortKey, bulkEdit }) => {
     const [query, setQuery] = useState('');
+    const [queryOpen, setQueryOpen] = useState(false);
+    const [selection, setSelection] = useState<ReadonlySet<string>>(() => new Set());
+    const [bulkOpen, setBulkOpen] = useState(false);
+    const [filterBySelection, setFilterBySelection] = useState(false);
     const [status, setStatus] = useState<string>('all');
     const [person, setPerson] = useState<string>('all');
     const [sprint, setSprint] = useState<string>('all');
@@ -47,28 +64,51 @@ const ModernTaskList: React.FC<ModernTaskListProps> = ({ tasks, resources, sprin
     const [busy, setBusy] = useState(false);
     const fileRef = useRef<HTMLInputElement>(null);
     const importKind = useRef<ImportKind>('excel');
+    const bulkButton = useRef<HTMLButtonElement>(null);
 
     const people = useMemo(() => uniq<string>(tasks.map(t => t.resourceName).filter(Boolean)).sort((a, b) => a.localeCompare(b, 'tr')), [tasks]);
     const units = useMemo(() => uniq<string>(tasks.map(t => t.unit).filter(Boolean)).sort((a, b) => a.localeCompare(b, 'tr')), [tasks]);
     const versions = useMemo(() => uniq<number>(tasks.map(t => t.version)).sort((a, b) => a - b), [tasks]);
 
+    const queryContext = useMemo<TaskQueryContext>(() => ({ sprintNames, workPackages, me }), [sprintNames, workPackages, me]);
+    const viewTasks = useMemo(() => tasks.filter(t => taskPassesView({ minTaskPriority: minPriority }, t)), [tasks, minPriority]);
+    const selected = useMemo(() => new Set(viewTasks.filter(t => selection.has(t.id)).map(t => t.id)), [viewTasks, selection]);
     const filtered = useMemo(() => {
         const q = lower(query.trim());
-        return tasks.filter(t =>
-            taskPassesView({ minTaskPriority: minPriority }, t) &&
+        return viewTasks.filter(t =>
             (!q || lower(t.name).includes(q) || lower(t.jiraId || '').includes(q)) &&
             (status === 'all' || columnOf(t.status) === status) &&
             (person === 'all' || t.resourceName === person) &&
             (sprint === 'all' || String(t.version) === sprint) &&
             (unit === 'all' || t.unit === unit)
         );
-    }, [tasks, query, status, person, sprint, unit, minPriority]);
-    const hiddenByView = minPriority === 'Low' ? 0 : tasks.filter(t => !taskPassesView({ minTaskPriority: minPriority }, t)).length;
+    }, [viewTasks, query, status, person, sprint, unit]);
+    const hiddenByView = tasks.length - viewTasks.length;
 
     const groups = useMemo(() => GROUPS.map(g => ({
         id: g,
-        rows: filtered.filter(t => columnOf(t.status) === g).sort(taskComparator(sortKey)),
-    })).filter(g => g.rows.length > 0), [filtered, sortKey]);
+        rows: filtered.filter(t => columnOf(t.status) === g && (!filterBySelection || selected.has(t.id))).sort(taskComparator(sortKey)),
+    })).filter(g => g.rows.length > 0), [filtered, filterBySelection, selected, sortKey]);
+    const selectedInFilter = filtered.reduce((count, task) => count + Number(selected.has(task.id)), 0);
+    const allSelected = filtered.length > 0 && selectedInFilter === filtered.length;
+    const setSelected = (targets: Task[], checked: boolean) => {
+        const next = new Set(selected);
+        for (const task of targets) {
+            if (checked) next.add(task.id);
+            else next.delete(task.id);
+        }
+        setSelection(next);
+    };
+    const grid = bulkEdit ? `36px ${GRID}` : GRID;
+    const closeBulk = () => {
+        setBulkOpen(false);
+        bulkButton.current?.focus();
+    };
+    const bulkAction = bulkEdit && selected.size > 0 && (
+        <button ref={bulkButton} type="button" className="m-btn m-btn-primary !min-h-[36px]" onClick={() => setBulkOpen(true)}>
+            <Icon name="pencil" size={16} />Toplu düzenle
+        </button>
+    );
 
     const changeStatus = (id: string, next: TaskStatus) => {
         const message = onCelebrate ? celebrationFor(tasks, id, next, sprintNames) : null;
@@ -97,13 +137,26 @@ const ModernTaskList: React.FC<ModernTaskListProps> = ({ tasks, resources, sprin
             onDataImport(result.tasks, result.resources);
             setNotice({ kind: 'ok', text: `${result.tasks.length} görev içe aktarıldı.` });
         } catch (e) {
-            setNotice({ kind: 'error', text: e instanceof Error ? e.message : 'Dosya okunamadı.' });
+            setNotice({ kind: 'error', text: `İçe aktarılamadı: ${e instanceof Error ? e.message : 'Dosya okunamadı.'}` });
         } finally {
             setBusy(false);
         }
     };
 
-    const filtersActive = status !== 'all' || person !== 'all' || sprint !== 'all' || unit !== 'all' || !!query;
+    const filtersActive = status !== 'all' || person !== 'all' || sprint !== 'all' || unit !== 'all' || !!query || filterBySelection;
+    const resetFilters = () => {
+        setQuery('');
+        setStatus('all');
+        setPerson('all');
+        setSprint('all');
+        setUnit('all');
+        setFilterBySelection(false);
+    };
+    const showSelection = () => {
+        resetFilters();
+        setFilterBySelection(true);
+        setQueryOpen(false);
+    };
 
     return (
         <div className="flex flex-col gap-5">
@@ -138,8 +191,11 @@ const ModernTaskList: React.FC<ModernTaskListProps> = ({ tasks, resources, sprin
                     </select>
                 )}
                 {filtersActive && (
-                    <button type="button" className="m-btn m-btn-plain" onClick={() => { setQuery(''); setStatus('all'); setPerson('all'); setSprint('all'); setUnit('all'); }}>Temizle</button>
+                    <button type="button" className="m-btn m-btn-plain" onClick={resetFilters}>Filtreleri temizle</button>
                 )}
+                <button type="button" className="m-btn m-btn-gray" aria-expanded={queryOpen} onClick={() => setQueryOpen(open => !open)}>
+                    <Icon name="search" size={18} />{queryOpen ? 'Sorguyu kapat' : 'Sorguyla seç'}
+                </button>
                 <div className="relative ml-auto">
                     <button type="button" className="m-btn m-btn-gray" aria-haspopup="menu" aria-expanded={ioOpen} disabled={busy} onClick={() => setIoOpen(o => !o)}>
                         <Icon name="download" size={18} />
@@ -172,23 +228,60 @@ const ModernTaskList: React.FC<ModernTaskListProps> = ({ tasks, resources, sprin
             {notice && (
                 <div role={notice.kind === 'error' ? 'alert' : 'status'} className={`rounded-2xl px-4 py-3 flex items-center gap-3 text-[15px] ${notice.kind === 'error' ? 'm-tone-bad' : 'm-tone-ok'}`}>
                     <Icon name={notice.kind === 'error' ? 'alert' : 'check'} size={18} strokeWidth={2} />
-                    <span className="flex-1">{notice.kind === 'error' ? `İçe aktarılamadı: ${notice.text}` : notice.text}</span>
+                    <span className="flex-1">{notice.text}</span>
                     <button type="button" className="m-icon-btn" aria-label="Kapat" onClick={() => setNotice(null)}><Icon name="x" size={18} /></button>
                 </div>
             )}
 
             {hiddenByView > 0 && <ViewFilterNote text={`Yönetici ayarı: ${MIN_PRIORITY_OPTIONS.find(o => o.value === minPriority)!.label.toLocaleLowerCase('tr-TR')} görevler gösteriliyor · ${hiddenByView} görev gizli`} />}
 
-            {groups.length === 0 && (
+            {bulkEdit && !queryOpen && (filtered.length > 0 || selected.size > 0) && (
+                <div className="flex flex-wrap items-center gap-2">
+                    {!filterBySelection && filtered.length > 0 && (
+                        <label className="inline-flex min-h-[36px] items-center gap-2 px-1 text-[14px] m-text-2 cursor-pointer">
+                            <input type="checkbox" className="w-4 h-4" checked={allSelected}
+                                ref={input => { if (input) input.indeterminate = selectedInFilter > 0 && !allSelected; }}
+                                onChange={e => setSelected(filtered, e.target.checked)} />
+                            Filtreye uyan görevleri seç ({filtered.length})
+                        </label>
+                    )}
+                    {selected.size > 0 && (
+                        <>
+                            <span className="text-[14px] m-text-2 px-1" aria-live="polite">{selected.size} görev seçili</span>
+                            {bulkAction}
+                            <button type="button" className="m-btn m-btn-plain !min-h-[36px]" onClick={() => { setSelection(new Set()); setFilterBySelection(false); }}>Seçimi temizle</button>
+                        </>
+                    )}
+                </div>
+            )}
+
+            {queryOpen && (
+                <section aria-label="Sorguyla görev seç" className="m-surface rounded-2xl p-4 flex flex-col gap-3">
+                    <TaskQueryPicker projectId={projectId} tasks={filtered} ctx={queryContext} selected={selected} onChange={setSelection} onViewTask={onViewTask} />
+                    <div className="flex flex-wrap gap-2">
+                        {bulkAction}
+                        <button type="button" className="m-btn m-btn-gray !min-h-[36px]" disabled={!selected.size} onClick={showSelection}>
+                            Seçilenleri listede göster ({selected.size})
+                        </button>
+                    </div>
+                </section>
+            )}
+            {!queryOpen && filterBySelection && (
+                <button type="button" className="m-btn m-btn-plain self-start" onClick={() => setFilterBySelection(false)}>
+                    <Icon name="x" size={16} />Seçim filtresini kaldır ({selected.size})
+                </button>
+            )}
+
+            {!queryOpen && groups.length === 0 && (
                 <div className="m-surface rounded-2xl px-5 py-10 text-center">
                     <p className="m-0 text-[17px] font-semibold m-text">{tasks.length === 0 ? 'Bu projede henüz görev yok' : 'Filtreye uyan görev yok'}</p>
                     <p className="m-0 mt-1 text-[15px] m-text-3">{tasks.length === 0 ? '"Yeni görev" ile ekleyin ya da bir dosyadan içe aktarın.' : 'Filtreleri değiştirin ya da temizleyin.'}</p>
                 </div>
             )}
 
-            {groups.map(g => {
+            {!queryOpen && groups.map(g => {
                 const meta = COLUMN_META[g.id];
-                const collapsed = g.id === TaskStatus.Done && !showDone && g.rows.length > 5;
+                const collapsed = g.id === TaskStatus.Done && !showDone && !filterBySelection && g.rows.length > 5;
                 const rows = collapsed ? g.rows.slice(0, 5) : g.rows;
                 return (
                     <section key={g.id} aria-label={`${meta.label}, ${g.rows.length} görev`} className="flex flex-col gap-2.5">
@@ -198,8 +291,9 @@ const ModernTaskList: React.FC<ModernTaskListProps> = ({ tasks, resources, sprin
                             <span className="text-[15px] m-text-3 m-tabular">{g.rows.length}</span>
                         </div>
                         <div className="m-surface rounded-2xl overflow-x-auto">
-                            <div style={{ minWidth: 820 }}>
-                                <div aria-hidden="true" className="grid items-center gap-3 pl-2 pr-4 pt-2.5 pb-2 text-[13px] m-text-3" style={{ gridTemplateColumns: GRID }}>
+                            <div style={{ minWidth: bulkEdit ? 868 : 820 }}>
+                                <div aria-hidden="true" className="grid items-center gap-3 pl-2 pr-4 pt-2.5 pb-2 text-[13px] m-text-3" style={{ gridTemplateColumns: grid }}>
+                                    {bulkEdit && <span className="text-center">Seç</span>}
                                     <span></span><span>Görev</span><span>Atanan</span><span>Sprint</span><span>Öncelik</span><span>Bitiş</span><span></span>
                                 </div>
                                 {rows.map(t => {
@@ -207,7 +301,8 @@ const ModernTaskList: React.FC<ModernTaskListProps> = ({ tasks, resources, sprin
                                     const isDone = g.id === TaskStatus.Done;
                                     const prio = PRIORITY_META[t.priority];
                                     return (
-                                        <div key={t.id} className="grid items-center gap-3 pl-2 pr-2 py-1.5 min-h-[60px] border-t m-sep" style={{ gridTemplateColumns: GRID }}>
+                                        <div key={t.id} className={`grid items-center gap-3 pl-2 pr-2 py-1.5 min-h-[60px] border-t m-sep ${bulkEdit && selected.has(t.id) ? 'm-fill-2' : ''}`} style={{ gridTemplateColumns: grid }}>
+                                            {bulkEdit && <label className="grid min-h-[44px] place-items-center cursor-pointer"><input type="checkbox" className="w-4 h-4" aria-label={`${t.name} seç`} checked={selected.has(t.id)} onChange={e => setSelected([t], e.target.checked)} /></label>}
                                             <button
                                                 type="button"
                                                 className="m-icon-btn"
@@ -223,6 +318,7 @@ const ModernTaskList: React.FC<ModernTaskListProps> = ({ tasks, resources, sprin
                                                 <span className="text-[13px] m-text-3 truncate flex items-center gap-1.5">
                                                     {t.jiraStatus && <span title={t.jiraStatus} className="inline-flex items-center h-5 px-1.5 rounded text-[11.5px] font-semibold m-fill-2 m-text-2 flex-none">{taskStatusLabel(t, workflow)}</span>}
                                                     <span className="truncate">{[t.jiraId, t.unit].filter(Boolean).join(' · ') || 'Numara yok'}</span>
+                                                    {t.fixVersion && <span title={`Hedef sürüm · ${t.fixVersion}`} className="truncate m-accent">{t.fixVersion}</span>}
                                                 </span>
                                             </button>
                                             <span className="flex items-center gap-2 text-[15px] min-w-0">
@@ -252,6 +348,22 @@ const ModernTaskList: React.FC<ModernTaskListProps> = ({ tasks, resources, sprin
                     </section>
                 );
             })}
+            {bulkEdit && bulkOpen && (
+                <BulkTaskEditSheet
+                    project={{ resources, versions: bulkEdit.versions }}
+                    people={bulkEdit.people}
+                    requiredFields={bulkEdit.requiredFields}
+                    tasks={viewTasks.filter(t => selected.has(t.id))}
+                    onClose={closeBulk}
+                    onApply={patch => {
+                        const result = bulkEdit.onApply(selected, patch);
+                        if ('error' in result) return result.error;
+                        setNotice({ kind: 'ok', text: `${result.changed} görev güncellendi.` });
+                        closeBulk();
+                        return undefined;
+                    }}
+                />
+            )}
         </div>
     );
 };
