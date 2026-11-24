@@ -6,7 +6,8 @@ import {
   applyCloudMembership, checkCloudConnection, clearConflictFlag, CloudWorkspaceOption,
   createCloudWorkspace, CLOUD_SCHEMA_MESSAGE, getCloudUser, getDeploymentCloudConnection,
   hasPendingConflict, listCloudWorkspaces, loadCloudConfig, pullWorkspace, pushWorkspace, saveCloudConfig,
-  requestCloudCode, signOut, verifyCloudCode,
+  requestCloudCode,
+  signInCloudWithPassword, signOut, verifyCloudCode,
 } from '../utils/cloudSync';
 import schema from '../supabase/schema.sql?raw';
 import CloudAccessManager from './CloudAccessManager';
@@ -49,6 +50,7 @@ const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ workspace, onReplaceWor
   const [email, setEmail] = useState('');
   const [codeEmail, setCodeEmail] = useState('');
   const [code, setCode] = useState('');
+  const [password, setPassword] = useState('');
   const [canResendAfter, setCanResendAfter] = useState(0);
   const [untilResend, setUntilResend] = useState(0);
   const [busy, setBusy] = useState(true);
@@ -161,6 +163,18 @@ const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ workspace, onReplaceWor
     setUntilResend(60);
     setCanResendAfter(Date.now() + 60_000);
     note('ok', 'Tek kullanımlık kod e-posta adresinize gönderildi.');
+  };
+
+  const passwordSignIn = async () => {
+    const address = email.trim();
+    if (!address || !password) return;
+    const error = await signInCloudWithPassword(address, password);
+    if (error) { note('err', error); return; }
+    const signedIn = await getCloudUser();
+    if (!signedIn) { note('err', 'Oturum doğrulanamadı. Tekrar deneyin.'); return; }
+    setUser(signedIn);
+    setPassword('');
+    await refreshWorkspaces(signedIn);
   };
 
   const authenticate = async () => {
@@ -279,14 +293,18 @@ const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ workspace, onReplaceWor
           )}
 
           {config && !user && (
-            <form className={panel} onSubmit={e => { e.preventDefault(); void run(codeEmail ? authenticate : sendCode); }}>
+            <form className={panel} onSubmit={e => { e.preventDefault(); void run(codeEmail ? authenticate : password ? passwordSignIn : sendCode); }}>
               <h4 className="font-semibold text-gray-900 dark:text-gray-100">E-posta koduyla giriş</h4>
               {codeEmail ? <>
                 <p className={help}>{codeEmail} adresine gelen kodu girin.</p>
                 <label className={label}>Tek kullanımlık kod<input className={inputCls} autoComplete="one-time-code" inputMode="numeric" pattern="[0-9]{6,10}" required maxLength={10} value={code} onChange={e => setCode(e.target.value.replace(/\D/g, ''))} /></label>
-              </> : <label className={label}>E-posta<input className={inputCls} type="email" autoComplete="email" required value={email} onChange={e => setEmail(e.target.value)} /></label>}
+              </> : <>
+                <label className={label}>E-posta<input className={inputCls} type="email" autoComplete="username" required value={email} onChange={e => setEmail(e.target.value)} /></label>
+                <label className={label}>Parola (isteğe bağlı)<input className={inputCls} type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} /></label>
+                <p className={help}>Supabase panelinde parolası tanımlı hesaplar parolayla kod beklemeden girer. Parola boşsa e-postanıza kod gönderilir.</p>
+              </>}
               <div className="flex flex-wrap items-center gap-2">
-                <button disabled={busy || (!!codeEmail && code.length < 6)} className={primary}>{codeEmail ? 'Kodu doğrula' : 'Kod gönder'}</button>
+                <button disabled={busy || (!!codeEmail && code.length < 6)} className={primary}>{codeEmail ? 'Kodu doğrula' : password ? 'Parolayla giriş yap' : 'Kod gönder'}</button>
                 {codeEmail && <>
                   <button type="button" disabled={busy || untilResend > 0} onClick={() => void run(sendCode)} className={secondary}>{untilResend ? 'Yeniden gönder (' + untilResend + ' sn)' : 'Kodu yeniden gönder'}</button>
                   <button type="button" disabled={busy} className={secondary} onClick={() => { setCodeEmail(''); setCode(''); setMessage(null); }}>E-postayı değiştir</button>

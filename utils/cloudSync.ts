@@ -225,6 +225,18 @@ export const requestCloudCode = async (email: string): Promise<string | null> =>
     return error.message && error.message !== '{}' ? error.message : 'Kod gönderilemedi. Bağlantı ayarlarını kontrol edip tekrar deneyin.';
 };
 
+/** Supabase panelinde parola tanımlanmış hesaplar (ör. yönetici) kod beklemeden girer. */
+export const signInCloudWithPassword = async (email: string, password: string): Promise<string | null> => {
+    const c = getClient();
+    if (!c) return 'Önce bağlantı ayarlarını kaydedin.';
+    const { error } = await c.auth.signInWithPassword({ email, password });
+    if (!error) return null;
+    if (error.status === 400 || error.code === 'invalid_credentials') return 'E-posta veya parola hatalı.';
+    if (error.code === 'email_not_confirmed') return 'Bu hesabın e-postası doğrulanmamış. Supabase panelinde kullanıcıyı onaylayın.';
+    if (error.status === 429) return 'Çok fazla deneme yapıldı. Biraz bekleyip tekrar deneyin.';
+    return cloudAuthServerError(error) ?? error.message;
+};
+
 export const verifyCloudCode = async (email: string, token: string): Promise<string | null> => {
     const c = getClient();
     if (!c) return 'Önce bağlantı ayarlarını kaydedin.';
