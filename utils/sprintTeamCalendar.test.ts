@@ -119,6 +119,7 @@ describe('sprint ekip takvimi', () => {
         const midweek = at('2026-11-25');
         expect(midweek).toMatchObject({ available: 24, inProgress: 12 });
         expect(midweek.items.map(item => [item.task.id, item.fit])).toEqual([['acil', 'late'], ['termin', 'late'], ['sonra', 'late'], ['tahminsiz', 'unknown']]);
+        expect(midweek.started.map(item => [item.task.id, item.estimate, item.fit])).toEqual([['kayitli', 6, 'fits'], ['suren', 6, 'fits']]);
 
         // 23 Kasım: 40 sa; "suren" o gün başladı (6 sa), "kayitli" henüz kayıtsız → havuzda.
         // 6 + 16 + 8 + 8 = 38 sa sığar, "sonra" ile 46 sa olur.

@@ -11,6 +11,7 @@ import { COLUMN_META, columnOf, daysLate, initialsOf, PRIORITY_META, sprintLabel
 import { Field, Sheet } from './ui';
 import { Identity } from '../../utils/rbac';
 import TaskQueryPicker from './TaskQueryPicker';
+import SprintSpanBadge from './SprintSpanBadge';
 import SprintTeamCalendar from './SprintTeamCalendar';
 import PlanReadinessSheet from './planning/PlanReadinessSheet';
 import { checkPlanReadiness, PlanReadiness } from '../../utils/planning/planReadiness';
@@ -85,7 +86,10 @@ const LaneMenu: React.FC<{ label: string; items: { label: string; danger?: boole
     );
 };
 
-const TaskChip: React.FC<{ task: Task; draggable: boolean; onOpen: () => void }> = ({ task, draggable, onOpen }) => {
+const TaskChip: React.FC<{ task: Task; draggable: boolean; onOpen: () => void; sprint?: number; sprintNames?: Record<number, string> }> = ({ task, draggable, onOpen, sprint, sprintNames }) => {
+    // Sprintler arası görevin devam ettiği sprintteki kopyası sürüklenmez; taşıma başladığı sprintten yapılır.
+    const continuation = sprint !== undefined && sprint !== (task.version || 0);
+    draggable = draggable && !continuation;
     const col = columnOf(task.status);
     const done = task.status === TaskStatus.Done;
     const pert = task.time.avg > 0 ? calculatePertFuzzyPert(task.time).pert : 0;
@@ -96,7 +100,7 @@ const TaskChip: React.FC<{ task: Task; draggable: boolean; onOpen: () => void }>
             draggable={draggable}
             onDragStart={e => { e.dataTransfer.setData('text/plain', task.id); e.dataTransfer.effectAllowed = 'move'; }}
             className={`m-surface rounded-xl ${draggable ? 'cursor-grab active:cursor-grabbing' : ''}`}
-            style={{ boxShadow: 'var(--m-shadow)' }}
+            style={{ boxShadow: continuation ? 'inset 0 0 0 1.5px var(--m-hold)' : 'var(--m-shadow)', opacity: continuation ? 0.85 : undefined }}
         >
             <button type="button" onClick={onOpen} className="m-row-link rounded-xl px-3 py-2.5 flex items-start gap-2.5 text-left">
                 <span aria-hidden="true" className="mt-1 w-3 h-3 rounded-full flex-none" style={{ boxShadow: `inset 0 0 0 2px ${COLUMN_META[col].ring}`, background: COLUMN_META[col].fill }}></span>
@@ -108,6 +112,7 @@ const TaskChip: React.FC<{ task: Task; draggable: boolean; onOpen: () => void }>
                         {urgent && <span className={`whitespace-nowrap font-semibold ${PRIORITY_META[task.priority].ink}`}>{PRIORITY_META[task.priority].label}</span>}
                         {late > 0 && <span className="m-ink-bad font-semibold whitespace-nowrap">{late} g gecikti</span>}
                     </span>
+                    <SprintSpanBadge task={task} sprint={sprint} sprintNames={sprintNames} />
                 </span>
             </button>
         </div>
@@ -496,7 +501,7 @@ const ModernTimeline: React.FC<ModernTimelineProps> = ({ project, people, leaves
                         >
                             {laneHeader(l)}
                             <div className="flex flex-col gap-2 px-2.5 pb-3">
-                                {l.tasks.map(t => <TaskChip key={t.id} task={t} draggable={canEdit} onOpen={() => onViewTask(t)} />)}
+                                {l.tasks.map(t => <TaskChip key={t.id} task={t} draggable={canEdit} sprint={l.version} sprintNames={names} onOpen={() => onViewTask(t)} />)}
                                 {l.tasks.length === 0 && <span className="px-1 py-6 text-center text-[14px] m-text-3">{canEdit ? 'Görevleri buraya sürükleyin' : 'Görev yok'}</span>}
                             </div>
                         </section>

@@ -38,6 +38,8 @@ export interface Task {
   availability: boolean;
   priority: 'Blocker' | 'High' | 'Medium' | 'Low';
   version: number;
+  /** Görevin sürdüğü ardışık sprint sayısı; `version` sprintinde başlar (yoksa 1) */
+  sprintSpan?: number;
   predecessor: string | null;
   unit: string;
   resourceName: string;

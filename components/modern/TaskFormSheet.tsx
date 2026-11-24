@@ -12,6 +12,7 @@ import { useAiRun } from '../assistant/AiButton';
 import { Icon } from './icons';
 import { PRIORITY_META, sprintLabel, TASK_STATUS_LABELS, uniq } from './taskMeta';
 import { Field, Sheet } from './ui';
+import { MAX_SPRINT_SPAN, requestedSprintSpan } from '../../utils/sprintSpan';
 
 /**
  * Modern görev formu (ekle/düzenle). Sık kullanılanlar üstte; süre, bağlantılar
@@ -48,7 +49,7 @@ const emptyDraft = (resources: Resource[]): Draft => ({
 });
 
 const fromTask = (t: Task): Draft => ({
-    name: t.name, priority: t.priority, version: t.version, predecessor: t.predecessor, unit: t.unit, resourceName: t.resourceName,
+    name: t.name, priority: t.priority, version: t.version, sprintSpan: t.sprintSpan, predecessor: t.predecessor, unit: t.unit, resourceName: t.resourceName,
     time: { ...t.time }, jiraId: t.jiraId, notes: t.notes, status: t.status, labels: t.labels || [], includeInSprints: t.includeInSprints ?? true,
     keyResultId: t.keyResultId, workPackageId: t.workPackageId, dueDate: t.dueDate, subtasks: t.subtasks, comments: t.comments,
     issueType: t.issueType, estimateSource: t.estimateSource, jiraStatus: t.jiraStatus, components: t.components, fixVersion: t.fixVersion,
@@ -232,6 +233,11 @@ const TaskFormSheet: React.FC<TaskFormSheetProps> = ({ task, tasks, resources, p
                         <Field label="Sprint" htmlFor="tf-version">
                             <select id="tf-version" className="m-input" value={d.version} onChange={e => set({ version: parseInt(e.target.value, 10) || 0 })}>
                                 {versions.map(v => <option key={v} value={v}>{sprintLabel(v, sprintNames)}</option>)}
+                            </select>
+                        </Field>
+                        <Field label="Sprint sayısı" htmlFor="tf-span" hint={requestedSprintSpan(d) > 1 ? `Görev ${requestedSprintSpan(d)} sprint sürer; efor sprintlere eşit bölünür.` : 'Birden fazlaysa görev sonraki sprintlerde de devam eder.'}>
+                            <select id="tf-span" className="m-input" value={requestedSprintSpan(d)} onChange={e => set({ sprintSpan: parseInt(e.target.value, 10) > 1 ? parseInt(e.target.value, 10) : undefined })}>
+                                {Array.from({ length: MAX_SPRINT_SPAN }, (_, i) => i + 1).map(n => <option key={n} value={n}>{n === 1 ? 'Tek sprint' : `${n} sprint`}</option>)}
                             </select>
                         </Field>
                         <Field label="Termin" htmlFor="tf-due">

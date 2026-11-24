@@ -9,6 +9,7 @@ import { SprintLane } from '../../utils/timelinePlan';
 import { fmtHours } from './WorkforceParts';
 import { COLUMN_META, columnOf, sprintLabel } from './taskMeta';
 import TaskKeyButton from './TaskKeyButton';
+import SprintSpanBadge from './SprintSpanBadge';
 import { Field, Sheet } from './ui';
 import { useJiraTimesheet } from './useJiraTimesheet';
 
@@ -83,6 +84,9 @@ const SprintTeamCalendar = ({ project, lane, people, leaves, identity, selection
     const logged = index ? sum(rows.flatMap(row => model.days.map(day => loggedOf(row.key, day.day)))) : undefined;
     const focusRow = focus ? rows.find(row => row.key === focus.row) : undefined;
     const focusDay = focus && focusRow ? model.days[focus.index] : undefined;
+    // "Sprint sonu" sütunu bugünün tarihiyle hesaplanır (sprint başlamadıysa ilk gün, bittiyse son gün).
+    const todayIso = toIsoDay(new Date());
+    const todayIndex = Math.max(0, model.days.findIndex(day => day.day >= todayIso) === -1 ? model.days.length - 1 : model.days.findIndex(day => day.day >= todayIso));
     const title = `${sprintLabel(lane.version, project.settings.sprintNames)} ekip takvimi`;
     const interval = lane.start && lane.end ? formatRange({ start: toIsoDay(lane.start), end: toIsoDay(lane.testEnd || lane.end) }) : '';
 
@@ -127,6 +131,8 @@ const SprintTeamCalendar = ({ project, lane, people, leaves, identity, selection
                         const items = summarizeSprintTasks(row, model.days, index ?? undefined)
                             .sort((a, b) => (startOf(a) < startOf(b) ? -1 : startOf(a) > startOf(b) ? 1 : a.task.name.localeCompare(b.task.name, 'tr')));
                         if (!items.length && !selected) return null;
+                        const pool = sprintTaskPool(row, model.days, todayIndex, index ?? undefined);
+                        const fitOf = new Map([...pool.started, ...pool.items].map(item => [item.task.id, item.fit]));
                         const plan = sum(items.map(item => item.estimate ?? 0));
                         const spent = index ? sum(items.map(item => item.logged ?? 0)) : undefined;
                         return (
@@ -137,7 +143,7 @@ const SprintTeamCalendar = ({ project, lane, people, leaves, identity, selection
                                 </div>
                                 {items.length === 0 ? <p className="m-0 text-[14px] m-text-3">Bu sprintte atanan görev yok.</p> : (
                                     <div className="overflow-x-auto rounded-xl m-surface" tabIndex={0} aria-label={`${row.name} görev tablosu`}>
-                                        <table className="w-full min-w-[760px] text-[14px] border-collapse">
+                                        <table className="w-full min-w-[900px] text-[14px] border-collapse">
                                             <thead>
                                                 <tr className="text-left text-[12px] m-text-3">
                                                     <th scope="col" className="px-3 py-2 font-semibold">Görev</th>
@@ -147,6 +153,7 @@ const SprintTeamCalendar = ({ project, lane, people, leaves, identity, selection
                                                     <th scope="col" className="px-3 py-2 font-semibold text-right">Sprintte kayıt</th>
                                                     <th scope="col" className="px-3 py-2 font-semibold">Son kayıt</th>
                                                     <th scope="col" className="px-3 py-2 font-semibold text-right">Jira kalan</th>
+                                                    <th scope="col" className="px-3 py-2 font-semibold">Sprint sonu</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -157,8 +164,11 @@ const SprintTeamCalendar = ({ project, lane, people, leaves, identity, selection
                                                             <td className="px-3 py-2">
                                                                 <span className="flex items-start gap-2 min-w-0">
                                                                     <TaskKeyButton task={item.task} onOpen={() => openTask(item.task)} />
-                                                                    <span className="min-w-0 break-words pt-1">{item.task.name}
-                                                                        {component && row.tasks.find(t => t.task.id === item.task.id)?.components.includes(component) && <span className="ml-2 m-accent text-[12px]">Seçili bileşen</span>}</span>
+                                                                    <span className="min-w-0 flex flex-col gap-1 pt-1">
+                                                                        <span className="break-words">{item.task.name}
+                                                                            {component && row.tasks.find(t => t.task.id === item.task.id)?.components.includes(component) && <span className="ml-2 m-accent text-[12px]">Seçili bileşen</span>}</span>
+                                                                        <SprintSpanBadge task={item.task} sprint={lane.version} sprintNames={project.settings.sprintNames} />
+                                                                    </span>
                                                                 </span>
                                                             </td>
                                                             <td className="px-3 py-2 pt-3 whitespace-nowrap m-text-2">{item.task.jiraStatus || COLUMN_META[columnOf(item.task.status)].label}</td>
@@ -171,6 +181,13 @@ const SprintTeamCalendar = ({ project, lane, people, leaves, identity, selection
                                                             </td>
                                                             <td className="px-3 py-2 pt-3 whitespace-nowrap m-text-2">{shortDay(item.lastLog) || <span className="m-text-3">—</span>}</td>
                                                             <td className="px-3 py-2 pt-3 text-right m-tabular whitespace-nowrap">{item.remaining === undefined ? <span className="m-text-3">—</span> : fmtHours(item.remaining)}</td>
+                                                            <td className="px-3 py-2 pt-2.5 whitespace-nowrap">
+                                                                {(() => {
+                                                                    const fit = fitOf.get(item.task.id);
+                                                                    if (!fit) return <span className="inline-flex items-center h-6 px-2 rounded-full text-[12px] font-semibold m-tone-ok">Bitti</span>;
+                                                                    return <span className={`inline-flex items-center h-6 px-2 rounded-full text-[12px] font-semibold ${FIT_LABEL[fit].tone}`}>{fit === 'unknown' && item.estimate === undefined ? 'Tahmin yok' : FIT_LABEL[fit].text}</span>;
+                                                                })()}
+                                                            </td>
                                                         </tr>
                                                     );
                                                 })}
@@ -182,7 +199,7 @@ const SprintTeamCalendar = ({ project, lane, people, leaves, identity, selection
                         );
                     })}
                     {!selected && rows.every(row => !row.tasks.length) && <p className="m-0 text-[14px] m-text-3">Bu sprintte atanan görev yok.</p>}
-                    <p className="m-0 text-[13px] m-text-3">Başlangıç, görevin "Süreçte"ye geçtiği gündür; henüz başlamadıysa planın ilk günü gösterilir. Sprintte kayıt, sprint tarihlerinde kişinin göreve Jira'da girdiği süredir; yüzde efor tahminine oranıdır. Günlük dağılım için Tempo'ya geçin.
+                    <p className="m-0 text-[13px] m-text-3">Başlangıç, görevin "Süreçte"ye geçtiği gündür; henüz başlamadıysa planın ilk günü gösterilir. Sprintte kayıt, sprint tarihlerinde kişinin göreve Jira'da girdiği süredir; yüzde efor tahminine oranıdır. Sprint sonu, {dayLabel.format(model.days[todayIndex]?.date || new Date())} itibarıyla kalan kapasiteye göre hesaplanır: süren işlerin kalanı önce, başlamamış görevler öncelik ve termin sırasıyla eklenir. Sprintler arası görevin eforu sprintlerine eşit bölünür. Günlük dağılım için Tempo'ya geçin.
                         {worklogs.status === 'off' && ' Proje Jira\'ya bağlı olmadığı için çalışma kaydı gösterilmez.'}
                         {worklogs.status === 'error' && <span className="m-ink-warn"> Jira kayıtları alınamadı: {worklogs.error}</span>}</p>
                 </>
@@ -265,6 +282,7 @@ const SprintTeamCalendar = ({ project, lane, people, leaves, identity, selection
                                                         <TaskKeyButton task={task} onOpen={() => openTask(task)} />
                                                         <span className="min-w-0 flex-1 flex flex-col gap-1 pt-1">
                                                             <span className="break-words">{task.name}</span>
+                                                            <SprintSpanBadge task={task} sprint={lane.version} sprintNames={project.settings.sprintNames} />
                                                             <span className={`self-start inline-flex items-center h-6 px-2 rounded-full text-[12px] font-semibold ${FIT_LABEL[fit].tone}`}
                                                                 title={fit === 'unknown' ? (estimate === undefined ? 'Görevin süre tahmini yok.' : 'Kişinin kapasitesi bilinmiyor.') : undefined}>
                                                                 {fit === 'unknown' && estimate === undefined ? 'Tahmin yok' : FIT_LABEL[fit].text}

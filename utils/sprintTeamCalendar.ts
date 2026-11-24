@@ -7,6 +7,7 @@ import { isUnassigned } from './planning/jiraPeople';
 import { isHalfDay, isWorkday } from './planning/workdays';
 import { plannedShare } from './resourcePlan';
 import { SprintLane, taskLoadDays } from './timelinePlan';
+import { sprintSpanOf } from './sprintSpan';
 import { HOURS_PER_DAY, matchWorklogPerson } from './workforce';
 
 const keyOf = (value: string) => value.trim().replace(/\s+/g, ' ').toLocaleLowerCase('tr-TR');
@@ -116,7 +117,9 @@ export const buildSprintTeamCalendar = (project: Project, lane: SprintLane, peop
     }
 
     for (const task of lane.tasks) {
-        const item = { task, hours: effortHours(task), components: componentsOf(task) };
+        // Sprintler arası devam eden görevin bu sprintteki payı
+        const total = effortHours(task);
+        const item = { task, hours: total === undefined ? undefined : total / sprintSpanOf(task), components: componentsOf(task) };
         if (isUnassigned(task.resourceName)) { unassigned.push(item); continue; }
         const row = personRow(task.resourceName);
         item.components.forEach(key => row.components.add(key));
@@ -210,7 +213,10 @@ export interface SprintPool {
     available?: number;
     /** O gün itibarıyla süren (başlamış, bitmemiş) işlerin kalan eforu (saat) */
     inProgress: number;
+    /** Başlamamış görevler (havuz) */
     items: SprintPoolItem[];
+    /** Süren görevler; `estimate` kalan efordur */
+    started: SprintPoolItem[];
 }
 
 const PRIORITY_RANK: Record<Task['priority'], number> = { Blocker: 0, High: 1, Medium: 2, Low: 3 };
@@ -243,29 +249,37 @@ export const sprintTaskPool = (
     const workCells = row.cells.filter((_, i) => i >= dayIndex && days[i]?.kind === 'work');
     const available = workCells.every(cell => cell.capacity !== undefined) ? workCells.reduce((total, cell) => total + (cell.capacity || 0), 0) : undefined;
 
-    let inProgress = 0;
-    const pending: { task: Task; estimate?: number; plannedStart: number }[] = [];
+    type Entry = { task: Task; estimate?: number; plannedStart: number };
+    const running: Entry[] = [];
+    const pending: Entry[] = [];
     for (const { task, hours } of row.tasks) {
         if (doneBy(task)) continue;
+        const first = row.cells.findIndex(cell => (cell.byTask.get(task.id) || 0) > 0);
+        const plannedStart = first < 0 ? Number.MAX_SAFE_INTEGER : first;
         if (startedBy(task)) {
             const spent = loggedOn(task).reduce((total, entry) => total + entry.hours, 0);
             const remaining = task.remainingEstimateHours;
-            inProgress += remaining !== undefined && Number.isFinite(remaining) && remaining >= 0 ? remaining : Math.max(0, (hours ?? 0) - spent);
+            running.push({ task, plannedStart, estimate: remaining !== undefined && Number.isFinite(remaining) && remaining >= 0 ? remaining : Math.max(0, (hours ?? 0) - spent) });
             continue;
         }
-        const first = row.cells.findIndex(cell => (cell.byTask.get(task.id) || 0) > 0);
-        pending.push({ task, estimate: hours, plannedStart: first < 0 ? Number.MAX_SAFE_INTEGER : first });
+        pending.push({ task, estimate: hours, plannedStart });
     }
-    pending.sort((a, b) => (PRIORITY_RANK[a.task.priority] ?? 2) - (PRIORITY_RANK[b.task.priority] ?? 2)
+    const order = (a: Entry, b: Entry) => (PRIORITY_RANK[a.task.priority] ?? 2) - (PRIORITY_RANK[b.task.priority] ?? 2)
         || compareDay(a.task.dueDate, b.task.dueDate)
         || a.plannedStart - b.plannedStart
-        || a.task.name.localeCompare(b.task.name, 'tr'));
+        || a.task.name.localeCompare(b.task.name, 'tr');
+    running.sort(order);
+    pending.sort(order);
 
-    let queued = inProgress;
-    const items = pending.map(({ task, estimate }): SprintPoolItem => {
+    // Süren işler önce, ardından başlamamışlar sırayla kalan kapasiteye eklenir.
+    let queued = 0;
+    const place = ({ task, estimate }: Entry): SprintPoolItem => {
         if (available === undefined || estimate === undefined) return { task, estimate, fit: 'unknown' };
         queued += estimate;
         return { task, estimate, fit: queued <= available + 1e-6 ? 'fits' : 'late' };
-    });
-    return { available, inProgress, items };
+    };
+    const started = running.map(place);
+    const inProgress = running.reduce((total, entry) => total + (entry.estimate ?? 0), 0);
+    queued = inProgress;
+    return { available, inProgress, items: pending.map(place), started };
 };

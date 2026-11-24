@@ -145,3 +145,16 @@ describe('paralel test', () => {
         expect(currentLaneVersion(lanesOf(true), first.end!)).toBe(first.version);
     });
 });
+
+describe('sprintler arası görevler', () => {
+    it('görev sürdüğü her sprint şeridinde görünür, eforu sprintlere bölünür', () => {
+        const p = buildProject();
+        p.tasks = [...p.tasks, task('uzun', 2, 'U310', 'Ayşe', 12, { sprintSpan: 2 })];
+        const lanes = buildLanes(p);
+        expect(lanes).toHaveLength(4);
+        expect(lanes[2].tasks.map(t => t.id)).toContain('uzun');
+        expect(lanes[3].tasks.map(t => t.id)).toEqual(['uzun']);
+        expect(lanes[3].units.find(u => u.unit === 'U310')?.load).toBe(6);
+        expect(lanes[0].tasks.map(t => t.id)).not.toContain('uzun');
+    });
+});
