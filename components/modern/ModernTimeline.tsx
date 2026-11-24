@@ -8,7 +8,7 @@ import { DayRange, formatRange, isDayRange, toIsoDay } from '../../utils/calenda
 import { canPlanSprintTask, periodTaskQuery, sprintsInPeriod } from '../../utils/planning/period';
 import { Icon } from './icons';
 import { COLUMN_META, columnOf, daysLate, initialsOf, PRIORITY_META, sprintLabel } from './taskMeta';
-import { Field, Sheet } from './ui';
+import { Field, SelectionStrip, Sheet, ToggleSwitch } from './ui';
 import TaskQueryPicker from './TaskQueryPicker';
 
 /**
@@ -124,17 +124,17 @@ const CalendarSheet: React.FC<{ value: CalendarSettings; onClose: () => void; on
             </Field>
             <div className="flex flex-col gap-1.5">
                 <span className="text-[13px] font-semibold m-text-2">Sprint süresi</span>
-                <div className="m-segmented self-start" role="group" aria-label="Sprint süresi">
+                <SelectionStrip className="m-segmented self-start" role="group" label="Sprint süresi" selection={weeks}>
                     {[1, 2, 3, 4, 5, 6].map(w => <button key={w} type="button" className="m-segment" aria-pressed={weeks === w} onClick={() => setWeeks(w)}>{w} hf</button>)}
-                </div>
+                </SelectionStrip>
             </div>
             <Field label="Test dönemi (iş günü)" htmlFor="tl-test" hint="Her sprintin ardından test ve canlıya alma için ayrılan süre">
                 <input id="tl-test" type="number" min={0} max={20} className="m-input m-tabular" value={testDays} onChange={e => setTestDays(Math.max(0, Math.min(20, parseInt(e.target.value, 10) || 0)))} />
             </Field>
-            <label className="flex items-center gap-2 text-[14px] m-text">
-                <input type="checkbox" className="w-4 h-4" checked={useRemaining} onChange={e => setUseRemaining(e.target.checked)} />
-                EVM ve iş yükü tahmininde Jira kalan süresini kullan
-            </label>
+            <div className="m-switch-row flex items-center justify-between gap-3 text-[14px] m-text">
+                <span>EVM ve iş yükü tahmininde Jira kalan süresini kullan</span>
+                <ToggleSwitch label="EVM ve iş yükü tahmininde Jira kalan süresini kullan" checked={useRemaining} onChange={setUseRemaining} />
+            </div>
         </Sheet>
     );
 };

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ColorMode, ModernTheme, UiStyle } from '../types';
 import { COLOR_MODES, MODERN_THEMES } from '../utils/theme';
+import { SelectionStrip, ToggleSwitch } from './modern/ui';
 
 interface SettingsModalProps {
   sprintDuration: number;
@@ -69,11 +70,11 @@ const UiPreview: React.FC<{ kind: UiStyle }> = ({ kind }) => kind === 'modern' ?
 /** Modern tema kartlarındaki küçük önizleme — her temanın yüzey ve köşe dili */
 const THEME_PREVIEW: Record<ModernTheme, { bg: string; side: React.CSSProperties; card: React.CSSProperties; btn: React.CSSProperties; line: string }> = {
   bubble: {
-    bg: 'radial-gradient(120% 90% at 100% 0%, #D9E8FF 0%, transparent 60%), radial-gradient(90% 80% at 0% 100%, #FFE1EC 0%, transparent 60%), #F2F2F7',
-    side: { background: 'rgba(255,255,255,0.75)', borderRadius: 8, margin: 4, boxShadow: '0 2px 6px rgba(30,40,80,0.10)' },
-    card: { background: '#FFFFFF', borderRadius: 8, boxShadow: '0 2px 6px rgba(30,40,80,0.10)' },
-    btn: { background: '#0066D6', borderRadius: 999 },
-    line: '#1C1C1E',
+    bg: 'radial-gradient(90% 110% at 85% 0%, #B9DFFF, transparent 73%), radial-gradient(100% 85% at 10% 100%, #DAD1FF, transparent 74%), #EEF2FA',
+    side: { background: 'rgba(255,255,255,.67)', borderRadius: 10, margin: 4, border: '1px solid #FFFFFF', boxShadow: '0 2px 8px #30499525' },
+    card: { background: 'linear-gradient(125deg, #FFFFFF, #EFF4FF)', borderRadius: 8, border: '1px solid #FFFFFF', boxShadow: '0 2px 6px #30499522' },
+    btn: { background: 'linear-gradient(145deg, #4068EA, #2750C6)', borderRadius: 999 },
+    line: '#182441',
   },
   aurora: {
     bg: 'radial-gradient(70% 70% at 10% 10%, rgba(45,212,191,0.6), transparent 70%), radial-gradient(60% 60% at 95% 30%, rgba(56,189,248,0.5), transparent 70%), radial-gradient(70% 60% at 60% 110%, rgba(190,242,100,0.55), transparent 70%), #EAF4F6',
@@ -161,14 +162,14 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex justify-center items-center p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-fade-in-up">
-        <div className="flex justify-between items-center p-5 border-b dark:border-gray-700">
-          <h2 className="text-lg font-bold flex items-center text-gray-800 dark:text-white">
+    <div className="m-sheet-backdrop fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex justify-center items-center p-4">
+      <div role="dialog" aria-modal="true" aria-labelledby="app-settings-title" className="m-app-dialog m-appearance-dialog bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-fade-in-up">
+        <div className="m-app-dialog-header flex justify-between items-center p-5 border-b dark:border-gray-700">
+          <h2 id="app-settings-title" className="text-lg font-bold flex items-center text-gray-800 dark:text-white">
             <i aria-hidden="true" className="fa-solid fa-sliders mr-3 text-primary"></i>
             Uygulama Ayarları
           </h2>
-          <button aria-label="Kapat" onClick={onClose} className="text-gray-400 hover:text-gray-700 dark:hover:text-white transition-colors">
+          <button aria-label="Kapat" onClick={onClose} className="m-app-dialog-close text-gray-400 hover:text-gray-700 dark:hover:text-white transition-colors">
             <i aria-hidden="true" className="fa-solid fa-times"></i>
           </button>
         </div>
@@ -205,7 +206,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
           <section className="space-y-4 pt-6 border-t dark:border-gray-700" aria-labelledby="appearance-title">
               <div className="flex flex-wrap justify-between items-center gap-3">
                   <h3 id="appearance-title" className="text-xs font-black text-gray-400 uppercase tracking-widest">{isModernActive ? 'Görünüm & Tema' : 'Görünüm & Renk'}</h3>
-                  <div role="radiogroup" aria-label="Gündüz / gece" className="inline-flex p-0.5 rounded-xl bg-gray-100 dark:bg-gray-700">
+                  <SelectionStrip role="radiogroup" label="Gündüz / gece" selection={colorMode} className="m-color-mode inline-flex p-0.5 rounded-xl bg-gray-100 dark:bg-gray-700">
                       {COLOR_MODES.map(m => {
                           const on = colorMode === m.id;
                           return (
@@ -214,6 +215,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                 type="button"
                                 role="radio"
                                 aria-checked={on}
+                                tabIndex={on ? 0 : -1}
                                 onClick={() => { if (!on) onChangeAppearance({ colorMode: m.id }); }}
                                 className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-[10px] text-xs font-semibold transition-colors ${on ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm' : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white'}`}
                               >
@@ -222,7 +224,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                               </button>
                           );
                       })}
-                  </div>
+                  </SelectionStrip>
               </div>
               {isModernActive ? (
                   <>
@@ -236,13 +238,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                     role="radio"
                                     aria-checked={selected}
                                     onClick={() => { if (!selected) onChangeAppearance({ modernTheme: t.id }); }}
-                                    className={`text-left p-2 rounded-xl border-2 transition-colors ${selected ? '' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-500'}`}
+                                    className={`m-theme-choice text-left p-2 rounded-xl border-2 transition-colors ${selected ? '' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-500'}`}
                                     style={selected ? { borderColor: 'var(--app-primary)' } : {}}
                                   >
                                       <ThemePreview id={t.id} />
                                       <span className="mt-2 flex items-center gap-1.5 text-sm font-semibold text-gray-800 dark:text-white">
                                           {t.name}
-                                          {selected && <i className="fa-solid fa-circle-check text-xs" style={{ color: 'var(--app-primary)' }} aria-hidden="true"></i>}
+                                          {selected && <i className="m-theme-choice-check fa-solid fa-circle-check text-xs" style={{ color: 'var(--app-primary)' }} aria-hidden="true"></i>}
                                       </span>
                                       <span className="block text-xs text-gray-600 dark:text-gray-400">{t.hint}</span>
                                   </button>
@@ -300,13 +302,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     <span className="text-sm font-bold text-gray-800 dark:text-white">Yapay Zeka Asistanı</span>
                     <span className="text-[10px] text-gray-500 dark:text-gray-400">Akıllı analiz asistanı.</span>
                 </div>
-                <button 
-                  onClick={() => setAiEnabled(!aiEnabled)}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${aiEnabled ? 'bg-primary' : 'bg-gray-300 dark:bg-gray-600'}`}
-                  style={aiEnabled ? { backgroundColor: 'var(--app-primary)' } : {}}
-                >
-                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${aiEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
-                </button>
+                <ToggleSwitch label="Yapay Zeka Asistanı" checked={aiEnabled} onChange={setAiEnabled} />
               </div>
 
               <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-100 dark:border-gray-700">
@@ -314,13 +310,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     <span className="text-sm font-bold text-gray-800 dark:text-white">Yerel Kayıt</span>
                     <span className="text-[10px] text-gray-500 dark:text-gray-400">Verileri tarayıcıda sakla.</span>
                 </div>
-                <button 
-                  onClick={() => setPersistenceEnabled(!persistenceEnabled)}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${persistenceEnabled ? 'bg-primary' : 'bg-gray-300 dark:bg-gray-600'}`}
-                  style={persistenceEnabled ? { backgroundColor: 'var(--app-primary)' } : {}}
-                >
-                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${persistenceEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
-                </button>
+                <ToggleSwitch label="Yerel Kayıt" checked={persistenceEnabled} onChange={setPersistenceEnabled} />
               </div>
 
               <button 

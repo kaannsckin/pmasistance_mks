@@ -94,8 +94,8 @@ const ModernDashboard: React.FC<Props> = ({ workspace, project, canEdit, role, p
 
     return (
         <div className="flex flex-col gap-4">
-            <div className="flex items-center gap-2 flex-wrap">
-                <div className="flex-1 min-w-[200px]">
+            <div className="m-dashboard-toolbar flex items-center gap-2 flex-wrap">
+                <div className="m-dashboard-heading flex-1 min-w-[200px]">
                     <h2 className="m-0 text-[20px] font-semibold m-text">Dashboard</h2>
                     <p className="m-0 text-[13px] m-text-3">{source}{personal?.updatedAt ? ` · ${new Date(personal.updatedAt).toLocaleString('tr-TR', { dateStyle: 'medium', timeStyle: 'short' })}` : ''} · {layout.widgets.length} bileşen</p>
                 </div>
@@ -141,6 +141,7 @@ const ModernDashboard: React.FC<Props> = ({ workspace, project, canEdit, role, p
                                 key={w.id}
                                 id={`dw-${w.id}`}
                                 aria-label={title}
+                                data-metric={w.type === 'metric' ? (w.config?.metric || 'progress') : undefined}
                                 className={`m-dash-w s${w.size} m-surface rounded-2xl p-4 flex flex-col gap-3 min-w-0 ${editing ? 'is-editing' : ''} ${overId === w.id && dragId !== w.id ? 'is-drop' : ''} ${dragId === w.id ? 'is-dragging' : ''}`}
                                 draggable={editing}
                                 onDragStart={e => { setDragId(w.id); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', w.id); }}

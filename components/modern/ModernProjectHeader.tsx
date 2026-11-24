@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Project, ProjectSectionKey, ProjectStatus, RagStatus, View } from '../../types';
 import { Icon, IconName } from './icons';
+import { SelectionStrip } from './ui';
 
 /**
  * Proje ekranlarının üst kısmı: geri (Portföy), başlık, durum, eylemler ve
@@ -76,16 +77,16 @@ const ModernProjectHeader: React.FC<ModernProjectHeaderProps> = ({ project, owne
     const meta = [ownerName || 'Sahip atanmadı', project.code, start ? `Başlangıç ${start}` : ''].filter(Boolean).join(' · ');
 
     return (
-        <div className="flex flex-col gap-4 mb-6">
+        <div className="m-project-header flex flex-col gap-4 mb-6">
             <div className="flex flex-col gap-1">
-                <button type="button" onClick={onBack} className="self-start inline-flex items-center min-h-[44px] -ml-2 pr-2 rounded-xl text-[17px] m-accent">
+                <button type="button" onClick={onBack} className="m-project-back self-start inline-flex items-center min-h-[44px] -ml-2 pr-2 rounded-xl text-[17px] m-accent">
                     <Icon name="chevronLeft" size={24} strokeWidth={2.2} />
                     Portföy
                 </button>
                 <div className="flex flex-wrap items-end justify-between gap-4">
                     <div className="min-w-0 flex flex-col gap-1.5">
                         <div className="flex flex-wrap items-center gap-3">
-                            <h1 className="m-0 text-[34px] leading-tight font-bold tracking-[-0.02em] m-text">{project.name}</h1>
+                            <h1 className="m-project-title m-0 text-[34px] leading-tight font-bold tracking-[-0.02em] m-text">{project.name}</h1>
                             {rag && <span className={`inline-flex items-center h-7 px-3 rounded-full text-[13px] font-semibold ${rag.tone}`}>{rag.label}</span>}
                             {!rag && <span className="inline-flex items-center h-7 px-3 rounded-full text-[13px] font-semibold m-tone-hold">{PROJECT_STATUS_LABEL[project.status]}</span>}
                         </div>
@@ -105,13 +106,14 @@ const ModernProjectHeader: React.FC<ModernProjectHeaderProps> = ({ project, owne
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-                <div className="m-segmented" role="tablist" aria-label="Proje görünümleri">
+                <SelectionStrip className="m-project-tabs m-segmented" role="tablist" label="Proje görünümleri" selection={currentView}>
                     {tabs.map(t => (
                         <button
                             key={t.view}
                             type="button"
                             role="tab"
                             aria-selected={currentView === t.view}
+                            data-mobile-dock={t.view === View.Tasks || t.view === View.Kanban ? 'true' : undefined}
                             className="m-segment"
                             onClick={() => onNavigate(t.view)}
                         >
@@ -135,7 +137,7 @@ const ModernProjectHeader: React.FC<ModernProjectHeaderProps> = ({ project, owne
                         {moreOpen && (
                             <>
                                 <div className="fixed inset-0 z-40" onClick={() => setMoreOpen(false)} aria-hidden="true"></div>
-                                <div role="menu" className="absolute left-0 top-full mt-2 w-60 m-surface m-pop rounded-2xl py-1.5 z-50">
+                                <div role="menu" className="m-project-menu absolute left-0 top-full mt-2 w-60 m-surface m-pop rounded-2xl py-1.5 z-50">
                                     {more.map(m => (
                                         <button
                                             key={m.key}
@@ -153,7 +155,7 @@ const ModernProjectHeader: React.FC<ModernProjectHeaderProps> = ({ project, owne
                             </>
                         )}
                     </div>}
-                </div>
+                </SelectionStrip>
             </div>
         </div>
     );

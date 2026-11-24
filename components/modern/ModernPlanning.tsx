@@ -12,6 +12,7 @@ import { estimateGate } from '../../utils/ai/estimateEval';
 import { useAssistantOptional } from '../assistant/AssistantContext';
 import { buildHistory, calibrator, PlanningHistory } from '../../utils/planning/history';
 import { GuideButton, GuideTour, useGuide } from './GuideTour';
+import { SelectionStrip } from './ui';
 import { Icon } from './icons';
 import { startStepFor } from '../../utils/guides';
 import JiraExport from './planning/JiraExport';
@@ -111,11 +112,11 @@ const ModernPlanning: React.FC<Props> = ({ project, workspace, me, visibleProjec
                     {sendToJira && (
                         <button type="button" className="m-btn m-btn-gray" aria-expanded={!!exportOpen} onClick={() => (exportOpen ? setExportOpen(null) : sendToJira([]))}><Icon name="send" size={18} />Jira'ya gönder</button>
                     )}
-                    <div className="m-segmented" role="tablist" aria-label="Planlama kipi">
+                    <SelectionStrip className="m-segmented" role="tablist" label="Planlama kipi" selection={mode}>
                         <button type="button" role="tab" className="m-segment" aria-selected={mode === 'record'} onClick={() => setMode('record')}>Yeni kayıt</button>
                         <button type="button" role="tab" className="m-segment" aria-selected={mode === 'release'} onClick={() => setMode('release')}>Sürüm planı</button>
                         <button type="button" role="tab" className="m-segment" aria-selected={mode === 'simulate'} onClick={() => setMode('simulate')}>Plan simülasyonu</button>
-                    </div>
+                    </SelectionStrip>
                     <GuideButton onClick={() => guide.show(startStepFor(guide.guide, mode))} />
                 </div>
             </div>

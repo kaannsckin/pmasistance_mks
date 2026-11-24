@@ -2,7 +2,7 @@ import type { ColorMode, ModernTheme, WorkspaceSettings } from '../types';
 
 /** Modern arayüz temaları (Ayarlar → Görünüm). Sıra, seçim kartlarının sırasıdır. */
 export const MODERN_THEMES: { id: ModernTheme; name: string; hint: string }[] = [
-    { id: 'bubble', name: 'Baloncuk', hint: 'Yumuşak, buzlu cam, hap butonlar' },
+    { id: 'bubble', name: 'Cam', hint: 'Katmanlı yüzeyler ve telefonda alt gezinme çubuğu' },
     { id: 'aurora', name: 'Aurora', hint: 'Renk bulutları üstünde cam kartlar' },
     { id: 'pro', name: 'Pro', hint: 'Sık, sade, klavye odaklı' },
     { id: 'clay', name: 'Kil', hint: 'Kabarık, dokunsal kartlar' },
@@ -19,7 +19,7 @@ const isColorMode = (v: unknown): v is ColorMode => COLOR_MODES.some(m => m.id =
 
 /**
  * Modern tema henüz seçilmemişse eski vurgu rengine en yakın temaya eşlenir:
- * mavi → Baloncuk, zümrüt → Aurora (turkuaz), mor → Pro (çivit), turuncu → Kil (mercan).
+ * mavi → Cam, zümrüt → Aurora (turkuaz), mor → Pro (çivit), turuncu → Kil (mercan).
  */
 const LEGACY_ACCENT_TO_THEME: Record<string, ModernTheme> = {
     classic: 'bubble',
