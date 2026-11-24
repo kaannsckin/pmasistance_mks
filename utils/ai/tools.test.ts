@@ -89,7 +89,9 @@ describe('araç kataloğu', () => {
         // Dosya çıktısı (dosya_olustur) yalnız tarayıcı sohbetinde gider; ayrı ölçülür
         const files = JSON.stringify(AI_TOOLS.filter(t => t.requires === 'files' || t.requires === 'memory').map(t => t.spec)).length;
         console.log(`dosya ve hafıza araçları: ${files}`);
-        expect(files).toBeLessThan(3_000);
+        // 3 000 → 6 000: rapor dosyasına gösterge (KPI), vurgu ve grafik bölümleri; sohbete hesap motoru
+        // (veri_analiz) ve yetenek oyun kitabı (yetenek_yukle) eklendi. Yalnız tarayıcı sohbetinde gider.
+        expect(files).toBeLessThan(6_000);
         let base = 0;
         for (const role of ['py', 'mudur', 'bolum_sorumlu', 'pyb_destek', 'pyb_sorumlu', 'admin'] as UserRole[]) {
             const ctx = buildToolContext(buildWs(role, role === 'py' || role === 'bolum_sorumlu' ? 'p1' : null), NOW);
@@ -104,7 +106,15 @@ describe('araç kataloğu', () => {
         // 5 000 → 7 000: ajan + Jira okuma araçlarına Jira worklog raporu, eşitleme önerisi, iş gücü
         // raporu ve kayıt worklog'u eklendi. Yalnız Jira bağlıyken gönderilir; temel istek BL-15'te kalır.
         expect(runtime).toBeLessThan(7_000);
-        expect(AI_TOOLS.length).toBeLessThanOrEqual(AI_LIMITS.maxTools);
+        // Katalogun tamamı hiçbir istekte birlikte gitmez (veri havuzu ve proje öneri araçları ayrı rollerde).
+        // Ölçü, en geniş istek: her çalışma zamanı bağlıyken (ajan, Jira, dosya, hafıza) her rol sınırda kalır.
+        for (const role of ['py', 'bolum_sorumlu', 'pyb_destek', 'mudur'] as UserRole[]) {
+            const ctx = buildToolContext(buildWs(role, role === 'py' || role === 'bolum_sorumlu' ? 'p1' : null), NOW);
+            Object.assign(ctx, { ui: { run: () => ({ ok: true }) }, jira: {}, files: [], memory: { store: {}, userPrompt: '' } });
+            const n = toolSpecsFor(ctx).length;
+            console.log(`${role} (tüm çalışma zamanı): ${n} araç`);
+            expect(n).toBeLessThanOrEqual(AI_LIMITS.maxTools);
+        }
     });
 
     it('her araç parametresiz çalışır (duman testi) ve sicil sızdırmaz', async () => {

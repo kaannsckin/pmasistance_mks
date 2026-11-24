@@ -8,7 +8,7 @@ import { Citation, RAG_SOURCE_LABELS } from '../../utils/rag/sources';
 import { useAssistant } from './AssistantContext';
 import { ATTACHMENT_EXTENSIONS } from '../../utils/ai/attachments';
 import { toolKind } from '../../utils/ai/tools';
-import { AiDocument, DOC_FORMAT_LABELS, documentStats } from '../../utils/export/aiDocument';
+import { AiDocument, DOC_FORMAT_LABELS, documentStats, documentSummary } from '../../utils/export/aiDocument';
 import { formatsFor, useDocumentDownload } from './useDocumentDownload';
 import { useSlashMenu } from './useSlashMenu';
 import { fmtFileSize, useChatAttachments } from './useChatAttachments';
@@ -200,7 +200,7 @@ const FileCards: React.FC<{ files: AiDocument[] }> = ({ files }) => {
               <i aria-hidden="true" className="fa-solid fa-file-lines text-indigo-500 mt-0.5"></i>
               <div className="min-w-0">
                 <p className="text-xs font-bold text-gray-800 dark:text-gray-100 break-words">{f.title}</p>
-                <p className="text-[11px] text-gray-500 dark:text-gray-400">{[f.subtitle, st.tables ? `${st.tables} tablo · ${st.rows.toLocaleString('tr-TR')} satır` : `${f.blocks.length} bölüm`].filter(Boolean).join(' · ')}</p>
+                <p className="text-[11px] text-gray-500 dark:text-gray-400">{[f.subtitle, documentSummary(st, f.blocks.length)].filter(Boolean).join(' · ')}</p>
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-1.5 mt-2">
