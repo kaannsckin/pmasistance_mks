@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ModernTheme } from '../../types';
 import { createRapidClickDetector, EGG_CATALOG, EggTrigger, prefersReducedMotion } from '../../utils/easterEggs';
 import { MODERN_THEMES } from '../../utils/theme';
+import type { SprintCompletionSummary } from '../../utils/sprintCompletion';
 import { Icon, IconName } from './icons';
 
 /**
@@ -15,6 +16,7 @@ export type EggEvent =
     | { kind: 'hyper' }
     | { kind: 'space' }
     | { kind: 'celebrate'; message: string }
+    | { kind: 'sprint'; title: string; summary: SprintCompletionSummary; more: number }
     | { kind: 'pop' }
     | { kind: 'aurora' }
     | { kind: 'ship' }
@@ -97,6 +99,63 @@ export const Celebration: React.FC<{ message: string; onDone: () => void }> = ({
             )}
             <EggToast text={message} icon="check" />
         </>
+    );
+};
+
+const dayCount = new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 1 });
+const timingText = (days?: number) => days === undefined ? undefined : days < 0 ? `${-days} gün erken` : days === 0 ? 'Tam zamanında' : `${days} gün geç`;
+const RING = 2 * Math.PI * 42;
+
+/**
+ * Sprint tamamlandı: halka dolar, tik belirir, özet satırları sırayla gelir ve
+ * konfeti yağar. Tıklanınca ya da birkaç saniye sonra kapanır.
+ */
+export const SprintCompletion: React.FC<{ title: string; summary: SprintCompletionSummary; more: number; onDone: () => void }> = ({ title, summary, more, onDone }) => {
+    const reduced = useMemo(prefersReducedMotion, []);
+    useAutoClose(onDone, reduced ? 3200 : 4600);
+    const pieces = useMemo(() => Array.from({ length: 60 }, (_, i) => ({
+        key: i,
+        left: `${Math.random() * 100}%`,
+        color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
+        dx: `${Math.round(Math.random() * 160 - 80)}px`,
+        rot: `${Math.round(Math.random() * 720 + 180)}deg`,
+        dur: `${(1.4 + Math.random() * 1.2).toFixed(2)}s`,
+        delay: `${(0.9 + Math.random() * 0.5).toFixed(2)}s`,
+    })), []);
+    const timing = timingText(summary.daysFromEnd);
+    const stats = [`${summary.taskCount} görev`, `${dayCount.format(summary.effortDays)} gün efor`, timing, more > 0 ? `+${more} sprint daha` : undefined].filter((s): s is string => !!s);
+    const spoken = `${title} ${stats.join(', ')}.`;
+    if (reduced) return <EggToast text={spoken} icon="check" />;
+    return (
+        <div className="m-sprint-veil fixed inset-0 z-[1000] flex items-center justify-center p-4" onClick={onDone}>
+            <div aria-hidden="true" className="absolute inset-0 pointer-events-none overflow-hidden">
+                {pieces.map(p => (
+                    <span key={p.key} className="m-confetti"
+                        style={{ left: p.left, background: p.color, ['--dx' as string]: p.dx, ['--rot' as string]: p.rot, ['--dur' as string]: p.dur, ['--delay' as string]: p.delay } as React.CSSProperties}></span>
+                ))}
+            </div>
+            <div role="status" aria-live="polite" aria-label={spoken}
+                className="m-sprint-card relative flex flex-col items-center gap-3 rounded-3xl px-8 py-7 text-center max-w-[420px] w-full"
+                style={{ background: 'rgba(28,28,30,0.94)', color: '#FFFFFF', boxShadow: '0 24px 60px rgba(0,0,0,0.35)' }}>
+                <span className="relative w-[104px] h-[104px] flex items-center justify-center" aria-hidden="true">
+                    <svg width="104" height="104" viewBox="0 0 104 104" className="absolute inset-0 -rotate-90">
+                        <circle cx="52" cy="52" r="42" fill="none" stroke="rgba(255,255,255,0.14)" strokeWidth="8" />
+                        <circle cx="52" cy="52" r="42" fill="none" stroke="#34C759" strokeWidth="8" strokeLinecap="round"
+                            className="m-sprint-ring" style={{ ['--c' as string]: `${RING}` } as React.CSSProperties} />
+                    </svg>
+                    <span className="m-sprint-check w-14 h-14 rounded-full flex items-center justify-center" style={{ background: '#34C759', color: '#FFFFFF' }}>
+                        <Icon name="check" size={30} strokeWidth={2.6} />
+                    </span>
+                </span>
+                <span className="m-sprint-stat text-[22px] font-bold leading-tight" style={{ ['--d' as string]: '1.05s' } as React.CSSProperties}>{title}</span>
+                <span className="flex flex-wrap justify-center gap-2">
+                    {stats.map((stat, i) => (
+                        <span key={stat} className="m-sprint-stat inline-flex items-center h-7 px-3 rounded-full text-[13px] font-semibold"
+                            style={{ background: 'rgba(255,255,255,0.12)', ['--d' as string]: `${1.25 + i * 0.12}s` } as React.CSSProperties}>{stat}</span>
+                    ))}
+                </span>
+            </div>
+        </div>
     );
 };
 
@@ -219,7 +278,7 @@ export const Boing: React.FC<{ onDone: () => void }> = ({ onDone }) => {
 };
 
 const EGG_ICON: Record<string, IconName> = {
-    rocket: 'rocket', hyper: 'rocket', space: 'key', celebrate: 'check', greeting: 'clock',
+    rocket: 'rocket', hyper: 'rocket', space: 'key', celebrate: 'check', sprint: 'check', greeting: 'clock',
     pop: 'message', aurora: 'sparkles', ship: 'send', boing: 'refresh',
 };
 

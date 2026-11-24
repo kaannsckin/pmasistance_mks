@@ -36,12 +36,10 @@ describe('taskMeta', () => {
 
 describe('celebrationFor', () => {
     const t = (id: string, version: number, status: TaskStatus) => ({ id, version, status } as unknown as import('../../types').Task);
-    it('sprint ve proje tamamlanınca mesaj üretir', () => {
+    it('proje tamamlanınca mesaj üretir; sprint tamamlama App animasyonuna bırakılır', () => {
         const tasks = [t('a', 1, TaskStatus.Done), t('b', 1, TaskStatus.InProgress), t('c', 2, TaskStatus.ToDo)];
-        expect(celebrationFor(tasks, 'b', TaskStatus.Done)).toBe('Sprint 1 tamamlandı!');
-        expect(celebrationFor(tasks, 'b', TaskStatus.Done, { 1: 'Pilot' })).toBe('Pilot tamamlandı!');
-        expect(celebrationFor(tasks, 'c', TaskStatus.Done)).toBe('Sprint 2 tamamlandı!');
-        expect(celebrationFor([...tasks, t('d', 2, TaskStatus.ToDo)], 'c', TaskStatus.Done)).toBeNull();
+        expect(celebrationFor(tasks, 'b', TaskStatus.Done)).toBeNull();
+        expect(celebrationFor(tasks, 'c', TaskStatus.Done)).toBeNull();
         expect(celebrationFor([t('a', 1, TaskStatus.Done), t('b', 2, TaskStatus.ToDo)], 'b', TaskStatus.Done)).toBe('Proje tamamlandı! Tebrikler.');
         expect(celebrationFor(tasks, 'b', TaskStatus.InProgress)).toBeNull();
         expect(celebrationFor([t('a', 0, TaskStatus.ToDo), t('b', 0, TaskStatus.Done), t('c', 1, TaskStatus.ToDo)], 'a', TaskStatus.Done)).toBeNull();

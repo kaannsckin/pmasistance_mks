@@ -128,7 +128,9 @@ import {
   canEditExpectation, canRespondExpectation, CATEGORY_LABELS, createExpectation, ExpectationDraft, isOwnExpectation,
   respondExpectation, setExpectationStatus, updateExpectationDraft, URGENCY_LABELS, urgencyCounts, visibleExpectations,
 } from './utils/expectations';
-import { AuroraSweep, Boing, BubblePop, Celebration, EggEvent, EggGuide, HyperdriveOverlay, ShipIt, SpaceMode } from './components/modern/Eggs';
+import { AuroraSweep, Boing, BubblePop, Celebration, EggEvent, EggGuide, HyperdriveOverlay, ShipIt, SpaceMode, SprintCompletion } from './components/modern/Eggs';
+import { sprintLabel } from './components/modern/taskMeta';
+import { newlyCompletedSprints, sprintCompletionSummary } from './utils/sprintCompletion';
 import ModernWeeklyReport from './components/modern/ModernWeeklyReport';
 import ModernAdmin from './components/modern/ModernAdmin';
 import ProfileSwitcherSheet from './components/modern/ProfileSwitcherSheet';
@@ -385,6 +387,23 @@ const App: React.FC = () => {
     () => workspace?.projects.find(p => p.id === workspace.activeProjectId) ?? null,
     [workspace]
   );
+
+  // Sprint tamamlama animasyonu: etkin projede bir sprintin son açık görevi hangi yoldan
+  // (pano, liste, görev ayrıntısı, toplu düzenleme, eşitleme) biterse bitsin bir kez gösterilir.
+  // Proje açılışı ya da proje değişimi tetiklemez; projenin tamamı bittiyse proje kutlaması yeterlidir.
+  const sprintWatch = useRef<{ id: string; tasks: Task[] } | null>(null);
+  useEffect(() => {
+    const previous = sprintWatch.current;
+    sprintWatch.current = activeProject ? { id: activeProject.id, tasks: activeProject.tasks } : null;
+    if (!activeProject || !previous || previous.id !== activeProject.id || previous.tasks === activeProject.tasks) return;
+    const completed = newlyCompletedSprints(previous.tasks, activeProject.tasks);
+    if (!completed.length || activeProject.tasks.every(t => t.status === TaskStatus.Done)) return;
+    const sprint = completed[completed.length - 1];
+    setEgg({
+      kind: 'sprint', title: `${sprintLabel(sprint, activeProject.settings.sprintNames)} tamamlandı!`,
+      summary: sprintCompletionSummary(activeProject, sprint), more: completed.length - 1,
+    });
+  }, [activeProject]);
 
   // ---- Kimlik + kapsam ----
   const identity = useMemo(() => (workspace ? identityOf(workspace) : { role: 'py' as UserRole }), [workspace]);
@@ -3056,6 +3075,7 @@ const App: React.FC = () => {
       {egg?.kind === 'hyper' && <HyperdriveOverlay onDone={() => setEgg(null)} />}
       {egg?.kind === 'space' && <SpaceMode onDone={() => setEgg(null)} />}
       {egg?.kind === 'celebrate' && <Celebration message={egg.message} onDone={() => setEgg(null)} />}
+      {egg?.kind === 'sprint' && <SprintCompletion title={egg.title} summary={egg.summary} more={egg.more} onDone={() => setEgg(null)} />}
       {egg?.kind === 'pop' && <BubblePop onDone={() => setEgg(null)} />}
       {egg?.kind === 'aurora' && <AuroraSweep onDone={() => setEgg(null)} />}
       {egg?.kind === 'ship' && <ShipIt onDone={() => setEgg(null)} />}
@@ -3064,7 +3084,9 @@ const App: React.FC = () => {
         <EggGuide
           theme={modernTheme}
           onClose={() => setEgg(null)}
-          onTry={(id: EggTrigger) => setEgg(id === 'celebrate' ? { kind: 'celebrate', message: 'Örnek kutlama: Sürüm 3 tamamlandı!' } : id === 'rocket' ? { kind: 'hyper' } : { kind: id })}
+          onTry={(id: EggTrigger) => setEgg(id === 'celebrate' ? { kind: 'celebrate', message: 'Örnek kutlama: Sürüm 3 tamamlandı!' }
+            : id === 'sprint' ? { kind: 'sprint', title: 'Örnek: Sprint 3 tamamlandı!', summary: { sprint: 3, taskCount: 12, effortDays: 34.5, daysFromEnd: -2 }, more: 0 }
+            : id === 'rocket' ? { kind: 'hyper' } : { kind: id })}
         />
       )}
       {storageFull && !storageWarnClosed && (

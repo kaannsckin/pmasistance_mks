@@ -200,10 +200,11 @@ const JiraSprintPlan = ({ project, onTransfer, onOpenLocalSprint }: Props) => {
                                             </select>
                                         </Field>
                                         {window && <p className="m-0 text-[13px] m-text-3">Yerel takvim · {localDate.format(window.start)} – {localDate.format(window.end)}</p>}
-                                        {(preview.skipped > 0 || moveExisting) && <label className="flex items-center gap-2 text-sm m-text">
+                                        {(preview.skipped > 0 || preview.carried > 0 || moveExisting) && <label className="flex items-center gap-2 text-sm m-text">
                                             <input type="checkbox" className="w-4 h-4" checked={moveExisting} onChange={e => setMoveExisting(e.target.checked)} />
                                             Başka yerel sprintteki seçili görevleri taşı
                                         </label>}
+                                        {preview.carried > 0 && !moveExisting && <p className="m-0 text-[13px] m-text-3">Önceki sprintte bitmemiş kayıtlar eski sprintinde kalır ve bu sprinte kadar "sprintler arası" olarak işaretlenir. Taşımak için yukarıdaki seçeneği açın.</p>}
                                     </>}
                                     <div className="flex flex-wrap items-center justify-between gap-2">
                                         <span className="text-sm m-text-2">{selected.size} / {records.length} seçili</span>
@@ -217,11 +218,12 @@ const JiraSprintPlan = ({ project, onTransfer, onOpenLocalSprint }: Props) => {
                                             {records.slice(0, resultLimit).map(issue => {
                                                 const key = keyOf(issue.key);
                                                 const existing = tasksByKey.get(key);
+                                                const carry = preview.rows.find(row => keyOf(row.issue.key) === key)?.action === 'carry';
                                                 return <li key={key}>
                                                     <label className="flex items-start gap-2 py-2 px-1 text-sm">
                                                         {onTransfer && <input type="checkbox" className="mt-0.5 w-4 h-4" checked={selected.has(key)} onChange={() => toggle(key)} />}
                                                         <span className="min-w-0 break-words"><span className="font-semibold">{issue.key}</span> {issue.summary}
-                                                            <small className="block m-text-3">{[issue.status, issue.assignee, existing?.version ? sprintLabel(existing.version, project.settings.sprintNames) : existing ? 'Yerel havuzda' : 'Yeni kayıt'].filter(Boolean).join(' · ')}</small>
+                                                            <small className="block m-text-3">{[issue.status, issue.assignee, existing?.version ? sprintLabel(existing.version, project.settings.sprintNames) : existing ? 'Yerel havuzda' : 'Yeni kayıt', carry ? `Sprintler arası · ${existing!.version} → ${preview.target}` : ''].filter(Boolean).join(' · ')}</small>
                                                         </span>
                                                     </label>
                                                 </li>;
@@ -232,6 +234,7 @@ const JiraSprintPlan = ({ project, onTransfer, onOpenLocalSprint }: Props) => {
                                     {onTransfer && <>
                                         <p className="m-0 text-sm m-text-2" aria-live="polite">
                                             {preview.added} yeni · {preview.moved} taşınacak · {preview.unchanged} zaten hedefte
+                                            {preview.carried > 0 && <span> · {preview.carried} sprintler arası devam edecek</span>}
                                             {preview.skipped > 0 && <span className="m-ink-warn"> · {preview.skipped} başka sprintte kalacak</span>}
                                         </p>
                                         <button type="button" className="m-btn m-btn-primary justify-self-start" disabled={!preview.canApply}

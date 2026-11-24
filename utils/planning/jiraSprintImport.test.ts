@@ -18,22 +18,25 @@ const request = (issues: JiraIssueRecord[]): JiraSprintTransfer => ({
 });
 
 describe('Jira sprintini yerel plana aktar', () => {
-    it('kopya sprinti bir kez oluşturur ve mevcut görevleri açık onayla taşır', () => {
+    it('kopya sprinti bir kez oluşturur, önceki sprintten bitmemiş görevi devreder ve açık onayla taşır', () => {
         const p = createProject('Portal');
         const existing = issueToTask(issue('MKS-1'), { importedAt: today.toISOString(), defaultUnit: 'Genel' });
         p.tasks = [{ ...existing, name: 'Yerel başlık', version: 1, dueDate: '2026-11-30', fixVersion: 'Sürüm A' }];
         const done = issue('MKS-2', { status: 'Bitti', statusCategory: 'done' });
         const transfer = request([issue('MKS-1'), done, issue('MKS-2', { statusCategory: 'done' }), issue('ABC-5')]);
-        expect(previewJiraSprintTransfer(p, transfer)).toMatchObject({ target: 2, added: 1, skipped: 1 });
+        expect(previewJiraSprintTransfer(p, transfer)).toMatchObject({ target: 2, added: 1, skipped: 0, carried: 1 });
         const copy = applyJiraSprintTransfer(p, transfer, ['jira-mks-2'], today).project;
         expect(copy.settings.sprintNames?.[2]).toBe('Jira Kasım');
-        expect(copy.tasks[0]).toBe(p.tasks[0]);
+        // Devir: görev Sprint 1'de kalır, Sprint 2'ye kadar sprintler arası olur
+        expect(copy.tasks[0]).toMatchObject({ id: existing.id, name: 'Yerel başlık', version: 1, sprintSpan: 2 });
         expect(copy.tasks[1]).toMatchObject({ id: 'jira-mks-2-2', jiraId: 'MKS-2', version: 2, includeInSprints: true, status: TaskStatus.Done });
-        expect(buildLanes(copy)[2].tasks).toHaveLength(1);
+        expect(buildLanes(copy)[1].tasks.map(t => t.id)).toEqual([existing.id]);
+        expect(buildLanes(copy)[2].tasks.map(t => t.id)).toEqual([existing.id, 'jira-mks-2-2']);
         expect(applyJiraSprintTransfer(copy, transfer, [], today).project).toBe(copy);
         const moved = applyJiraSprintTransfer(copy, { ...transfer, moveExisting: true }, [], today);
-        expect(moved).toMatchObject({ target: 2, added: 0, moved: 1, unchanged: 1 });
+        expect(moved).toMatchObject({ target: 2, added: 0, moved: 1, unchanged: 1, carried: 0 });
         expect(moved.project.tasks[0]).toMatchObject({ id: existing.id, name: 'Yerel başlık', dueDate: '2026-11-30', fixVersion: 'Sürüm A', version: 2 });
+        expect(moved.project.tasks[0].sprintSpan).toBeUndefined();
         expect(moved.project.settings.jiraSprintImports?.['MKS:7']).toMatchObject({ localSprint: 2, startDate: '2026-11-24T08:00:00Z' });
     });
 
@@ -46,5 +49,20 @@ describe('Jira sprintini yerel plana aktar', () => {
         expect(shifted.sprintNames).toEqual({ 2: 'Yerel plan', 3: 'Jira Kasım' });
         expect(shifted.jiraSprintImports?.['MKS:7'].localSprint).toBe(3);
         expect(shiftSprintSettings(shifted, 3, -1).jiraSprintImports).toEqual({});
+    });
+
+    it('biten, plan dışı ya da çok uzaktaki önceki sprint görevini devretmez', () => {
+        const p = createProject('Portal');
+        const base = (key: string) => issueToTask(issue(key), { importedAt: today.toISOString(), defaultUnit: 'Genel' });
+        p.settings.sprintNames = { 6: 'Sprint 6' };
+        p.tasks = [
+            { ...base('MKS-1'), version: 1, status: TaskStatus.Done },
+            { ...base('MKS-2'), version: 2, includeInSprints: false },
+            { ...base('MKS-3'), version: 2 },
+            { ...base('MKS-4'), version: 4 },
+        ];
+        const preview = previewJiraSprintTransfer(p, { ...request(['MKS-1', 'MKS-2', 'MKS-3', 'MKS-4'].map(key => issue(key))), target: 6 });
+        expect(preview.rows.map(row => [row.issue.key, row.action])).toEqual([['MKS-1', 'skip'], ['MKS-2', 'skip'], ['MKS-3', 'skip'], ['MKS-4', 'carry']]);
+        expect(applyJiraSprintTransfer(p, { ...request([issue('MKS-4')]), target: 6 }, [], today).project.tasks[3]).toMatchObject({ version: 4, sprintSpan: 3 });
     });
 });

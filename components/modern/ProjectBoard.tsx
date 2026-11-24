@@ -198,7 +198,7 @@ const ProjectBoard: React.FC<ProjectBoardProps> = ({
         }
         const patch = moveTaskPatch(task, target, cfg, new Date());
         if (patch.status !== task.status && onCelebrate) {
-            const message = celebrationFor(tasks, id, patch.status!, sprintNames);
+            const message = celebrationFor(tasks, id, patch.status!);
             if (message) onCelebrate(message);
         }
         onMoveTask(id, patch);
