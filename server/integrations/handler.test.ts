@@ -637,3 +637,56 @@ describe('Jira worklog ayrıntısı ve artımlı yenileme', () => {
         }
     });
 });
+
+describe('Jira Scrum sprintleri', () => {
+    const run = (body: unknown, env: Record<string, string>, fetchImpl: typeof fetch) =>
+        handleIntegrationRequest(post('jira-sync', body), { ...BASE_ENV, JIRA_ALLOWED_PROJECTS: 'MKS', ...env }, { route: 'jira-sync', fetchImpl });
+
+    it('panoları ve sprintleri Agile REST üzerinden sayfalar ve panonun proje kapsamını denetler', async () => {
+        const env = { JIRA_BASE_URL: 'https://jira-sprints.example', JIRA_TOKEN: 'pat' };
+        const endpoints: string[] = [];
+        const fetchImpl = (async (input: RequestInfo | URL) => {
+            const url = new URL(String(input));
+            endpoints.push(url.pathname);
+            if (url.pathname.endsWith('/board')) {
+                expect(url.searchParams.get('projectKeyOrId')).toBe('MKS');
+                const start = Number(url.searchParams.get('startAt'));
+                return start === 0 ? jsonRes(200, { startAt: 0, isLast: false, values: [{ id: 1, name: 'Pano 1', type: 'scrum' }] })
+                    : jsonRes(200, { startAt: 1, isLast: true, values: [{ id: 2, name: 'Pano 2', type: 'simple' }, { id: 3, name: 'Kanban', type: 'kanban' }] });
+            }
+            expect(url.pathname).toBe('/rest/agile/1.0/board/2/sprint');
+            expect(url.searchParams.get('state')).toBe('active');
+            return jsonRes(200, { isLast: true, values: [{ id: 9, name: 'Sprint Kasım', state: 'active', startDate: '2026-11-24T09:00:00+03:00', goal: 'Test kapsamı' }] });
+        }) as typeof fetch;
+        const boards = await run({ op: 'sprintBoards', projectKey: 'mks' }, env, fetchImpl);
+        expect(await boards.json()).toEqual({ values: [{ id: 1, name: 'Pano 1' }, { id: 2, name: 'Pano 2' }], truncated: false });
+        const sprints = await run({ op: 'boardSprints', projectKey: 'MKS', boardId: 2, state: 'active' }, env, fetchImpl);
+        expect(await sprints.json()).toEqual({ values: [{ id: 9, name: 'Sprint Kasım', state: 'active', startDate: '2026-11-24T06:00:00.000Z', goal: 'Test kapsamı' }], truncated: false });
+        const blocked = await run({ op: 'boardSprints', projectKey: 'MKS', boardId: 8 }, env, fetchImpl);
+        expect(blocked.status).toBe(403);
+        expect(endpoints.filter(path => path.endsWith('/sprint'))).toEqual(['/rest/agile/1.0/board/2/sprint']);
+        expect((await run({ op: 'sprintBoards', projectKey: 'OTHER' }, env, fetchImpl)).status).toBe(403);
+    });
+
+    it.each([
+        { base: 'https://jira-sprints.atlassian.net', path: '/rest/api/2/search/jql', cursor: 'cloudtoken', page: { nextPageToken: 'nextToken' }, next: 'nextToken' },
+        { base: 'https://jira-sprints-dc.example', path: '/rest/api/2/search', cursor: '100', page: { total: 150 }, next: '102' },
+    ])('yalnız seçili projenin sprint kayıtlarını normalleştirir ($base)', async ({ base, path, cursor, page, next }) => {
+        const fetchImpl = (async (input: RequestInfo | URL) => {
+            const url = new URL(String(input));
+            if (url.pathname.endsWith('/status')) return jsonRes(200, []);
+            expect(url.pathname).toBe(path);
+            expect(url.searchParams.get('jql')).toBe('project = "MKS" AND sprint = 301 ORDER BY key ASC');
+            expect(url.searchParams.get('nextPageToken') || url.searchParams.get('startAt')).toBe(cursor);
+            return jsonRes(200, { ...page, issues: [
+                { key: 'MKS-22', fields: { summary: 'Denetim', status: { name: 'Bitti', statusCategory: { key: 'done' } } } },
+                { key: 'ABC-12', fields: { summary: 'Kapsam dışı' } },
+            ] });
+        }) as typeof fetch;
+        const env = { JIRA_BASE_URL: base, JIRA_TOKEN: 'pat', JIRA_STORY_POINTS_FIELD: 'customfield_1' };
+        const res = await run({ op: 'sprintIssues', projectKey: 'MKS', sprintId: 301, cursor }, env, fetchImpl);
+        expect(res.status).toBe(200);
+        expect(await res.json()).toMatchObject({ issues: [{ key: 'MKS-22', summary: 'Denetim', statusCategory: 'done' }], next });
+        expect((await run({ op: 'sprintIssues', projectKey: 'MKS', sprintId: '301 OR 1=1' }, env, fetchImpl)).status).toBe(400);
+    });
+});

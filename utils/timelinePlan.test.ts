@@ -122,3 +122,39 @@ describe('aralık ve konum', () => {
         expect(currentLaneVersion(lanes, new Date(2027, 0, 1))).toBeNull();
     });
 });
+
+describe('paralel test', () => {
+    const lanesOf = (parallelTest: boolean) => {
+        const p = buildProject();
+        p.settings = { ...p.settings, parallelTest };
+        return buildLanes(p);
+    };
+
+    it('sonraki sprint testi beklemeden geliştirme bitince başlar, test yine sprint bitince başlar', () => {
+        const [, first, second] = lanesOf(true);
+        const sequential = lanesOf(false);
+        expect(toIsoDay(first.testStart!)).toBe(toIsoDay(sequential[1].testStart!));
+        expect(second.start!.getTime()).toBe(first.testStart!.getTime());
+        expect(second.start! < first.testEnd!).toBe(true);
+        expect(sequential[2].start! > sequential[1].testEnd!).toBe(true);
+    });
+
+    it('çakışan günde bugünün sprinti geliştirmesi süren sprinttir', () => {
+        const [, first, second] = lanesOf(true);
+        expect(currentLaneVersion(lanesOf(true), first.testEnd!)).toBe(second.version);
+        expect(currentLaneVersion(lanesOf(true), first.end!)).toBe(first.version);
+    });
+});
+
+describe('sprintler arası görevler', () => {
+    it('görev sürdüğü her sprint şeridinde görünür, eforu sprintlere bölünür', () => {
+        const p = buildProject();
+        p.tasks = [...p.tasks, task('uzun', 2, 'U310', 'Ayşe', 12, { sprintSpan: 2 })];
+        const lanes = buildLanes(p);
+        expect(lanes).toHaveLength(4);
+        expect(lanes[2].tasks.map(t => t.id)).toContain('uzun');
+        expect(lanes[3].tasks.map(t => t.id)).toEqual(['uzun']);
+        expect(lanes[3].units.find(u => u.unit === 'U310')?.load).toBe(6);
+        expect(lanes[0].tasks.map(t => t.id)).not.toContain('uzun');
+    });
+});

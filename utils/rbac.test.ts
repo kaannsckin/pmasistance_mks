@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
     canAddAllocationToProject, canCreateProject, canEditActualCell, canEditAllocationCell,
-    canEditPlanCell, canEditProjectContent, Identity, identityNeedsPerson,
+    canEditPlanCell, canEditProjectContent, Identity, identityNeedsPerson, identityOf, keepScopedWorkspaceEdits,
     managesPerson, ownsProject, seesAllProjects, visiblePersonIds, visibleProjectIds,
 } from './rbac';
 import { createEmptyWorkspace, createProject } from './workspace';
@@ -26,6 +26,32 @@ const buildWs = (): WorkspaceData => {
 
 const py = (personId?: string): Identity => ({ role: 'py', personId });
 const bolum = (personId?: string): Identity => ({ role: 'bolum_sorumlu', personId });
+
+describe('bulut üyeliği', () => {
+    it('yerel rolü ve kişiyi kullanmadan, yöneticinin verdiği projeyi salt okunur gösterir', () => {
+        const ws = buildWs();
+        ws.currentRole = 'admin';
+        ws.currentPersonId = 'pm2';
+        ws.cloudMembership = { role: 'py', personId: 'pm1', projectIds: [ws.projects[1].id], accessAdmin: false };
+        const id = identityOf(ws);
+        expect(id).toMatchObject({ role: 'py', personId: 'pm1' });
+        expect([...visibleProjectIds(ws, id)]).toEqual([ws.projects[1].id]);
+        expect(canEditProjectContent(ws, id, ws.projects[0].id)).toBe(false);
+        expect(canEditProjectContent(ws, id, ws.projects[1].id)).toBe(false);
+        expect(canCreateProject(id)).toBe(false);
+    });
+
+    it('kapsamlı PY düzenlemesini kendi projesinde tutar, ortak belgeyi korur', () => {
+        const ws = buildWs();
+        ws.cloudMembership = { role: 'py', personId: 'pm1', projectIds: [ws.projects[0].id, ws.projects[1].id], accessAdmin: false };
+        const result = keepScopedWorkspaceEdits(ws, {
+            ...ws, allocations: [], projects: ws.projects.map(project => ({ ...project, name: 'Düzenleme' })),
+        });
+        expect(result.projects.map(project => project.name)).toEqual(['Düzenleme', 'Proje B']);
+        expect(result.allocations).toEqual(ws.allocations);
+        expect(canEditAllocationCell(ws, identityOf(ws), ws.projects[0].id, 'pm1')).toBe(false);
+    });
+});
 
 describe('görünürlük kapsamı', () => {
     it('müdür/pyb her projeyi görür; py yalnız sahip olduğunu', () => {

@@ -1,7 +1,7 @@
 import type { JiraHistoryEntry, JiraHistorySummary } from './jiraHistory';
 import { AiAuthMode } from './ai/protocol';
 import { authHeaders } from './ai/client';
-import { JiraWorklogDetail, WorklogEntry } from '../types';
+import { JiraAgileBoard, JiraAgileList, JiraSprint, JiraWorklogDetail, WorklogEntry } from '../types';
 import type { DayRange } from './calendarRange';
 
 /**
@@ -275,6 +275,15 @@ const jiraSync = async <T>(body: Record<string, unknown>, authMode: AiAuthMode, 
 /** Bağlantı sınaması ve kaynak seçenekleri (jeton sahibi, projeler, sık kullanılan filtreler) */
 export const fetchJiraMeta = (authMode: AiAuthMode, signal?: AbortSignal): Promise<JiraMeta> =>
     jiraSync<Partial<JiraMeta>>({ op: 'meta' }, authMode, signal).then(m => ({ user: m.user || '', projects: m.projects || [], filters: m.filters || [] }));
+
+export const fetchJiraSprintBoards = (projectKey: string, authMode: AiAuthMode, signal?: AbortSignal): Promise<JiraAgileList<JiraAgileBoard>> =>
+    jiraSync({ op: 'sprintBoards', projectKey }, authMode, signal);
+
+export const fetchJiraBoardSprints = (projectKey: string, boardId: number, state: string, authMode: AiAuthMode, signal?: AbortSignal): Promise<JiraAgileList<JiraSprint>> =>
+    jiraSync({ op: 'boardSprints', projectKey, boardId, state }, authMode, signal);
+
+export const fetchJiraSprintIssues = (projectKey: string, sprintId: number, cursor: string | null, authMode: AiAuthMode, signal?: AbortSignal): Promise<JiraIssuePage> =>
+    jiraSync({ op: 'sprintIssues', projectKey, sprintId, cursor }, authMode, signal);
 
 /** Kapsamlı okuma: `keys` (anahtarı bilinen kayıtların güncel hâli) ya da `source` (kaynaktaki açık kayıtlar, sayfa sayfa) */
 export const fetchJiraSyncPage = (

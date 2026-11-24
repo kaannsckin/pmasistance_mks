@@ -1,4 +1,10 @@
 {
+  "rewrites": [
+    {
+      "source": "/api/cloud/config",
+      "destination": "/api/integrations/health?route=cloud-config"
+    }
+  ],
   "functions": {
     "api/ai/*.ts": {
       "maxDuration": 60

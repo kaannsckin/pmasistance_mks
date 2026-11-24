@@ -14,7 +14,7 @@ import {
 } from './utils/workspace';
 import { canEditPool, createAllocation, EffortField, getPlanLockStatus, ROLE_LABELS, setAllocationCell, upsertPlanLock } from './utils/allocations';
 import { applyPoolImport, PoolImportResult } from './utils/poolImporter';
-import { canCreateProject, canEditProjectContent, identityFor, identityOf, identityNeedsPerson as computeNeedsPerson, managedDepartmentCode, ownsProject, visibleProjectIds } from './utils/rbac';
+import { canCreateProject, canEditProjectContent, identityFor, identityOf, identityNeedsPerson as computeNeedsPerson, keepScopedWorkspaceEdits, managedDepartmentCode, ownsProject, visibleProjectIds } from './utils/rbac';
 import { can, isConsoleRole, isManagementRole, PERMISSION_BY_KEY, resetRolePermissions, setRolePermission } from './utils/permissions';
 import { applyPreset, projectPassesView, resetRoleView, roleViewOf, sectionOfView, taskPassesView, updateRoleView, VIEW_PRESETS, ViewPresetKey } from './utils/viewConfig';
 import { AdminSection, ADMIN_SECTIONS } from './components/modern/adminSections';
@@ -42,11 +42,13 @@ import { listId } from './utils/projectLists';
 import { BulkTaskPatch, previewBulkTaskEdit } from './utils/bulkTaskEdit';
 import type { DayRange } from './utils/calendarRange';
 import { moveSprintTasks } from './utils/planning/period';
+import { applyJiraSprintTransfer, JiraSprintTransfer } from './utils/planning/jiraSprintImport';
+import { shiftSprintSettings } from './utils/timelinePlan';
 import { buildDeliveries, detectTaskEvents, NotificationDelivery } from './utils/notifications';
 import { AllocationSuggestion, ApplyMode, applyAllocationSuggestions } from './utils/taskToAllocation';
 import { applyBilledHoursActuals, planBilledHoursPoolAdditions, suggestBilledHoursActuals, BilledApplyMode, BilledHoursOptions, BilledHoursRecord } from './utils/billedHours';
 import { buildTodoItems, TodoItem } from './utils/todoItems';
-import { loadCloudConfig, scheduleAutoPush } from './utils/cloudSync';
+import { applyCloudMembership, getCloudMembership, loadCloudConfig, markCachedCloudWorkspace, pullWorkspace, sameCloudMembership, scheduleAutoPush } from './utils/cloudSync';
 import { isDarkResolved, resolveColorMode, resolveModernTheme } from './utils/theme';
 import { joinStored, openIndexedDbStore, requestPersistentStorage, WorkspacePersister } from './utils/workspaceStore';
 import CloudSyncModal from './components/CloudSyncModal';
@@ -127,7 +129,9 @@ import {
   canEditExpectation, canRespondExpectation, CATEGORY_LABELS, createExpectation, ExpectationDraft, isOwnExpectation,
   respondExpectation, setExpectationStatus, updateExpectationDraft, URGENCY_LABELS, urgencyCounts, visibleExpectations,
 } from './utils/expectations';
-import { AuroraSweep, Boing, BubblePop, Celebration, EggEvent, EggGuide, HyperdriveOverlay, ShipIt, SpaceMode } from './components/modern/Eggs';
+import { AuroraSweep, Boing, BubblePop, Celebration, EggEvent, EggGuide, HyperdriveOverlay, ShipIt, SpaceMode, SprintCompletion } from './components/modern/Eggs';
+import { sprintLabel } from './components/modern/taskMeta';
+import { newlyCompletedSprints, sprintCompletionSummary } from './utils/sprintCompletion';
 import ModernWeeklyReport from './components/modern/ModernWeeklyReport';
 import ModernAdmin from './components/modern/ModernAdmin';
 import ProfileSwitcherSheet from './components/modern/ProfileSwitcherSheet';
@@ -176,7 +180,7 @@ const MODERN_PROJECT_VIEWS: View[] = [View.Dashboard, View.Overview, View.Roadma
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<View>(View.Portfolio);
   const [projectPeriods, setProjectPeriods] = useState(() => new Map<string, DayRange>());
-  const [planningEntry, setPlanningEntry] = useState<{ projectId: string; query?: string; jiraPeriod?: DayRange; releaseTasks?: string[]; sprintTasks?: string[] } | null>(null);
+  const [planningEntry, setPlanningEntry] = useState<{ projectId: string; query?: string; jiraPeriod?: DayRange; releaseTasks?: string[]; sprintTasks?: string[]; sprint?: number } | null>(null);
   useEffect(() => { if (planningEntry) setPlanningEntry(null); }, [planningEntry]);
   const [workspace, setWorkspace] = useState<WorkspaceData | null>(null);
 
@@ -219,12 +223,45 @@ const App: React.FC = () => {
   const workspaceRef = useRef<WorkspaceData | null>(null);
 
   const [isInitialized, setIsInitialized] = useState(false);
+  const [cloudStartupProblem, setCloudStartupProblem] = useState<string>();
+  const persister = useRef<WorkspacePersister | null>(null);
+  const cacheClearedWorkspace = useCallback((empty: WorkspaceData) => {
+    if (persister.current) persister.current.save(empty);
+    else {
+      try { localStorage.setItem(WORKSPACE_STORAGE_KEY, serializeWorkspace(empty, false)); }
+      catch { /* The browser may have disabled its local storage. */ }
+    }
+  }, []);
+  const clearCloudViews = useCallback(() => {
+    setUndo(null);
+    setViewingTask(null);
+    setEditingTask(null);
+    setTeamsTask(null);
+    setIsDetailModalOpen(false);
+    setIsFormModalOpen(false);
+    setIsTeamsModalOpen(false);
+    setConvertingRequestId(null);
+    setCurrentView(View.Portfolio);
+  }, []);
+  const clearCloudWorkspace = useCallback(() => {
+    markCachedCloudWorkspace(null);
+    clearCloudViews();
+    const previous = workspaceRef.current;
+    if (!previous) return;
+    const empty = { ...createEmptyWorkspace(), settings: previous.settings };
+    cacheClearedWorkspace(empty);
+    setWorkspace(empty);
+  }, [cacheClearedWorkspace, clearCloudViews]);
+  const openProfile = useCallback(() => {
+    if (loadCloudConfig()?.workspaceId) setIsCloudModalOpen(true);
+    else setIsProfileOpen(true);
+  }, []);
 
   // ---- Açılış: IndexedDB → (taşıma) localStorage v2 → v1 migration → örnek proje ----
   // Kalıcı depo IndexedDB (parçalı, kota sorunu yok); yoksa localStorage
-  const persister = useRef<WorkspacePersister | null>(null);
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
     (async () => {
       const kv = await openIndexedDbStore();
       let stored: ReturnType<typeof joinStored> = null;
@@ -239,11 +276,38 @@ const App: React.FC = () => {
         localStorage.getItem(LEGACY_STORAGE_KEY)
       ).workspace;
       const resolved = stored ? normalizeWorkspace(stored.workspace) : fromLocal;
+      const cloudConfig = loadCloudConfig();
       let initial: WorkspaceData;
-      if (resolved) {
+      let clearCachedAccess = false;
+      if (cloudConfig?.workspaceId) {
+        const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(8000)]);
+        const access = await getCloudMembership(cloudConfig.workspaceId, signal).catch(() => null);
+        if (cancelled) return;
+        if (access?.membership && cloudConfig.linkedUserId === access.userId && resolved?.cloudWorkspaceId === cloudConfig.workspaceId && resolved.settings.isLocalPersistenceEnabled !== false
+          && sameCloudMembership(resolved.cloudMembership, access.membership) && sameCloudMembership(cloudConfig.membership, access.membership)) {
+          markCachedCloudWorkspace(cloudConfig);
+          initial = applyCloudMembership(resolved, access.membership, cloudConfig.workspaceId);
+        } else {
+          const retrySignal = AbortSignal.any([controller.signal, AbortSignal.timeout(12000)]);
+          const result = access?.membership ? await pullWorkspace(cloudConfig.workspaceId, retrySignal).catch(() => null) : null;
+          if (cancelled) return;
+          const empty = createEmptyWorkspace();
+          const device = resolved ? { ...empty, settings: resolved.settings } : empty;
+          if (result?.workspace) initial = result.workspace(device);
+          else {
+            initial = device;
+            clearCachedAccess = !!access && !access.error && (access.userId !== cloudConfig.linkedUserId
+              || !access.membership || !sameCloudMembership(access.membership, cloudConfig.membership));
+            markCachedCloudWorkspace(null);
+            setCloudStartupProblem(access?.error || result?.message || 'Çalışma alanı erişimi doğrulanamadı. Oturumunuzu veya yönetici atamanızı kontrol edin.');
+            setIsCloudModalOpen(true);
+          }
+        }
+      } else if (resolved) {
         // Ayın ilk açılışında otomatik baseline (plan kayması trendi için) ve
         // haftalık sağlık fotoğrafı (sağlık modelinin eğitim verisi)
-        const withBaseline = ensureMonthlySnapshot(resolved) || resolved;
+        const local = resolved.cloudMembership ? { ...createEmptyWorkspace(), settings: resolved.settings } : resolved;
+        const withBaseline = ensureMonthlySnapshot(local) || local;
         initial = ensureWeeklyHealthSnapshot(withBaseline) || withBaseline;
       } else {
         const sample = createSampleProject();
@@ -262,11 +326,57 @@ const App: React.FC = () => {
         }, stored?.orphans);
         requestPersistentStorage();
       }
+      if (clearCachedAccess) cacheClearedWorkspace(initial);
       setWorkspace(initial);
       setIsInitialized(true);
     })();
-    return () => { cancelled = true; };
-  }, []);
+    return () => { cancelled = true; controller.abort(); };
+  }, [cacheClearedWorkspace]);
+
+  const activeCloudId = workspace?.cloudWorkspaceId;
+  useEffect(() => {
+    if (!activeCloudId) return;
+    const controller = new AbortController();
+    let checking = false;
+    const check = async () => {
+      if (checking || document.visibilityState === 'hidden') return;
+      checking = true;
+      try {
+        const config = loadCloudConfig();
+        const access = config?.workspaceId ? await getCloudMembership(config.workspaceId, AbortSignal.any([controller.signal, AbortSignal.timeout(8000)])) : null;
+        if (controller.signal.aborted || access?.error) return;
+        if (!access?.membership || access.userId !== config?.linkedUserId) {
+          markCachedCloudWorkspace(null);
+          clearCloudWorkspace();
+          setCloudStartupProblem('Çalışma alanına erişiminiz değişti. Erişimi bulut penceresinden kontrol edin.');
+          setIsCloudModalOpen(true);
+        } else if (config?.workspaceId && (config.workspaceId !== activeCloudId || !sameCloudMembership(config.membership, access.membership))) {
+          markCachedCloudWorkspace(null);
+          const result = await pullWorkspace(config.workspaceId, AbortSignal.any([controller.signal, AbortSignal.timeout(12000)]));
+          if (controller.signal.aborted) return;
+          clearCloudViews();
+          const update = result.workspace;
+          if (update) setWorkspace(prev => prev ? update(prev) : prev);
+          else {
+            clearCloudWorkspace();
+            setCloudStartupProblem(result.message || 'Yeni çalışma alanı kapsamı yüklenemedi.');
+            setIsCloudModalOpen(true);
+          }
+        }
+      } catch { /* A temporary connection problem does not confirm a permission change. */ }
+      finally { checking = false; }
+    };
+    const timer = window.setInterval(() => void check(), 30_000);
+    const recheck = () => { void check(); };
+    window.addEventListener('focus', recheck);
+    window.addEventListener('storage', recheck);
+    return () => {
+      controller.abort();
+      window.clearInterval(timer);
+      window.removeEventListener('focus', recheck);
+      window.removeEventListener('storage', recheck);
+    };
+  }, [activeCloudId, clearCloudViews, clearCloudWorkspace]);
 
   const settings = workspace?.settings;
   // Aktif projenin admin yapılandırma şeması (iş akışı, kayıt türleri, zorunlu alanlar, pano)
@@ -278,6 +388,23 @@ const App: React.FC = () => {
     () => workspace?.projects.find(p => p.id === workspace.activeProjectId) ?? null,
     [workspace]
   );
+
+  // Sprint tamamlama animasyonu: etkin projede bir sprintin son açık görevi hangi yoldan
+  // (pano, liste, görev ayrıntısı, toplu düzenleme, eşitleme) biterse bitsin bir kez gösterilir.
+  // Proje açılışı ya da proje değişimi tetiklemez; projenin tamamı bittiyse proje kutlaması yeterlidir.
+  const sprintWatch = useRef<{ id: string; tasks: Task[] } | null>(null);
+  useEffect(() => {
+    const previous = sprintWatch.current;
+    sprintWatch.current = activeProject ? { id: activeProject.id, tasks: activeProject.tasks } : null;
+    if (!activeProject || !previous || previous.id !== activeProject.id || previous.tasks === activeProject.tasks) return;
+    const completed = newlyCompletedSprints(previous.tasks, activeProject.tasks);
+    if (!completed.length || activeProject.tasks.every(t => t.status === TaskStatus.Done)) return;
+    const sprint = completed[completed.length - 1];
+    setEgg({
+      kind: 'sprint', title: `${sprintLabel(sprint, activeProject.settings.sprintNames)} tamamlandı!`,
+      summary: sprintCompletionSummary(activeProject, sprint), more: completed.length - 1,
+    });
+  }, [activeProject]);
 
   // ---- Kimlik + kapsam ----
   const identity = useMemo(() => (workspace ? identityOf(workspace) : { role: 'py' as UserRole }), [workspace]);
@@ -386,7 +513,7 @@ const App: React.FC = () => {
 
   // ---- Kalıcılık ----
   useEffect(() => {
-    if (!isInitialized || !workspace) return;
+    if (!isInitialized || !workspace || cloudStartupProblem) return;
     const toPersist = workspace.settings.isLocalPersistenceEnabled !== false
       ? workspace
       : { ...workspace, projects: [], activeProjectId: null };
@@ -406,11 +533,11 @@ const App: React.FC = () => {
     }
     // Bulut bağlıysa değişiklikleri gecikmeli gönder (yerel-öncelikli senkron)
     scheduleAutoPush(workspace);
-  }, [workspace, isInitialized]);
+  }, [workspace, isInitialized, cloudStartupProblem]);
 
   // ---- Merkezi güncelleme yardımcıları ----
   const updateWorkspace = useCallback((updater: (ws: WorkspaceData) => WorkspaceData) => {
-    setWorkspace(prev => (prev ? updater(prev) : prev));
+    setWorkspace(prev => (prev ? keepScopedWorkspaceEdits(prev, updater(prev)) : prev));
   }, []);
 
   const handleApplyHealthFix = useCallback((fix: HealthFix) => {
@@ -700,6 +827,7 @@ const App: React.FC = () => {
 
   // ---- Kimlik / RBAC ----
   const handleChangeIdentity = useCallback((role: UserRole, personId?: string) => {
+    if (loadCloudConfig()?.workspaceId) return;
     updateWorkspace(ws => {
       const next = { ...ws, currentRole: role, currentPersonId: personId };
       // Kapsam değişince görünmeyen bir proje aktifse ilk görünür projeye/portföye geç
@@ -860,7 +988,8 @@ const App: React.FC = () => {
           `Bu dosya ${incoming.projects.length} proje içeren bir çalışma alanı yedeği. Mevcut çalışma alanının TAMAMI bu yedekle değiştirilecek. Devam edilsin mi?`
         );
         if (!ok) return;
-        setWorkspace(incoming);
+        setWorkspace(prev => prev?.cloudMembership && prev.cloudWorkspaceId
+          ? applyCloudMembership(incoming, prev.cloudMembership, prev.cloudWorkspaceId) : incoming);
         setCurrentView(View.Portfolio);
         return;
       }
@@ -923,8 +1052,10 @@ const App: React.FC = () => {
 
   // ---- Haftalık rapor: yetki ve akış işlem anında güncel veriyle doğrulanır ----
   const commitWorkspace = useCallback((next: WorkspaceData) => {
-    workspaceRef.current = next;
-    setWorkspace(next);
+    const previous = workspaceRef.current;
+    const updated = previous ? keepScopedWorkspaceEdits(previous, next) : next;
+    workspaceRef.current = updated;
+    setWorkspace(updated);
   }, []);
   const reportLabel = (ws: WorkspaceData, r: WeeklyReport) => {
     const name = r.kind === 'department'
@@ -1322,6 +1453,20 @@ const App: React.FC = () => {
       if (!r.added && !r.updated) return ws;
       const next = { ...ws, projects: ws.projects.map(p => (p.id === projectId ? { ...p, tasks: r.tasks, jiraProjectKey: key, updatedAt: new Date().toISOString() } : p)) };
       return appendAudit(next, 'data.import', `"${project.name}" · Jira ${key} kayıt geçmişi (${label}): ${r.added} yeni, ${r.updated} güncellenen kayıt`, projectId);
+    });
+  }, [updateWorkspace]);
+
+  const handleJiraSprintTransfer = useCallback((projectId: string, transfer: JiraSprintTransfer) => {
+    const now = new Date();
+    updateWorkspace(ws => {
+      const project = ws.projects.find(p => p.id === projectId);
+      if (!project || !canEditProjectContent(ws, identityOf(ws), projectId)) return ws;
+      const takenIds = ws.projects.filter(p => p.id !== projectId).flatMap(p => p.tasks.map(t => t.id));
+      const result = applyJiraSprintTransfer(project, transfer, takenIds, now);
+      if (result.project === project) return ws;
+      const next = { ...result.project, jiraProjectKey: project.jiraProjectKey || transfer.projectKey };
+      const state = { ...ws, projects: ws.projects.map(p => p.id === projectId ? next : p) };
+      return appendAudit(state, 'data.import', `${project.name} · Jira sprinti “${transfer.sprint.name}” → Sprint ${result.target} (${result.added} yeni, ${result.moved} taşınan)`, projectId);
     });
   }, [updateWorkspace]);
 
@@ -1793,7 +1938,7 @@ const App: React.FC = () => {
           onApplyHealthFix={canDataHealth ? handleApplyHealthFix : undefined}
           cloudLinked={!!loadCloudConfig()?.workspaceId}
           onOpenCloud={() => setIsCloudModalOpen(true)}
-          onOpenProfile={() => setIsProfileOpen(true)}
+          onOpenProfile={openProfile}
           onSaveScheme={handleSaveScheme}
           onDeleteScheme={handleDeleteScheme}
           onAssignScheme={handleAssignScheme}
@@ -2106,8 +2251,10 @@ const App: React.FC = () => {
     };
 
     // Sprint ekleme/silme (klasik pano ve modern zaman çizelgesi ortak)
-    const insertSprint = (n: number) => setTasks(prev => prev.map(t => t.version >= n ? { ...t, version: t.version + 1 } : t));
-    const deleteSprint = (n: number) => setTasks(prev => prev.map(t => t.version === n ? { ...t, version: 0, status: TaskStatus.Backlog } : t.version > n ? { ...t, version: t.version - 1 } : t));
+    const insertSprint = (n: number) => updateActiveProject(p => ({ ...p, settings: shiftSprintSettings(p.settings, n, 1),
+      tasks: p.tasks.map(t => t.version >= n ? { ...t, version: t.version + 1 } : t) }));
+    const deleteSprint = (n: number) => updateActiveProject(p => ({ ...p, settings: shiftSprintSettings(p.settings, n, -1),
+      tasks: p.tasks.map(t => t.version === n ? { ...t, version: 0, status: TaskStatus.Backlog } : t.version > n ? { ...t, version: t.version - 1 } : t) }));
     const period = projectPeriods.get(activeProject.id) || null;
     const entry = planningEntry?.projectId === activeProject.id ? planningEntry : undefined;
     const canPlan = canEditProjectContent(workspace, identity, activeProject.id);
@@ -2125,6 +2272,9 @@ const App: React.FC = () => {
           key={activeProject.id}
           // Salt okunur zaman çizelgesi admin'in öncelik süzgecini izler; düzenlenebilirde tüm görevler (otomatik plan gizlileri kaybetmesin)
           project={isManagementRole(identity.role) && roleView.minTaskPriority !== 'Low' ? { ...activeProject, tasks: activeProject.tasks.filter(t => taskPassesView(roleView, t)) } : activeProject}
+          people={workspace.people}
+          leaves={workspace.leaves || []}
+          identity={identity}
           canEdit={!isManagementRole(identity.role)}
           onMoveTask={(id: string, v: number) => setTasks(prev => prev.map(t => t.id === id ? { ...t, version: v } : t))}
           onPlanGenerated={setTasks}
@@ -2141,6 +2291,7 @@ const App: React.FC = () => {
           period={period}
           me={boardMe}
           initialSelection={entry?.sprintTasks}
+          initialSprint={entry?.sprint}
           onPeriodChange={value => setProjectPeriods(previous => {
             const next = new Map(previous);
             if (value) next.set(activeProject.id, value); else next.delete(activeProject.id);
@@ -2181,6 +2332,12 @@ const App: React.FC = () => {
           onCommitReleasePlan={handleCommitReleasePlan}
           onOpenGoals={() => setCurrentView(View.Goals)}
           onImportJira={(key, issues, opts, label) => handleImportJiraHistory(activeProject.id, key, issues, opts, label)}
+          onTransferJiraSprint={transfer => handleJiraSprintTransfer(activeProject.id, transfer)}
+          onOpenLocalSprint={sprint => {
+            setProjectPeriods(previous => { const next = new Map(previous); next.delete(activeProject.id); return next; });
+            setPlanningEntry({ projectId: activeProject.id, sprint });
+            setCurrentView(View.Kanban);
+          }}
           onLinkJira={(key, links) => handleLinkJira(activeProject.id, key, links)}
           onSaveJiraSync={settings => handleSetJiraSync(activeProject.id, settings)}
           onApplyJiraSync={(issues, opts, addNew, label, pushed, settings) => handleApplyJiraSync(activeProject.id, issues, opts, addNew, label, pushed, settings)}
@@ -2242,6 +2399,7 @@ const App: React.FC = () => {
         <ModernRequests
           requests={customerRequests}
           tasks={tasks}
+          readOnly={!!identity.projectIds && !canEditProjectContent(workspace, identity, activeProject.id)}
           onChange={(next: CustomerRequest[]) => setCustomerRequests(next)}
           onConvert={convertRequest}
           onViewTask={viewTask}
@@ -2368,7 +2526,7 @@ const App: React.FC = () => {
             tasks={tasks} resources={resources}
             sprintDuration={ps.sprintDuration} projectStartDate={ps.projectStartDate}
             sprintNames={ps.sprintNames || {}} setSprintNames={setSprintNames}
-            globalTestDays={ps.globalTestDays || 4} setGlobalTestDays={setGlobalTestDays as React.Dispatch<React.SetStateAction<number>>}
+            globalTestDays={ps.globalTestDays || 4} parallelTest={ps.parallelTest} setGlobalTestDays={setGlobalTestDays as React.Dispatch<React.SetStateAction<number>>}
             onPlanGenerated={setTasks} onTaskSprintChange={(id, v) => setTasks(prev => prev.map(t => t.id === id ? { ...t, version: v } : t))}
             onTaskStatusChange={(id, s) => setTasks(prev => prev.map(t => t.id === id ? { ...t, status: s } : t))}
             onInsertSprint={insertSprint}
@@ -2577,11 +2735,11 @@ const App: React.FC = () => {
         if (cmd.dialog === 'veri_sagligi') setIsHealthModalOpen(true);
         else if (cmd.dialog === 'denetim_gunlugu') setIsAuditModalOpen(true);
         else if (cmd.dialog === 'is_paketleri') setIsWpManagerOpen(true);
-        else setIsProfileOpen(true);
+        else openProfile();
         return { ok: true, message: `${DIALOGS[cmd.dialog]} penceresi açıldı.` };
       }
     }
-  }, [updateWorkspace]);
+  }, [openProfile, updateWorkspace]);
   const aiSuggestions = useMemo(
     () => {
       const shown = activeProject && visibleProjects.some(p => p.id === activeProject.id) ? activeProject : undefined;
@@ -2620,7 +2778,7 @@ const App: React.FC = () => {
     // Admin konsolu: yalnız konsol bölümleri ve profil değiştirme
     if (consoleMode) {
       ADMIN_SECTIONS.forEach(sec => items.push({ id: `adm-${sec.key}`, group: 'Yönetici konsolu', label: sec.label, sublabel: sec.description, icon: 'fa-user-lock', keywords: sec.description, run: () => { setAdminSection(sec.key); setCurrentView(View.Admin); } }));
-      items.push({ id: 'a-profile', group: 'Aksiyonlar', label: 'Profil değiştir', icon: 'fa-user-gear', keywords: 'profil rol kimlik kisi degistir', run: () => setIsProfileOpen(true) });
+      items.push({ id: 'a-profile', group: 'Aksiyonlar', label: 'Profil değiştir', icon: 'fa-user-gear', keywords: 'profil rol kimlik kisi degistir', run: openProfile });
       return items;
     }
     items.push({ id: 'v-portfolio', group: 'Ekranlar', label: 'Portföy', icon: 'fa-table-cells-large', keywords: 'portfoy proje', run: go(View.Portfolio) });
@@ -2633,7 +2791,7 @@ const App: React.FC = () => {
     items.push({ id: 'v-pool', group: 'Ekranlar', label: 'Veri Havuzu', icon: 'fa-database', keywords: 'personel bolum rol unvan havuz', run: go(View.DataPool) });
     if (canExecutive) items.push({ id: 'v-exec', group: 'Ekranlar', label: 'Yönetim (EVM · riskler · baseline)', icon: 'fa-gauge-high', keywords: 'yonetim evm butce risk', run: go(View.Executive) });
     if (canAdmin) items.push({ id: 'v-admin', group: 'Ekranlar', label: 'Yönetici konsolu: yetkiler, görünüm, rapor akışı, puanlama', icon: 'fa-user-lock', keywords: 'admin yetki rol izin profil kullanici gorunum filtre siralama akis puan', run: go(View.Admin) });
-    items.push({ id: 'a-profile', group: 'Aksiyonlar', label: 'Profil değiştir', icon: 'fa-user-gear', keywords: 'profil rol kimlik kisi degistir', run: () => setIsProfileOpen(true) });
+    items.push({ id: 'a-profile', group: 'Aksiyonlar', label: activeCloudId ? 'Bulut hesabı' : 'Profil değiştir', icon: 'fa-user-gear', keywords: 'profil rol kimlik kisi degistir', run: openProfile });
     if (canDataHealth) items.push({ id: 'a-health', group: 'Aksiyonlar', label: 'Veri Sağlığı Denetimi', icon: 'fa-stethoscope', keywords: 'saglik hata yetim', run: () => setIsHealthModalOpen(true) });
     if (canAudit) items.push({ id: 'a-audit', group: 'Aksiyonlar', label: 'Denetim Günlüğü', icon: 'fa-clock-rotate-left', keywords: 'audit log gunluk kayit', run: () => setIsAuditModalOpen(true) });
     if (activeProject && isModern && roleView.projectSections.has('planning')) items.push({ id: 'v-planning', group: 'Ekranlar', label: `Planlama asistanı — ${activeProject.name}`, icon: 'fa-chart-area', keywords: 'planlama simulasyon monte carlo tahmin olasilik surum yeni kayit benzer', run: go(View.Planning) });
@@ -2643,10 +2801,12 @@ const App: React.FC = () => {
     visibleProjects.forEach(p => items.push({ id: `p-${p.id}`, group: 'Projeler', label: p.name, sublabel: 'Projeyi aç', icon: 'fa-folder-open', keywords: p.code || '', run: () => handleOpenProject(p.id) }));
     workspace.people.forEach(p => items.push({ id: `k-${p.id}`, group: 'Kişiler', label: `${p.firstName} ${p.lastName}`.trim(), sublabel: `${p.departmentCode || ''} · kişi profili`, icon: 'fa-user', keywords: p.sicil || '', run: () => setViewingPersonId(p.id) }));
     return items;
-  }, [workspace, visibleProjects, identity, handleOpenProject, activeProject, consoleMode, canAudit, canDataHealth, isModern, roleView]);
+  }, [workspace, visibleProjects, identity, handleOpenProject, activeCloudId, activeProject, consoleMode, canAudit, canDataHealth, isModern, openProfile, roleView]);
 
   return (
-    <AssistantProvider enabled={isAIEnabled && !consoleMode} chat={aiPolicy.chat} embedded={aiPolicy.embedded} getWorkspace={getAssistantWorkspace} getView={getAssistantView} getFocus={getAssistantFocus} onNavigate={handleAssistantNavigate} onApplyAction={handleApplyAiAction} onApplyActions={handleApplyAiActions} onUiCommand={handleAssistantUiCommand}>
+    <AssistantProvider enabled={isAIEnabled && !consoleMode}
+      sessionScope={activeCloudId ? JSON.stringify([activeCloudId, loadCloudConfig()?.linkedUserId, workspace?.cloudMembership]) : undefined}
+      chat={aiPolicy.chat} embedded={aiPolicy.embedded} getWorkspace={getAssistantWorkspace} getView={getAssistantView} getFocus={getAssistantFocus} onNavigate={handleAssistantNavigate} onApplyAction={handleApplyAiAction} onApplyActions={handleApplyAiActions} onUiCommand={handleAssistantUiCommand}>
     <div className={`min-h-screen font-sans theme-${settings?.theme || 'classic'} ${isModern ? `ui-modern mt-${modernTheme}` : 'bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100'}`}>
       {isModern ? (
         <div className="flex min-h-screen">
@@ -2661,7 +2821,7 @@ const App: React.FC = () => {
             consoleMode={consoleMode}
             adminSection={adminSection}
             onAdminSection={setAdminSection}
-            onOpenProfile={() => setIsProfileOpen(true)}
+            onOpenProfile={openProfile}
             expectationBadge={expectationBadge}
             reportBadge={attention.reportBadge}
             meetingBadge={attention.meetingBadge}
@@ -2693,7 +2853,7 @@ const App: React.FC = () => {
               <button type="button" className="m-icon-btn" aria-label="Menüyü aç" onClick={() => setIsSidebarOpen(true)}><Icon name="menu" /></button>
               <span className="flex-1 min-w-0 truncate text-[17px] font-semibold m-text">{inProjectView && activeProject ? activeProject.name : consoleMode ? 'Yönetici konsolu' : 'PlanAsistan'}</span>
               {!consoleMode && <button type="button" className="m-icon-btn" aria-label="Ara" onClick={() => setIsPaletteOpen(true)}><Icon name="search" /></button>}
-              <button type="button" className="m-icon-btn" aria-label={`Profil: ${currentActorName}. Profil değiştir`} title="Profil değiştir" onClick={() => setIsProfileOpen(true)}>
+              <button type="button" className="m-icon-btn" aria-label={activeCloudId ? 'Bulut hesabı' : `Profil değiştir (${currentActorName})`} title={activeCloudId ? 'Bulut hesabı' : 'Profil değiştir'} onClick={openProfile}>
                 <span aria-hidden="true" className="w-8 h-8 rounded-full m-fill flex items-center justify-center text-[12px] font-semibold m-text">{initialsOf(currentActorName)}</span>
               </button>
             </div>
@@ -2738,7 +2898,7 @@ const App: React.FC = () => {
           currentPersonId={workspace?.currentPersonId}
           people={(workspace?.people || []).map(p => ({ id: p.id, name: `${p.firstName} ${p.lastName}`.trim(), initials: `${p.firstName.charAt(0)}${p.lastName.charAt(0)}`, departmentCode: p.departmentCode }))}
           identityNeedsPerson={needsPerson}
-          onOpenProfile={() => setIsProfileOpen(true)}
+          onOpenProfile={openProfile}
           canExecutive={canExecutive}
           hidePrivate={isManagementRole(identity.role)}
           cloudLinked={!!loadCloudConfig()?.workspaceId}
@@ -2835,7 +2995,14 @@ const App: React.FC = () => {
       {isCloudModalOpen && workspace && (
         <CloudSyncModal
           workspace={workspace}
-          onReplaceWorkspace={(updater) => setWorkspace(prev => (prev ? updater(prev) : prev))}
+          initialProblem={cloudStartupProblem}
+          onDisconnect={() => { setCloudStartupProblem(undefined); clearCloudWorkspace(); }}
+          onReplaceWorkspace={(updater) => {
+            setCloudStartupProblem(undefined);
+            clearCloudViews();
+            setWorkspace(prev => (prev ? updater(prev) : prev));
+          }}
+          onBackup={can(identity, 'app.backup') ? handleSaveProject : undefined}
           onClose={() => setIsCloudModalOpen(false)}
         />
       )}
@@ -2889,7 +3056,7 @@ const App: React.FC = () => {
           onClose={() => setIsAuditModalOpen(false)}
         />
       )}
-      {isProfileOpen && workspace && (() => {
+      {isProfileOpen && workspace && !loadCloudConfig()?.workspaceId && (() => {
         const sheet = <ProfileSwitcherSheet workspace={workspace} onSelect={handleChangeIdentity} onClose={() => setIsProfileOpen(false)} />;
         // Klasik arayüzde modern pencere kendi stil kabında açılır
         return isModern ? sheet : <div className={modernScope}>{sheet}</div>;
@@ -2913,6 +3080,7 @@ const App: React.FC = () => {
       {egg?.kind === 'hyper' && <HyperdriveOverlay onDone={() => setEgg(null)} />}
       {egg?.kind === 'space' && <SpaceMode onDone={() => setEgg(null)} />}
       {egg?.kind === 'celebrate' && <Celebration message={egg.message} onDone={() => setEgg(null)} />}
+      {egg?.kind === 'sprint' && <SprintCompletion title={egg.title} summary={egg.summary} more={egg.more} onDone={() => setEgg(null)} />}
       {egg?.kind === 'pop' && <BubblePop onDone={() => setEgg(null)} />}
       {egg?.kind === 'aurora' && <AuroraSweep onDone={() => setEgg(null)} />}
       {egg?.kind === 'ship' && <ShipIt onDone={() => setEgg(null)} />}
@@ -2921,7 +3089,9 @@ const App: React.FC = () => {
         <EggGuide
           theme={modernTheme}
           onClose={() => setEgg(null)}
-          onTry={(id: EggTrigger) => setEgg(id === 'celebrate' ? { kind: 'celebrate', message: 'Örnek kutlama: Sürüm 3 tamamlandı!' } : id === 'rocket' ? { kind: 'hyper' } : { kind: id })}
+          onTry={(id: EggTrigger) => setEgg(id === 'celebrate' ? { kind: 'celebrate', message: 'Örnek kutlama: Sürüm 3 tamamlandı!' }
+            : id === 'sprint' ? { kind: 'sprint', title: 'Örnek: Sprint 3 tamamlandı!', summary: { sprint: 3, taskCount: 12, effortDays: 34.5, daysFromEnd: -2 }, more: 0 }
+            : id === 'rocket' ? { kind: 'hyper' } : { kind: id })}
         />
       )}
       {storageFull && !storageWarnClosed && (

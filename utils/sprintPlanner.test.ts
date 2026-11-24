@@ -227,3 +227,30 @@ describe('planTaskVersions (geriye dönük uyumlu sarmalayıcı)', () => {
         expect(wrapped).toEqual(detailed);
     });
 });
+
+describe('sprintler arası görevler', () => {
+    // 3 hafta × 5 − 4 test = 11 gün sprint kapasitesi
+    it('çok sprintli görevi ardışık sprintlere böler ve ardılını son sprintinden sonra başlatır', () => {
+        const r = planTaskVersionsDetailed([
+            makeTask({ id: 'uzun', sprintSpan: 2, time: { best: 16, avg: 16, worst: 16 } }), // sprint başına 8 gün
+            makeTask({ id: 'ardil', predecessor: 'uzun', time: { best: 2, avg: 2, worst: 2 } }),
+            makeTask({ id: 'kisa', time: { best: 3, avg: 3, worst: 3 } }),
+        ], resources, 3, 4);
+        const at = (id: string) => r.tasks.find(t => t.id === id)!;
+        expect(at('uzun')).toMatchObject({ version: 1, sprintSpan: 2 });
+        expect(at('ardil').version).toBe(3);
+        expect(at('kisa').version).toBe(1); // 8 + 3 = 11 gün sığar
+        expect(r.stats.sprintCount).toBe(3);
+        expect(r.warnings).toEqual([]);
+    });
+
+    it('bölündüğünde de sığmayan görevi uyarıyla boş sprintlere taşır', () => {
+        const r = planTaskVersionsDetailed([
+            makeTask({ id: 'once', time: { best: 2, avg: 2, worst: 2 } }),
+            makeTask({ id: 'dev', sprintSpan: 2, priority: 'Low', time: { best: 30, avg: 30, worst: 30 } }),
+        ], resources, 3, 4);
+        expect(r.tasks.find(t => t.id === 'dev')!.version).toBe(2);
+        expect(r.warnings.map(w => w.type)).toEqual(['oversized']);
+        expect(r.warnings[0].message).toContain('Sprint 2–3');
+    });
+});

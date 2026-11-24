@@ -38,6 +38,8 @@ export interface Task {
   availability: boolean;
   priority: 'Blocker' | 'High' | 'Medium' | 'Low';
   version: number;
+  /** Görevin sürdüğü ardışık sprint sayısı; `version` sprintinde başlar (yoksa 1) */
+  sprintSpan?: number;
   predecessor: string | null;
   unit: string;
   resourceName: string;
@@ -592,6 +594,13 @@ export interface ProjectData {
  */
 export type UserRole = 'mudur' | 'pyb_sorumlu' | 'pyb_destek' | 'py' | 'bolum_sorumlu' | 'admin';
 
+export interface CloudMembership {
+  role: Exclude<UserRole, 'admin'>;
+  personId: string | null;
+  projectIds: string[] | null;
+  accessAdmin: boolean;
+}
+
 /** Rol bazlı özellik yetkileri (katalog ve varsayılanlar: utils/permissions.ts) */
 export type PermissionKey =
   | 'screen.executive' | 'screen.admin' | 'portfolio.viewAll'
@@ -648,6 +657,25 @@ export type ProjectStatus = 'devam' | 'teklif' | 'beklemede' | 'tamamlandi';
 /** Haftalık yönetici durumu (kırmızı/sarı/yeşil) */
 export type RagStatus = 'green' | 'amber' | 'red';
 
+export interface JiraAgileBoard {
+    id: number;
+    name: string;
+}
+
+export interface JiraSprint {
+    id: number;
+    name: string;
+    state: 'active' | 'future' | 'closed' | 'unknown';
+    startDate?: string;
+    endDate?: string;
+    goal?: string;
+}
+
+export interface JiraAgileList<T> {
+    values: T[];
+    truncated: boolean;
+}
+
 /** Projeye özgü ayarlar (tema/kalıcılık gibi uygulama geneli ayarlar WorkspaceSettings'te) */
 export interface ProjectSettings {
   sprintDuration: number;
@@ -655,7 +683,10 @@ export interface ProjectSettings {
   tagColors?: Record<string, string>;
   titleCosts?: Record<string, number>;
   sprintNames?: Record<number, string>;
+  jiraSprintImports?: Record<string, { localSprint: number; name: string; startDate?: string; endDate?: string }>;
   globalTestDays?: number;
+  /** Test sonraki sprintle paralel yürür: sprint, öncekinin testini beklemeden geliştirme bitince başlar. */
+  parallelTest?: boolean;
   useJiraRemainingEstimate?: boolean;
   manMonthTableColor?: string;
   costTableColor?: string;
@@ -779,6 +810,11 @@ export interface DashboardFilter {
 
 export type DashboardMeasure = 'count' | 'effort' | 'hours';
 
+export interface DashboardProgressWeights {
+  categories?: Partial<Record<TaskStatus, number>>;
+  statuses?: Record<string, number>;
+}
+
 export interface DashboardWidgetConfig {
   filter?: DashboardFilter;
   dim?: DashboardDim;
@@ -786,6 +822,8 @@ export interface DashboardWidgetConfig {
   measure?: DashboardMeasure;
   /** metric: hesaplanan gösterge anahtarı */
   metric?: string;
+  /** İlerleme (kayıt): kategori ve ayrıntılı durum başına 0–100 yüzde */
+  progressWeights?: DashboardProgressWeights;
   /** kpi: projedeki gösterge */
   kpiId?: string;
   /** note: metin */
@@ -1007,6 +1045,9 @@ export interface WorkspaceData {
   currentRole?: UserRole;
   /** Aktif kimlik: py/bölüm sorumlusu rollerinde kapsamı belirleyen havuz kişisi */
   currentPersonId?: string;
+  /** Cihazda doğrulanan bulut kapsamı. Paylaşılan belgeye ve dışa aktarıma girmez. */
+  cloudMembership?: CloudMembership;
+  cloudWorkspaceId?: string;
   /** Admin'in proje yapılandırma şemaları (iş akışı, kayıt türleri, zorunlu alanlar, pano) */
   projectSchemes?: ProjectScheme[];
   /** Proje rolü tanımları (yoksa hazır roller); üyeler projede atanır */

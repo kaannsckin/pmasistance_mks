@@ -124,6 +124,7 @@ let nextId = 1;
 
 interface ProviderProps {
   enabled: boolean;
+  sessionScope?: string;
   chat?: boolean;
   embedded?: boolean;
   getWorkspace: () => WorkspaceData | null;
@@ -140,7 +141,7 @@ interface ProviderProps {
   children: React.ReactNode;
 }
 
-export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, chat = true, embedded = true, getWorkspace, getView, getFocus, onNavigate, onApplyAction, onApplyActions, onUiCommand, children }) => {
+export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, sessionScope, chat = true, embedded = true, getWorkspace, getView, getFocus, onNavigate, onApplyAction, onApplyActions, onUiCommand, children }) => {
   const [phase, setPhase] = useState<AssistantPhase>('idle');
   const [status, setStatus] = useState<AiStatus | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -423,9 +424,10 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, chat = tru
   const loadedRef = useRef<UiMessage[] | null>(null); // geri yüklenen mesajlar: değişmedikçe yeniden kaydedilmez
   const restoredRef = useRef(false);
   const ownerNow = useCallback(() => {
+    if (sessionScope) return sessionScope;
     const ws = getWorkspace();
     return ws ? chatOwner(ws.currentRole || 'py', ws.currentPersonId) : null;
-  }, [getWorkspace]);
+  }, [getWorkspace, sessionScope]);
   const refreshChats = useCallback(async () => {
     const owner = ownerNow();
     setChats(owner ? summarize(await listChats(owner)) : []);
@@ -438,6 +440,17 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, chat = tru
     setMessages([]);
     setCurrentChatId(newChatId());
   }, []);
+
+  const historyScope = useRef(sessionScope);
+  useEffect(() => {
+    if (historyScope.current === sessionScope) return;
+    historyScope.current = sessionScope;
+    chatOwnerRef.current = null;
+    restoredRef.current = false;
+    clear();
+    setChats([]);
+    setOpen(false);
+  }, [sessionScope, clear]);
 
   const openChat = useCallback(async (id: string) => {
     if (abortRef.current) return;
@@ -482,6 +495,7 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, chat = tru
     if (!owner) return;
     const id = chatIdRef.current;
     const timer = window.setTimeout(() => {
+      if (owner !== ownerNow() || !messagesRef.current.length) return;
       const stored = toStored(messages as unknown as StoredMessage[]);
       saveChat({ id, owner, title: chatTitle(stored), updatedAt: new Date().toISOString(), messages: stored }).then(refreshChats);
     }, 400);

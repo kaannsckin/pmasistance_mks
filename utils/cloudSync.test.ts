@@ -161,3 +161,17 @@ describe('proje satırları ve değişiklik planı', () => {
         expect(contentHash('x'.repeat(10000))).not.toBe(contentHash('x'.repeat(10001)));
     });
 });
+
+describe('Supabase giriş hataları', () => {
+    it('kod gönderiminde 5xx yanıtı "{}" yerine anlaşılır iletiye çevrilir', async () => {
+        const { createClient } = await import('@supabase/supabase-js');
+        const { cloudAuthServerError } = await import('./cloudSync');
+        const fetch = async () => new Response(JSON.stringify({ code: 500, msg: 'Error sending magic link email' }), { status: 500 });
+        const c = createClient('https://abcdefghijklmnopqrst.supabase.co', 'sb_publishable_test', { global: { fetch }, auth: { persistSession: false } });
+        const { error } = await c.auth.signInWithOtp({ email: 'kisi@example.com' });
+        expect(error?.status).toBe(500);
+        expect(error?.message).toBe('{}');
+        expect(cloudAuthServerError(error!)).toBe('Supabase sunucu hatası (500).');
+        expect(cloudAuthServerError({ status: 400, message: 'x' })).toBeNull();
+    });
+});

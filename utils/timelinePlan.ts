@@ -1,6 +1,7 @@
-import { Project, Task, TaskStatus } from '../types';
+import { Project, ProjectSettings, Task, TaskStatus } from '../types';
 import { calculatePertFuzzyPert } from './timeline';
 import { buildSprintWindows } from './taskToAllocation';
+import { isInSprint, lastSprintOf, sprintSpanOf } from './sprintSpan';
 
 /**
  * Zaman çizelgesi (sprint planı) hesapları. Klasik sprint panosuyla aynı
@@ -36,6 +37,25 @@ const UNASSIGNED = 'Atanmamış';
 /** Görevin sprinte yüklediği efor (gün): PERT. Katılım kapasite tarafında sayılır. */
 export const taskLoadDays = (task: Task): number => calculatePertFuzzyPert(task.time).pert;
 
+export const lastPlannedSprint = (project: Project): number => Math.max(0,
+    ...project.tasks.filter(task => task.includeInSprints !== false).map(lastSprintOf),
+    ...Object.keys(project.settings.sprintNames || {}).map(Number).filter(Number.isSafeInteger),
+    ...Object.values(project.settings.jiraSprintImports || {}).map(sprint => sprint.localSprint).filter(Number.isSafeInteger));
+
+/** Sprint numaralarının yer değiştirmesi, adları ve Jira kaynak bağlantılarını da taşır. */
+export const shiftSprintSettings = (settings: ProjectSettings, at: number, direction: 1 | -1): ProjectSettings => {
+    const move = (sprint: number) => sprint < at ? sprint : sprint === at && direction === -1 ? undefined : sprint + direction;
+    const sprintNames = Object.fromEntries(Object.entries(settings.sprintNames || {}).flatMap(([key, name]) => {
+        const target = move(Number(key));
+        return target === undefined ? [] : [[target, name]];
+    }));
+    const jiraSprintImports = Object.fromEntries(Object.entries(settings.jiraSprintImports || {}).flatMap(([key, source]) => {
+        const target = move(source.localSprint);
+        return target === undefined ? [] : [[key, { ...source, localSprint: target }]];
+    }));
+    return { ...settings, sprintNames, ...(settings.jiraSprintImports ? { jiraSprintImports } : {}) };
+};
+
 /** Bir sprintte birim başına kapasite (gün): (hafta×5 − test günü) × katılım */
 export const unitCapacities = (project: Project): Map<string, number> => {
     const weeks = project.settings.sprintDuration || 3;
@@ -55,16 +75,17 @@ export const unitCapacities = (project: Project): Map<string, number> => {
  */
 export const buildLanes = (project: Project, extraLanes = 0): SprintLane[] => {
     const planned = project.tasks.filter(t => t.includeInSprints !== false);
-    const maxVersion = Math.max(0, ...planned.map(t => t.version || 0)) + extraLanes;
+    const maxVersion = lastPlannedSprint(project) + extraLanes;
     const windows = buildSprintWindows(project, maxVersion);
     const caps = unitCapacities(project);
 
     return Array.from({ length: maxVersion + 1 }, (_, v) => {
-        const tasks = planned.filter(t => (t.version || 0) === v);
+        // Birden çok sprinte yayılan görev her sprintte görünür, eforu sprintlere eşit bölünür.
+        const tasks = planned.filter(t => isInSprint(t, v));
         const loads = new Map<string, number>();
         tasks.forEach(t => {
             const unit = t.unit || UNASSIGNED;
-            loads.set(unit, (loads.get(unit) || 0) + taskLoadDays(t));
+            loads.set(unit, (loads.get(unit) || 0) + taskLoadDays(t) / sprintSpanOf(t));
         });
         const unitNames = v === 0 ? [...loads.keys()] : [...new Set([...caps.keys(), ...loads.keys()])];
         const units = unitNames
@@ -119,6 +140,8 @@ export const segmentPct = (from: Date, to: Date, range: { start: Date; end: Date
 /** Bugünün düştüğü sprint (test dönemi dahil); yoksa null */
 export const currentLaneVersion = (lanes: SprintLane[], now: Date = new Date()): number | null => {
     const t = dayStart(now);
-    const hit = lanes.find(l => l.start && l.testEnd && dayStart(l.start) <= t && t <= dayStart(l.testEnd));
+    // Paralel testte bir gün hem önceki sprintin testine hem yeni sprintin geliştirmesine düşer; geliştirme önce gelir.
+    const developing = lanes.find(l => l.start && l.end && dayStart(l.start) <= t && t <= dayStart(l.end));
+    const hit = developing || lanes.find(l => l.start && l.testEnd && dayStart(l.start) <= t && t <= dayStart(l.testEnd));
     return hit ? hit.version : null;
 };

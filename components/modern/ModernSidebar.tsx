@@ -111,13 +111,13 @@ const ToolsMenu: React.FC<Pick<ModernSidebarProps, 'onSwitchToClassic' | 'onSave
     );
     return (
         <div role="menu" aria-label="Diğer araçlar" className="absolute bottom-full left-2 right-2 mb-2 m-surface m-pop rounded-2xl py-1.5 z-50 max-h-[70vh] overflow-y-auto">
-            {item('userCog', 'Profil değiştir', p.onOpenProfile)}
+            {item('userCog', p.cloudLinked ? 'Bulut hesabı' : 'Profil değiştir', p.onOpenProfile)}
             <div className="border-t m-sep my-1"></div>
             {p.onSaveBackup && item('download', 'Yedeği indir', p.onSaveBackup)}
             {p.onLoadBackup && item('upload', 'Yedekten yükle', () => fileRef.current?.click())}
             {/* Yerel modda yedek yalnız Yönetici yetkisiyle: düğme gizlenmesin, yolu göstersin */}
             {!p.onSaveBackup && !p.onLoadBackup && !p.cloudLinked && item('upload', 'Yedek al / yükle', p.onOpenProfile, <span className="text-[13px] m-text-3">Admin kimliğiyle</span>)}
-            {item('cloud', 'Bulut eşitleme', p.onOpenCloud, p.cloudLinked ? <span className="text-[13px] m-ink-ok font-semibold">Bağlı</span> : undefined)}
+            {item('cloud', 'Bulut veritabanı', p.onOpenCloud, p.cloudLinked ? <span className="text-[13px] m-ink-ok font-semibold">Bağlı</span> : undefined)}
             {p.onOpenHealth && item('activity', 'Veri sağlığı', p.onOpenHealth, p.healthAlerts > 0 ? <span className="text-[13px] font-semibold m-ink-warn">{p.healthAlerts}</span> : undefined)}
             {p.onOpenAudit && item('history', 'Denetim günlüğü', p.onOpenAudit)}
             {item('info', 'Hakkında', p.onOpenAbout)}
@@ -243,7 +243,7 @@ const ModernSidebar: React.FC<ModernSidebarProps> = (props) => {
                             type="button"
                             onClick={() => { onOpenProfile(); onClose(); }}
                             aria-haspopup="dialog"
-                            title="Profil değiştir"
+                            title={props.cloudLinked ? 'Bulut hesabı' : 'Profil değiştir'}
                             className="m-sidebar-profile m-row-link flex-1 min-w-0 flex items-center gap-2.5 min-h-[52px] px-2 rounded-xl"
                         >
                             <span className="w-9 h-9 rounded-full m-fill flex items-center justify-center text-[13px] font-semibold flex-none" aria-hidden="true">
@@ -252,7 +252,7 @@ const ModernSidebar: React.FC<ModernSidebarProps> = (props) => {
                             <span className="flex-1 min-w-0 flex flex-col leading-tight">
                                 <span className="text-[15px] font-semibold truncate">{person ? person.name : ROLE_LABELS[currentRole]}</span>
                                 <span className={`text-[13px] truncate ${needsPerson ? 'm-ink-warn font-semibold' : 'm-text-3'}`}>
-                                    {needsPerson ? 'Kişi seçin' : person ? ROLE_LABELS[currentRole] : 'Profil değiştir'}
+                                    {props.cloudLinked ? 'Bulut hesabı' : needsPerson ? 'Kişi seçin' : person ? ROLE_LABELS[currentRole] : 'Profil değiştir'}
                                 </span>
                             </span>
                         </button>

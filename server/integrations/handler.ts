@@ -6,6 +6,7 @@ import { createRateLimiter } from '../ai/rateLimit.js';
 import { describeNetworkError, extraCaFor, upstreamFetch } from '../ai/tls.js';
 import { withIntegrationSettings } from './settings.js';
 import { addDays, DayRange, isDayRange, isIsoDay } from '../../utils/calendarRange.js';
+import type { JiraAgileBoard, JiraAgileList, JiraSprint } from '../../types.js';
 
 /**
  * Kurum entegrasyonları (yalnız sunucu): Jira worklog okuma, Teams ve e-posta
@@ -729,6 +730,54 @@ export const buildSyncJql = (env: Env, source: JiraSyncSource, openOnly = true):
 
 export const buildKeysJql = (keys: string[]): string => `key in (${quoted(keys)}) ORDER BY key ASC`;
 
+const agileId = (value: unknown): number | undefined => {
+    if (typeof value !== 'number' && typeof value !== 'string') return undefined;
+    if (!/^[1-9]\d{0,11}$/.test(String(value))) return undefined;
+    return Number(value);
+};
+
+const agileList = async <T extends { id: number }>(env: Env, path: string, normalize: (row: Record<string, unknown>) => T | undefined, fetchImpl?: typeof fetch): Promise<JiraAgileList<T>> => {
+    const base = clean(env.JIRA_BASE_URL)!.replace(/\/+$/, '');
+    const f = fetchImpl || upstreamFetch(base, env);
+    const headers = { authorization: jiraAuth(env), accept: 'application/json' };
+    const values = new Map<number, T>();
+    const separator = path.includes('?') ? '&' : '?';
+    for (let startAt = 0, page = 0; page < 10; page++) {
+        const response = await jiraReadWithRetry(f, `${base}/rest/agile/1.0/${path}${separator}startAt=${startAt}&maxResults=50`, { headers });
+        if (!response.ok) {
+            const status = response.status === 404 ? 404 : response.status === 429 ? 429 : 502;
+            throw Object.assign(new Error(response.status === 404 ? 'Jira panosu bulunamadı veya Jira Software sprint erişimi kapalı.' : `Jira sprint verisi okunamadı (HTTP ${response.status}).`), { status });
+        }
+        const data = await response.json() as { values?: Record<string, unknown>[]; startAt?: number; total?: number; isLast?: boolean };
+        const rows = Array.isArray(data.values) ? data.values : [];
+        if (typeof data.startAt === 'number' && data.startAt !== startAt) break;
+        for (const row of rows) {
+            if (!row || typeof row !== 'object') continue;
+            const item = normalize(row);
+            if (item) values.set(item.id, item);
+        }
+        startAt += rows.length;
+        if (!rows.length || data.isLast === true || (typeof data.total === 'number' && startAt >= data.total)
+            || (data.isLast === undefined && data.total === undefined && rows.length < 50)) return { values: [...values.values()], truncated: false };
+    }
+    return { values: [...values.values()], truncated: true };
+};
+
+const jiraSprintBoards = (env: Env, key: string, fetchImpl?: typeof fetch): Promise<JiraAgileList<JiraAgileBoard>> =>
+    agileList(env, `board?projectKeyOrId=${encodeURIComponent(key)}`, row => {
+        const id = agileId(row.id);
+        return id !== undefined && (!row.type || row.type === 'scrum' || row.type === 'simple') ? { id, name: str(row.name).trim() || `Pano ${id}` } : undefined;
+    }, fetchImpl);
+
+const jiraBoardSprints = (env: Env, boardId: number, state: string, fetchImpl?: typeof fetch): Promise<JiraAgileList<JiraSprint>> =>
+    agileList(env, `board/${boardId}/sprint${state ? `?state=${state}` : ''}`, row => {
+        const id = agileId(row.id);
+        if (!id) return undefined;
+        const state = row.state === 'active' || row.state === 'future' || row.state === 'closed' ? row.state : 'unknown';
+        return { id, name: str(row.name).trim() || `Sprint ${id}`, state, startDate: isoOf(row.startDate) || undefined,
+            endDate: isoOf(row.endDate) || undefined, goal: str(row.goal).trim().slice(0, 2000) || undefined };
+    }, fetchImpl);
+
 /**
  * Anahtarı bilinen kayıtların güncel hâli (kapanmış olanlar dahil). Jira,
  * listede silinmiş / taşınmış tek bir anahtar olsa tüm sorguyu reddeder:
@@ -1281,6 +1330,26 @@ export const handleIntegrationRequest = async (request: Request, rawEnv: Env, op
         try {
             // Bağlantı sınaması ve kaynak seçenekleri
             if (op === 'meta') return json(200, await fetchJiraMeta(env, opts.fetchImpl));
+
+            if (op === 'sprintBoards' || op === 'boardSprints' || op === 'sprintIssues') {
+                const projectKey = String(body.projectKey || '').trim().toUpperCase();
+                if (!KEY_RE.test(projectKey)) return json(400, { error: 'Geçerli Jira proje anahtarı gerekir.', code: 'bad_request' });
+                if (!jiraProjectAllowed(env, projectKey)) return json(403, { error: `${projectKey} projesi bu sunucuda Jira erişimine açık değil.`, code: 'forbidden' });
+                if (op === 'sprintBoards') return json(200, await jiraSprintBoards(env, projectKey, opts.fetchImpl));
+                if (op === 'boardSprints') {
+                    const boardId = agileId(body.boardId);
+                    const state = String(body.state || '');
+                    if (!boardId || !['', 'active', 'future', 'closed'].includes(state)) return json(400, { error: 'Geçersiz Jira panosu ya da sprint durumu.', code: 'bad_request' });
+                    const boards = await jiraSprintBoards(env, projectKey, opts.fetchImpl);
+                    if (!boards.values.some(board => board.id === boardId)) return json(403, { error: 'Bu Jira panosu seçili projede erişilebilir değil.', code: 'forbidden' });
+                    return json(200, await jiraBoardSprints(env, boardId, state, opts.fetchImpl));
+                }
+                const sprintId = agileId(body.sprintId);
+                const cursor = body.cursor == null ? undefined : String(body.cursor);
+                if (!sprintId || (cursor !== undefined && (cursor.length > 2000 || /\s/.test(cursor)))) return json(400, { error: 'Geçersiz Jira sprinti ya da sayfa imleci.', code: 'bad_request' });
+                const page = await fetchIssuesByJql(env, `project = "${projectKey}" AND sprint = ${sprintId} ORDER BY key ASC`, { cursor }, opts.fetchImpl);
+                return json(200, { ...page, issues: page.issues.filter(issue => issue.key.split('-')[0].toUpperCase() === projectKey) });
+            }
 
             // Kapsamlı okuma: anahtarı bilinen kayıtlar ya da kaynak (proje / etiket / kayıtlı filtre)
             if (op === 'search') {

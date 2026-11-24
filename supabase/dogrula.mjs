@@ -33,7 +33,7 @@ if (dashMatch) {
     info(`Dashboard adresi algılandı → API adresi kullanılıyor: ${url}`);
 }
 
-const headers = { apikey: anonKey, Authorization: `Bearer ${anonKey}` };
+const headers = { apikey: anonKey };
 let errorCount = 0;
 
 const get = async (path, extraHeaders = {}) => {
@@ -46,7 +46,16 @@ const get = async (path, extraHeaders = {}) => {
 const checkTable = async (table) => {
     const { status, body } = await get(`/rest/v1/${table}?select=*&limit=1`);
     if (status === 200) {
-        ok(`${table} tablosu kurulu (RLS aktif, anonim erişim boş dönüyor)`);
+        if (!Array.isArray(body) || body.length) {
+            fail(`${table}: anonim istek veri döndürdü`);
+            errorCount++;
+            return false;
+        }
+        ok(`${table} tablosu kurulu, anonim istek veri döndürmüyor`);
+        return true;
+    }
+    if ([401, 403].includes(status) && body?.code === '42501') {
+        ok(`${table} tablosu anonim rolün erişimine kapalı`);
         return true;
     }
     if (status === 404 || body?.code === 'PGRST205') {
@@ -99,7 +108,8 @@ const run = async () => {
     const st = await get('/rest/v1/app_settings?select=id&limit=1');
     if (st.status === 200 && Array.isArray(st.body) && st.body.length === 0) ok('app_settings tablosu kurulu ve istemcilere kapalı (yönetici panelinden AI ayarı için)');
     else if (st.status === 200) { fail('app_settings istemciye açık görünüyor: tabloda RLS açık ve politika olmamalı'); errorCount++; }
-    else info('app_settings tablosu yok: yönetici panelinden AI ayarı kullanılmayacaksa gerekmez (schema.sql ile kurulur)');
+    else if (st.body?.code === '42501') ok('app_settings tablosu istemcilere kapalı');
+    else info('app_settings tablosu doğrulanamadı (schema.sql ile kurulur)');
     if (!schemaReady) {
         info('Çözüm: Dashboard → SQL Editor → New query → supabase/schema.sql içeriğini yapıştırın → Run');
     }
@@ -134,15 +144,16 @@ const run = async () => {
         ok('Kayıt + otomatik giriş çalışıyor');
         const authed = { apikey: anonKey, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
-        // Çalışma alanı oluştur
-        const wsRes = await fetch(`${url}/rest/v1/workspaces`, {
+        // Uygulamanın ilk aktarım işlemi: çalışma alanı, proje ve özel belge
+        const { randomUUID } = await import('node:crypto');
+        const wsId = randomUUID();
+        const wsRes = await fetch(`${url}/rest/v1/rpc/create_planasistan_workspace`, {
             method: 'POST',
-            headers: { ...authed, Prefer: 'return=representation' },
-            body: JSON.stringify({ name: 'E2E Test', core: { probe: true }, version: 1 }),
+            headers: authed,
+            body: JSON.stringify({ p_id: wsId, p_name: 'E2E Test', p_core: { probe: true }, p_projects: [{ id: 'e2e-proje', name: 'E2E' }], p_private: { notes: {}, customerRequests: {} } }),
         });
         const wsBody = await wsRes.json();
-        const wsId = Array.isArray(wsBody) ? wsBody[0]?.id : wsBody?.id;
-        if (!wsRes.ok || !wsId) {
+        if (!wsRes.ok || wsBody !== wsId) {
             fail(`Çalışma alanı oluşturulamadı: ${JSON.stringify(wsBody).slice(0, 160)}`);
             process.exit(1);
         }
@@ -167,15 +178,13 @@ const run = async () => {
         }
 
         // Proje satırı: üye yazar, okur; sürüm koşullu güncelleme eski sürümle eşleşmez
-        const prRes = await fetch(`${url}/rest/v1/workspace_projects`, {
-            method: 'POST', headers: { ...authed, Prefer: 'return=representation' },
-            body: JSON.stringify({ workspace_id: wsId, project_id: 'e2e-proje', data: { id: 'e2e-proje', name: 'E2E' }, version: 1 }),
-        });
+        const prRes = await fetch(`${url}/rest/v1/workspace_projects?workspace_id=eq.${wsId}&select=project_id`, { headers: authed });
+        const projects = await prRes.json();
         const stale = await fetch(`${url}/rest/v1/workspace_projects?workspace_id=eq.${wsId}&project_id=eq.e2e-proje&version=eq.0`, {
             method: 'PATCH', headers: { ...authed, Prefer: 'return=representation' }, body: JSON.stringify({ version: 1 }),
         });
         const staleRows = await stale.json().catch(() => null);
-        if (prRes.ok && Array.isArray(staleRows) && staleRows.length === 0) {
+        if (prRes.ok && projects?.[0]?.project_id === 'e2e-proje' && Array.isArray(staleRows) && staleRows.length === 0) {
             ok('Proje satırı yazıldı; eski sürümle güncelleme reddedildi (çakışma koruması)');
         } else {
             fail(`Proje satırı denetimi başarısız (HTTP ${prRes.status}): ${JSON.stringify(staleRows).slice(0, 120)}`);
@@ -183,12 +192,15 @@ const run = async () => {
         }
 
         // Rolü müdüre çevir → private RLS ile GİZLENMELİ
-        await fetch(`${url}/rest/v1/workspace_members?workspace_id=eq.${wsId}`, {
-            method: 'PATCH', headers: authed, body: JSON.stringify({ role: 'mudur' }),
+        const setOwnerRole = role => fetch(`${url}/rest/v1/rpc/save_planasistan_member`, {
+            method: 'POST', headers: authed,
+            body: JSON.stringify({ p_workspace: wsId, p_email: email, p_role: role, p_person_id: null,
+                p_project_ids: null, p_access_admin: true, p_remove: false }),
         });
+        const roleRes = await setOwnerRole('mudur');
         const privRes2 = await fetch(`${url}/rest/v1/workspace_private?workspace_id=eq.${wsId}&select=workspace_id`, { headers: authed });
         const priv2 = await privRes2.json();
-        if (Array.isArray(priv2) && priv2.length === 0) {
+        if (roleRes.ok && Array.isArray(priv2) && priv2.length === 0) {
             ok('RLS DOĞRULANDI: Müdür rolü private (not/istek) verisini OKUYAMIYOR');
         } else {
             fail(`RLS beklenen gibi çalışmadı: müdür private görebiliyor (${JSON.stringify(priv2).slice(0, 80)})`);
@@ -196,9 +208,7 @@ const run = async () => {
         }
 
         // Temizlik: rolü geri al + çalışma alanını sil (cascade)
-        await fetch(`${url}/rest/v1/workspace_members?workspace_id=eq.${wsId}`, {
-            method: 'PATCH', headers: authed, body: JSON.stringify({ role: 'pyb_destek' }),
-        });
+        await setOwnerRole('pyb_destek');
         const delRes = await fetch(`${url}/rest/v1/workspaces?id=eq.${wsId}`, { method: 'DELETE', headers: authed });
         if (delRes.ok) {
             ok('Test çalışma alanı silindi (temizlik tamam)');

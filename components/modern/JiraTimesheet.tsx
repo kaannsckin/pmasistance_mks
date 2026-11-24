@@ -1,18 +1,18 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Leave, Person, Project, TitleDef } from '../../types';
-import { Identity, ownsProject } from '../../utils/rbac';
+import { Identity } from '../../utils/rbac';
 import { effectiveCapacity } from '../../utils/availability';
 import { addDays, formatRange, isIsoDay, parseIsoDay, toIsoDay, weekRange } from '../../utils/calendarRange';
-import { fetchIntegrationHealth, fetchJiraTimesheet, JiraIssueWorklog } from '../../utils/integrations';
+import { JiraIssueWorklog } from '../../utils/integrations';
 import { JIRA_WORK_TIME_ZONE, jiraLocalDay } from '../../utils/jiraHistory';
 import { isHalfDay, isWorkday } from '../../utils/planning/workdays';
 import { isoWeekOf } from '../../utils/weeklyReport';
 import { getWorklogTimeZone, hourlyRate, HOURS_PER_DAY, matchWorklogPerson, setWorklogTimeZone } from '../../utils/workforce';
 import { ISSUE_TYPE_LABELS } from '../../utils/planning/lifecycle';
 import { fmtCost, fmtHours } from './WorkforceParts';
+import { projectJiraKey, useJiraTimesheet } from './useJiraTimesheet';
 
 const TIME_ZONES = [...new Set([JIRA_WORK_TIME_ZONE, 'UTC', ...(Intl.supportedValuesOf?.('timeZone') || [])])];
-const projectKeyOf = (project: Project) => project.jiraProjectKey?.trim() || project.tasks.find(t => t.jiraId)?.jiraId?.split('-')[0];
 const personKey = (row: JiraIssueWorklog) => row.accountId || row.authorEmail || row.author;
 const total = (hours: number[]) => hours.reduce((a, b) => a + b, 0);
 const pivot = (log: JiraIssueWorklog[], days: string[]) => {
@@ -26,7 +26,7 @@ const dailyCapacity = (person: Person, leaves: Leave[], day: string) => {
 };
 
 const JiraTimesheet = ({ projects, people, leaves, titles, identity }: { projects: Project[]; people: Person[]; leaves: Leave[]; titles: TitleDef[]; identity: Identity }) => {
-    const linked = projects.filter(p => projectKeyOf(p));
+    const linked = projects.filter(p => projectJiraKey(p));
     const [projectId, setProjectId] = useState(linked[0]?.id || '');
     const [period, setPeriod] = useState<'week' | 'month'>('week');
     const [anchor, setAnchor] = useState(() => jiraLocalDay(Date.now(), getWorklogTimeZone())!);
@@ -38,39 +38,19 @@ const JiraTimesheet = ({ projects, people, leaves, titles, identity }: { project
     const [component, setComponent] = useState('');
     const [version, setVersion] = useState('');
     const [issueType, setIssueType] = useState('');
-    const [result, setResult] = useState<{ key: string; rows: JiraIssueWorklog[]; error?: string }>();
     const [refresh, setRefresh] = useState(0);
     const [expanded, setExpanded] = useState<string | null>(null);
     const project = linked.find(p => p.id === projectId) || linked[0];
-    const jiraKey = project && projectKeyOf(project);
+    const jiraKey = project && projectJiraKey(project);
     const date = parseIsoDay(anchor)!;
     const monthStart = new Date(date.getFullYear(), date.getMonth(), 1);
     const monthEnd = new Date(date.getFullYear(), date.getMonth() + 1, 0);
     const wk = isoWeekOf(date);
     const range = period === 'week' ? weekRange(wk.year, wk.week, false) : { start: toIsoDay(monthStart), end: toIsoDay(monthEnd) };
     const { start, end } = range;
-    const owns = !!project && ownsProject(project, identity);
-    const email = people.find(person => person.id === identity.personId)?.email?.trim().toLowerCase();
-    const requestKey = JSON.stringify([jiraKey, start, end, zone, refresh, owns, email]);
-
-    useEffect(() => {
-        if (!jiraKey) return;
-        let current = true;
-        void (async () => {
-            try {
-                const health = await fetchIntegrationHealth();
-                if (!health.jira) throw new Error('Jira bağlantısı yapılandırılmadı.');
-                const rows = await fetchJiraTimesheet({ projectKey: jiraKey, from: start, to: end, timeZone: zone }, health.authMode);
-                const visible = health.authMode === 'supabase' || owns ? rows : rows.filter(row => !!email && row.authorEmail === email);
-                if (current) setResult({ key: requestKey, rows: visible });
-            } catch (e) {
-                if (current) setResult({ key: requestKey, rows: [], error: (e as Error).message });
-            }
-        })();
-        return () => { current = false; };
-    }, [requestKey, jiraKey, start, end, zone, owns, email]);
-
-    const current = result?.key === requestKey ? result : undefined;
+    const sheet = useJiraTimesheet({ project, start, end, timeZone: zone, identity, people, refresh });
+    const current: { rows: JiraIssueWorklog[]; error?: string } | undefined = sheet.status === 'ready' ? { rows: sheet.rows }
+        : sheet.status === 'error' ? { rows: [], error: sheet.error } : undefined;
     const days = useMemo(() => {
         const list: string[] = [];
         for (let day = start; day <= end; day = addDays(day, 1)) list.push(day);

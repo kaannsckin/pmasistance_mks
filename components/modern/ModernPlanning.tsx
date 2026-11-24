@@ -5,6 +5,7 @@ import { JiraIssueRecord } from '../../utils/integrations';
 import type { DayRange } from '../../utils/calendarRange';
 import { JiraImportOptions } from '../../utils/planning/jiraImport';
 import { JiraPushOutcome } from '../../utils/planning/jiraSync';
+import type { JiraSprintTransfer } from '../../utils/planning/jiraSprintImport';
 import { modelEstimateEnabled } from '../../utils/planning/ml/runModel';
 import { useEstimateModel } from './planning/useEstimateModel';
 import { aiPolicyOf } from '../../utils/ai/policy';
@@ -18,6 +19,7 @@ import { startStepFor } from '../../utils/guides';
 import JiraExport from './planning/JiraExport';
 import JiraHistoryImport from './planning/JiraHistoryImport';
 import JiraSync from './planning/JiraSync';
+import JiraSprintPlan from './planning/JiraSprintPlan';
 import NewRecordPlanner from './planning/NewRecordPlanner';
 import PlanSimulator from './planning/PlanSimulator';
 import ReleasePlanner from './planning/ReleasePlanner';
@@ -40,6 +42,8 @@ interface Props {
     onViewTask: (task: Task) => void;
     onOpenList: () => void;
     onOpenFilteredList: (query: string) => void;
+    onTransferJiraSprint: (transfer: JiraSprintTransfer) => void;
+    onOpenLocalSprint: (sprint: number) => void;
     period: DayRange | null;
     initialJiraPeriod?: DayRange;
     initialReleaseTasks?: string[];
@@ -56,11 +60,11 @@ interface Props {
     onApplyJiraSync?: (issues: JiraIssueRecord[], opts: JiraImportOptions, addNew: boolean, label: string, pushed?: JiraPushOutcome, settings?: JiraSyncSettings) => void;
 }
 
-type Mode = 'record' | 'release' | 'simulate';
+type Mode = 'record' | 'release' | 'simulate' | 'jira-sprints';
 
 const num = (v: number) => v.toLocaleString('tr-TR', { maximumFractionDigits: 1 });
 
-const ModernPlanning: React.FC<Props> = ({ project, workspace, me, visibleProjectIds, canEdit, onAddTask, onViewTask, onOpenList, onOpenFilteredList, period, initialJiraPeriod, initialReleaseTasks, onSaveReleasePlan, onDeleteReleasePlan, onCommitReleasePlan, onOpenGoals, onImportJira, onLinkJira, onSaveJiraSync, onApplyJiraSync }) => {
+const ModernPlanning: React.FC<Props> = ({ project, workspace, me, visibleProjectIds, canEdit, onAddTask, onViewTask, onOpenList, onOpenFilteredList, onTransferJiraSprint, onOpenLocalSprint, period, initialJiraPeriod, initialReleaseTasks, onSaveReleasePlan, onDeleteReleasePlan, onCommitReleasePlan, onOpenGoals, onImportJira, onLinkJira, onSaveJiraSync, onApplyJiraSync }) => {
     const [mode, setMode] = useState<Mode>(initialReleaseTasks ? 'release' : 'record');
     const [releaseTasks] = useState(initialReleaseTasks);
     const [jiraOpen, setJiraOpen] = useState(false);
@@ -116,6 +120,7 @@ const ModernPlanning: React.FC<Props> = ({ project, workspace, me, visibleProjec
                         <button type="button" role="tab" className="m-segment" aria-selected={mode === 'record'} onClick={() => setMode('record')}>Yeni kayıt</button>
                         <button type="button" role="tab" className="m-segment" aria-selected={mode === 'release'} onClick={() => setMode('release')}>Sürüm planı</button>
                         <button type="button" role="tab" className="m-segment" aria-selected={mode === 'simulate'} onClick={() => setMode('simulate')}>Plan simülasyonu</button>
+                        <button type="button" role="tab" className="m-segment" aria-selected={mode === 'jira-sprints'} onClick={() => setMode('jira-sprints')}>Jira sprintleri</button>
                     </SelectionStrip>
                     <GuideButton onClick={() => guide.show(startStepFor(guide.guide, mode))} />
                 </div>
@@ -136,6 +141,8 @@ const ModernPlanning: React.FC<Props> = ({ project, workspace, me, visibleProjec
                 <ReleasePlanner key={project.id} project={project} me={me} history={history} people={people} leaves={leaves} visibleProjectIds={visibleProjectIds} canEdit={canEdit} blindEstimate={aiPolicyOf(workspace).blindEstimate} aiBlocked={aiBlocked} ml={ml}
                     initialTaskIds={releaseTasks} initialPeriod={period} onViewTask={onViewTask} onOpenFilteredList={onOpenFilteredList}
                     onSavePlan={onSaveReleasePlan} onDeletePlan={onDeleteReleasePlan} onCommit={onCommitReleasePlan} onOpenGoals={onOpenGoals} onSendToJira={sendToJira} />
+            ) : mode === 'jira-sprints' ? (
+                <JiraSprintPlan project={project} onTransfer={canEdit ? onTransferJiraSprint : undefined} onOpenLocalSprint={onOpenLocalSprint} />
             ) : (
                 <PlanSimulator key={project.id} project={project} history={history} people={people} leaves={leaves} visibleProjectIds={visibleProjectIds} onViewTask={onViewTask} />
             )}

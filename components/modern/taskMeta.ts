@@ -64,15 +64,12 @@ export const sprintLabel = (version: number, names?: Record<number, string>): st
     version === 0 ? 'Havuz' : names?.[version]?.trim() || `Sprint ${version}`;
 
 /** Bu durum değişikliği projeyi ya da bir sprinti bitiriyorsa kutlama mesajı */
-export const celebrationFor = (tasks: Task[], id: string, status: TaskStatus, names?: Record<number, string>): string | null => {
+export const celebrationFor = (tasks: Task[], id: string, status: TaskStatus): string | null => {
     if (status !== TaskStatus.Done) return null;
     const task = tasks.find(t => t.id === id);
     if (!task) return null;
-    if (completesGroup(tasks, id, status)) return 'Proje tamamlandı! Tebrikler.';
-    if (task.version > 0 && completesGroup(tasks.filter(t => t.version === task.version), id, status)) {
-        return `${sprintLabel(task.version, names)} tamamlandı!`;
-    }
-    return null;
+    // Sprint tamamlama animasyonu App'te, görevin hangi yoldan bittiğine bakmadan gösterilir.
+    return completesGroup(tasks, id, status) ? 'Proje tamamlandı! Tebrikler.' : null;
 };
 
 /** Tekrarsız liste (sırayı korur) */

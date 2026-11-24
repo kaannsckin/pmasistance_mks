@@ -2,6 +2,7 @@
 import { Task, Resource, TaskStatus } from '../types';
 import { calculatePertFuzzyPert } from './timeline';
 import { TEST_DAYS, WORK_DAYS_PER_WEEK } from '../constants';
+import { lastSprintOf, requestedSprintSpan } from './sprintSpan';
 
 // Temel öncelik puanları
 const BASE_PRIORITY_SCORES: Record<Task['priority'], number> = {
@@ -234,10 +235,21 @@ export const planTaskVersionsDetailed = (
     const finalTasks = new Map<string, Task>();
     let processedCount = 0;
 
+    // Sprintler arası görev: eforu ardışık sprintlere eşit bölünür, hepsinde yer aranır.
+    const fitsFrom = (start: number, resourceName: string, span: number, share: number, oversized: boolean) => {
+        for (let k = 0; k < span; k++) {
+            const used = usageOf(start + k, resourceName);
+            if (oversized ? used !== 0 : used + share > sprintCapacityDays) return false;
+        }
+        return true;
+    };
+
     const placeTask = (task: Task) => {
         const m = meta.get(task.id)!;
         const duration = m.duration;
         const resourceName = task.resourceName || 'Atanmamış';
+        const span = requestedSprintSpan(task);
+        const share = duration / span;
 
         // Öncül kısıtından minimum sprinti belirle
         let minSprint = 1;
@@ -249,11 +261,12 @@ export const planTaskVersionsDetailed = (
                 if (predSprint === undefined || predSprint === 0) {
                     blockedByPred = predSprint === 0; // Öncül planlanamadıysa ardıl da planlanamaz
                 } else {
-                    minSprint = predSprint + 1; // Aynı sprint yasak: bir sonrakinden başla
+                    // Aynı sprint yasak: öncülün son sprintinden sonra başla
+                    minSprint = predSprint + requestedSprintSpan(pred);
                 }
             } else if (pred.status !== TaskStatus.Done && pred.includeInSprints === false && pred.version > 0) {
-                // Elle sabitlenmiş, bitmemiş öncül: onun sprintinden sonraya planla
-                minSprint = pred.version + 1;
+                // Elle sabitlenmiş, bitmemiş öncül: onun (son) sprintinden sonraya planla
+                minSprint = lastSprintOf(pred) + 1;
             }
             // Tamamlanmış öncül kısıt oluşturmaz.
         }
@@ -272,31 +285,24 @@ export const planTaskVersionsDetailed = (
 
         let assignedSprint = -1;
 
-        if (duration > sprintCapacityDays) {
-            // Dev görev: kaynağın tamamen boş olduğu ilk sprinte taşarak yerleştir
-            for (let s = minSprint; s <= MAX_SPRINTS; s++) {
-                if (usageOf(s, resourceName) === 0) {
-                    assignedSprint = s;
-                    allocate(s, resourceName, duration);
-                    break;
-                }
+        const oversized = share > sprintCapacityDays;
+        // Dev görev: kaynağın tamamen boş olduğu ilk sprint(ler)e taşarak yerleştir
+        for (let s = minSprint; s + span - 1 <= MAX_SPRINTS; s++) {
+            if (fitsFrom(s, resourceName, span, share, oversized)) {
+                assignedSprint = s;
+                for (let k = 0; k < span; k++) allocate(s + k, resourceName, share);
+                break;
             }
-            if (assignedSprint !== -1) {
-                warnings.push({
-                    taskId: task.id,
-                    taskName: task.name,
-                    type: 'oversized',
-                    message: `"${task.name}" (${Math.ceil(duration)} gün) tek sprint kapasitesinden (${sprintCapacityDays} gün) büyük; Sprint ${assignedSprint}'e taşarak yerleştirildi. Görevi bölmeyi düşünün.`,
-                });
-            }
-        } else {
-            for (let s = minSprint; s <= MAX_SPRINTS; s++) {
-                if (usageOf(s, resourceName) + duration <= sprintCapacityDays) {
-                    assignedSprint = s;
-                    allocate(s, resourceName, duration);
-                    break;
-                }
-            }
+        }
+        if (oversized && assignedSprint !== -1) {
+            warnings.push({
+                taskId: task.id,
+                taskName: task.name,
+                type: 'oversized',
+                message: span > 1
+                    ? `"${task.name}" (${Math.ceil(duration)} gün) ${span} sprinte bölündüğünde de sprint kapasitesinden (${sprintCapacityDays} gün) büyük; Sprint ${assignedSprint}–${assignedSprint + span - 1} aralığına taşarak yerleştirildi. Sprint sayısını artırmayı ya da görevi bölmeyi düşünün.`
+                    : `"${task.name}" (${Math.ceil(duration)} gün) tek sprint kapasitesinden (${sprintCapacityDays} gün) büyük; Sprint ${assignedSprint}'e taşarak yerleştirildi. Görevi bölmeyi ya da sprint sayısını artırmayı düşünün.`,
+            });
         }
 
         if (assignedSprint === -1) {
@@ -352,7 +358,7 @@ export const planTaskVersionsDetailed = (
     let totalEffortDays = 0;
     assignment.forEach((sprint, taskId) => {
         if (sprint > 0) {
-            sprintCount = Math.max(sprintCount, sprint);
+            sprintCount = Math.max(sprintCount, sprint + requestedSprintSpan(taskById.get(taskId)!) - 1);
             plannedTaskCount++;
             totalEffortDays += durations.get(taskId) || 0;
         }

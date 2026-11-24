@@ -15,6 +15,7 @@ import { TaskWorklogSummary } from './WorkforceParts';
 import { Sheet } from './ui';
 import { Icon } from './icons';
 import { useAssistantOptional } from '../assistant/AssistantContext';
+import { lastSprintOf, sprintSpanOf } from '../../utils/sprintSpan';
 
 /**
  * Modern görev ayrıntısı: durum hızlı değişir, alt görevler işaretlenir,
@@ -76,7 +77,7 @@ const TaskDetailSheet: React.FC<TaskDetailSheetProps> = ({ task, project, author
         ['Yaşam döngüsü', lifecycle ? <>{lifecycle}{closedIn !== null && <span className="ml-2 font-semibold">{closedIn} iş gününde {dur.cycleDays !== null ? 'tamamlandı' : 'kapandı'}</span>}{dur.reopened > 0 && <span className="ml-2 m-ink-warn">{dur.reopened} kez yeniden açıldı</span>}</> : <span className="m-text-3">Kayıt yok</span>],
         ['Sorumlu', task.resourceName || <span className="m-ink-warn">Atanmadı</span>],
         ['Birim', task.unit || '—'],
-        ['Sprint', sprintLabel(task.version, project.settings.sprintNames)],
+        ['Sprint', sprintSpanOf(task) > 1 ? `${sprintLabel(task.version, project.settings.sprintNames)} → ${sprintLabel(lastSprintOf(task), project.settings.sprintNames)} (sprintler arası, ${sprintSpanOf(task)} sprint)` : sprintLabel(task.version, project.settings.sprintNames)],
         ...(task.fixVersion ? [['Hedef sürüm', task.fixVersion] as [string, React.ReactNode]] : []),
         ...(task.components?.length ? [['Bileşen', task.components.join(', ')] as [string, React.ReactNode]] : []),
         ...(task.resolution ? [['Çözüm', task.resolution] as [string, React.ReactNode]] : []),

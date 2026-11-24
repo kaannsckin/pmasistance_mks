@@ -50,6 +50,22 @@ export const createReleasePlan = (project: Pick<Project, 'settings'>, now: Date 
 
 export const newItem = (partial: Partial<ReleasePlanItem> = {}): ReleasePlanItem => ({ id: newId('ri'), name: '', ...partial });
 
+/** Uygun görevler içinde başlık ve Jira anahtarıyla arama. */
+export const matchReleaseTasks = (tasks: Task[], input: string): Task[] => {
+    const query = foldTr(input).trim().replace(/\s+/g, ' ');
+    if (!query) return [];
+    const words = query.split(' ');
+    const matches: { task: Task; rank: number }[] = [];
+    for (const task of tasks) {
+        const name = foldTr(task.name).trim().replace(/\s+/g, ' ');
+        const key = foldTr(task.jiraId || '');
+        if (!words.every(word => name.includes(word) || key.includes(word))) continue;
+        const rank = name === query || key === query ? 0 : name.startsWith(query) || key.startsWith(query) ? 1 : 2;
+        matches.push({ task, rank });
+    }
+    return matches.sort((a, b) => a.rank - b.rank).slice(0, 8).map(({ task }) => task);
+};
+
 /**
  * Havuzdaki (sprinti atanmamış) açık görevden satır. Ekibin kendi tahmini
  * "kendi tahminim" olur ve aralığı korunur; geçmişten / AI'dan / modelden

@@ -41,7 +41,7 @@ const Legend: React.FC<{ items: { label: string; color: string }[] }> = ({ items
 // ------------------------------------------------------------------ metrik
 export const MetricWidget: React.FC<{ w: DashboardWidget; tasks: Task[]; env: WidgetEnv }> = ({ w, tasks, env }) => {
     const def = METRIC_BY_KEY.get(w.config?.metric || 'progress') || METRIC_BY_KEY.get('progress')!;
-    const v = def.compute({ ...env, tasks: def.filtered ? tasks : env.project.tasks });
+    const v = def.compute({ ...env, tasks: def.filtered ? tasks : env.project.tasks, progressWeights: w.config?.progressWeights });
     return (
         <div className="flex flex-col gap-1.5">
             <span className={`text-[34px] leading-none font-semibold m-tabular ${TONE_INK[v.tone || 'neutral']}`}>{v.text}</span>

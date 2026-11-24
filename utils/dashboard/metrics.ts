@@ -1,10 +1,11 @@
-import { Project, ProjectKpi, Task, WorkspaceData } from '../../types';
+import { DashboardProgressWeights, Project, ProjectKpi, Task, TaskStatus, WorkspaceData } from '../../types';
 import { closedStatusMonth } from '../evm';
 import { isHealthScored, projectHealth } from '../executive';
 import { currentSprint } from '../projectOverview';
 import { riskScore } from '../risks';
+import { workflowKey } from '../workflow';
 import { buildWorkforce } from '../workforce';
-import { DimContext, taskTotals } from './data';
+import { DimContext, isDone, taskTotals } from './data';
 
 /**
  * Dashboard'daki tek sayılık göstergeler (metrik kartı). Her metrik süzülmüş
@@ -27,11 +28,34 @@ export interface MetricContext extends DimContext {
     ws: WorkspaceData;
     tasks: Task[];
     now: Date;
+    progressWeights?: DashboardProgressWeights;
 }
 
 const pct = (v: number) => `%${Math.round(v * 100)}`;
 const num = (v: number, d = 1) => v.toLocaleString('tr-TR', { maximumFractionDigits: d });
 const tl = (v: number) => v.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY', maximumFractionDigits: 0 });
+
+export const defaultProgressPercent = (category: TaskStatus): number => category === TaskStatus.Done ? 100 : 0;
+export const isProgressPercent = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 100;
+
+const recordProgress = ({ tasks, progressWeights }: MetricContext): MetricValue => {
+    let done = 0, sum = 0, weighted = false;
+    for (const task of tasks) {
+        if (isDone(task)) done++;
+        const specific = task.jiraStatus?.trim() ? progressWeights?.statuses?.[workflowKey(task.jiraStatus)] : undefined;
+        const category = progressWeights?.categories?.[task.status];
+        const assigned = isProgressPercent(specific) ? specific : category;
+        if (isProgressPercent(assigned)) {
+            sum += assigned;
+            weighted = true;
+        } else {
+            sum += defaultProgressPercent(task.status);
+        }
+    }
+    const p = tasks.length ? sum / (100 * tasks.length) : 0;
+    const count = `${done} / ${tasks.length} kayıt tamamlandı`;
+    return { value: p, text: pct(p), sub: weighted ? `Durum yüzdelerine göre · ${count}` : count, pct: p, tone: 'neutral' };
+};
 
 export interface MetricDef {
     key: string;
@@ -45,7 +69,7 @@ export interface MetricDef {
 export const METRICS: MetricDef[] = [
     {
         key: 'progress', label: 'İlerleme (kayıt)', group: 'İlerleme', filtered: true,
-        compute: ({ tasks, now }) => { const t = taskTotals(tasks, now); const p = t.total ? t.done / t.total : 0; return { value: p, text: pct(p), sub: `${t.done} / ${t.total} kayıt tamamlandı`, pct: p, tone: 'neutral' }; },
+        compute: recordProgress,
     },
     {
         key: 'effortProgress', label: 'İlerleme (efor)', group: 'İlerleme', filtered: true,

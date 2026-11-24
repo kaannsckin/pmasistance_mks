@@ -163,7 +163,7 @@ export const parseImportedJson = (text: string, legacyName = 'İçe Aktarılan P
     const obj = parsed as Record<string, unknown>;
 
     if (Array.isArray(obj.projects) && typeof obj.schemaVersion === 'number') {
-        return { kind: 'workspace', workspace: normalizeWorkspace(obj as Partial<WorkspaceData>) };
+        return { kind: 'workspace', workspace: normalizeWorkspace({ ...obj as Partial<WorkspaceData>, cloudMembership: undefined, cloudWorkspaceId: undefined }) };
     }
     if (Array.isArray(obj.tasks) || Array.isArray(obj.resources)) {
         return { kind: 'legacyProject', project: legacyToProject(obj as unknown as ProjectData, legacyName) };
@@ -200,4 +200,5 @@ export const resolveWorkspaceFromStorage = (
 
 /** `pretty` yalnız dışa aktarılan dosya için; tarayıcı deposunda sıkışık JSON (kota) */
 export const serializeWorkspace = (ws: WorkspaceData, pretty = true): string =>
-    JSON.stringify({ ...ws, appVersion: APP_VERSION, exportDate: new Date().toISOString() }, null, pretty ? 2 : undefined);
+    JSON.stringify({ ...ws, cloudMembership: pretty ? undefined : ws.cloudMembership, cloudWorkspaceId: pretty ? undefined : ws.cloudWorkspaceId,
+        appVersion: APP_VERSION, exportDate: new Date().toISOString() }, null, pretty ? 2 : undefined);

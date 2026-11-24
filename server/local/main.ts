@@ -5,6 +5,8 @@ import { createServer, IncomingMessage, ServerResponse } from 'node:http';
 import { dirname, extname, join, normalize, sep } from 'node:path';
 import { createAiMiddleware } from '../ai/nodeAdapter';
 import { handleIntegrationRequest, IntegrationRoute } from '../integrations/handler';
+import { handleCloudConfig } from '../cloud/config';
+import { CLOUD_CONFIG_PATH } from '../../utils/cloudConnection';
 import { parseEnvFile } from './envFile';
 
 /**
@@ -18,8 +20,8 @@ import { parseEnvFile } from './envFile';
  *   PlanAsistan.exe --no-browser    → tarayıcı açılmaz
  *   PORT=5190 PlanAsistan.exe       → başka port (varsayılan 5180)
  *
- * Proje verisi tarayıcıda (adrese bağlı yerel depo) tutulur; bu yüzden port
- * sabittir: port değişirse tarayıcı verileri başka adreste arar.
+ * Tarayıcıdaki proje kopyası ve oturum bu adrese bağlıdır. Port değişirse
+ * tarayıcı önceki adresteki kopyaya ve oturuma erişemez.
  */
 
 type Sea = { isSea: () => boolean; getAsset: (key: string) => ArrayBuffer };
@@ -64,11 +66,15 @@ const ENV_TEMPLATE = `# PlanAsistan yerel ayarları — değişiklikten sonra Pl
 # AI_MODEL=general            # isteğe bağlı: general | code
 #    Başka sağlayıcı: AI_PROVIDER=openai | azure | anthropic | gemini, AI_MODEL=..., gerekirse AI_BASE_URL=...
 
+# ---- Bulut veritabanı (isteğe bağlı) ----
+# Bu iki değer girilirse Bulut veritabanı ekranında doğrudan e-posta ile giriş yapılır.
+# SUPABASE_URL=
+# SUPABASE_ANON_KEY=           # Publishable (sb_publishable_…) veya anon public
+
 # ---- Vercel'deki panel ayarlarını ortak kullanmak (isteğe bağlı) ----
 # Vercel'de AI ayarları panelden girildiyse Supabase'de şifreli durur. Aynı ayarları okumak için Vercel'deki
 # üç değeri buraya yazın. DİKKAT: SUPABASE_SERVICE_ROLE_KEY veritabanının tam yetkili anahtarıdır; yalnız
 # kendi bilgisayarınızda ve gerçekten gerekiyorsa kullanın (yoksa yukarıdaki a/b yolu yeterli).
-# SUPABASE_URL=
 # SUPABASE_SERVICE_ROLE_KEY=
 # AI_CONFIG_SECRET=
 
@@ -176,6 +182,7 @@ export const main = async (): Promise<void> => {
     const initial = getEnv();
 
     const ai = createAiMiddleware(getEnv, { isDev: true });
+    const cloud = createAiMiddleware(getEnv, { mountPath: CLOUD_CONFIG_PATH, handler: handleCloudConfig });
     const integrations = createAiMiddleware(getEnv, {
         isDev: true,
         mountPath: '/api/integrations',
@@ -201,6 +208,11 @@ export const main = async (): Promise<void> => {
         if (path.startsWith('/api/integrations/')) {
             (req as IncomingMessage & { originalUrl?: string }).originalUrl = req.url;
             void integrations(req, res);
+            return;
+        }
+        if (path === CLOUD_CONFIG_PATH) {
+            (req as IncomingMessage & { originalUrl?: string }).originalUrl = req.url;
+            void cloud(req, res);
             return;
         }
         if (req.method !== 'GET' && req.method !== 'HEAD') { res.statusCode = 405; res.end(); return; }
@@ -233,7 +245,7 @@ export const main = async (): Promise<void> => {
         log(`Hazır: ${url}`);
         log(`Ayarlar: ${ENV_FILE}`);
         log(`Jira: ${env.JIRA_BASE_URL && (env.JIRA_TOKEN || env.JIRA_API_TOKEN) ? env.JIRA_BASE_URL : 'yapılandırılmadı (ayar dosyasına JIRA_BASE_URL ve JIRA_TOKEN yazın)'}`);
-        log('Proje verileriniz bu bilgisayarda, tarayıcıda saklanır. Kapatmak için bu pencereyi kapatın.');
+        log('Bulut veritabanı ve yerel kayıt seçenekleri uygulama içinden yönetilir.');
         console.log('');
         if (!noBrowser) openBrowser(url);
     });

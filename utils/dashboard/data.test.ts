@@ -108,6 +108,24 @@ describe('dashboard verisi', () => {
         const empty = createProject('Boş');
         for (const m of METRICS) expect(() => m.compute({ ...ctx(empty), ws: { ...createEmptyWorkspace(), projects: [empty] }, tasks: [], now: NOW })).not.toThrow();
     });
+
+    it('kayıt ilerlemesinde ayrıntılı durum kategoriyi geçersiz kılar ve kapanan kayıt adedi korunur', () => {
+        const p = project();
+        const tasks = [
+            task([], { status: TaskStatus.InProgress, jiraStatus: ' testing ' }),
+            task([], { status: TaskStatus.InProgress }),
+            task([], { status: TaskStatus.Done }),
+            task([], { status: TaskStatus.ToDo }),
+        ];
+        const compute = METRIC_BY_KEY.get('progress')!.compute;
+        const progressWeights = { categories: { [TaskStatus.InProgress]: 25 }, statuses: { TESTING: 50 } };
+        const mctx = { ...ctx(p), ws: createEmptyWorkspace(), tasks, now: NOW, progressWeights };
+        expect(compute(mctx)).toMatchObject({ text: '%44', value: 0.4375, sub: 'Durum yüzdelerine göre · 1 / 4 kayıt tamamlandı' });
+        expect(compute({ ...mctx, tasks: tasks.slice(0, 2) })).toMatchObject({ text: '%38', value: 0.375 });
+        expect(compute({ ...mctx, progressWeights: { ...progressWeights, statuses: { TESTING: 0 } } }).value).toBe(0.3125);
+        expect(compute({ ...mctx, progressWeights: { ...progressWeights, statuses: { TESTING: 120 } } }).value).toBe(0.375);
+        expect(compute({ ...mctx, progressWeights: undefined })).toMatchObject({ value: 0.25, sub: '1 / 4 kayıt tamamlandı' });
+    });
 });
 
 describe('projeye özel göstergeler', () => {

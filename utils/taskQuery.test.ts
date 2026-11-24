@@ -182,3 +182,14 @@ it('efor sorgusunda saat birimi, tahmin aşımı ve boş ile sıfır ayrımı', 
     expect(looksLikeQuery('tahmin aşılmış')).toBe(true);
     expect(looksLikeQuery('tahminsiz')).toBe(true);
 });
+
+describe('sprintler arası görevler', () => {
+    it('sprint eşitliği ve IN, görevin sürdüğü her sprintte eşleşir; karşılaştırma başlangıç sprintine bakar', () => {
+        const spanning = [task('x', { version: 2, sprintSpan: 2 }), task('y', { version: 3 }), task('z', { version: 0, sprintSpan: 3 })];
+        const run = (q: string) => { const r = runTaskQuery(spanning, q, ctx); if (r.ok === false) throw new Error(r.error); return r.tasks.map(t => t.id); };
+        expect(run('sprint = 3')).toEqual(['x', 'y']);
+        expect(run('sprint IN (2)')).toEqual(['x']);
+        expect(run('sprint > 2')).toEqual(['y']);
+        expect(run('sprint = Havuz')).toEqual(['z']);
+    });
+});

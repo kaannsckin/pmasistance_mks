@@ -495,6 +495,17 @@ html:not(.dark) .ui-modern .text-gray-300, html:not(.dark) .ui-modern .text-gray
 .m-confetti { position: absolute; top: -12px; width: 8px; height: 12px; border-radius: 2px; animation: m-fall var(--dur, 1.8s) cubic-bezier(0.2, 0.6, 0.4, 1) forwards; animation-delay: var(--delay, 0s); }
 @keyframes m-fall { 0% { transform: translate(0, 0) rotate(0deg); opacity: 1; } 100% { transform: translate(var(--dx, 0px), 105vh) rotate(var(--rot, 540deg)); opacity: 0.9; } }
 
+/* Sprint tamamlandı: halka dolar, tik belirir, özet satırları gelir */
+.m-sprint-veil { background: rgba(0, 0, 0, 0.28); cursor: pointer; animation: m-sprint-veil 4.6s ease forwards; }
+@keyframes m-sprint-veil { 0% { opacity: 0; } 8% { opacity: 1; } 88% { opacity: 1; } 100% { opacity: 0; } }
+.m-sprint-card { animation: m-sprint-rise 0.55s cubic-bezier(0.2, 0.9, 0.3, 1.2) both; }
+@keyframes m-sprint-rise { from { transform: translateY(24px) scale(0.92); opacity: 0; } to { transform: none; opacity: 1; } }
+.m-sprint-ring { stroke-dasharray: var(--c); stroke-dashoffset: var(--c); animation: m-sprint-draw 0.85s cubic-bezier(0.65, 0, 0.35, 1) 0.25s forwards; }
+@keyframes m-sprint-draw { to { stroke-dashoffset: 0; } }
+.m-sprint-check { animation: m-sprint-pop 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.5) 0.95s both; }
+@keyframes m-sprint-pop { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.m-sprint-stat { animation: m-sprint-rise 0.4s ease both; animation-delay: var(--d, 0s); }
+
 /* Uzay modu (Konami) */
 .m-space { position: fixed; inset: 0; z-index: 1000; background: radial-gradient(ellipse at bottom, #0B1A33 0%, #02040A 100%); animation: m-veil 4.2s ease-in-out forwards; }
 .m-space-star { position: absolute; width: 2px; height: 2px; border-radius: 1px; background: #FFFFFF; animation: m-twinkle 1.6s ease-in-out infinite; animation-delay: var(--delay, 0s); }
@@ -616,7 +627,8 @@ html:not(.dark) .ui-modern .text-gray-300, html:not(.dark) .ui-modern .text-gray
 
 @media (prefers-reduced-motion: reduce) {
   .m-rocket, .m-trail, .m-streak, .m-hyper-ring, .m-hyper-star, .m-hyper-veil, .m-confetti, .m-space, .m-space-star, .m-space-rocket,
-  .m-bubble, .m-aurora-band, .m-aurora-veil, .m-ship-bar, .m-ship-card, .m-ship-step, .m-egg-card, .m-egg, .m-egg-head, .m-egg-item {
+  .m-bubble, .m-aurora-band, .m-aurora-veil, .m-ship-bar, .m-ship-card, .m-ship-step, .m-egg-card, .m-egg, .m-egg-head, .m-egg-item,
+  .m-sprint-veil, .m-sprint-card, .m-sprint-ring, .m-sprint-check, .m-sprint-stat {
     animation: none !important; transition: none !important;
   }
   /* Rehberdeki yumurta hareketsiz: çatlamış hâliyle durur */

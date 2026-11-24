@@ -181,6 +181,7 @@ const ModernDashboard: React.FC<Props> = ({ workspace, project, canEdit, role, p
                 <WidgetSettings
                     widget={settings}
                     project={project}
+                    workflow={workflow}
                     canEditKpi={canEdit}
                     onClose={() => setSettings(null)}
                     onNewKpi={() => { setKpiEdit({ kpi: null, widgetId: settings.id }); setSettings(null); }}

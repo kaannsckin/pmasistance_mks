@@ -1,8 +1,9 @@
-import React, { useMemo, useState } from 'react';
-import { DashboardDim, DashboardFilter, DashboardMeasure, DashboardWidget, DashboardWidgetType, Project, ProjectKpi, Task } from '../../../types';
+import React, { useId, useMemo, useState } from 'react';
+import { DashboardDim, DashboardFilter, DashboardMeasure, DashboardProgressWeights, DashboardWidget, DashboardWidgetType, Project, ProjectKpi, Task, WorkflowConfig } from '../../../types';
 import { DIM_LABELS, labelCounts, labelFamilies, MEASURE_LABELS } from '../../../utils/dashboard/data';
-import { addKpiPoint, formatKpi, KPI_UNIT_LABELS, METRICS, newKpiId } from '../../../utils/dashboard/metrics';
+import { addKpiPoint, defaultProgressPercent, formatKpi, isProgressPercent, KPI_UNIT_LABELS, METRICS, newKpiId } from '../../../utils/dashboard/metrics';
 import { TEMPLATES, WIDGET_BY_TYPE, WIDGETS } from '../../../utils/dashboard/model';
+import { CATEGORY_LABELS, CATEGORY_ORDER, workflowOptions } from '../../../utils/workflow';
 import { Icon, IconName } from '../icons';
 import { Field, rowSep, Sheet } from '../ui';
 
@@ -145,24 +146,103 @@ const USES_FILTER = new Set<DashboardWidgetType>(['metric', 'progress', 'statusM
 const USES_MEASURE = new Set<DashboardWidgetType>(['progress', 'breakdown', 'milestones', 'workPackages', 'pivot', 'burnup']);
 const USES_LIMIT = new Set<DashboardWidgetType>(['team', 'deadlines', 'risks', 'worklog', 'activity', 'breakdown']);
 
+const ProgressPercentInput = ({ label, value, fallback, onChange }: {
+    label: string;
+    value?: number;
+    fallback: number;
+    onChange: (value: number | undefined) => void;
+}) => {
+    const id = useId();
+    return (
+        <Field label={label} htmlFor={id}>
+            <input id={id} type="number" min={0} max={100} step="any" className="m-input m-tabular" value={value ?? ''}
+                placeholder={String(fallback)} aria-invalid={value !== undefined && !isProgressPercent(value)}
+                onChange={e => onChange(e.target.value === '' ? undefined : e.target.valueAsNumber)} />
+        </Field>
+    );
+};
+
+const ProgressWeightsEditor = ({ project, workflow, value, onChange }: {
+    project: Project;
+    workflow: WorkflowConfig;
+    value?: DashboardProgressWeights;
+    onChange: (weights: DashboardProgressWeights | undefined) => void;
+}) => {
+    const groups = useMemo(() => workflowOptions(project.tasks, workflow), [project.tasks, workflow]);
+    const occurrences = new Map<string, number>();
+    for (const { statuses } of groups) {
+        for (const { label } of statuses) occurrences.set(label, (occurrences.get(label) || 0) + 1);
+    }
+    const categoryPercent = (category: (typeof CATEGORY_ORDER)[number]) => {
+        const percent = value?.categories?.[category];
+        return isProgressPercent(percent) ? percent : defaultProgressPercent(category);
+    };
+    const setPercent = (group: keyof DashboardProgressWeights, key: string, percent: number | undefined) => {
+        const values = { ...value?.[group] };
+        if (percent === undefined) delete values[key];
+        else values[key] = percent;
+        const next = { ...value, [group]: Object.keys(values).length ? values : undefined };
+        onChange(next.categories || next.statuses ? next : undefined);
+    };
+    return (
+        <fieldset className="m-0 p-0 border-0 flex flex-col gap-3">
+            <legend className="text-[15px] font-semibold m-text mb-1">Duruma göre ilerleme (%)</legend>
+            <p className="m-0 text-[13px] m-text-3">Kart, görevlerin yüzdelerinin ortalamasını gösterir. Ayrıntılı durum boşsa kategori yüzdesi kullanılır.</p>
+            <div className="grid gap-2 grid-cols-2 sm:grid-cols-4">
+                {CATEGORY_ORDER.map(category => (
+                    <div key={category} className="min-w-0">
+                        <ProgressPercentInput label={CATEGORY_LABELS[category]} value={value?.categories?.[category]}
+                            fallback={defaultProgressPercent(category)} onChange={percent => setPercent('categories', category, percent)} />
+                    </div>
+                ))}
+            </div>
+            {groups.length > 0 && (
+                <details className="rounded-xl m-fill-2 px-3 py-2 text-[14px] m-text">
+                    <summary className="cursor-pointer font-semibold">Ayrıntılı iş akışı durumları</summary>
+                    <div className="flex flex-col gap-3 pt-3">
+                        {groups.map(group => (
+                            <fieldset key={group.category} className="m-0 p-0 border-0">
+                                <legend className="text-[13px] m-text-3 mb-1.5">{group.label}</legend>
+                                <div className="grid gap-2 grid-cols-2 sm:grid-cols-3">
+                                    {group.statuses.map(status => (
+                                        <div key={status.key} className="min-w-0">
+                                            <ProgressPercentInput label={(occurrences.get(status.label) || 0) > 1 ? `${status.label} (${status.key})` : status.label}
+                                                value={value?.statuses?.[status.key]} fallback={categoryPercent(group.category)}
+                                                onChange={percent => setPercent('statuses', status.key, percent)} />
+                                        </div>
+                                    ))}
+                                </div>
+                            </fieldset>
+                        ))}
+                    </div>
+                </details>
+            )}
+            {(value?.categories || value?.statuses) && <button type="button" className="m-btn m-btn-plain self-start" onClick={() => onChange(undefined)}>Varsayılan yüzdelere dön</button>}
+        </fieldset>
+    );
+};
+
 export const WidgetSettings: React.FC<{
     widget: DashboardWidget;
     project: Project;
+    workflow: WorkflowConfig;
     canEditKpi: boolean;
     onSave: (w: DashboardWidget) => void;
     onNewKpi: () => void;
     onClose: () => void;
-}> = ({ widget, project, canEditKpi, onSave, onNewKpi, onClose }) => {
+}> = ({ widget, project, workflow, canEditKpi, onSave, onNewKpi, onClose }) => {
     const [w, setW] = useState<DashboardWidget>(structuredClone(widget));
     const cfg = w.config || {};
     const setCfg = (patch: Partial<NonNullable<DashboardWidget['config']>>) => setW(x => ({ ...x, config: { ...(x.config || {}), ...patch } }));
     const def = WIDGET_BY_TYPE.get(w.type)!;
     const groups = [...new Set(METRICS.map(m => m.group))];
+    const showProgressWeights = w.type === 'metric' && (cfg.metric || 'progress') === 'progress';
+    const invalidProgress = showProgressWeights && [...Object.values(cfg.progressWeights?.categories || {}), ...Object.values(cfg.progressWeights?.statuses || {})].some(v => !isProgressPercent(v));
     return (
         <Sheet title={`${def.label} ayarları`} subtitle={def.description} onClose={onClose} wide footer={<>
             <span className="flex-1"></span>
             <button type="button" className="m-btn m-btn-gray" onClick={onClose}>Vazgeç</button>
-            <button type="button" className="m-btn m-btn-primary" onClick={() => onSave(w)}>Kaydet</button>
+            <button type="button" className="m-btn m-btn-primary" disabled={invalidProgress} onClick={() => onSave(w)}>Kaydet</button>
         </>}>
             <div className="flex flex-col gap-4">
                 <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
@@ -183,6 +263,10 @@ export const WidgetSettings: React.FC<{
                         </select>
                     </Field>
                 )}
+                {showProgressWeights && (
+                    <ProgressWeightsEditor project={project} workflow={workflow} value={cfg.progressWeights} onChange={progressWeights => setCfg({ progressWeights })} />
+                )}
+                {invalidProgress && <p role="alert" className="m-0 text-[13px] m-ink-bad">İlerleme yüzdeleri 0 ile 100 arasında olmalı.</p>}
 
                 {w.type === 'kpi' && (
                     <Field label="Projeye özel gösterge" htmlFor="ws-kpi">

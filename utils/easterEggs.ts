@@ -106,7 +106,7 @@ export const createWordDetector = <W extends string>(words: readonly W[], gapMs 
 };
 
 /** Sürpriz rehberi kartında ve komut paletinde kullanılan katalog */
-export type EggTrigger = 'rocket' | 'hyper' | 'space' | 'celebrate' | 'pop' | 'aurora' | 'ship' | 'boing';
+export type EggTrigger = 'rocket' | 'hyper' | 'space' | 'celebrate' | 'sprint' | 'pop' | 'aurora' | 'ship' | 'boing';
 export interface EggInfo {
     id: EggTrigger | 'greeting';
     title: string;
@@ -122,6 +122,7 @@ export const EGG_CATALOG: EggInfo[] = [
     { id: 'hyper', title: 'Hiper sürüş', how: 'Logoya 2 saniye içinde 5 kez tıklayın ya da komut paletinde "roket" arayın.', tryable: true },
     { id: 'space', title: 'Uzay modu', how: 'Klavyede ↑ ↑ ↓ ↓ ← → ← → B A.', tryable: true },
     { id: 'celebrate', title: 'Kutlama', how: 'Bir sürümün ya da projenin son görevini tamamlayın.', tryable: true },
+    { id: 'sprint', title: 'Sprint tamamlandı', how: 'Bir sprintin son açık görevini tamamlayın; görev sayısı, efor ve sprint sonuna göre zamanlama gösterilir.', tryable: true },
     { id: 'greeting', title: 'Saatli selam', how: 'Gece yarısı, cuma akşamı ya da pazartesi sabahı Portföy\'e bakın.', tryable: false },
     { id: 'pop', title: 'Baloncuk patlat', how: 'Bir yazı alanında değilken "pop" yazın.', theme: 'bubble', tryable: true },
     { id: 'aurora', title: 'Kuzey ışıkları', how: 'Bir yazı alanında değilken "aurora" yazın.', theme: 'aurora', tryable: true },

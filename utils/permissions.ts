@@ -1,4 +1,4 @@
-import { PermissionKey, RolePermissions, UserRole } from '../types';
+import { PermissionKey, RolePermissions, UserRole } from '../types.js';
 
 /**
  * Rol bazlı özellik yetkileri. Katalogdaki varsayılanlar uygulamanın önceden

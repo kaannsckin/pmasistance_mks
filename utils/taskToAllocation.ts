@@ -79,7 +79,8 @@ export const buildSprintWindows = (project: Project, maxSprint: number): SprintW
         const testStart = getNextWorkday(end);
         const testEnd = addWorkdays(testStart, testDays);
         windows.push({ sprint: s, start, end, testStart, testEnd, workdaysByMonth, totalWorkdays: total });
-        cursor = getNextWorkday(testEnd);
+        // Paralel testte sonraki sprint bu sprintin testini beklemez.
+        cursor = getNextWorkday(project.settings.parallelTest ? end : testEnd);
     }
     return windows;
 };

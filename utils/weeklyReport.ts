@@ -1,10 +1,10 @@
 import {
     Abbreviation, AiReportAssessment, MeetingDetails, PlanReviewItem, PlanReviewStatus, Project, ReportCategory, ReportEvent, ReportFlow, ReportItem, ReportSettings, ReportStage, UserRole, WeeklyPublication,
     WeeklyReport, WorkspaceData,
-} from '../types';
-import { ROLE_LABELS } from './allocations';
-import { can, PermissionHolder } from './permissions';
-import { Identity, managedDepartmentCode, ownsProject } from './rbac';
+} from '../types.js';
+import { ROLE_LABELS } from './allocations.js';
+import { can, PermissionHolder } from './permissions.js';
+import { Identity, managedDepartmentCode, ownsProject } from './rbac.js';
 
 /**
  * Haftalık rapor — kurum rapor kılavuzuna göre yazım, onay akışı ve

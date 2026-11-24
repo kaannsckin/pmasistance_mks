@@ -135,7 +135,7 @@ const ModernTaskList: React.FC<ModernTaskListProps> = ({ projectId, initialQuery
     );
 
     const changeStatus = (id: string, next: TaskStatus) => {
-        const message = onCelebrate ? celebrationFor(tasks, id, next, sprintNames) : null;
+        const message = onCelebrate ? celebrationFor(tasks, id, next) : null;
         if (message) onCelebrate!(message);
         onStatusChange(id, next);
     };

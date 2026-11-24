@@ -1,4 +1,4 @@
-import { isoWeekOf, weekStart } from './weeklyReport';
+import { isoWeekOf, weekStart } from './weeklyReport.js';
 
 /**
  * Takvim seçici yardımcıları (saf): ay ızgarası, gün/aralık biçimleri ve

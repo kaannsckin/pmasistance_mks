@@ -7,6 +7,7 @@ import { Icon } from '../icons';
 import TaskQueryPicker from '../TaskQueryPicker';
 import { sprintLabel } from '../taskMeta';
 import { Field } from '../ui';
+import ReleaseTaskNameInput from './ReleaseTaskNameInput';
 
 interface Props {
     project: Project;
@@ -29,7 +30,7 @@ const ManualReleasePlan: React.FC<Props> = ({ project, initial, me, canEdit, onV
     const context = useMemo(() => ({ sprintNames: names, workPackages: project.workPackages, me }), [names, project.workPackages, me]);
     const blocked = useMemo(() => new Set((project.releasePlans || []).filter(p => p.id !== plan.id && p.status === 'draft').flatMap(p => p.items.flatMap(i => i.sourceTaskId ? [i.sourceTaskId] : []))), [project.releasePlans, plan.id]);
     const candidates = useMemo(() => project.tasks.filter(t => canAddManualReleaseTask(t) && !blocked.has(t.id)), [project.tasks, blocked]);
-    const chosen = new Set(plan.items.flatMap(i => i.sourceTaskId ? [i.sourceTaskId] : []));
+    const chosen = new Set<string>(plan.items.flatMap(i => i.sourceTaskId ? [i.sourceTaskId] : []));
     const byId = new Map<string, Task>(candidates.map(task => [task.id, task]));
     const available = plan.items.filter(item => !item.sourceTaskId || byId.has(item.sourceTaskId));
     const period = { start: plan.startDate || '', end: plan.targetDate || '' };
@@ -80,12 +81,18 @@ const ManualReleasePlan: React.FC<Props> = ({ project, initial, me, canEdit, onV
             {!validDates && <p role="alert" className="m-0 m-ink-bad">Hedef tarih başlangıçtan önce olamaz.</p>}
             {canEdit && (
                 <>
-                    <div className="flex flex-wrap items-end gap-2">
-                        <button type="button" className="m-btn m-btn-gray" aria-expanded={selectOpen} onClick={() => setSelectOpen(!selectOpen)}><Icon name="search" size={17} />Mevcut görevleri seç</button>
-                        <form className="flex flex-wrap items-end gap-2" onSubmit={e => { e.preventDefault(); addNew(); }}>
-                            <Field label="Yeni görev başlığı" htmlFor="manual-release-new"><input id="manual-release-new" className="m-input" value={newName} onChange={e => setNewName(e.target.value)} /></Field>
-                            <button type="submit" className="m-btn m-btn-gray" disabled={!newName.trim()}><Icon name="plus" size={17} />Görev ekle</button>
+                    <div className="flex flex-col sm:flex-row flex-wrap items-start gap-2">
+                        <form className="flex w-full sm:w-auto sm:flex-1 flex-wrap items-start gap-2 min-w-0" onSubmit={e => { e.preventDefault(); addNew(); }}>
+                            <div className="flex-1 basis-60 min-w-0">
+                                <Field label="Görev adı veya Jira anahtarı" htmlFor="manual-release-new">
+                                    <ReleaseTaskNameInput id="manual-release-new" label="Görev adı veya Jira anahtarı" value={newName}
+                                        tasks={candidates.filter(task => !chosen.has(task.id))} onChange={setNewName}
+                                        onPick={task => { choose(new Set([...chosen, task.id])); setNewName(''); }} />
+                                </Field>
+                            </div>
+                            <button type="submit" className="m-btn m-btn-gray sm:mt-[25px]" disabled={!newName.trim()}><Icon name="plus" size={17} />Yeni görev ekle</button>
                         </form>
+                        <button type="button" className="m-btn m-btn-gray sm:mt-[25px]" aria-expanded={selectOpen} onClick={() => setSelectOpen(!selectOpen)}><Icon name="search" size={17} />Mevcut görevleri seç</button>
                     </div>
                     {selectOpen && <TaskQueryPicker projectId={project.id} tasks={candidates} ctx={context} selected={chosen} onChange={choose} onViewTask={onViewTask} label="Sürüm için görev bul" />}
                 </>

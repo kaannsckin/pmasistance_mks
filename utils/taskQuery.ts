@@ -1,6 +1,7 @@
 import { IssueType, Task, TaskStatus } from '../types';
 import { ISSUE_TYPE_LABELS, pertDays } from './planning/lifecycle';
 import { taskTimeTracking } from './timeTracking';
+import { sprintsOf } from './sprintSpan';
 
 /**
  * Görev sorgu dili (JQL benzeri). Görevleri aramak, süzmek ve toplu seçmek
@@ -602,8 +603,9 @@ const compileCmp = (node: Extract<QueryNode, { kind: 'cmp' }>, ctx: TaskQueryCon
             if (op === '>=') return t => s(t) >= nums[0];
             if (op === '<') return t => s(t) < nums[0];
             if (op === '<=') return t => s(t) <= nums[0];
+            // Eşitlik ve IN, sprintler arası devam eden görevi kapsadığı her sprintte bulur.
             const set = new Set(nums);
-            return wrap(t => set.has(s(t)));
+            return wrap(t => sprintsOf(t).some(sprint => set.has(sprint)));
         }
         case 'number': {
             const nums = values.map(v => resolveNumber(v, field.label));

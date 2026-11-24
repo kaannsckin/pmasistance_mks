@@ -1,6 +1,6 @@
-import { Allocation, Leave, Person, PlanLock, PlanLockStatus, UserRole, WorkspaceData } from '../types';
-import { effectiveCapacity } from './availability';
-import { canFor, PermissionHolder } from './permissions';
+import { Allocation, Leave, Person, PlanLock, PlanLockStatus, UserRole, WorkspaceData } from '../types.js';
+import { effectiveCapacity } from './availability.js';
+import { canFor, PermissionHolder } from './permissions.js';
 
 export const MONTHS_TR = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
 export const MONTH_INDEXES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
