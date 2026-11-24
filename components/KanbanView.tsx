@@ -18,6 +18,8 @@ interface KanbanViewProps {
   sprintNames: Record<number, string>;
   setSprintNames: React.Dispatch<React.SetStateAction<Record<number, string>>>;
   globalTestDays: number;
+  /** Test sonraki sprintle paralel yürür (sprint, öncekinin testini beklemez) */
+  parallelTest?: boolean;
   setGlobalTestDays: React.Dispatch<React.SetStateAction<number>>;
   onPlanGenerated: (newTasks: Task[]) => void;
   onTaskSprintChange: (taskId: string, newVersion: number) => void;
@@ -92,7 +94,7 @@ const BacklogTab: React.FC<{ count: number, onClick: () => void, onDrop: (taskId
     );
 };
 
-const KanbanView: React.FC<KanbanViewProps> = ({ tasks, resources, sprintDuration, projectStartDate, sprintNames, setSprintNames, globalTestDays, setGlobalTestDays, onPlanGenerated, onTaskSprintChange, onTaskStatusChange, onInsertSprint, onDeleteSprint, onOpenSettings, onViewTaskDetails, onNewTask }) => {
+const KanbanView: React.FC<KanbanViewProps> = ({ tasks, resources, sprintDuration, projectStartDate, sprintNames, setSprintNames, globalTestDays, parallelTest, setGlobalTestDays, onPlanGenerated, onTaskSprintChange, onTaskStatusChange, onInsertSprint, onDeleteSprint, onOpenSettings, onViewTaskDetails, onNewTask }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [isFilterExpanded, setIsFilterExpanded] = useState(false);
   const [isCompact, setIsCompact] = useState(true); 
@@ -187,11 +189,11 @@ const KanbanView: React.FC<KanbanViewProps> = ({ tasks, resources, sprintDuratio
         const testEnd = addWorkdays(testStart, currentSprintTestDays);
         const details = testPeriodDetails[sprint.id] || {};
         sprint.testPeriod = { startDate: testStart.toLocaleDateString('tr-TR', fmt), endDate: testEnd.toLocaleDateString('tr-TR', fmt), duration: currentSprintTestDays, ...details };
-        currentProcessingDate = getNextWorkday(testEnd);
+        currentProcessingDate = getNextWorkday(parallelTest ? workEnd : testEnd);
       }
     });
     return sorted;
-  }, [tasks, resources, sprintDuration, projectStartDate, testPeriodDetails, extraSprints, sprintNames, globalTestDays]);
+  }, [tasks, resources, sprintDuration, projectStartDate, testPeriodDetails, extraSprints, sprintNames, globalTestDays, parallelTest]);
 
   useEffect(() => {
     setOrderedSprints(calculatedSprints);

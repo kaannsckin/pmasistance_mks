@@ -11,6 +11,8 @@ import { COLUMN_META, columnOf, daysLate, initialsOf, PRIORITY_META, sprintLabel
 import { Field, Sheet } from './ui';
 import TaskQueryPicker from './TaskQueryPicker';
 import SprintTeamCalendar from './SprintTeamCalendar';
+import PlanReadinessSheet from './planning/PlanReadinessSheet';
+import { checkPlanReadiness, PlanReadiness } from '../../utils/planning/planReadiness';
 
 /**
  * Modern zaman çizelgesi (sprint planı). Üstte tüm sprintleri ve test
@@ -22,6 +24,7 @@ export interface CalendarSettings {
     projectStartDate: string;
     sprintDuration: number;
     globalTestDays: number;
+    parallelTest?: boolean;
     useJiraRemainingEstimate?: boolean;
 }
 
@@ -112,6 +115,7 @@ const CalendarSheet: React.FC<{ value: CalendarSettings; onClose: () => void; on
     const [start, setStart] = useState(value.projectStartDate);
     const [weeks, setWeeks] = useState(value.sprintDuration);
     const [testDays, setTestDays] = useState(value.globalTestDays);
+    const [parallelTest, setParallelTest] = useState(!!value.parallelTest);
     const [useRemaining, setUseRemaining] = useState(!!value.useJiraRemainingEstimate);
     return (
         <Sheet
@@ -120,7 +124,7 @@ const CalendarSheet: React.FC<{ value: CalendarSettings; onClose: () => void; on
             footer={<>
                 <span className="flex-1 text-[13px] m-text-3">Tüm sprint tarihleri yeniden hesaplanır.</span>
                 <button type="button" className="m-btn m-btn-plain" onClick={onClose}>Vazgeç</button>
-                <button type="button" className="m-btn m-btn-primary" disabled={!start} onClick={() => onSave({ projectStartDate: start, sprintDuration: weeks, globalTestDays: testDays, useJiraRemainingEstimate: useRemaining })}>Kaydet</button>
+                <button type="button" className="m-btn m-btn-primary" disabled={!start} onClick={() => onSave({ projectStartDate: start, sprintDuration: weeks, globalTestDays: testDays, parallelTest, useJiraRemainingEstimate: useRemaining })}>Kaydet</button>
             </>}
         >
             <Field label="Proje başlangıcı" htmlFor="tl-start">
@@ -135,6 +139,13 @@ const CalendarSheet: React.FC<{ value: CalendarSettings; onClose: () => void; on
             <Field label="Test dönemi (iş günü)" htmlFor="tl-test" hint="Her sprintin ardından test ve canlıya alma için ayrılan süre">
                 <input id="tl-test" type="number" min={0} max={20} className="m-input m-tabular" value={testDays} onChange={e => setTestDays(Math.max(0, Math.min(20, parseInt(e.target.value, 10) || 0)))} />
             </Field>
+            <label className="flex items-start gap-2 text-[14px] m-text">
+                <input type="checkbox" className="w-4 h-4 mt-0.5" checked={parallelTest} onChange={e => setParallelTest(e.target.checked)} />
+                <span className="flex flex-col gap-0.5">
+                    Test sonraki sprintle paralel yürüsün
+                    <span className="text-[13px] m-text-3">Test sprint bitince başlar; sonraki sprint testin bitmesini beklemeden hemen başlar.</span>
+                </span>
+            </label>
             <label className="flex items-center gap-2 text-[14px] m-text">
                 <input type="checkbox" className="w-4 h-4" checked={useRemaining} onChange={e => setUseRemaining(e.target.checked)} />
                 EVM ve iş yükü tahmininde Jira kalan süresini kullan
@@ -158,6 +169,7 @@ const ModernTimeline: React.FC<ModernTimelineProps> = ({ project, people, leaves
     const names = project.settings.sprintNames || {};
     const weeks = project.settings.sprintDuration || 3;
     const testDays = project.settings.globalTestDays || 4;
+    const parallelTest = !!project.settings.parallelTest;
     const excluded = project.tasks.filter(t => t.includeInSprints === false).length;
     const [poolOpen, setPoolOpen] = useState(false);
     const [renaming, setRenaming] = useState<{ v: number; name: string } | null>(null);
@@ -167,6 +179,7 @@ const ModernTimeline: React.FC<ModernTimelineProps> = ({ project, people, leaves
     const [teamCalendarSprint, setTeamCalendarSprint] = useState<number | null>(null);
     const [teamCalendarSelection, setTeamCalendarSelection] = useState({ component: '', person: '' });
     const [result, setResult] = useState<{ warnings: PlanWarning[]; text: string } | null>(null);
+    const [readiness, setReadiness] = useState<PlanReadiness | null>(null);
     const laneRefs = useRef(new Map<number, HTMLElement>());
     useEffect(() => {
         if (initialSprint) laneRefs.current.get(initialSprint)?.scrollIntoView({ inline: 'start', block: 'nearest' });
@@ -193,17 +206,32 @@ const ModernTimeline: React.FC<ModernTimelineProps> = ({ project, people, leaves
         onPeriodChange(next);
     };
 
-    const autoPlan = () => {
-        const placed = project.tasks.some(t => (t.version || 0) > 0 && t.status !== TaskStatus.Done);
-        if (placed && !window.confirm('Otomatik plan, bitmemiş görevlerin sprintlerini öncül ilişkileri ve kapasiteye göre yeniden dağıtır. Devam edilsin mi?')) return;
+    const placedOpen = project.tasks.some(t => (t.version || 0) > 0 && t.status !== TaskStatus.Done);
+    const runPlan = (tasks: Task[], edited = 0) => {
         try {
-            const r = planTaskVersionsDetailed(project.tasks, project.resources, weeks, testDays);
+            const r = planTaskVersionsDetailed(tasks, project.resources, weeks, testDays);
             onPlanGenerated(r.tasks);
             setExtra(0);
-            setResult({ warnings: r.warnings, text: `${r.stats.plannedTaskCount} görev ${r.stats.sprintCount} sprinte dağıtıldı (${num(r.stats.totalEffortDays)} gün iş).` });
+            setResult({ warnings: r.warnings, text: `${edited ? `${edited} görev güncellendi. ` : ''}${r.stats.plannedTaskCount} görev ${r.stats.sprintCount} sprinte dağıtıldı (${num(r.stats.totalEffortDays)} gün iş).` });
         } catch (e) {
+            if (edited) onPlanGenerated(tasks);
             setResult({ warnings: [], text: e instanceof Error ? e.message : 'Plan oluşturulamadı.' });
         }
+    };
+    const autoPlan = () => {
+        // Süresi, bileşeni ya da sorumlusu eksik görevler önce gösterilir; pencere yeniden dağıtım uyarısını da içerir.
+        const check = checkPlanReadiness(project);
+        if (check.rows.length) { setReadiness(check); return; }
+        if (placedOpen && !window.confirm('Otomatik plan, bitmemiş görevlerin sprintlerini öncül ilişkileri ve kapasiteye göre yeniden dağıtır. Devam edilsin mi?')) return;
+        runPlan(project.tasks);
+    };
+    const saveReadinessEdits = (changed: Task[], plan: boolean) => {
+        setReadiness(null);
+        const byId = new Map(changed.map(t => [t.id, t]));
+        const tasks = project.tasks.map(t => byId.get(t.id) || t);
+        if (plan) { runPlan(tasks, changed.length); return; }
+        onPlanGenerated(tasks);
+        setResult({ warnings: [], text: `${changed.length} görev güncellendi.` });
     };
 
     const exportExcel = () => exportSprintPlanToExcel((period ? sprints : lanes).map((l): Sprint => ({
@@ -305,7 +333,7 @@ const ModernTimeline: React.FC<ModernTimelineProps> = ({ project, people, leaves
         <div className="flex flex-col gap-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="m-0 text-[15px] m-text-2">
-                    {sprints.length ? `${sprints.length} sprint · ${dm(range?.start)} – ${dm(range?.end)}` : 'Henüz sprint yok'} · sprint {weeks} hafta + {testDays} gün test
+                    {sprints.length ? `${sprints.length} sprint · ${dm(range?.start)} – ${dm(range?.end)}` : 'Henüz sprint yok'} · sprint {weeks} hafta + {testDays} gün test{parallelTest ? ' (sonraki sprintle paralel)' : ''}
                     {excluded > 0 && <span className="m-text-3"> · {excluded} görev plan dışı</span>}
                 </p>
                 <div className="flex flex-wrap items-center gap-2.5">
@@ -379,7 +407,7 @@ const ModernTimeline: React.FC<ModernTimelineProps> = ({ project, people, leaves
 
             {range && sprints.length > 0 && (
                 <section aria-label="Zaman şeridi" className="m-surface rounded-2xl px-5 pt-4 pb-3 flex flex-col gap-2">
-                    <div className="relative h-11">
+                    <div className="relative" style={{ height: parallelTest ? 70 : 44 }}>
                         {sprints.map(l => {
                             const work = segmentPct(l.start!, l.end!, range);
                             const test = segmentPct(l.testStart!, l.testEnd!, range);
@@ -392,16 +420,17 @@ const ModernTimeline: React.FC<ModernTimelineProps> = ({ project, people, leaves
                                         title={`${label}: ${dm(l.start)} – ${dm(l.end)}`}
                                         aria-haspopup={teamCalendarMode ? 'dialog' : undefined}
                                         onClick={() => openSprint(l.version)}
-                                        className="absolute top-0 h-full rounded-lg px-2 flex items-center text-[12px] font-semibold overflow-hidden whitespace-nowrap border-0 cursor-pointer"
-                                        style={{ left: `${work.left}%`, width: `${work.width}%`, background: over ? 'var(--m-bad-tint)' : 'var(--m-accent-tint)', color: over ? 'var(--m-bad-ink)' : 'var(--m-accent-ink)', boxShadow: nowVersion === l.version ? 'inset 0 0 0 2px var(--m-accent)' : undefined }}
+                                        className="absolute top-0 rounded-lg px-2 flex items-center text-[12px] font-semibold overflow-hidden whitespace-nowrap border-0 cursor-pointer"
+                                        style={{ height: 44, left: `${work.left}%`, width: `${work.width}%`, background: over ? 'var(--m-bad-tint)' : 'var(--m-accent-tint)', color: over ? 'var(--m-bad-ink)' : 'var(--m-accent-ink)', boxShadow: nowVersion === l.version ? 'inset 0 0 0 2px var(--m-accent)' : undefined }}
                                     >
                                         <span className="truncate">{label}</span>
                                     </button>
                                     <span
                                         aria-hidden="true"
                                         title={`Test: ${dm(l.testStart)} – ${dm(l.testEnd)}`}
-                                        className="absolute top-1.5 bottom-1.5 rounded-md"
-                                        style={{ left: `${test.left}%`, width: `${test.width}%`, background: 'repeating-linear-gradient(135deg, var(--m-fill) 0 4px, var(--m-fill-2) 4px 8px)' }}
+                                        className="absolute rounded-md"
+                                        // Paralel testte test, sonraki sprintin altında kendi satırında görünür.
+                                        style={{ top: parallelTest ? 50 : 6, height: parallelTest ? 20 : 32, left: `${test.left}%`, width: `${test.width}%`, background: 'repeating-linear-gradient(135deg, var(--m-fill) 0 4px, var(--m-fill-2) 4px 8px)' }}
                                     ></span>
                                 </React.Fragment>
                             );
@@ -487,10 +516,17 @@ const ModernTimeline: React.FC<ModernTimelineProps> = ({ project, people, leaves
 
             {calendarOpen && (
                 <CalendarSheet
-                    value={{ projectStartDate: project.settings.projectStartDate, sprintDuration: weeks, globalTestDays: testDays, useJiraRemainingEstimate: project.settings.useJiraRemainingEstimate }}
+                    value={{ projectStartDate: project.settings.projectStartDate, sprintDuration: weeks, globalTestDays: testDays, parallelTest, useJiraRemainingEstimate: project.settings.useJiraRemainingEstimate }}
                     onClose={() => setCalendarOpen(false)}
                     onSave={c => { onUpdateCalendar(c); setCalendarOpen(false); }}
                 />
+            )}
+            {readiness && (
+                <PlanReadinessSheet project={project} readiness={readiness} replansPlaced={placedOpen}
+                    onClose={() => setReadiness(null)}
+                    onContinue={() => { setReadiness(null); runPlan(project.tasks); }}
+                    onViewTask={onViewTask}
+                    onSave={saveReadinessEdits} />
             )}
             {teamCalendarLane && <SprintTeamCalendar project={project} lane={teamCalendarLane} people={people} leaves={leaves}
                 selection={teamCalendarSelection} onSelection={setTeamCalendarSelection}

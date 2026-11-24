@@ -683,6 +683,8 @@ export interface ProjectSettings {
   sprintNames?: Record<number, string>;
   jiraSprintImports?: Record<string, { localSprint: number; name: string; startDate?: string; endDate?: string }>;
   globalTestDays?: number;
+  /** Test sonraki sprintle paralel yürür: sprint, öncekinin testini beklemeden geliştirme bitince başlar. */
+  parallelTest?: boolean;
   useJiraRemainingEstimate?: boolean;
   manMonthTableColor?: string;
   costTableColor?: string;

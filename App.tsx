@@ -2505,7 +2505,7 @@ const App: React.FC = () => {
             tasks={tasks} resources={resources}
             sprintDuration={ps.sprintDuration} projectStartDate={ps.projectStartDate}
             sprintNames={ps.sprintNames || {}} setSprintNames={setSprintNames}
-            globalTestDays={ps.globalTestDays || 4} setGlobalTestDays={setGlobalTestDays as React.Dispatch<React.SetStateAction<number>>}
+            globalTestDays={ps.globalTestDays || 4} parallelTest={ps.parallelTest} setGlobalTestDays={setGlobalTestDays as React.Dispatch<React.SetStateAction<number>>}
             onPlanGenerated={setTasks} onTaskSprintChange={(id, v) => setTasks(prev => prev.map(t => t.id === id ? { ...t, version: v } : t))}
             onTaskStatusChange={(id, s) => setTasks(prev => prev.map(t => t.id === id ? { ...t, status: s } : t))}
             onInsertSprint={insertSprint}

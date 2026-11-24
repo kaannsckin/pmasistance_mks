@@ -138,6 +138,8 @@ export const segmentPct = (from: Date, to: Date, range: { start: Date; end: Date
 /** Bugünün düştüğü sprint (test dönemi dahil); yoksa null */
 export const currentLaneVersion = (lanes: SprintLane[], now: Date = new Date()): number | null => {
     const t = dayStart(now);
-    const hit = lanes.find(l => l.start && l.testEnd && dayStart(l.start) <= t && t <= dayStart(l.testEnd));
+    // Paralel testte bir gün hem önceki sprintin testine hem yeni sprintin geliştirmesine düşer; geliştirme önce gelir.
+    const developing = lanes.find(l => l.start && l.end && dayStart(l.start) <= t && t <= dayStart(l.end));
+    const hit = developing || lanes.find(l => l.start && l.testEnd && dayStart(l.start) <= t && t <= dayStart(l.testEnd));
     return hit ? hit.version : null;
 };
