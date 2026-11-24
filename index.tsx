@@ -12,6 +12,7 @@ import '@fontsource-variable/nunito';
 import '@fontsource-variable/plus-jakarta-sans';
 import './styles/tailwind.css';
 import './styles/modern.css';
+import './styles/glass.css';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

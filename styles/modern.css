@@ -2,7 +2,7 @@
  * Modern arayüz (Ayarlar → Arayüz → Modern). Kök öğede .ui-modern sınıfı varken
  * geçerlidir; klasik arayüzü etkilemez.
  *
- *  1. Tasarım değişkenleri (açık / koyu) ve temalar (Baloncuk, Aurora, Pro, Kil)
+ *  1. Tasarım değişkenleri (açık / koyu) ve temalar (Cam, Aurora, Pro, Kil)
  *  2. Modern bileşenlerin küçük yardımcı sınıfları (.m-*)
  *  3. Henüz yeniden yazılmamış ekranlar için yumuşatma katmanı
  *  4. Animasyonlar (roket, kutlama, uzay modu) — "hareketi azalt"a saygılı
@@ -119,23 +119,6 @@
  * Durum renkleri (ok/warn/bad), grafik serileri ve ısı haritası tüm temalarda
  * ortaktır; renk körlüğü denetiminden geçmiş paleti bozmayız.
  */
-
-/* Baloncuk (varsayılan): yumuşak ışıklı zemin, buzlu cam menü, hap butonlar */
-.ui-modern.ui-modern.mt-bubble {
-  --m-bg-image: radial-gradient(1100px 620px at 100% -8%, rgba(0, 122, 255, 0.10), transparent 62%), radial-gradient(900px 560px at -8% 108%, rgba(255, 45, 85, 0.07), transparent 62%);
-  --m-radius-card: 22px;
-  --m-radius-btn: 999px;
-  --m-card-shadow: 0 6px 20px rgba(30, 40, 80, 0.07), 0 1px 2px rgba(0, 0, 0, 0.04);
-  --m-sidebar-bg: rgba(255, 255, 255, 0.72);
-  --m-sidebar-blur: blur(20px) saturate(1.6);
-  --m-btn-shadow: 0 4px 12px rgba(0, 102, 214, 0.28);
-}
-.dark .ui-modern.ui-modern.mt-bubble {
-  --m-bg-image: radial-gradient(1100px 620px at 100% -8%, rgba(10, 132, 255, 0.18), transparent 62%), radial-gradient(900px 560px at -8% 108%, rgba(255, 55, 95, 0.10), transparent 62%);
-  --m-card-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
-  --m-sidebar-bg: rgba(28, 28, 30, 0.72);
-  --m-btn-shadow: 0 4px 14px rgba(77, 162, 255, 0.22);
-}
 
 /* Aurora: renk bulutlu zemin, yarı saydam cam yüzeyler, gradyan vurgu */
 .ui-modern.ui-modern.mt-aurora {
@@ -311,9 +294,9 @@
 @media (max-width: 1023px) {
   .ui-modern .m-sidebar.m-surface { background-color: var(--m-surface-pop); }
 }
-/* Baloncuk ve Kil: geniş ekranda kenar çubuğu zeminden ayrık, yüzen bir panel */
+/* Kil: geniş ekranda kenar çubuğu zeminden ayrık, yüzen bir panel */
 @media (min-width: 1024px) {
-  .ui-modern.mt-bubble .m-sidebar.m-surface, .ui-modern.mt-clay .m-sidebar.m-surface {
+  .ui-modern.mt-clay .m-sidebar.m-surface {
     margin: 12px 0 12px 12px; top: 12px; height: calc(100vh - 24px);
     border-right-width: 0; border-radius: var(--m-radius-card); box-shadow: var(--m-card-shadow);
   }
@@ -390,6 +373,41 @@
 }
 /* Seçili bölüm zemini koyu temalarda açıklaştığı için içindeki soluk sayılar ana yazı rengini alır */
 .ui-modern .m-segment[aria-pressed="true"] .m-text-3, .ui-modern .m-segment[aria-current="page"] .m-text-3, .ui-modern .m-segment[aria-selected="true"] .m-text-3 { color: var(--m-label); }
+
+.m-selection-strip { position: relative; }
+.m-selection-lane { display: none; }
+.m-selection-indicator { display: none; pointer-events: none; }
+
+.m-switch {
+  display: inline-grid; place-items: center; position: relative; flex: none;
+  width: 54px; height: 44px; cursor: pointer;
+}
+.m-switch:has(input:disabled) { opacity: .48; cursor: not-allowed; }
+.m-switch input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: inherit; }
+.m-switch-track {
+  width: 50px; height: 28px; padding: 3px; border-radius: 999px;
+  background: var(--m-fill, #b0b7c4); pointer-events: none;
+}
+.dark .m-switch-track { background: var(--m-fill, #51596a); }
+.m-switch-track > span {
+  display: block; width: 22px; height: 22px; border-radius: 50%; background: #fff;
+  transform: translateX(var(--m-switch-offset, 0px)) scaleX(var(--m-switch-stretch, 1));
+  box-shadow: 0 1px 4px rgb(0 0 0 / 22%);
+}
+.m-switch input:checked + .m-switch-track {
+  --m-switch-offset: 22px;
+  background: var(--m-switch-on, var(--app-primary, #2563eb));
+}
+.m-switch input:focus-visible + .m-switch-track { outline: 2px solid var(--m-accent, #2563eb); outline-offset: 3px; }
+@media (prefers-reduced-motion: no-preference) {
+  .m-switch-track { transition: background-color .18s ease; }
+  .m-switch-track > span { transition: transform .22s ease-out; }
+}
+@media (forced-colors: active) {
+  .m-switch-track { outline: 1px solid ButtonText; background: Canvas; }
+  .m-switch-track > span { background: ButtonText; }
+  .m-switch input:checked + .m-switch-track { outline: 2px solid Highlight; }
+}
 
 .ui-modern .m-input {
   min-height: 44px; width: 100%; box-sizing: border-box; padding: 0 14px; border-radius: var(--m-radius-ctl);
@@ -486,7 +504,7 @@ html:not(.dark) .ui-modern .text-gray-300, html:not(.dark) .ui-modern .text-gray
 
 
 /* 4b. Tema hareketleri ve temalara özel sürprizler -------------------------
- * Her temanın hareket dili ayrı: Baloncuk yaylanır, Aurora süzülür, Pro
+ * Her temanın hareket dili ayrı: Cam yaylanır, Aurora süzülür, Pro
  * neredeyse anlıktır, Kil hamur gibi ezilir. Hepsi "hareketi azalt"ta kapanır.
  * Sayfa girişi animasyonu yalnız başlangıç karesini uygular (fill: backwards);
  * bittikten sonra transform kalmaz, içerideki fixed pencereler kaymaz.
@@ -495,9 +513,9 @@ html:not(.dark) .ui-modern .text-gray-300, html:not(.dark) .ui-modern .text-gray
   .ui-modern main > * { animation: m-enter-rise 0.42s cubic-bezier(0.34, 1.56, 0.64, 1) backwards; }
   .ui-modern [role="dialog"].m-pop, .ui-modern [role="dialog"].m-bg { animation: m-dialog-in 0.32s cubic-bezier(0.34, 1.56, 0.64, 1) backwards; }
 
-  /* Baloncuk: yaylanan basma */
+  /* Cam: yaylanan basma */
   .ui-modern.mt-bubble .m-btn, .ui-modern.mt-bubble .m-pill, .ui-modern.mt-bubble .m-segment, .ui-modern.mt-bubble .m-icon-btn {
-    transition: transform 0.35s cubic-bezier(0.34, 1.8, 0.64, 1), filter 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+    transition: transform 0.35s var(--glass-spring), filter 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
   }
   .ui-modern.mt-bubble .m-btn:active:not(:disabled), .ui-modern.mt-bubble .m-pill:active, .ui-modern.mt-bubble .m-segment:active, .ui-modern.mt-bubble .m-icon-btn:active { transform: scale(0.94); transition-duration: 0.08s; }
 
