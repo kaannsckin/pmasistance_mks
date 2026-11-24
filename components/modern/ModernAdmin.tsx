@@ -849,7 +849,7 @@ const AppTools: React.FC<Pick<ModernAdminProps, 'workspace' | 'onSaveBackup' | '
                         <p className="m-0 text-[13px] m-text-3">Yedekten yükleme mevcut çalışma alanının tamamını değiştirir; önce onay istenir ve denetim günlüğüne yazılır.</p>
                     </Card>
                 )}
-                <Card title="Bulut eşitleme" subtitle={cloudLinked ? 'Bu tarayıcı bir bulut çalışma alanına bağlı' : 'Bağlı değil'}>
+                <Card title="Bulut veritabanı" subtitle={cloudLinked ? 'Bu tarayıcı bir bulut çalışma alanına bağlı' : 'Bağlı değil'}>
                     <div className="flex flex-wrap items-center gap-2.5">
                         <span className={`inline-flex items-center h-7 px-3 rounded-full text-[13px] font-semibold ${cloudLinked ? 'm-tone-ok' : 'm-tone-hold'}`}>{cloudLinked ? 'Bağlı' : 'Yerel'}</span>
                         <button type="button" className="m-btn m-btn-gray" onClick={onOpenCloud}><Icon name="cloud" size={18} />Bulut ayarları</button>

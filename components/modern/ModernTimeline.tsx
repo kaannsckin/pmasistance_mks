@@ -1,15 +1,16 @@
-import React, { useMemo, useRef, useState } from 'react';
-import { Project, Sprint, Task, TaskStatus } from '../../types';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Leave, Person, Project, Sprint, Task, TaskStatus } from '../../types';
 import { exportSprintPlanToExcel } from '../../utils/exporter';
 import { planTaskVersionsDetailed, PlanWarning } from '../../utils/sprintPlanner';
 import { calculatePertFuzzyPert } from '../../utils/timeline';
-import { buildLanes, currentLaneVersion, laneRange, positionPct, segmentPct, SprintLane } from '../../utils/timelinePlan';
+import { buildLanes, currentLaneVersion, laneRange, lastPlannedSprint, positionPct, segmentPct, SprintLane } from '../../utils/timelinePlan';
 import { DayRange, formatRange, isDayRange, toIsoDay } from '../../utils/calendarRange';
 import { canPlanSprintTask, periodTaskQuery, sprintsInPeriod } from '../../utils/planning/period';
 import { Icon } from './icons';
 import { COLUMN_META, columnOf, daysLate, initialsOf, PRIORITY_META, sprintLabel } from './taskMeta';
 import { Field, Sheet } from './ui';
 import TaskQueryPicker from './TaskQueryPicker';
+import SprintTeamCalendar from './SprintTeamCalendar';
 
 /**
  * Modern zaman çizelgesi (sprint planı). Üstte tüm sprintleri ve test
@@ -26,6 +27,8 @@ export interface CalendarSettings {
 
 interface ModernTimelineProps {
     project: Project;
+    people: Person[];
+    leaves: Leave[];
     canEdit: boolean;
     onMoveTask: (taskId: string, version: number) => void;
     onPlanGenerated: (tasks: Task[]) => void;
@@ -38,6 +41,7 @@ interface ModernTimelineProps {
     period: DayRange | null;
     me?: string;
     initialSelection?: string[];
+    initialSprint?: number;
     onPeriodChange: (period: DayRange | null) => void;
     onBulkMove?: (ids: ReadonlySet<string>, sprint: number) => void;
     onOpenFilteredList: (query: string) => void;
@@ -139,13 +143,13 @@ const CalendarSheet: React.FC<{ value: CalendarSettings; onClose: () => void; on
     );
 };
 
-const ModernTimeline: React.FC<ModernTimelineProps> = ({ project, canEdit, onMoveTask, onPlanGenerated, onInsertSprint, onDeleteSprint, onRenameSprint, onUpdateCalendar, onViewTask, onNewTask, period, me, initialSelection, onPeriodChange, onBulkMove, onOpenFilteredList, onOpenPeriodJira, onOpenManualRelease }) => {
+const ModernTimeline: React.FC<ModernTimelineProps> = ({ project, people, leaves, canEdit, onMoveTask, onPlanGenerated, onInsertSprint, onDeleteSprint, onRenameSprint, onUpdateCalendar, onViewTask, onNewTask, period, me, initialSelection, initialSprint, onPeriodChange, onBulkMove, onOpenFilteredList, onOpenPeriodJira, onOpenManualRelease }) => {
     const [extra, setExtra] = useState(0);
     const [dates, setDates] = useState<DayRange>(period || { start: '', end: '' });
     const [selection, setSelection] = useState<Set<string> | null>(() => initialSelection ? new Set(initialSelection) : null);
     const [targetSprint, setDestination] = useState<number>();
     const periodSprints = useMemo(() => period ? sprintsInPeriod(project, period) : [], [project.settings, period]);
-    const lastUsed = Math.max(0, ...project.tasks.filter(t => t.includeInSprints !== false).map(t => t.version || 0));
+    const lastUsed = lastPlannedSprint(project);
     const lanes = useMemo(() => buildLanes(project, Math.max(extra, (periodSprints.at(-1) || 0) - lastUsed)), [project, extra, periodSprints, lastUsed]);
     const sprints = period ? lanes.filter(l => periodSprints.includes(l.version)) : lanes.filter(l => l.version > 0);
     const range = laneRange(sprints);
@@ -159,8 +163,20 @@ const ModernTimeline: React.FC<ModernTimelineProps> = ({ project, canEdit, onMov
     const [renaming, setRenaming] = useState<{ v: number; name: string } | null>(null);
     const [dropTarget, setDropTarget] = useState<number | null>(null);
     const [calendarOpen, setCalendarOpen] = useState(false);
+    const [teamCalendarMode, setTeamCalendarMode] = useState(false);
+    const [teamCalendarSprint, setTeamCalendarSprint] = useState<number | null>(null);
+    const [teamCalendarSelection, setTeamCalendarSelection] = useState({ component: '', person: '' });
     const [result, setResult] = useState<{ warnings: PlanWarning[]; text: string } | null>(null);
     const laneRefs = useRef(new Map<number, HTMLElement>());
+    useEffect(() => {
+        if (initialSprint) laneRefs.current.get(initialSprint)?.scrollIntoView({ inline: 'start', block: 'nearest' });
+    }, [initialSprint]);
+    const teamCalendarLane = sprints.find(lane => lane.version === teamCalendarSprint);
+
+    const openSprint = (version: number) => {
+        if (teamCalendarMode) setTeamCalendarSprint(version);
+        else laneRefs.current.get(version)?.scrollIntoView({ behavior: 'smooth', inline: 'start', block: 'nearest' });
+    };
 
     const pool = lanes[0];
     const bulkTasks = useMemo(() => project.tasks.filter(canPlanSprintTask), [project.tasks]);
@@ -249,7 +265,12 @@ const ModernTimeline: React.FC<ModernTimelineProps> = ({ project, canEdit, onMov
                             onBlur={() => { onRenameSprint(l.version, renaming!.name.trim()); setRenaming(null); }}
                         />
                     ) : (
-                        <h3 className="m-0 flex-1 min-w-0 text-[17px] font-semibold m-text truncate">{label}</h3>
+                        <h3 className="m-0 flex-1 min-w-0 text-[17px] font-semibold m-text truncate">
+                            {teamCalendarMode ? (
+                                <button type="button" className="m-row-link w-full py-1 text-left font-semibold min-w-0 truncate m-accent"
+                                    aria-label={`${label} ekip takvimi`} aria-haspopup="dialog" onClick={() => openSprint(l.version)}>{label}</button>
+                            ) : label}
+                        </h3>
                     )}
                     {nowVersion === l.version && !isRenaming && <span className="inline-flex items-center h-6 px-2 rounded-full text-[12px] font-semibold m-tone-accent">Şimdi</span>}
                     {canEdit && !isRenaming && (
@@ -289,6 +310,10 @@ const ModernTimeline: React.FC<ModernTimelineProps> = ({ project, canEdit, onMov
                 </p>
                 <div className="flex flex-wrap items-center gap-2.5">
                     {canEdit && <button type="button" className="m-btn m-btn-gray" onClick={() => setCalendarOpen(true)}><Icon name="sliders" size={18} />Takvim</button>}
+                    <button type="button" className={`m-btn ${teamCalendarMode ? 'm-btn-primary' : 'm-btn-gray'}`} aria-pressed={teamCalendarMode} disabled={!sprints.length && !teamCalendarMode}
+                        onClick={() => { setTeamCalendarMode(!teamCalendarMode); setTeamCalendarSprint(null); }}>
+                        <Icon name="calendar" size={18} />{teamCalendarMode ? 'Ekip takvimini gizle' : 'Ekip takvimini göster'}
+                    </button>
                     {onBulkMove && <button type="button" className="m-btn m-btn-gray" aria-expanded={!!selection} onClick={() => {
                         setSelection(selection ? null : new Set());
                         setDestination(undefined);
@@ -297,6 +322,7 @@ const ModernTimeline: React.FC<ModernTimelineProps> = ({ project, canEdit, onMov
                     {canEdit && <button type="button" className="m-btn m-btn-primary" onClick={autoPlan} disabled={!project.tasks.length}><Icon name="rocket" size={18} />Otomatik planla</button>}
                 </div>
             </div>
+            {teamCalendarMode && <p className="m-0 text-[14px] m-text-2" role="status">Ekip yoğunluğunu açmak için zaman şeridinden veya sütun başlığından bir sprint seçin.</p>}
 
             <section aria-label="Plan aralığı" className="m-surface rounded-2xl p-3.5 flex flex-wrap items-end gap-2.5">
                 <Field label="Aralık başlangıcı" htmlFor="tl-period-start">
@@ -364,7 +390,8 @@ const ModernTimeline: React.FC<ModernTimelineProps> = ({ project, canEdit, onMov
                                     <button
                                         type="button"
                                         title={`${label}: ${dm(l.start)} – ${dm(l.end)}`}
-                                        onClick={() => laneRefs.current.get(l.version)?.scrollIntoView({ behavior: 'smooth', inline: 'start', block: 'nearest' })}
+                                        aria-haspopup={teamCalendarMode ? 'dialog' : undefined}
+                                        onClick={() => openSprint(l.version)}
                                         className="absolute top-0 h-full rounded-lg px-2 flex items-center text-[12px] font-semibold overflow-hidden whitespace-nowrap border-0 cursor-pointer"
                                         style={{ left: `${work.left}%`, width: `${work.width}%`, background: over ? 'var(--m-bad-tint)' : 'var(--m-accent-tint)', color: over ? 'var(--m-bad-ink)' : 'var(--m-accent-ink)', boxShadow: nowVersion === l.version ? 'inset 0 0 0 2px var(--m-accent)' : undefined }}
                                     >
@@ -465,6 +492,9 @@ const ModernTimeline: React.FC<ModernTimelineProps> = ({ project, canEdit, onMov
                     onSave={c => { onUpdateCalendar(c); setCalendarOpen(false); }}
                 />
             )}
+            {teamCalendarLane && <SprintTeamCalendar project={project} lane={teamCalendarLane} people={people} leaves={leaves}
+                selection={teamCalendarSelection} onSelection={setTeamCalendarSelection}
+                onClose={() => setTeamCalendarSprint(null)} onViewTask={onViewTask} />}
         </div>
     );
 };

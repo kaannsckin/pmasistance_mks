@@ -15,6 +15,7 @@ import { Field, rowSep, Sheet } from './ui';
 interface ModernRequestsProps {
     requests: CustomerRequest[];
     tasks: Task[];
+    readOnly?: boolean;
     onChange: (requests: CustomerRequest[]) => void;
     onConvert: (request: CustomerRequest) => void;
     onViewTask: (task: Task) => void;
@@ -29,7 +30,7 @@ const TABS: { key: RequestStatus | 'all'; label: string }[] = [
 
 const STATUS_TONE: Record<RequestStatus, string> = { New: 'm-tone-accent', Converted: 'm-tone-ok', Rejected: 'm-tone-hold' };
 
-const ModernRequests: React.FC<ModernRequestsProps> = ({ requests, tasks, onChange, onConvert, onViewTask }) => {
+const ModernRequests: React.FC<ModernRequestsProps> = ({ requests, tasks, readOnly, onChange, onConvert, onViewTask }) => {
     const [status, setStatus] = useState<RequestStatus | 'all'>('New');
     const [query, setQuery] = useState('');
     const [adding, setAdding] = useState(false);
@@ -84,7 +85,7 @@ const ModernRequests: React.FC<ModernRequestsProps> = ({ requests, tasks, onChan
                     <input aria-label="İsteklerde ara" className="bg-transparent border-0 outline-none text-[15px] m-text w-44" placeholder="Başlık, müşteri" value={query} onChange={e => setQuery(e.target.value)} />
                 </label>
                 <span className="flex-1"></span>
-                <button type="button" className="m-btn m-btn-gray" disabled={busy} onClick={() => fileRef.current?.click()}>
+                {!readOnly && <><button type="button" className="m-btn m-btn-gray" disabled={busy} onClick={() => fileRef.current?.click()}>
                     <Icon name="upload" size={18} />
                     {busy ? 'Aktarılıyor…' : 'İçe aktar'}
                 </button>
@@ -92,7 +93,7 @@ const ModernRequests: React.FC<ModernRequestsProps> = ({ requests, tasks, onChan
                     <Icon name="plus" size={18} strokeWidth={2.2} />
                     Yeni istek
                 </button>
-                <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) importFile(f); e.target.value = ''; }} />
+                <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) importFile(f); e.target.value = ''; }} /></>}
             </div>
 
             {notice && (
@@ -106,7 +107,7 @@ const ModernRequests: React.FC<ModernRequestsProps> = ({ requests, tasks, onChan
                 <div className="m-surface rounded-2xl px-5 py-12 flex flex-col items-center gap-2 text-center">
                     <span className="w-11 h-11 rounded-full m-tone-accent flex items-center justify-center"><Icon name="inbox" size={22} /></span>
                     <span className="text-[17px] font-semibold m-text">{requests.length === 0 ? 'Henüz müşteri isteği yok' : 'Bu süzgeçte istek yok'}</span>
-                    {requests.length === 0 && <span className="text-[15px] m-text-3 max-w-[52ch]">İstekleri tek tek ekleyin ya da Excel/CSV'den aktarın; uygun olanları tek tıkla göreve dönüştürün.</span>}
+                    {!readOnly && requests.length === 0 && <span className="text-[15px] m-text-3 max-w-[52ch]">İstekleri tek tek ekleyin ya da Excel/CSV'den aktarın; uygun olanları tek tıkla göreve dönüştürün.</span>}
                 </div>
             ) : (
                 <div className="m-surface rounded-2xl p-1.5">
@@ -130,7 +131,7 @@ const ModernRequests: React.FC<ModernRequestsProps> = ({ requests, tasks, onChan
                                         </button>
                                     )}
                                 </div>
-                                <div className="flex items-center gap-1.5 flex-none">
+                                {!readOnly && <div className="flex items-center gap-1.5 flex-none">
                                     {r.status === 'New' && <button type="button" className="m-btn m-btn-gray" onClick={() => onConvert(r)}>Göreve dönüştür</button>}
                                     <div className="relative">
                                         <button type="button" className="m-icon-btn" aria-label={`${r.title} işlemleri`} aria-haspopup="menu" aria-expanded={menu === r.id} onClick={() => setMenu(menu === r.id ? null : r.id)}><Icon name="more" /></button>
@@ -145,14 +146,14 @@ const ModernRequests: React.FC<ModernRequestsProps> = ({ requests, tasks, onChan
                                             </>
                                         )}
                                     </div>
-                                </div>
+                                </div>}
                             </div>
                         );
                     })}
                 </div>
             )}
 
-            {adding && (
+            {!readOnly && adding && (
                 <Sheet
                     title="Yeni müşteri isteği"
                     onClose={() => setAdding(false)}

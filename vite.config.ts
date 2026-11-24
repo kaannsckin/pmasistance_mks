@@ -3,6 +3,8 @@ import { defineConfig, loadEnv, Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { createAiMiddleware } from './server/ai/nodeAdapter';
 import { handleIntegrationRequest, IntegrationRoute } from './server/integrations/handler';
+import { handleCloudConfig } from './server/cloud/config';
+import { CLOUD_CONFIG_PATH } from './utils/cloudConnection';
 
 /**
  * Yerel geliştirmede /api/ai/* isteklerini AI proxy'sine bağlar. Anahtar
@@ -13,6 +15,7 @@ const aiProxyPlugin = (mode: string): Plugin => {
   // Yönetici panelinden girilen AI ayarları yerelde bu dosyada (şifreli anahtarlarla) tutulur
   const getEnv = () => ({ AI_SETTINGS_FILE: '.planasistan/ai-settings.json', ...loadEnv(mode, '.', ''), ...process.env });
   const middleware = createAiMiddleware(getEnv, { isDev: true });
+  const cloud = createAiMiddleware(getEnv, { mountPath: CLOUD_CONFIG_PATH, handler: handleCloudConfig });
   // Kurum entegrasyonları (Jira, Teams, e-posta) — yayında api/integrations/*
   const integrations = createAiMiddleware(getEnv, {
     isDev: true,
@@ -28,10 +31,12 @@ const aiProxyPlugin = (mode: string): Plugin => {
     configureServer(server) {
       server.middlewares.use('/api/ai', middleware);
       server.middlewares.use('/api/integrations', integrations);
+      server.middlewares.use(CLOUD_CONFIG_PATH, cloud);
     },
     configurePreviewServer(server) {
       server.middlewares.use('/api/ai', middleware);
       server.middlewares.use('/api/integrations', integrations);
+      server.middlewares.use(CLOUD_CONFIG_PATH, cloud);
     },
   };
 };

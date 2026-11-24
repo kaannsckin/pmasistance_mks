@@ -1,4 +1,4 @@
-import { Project, Task, TaskStatus } from '../types';
+import { Project, ProjectSettings, Task, TaskStatus } from '../types';
 import { calculatePertFuzzyPert } from './timeline';
 import { buildSprintWindows } from './taskToAllocation';
 
@@ -36,6 +36,25 @@ const UNASSIGNED = 'Atanmamış';
 /** Görevin sprinte yüklediği efor (gün): PERT. Katılım kapasite tarafında sayılır. */
 export const taskLoadDays = (task: Task): number => calculatePertFuzzyPert(task.time).pert;
 
+export const lastPlannedSprint = (project: Project): number => Math.max(0,
+    ...project.tasks.filter(task => task.includeInSprints !== false).map(task => task.version || 0),
+    ...Object.keys(project.settings.sprintNames || {}).map(Number).filter(Number.isSafeInteger),
+    ...Object.values(project.settings.jiraSprintImports || {}).map(sprint => sprint.localSprint).filter(Number.isSafeInteger));
+
+/** Sprint numaralarının yer değiştirmesi, adları ve Jira kaynak bağlantılarını da taşır. */
+export const shiftSprintSettings = (settings: ProjectSettings, at: number, direction: 1 | -1): ProjectSettings => {
+    const move = (sprint: number) => sprint < at ? sprint : sprint === at && direction === -1 ? undefined : sprint + direction;
+    const sprintNames = Object.fromEntries(Object.entries(settings.sprintNames || {}).flatMap(([key, name]) => {
+        const target = move(Number(key));
+        return target === undefined ? [] : [[target, name]];
+    }));
+    const jiraSprintImports = Object.fromEntries(Object.entries(settings.jiraSprintImports || {}).flatMap(([key, source]) => {
+        const target = move(source.localSprint);
+        return target === undefined ? [] : [[key, { ...source, localSprint: target }]];
+    }));
+    return { ...settings, sprintNames, ...(settings.jiraSprintImports ? { jiraSprintImports } : {}) };
+};
+
 /** Bir sprintte birim başına kapasite (gün): (hafta×5 − test günü) × katılım */
 export const unitCapacities = (project: Project): Map<string, number> => {
     const weeks = project.settings.sprintDuration || 3;
@@ -55,7 +74,7 @@ export const unitCapacities = (project: Project): Map<string, number> => {
  */
 export const buildLanes = (project: Project, extraLanes = 0): SprintLane[] => {
     const planned = project.tasks.filter(t => t.includeInSprints !== false);
-    const maxVersion = Math.max(0, ...planned.map(t => t.version || 0)) + extraLanes;
+    const maxVersion = lastPlannedSprint(project) + extraLanes;
     const windows = buildSprintWindows(project, maxVersion);
     const caps = unitCapacities(project);
 

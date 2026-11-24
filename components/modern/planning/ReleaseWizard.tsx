@@ -22,6 +22,7 @@ import { Icon } from '../icons';
 import { PRIORITY_META } from '../taskMeta';
 import { Field, rowSep } from '../ui';
 import TaskQueryPicker from '../TaskQueryPicker';
+import ReleaseTaskNameInput from './ReleaseTaskNameInput';
 import SimChart, { ChartMarker } from './SimChart';
 import { useReleaseSimulation } from './useReleaseSimulation';
 
@@ -238,7 +239,7 @@ const StepItems: React.FC<{ plan: ReleasePlan; project: Project; me?: string; ca
     const backlog = useMemo(() => {
         const otherItems = (project.releasePlans || []).filter(p => p.id !== plan.id && p.status === 'draft').flatMap(p => p.items);
         const taken = new Set([...otherItems, ...plan.items].map(i => i.sourceTaskId));
-        return project.tasks.filter(t => t.status !== TaskStatus.Done && (t.version || 0) === 0 && t.includeInSprints !== false && !taken.has(t.id));
+        return project.tasks.filter(t => t.status !== TaskStatus.Done && (t.version || 0) === 0 && !t.keyResultId && t.includeInSprints !== false && !taken.has(t.id));
     }, [project.releasePlans, project.tasks, plan.id, plan.items]);
     const sprintNames = project.settings.sprintNames;
     const queryContext = useMemo(() => ({ sprintNames, workPackages: project.workPackages, me }), [sprintNames, project.workPackages, me]);
@@ -246,6 +247,13 @@ const StepItems: React.FC<{ plan: ReleasePlan; project: Project; me?: string; ca
     const selectedPool = useMemo(() => new Set([...(pool || [])].filter(id => backlogById.has(id))), [pool, backlogById]);
     const defaultUnit = project.resources[0]?.unit || '';
     const add = (xs: ReleasePlanItem[]) => update(p => ({ ...p, items: [...p.items, ...xs] }));
+    const link = (id: string, task: Task) => {
+        const picked = itemFromTask(task);
+        update(p => {
+            if (p.items.some(item => item.sourceTaskId === task.id)) return p;
+            return { ...p, items: p.items.map(item => item.id === id ? { ...picked, id, predecessorId: item.predecessorId } : item) };
+        });
+    };
     const hideHint = plan.revealed ? 'Öneriler açıldı; buradaki değişiklik kör tahmini değiştirmez.' : blindEstimate ? 'Kör tahmin açık: kendi tahminlerinizi şimdi girin; öneriler bir sonraki adımda açılır.' : 'Kendi tahmininiz isteğe bağlı; bir sonraki adımda önerilerle karşılaştırılır.';
 
     return (
@@ -295,10 +303,15 @@ const StepItems: React.FC<{ plan: ReleasePlan; project: Project; me?: string; ca
             <div className="flex flex-col gap-3">
                 {plan.items.map((i, k) => (
                     <div key={i.id} className="rounded-xl p-3.5 flex flex-col gap-2.5 border m-sep" style={{ borderStyle: 'solid', borderWidth: 1 }}>
-                        <div className="flex items-center gap-2">
-                            <span className="text-[13px] font-semibold m-text-3 m-tabular w-7">#{k + 1}</span>
-                            <input aria-label={`Kayıt ${k + 1} başlığı`} className="m-input flex-1" disabled={!canEdit} value={i.name} placeholder="Kayıt başlığı" onChange={e => setItem(update, i.id, { name: e.target.value })} />
-                            {i.sourceTaskId && <span className="inline-flex items-center h-6 px-2 rounded-full text-[12px] font-semibold m-tone-hold whitespace-nowrap">Havuzdan</span>}
+                        <div className="flex items-start gap-2">
+                            <span className="text-[13px] font-semibold m-text-3 m-tabular w-7 pt-2.5">#{k + 1}</span>
+                            {canEdit && !i.sourceTaskId ? (
+                                <ReleaseTaskNameInput label={`Kayıt ${k + 1} başlığı`} value={i.name} tasks={backlog}
+                                    onChange={name => setItem(update, i.id, { name })} onPick={task => link(i.id, task)} />
+                            ) : (
+                                <input aria-label={`Kayıt ${k + 1} başlığı`} className="m-input flex-1" disabled={!canEdit} value={i.name} placeholder="Kayıt başlığı" onChange={e => setItem(update, i.id, { name: e.target.value })} />
+                            )}
+                            {i.sourceTaskId && <span className="inline-flex items-center h-6 mt-2 px-2 rounded-full text-[12px] font-semibold m-tone-hold whitespace-nowrap">Havuzdan</span>}
                             {canEdit && <button type="button" className="m-icon-btn" aria-label={`${k + 1}. kaydı sil`} onClick={() => update(p => ({ ...p, items: p.items.filter(x => x.id !== i.id).map(x => (x.predecessorId === i.id ? { ...x, predecessorId: undefined } : x)), milestones: p.milestones.map(m => ({ ...m, itemIds: m.itemIds.filter(id => id !== i.id) })) }))}><Icon name="trash" size={16} /></button>}
                         </div>
                         <textarea aria-label={`Kayıt ${k + 1} açıklaması`} className="m-input py-2" rows={2} disabled={!canEdit} value={i.notes || ''} placeholder="Açıklama (isteğe bağlı)" onChange={e => setItem(update, i.id, { notes: e.target.value || undefined })} />

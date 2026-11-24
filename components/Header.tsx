@@ -245,15 +245,16 @@ const IdentitySwitcher: React.FC<{
   currentPersonId?: string;
   people: HeaderPersonSummary[];
   needsPerson: boolean;
+  cloudLinked?: boolean;
   onOpenProfile: () => void;
-}> = ({ currentRole, currentPersonId, people, needsPerson, onOpenProfile }) => {
+}> = ({ currentRole, currentPersonId, people, needsPerson, cloudLinked, onOpenProfile }) => {
   const activePerson = people.find(p => p.id === currentPersonId);
   const scoped = SCOPED_ROLES.includes(currentRole);
   return (
     <button
       onClick={onOpenProfile}
       className={`h-10 flex items-center gap-2 px-3 bg-white dark:bg-gray-700 rounded-lg border transition-colors ${needsPerson ? 'border-amber-400 text-amber-600' : 'border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-500'}`}
-      title="Profil değiştir"
+      title={cloudLinked ? 'Bulut hesabı' : 'Profil değiştir'}
       aria-haspopup="dialog"
     >
       <i aria-hidden="true" className={`fa-solid ${ROLE_ICONS[currentRole]} text-[11px]`} style={{ color: 'var(--app-primary)' }}></i>
@@ -385,12 +386,12 @@ const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSett
             <button
               onClick={onOpenCloudSync}
               className="w-10 h-10 flex items-center justify-center bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500 transition-colors relative"
-              title={cloudLinked ? 'Bulut senkronizasyonu bağlı' : 'Bulut senkronizasyonu (Supabase)'}
+              title={cloudLinked ? 'Bulut veritabanı bağlı' : 'Bulut veritabanı (Supabase)'}
             >
               <i aria-hidden="true" className="fa-solid fa-cloud text-[13px]" style={cloudLinked ? { color: 'var(--app-primary)' } : { color: '#9ca3af' }}></i>
               {cloudLinked && <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-emerald-400 border border-white dark:border-gray-700"></span>}
             </button>
-            <IdentitySwitcher currentRole={currentRole} currentPersonId={currentPersonId} people={people} needsPerson={identityNeedsPerson} onOpenProfile={onOpenProfile} />
+            <IdentitySwitcher currentRole={currentRole} currentPersonId={currentPersonId} people={people} needsPerson={identityNeedsPerson} cloudLinked={cloudLinked} onOpenProfile={onOpenProfile} />
             {onSaveProject && onLoadProject && <div className="hidden sm:flex items-center bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
               <input type="file" ref={fileInputRef} className="hidden" accept=".json" onChange={(e) => {
                 const file = e.target.files?.[0];

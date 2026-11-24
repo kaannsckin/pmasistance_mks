@@ -7,7 +7,7 @@ import { runMonteCarlo } from './monteCarlo';
 import { buildSimulation } from './simulationInput';
 import {
     applyCommit, autoMilestones, BASELINE_ITERATIONS, baselineGroups, buildReleaseSimulation, choiceOf, commitGroups, commitManualReleasePlan, commitReleasePlan, createReleasePlan, decisionOf, effortOf, finalizeCommit, groupOf, itemFromTask, newItem,
-    parsePastedItems, priorityOf, RELEASE_GROUP, releaseDates, sanitizeMilestones, suggestDescope, virtualProject, withReference,
+    matchReleaseTasks, parsePastedItems, priorityOf, RELEASE_GROUP, releaseDates, sanitizeMilestones, suggestDescope, virtualProject, withReference,
 } from './releasePlan';
 
 const NOW = new Date('2026-10-07T10:00:00');
@@ -29,6 +29,18 @@ const plan = (items = [
 ]): ReleasePlan => ({ ...createReleasePlan(project(), NOW), name: 'Sürüm 2.0', items });
 
 describe('kayıt girişi', () => {
+    it('mevcut görevi Türkçe başlıktan veya Jira anahtarından bulur, tam eşleşmeyi öne alır', () => {
+        const tasks = [
+            task('a', { name: 'İlk iş akışını hazırla', jiraId: 'MKS-11' }),
+            task('b', { name: 'İş akışı', jiraId: 'MKS-12' }),
+            task('c', { name: 'İş akışı ekranı', jiraId: 'MKS-13' }),
+        ];
+        expect(matchReleaseTasks(tasks, 'IS  AKISI').map(t => t.id)).toEqual(['b', 'c', 'a']);
+        expect(matchReleaseTasks(tasks, 'mks-12').map(t => t.id)).toEqual(['b']);
+        expect(matchReleaseTasks(tasks, 'akis mks-13').map(t => t.id)).toEqual(['c']);
+        expect(matchReleaseTasks(tasks, 'eşleşmeyen görev')).toEqual([]);
+    });
+
     it('Excel (sekme) yapıştırmada başlık satırı sütunları eşler', () => {
         const items = parsePastedItems('Başlık\tAçıklama\tTür\tÖncelik\tTahmin\nGiriş hatası\tOturum düşüyor\tBug\tHigh\t2,5\nRapor\t\tStory\tLow\t', { unit: 'Yazılım' });
         expect(items).toHaveLength(2);

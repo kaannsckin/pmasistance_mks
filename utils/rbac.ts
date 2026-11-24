@@ -29,6 +29,8 @@ export interface Identity {
     personId?: string;
     /** Rolün geçerli yetkileri (admin değişiklikleriyle); yoksa varsayılanlar */
     perms?: ReadonlySet<PermissionKey>;
+    projectIds?: readonly string[];
+    fullCloudProjectAccess?: boolean;
 }
 
 /** Çalışma alanındaki yetki değişiklikleriyle birlikte bir kimlik kurar */
@@ -40,8 +42,19 @@ export const identityFor = (ws: Pick<WorkspaceData, 'rolePermissions'>, role: Us
 
 type WsLike = Pick<WorkspaceData, 'people' | 'projects' | 'allocations'>;
 
-export const identityOf = (ws: Pick<WorkspaceData, 'currentRole' | 'currentPersonId' | 'rolePermissions'>): Identity =>
-    identityFor(ws, ws.currentRole || 'py', ws.currentPersonId);
+const SCOPED_PERMISSIONS = new Set<PermissionKey>(['portfolio.viewAll', 'screen.executive', 'notes.private', 'ai.use']);
+
+export const identityOf = (ws: Pick<WorkspaceData, 'currentRole' | 'currentPersonId' | 'rolePermissions' | 'cloudMembership'>): Identity => {
+    const membership = ws.cloudMembership;
+    const identity = identityFor(ws, membership?.role ?? ws.currentRole ?? 'py', membership ? membership.personId ?? undefined : ws.currentPersonId);
+    if (!membership) return identity;
+    if (membership.projectIds === null) return { ...identity, fullCloudProjectAccess: true };
+    return {
+        ...identity,
+        projectIds: membership.projectIds,
+        perms: new Set([...identity.perms!].filter(permission => SCOPED_PERMISSIONS.has(permission))),
+    };
+};
 
 /** Portföyün tamamını görebilir mi (rol adı → varsayılan yetki, kimlik → geçerli yetki) */
 export const seesAllProjects = (who: UserRole | PermissionHolder | undefined): boolean => canFor(who, 'portfolio.viewAll');
@@ -69,7 +82,8 @@ export const managesPerson = (ws: WsLike, id: Identity, personId: string): boole
 
 /** Görünür proje id kümesi (kapsam) */
 export const visibleProjectIds = (ws: WsLike, id: Identity): Set<string> => {
-    if (can(id, 'portfolio.viewAll')) return new Set(ws.projects.map(p => p.id));
+    if (id.projectIds) return new Set(ws.projects.filter(p => id.projectIds!.includes(p.id)).map(p => p.id));
+    if (id.fullCloudProjectAccess || can(id, 'portfolio.viewAll')) return new Set(ws.projects.map(p => p.id));
     if (id.role === 'py') return new Set(ws.projects.filter(p => ownsProject(p, id)).map(p => p.id));
     if (id.role === 'bolum_sorumlu') {
         const dept = managedDepartmentCode(ws, id);
@@ -92,7 +106,22 @@ export const visiblePersonIds = (ws: WsLike, id: Identity): Set<string> => {
 /** Proje içeriğini (görev/risk/hedef/RAG/durum) düzenleyebilir mi? → yalnız sahip PM */
 export const canEditProjectContent = (ws: WsLike, id: Identity, projectId: string): boolean => {
     const project = ws.projects.find(p => p.id === projectId);
-    return !!project && ownsProject(project, id);
+    return !!project && (!id.projectIds || id.projectIds.includes(projectId)) && ownsProject(project, id);
+};
+
+export const keepScopedWorkspaceEdits = (before: WorkspaceData, after: WorkspaceData): WorkspaceData => {
+    const identity = identityOf(before);
+    if (!identity.projectIds) return after;
+    const proposed = new Map(after.projects.map(project => [project.id, project]));
+    return {
+        ...before,
+        activeProjectId: after.activeProjectId,
+        settings: after.settings,
+        projects: before.projects.map(project => {
+            const changed = proposed.get(project.id);
+            return changed && changed.pmPersonId === project.pmPersonId && canEditProjectContent(before, identity, project.id) ? changed : project;
+        }),
+    };
 };
 
 /** Yeni proje oluşturabilir mi? */
@@ -108,6 +137,7 @@ export const canAssignProjectOwner = (ws: WsLike, id: Identity, projectId: strin
  *  - bölüm sorumlusu: bölümü personelinin tahsisini (tüm projeler)
  */
 export const canEditAllocationCell = (ws: WsLike, id: Identity, projectId: string, personId: string): boolean => {
+    if (id.projectIds) return false;
     const project = ws.projects.find(p => p.id === projectId);
     if (project && ownsProject(project, id)) return true;
     if (managesPerson(ws, id, personId)) return true;
@@ -124,6 +154,7 @@ export const canEditActualCell = (ws: WsLike, id: Identity, projectId: string, p
 
 /** Bu projeye yeni tahsis satırı ekleyebilecek mi (kişiden bağımsız ön kontrol) */
 export const canAddAllocationToProject = (ws: WsLike, id: Identity, projectId: string): boolean => {
+    if (id.projectIds) return false;
     const project = ws.projects.find(p => p.id === projectId);
     if (project && ownsProject(project, id)) return true;
     // Bölüm sorumlusu bölümündeki bir kişi için ekleyebilir → satır formunda kişi bazlı doğrulanır

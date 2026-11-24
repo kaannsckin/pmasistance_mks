@@ -131,7 +131,7 @@ const KanbanView: React.FC<KanbanViewProps> = ({ tasks, resources, sprintDuratio
 
   const calculatedSprints = useMemo((): Sprint[] => {
     const tasksForKanban = tasks.filter(t => t.includeInSprints !== false);
-    const maxVersionFromTasks = Math.max(0, ...tasksForKanban.map(t => t.version || 0));
+    const maxVersionFromTasks = Math.max(0, ...tasksForKanban.map(t => t.version || 0), ...Object.keys(sprintNames).map(Number).filter(Number.isSafeInteger));
     const maxVersion = maxVersionFromTasks + extraSprints;
     const sprintMap = new Map<number, Sprint>();
     
