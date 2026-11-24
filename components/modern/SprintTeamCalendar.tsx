@@ -3,11 +3,12 @@ import { Leave, Person, Project, Task } from '../../types';
 import { JiraIssueWorklog } from '../../utils/integrations';
 import { Identity } from '../../utils/rbac';
 import { getWorklogTimeZone } from '../../utils/workforce';
-import { formatRange, toIsoDay } from '../../utils/calendarRange';
-import { buildSprintTeamCalendar, indexSprintWorklogs, SprintLoadCell } from '../../utils/sprintTeamCalendar';
+import { formatRange, parseIsoDay, toIsoDay } from '../../utils/calendarRange';
+import { buildSprintTeamCalendar, indexSprintWorklogs, SprintLoadCell, summarizeSprintTasks } from '../../utils/sprintTeamCalendar';
 import { SprintLane } from '../../utils/timelinePlan';
 import { fmtHours } from './WorkforceParts';
-import { sprintLabel } from './taskMeta';
+import { COLUMN_META, columnOf, sprintLabel } from './taskMeta';
+import TaskKeyButton from './TaskKeyButton';
 import { Field, Sheet } from './ui';
 import { useJiraTimesheet } from './useJiraTimesheet';
 
@@ -33,6 +34,11 @@ const weekday = new Intl.DateTimeFormat('tr-TR', { weekday: 'short' });
 const number = new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 1 });
 const sum = (numbers: number[]) => numbers.reduce((total, value) => total + value, 0);
 
+const shortDay = (value?: string) => {
+    const date = value ? (parseIsoDay(value.slice(0, 10)) || new Date(value)) : undefined;
+    return date && !Number.isNaN(date.getTime()) ? dayLabel.format(date) : undefined;
+};
+
 const capacityTone = (cell: SprintLoadCell) => {
     if (!cell.hours || cell.capacity === undefined) return 'm-fill-2';
     if (cell.hours > cell.capacity + 1e-6) return 'm-tone-bad';
@@ -42,6 +48,8 @@ const capacityTone = (cell: SprintLoadCell) => {
 const SprintTeamCalendar = ({ project, lane, people, leaves, identity, selection, onSelection, onClose, onViewTask }: Props) => {
     const model = useMemo(() => buildSprintTeamCalendar(project, lane, people, leaves), [project, lane, people, leaves]);
     const [refresh, setRefresh] = useState(0);
+    // Açılışta görev listesi; "Tempo" günlük plan/kayıt ızgarasını gösterir.
+    const [view, setView] = useState<'tasks' | 'tempo'>('tasks');
     const [focus, setFocus] = useState<{ row: string; index: number } | null>(null);
     const detailRef = useRef<HTMLElement>(null);
     const timeZone = getWorklogTimeZone();
@@ -74,7 +82,8 @@ const SprintTeamCalendar = ({ project, lane, people, leaves, identity, selection
 
     return (
         <Sheet title={title} subtitle={interval} xxl onClose={onClose}>
-            <div className="grid gap-3 sm:grid-cols-2 sm:max-w-xl">
+            <div className="flex flex-wrap items-end gap-3">
+            <div className="grid gap-3 sm:grid-cols-2 flex-1 min-w-0 sm:max-w-xl">
                 <Field label="Bileşen ekibi" htmlFor="sprint-calendar-team">
                     <select id="sprint-calendar-team" className="m-input" value={component} onChange={e => onSelection({ component: e.target.value, person: '' })}>
                         <option value="">Tüm ekipler</option>
@@ -88,6 +97,11 @@ const SprintTeamCalendar = ({ project, lane, people, leaves, identity, selection
                     </select>
                 </Field>
             </div>
+            <div className="m-segmented" role="group" aria-label="Görünüm">
+                <button type="button" className="m-segment" aria-pressed={view === 'tasks'} onClick={() => setView('tasks')}>Görevler</button>
+                <button type="button" className="m-segment" aria-pressed={view === 'tempo'} onClick={() => setView('tempo')}>Tempo</button>
+            </div>
+            </div>
             <dl className="m-0 flex flex-wrap gap-3" aria-label="Sprint yoğunluk özeti">
                 <div className="rounded-xl m-fill-2 px-3 py-2"><dt className="text-[13px] m-text-3">Sprint yükü</dt><dd className="m-0 font-semibold m-tabular">{fmtHours(hours)}</dd></div>
                 <div className="rounded-xl m-fill-2 px-3 py-2"><dt className="text-[13px] m-text-3">{partialCapacity ? 'Bilinen kapasite' : 'Kapasite'}</dt><dd className="m-0 font-semibold m-tabular">{capacities.length ? fmtHours(sum(capacities)) : '—'}</dd></div>
@@ -99,7 +113,74 @@ const SprintTeamCalendar = ({ project, lane, people, leaves, identity, selection
                     </div>
                 )}
             </dl>
-            {rows.length > 0 ? (
+            {rows.length > 0 && view === 'tasks' ? (
+                <>
+                    {rows.map(row => {
+                        // Başlayan/planlanan önce, tarihsizler sonda; ISO gün dizgesi düz karşılaştırılır.
+                        const startOf = (item: { startedAt?: string; plannedStart?: string }) => item.startedAt?.slice(0, 10) || item.plannedStart || '\uffff';
+                        const items = summarizeSprintTasks(row, model.days, index ?? undefined)
+                            .sort((a, b) => (startOf(a) < startOf(b) ? -1 : startOf(a) > startOf(b) ? 1 : a.task.name.localeCompare(b.task.name, 'tr')));
+                        if (!items.length && !selected) return null;
+                        const plan = sum(items.map(item => item.estimate ?? 0));
+                        const spent = index ? sum(items.map(item => item.logged ?? 0)) : undefined;
+                        return (
+                            <section key={row.key} aria-label={`${row.name} sprint görevleri`} className="min-w-0 flex flex-col gap-2">
+                                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                                    <h3 className="m-0 text-[16px] font-semibold">{row.name}</h3>
+                                    <span className="text-[13px] m-text-3 m-tabular">{items.length} görev · Tahmin {fmtHours(plan)}{spent !== undefined ? ` · Sprintte kayıt ${fmtHours(spent)}` : ''}</span>
+                                </div>
+                                {items.length === 0 ? <p className="m-0 text-[14px] m-text-3">Bu sprintte atanan görev yok.</p> : (
+                                    <div className="overflow-x-auto rounded-xl m-surface" tabIndex={0} aria-label={`${row.name} görev tablosu`}>
+                                        <table className="w-full min-w-[760px] text-[14px] border-collapse">
+                                            <thead>
+                                                <tr className="text-left text-[12px] m-text-3">
+                                                    <th scope="col" className="px-3 py-2 font-semibold">Görev</th>
+                                                    <th scope="col" className="px-3 py-2 font-semibold">Durum</th>
+                                                    <th scope="col" className="px-3 py-2 font-semibold text-right">Efor tahmini</th>
+                                                    <th scope="col" className="px-3 py-2 font-semibold">Başlangıç</th>
+                                                    <th scope="col" className="px-3 py-2 font-semibold text-right">Sprintte kayıt</th>
+                                                    <th scope="col" className="px-3 py-2 font-semibold">Son kayıt</th>
+                                                    <th scope="col" className="px-3 py-2 font-semibold text-right">Jira kalan</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {items.map(item => {
+                                                    const ratio = item.logged !== undefined && item.estimate ? item.logged / item.estimate : undefined;
+                                                    return (
+                                                        <tr key={item.task.id} className="border-t m-sep align-top">
+                                                            <td className="px-3 py-2">
+                                                                <span className="flex items-start gap-2 min-w-0">
+                                                                    <TaskKeyButton task={item.task} onOpen={() => openTask(item.task)} />
+                                                                    <span className="min-w-0 break-words pt-1">{item.task.name}
+                                                                        {component && row.tasks.find(t => t.task.id === item.task.id)?.components.includes(component) && <span className="ml-2 m-accent text-[12px]">Seçili bileşen</span>}</span>
+                                                                </span>
+                                                            </td>
+                                                            <td className="px-3 py-2 pt-3 whitespace-nowrap m-text-2">{item.task.jiraStatus || COLUMN_META[columnOf(item.task.status)].label}</td>
+                                                            <td className="px-3 py-2 pt-3 text-right m-tabular whitespace-nowrap">{item.estimate === undefined ? <span className="m-ink-warn">Tahmin yok</span> : fmtHours(item.estimate)}</td>
+                                                            <td className="px-3 py-2 pt-3 whitespace-nowrap">{item.startedAt ? shortDay(item.startedAt) : item.plannedStart ? <span className="m-text-3">Plan {shortDay(item.plannedStart)}</span> : <span className="m-text-3">—</span>}</td>
+                                                            <td className="px-3 py-2 pt-3 text-right m-tabular whitespace-nowrap">
+                                                                {item.logged === undefined ? <span className="m-text-3">{worklogs.status === 'loading' ? '…' : '—'}</span> : (
+                                                                    <span className={ratio !== undefined && ratio > 1 ? 'm-ink-bad' : undefined}>{fmtHours(item.logged)}{ratio !== undefined && <span className="m-text-3"> · %{Math.round(ratio * 100)}</span>}</span>
+                                                                )}
+                                                            </td>
+                                                            <td className="px-3 py-2 pt-3 whitespace-nowrap m-text-2">{shortDay(item.lastLog) || <span className="m-text-3">—</span>}</td>
+                                                            <td className="px-3 py-2 pt-3 text-right m-tabular whitespace-nowrap">{item.remaining === undefined ? <span className="m-text-3">—</span> : fmtHours(item.remaining)}</td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                            </section>
+                        );
+                    })}
+                    {!selected && rows.every(row => !row.tasks.length) && <p className="m-0 text-[14px] m-text-3">Bu sprintte atanan görev yok.</p>}
+                    <p className="m-0 text-[13px] m-text-3">Başlangıç, görevin "Süreçte"ye geçtiği gündür; henüz başlamadıysa planın ilk günü gösterilir. Sprintte kayıt, sprint tarihlerinde kişinin göreve Jira'da girdiği süredir; yüzde efor tahminine oranıdır. Günlük dağılım için Tempo'ya geçin.
+                        {worklogs.status === 'off' && ' Proje Jira\'ya bağlı olmadığı için çalışma kaydı gösterilmez.'}
+                        {worklogs.status === 'error' && <span className="m-ink-warn"> Jira kayıtları alınamadı: {worklogs.error}</span>}</p>
+                </>
+            ) : rows.length > 0 ? (
                 <>
                     <div className="overflow-x-auto rounded-xl m-surface" tabIndex={0} aria-label="Kişi ve güne göre yoğunluk tablosu">
                         <table className="border-separate border-spacing-1 text-[13px]" aria-label="Günlük sprint yoğunluğu">
@@ -167,10 +248,11 @@ const SprintTeamCalendar = ({ project, lane, people, leaves, identity, selection
                                         {plannedTasks.length ? (
                                             <ul className="m-0 list-none p-0 grid gap-1">
                                                 {plannedTasks.map(({ task, hours: h }) => (
-                                                    <li key={task!.id}><button type="button" className="m-row-link w-full rounded-lg m-fill-2 px-3 py-2 text-left flex justify-between gap-2" onClick={() => openTask(task!)}>
-                                                        <span className="min-w-0 break-words">{task!.jiraId && <span className="m-text-3 mr-2">{task!.jiraId}</span>}{task!.name}</span>
-                                                        <span className="m-text-3 text-[13px] m-tabular whitespace-nowrap">{fmtHours(h)}</span>
-                                                    </button></li>
+                                                    <li key={task!.id} className="rounded-lg m-fill-2 px-3 py-2 flex items-start gap-2">
+                                                        <TaskKeyButton task={task!} onOpen={() => openTask(task!)} />
+                                                        <span className="min-w-0 flex-1 break-words pt-1">{task!.name}</span>
+                                                        <span className="m-text-3 text-[13px] m-tabular whitespace-nowrap pt-1.5">{fmtHours(h)}</span>
+                                                    </li>
                                                 ))}
                                             </ul>
                                         ) : <p className="m-0 text-[14px] m-text-3">{focusDay.kind === 'work' ? 'Bu güne dağıtılan görev yok.' : focusDay.kind === 'test' ? 'Test günü; geliştirme planlanmaz.' : 'Tatil günü.'}</p>}
@@ -185,19 +267,15 @@ const SprintTeamCalendar = ({ project, lane, people, leaves, identity, selection
                                                     {logs.map((entry, i) => {
                                                         const task = tasksByKey.get(entry.issueKey.toUpperCase());
                                                         const started = entry.started ? new Date(entry.started) : undefined;
-                                                        const body = (
-                                                            <>
-                                                                <span className="flex justify-between gap-2">
-                                                                    <span className="min-w-0 break-words"><span className="m-text-3 mr-2">{entry.issueKey}</span>{task?.name || entry.summary || ''}</span>
-                                                                    <span className="m-tabular text-[13px] whitespace-nowrap">{started && !Number.isNaN(started.getTime()) ? `${clock.format(started)} · ` : ''}{fmtHours(entry.hours)}</span>
-                                                                </span>
-                                                                {entry.comment && <span className="block text-[13px] m-text-3 whitespace-pre-line break-words">{entry.comment}</span>}
-                                                            </>
-                                                        );
                                                         return (
-                                                            <li key={entry.id || `${entry.issueKey}-${i}`}>
-                                                                {task ? <button type="button" className="m-row-link w-full rounded-lg m-fill-2 px-3 py-2 text-left flex flex-col gap-0.5" onClick={() => openTask(task)}>{body}</button>
-                                                                    : <div className="rounded-lg m-fill-2 px-3 py-2 flex flex-col gap-0.5">{body}</div>}
+                                                            <li key={entry.id || `${entry.issueKey}-${i}`} className="rounded-lg m-fill-2 px-3 py-2 flex items-start gap-2">
+                                                                {task ? <TaskKeyButton task={task} onOpen={() => openTask(task)} />
+                                                                    : <span className="inline-flex items-center min-h-[32px] px-2.5 rounded-lg m-fill text-[13px] font-semibold m-tabular whitespace-nowrap" title="Bu kayıt projede yok">{entry.issueKey}</span>}
+                                                                <span className="min-w-0 flex-1 flex flex-col gap-0.5 pt-1">
+                                                                    <span className="break-words">{task?.name || entry.summary || ''}</span>
+                                                                    {entry.comment && <span className="text-[13px] m-text-3 whitespace-pre-line break-words">{entry.comment}</span>}
+                                                                </span>
+                                                                <span className="m-tabular text-[13px] whitespace-nowrap pt-1.5">{started && !Number.isNaN(started.getTime()) ? `${clock.format(started)} · ` : ''}{fmtHours(entry.hours)}</span>
                                                             </li>
                                                         );
                                                     })}
@@ -223,29 +301,6 @@ const SprintTeamCalendar = ({ project, lane, people, leaves, identity, selection
                 <p className="m-0 text-[13px] m-text-3">
                     {[withoutEstimate ? `${withoutEstimate} atanan görevin süre tahmini yok` : '', unassigned.length ? `${unassigned.length} atanmamış görev` : ''].filter(Boolean).join(' · ')}
                 </p>
-            )}
-            {selected && (
-                <section aria-label={`${selected.name} sprint görevleri`} className="min-w-0">
-                    <h3 className="m-0 mb-2 text-[15px] font-semibold">{selected.name} · Sprint görevleri</h3>
-                    {selected.tasks.length === 0 ? <p className="m-0 text-[14px] m-text-3">Bu sprintte atanan görev yok.</p> : (
-                        <ul className="m-0 list-none p-0 grid gap-1">
-                            {selected.tasks.map(({ task, hours: estimate, components }) => (
-                                <li key={task.id}>
-                                    <button type="button" className="m-row-link w-full rounded-xl m-fill-2 px-3 py-2 text-left flex flex-wrap justify-between gap-1.5"
-                                        onClick={() => { onClose(); onViewTask(task); }}>
-                                        <span className="min-w-0 break-words">{task.jiraId && <span className="m-text-3 mr-2">{task.jiraId}</span>}{task.name}
-                                            {component && components.includes(component) && <span className="ml-2 m-accent text-[12px]">Seçili bileşen</span>}</span>
-                                        <span className="m-text-3 text-[13px] m-tabular">{estimate === undefined ? 'Tahmin yok' : `Plan ${fmtHours(estimate)}`}
-                                            {index && task.jiraId && (() => {
-                                                const spent = sum([...(index.byRow.get(selected.key)?.values() || [])].flat().filter(entry => entry.issueKey.toUpperCase() === task.jiraId.toUpperCase()).map(entry => entry.hours));
-                                                return spent > 0 ? ` · Kayıt ${fmtHours(spent)}` : '';
-                                            })()}</span>
-                                    </button>
-                                </li>
-                            ))}
-                        </ul>
-                    )}
-                </section>
             )}
         </Sheet>
     );

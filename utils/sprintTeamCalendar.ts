@@ -161,3 +161,38 @@ export const indexSprintWorklogs = (rowKeys: Iterable<string>, entries: JiraIssu
     }
     return { byRow, unmatched };
 };
+
+export interface SprintTaskSummary {
+    task: Task;
+    /** Tahmini efor (saat); tahmin yoksa tanımsız */
+    estimate?: number;
+    /** Gerçek başlangıç (ilk "Süreçte" geçişi) */
+    startedAt?: string;
+    /** Planın göreve saat ayırdığı ilk gün */
+    plannedStart?: string;
+    /** Sprint tarihlerinde bu kişinin göreve girdiği saat; Jira kayıtları yoksa tanımsız */
+    logged?: number;
+    lastLog?: string;
+    /** Jira kalan süresi (saat) */
+    remaining?: number;
+}
+
+/** Kişinin sprint görevleri: tahmin, başlangıç ve Jira çalışma kaydı özeti. */
+export const summarizeSprintTasks = (row: Pick<SprintLoadPerson, 'key' | 'tasks' | 'cells'>, days: { day: string }[], worklogs?: SprintWorklogIndex): SprintTaskSummary[] => {
+    const logs = worklogs ? [...(worklogs.byRow.get(row.key)?.values() || [])].flat() : undefined;
+    return row.tasks.map(({ task, hours }) => {
+        const firstPlanned = row.cells.findIndex(cell => (cell.byTask.get(task.id) || 0) > 0);
+        const key = task.jiraId?.trim().toUpperCase();
+        const own = logs && key ? logs.filter(entry => entry.issueKey.toUpperCase() === key) : [];
+        const remaining = task.remainingEstimateHours;
+        return {
+            task,
+            estimate: hours,
+            startedAt: task.startedAt,
+            plannedStart: firstPlanned >= 0 ? days[firstPlanned]?.day : undefined,
+            logged: logs ? own.reduce((total, entry) => total + entry.hours, 0) : undefined,
+            lastLog: own.reduce<string | undefined>((last, entry) => (!last || entry.date > last ? entry.date : last), undefined),
+            remaining: remaining !== undefined && Number.isFinite(remaining) && remaining >= 0 ? remaining : undefined,
+        };
+    });
+};

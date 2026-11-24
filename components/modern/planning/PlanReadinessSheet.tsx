@@ -6,6 +6,7 @@ import {
 } from '../../../utils/planning/planReadiness';
 import { Icon } from '../icons';
 import { Sheet } from '../ui';
+import TaskKeyButton from '../TaskKeyButton';
 
 interface Draft { days: string; component: string; resourceName: string }
 
@@ -102,9 +103,8 @@ const PlanReadinessSheet: React.FC<PlanReadinessSheetProps> = ({ project, readin
                     return (
                         <section key={task.id} aria-label={task.name} className="m-fill-2 rounded-xl px-4 py-3 flex flex-col gap-2.5">
                             <div className="flex flex-wrap items-center gap-2">
-                                <button type="button" className="m-row-link text-left text-[15px] font-semibold m-text min-w-0 flex-1 truncate" onClick={() => onViewTask(task)}>
-                                    {task.jiraId ? `${task.jiraId} · ` : ''}{task.name}
-                                </button>
+                                <TaskKeyButton task={task} onOpen={() => onViewTask(task)} />
+                                <span className="text-[15px] font-semibold m-text min-w-0 flex-1 truncate">{task.name}</span>
                                 {issues.map(issue => <span key={issue} className="inline-flex items-center h-6 px-2 rounded-full text-[12px] font-semibold m-tone-warn">{PLAN_READINESS_LABELS[issue]}</span>)}
                             </div>
                             <div className="grid gap-2.5 sm:grid-cols-3">

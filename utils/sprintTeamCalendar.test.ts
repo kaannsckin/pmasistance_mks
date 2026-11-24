@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Person, Task, TaskStatus } from '../types';
-import { buildSprintTeamCalendar, indexSprintWorklogs } from './sprintTeamCalendar';
+import { buildSprintTeamCalendar, indexSprintWorklogs, summarizeSprintTasks } from './sprintTeamCalendar';
 import { buildLanes } from './timelinePlan';
 import { createProject } from './workspace';
 
@@ -70,5 +70,29 @@ describe('sprint ekip takvimi', () => {
         expect(index.byRow.get('ayşe demir')?.get('2026-11-23')?.map(e => e.hours)).toEqual([2, 1.5]);
         expect(index.byRow.get('ali can')?.get('2026-11-24')?.map(e => e.hours)).toEqual([3]);
         expect(index.unmatched).toBe(2);
+    });
+
+    it('kişinin sprint görevlerini tahmin, başlangıç ve kayıt özetiyle listeler', () => {
+        const project = createProject('Plan');
+        project.settings = { ...project.settings, projectStartDate: '2026-11-23', sprintDuration: 1, globalTestDays: 1 };
+        project.resources = [{ id: 'a', name: 'Ali Can', unit: 'U300', title: '', participation: 100 }];
+        project.tasks = [
+            task('a', 'Ali Can', 1, { jiraId: 'mks-1', startedAt: '2026-11-20T08:00:00Z', remainingEstimateHours: 3 }),
+            task('b', 'Ali Can', 0, { jiraId: 'MKS-2', dueDate: '2026-11-25' }),
+            task('c', 'Ali Can', 2, { dueDate: '2026-11-25' }),
+        ];
+        const calendar = buildSprintTeamCalendar(project, buildLanes(project)[1], [], []);
+        const [row] = calendar.rows;
+        const logs = indexSprintWorklogs([row.key], [
+            { issueKey: 'MKS-1', author: 'Ali Can', date: '2026-11-24', hours: 2 },
+            { issueKey: 'MKS-1', author: 'Ali Can', date: '2026-11-26', hours: 1 },
+            { issueKey: 'MKS-2', author: 'Ali Can', date: '2026-11-23', hours: 4 },
+        ], []);
+        expect(summarizeSprintTasks(row, calendar.days, logs)).toEqual([
+            expect.objectContaining({ estimate: 8, startedAt: '2026-11-20T08:00:00Z', plannedStart: '2026-11-23', logged: 3, lastLog: '2026-11-26', remaining: 3 }),
+            expect.objectContaining({ estimate: undefined, plannedStart: undefined, logged: 4, lastLog: '2026-11-23' }),
+            expect.objectContaining({ estimate: 16, plannedStart: '2026-11-23', logged: 0, lastLog: undefined }),
+        ]);
+        expect(summarizeSprintTasks(row, calendar.days)[0].logged).toBeUndefined();
     });
 });
