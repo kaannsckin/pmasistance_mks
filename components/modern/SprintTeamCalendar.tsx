@@ -4,7 +4,7 @@ import { JiraIssueWorklog } from '../../utils/integrations';
 import { Identity } from '../../utils/rbac';
 import { getWorklogTimeZone } from '../../utils/workforce';
 import { formatRange, parseIsoDay, toIsoDay } from '../../utils/calendarRange';
-import { buildSprintTeamCalendar, indexSprintWorklogs, SprintLoadCell, summarizeSprintTasks } from '../../utils/sprintTeamCalendar';
+import { buildSprintTeamCalendar, indexSprintWorklogs, SprintLoadCell, SprintPoolFit, sprintTaskPool, summarizeSprintTasks } from '../../utils/sprintTeamCalendar';
 import { SprintLane } from '../../utils/timelinePlan';
 import { fmtHours } from './WorkforceParts';
 import { COLUMN_META, columnOf, sprintLabel } from './taskMeta';
@@ -37,6 +37,12 @@ const sum = (numbers: number[]) => numbers.reduce((total, value) => total + valu
 const shortDay = (value?: string) => {
     const date = value ? (parseIsoDay(value.slice(0, 10)) || new Date(value)) : undefined;
     return date && !Number.isNaN(date.getTime()) ? dayLabel.format(date) : undefined;
+};
+
+const FIT_LABEL: Record<SprintPoolFit, { text: string; tone: string }> = {
+    fits: { text: 'Yetişir', tone: 'm-tone-ok' },
+    late: { text: 'Sprint sonuna yetişmez', tone: 'm-tone-bad' },
+    unknown: { text: 'Hesaplanamıyor', tone: 'm-tone-hold' },
 };
 
 const capacityTone = (cell: SprintLoadCell) => {
@@ -233,7 +239,9 @@ const SprintTeamCalendar = ({ project, lane, people, leaves, identity, selection
                     </div>
                     {focusRow && focusDay && (() => {
                         const cell = focusRow.cells[focus!.index];
-                        const plannedTasks = [...cell.byTask].map(([id, hours]) => ({ task: focusRow.tasks.find(item => item.task.id === id)?.task, hours })).filter(item => item.task);
+                        // Worklog'lar henüz gelmediyse havuz yalnız durum ve yaşam döngüsü tarihleriyle hesaplanır.
+                        const pool = sprintTaskPool(focusRow, model.days, focus!.index, index ?? undefined);
+                        const late = pool.items.filter(item => item.fit === 'late').length;
                         const logs = logsOf(focusRow.key, focusDay.day);
                         return (
                             <section ref={detailRef} aria-label={`${focusRow.name}, ${dayLabel.format(focusDay.date)} ayrıntısı`} className="rounded-xl m-surface p-4 flex flex-col gap-3">
@@ -244,18 +252,30 @@ const SprintTeamCalendar = ({ project, lane, people, leaves, identity, selection
                                 </div>
                                 <div className="grid gap-4 md:grid-cols-2">
                                     <div className="min-w-0">
-                                        <h4 className="m-0 mb-1.5 text-[13px] font-semibold m-text-2">O gün için planlanan</h4>
-                                        {plannedTasks.length ? (
+                                        <h4 className="m-0 text-[13px] font-semibold m-text-2">Sprintte görev havuzu</h4>
+                                        <p className="m-0 mb-1.5 text-[13px] m-text-3 m-tabular">
+                                            {pool.items.length} görev başlamadı · Sprint sonuna kalan kapasite {pool.available === undefined ? 'bilinmiyor' : fmtHours(pool.available)}
+                                            {pool.inProgress > 0 && ` · Süren işlerin kalanı ${fmtHours(pool.inProgress)}`}
+                                            {late > 0 && <span className="m-ink-bad font-semibold"> · {late} görev yetişmez</span>}
+                                        </p>
+                                        {pool.items.length ? (
                                             <ul className="m-0 list-none p-0 grid gap-1">
-                                                {plannedTasks.map(({ task, hours: h }) => (
-                                                    <li key={task!.id} className="rounded-lg m-fill-2 px-3 py-2 flex items-start gap-2">
-                                                        <TaskKeyButton task={task!} onOpen={() => openTask(task!)} />
-                                                        <span className="min-w-0 flex-1 break-words pt-1">{task!.name}</span>
-                                                        <span className="m-text-3 text-[13px] m-tabular whitespace-nowrap pt-1.5">{fmtHours(h)}</span>
+                                                {pool.items.map(({ task, estimate, fit }) => (
+                                                    <li key={task.id} className="rounded-lg m-fill-2 px-3 py-2 flex items-start gap-2">
+                                                        <TaskKeyButton task={task} onOpen={() => openTask(task)} />
+                                                        <span className="min-w-0 flex-1 flex flex-col gap-1 pt-1">
+                                                            <span className="break-words">{task.name}</span>
+                                                            <span className={`self-start inline-flex items-center h-6 px-2 rounded-full text-[12px] font-semibold ${FIT_LABEL[fit].tone}`}
+                                                                title={fit === 'unknown' ? (estimate === undefined ? 'Görevin süre tahmini yok.' : 'Kişinin kapasitesi bilinmiyor.') : undefined}>
+                                                                {fit === 'unknown' && estimate === undefined ? 'Tahmin yok' : FIT_LABEL[fit].text}
+                                                            </span>
+                                                        </span>
+                                                        <span className="m-text-3 text-[13px] m-tabular whitespace-nowrap pt-1.5">{estimate === undefined ? '—' : fmtHours(estimate)}</span>
                                                     </li>
                                                 ))}
                                             </ul>
-                                        ) : <p className="m-0 text-[14px] m-text-3">{focusDay.kind === 'work' ? 'Bu güne dağıtılan görev yok.' : focusDay.kind === 'test' ? 'Test günü; geliştirme planlanmaz.' : 'Tatil günü.'}</p>}
+                                        ) : <p className="m-0 text-[14px] m-text-3">Bu gün itibarıyla başlamamış görev yok.</p>}
+                                        <p className="m-0 mt-1.5 text-[12px] m-text-3">Süren işlerin kalanı önce düşülür; başlamamış görevler öncelik ve termin sırasıyla kalan kapasiteye eklenir.</p>
                                     </div>
                                     <div className="min-w-0">
                                         <h4 className="m-0 mb-1.5 text-[13px] font-semibold m-text-2">Jira çalışma kayıtları</h4>

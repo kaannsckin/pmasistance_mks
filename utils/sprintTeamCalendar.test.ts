@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Person, Task, TaskStatus } from '../types';
-import { buildSprintTeamCalendar, indexSprintWorklogs, summarizeSprintTasks } from './sprintTeamCalendar';
+import { buildSprintTeamCalendar, indexSprintWorklogs, sprintTaskPool, summarizeSprintTasks } from './sprintTeamCalendar';
 import { buildLanes } from './timelinePlan';
 import { createProject } from './workspace';
 
@@ -94,5 +94,40 @@ describe('sprint ekip takvimi', () => {
             expect.objectContaining({ estimate: 16, plannedStart: '2026-11-23', logged: 0, lastLog: undefined }),
         ]);
         expect(summarizeSprintTasks(row, calendar.days)[0].logged).toBeUndefined();
+    });
+
+    it('seçilen gün itibarıyla başlamamış görevleri ve sprint sonuna yetişmeyenleri ayırır', () => {
+        const project = createProject('Plan');
+        // 1 hafta: 23-27 Kasım, kişi günde 8 saat → 40 saat
+        project.settings = { ...project.settings, projectStartDate: '2026-11-23', sprintDuration: 1, globalTestDays: 1 };
+        project.resources = [{ id: 'a', name: 'Ali Can', unit: 'U300', title: '', participation: 100 }];
+        project.tasks = [
+            task('suren', 'Ali Can', 1, { jiraId: 'MKS-1', status: TaskStatus.InProgress, startedAt: '2026-11-23T08:00:00Z', remainingEstimateHours: 6 }),
+            task('kayitli', 'Ali Can', 1, { jiraId: 'MKS-2' }), // durum Yapılacak ama 24'ünde kayıt girilmiş
+            task('acil', 'Ali Can', 2, { priority: 'High' }),
+            task('termin', 'Ali Can', 1, { dueDate: '2026-11-26' }),
+            task('sonra', 'Ali Can', 1),
+            task('tahminsiz', 'Ali Can', 0),
+            task('bitti', 'Ali Can', 3, { status: TaskStatus.Done, resolvedAt: '2026-11-23T10:00:00Z' }),
+        ];
+        const calendar = buildSprintTeamCalendar(project, buildLanes(project)[1], [], []);
+        const [row] = calendar.rows;
+        const logs = indexSprintWorklogs([row.key], [{ issueKey: 'MKS-2', author: 'Ali Can', date: '2026-11-24', hours: 2 }], []);
+        const at = (day: string) => sprintTaskPool(row, calendar.days, calendar.days.findIndex(d => d.day === day), logs);
+
+        // 25 Kasım: kalan 3 gün = 24 sa; süren işler 6 + (8 - 2) = 12 sa; 16 sa'lik "acil" sığmaz
+        const midweek = at('2026-11-25');
+        expect(midweek).toMatchObject({ available: 24, inProgress: 12 });
+        expect(midweek.items.map(item => [item.task.id, item.fit])).toEqual([['acil', 'late'], ['termin', 'late'], ['sonra', 'late'], ['tahminsiz', 'unknown']]);
+
+        // 23 Kasım: 40 sa; "suren" o gün başladı (6 sa), "kayitli" henüz kayıtsız → havuzda.
+        // 6 + 16 + 8 + 8 = 38 sa sığar, "sonra" ile 46 sa olur.
+        const monday = at('2026-11-23');
+        expect(monday).toMatchObject({ available: 40, inProgress: 6 });
+        expect(monday.items.map(item => [item.task.id, item.fit])).toEqual([['acil', 'fits'], ['termin', 'fits'], ['kayitli', 'fits'], ['sonra', 'late'], ['tahminsiz', 'unknown']]);
+
+        // Test günü: geliştirme kapasitesi kalmaz
+        const testDay = calendar.days.findIndex(d => d.kind === 'test');
+        expect(sprintTaskPool(row, calendar.days, testDay, logs).available).toBe(0);
     });
 });

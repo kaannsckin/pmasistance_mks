@@ -196,3 +196,76 @@ export const summarizeSprintTasks = (row: Pick<SprintLoadPerson, 'key' | 'tasks'
         };
     });
 };
+
+export type SprintPoolFit = 'fits' | 'late' | 'unknown';
+
+export interface SprintPoolItem {
+    task: Task;
+    estimate?: number;
+    fit: SprintPoolFit;
+}
+
+export interface SprintPool {
+    /** Seçilen günden sprint geliştirme sonuna kadar kişinin kapasitesi (saat); bilinmiyorsa tanımsız */
+    available?: number;
+    /** O gün itibarıyla süren (başlamış, bitmemiş) işlerin kalan eforu (saat) */
+    inProgress: number;
+    items: SprintPoolItem[];
+}
+
+const PRIORITY_RANK: Record<Task['priority'], number> = { Blocker: 0, High: 1, Medium: 2, Low: 3 };
+const dayOf = (iso?: string) => iso?.slice(0, 10);
+/** ISO günleri düz karşılaştırır; tarihsiz sona düşer. */
+const compareDay = (a?: string, b?: string) => (a === b ? 0 : !a ? 1 : !b ? -1 : a < b ? -1 : 1);
+
+/**
+ * Seçilen gün itibarıyla başlamamış sprint görevleri ve sprint sonuna yetişip
+ * yetişmeyecekleri. Kalan kapasiteden önce süren işlerin kalanı düşülür;
+ * başlamamış görevler öncelik, termin ve plan sırasıyla eklenir, kapasiteyi
+ * aşanlar "late" olur. Kapasite ya da tahmin bilinmiyorsa "unknown".
+ */
+export const sprintTaskPool = (
+    row: Pick<SprintLoadPerson, 'key' | 'tasks' | 'cells'>,
+    days: Pick<SprintLoadDay, 'day' | 'kind'>[],
+    dayIndex: number,
+    worklogs?: SprintWorklogIndex,
+): SprintPool => {
+    const day = days[dayIndex]?.day || '';
+    const logs = worklogs ? [...(worklogs.byRow.get(row.key)?.values() || [])].flat().filter(entry => entry.date <= day) : [];
+    const loggedOn = (task: Task) => {
+        const key = task.jiraId?.trim().toUpperCase();
+        return key ? logs.filter(entry => entry.issueKey.toUpperCase() === key) : [];
+    };
+    const doneBy = (task: Task) => task.status === TaskStatus.Done && (!task.resolvedAt || dayOf(task.resolvedAt)! <= day);
+    // Yaşam döngüsü tarihi yoksa güncel durum ve o güne kadarki kayıtlar esas alınır.
+    const startedBy = (task: Task) => (task.startedAt ? dayOf(task.startedAt)! <= day : task.status !== TaskStatus.ToDo && task.status !== TaskStatus.Backlog) || loggedOn(task).length > 0;
+
+    const workCells = row.cells.filter((_, i) => i >= dayIndex && days[i]?.kind === 'work');
+    const available = workCells.every(cell => cell.capacity !== undefined) ? workCells.reduce((total, cell) => total + (cell.capacity || 0), 0) : undefined;
+
+    let inProgress = 0;
+    const pending: { task: Task; estimate?: number; plannedStart: number }[] = [];
+    for (const { task, hours } of row.tasks) {
+        if (doneBy(task)) continue;
+        if (startedBy(task)) {
+            const spent = loggedOn(task).reduce((total, entry) => total + entry.hours, 0);
+            const remaining = task.remainingEstimateHours;
+            inProgress += remaining !== undefined && Number.isFinite(remaining) && remaining >= 0 ? remaining : Math.max(0, (hours ?? 0) - spent);
+            continue;
+        }
+        const first = row.cells.findIndex(cell => (cell.byTask.get(task.id) || 0) > 0);
+        pending.push({ task, estimate: hours, plannedStart: first < 0 ? Number.MAX_SAFE_INTEGER : first });
+    }
+    pending.sort((a, b) => (PRIORITY_RANK[a.task.priority] ?? 2) - (PRIORITY_RANK[b.task.priority] ?? 2)
+        || compareDay(a.task.dueDate, b.task.dueDate)
+        || a.plannedStart - b.plannedStart
+        || a.task.name.localeCompare(b.task.name, 'tr'));
+
+    let queued = inProgress;
+    const items = pending.map(({ task, estimate }): SprintPoolItem => {
+        if (available === undefined || estimate === undefined) return { task, estimate, fit: 'unknown' };
+        queued += estimate;
+        return { task, estimate, fit: queued <= available + 1e-6 ? 'fits' : 'late' };
+    });
+    return { available, inProgress, items };
+};
