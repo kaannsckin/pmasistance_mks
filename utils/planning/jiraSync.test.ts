@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { JiraSyncSettings, Task, TaskStatus } from '../../types';
 import { JiraIssueRecord, JiraSyncPage } from '../integrations';
-import { applyJiraSync, collectJiraSync, diffToChanges, hasSyncWork, jiraDiff, linkedOpenKeys, parseLabels, pullIssueIntoTasks, runProjectSync, sourceLabel, sourceOf, syncDue, syncSummary } from './jiraSync';
+import { applyJiraSync, collectJiraSync, diffToChanges, hasSyncWork, jiraDiff, linkedOpenKeys, parseLabels, pullIssueIntoTasks, runFullSync, runProjectSync, sourceLabel, sourceOf, syncDue, syncSummary } from './jiraSync';
 
 const task = (id: string, jiraId: string, status = TaskStatus.InProgress, extra: Partial<Task> = {}): Task => ({
     id, name: `Görev ${id}`, jiraId, status, availability: true, priority: 'Medium', version: 2, predecessor: null, unit: 'Yazılım', resourceName: 'Ayşe', time: { best: 1, avg: 2, worst: 3 }, notes: '', ...extra,
@@ -15,6 +15,26 @@ const page = (issues: JiraIssueRecord[], next: string | null = null, missing: st
 
 describe('Jira canlı eşitleme', () => {
     const tasks = [task('a', 'MKS-1'), task('b', 'mks-2', TaskStatus.ToDo), task('c', 'MKS-3', TaskStatus.Done), task('d', ''), task('e', 'serbest metin')];
+
+    it('tarih aralığında yalnız kaynaktan gelen Jira kayıtlarını çeker ve günceller', async () => {
+        const range = { start: '2026-12-01', end: '2026-12-31' };
+        const settings: JiraSyncSettings = { filterId: '7', discover: false, autoMinutes: 15, fields: { summary: 'push', status: 'pull' } };
+        const calls: unknown[] = [];
+        const writes: string[] = [];
+        const fetched = [issue('MKS-1', 'done', { due: range.start }), issue('MKS-99', 'new', { due: range.end })];
+        const r = await runFullSync({ tasks, resources: [], jiraSync: settings }, async o => {
+            calls.push(o);
+            return page(fetched);
+        }, async key => {
+            writes.push(key);
+            return { applied: ['summary'], errors: [] };
+        }, undefined, range);
+        expect(calls).toEqual([{ source: { filterId: '7', duePeriod: range }, cursor: null, openOnly: false }]);
+        expect(writes).toEqual(['MKS-1']);
+        expect(r.addNew).toBe(false);
+        expect(r.preview.closed).toBe(1);
+        expect(r.preview.added).toBe(0);
+    });
 
     it('yalnız Jira anahtarlı açık kayıtlar yenilenir; kaynak ancak keşif açıkken sorgulanır', async () => {
         expect(linkedOpenKeys(tasks)).toEqual(['MKS-1', 'MKS-2']);

@@ -1,4 +1,6 @@
-import { Person, Project, Task, TaskJiraWorklog, TitleDef, WorkspaceData } from '../types';
+import { JIRA_WORK_TIME_ZONE } from './jiraHistory';
+import type { JiraIssueWorklog } from './integrations';
+import { Person, Project, Task, TaskJiraWorklog, TitleDef, WorklogEntry, WorkspaceData } from '../types';
 import { fullName } from './dataPool';
 import { effectiveWorkdays } from './planning/workdays';
 
@@ -215,7 +217,7 @@ export const pendingWorklogKeys = (projects: Pick<Project, 'tasks'>[], limit: nu
 export const applyIssueWorklogs = (
     project: Project,
     requested: string[],
-    entries: { issueKey: string; date: string; author: string; authorEmail?: string; hours: number }[],
+    entries: JiraIssueWorklog[],
     missing: string[],
     now: Date = new Date(),
 ): Project => {
@@ -226,7 +228,8 @@ export const applyIssueWorklogs = (
     entries.forEach(e => {
         const k = e.issueKey.toUpperCase();
         if (!byKey.has(k)) byKey.set(k, []);
-        byKey.get(k)!.push({ author: e.author, ...(e.authorEmail ? { email: e.authorEmail } : {}), date: e.date, hours: e.hours });
+        const { id, author, authorEmail: email, accountId, date, hours, started, updated } = e;
+        byKey.get(k)!.push({ id, author, email, accountId, date, hours, started, updated });
     });
     const at = now.toISOString();
     return {
@@ -237,4 +240,43 @@ export const applyIssueWorklogs = (
             return { ...t, jiraWorklog: { at, forHours: t.actualHours || 0, entries: byKey.get(k) || [] } };
         }),
     };
+};
+
+/** Paylaşılan proje verisindeki mevcut özetleri oturum görünürlüğüne göre süzer. */
+export const scopedWorklogProject = (project: Project, canViewAll: boolean, person?: Person): Project => {
+    if (canViewAll) return project;
+    const email = person?.email?.trim().toLowerCase();
+    return { ...project, tasks: project.tasks.map(task => task.jiraWorklog ? {
+        ...task,
+        jiraWorklog: { ...task.jiraWorklog, entries: email ? task.jiraWorklog.entries.filter(row => row.email?.trim().toLowerCase() === email) : [] },
+    } : task) };
+};
+
+/** Haftalık rapora paylaşıma uygun, kişi ve yorum içermeyen Jira özeti. */
+export const summarizeJiraWorklogForReport = (entries: WorklogEntry[]): WorklogEntry[] => {
+    const byIssueDay = new Map<string, WorklogEntry>();
+    for (const { issueKey, date, summary, hours, source } of entries) {
+        const key = JSON.stringify([issueKey || summary, date]);
+        const row = byIssueDay.get(key) || { issueKey, date, summary, hours: 0, author: '', source };
+        row.hours += hours;
+        byIssueDay.set(key, row);
+    }
+    return [...byIssueDay.values()];
+};
+
+const WORKLOG_TIME_ZONE_KEY = 'planasistan.jiraWorklog.timeZone';
+
+export const getWorklogTimeZone = (): string => {
+    try {
+        const zone = localStorage.getItem(WORKLOG_TIME_ZONE_KEY);
+        if (zone) {
+            new Intl.DateTimeFormat('tr-TR', { timeZone: zone });
+            return zone;
+        }
+    } catch { /* Tarayıcı depolaması kapalıysa İstanbul kullanılır. */ }
+    return JIRA_WORK_TIME_ZONE;
+};
+
+export const setWorklogTimeZone = (zone: string) => {
+    try { localStorage.setItem(WORKLOG_TIME_ZONE_KEY, zone); } catch { /* Oturum içi tercih korunur. */ }
 };

@@ -29,6 +29,18 @@ export const parseIsoDay = (s: string | undefined | null): Date | null => {
     return d.getMonth() === Number(m[2]) - 1 ? d : null;
 };
 
+export const isIsoDay = (value: unknown): value is IsoDay => {
+    if (typeof value !== 'string') return false;
+    const day = parseIsoDay(value);
+    return day !== null && toIsoDay(day) === value;
+};
+
+export const isDayRange = (value: unknown): value is DayRange => {
+    if (!value || typeof value !== 'object') return false;
+    const { start, end } = value as Partial<DayRange>;
+    return isIsoDay(start) && isIsoDay(end) && start <= end;
+};
+
 export const addDays = (day: IsoDay, n: number): IsoDay => {
     const d = parseIsoDay(day)!;
     d.setDate(d.getDate() + n);

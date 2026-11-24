@@ -4,6 +4,8 @@ import { BulkTaskPatch } from '../../utils/bulkTaskEdit';
 import { exportToExcel, exportToJiraCsv, exportToMsProjectCsv } from '../../utils/exporter';
 import { parseCustomCsv, parseImportedFile, parseJiraCsv } from '../../utils/importer';
 import { TaskQueryContext } from '../../utils/taskQuery';
+import { taskTimeTracking } from '../../utils/timeTracking';
+import { formatHours } from './TaskTimeTracking';
 import { Icon } from './icons';
 import { ViewFilterNote } from './ui';
 import TaskActionsMenu from './TaskActionsMenu';
@@ -15,6 +17,9 @@ import { BoardColumn, celebrationFor, COLUMN_META, columnOf, daysLate, initialsO
 
 interface ModernTaskListProps {
     projectId: string;
+    initialQuery?: string;
+    onPlanSprint?: (ids: ReadonlySet<string>) => void;
+    onPlanRelease?: (ids: ReadonlySet<string>) => void;
     tasks: Task[];
     resources: Resource[];
     sprintNames?: Record<number, string>;
@@ -48,9 +53,10 @@ const lower = (s: string) => s.toLocaleLowerCase('tr-TR');
 
 type ImportKind = 'excel' | 'jira' | 'csv';
 
-const ModernTaskList: React.FC<ModernTaskListProps> = ({ projectId, tasks, resources, sprintNames, workPackages, me, onStatusChange, onWorkflowChange, workflow, onViewTask, onEditTask, onDeleteTask, onNotifyTask, onDataImport, onCelebrate, minPriority = 'Low' as TaskPriority, sortKey = 'smart' as TaskSortKey, bulkEdit }) => {
+const ModernTaskList: React.FC<ModernTaskListProps> = ({ projectId, initialQuery, onPlanSprint, onPlanRelease, tasks, resources, sprintNames, workPackages, me, onStatusChange, onWorkflowChange, workflow, onViewTask, onEditTask, onDeleteTask, onNotifyTask, onDataImport, onCelebrate, minPriority = 'Low' as TaskPriority, sortKey = 'smart' as TaskSortKey, bulkEdit }) => {
     const [query, setQuery] = useState('');
-    const [queryOpen, setQueryOpen] = useState(false);
+    const [queryOpen, setQueryOpen] = useState(!!initialQuery);
+    const [querySeed, setQuerySeed] = useState(initialQuery || '');
     const [selection, setSelection] = useState<ReadonlySet<string>>(() => new Set());
     const [bulkOpen, setBulkOpen] = useState(false);
     const [filterBySelection, setFilterBySelection] = useState(false);
@@ -60,6 +66,8 @@ const ModernTaskList: React.FC<ModernTaskListProps> = ({ projectId, tasks, resou
     const [unit, setUnit] = useState<string>('all');
     const [ioOpen, setIoOpen] = useState(false);
     const [showDone, setShowDone] = useState(false);
+    const [showTracking, setShowTracking] = useState(false);
+    const [timeSort, setTimeSort] = useState<'' | 'remaining' | 'spent' | 'variancePct'>('');
     const [notice, setNotice] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
     const [busy, setBusy] = useState(false);
     const fileRef = useRef<HTMLInputElement>(null);
@@ -85,10 +93,19 @@ const ModernTaskList: React.FC<ModernTaskListProps> = ({ projectId, tasks, resou
     }, [viewTasks, query, status, person, sprint, unit]);
     const hiddenByView = tasks.length - viewTasks.length;
 
-    const groups = useMemo(() => GROUPS.map(g => ({
+    const groups = useMemo(() => {
+        const defaultSort = taskComparator(sortKey);
+        const sort = (a: Task, b: Task) => {
+            if (!showTracking || !timeSort) return defaultSort(a, b);
+            const left = taskTimeTracking(a)[timeSort] ?? -Infinity;
+            const right = taskTimeTracking(b)[timeSort] ?? -Infinity;
+            return left === right ? defaultSort(a, b) : right - left;
+        };
+        return GROUPS.map(g => ({
         id: g,
-        rows: filtered.filter(t => columnOf(t.status) === g && (!filterBySelection || selected.has(t.id))).sort(taskComparator(sortKey)),
-    })).filter(g => g.rows.length > 0), [filtered, filterBySelection, selected, sortKey]);
+        rows: filtered.filter(t => columnOf(t.status) === g && (!filterBySelection || selected.has(t.id))).sort(sort),
+        })).filter(g => g.rows.length > 0);
+    }, [filtered, filterBySelection, selected, sortKey, showTracking, timeSort]);
     const selectedInFilter = filtered.reduce((count, task) => count + Number(selected.has(task.id)), 0);
     const allSelected = filtered.length > 0 && selectedInFilter === filtered.length;
     const setSelected = (targets: Task[], checked: boolean) => {
@@ -99,7 +116,8 @@ const ModernTaskList: React.FC<ModernTaskListProps> = ({ projectId, tasks, resou
         }
         setSelection(next);
     };
-    const grid = bulkEdit ? `36px ${GRID}` : GRID;
+    const columns = showTracking ? GRID.replace(/ 44px$/, ' minmax(84px, 1fr) minmax(88px, 1fr) minmax(82px, 1fr) 44px') : GRID;
+    const grid = bulkEdit ? `36px ${columns}` : columns;
     const closeBulk = () => {
         setBulkOpen(false);
         bulkButton.current?.focus();
@@ -108,6 +126,12 @@ const ModernTaskList: React.FC<ModernTaskListProps> = ({ projectId, tasks, resou
         <button ref={bulkButton} type="button" className="m-btn m-btn-primary !min-h-[36px]" onClick={() => setBulkOpen(true)}>
             <Icon name="pencil" size={16} />Toplu düzenle
         </button>
+    );
+    const planActions = selected.size > 0 && (
+        <>
+            {onPlanSprint && <button type="button" className="m-btn m-btn-gray !min-h-[36px]" onClick={() => onPlanSprint(selected)}>Sprint planına al</button>}
+            {onPlanRelease && <button type="button" className="m-btn m-btn-gray !min-h-[36px]" onClick={() => onPlanRelease(selected)}>Sürüm planına al</button>}
+        </>
     );
 
     const changeStatus = (id: string, next: TaskStatus) => {
@@ -157,10 +181,23 @@ const ModernTaskList: React.FC<ModernTaskListProps> = ({ projectId, tasks, resou
         setFilterBySelection(true);
         setQueryOpen(false);
     };
+    const toggleQuery = () => {
+        if (queryOpen) { setQueryOpen(false); return; }
+        const text = JSON.stringify(query.trim());
+        setQuerySeed([
+            query.trim() ? `(özet ~ ${text} OR anahtar ~ ${text})` : '',
+            status === TaskStatus.ToDo ? 'durum IN (Backlog, ToDo)' : status !== 'all' ? `durum = ${status}` : '',
+            person !== 'all' ? `atanan = ${JSON.stringify(person)}` : '',
+            sprint !== 'all' ? `sprint = ${sprint}` : '',
+            unit !== 'all' ? `birim = ${JSON.stringify(unit)}` : '',
+        ].filter(Boolean).join(' AND '));
+        setQueryOpen(true);
+    };
 
     return (
         <div className="flex flex-col gap-5">
             <div className="flex flex-wrap items-center gap-2.5">
+                {!queryOpen && <>
                 <label className="flex items-center gap-2 min-h-[44px] px-3.5 rounded-xl m-surface m-text-3" style={{ flex: '1 1 260px', maxWidth: 420 }}>
                     <Icon name="search" size={18} strokeWidth={2} />
                     <input
@@ -193,9 +230,18 @@ const ModernTaskList: React.FC<ModernTaskListProps> = ({ projectId, tasks, resou
                 {filtersActive && (
                     <button type="button" className="m-btn m-btn-plain" onClick={resetFilters}>Filtreleri temizle</button>
                 )}
-                <button type="button" className="m-btn m-btn-gray" aria-expanded={queryOpen} onClick={() => setQueryOpen(open => !open)}>
+                </>}
+                <button type="button" className="m-btn m-btn-gray" aria-expanded={queryOpen} onClick={toggleQuery}>
                     <Icon name="search" size={18} />{queryOpen ? 'Sorguyu kapat' : 'Sorguyla seç'}
                 </button>
+                {!queryOpen && (
+                    <>
+                        <button type="button" className="m-btn m-btn-gray" aria-pressed={showTracking} onClick={() => setShowTracking(v => !v)}><Icon name="clock" size={16} />Zaman sütunları</button>
+                        {showTracking && <select aria-label="Zaman sütununa göre sırala" className="m-pill" value={timeSort} onChange={e => setTimeSort(e.target.value as typeof timeSort)}>
+                            <option value="">Varsayılan sıralama</option><option value="remaining">Kalan ↓</option><option value="spent">Harcanan ↓</option><option value="variancePct">Sapma % ↓</option>
+                        </select>}
+                    </>
+                )}
                 <div className="relative ml-auto">
                     <button type="button" className="m-btn m-btn-gray" aria-haspopup="menu" aria-expanded={ioOpen} disabled={busy} onClick={() => setIoOpen(o => !o)}>
                         <Icon name="download" size={18} />
@@ -249,6 +295,7 @@ const ModernTaskList: React.FC<ModernTaskListProps> = ({ projectId, tasks, resou
                         <>
                             <span className="text-[14px] m-text-2 px-1" aria-live="polite">{selected.size} görev seçili</span>
                             {bulkAction}
+                            {planActions}
                             <button type="button" className="m-btn m-btn-plain !min-h-[36px]" onClick={() => { setSelection(new Set()); setFilterBySelection(false); }}>Seçimi temizle</button>
                         </>
                     )}
@@ -257,9 +304,10 @@ const ModernTaskList: React.FC<ModernTaskListProps> = ({ projectId, tasks, resou
 
             {queryOpen && (
                 <section aria-label="Sorguyla görev seç" className="m-surface rounded-2xl p-4 flex flex-col gap-3">
-                    <TaskQueryPicker projectId={projectId} tasks={filtered} ctx={queryContext} selected={selected} onChange={setSelection} onViewTask={onViewTask} />
+                    <TaskQueryPicker projectId={projectId} tasks={viewTasks} ctx={queryContext} selected={selected} onChange={setSelection} onViewTask={onViewTask} initialQuery={querySeed} />
                     <div className="flex flex-wrap gap-2">
                         {bulkAction}
+                        {planActions}
                         <button type="button" className="m-btn m-btn-gray !min-h-[36px]" disabled={!selected.size} onClick={showSelection}>
                             Seçilenleri listede göster ({selected.size})
                         </button>
@@ -291,15 +339,18 @@ const ModernTaskList: React.FC<ModernTaskListProps> = ({ projectId, tasks, resou
                             <span className="text-[15px] m-text-3 m-tabular">{g.rows.length}</span>
                         </div>
                         <div className="m-surface rounded-2xl overflow-x-auto">
-                            <div style={{ minWidth: bulkEdit ? 868 : 820 }}>
+                            <div style={{ minWidth: 820 + (bulkEdit ? 48 : 0) + (showTracking ? 290 : 0) }}>
                                 <div aria-hidden="true" className="grid items-center gap-3 pl-2 pr-4 pt-2.5 pb-2 text-[13px] m-text-3" style={{ gridTemplateColumns: grid }}>
                                     {bulkEdit && <span className="text-center">Seç</span>}
-                                    <span></span><span>Görev</span><span>Atanan</span><span>Sprint</span><span>Öncelik</span><span>Bitiş</span><span></span>
+                                    <span></span><span>Görev</span><span>Atanan</span><span>Sprint</span><span>Öncelik</span><span>Bitiş</span>
+                                    {showTracking && <><span>Kalan</span><span>Harcanan</span><span>Sapma %</span></>}
+                                    <span></span>
                                 </div>
                                 {rows.map(t => {
                                     const late = daysLate(t);
                                     const isDone = g.id === TaskStatus.Done;
                                     const prio = PRIORITY_META[t.priority];
+                                    const tracking = showTracking ? taskTimeTracking(t) : null;
                                     return (
                                         <div key={t.id} className={`grid items-center gap-3 pl-2 pr-2 py-1.5 min-h-[60px] border-t m-sep ${bulkEdit && selected.has(t.id) ? 'm-fill-2' : ''}`} style={{ gridTemplateColumns: grid }}>
                                             {bulkEdit && <label className="grid min-h-[44px] place-items-center cursor-pointer"><input type="checkbox" className="w-4 h-4" aria-label={`${t.name} seç`} checked={selected.has(t.id)} onChange={e => setSelected([t], e.target.checked)} /></label>}
@@ -336,6 +387,11 @@ const ModernTaskList: React.FC<ModernTaskListProps> = ({ projectId, tasks, resou
                                                 {late > 0 && <span className="text-[13px] m-ink-bad">{late} gün gecikti</span>}
                                                 {late === 0 && missingEstimate(t) && <span className="text-[13px] m-ink-warn">Süre tahmini yok</span>}
                                             </span>
+                                            {tracking && <>
+                                                <span className="m-text m-tabular text-[14px]">{formatHours(tracking.remaining)}</span>
+                                                <span className="m-text m-tabular text-[14px]">{formatHours(tracking.spent)}</span>
+                                                <span className={`m-tabular text-[14px] ${tracking.overrun ? 'm-ink-bad' : 'm-text'}`}>{tracking.variancePct === undefined ? '—' : (tracking.variancePct / 100).toLocaleString('tr-TR', { style: 'percent', maximumFractionDigits: 1 })}</span>
+                                            </>}
                                             <TaskActionsMenu task={t} onStatusChange={changeStatus} onWorkflowChange={onWorkflowChange} workflowTasks={tasks} workflow={workflow} onEdit={onEditTask} onDelete={onDeleteTask} onNotify={onNotifyTask} />
                                         </div>
                                     );

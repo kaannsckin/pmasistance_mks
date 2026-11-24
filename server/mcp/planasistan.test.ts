@@ -282,12 +282,14 @@ describe('PlanAsistan MCP — Jira', () => {
         expect(evm.json.ay_ici_not).toContain('EVM\'e girmez');
     });
 
-    it('worklog özeti: kişi, kayıt ve gün bazında', async () => {
-        const { call } = jiraServer('mudur');
+    it('worklog özeti: proje yöneticisi kendi projesini kişi, kayıt ve gün bazında görür', async () => {
+        const { call } = jiraServer('py', 'Ayşe Kaya');
         const res = await call(JIRA_WORKLOG_TOOL, { proje: 'ALTAY', baslangic: '2026-07-14', bitis: '2026-07-15' });
         expect(res.isError).toBeUndefined();
         expect(res.json).toMatchObject({ jira: 'ALT', toplam_saat: 9, kayit_sayisi: 3 });
         expect(res.json.kisi).toEqual([{ ad: 'Ayşe Kaya', saat: 7 }, { ad: 'Mehmet Demir', saat: 2 }]);
+        const other = await jiraServer('mudur').call(JIRA_WORKLOG_TOOL, { proje: 'ALTAY', baslangic: '2026-07-14', bitis: '2026-07-15' });
+        expect(other.json).toMatchObject({ toplam_saat: 0, kisi: [] });
         expect((await call(JIRA_WORKLOG_TOOL, { proje: 'ALTAY', baslangic: '2026-07-20', bitis: '2026-07-01' })).isError).toBe(true);
     });
 });

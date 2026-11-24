@@ -2,6 +2,7 @@ import React, { useMemo, useRef, useState } from 'react';
 import { EstimateLogEntry, JiraSyncSettings, Project, ReleasePlan, Task, WorkspaceData } from '../../types';
 import { CommitResult } from '../../utils/planning/releasePlan';
 import { JiraIssueRecord } from '../../utils/integrations';
+import type { DayRange } from '../../utils/calendarRange';
 import { JiraImportOptions } from '../../utils/planning/jiraImport';
 import { JiraPushOutcome } from '../../utils/planning/jiraSync';
 import { modelEstimateEnabled } from '../../utils/planning/ml/runModel';
@@ -37,6 +38,10 @@ interface Props {
     onAddTask: (task: Task, log: EstimateLogEntry) => void;
     onViewTask: (task: Task) => void;
     onOpenList: () => void;
+    onOpenFilteredList: (query: string) => void;
+    period: DayRange | null;
+    initialJiraPeriod?: DayRange;
+    initialReleaseTasks?: string[];
     onSaveReleasePlan: (projectId: string, plan: ReleasePlan) => void;
     onDeleteReleasePlan: (projectId: string, id: string) => void;
     onCommitReleasePlan: (result: CommitResult) => void;
@@ -47,22 +52,25 @@ interface Props {
     onLinkJira?: (key: string, links: Record<string, string>) => void;
     /** Jira canlı eşitleme: ayarı kaydeder ve çekilen kayıtları görevlere uygular (yalnız düzenleyebilen) */
     onSaveJiraSync?: (settings: JiraSyncSettings) => void;
-    onApplyJiraSync?: (issues: JiraIssueRecord[], opts: JiraImportOptions, addNew: boolean, label: string, pushed?: JiraPushOutcome) => void;
+    onApplyJiraSync?: (issues: JiraIssueRecord[], opts: JiraImportOptions, addNew: boolean, label: string, pushed?: JiraPushOutcome, settings?: JiraSyncSettings) => void;
 }
 
 type Mode = 'record' | 'release' | 'simulate';
 
 const num = (v: number) => v.toLocaleString('tr-TR', { maximumFractionDigits: 1 });
 
-const ModernPlanning: React.FC<Props> = ({ project, workspace, me, visibleProjectIds, canEdit, onAddTask, onViewTask, onOpenList, onSaveReleasePlan, onDeleteReleasePlan, onCommitReleasePlan, onOpenGoals, onImportJira, onLinkJira, onSaveJiraSync, onApplyJiraSync }) => {
-    const [mode, setMode] = useState<Mode>('record');
+const ModernPlanning: React.FC<Props> = ({ project, workspace, me, visibleProjectIds, canEdit, onAddTask, onViewTask, onOpenList, onOpenFilteredList, period, initialJiraPeriod, initialReleaseTasks, onSaveReleasePlan, onDeleteReleasePlan, onCommitReleasePlan, onOpenGoals, onImportJira, onLinkJira, onSaveJiraSync, onApplyJiraSync }) => {
+    const [mode, setMode] = useState<Mode>(initialReleaseTasks ? 'release' : 'record');
+    const [releaseTasks] = useState(initialReleaseTasks);
     const [jiraOpen, setJiraOpen] = useState(false);
-    const [syncOpen, setSyncOpen] = useState(false);
+    const [syncOpen, setSyncOpen] = useState(!!initialJiraPeriod);
+    const [syncPeriod, setSyncPeriod] = useState(initialJiraPeriod);
+    const [autoGuide] = useState(!initialJiraPeriod && !initialReleaseTasks);
     // Jira'ya gönder paneli; açıkken önceden seçili görevler
     const [exportOpen, setExportOpen] = useState<{ preselect: string[] } | null>(null);
     const sendToJira = canEdit && onLinkJira ? (ids: string[]) => { setJiraOpen(false); setSyncOpen(false); setExportOpen({ preselect: ids }); } : undefined;
     // Rehber: sayfa ilk açıldığında bir kez; sonra "?" ile (açık kipin adımından)
-    const guide = useGuide('planning');
+    const guide = useGuide('planning', autoGuide);
     // Geçmiş yalnız görevler ya da ekip değişince yeniden kurulur (sürüm taslağı kaydı onu bozmasın)
     const histRef = useRef<{ keys: unknown[]; h: PlanningHistory } | null>(null);
     const keys = workspace.projects.flatMap(p => [p.id, p.tasks, p.resources]);
@@ -92,7 +100,10 @@ const ModernPlanning: React.FC<Props> = ({ project, workspace, me, visibleProjec
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                     {canEdit && onSaveJiraSync && onApplyJiraSync && (
-                        <button type="button" className="m-btn m-btn-gray" aria-expanded={syncOpen} onClick={() => { setExportOpen(null); setJiraOpen(false); setSyncOpen(v => !v); }}><Icon name="refresh" size={18} />Jira eşitleme</button>
+                        <button type="button" className="m-btn m-btn-gray" aria-expanded={syncOpen} onClick={() => { setExportOpen(null); setJiraOpen(false); setSyncPeriod(undefined); setSyncOpen(v => !v); }}><Icon name="refresh" size={18} />Jira eşitleme</button>
+                    )}
+                    {period && canEdit && onSaveJiraSync && onApplyJiraSync && (
+                        <button type="button" className="m-btn m-btn-gray" onClick={() => { setExportOpen(null); setJiraOpen(false); setSyncPeriod(period); setSyncOpen(true); }}><Icon name="calendar" size={18} />Aralığı eşitle</button>
                     )}
                     {canEdit && onImportJira && (
                         <button type="button" className="m-btn m-btn-gray" aria-expanded={jiraOpen} onClick={() => { setExportOpen(null); setSyncOpen(false); setJiraOpen(v => !v); }}><Icon name="download" size={18} />Jira'dan geçmiş</button>
@@ -110,7 +121,7 @@ const ModernPlanning: React.FC<Props> = ({ project, workspace, me, visibleProjec
             </div>
             {guide.open && <GuideTour guide={guide.guide} start={guide.start} onClose={guide.close} />}
             {syncOpen && canEdit && onSaveJiraSync && onApplyJiraSync && (
-                <JiraSync key={`jira-sync-${project.id}`} project={project} onSaveSettings={onSaveJiraSync} onApply={onApplyJiraSync} onClose={() => setSyncOpen(false)} />
+                <JiraSync key={`jira-sync-${project.id}-${syncPeriod?.start || ''}-${syncPeriod?.end || ''}`} project={project} period={syncPeriod} onSaveSettings={onSaveJiraSync} onApply={onApplyJiraSync} onClose={() => setSyncOpen(false)} />
             )}
             {jiraOpen && canEdit && onImportJira && (
                 <JiraHistoryImport key={`jira-${project.id}`} project={project} onImport={onImportJira} onOpenList={onOpenList} onClose={() => setJiraOpen(false)} />
@@ -122,6 +133,7 @@ const ModernPlanning: React.FC<Props> = ({ project, workspace, me, visibleProjec
                 <NewRecordPlanner key={project.id} project={project} history={history} people={people} leaves={leaves} visibleProjectIds={visibleProjectIds} canEdit={canEdit} blindEstimate={aiPolicyOf(workspace).blindEstimate} aiBlocked={aiBlocked} ml={ml} onAddTask={onAddTask} onOpenList={onOpenList} onSendToJira={sendToJira} />
             ) : mode === 'release' ? (
                 <ReleasePlanner key={project.id} project={project} me={me} history={history} people={people} leaves={leaves} visibleProjectIds={visibleProjectIds} canEdit={canEdit} blindEstimate={aiPolicyOf(workspace).blindEstimate} aiBlocked={aiBlocked} ml={ml}
+                    initialTaskIds={releaseTasks} initialPeriod={period} onViewTask={onViewTask} onOpenFilteredList={onOpenFilteredList}
                     onSavePlan={onSaveReleasePlan} onDeletePlan={onDeleteReleasePlan} onCommit={onCommitReleasePlan} onOpenGoals={onOpenGoals} onSendToJira={sendToJira} />
             ) : (
                 <PlanSimulator key={project.id} project={project} history={history} people={people} leaves={leaves} visibleProjectIds={visibleProjectIds} onViewTask={onViewTask} />

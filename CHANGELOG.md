@@ -3,6 +3,13 @@
 Her sürümün başlığı `## vX.Y.Z` biçimindedir; GitHub sürüm sayfası bu bölümü
 buradan alır (`.github/workflows/exe.yml`).
 
+## v3.4.0
+
+- Jira Cloud ve Data Center’dan ilk tahmin, kalan süre, harcanan süre ve alt görev toplamları alınır. Kalan süre alanı dört eşitleme yönünü destekler. Efor sütunları, sorgu alanları ve Efor durumu dashboard bileşeni eklendi.
+- Görev ayrıntısı Jira geçmişini ve uygulamanın durum geçişlerini gösterir. Proje dashboard’undaki Jira darboğazları bileşeni, ortanca ve ortalama iş saatleriyle değişiklik sayılarının incelenmesini sağlar.
+- Jira çalışma kayıtları salt okunurdur. Görev ayrıntısı ve hafta/ay çizelgesi yetkili kayıtları gösterir. Tarih, kişi, ekip, bileşen, sürüm ve kayıt türü filtreleriyle Excel, CSV ve PDF alınabilir.
+- Kaydedilen görev filtreleri adlandırılabilir, güncellenebilir ve sabitlenebilir. Görev listesindeki seçim sprint ve manuel sürüm planına taşınabilir. Seçili termin aralığı Jira ile eşitlenebilir.
+
 ## v3.3.0
 
 - Görev listesi ve sürüm planı havuzunda JQL benzeri sorgularla arama, sıralama ve toplu seçim yapılabiliyor. Sorgu kutusunun yanındaki bilgi kartı, tek tıkla uygulanabilen senaryolar sunuyor.

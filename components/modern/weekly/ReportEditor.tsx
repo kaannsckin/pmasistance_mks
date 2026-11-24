@@ -10,6 +10,7 @@ import { buildDepartmentRequest, buildVariantRequest, PRODUCTION_VARIANT } from 
 import { buildDepartmentInput, buildReportInput, parseReportSuggestion, ReportSuggestion } from '../../../utils/ai/weeklyReportPrompt';
 import { reportPromptVersion } from '../../../utils/ai/reportGuide';
 import { meetingsHeldInWeek, meetingsPlannedInWeek, meetingToDetails, visibleMeetings } from '../../../utils/customerMeetings';
+import { getWorklogTimeZone, summarizeJiraWorklogForReport } from '../../../utils/workforce';
 import { fetchJiraWorklogs, IntegrationHealth } from '../../../utils/integrations';
 import { Identity, ownsProject } from '../../../utils/rbac';
 import { relativeTime } from '../../../utils/recentChanges';
@@ -423,8 +424,8 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
         try {
             const s = weekStart(year, week);
             const e = new Date(s); e.setDate(s.getDate() + 6);
-            const entries = await fetchJiraWorklogs({ projectKey: project.jiraProjectKey, from: isoDay(s), to: isoDay(e) }, health.authMode);
-            setWorklog(entries, 'jira');
+            const entries = await fetchJiraWorklogs({ projectKey: project.jiraProjectKey, from: isoDay(s), to: isoDay(e), timeZone: getWorklogTimeZone() }, health.authMode);
+            setWorklog(summarizeJiraWorklogForReport(entries), 'jira');
             setNotice({ kind: entries.length ? 'ok' : 'info', text: entries.length ? `Jira'dan ${entries.length} worklog kaydı alındı.` : 'Jira\'da bu hafta için worklog kaydı yok.' });
         } catch (err) {
             setNotice({ kind: 'error', text: (err as Error).message });
@@ -855,7 +856,7 @@ const ReportEditor: React.FC<ReportEditorProps> = ({ workspace, identity, report
 
                                     <SubHead count={worklog.length}>Worklog{worklogHours ? ` · ${worklogHours} saat` : ''}</SubHead>
                                     {worklog.slice(0, 8).map(w => (
-                                        <SourceRow key={w.issueKey || w.summary} title={`${w.issueKey ? `${w.issueKey} ` : ''}${w.summary}`} sub={`${w.hours} sa · ${w.authors.slice(0, 3).join(', ')}`} action="Madde" added={addedText(worklogText(w))} onAdd={() => addItem('thisWeek', newItem('ongoing', worklogText(w), { source: 'worklog' }))} />
+                                        <SourceRow key={w.issueKey || w.summary} title={`${w.issueKey ? `${w.issueKey} ` : ''}${w.summary}`} sub={[`${w.hours} sa`, w.authors.slice(0, 3).filter(Boolean).join(', ')].filter(Boolean).join(' · ')} action="Madde" added={addedText(worklogText(w))} onAdd={() => addItem('thisWeek', newItem('ongoing', worklogText(w), { source: 'worklog' }))} />
                                     ))}
                                     <div className="flex flex-wrap items-center gap-2 py-1.5">
                                         <button type="button" className="m-btn m-btn-gray !min-h-[38px] text-[14px]" disabled={busy !== null} onClick={() => fileRef.current?.click()}>

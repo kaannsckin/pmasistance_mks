@@ -33,7 +33,11 @@ describe('pilot Jira\'sı', () => {
         const raws = records.map((r, i) => toRawIssue(r, { id: 10_001 + i, project, worklogs: [] }));
         const jira = createMockJira(async () => raws);
         const page = await fetchJiraIssuesPage(PILOT_JIRA_ENV, { projectKey: 'ATL', scope: 'all' }, jira);
-        expect(page.issues).toEqual(records);
+        expect(page.issues).toMatchObject(records);
+        expect(page.issues).toMatchObject([
+            { remainingEstimateSeconds: 0, subtaskKeys: [], historySummary: { reopenCount: 0 } },
+            { remainingEstimateSeconds: null, subtaskKeys: [] },
+        ]);
         expect(page).toMatchObject({ total: 2, next: null });
     });
 
@@ -84,7 +88,7 @@ describe('pilot Jira\'sı', () => {
                 got.push(...r.issues);
                 cursor = r.next || undefined;
             } while (cursor);
-            expect(got).toEqual(data.issues.map(x => ({ ...x.rec, due: x.rec.due ?? null })));
+            expect(got).toMatchObject(data.issues.map(x => ({ ...x.rec, due: x.rec.due ?? null })));
         }
     });
 });

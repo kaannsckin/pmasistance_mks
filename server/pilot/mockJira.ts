@@ -31,7 +31,7 @@ const PRIORITIES = ['Highest', 'High', 'Medium', 'Low', 'Lowest'].map((name, i) 
 const ISSUE_TYPES = ['Hata', 'Hikaye', 'İyileştirme', 'Görev'].map((name, i) => ({ id: String(10000 + i), name, subtask: false }));
 const WORKLOG_PAGE = 20; // gerçek Jira'da aramadaki worklog alanı 20 kayıtla kısaltılır
 
-export interface RawWorklog { id: string; author: { displayName: string; name: string }; started: string; timeSpentSeconds: number; comment?: string }
+export interface RawWorklog { id: string; issueId?: string; updated?: string; author: { displayName: string; name: string }; started: string; timeSpentSeconds: number; comment?: string }
 export interface RawIssue {
     id: string;
     key: string;
@@ -56,6 +56,8 @@ export const toRawIssue = (
 ): RawIssue => {
     const worklogs: RawWorklog[] = o.worklogs.map((w, i) => ({
         id: `${o.id}${String(i + 1).padStart(3, '0')}`,
+        issueId: String(o.id),
+        updated: `${w.day}T10:00:00.000+0300`,
         author: { displayName: w.author, name: loginOf(w.author) },
         started: `${w.day}T09:00:00.000+0300`,
         timeSpentSeconds: Math.round(w.hours * 3600),
@@ -84,6 +86,13 @@ export const toRawIssue = (
             fixVersions: rec.fixVersions.map(name => ({ name })),
             timeoriginalestimate: rec.originalEstimateSeconds,
             timespent: rec.timeSpentSeconds,
+            timeestimate: rec.remainingEstimateSeconds ?? (rec.statusCategory === 'done' ? 0
+                : rec.originalEstimateSeconds === null ? null : Math.max(0, rec.originalEstimateSeconds - (rec.timeSpentSeconds ?? 0))),
+            aggregatetimeoriginalestimate: rec.aggregateOriginalEstimateSeconds,
+            aggregatetimeestimate: rec.aggregateRemainingEstimateSeconds,
+            aggregatetimespent: rec.aggregateTimeSpentSeconds,
+            parent: rec.parentKey ? { key: rec.parentKey } : undefined,
+            subtasks: rec.subtaskKeys?.map(key => ({ key })) || [],
             assignee: rec.assignee ? { displayName: rec.assignee, name: loginOf(rec.assignee) } : null,
             issuelinks: rec.blockedBy.map(key => ({ type: { name: 'Blocks', inward: 'is blocked by', outward: 'blocks' }, inwardIssue: { key } })),
             [STORY_POINTS_FIELD]: rec.storyPoints,

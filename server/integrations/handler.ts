@@ -1,8 +1,11 @@
-import { authorize } from '../ai/auth.js';
+import { createHash } from 'node:crypto';
+import { jiraLocalDay, JIRA_WORK_TIME_ZONE, summarizeJiraHistory, type JiraHistoryEntry, type JiraHistorySummary } from '../../utils/jiraHistory.js';
+import { authorize, type AuthResult } from '../ai/auth.js';
 import { Env, resolveAuthMode } from '../ai/config.js';
 import { createRateLimiter } from '../ai/rateLimit.js';
 import { describeNetworkError, extraCaFor, upstreamFetch } from '../ai/tls.js';
 import { withIntegrationSettings } from './settings.js';
+import { addDays, DayRange, isDayRange, isIsoDay } from '../../utils/calendarRange.js';
 
 /**
  * Kurum entegrasyonları (yalnız sunucu): Jira worklog okuma, Teams ve e-posta
@@ -15,14 +18,14 @@ import { withIntegrationSettings } from './settings.js';
  *   JIRA_ALLOWED_PROJECTS                   (isteğe bağlı: erişilebilecek proje anahtarları, virgülle)
  *   JIRA_STORY_POINTS_FIELD                 (isteğe bağlı: story point alanı, ör. customfield_10002; yoksa adından bulunur)
  *   JIRA_ALLOW_CREATE                       (isteğe bağlı, "1": planlamadaki kayıtlar Jira'da açılabilir; yoksa yalnız okuma)
- *   JIRA_ALLOW_UPDATE                       (isteğe bağlı, "1": uygulamadan Jira kaydı güncellenebilir — alan, durum geçişi, yorum, worklog)
+ *   JIRA_ALLOW_UPDATE                       (isteğe bağlı, "1": uygulamadan Jira kaydı güncellenebilir — alan, durum geçişi, yorum)
  *   TEAMS_WEBHOOK_URL                       (Teams kanalı / Power Automate iş akışı)
  *   SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM, SMTP_SECURE
  *   NOTIFY_ALLOWED_DOMAINS                  (alıcı alan adları; yoksa SMTP_FROM'un alanı)
  *   REPORT_REMINDER_TO, APP_URL, CRON_SECRET (haftalık hatırlatma)
  */
 
-export type IntegrationRoute = 'health' | 'jira-worklogs' | 'jira-issues' | 'jira-create' | 'jira-sync' | 'notify' | 'cron-reminder';
+export type IntegrationRoute = 'health' | 'jira-worklogs' | 'jira-history' | 'jira-issues' | 'jira-create' | 'jira-sync' | 'notify' | 'cron-reminder';
 
 export interface Mailer {
     sendMail: (m: { from: string; to?: string; bcc?: string; subject: string; text: string; html?: string }) => Promise<unknown>;
@@ -67,6 +70,10 @@ export const integrationStatus = (env: Env): IntegrationStatus => ({
 // ---------------------------------------------------------------- Jira
 
 export interface JiraWorklog {
+    id?: string;
+    started?: string;
+    updated?: string;
+    accountId?: string;
     date: string;
     author: string;
     /** Jira'nın verdiği e-posta (izin varsa); havuzdaki kişiyle eşleştirmede isimden önce kullanılır */
@@ -91,7 +98,7 @@ const jiraAuth = (env: Env): string => {
     return `Basic ${Buffer.from(raw).toString('base64')}`;
 };
 
-type JiraWorklogRaw = { started?: string; timeSpentSeconds?: number; comment?: unknown; author?: { displayName?: string; name?: string; emailAddress?: string } };
+type JiraWorklogRaw = { id?: string; issueId?: string; started?: string; updated?: string; timeSpentSeconds?: number; comment?: unknown; author?: { displayName?: string; name?: string; emailAddress?: string; accountId?: string; key?: string } };
 type JiraIssueRaw = { key: string; fields?: { summary?: string; worklog?: { total?: number; maxResults?: number; worklogs?: JiraWorklogRaw[] } } };
 
 const commentText = (c: unknown): string | undefined => {
@@ -102,7 +109,7 @@ const commentText = (c: unknown): string | undefined => {
         if (!n || typeof n !== 'object') return;
         const o = n as { text?: unknown; content?: unknown[] };
         if (typeof o.text === 'string') out.push(o.text);
-        (o.content || []).forEach(walk);
+        if (Array.isArray(o.content)) o.content.forEach(walk);
     };
     walk(c);
     return out.join(' ').trim() || undefined;
@@ -137,37 +144,38 @@ export const searchJiraPage = async <T,>(
 };
 
 /** Projedeki, tarih aralığındaki worklog kayıtları (Jira Server/DC ve Cloud REST v2) */
-export const fetchJiraWorklogs = async (env: Env, projectKey: string, from: string, to: string, fetchImpl?: typeof fetch): Promise<JiraWorklog[]> => {
+export const fetchJiraWorklogs = async (env: Env, projectKey: string, from: string, to: string, fetchImpl?: typeof fetch, timeZone?: string): Promise<JiraWorklog[]> => {
     const base = clean(env.JIRA_BASE_URL)!.replace(/\/+$/, '');
     const f = fetchImpl || upstreamFetch(base, env);
     const headers = { authorization: jiraAuth(env), accept: 'application/json' };
     const get = async (path: string) => {
-        const res = await f(`${base}${path}`, { headers });
+        const res = await jiraReadWithRetry(f, `${base}${path}`, { headers });
         if (res.status === 401 || res.status === 403) throw Object.assign(new Error('Jira erişimi reddedildi (yetki ya da jeton hatalı).'), { status: 502 });
         if (!res.ok) throw Object.assign(new Error(`Jira yanıtı başarısız (HTTP ${res.status}).`), { status: 502 });
         return res.json();
     };
-    const params = `jql=${encodeURIComponent(buildWorklogJql(projectKey, from, to))}&fields=summary,worklog&maxResults=100`;
+    const params = `jql=${encodeURIComponent(buildWorklogJql(projectKey, timeZone ? addDays(from, -1) : from, timeZone ? addDays(to, 1) : to))}&fields=summary,worklog&maxResults=100`;
     const cloud = isJiraCloud(base);
     const issues: JiraIssueRaw[] = [];
     let cursor: string | null = null;
     for (let page = 0; page < 5; page++) { // en çok 500 kayıt
         const r: { issues: JiraIssueRaw[]; next: string | null } = await searchJiraPage<JiraIssueRaw>(get, cloud, params, cursor);
         issues.push(...r.issues);
-        if (!r.next) break;
         cursor = r.next;
+        if (!cursor) break;
     }
+    if (cursor) throw Object.assign(new Error('Bu tarih aralığında 500’den fazla Jira kaydı var. Daha kısa bir aralık seçin.'), { status: 422 });
     const out: JiraWorklog[] = [];
     for (const issue of issues) {
+        if (issue.key.split('-')[0].toUpperCase() !== projectKey.toUpperCase()) continue;
         let logs = issue.fields?.worklog?.worklogs || [];
         if ((issue.fields?.worklog?.total || 0) > logs.length) {
-            const all = await get(`/rest/api/2/issue/${encodeURIComponent(issue.key)}/worklog`) as { worklogs?: JiraWorklogRaw[] };
-            logs = all.worklogs || logs;
+            logs = await readIssueLogPages((path, init) => jiraReadWithRetry(f, base + path, { ...init, headers }), issue.key) || [];
         }
         logs.forEach(w => {
-            const date = (w.started || '').slice(0, 10);
+            const date = timeZone && w.started ? jiraLocalDay(w.started, timeZone) || '' : (w.started || '').slice(0, 10);
             if (!DATE_RE.test(date) || date < from || date > to) return;
-            const hours = Math.round(((w.timeSpentSeconds || 0) / 3600) * 100) / 100;
+            const hours = (w.timeSpentSeconds || 0) / 3600;
             if (!(hours > 0)) return;
             out.push(worklogEntry(issue.key, issue.fields?.summary || '', w, date, hours));
         });
@@ -177,7 +185,13 @@ export const fetchJiraWorklogs = async (env: Env, projectKey: string, from: stri
 
 const worklogEntry = (issueKey: string, summary: string, w: JiraWorklogRaw, date: string, hours: number): JiraWorklog => {
     const email = clean(w.author?.emailAddress);
+    const started = w.started && Number.isFinite(Date.parse(w.started)) ? w.started.replace(/([+-]\d{2})(\d{2})$/, '$1:$2') : undefined;
+    const updated = isoOf(w.updated) || undefined;
     return {
+        id: w.id === undefined ? undefined : String(w.id),
+        started,
+        updated,
+        accountId: w.author?.accountId || w.author?.key,
         date, author: w.author?.displayName || w.author?.name || '', ...(email ? { authorEmail: email.toLowerCase() } : {}),
         issueKey, summary, hours, comment: commentText(w.comment), source: 'jira',
     };
@@ -185,41 +199,173 @@ const worklogEntry = (issueKey: string, summary: string, w: JiraWorklogRaw, date
 
 export const MAX_WORKLOG_KEYS = 50;
 
-/**
- * Belirli kayıtların TÜM worklog'ları (tarih sınırı yok): görev Jira kaydıyla
- * eşitlenince kim kaç saat harcamış (billing hours) buradan gelir. Aynı anda en
- * çok 4 istek; bulunamayan/erişilemeyen kayıtlar `missing` olarak döner.
- */
-export const fetchJiraIssueWorklogs = async (env: Env, keys: string[], fetchImpl?: typeof fetch): Promise<{ entries: JiraWorklog[]; missing: string[] }> => {
-    const base = clean(env.JIRA_BASE_URL)!.replace(/\/+$/, '');
-    const f = fetchImpl || upstreamFetch(base, env);
-    const headers = { authorization: jiraAuth(env), accept: 'application/json' };
-    const entries: JiraWorklog[] = [];
-    const missing: string[] = [];
-    const one = async (key: string) => {
-        const logs: JiraWorklogRaw[] = [];
-        for (let startAt = 0, page = 0; page < 20; page++) { // Cloud sayfalar (en çok 20 × 1000); Server tümünü bir kerede verir
-            const res = await f(`${base}/rest/api/2/issue/${encodeURIComponent(key)}/worklog?startAt=${startAt}&maxResults=1000`, { headers });
-            if (res.status === 404) { missing.push(key); return; }
-            if (res.status === 401 || res.status === 403) throw Object.assign(new Error('Jira erişimi reddedildi (yetki ya da jeton hatalı).'), { status: 502 });
-            if (!res.ok) throw Object.assign(new Error(`Jira yanıtı başarısız (HTTP ${res.status}).`), { status: 502 });
-            const body = await res.json() as { worklogs?: JiraWorklogRaw[]; total?: number };
-            const got = body.worklogs || [];
-            logs.push(...got);
-            startAt += got.length;
-            if (!got.length || typeof body.total !== 'number' || startAt >= body.total) break;
-        }
-        logs.forEach(w => {
-            const date = (w.started || '').slice(0, 10);
-            const hours = Math.round(((w.timeSpentSeconds || 0) / 3600) * 100) / 100;
-            if (DATE_RE.test(date) && hours > 0) entries.push(worklogEntry(key, '', w, date, hours));
+type WorklogReader = (path: string, init?: RequestInit) => Promise<Response>;
+type WorklogSnapshot = {
+    byKey: Map<string, JiraWorklogRaw[]>;
+    ids: Map<string, string>;
+    since: number;
+    refreshedAt: number;
+    expires: number;
+};
+const worklogSnapshots = new Map<string, WorklogSnapshot>();
+const WORKLOG_ISSUE_LIMIT = 5000;
+const WORKLOG_SNAPSHOT_LIMIT = 15000;
+
+const readIssueLogPages = async (get: WorklogReader, key: string): Promise<JiraWorklogRaw[] | null> => {
+    const result: JiraWorklogRaw[] = [];
+    for (let page = 0; page < 100; page++) {
+        const res = await get(`/rest/api/2/issue/${encodeURIComponent(key)}/worklog?startAt=${result.length}&maxResults=1000`);
+        if (res.status === 404) return null;
+        if (!res.ok) throw Object.assign(new Error(`Jira worklog okunamadı (HTTP ${res.status}).`), { status: res.status === 429 ? 429 : 502 });
+        const body = await res.json() as { worklogs?: JiraWorklogRaw[]; total?: number };
+        const rows = body.worklogs || [];
+        result.push(...rows);
+        if (result.length > WORKLOG_ISSUE_LIMIT || (body.total || 0) > WORKLOG_ISSUE_LIMIT) break;
+        if (typeof body.total !== 'number' || result.length >= body.total) return result;
+        if (!rows.length) break;
+    }
+    throw Object.assign(new Error(`${key} için Jira worklog sınırı aşıldı veya eksik sayfa alındı.`), { status: 422 });
+};
+
+type WorklogChange = { worklogId: number; updatedTime?: number };
+const worklogChanges = async (get: WorklogReader, kind: 'updated' | 'deleted', since: number) => {
+    const ids = new Set<number>();
+    const initialSince = since;
+    for (let page = 0; page < 5; page++) {
+        const res = await get(`/rest/api/2/worklog/${kind}?since=${since}`);
+        if (!res.ok) return null;
+        const data = await res.json() as { values?: WorklogChange[]; lastPage?: boolean; nextPage?: string; until?: number };
+        if (!Array.isArray(data.values)) return null;
+        data.values.forEach(row => { if (Number.isSafeInteger(row.worklogId)) ids.add(row.worklogId); });
+        const until = Number(data.until);
+        if (data.lastPage !== false) return { ids, until: until >= initialSince ? until : initialSince };
+        const next = data.nextPage ? Number(new URL(data.nextPage, 'https://jira.invalid').searchParams.get('since')) : until;
+        if (!Number.isSafeInteger(next) || next <= since) return null;
+        since = next;
+    }
+    return null;
+};
+
+const reconcileWorklogSnapshot = async (get: WorklogReader, snapshot: WorklogSnapshot): Promise<WorklogSnapshot | null> => {
+    const baseline = Date.now();
+    const [updates, deletions] = await Promise.all([
+        worklogChanges(get, 'updated', snapshot.since),
+        worklogChanges(get, 'deleted', snapshot.since),
+    ]);
+    if (!updates || !deletions) return null;
+    const changes = [...updates.ids].filter(id => !deletions.ids.has(id));
+    const rows: JiraWorklogRaw[] = [];
+    for (let i = 0; i < changes.length; i += 1000) {
+        const res = await get('/rest/api/2/worklog/list', {
+            method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ids: changes.slice(i, i + 1000) }),
         });
-    };
+        if (!res.ok) return null;
+        const page = await res.json() as JiraWorklogRaw[];
+        if (!Array.isArray(page)) return null;
+        rows.push(...page);
+    }
+    const affected = new Set([...updates.ids, ...deletions.ids].map(String));
+    const byKey = new Map([...snapshot.byKey].map(([key, logs]) => [key, logs.filter(row => !affected.has(String(row.id)))]));
+    for (const row of rows) {
+        if (!row.issueId) return null;
+        const key = snapshot.ids.get(String(row.issueId));
+        if (key) byKey.get(key)?.push(row);
+    }
+    if ([...byKey.values()].some(logs => logs.length > WORKLOG_ISSUE_LIMIT)) return null;
+    return { ...snapshot, byKey, since: Math.max(snapshot.since, Math.min(updates.until, deletions.until, baseline)), refreshedAt: baseline };
+};
+
+const fullWorklogSnapshot = async (get: WorklogReader, keys: string[], cloud: boolean, incremental: boolean): Promise<WorklogSnapshot> => {
+    const checkedAt = Date.now();
+    const byKey: WorklogSnapshot['byKey'] = new Map();
     const queue = [...keys];
     await Promise.all(Array.from({ length: Math.min(4, queue.length) }, async () => {
-        for (let k = queue.shift(); k; k = queue.shift()) await one(k);
+        for (let key = queue.shift(); key; key = queue.shift()) {
+            const logs = await readIssueLogPages(get, key);
+            if (logs) byKey.set(key, logs);
+        }
     }));
-    return { entries: entries.sort((a, b) => a.issueKey.localeCompare(b.issueKey) || a.date.localeCompare(b.date)), missing: missing.sort() };
+    const ids = new Map<string, string>();
+    if (incremental && byKey.size) {
+        try {
+            const jql = 'key in (' + [...byKey.keys()].join(',') + ')';
+            const found = await searchJiraPage<{ key: string; id?: string }>(async path => {
+                const res = await get(path);
+                if (!res.ok) throw new Error('Jira kayıt kimlikleri okunamadı.');
+                return res.json();
+            }, cloud, `jql=${encodeURIComponent(jql)}&fields=none&maxResults=${MAX_WORKLOG_KEYS}`);
+            found.issues.forEach(issue => { if (issue.id && byKey.has(issue.key)) ids.set(String(issue.id), issue.key); });
+        } catch { /* Jira Worklog toplu akışı kullanılamıyorsa kayıt bazında yenile. */ }
+    }
+    const cacheable = ids.size === keys.length && [...byKey.values()].reduce((n, logs) => n + logs.length, 0) <= WORKLOG_SNAPSHOT_LIMIT;
+    return { byKey, ids, since: checkedAt - 120_000, refreshedAt: checkedAt, expires: cacheable ? checkedAt + 15 * 60_000 : 0 };
+};
+
+/** Kayıt bazında tam okuma ve aynı proje grubunun sonraki okumalarında artımlı yenileme. */
+export const fetchJiraIssueWorklogs = async (
+    env: Env, keys: string[], fetchImpl?: typeof fetch, timeZone?: string, incremental = false,
+): Promise<{ entries: JiraWorklog[]; missing: string[] }> => {
+    const base = clean(env.JIRA_BASE_URL)!.replace(/\/+$/, '');
+    const f = fetchImpl || upstreamFetch(base, env);
+    const auth = jiraAuth(env);
+    const get: WorklogReader = (path, init) => jiraReadWithRetry(f, base + path, {
+        ...init, headers: { ...init?.headers, authorization: auth, accept: 'application/json' },
+    });
+    const group = new Map<string, string[]>();
+    for (const key of keys) {
+        const project = key.split('-')[0];
+        group.set(project, [...(group.get(project) || []), key]);
+    }
+    const results: WorklogSnapshot[] = [];
+    const fingerprint = createHash('sha256').update(auth).digest('hex');
+    for (const [project, projectKeys] of group) {
+        const cacheKey = JSON.stringify([base, fingerprint, project, [...projectKeys].sort()]);
+        const cached = incremental ? worklogSnapshots.get(cacheKey) : undefined;
+        let result = cached && cached.expires > Date.now() ? cached : undefined;
+        if (result) {
+            result = (await reconcileWorklogSnapshot(get, result).catch(() => null)) || undefined;
+        }
+        result ||= await fullWorklogSnapshot(get, projectKeys, isJiraCloud(base), incremental);
+        if (incremental && result.expires) {
+            if (!worklogSnapshots.has(cacheKey) && worklogSnapshots.size >= 8) worklogSnapshots.delete(worklogSnapshots.keys().next().value!);
+            const current = worklogSnapshots.get(cacheKey);
+            if (!current || result.refreshedAt >= current.refreshedAt) worklogSnapshots.set(cacheKey, result);
+        }
+        results.push(result);
+    }
+    const entries: JiraWorklog[] = [];
+    const missing = new Set(keys);
+    for (const { byKey } of results) {
+        for (const [key, logs] of byKey) {
+            missing.delete(key);
+            for (const log of logs) {
+                const date = timeZone && log.started ? jiraLocalDay(log.started, timeZone) || '' : (log.started || '').slice(0, 10);
+                const hours = (log.timeSpentSeconds || 0) / 3600;
+                if (DATE_RE.test(date) && hours > 0) entries.push(worklogEntry(key, '', log, date, hours));
+            }
+        }
+    }
+    return { entries: entries.sort((a, b) => a.issueKey.localeCompare(b.issueKey) || a.date.localeCompare(b.date)), missing: [...missing].sort() };
+};
+
+const worklogSettings = (env: Env) => {
+    try {
+        const config = JSON.parse(env.JIRA_WORKLOG_ACCESS || '{}') as Record<string, { projects?: string[]; authorIds?: string[] }>;
+        return config && typeof config === 'object' ? config : {};
+    } catch {
+        return {};
+    }
+};
+
+const allowedWorklogs = (env: Env, who: Extract<AuthResult, { ok: true }>, entries: JiraWorklog[]): JiraWorklog[] => {
+    if (who.subject.startsWith('ip:')) return entries;
+    const config = worklogSettings(env)[who.subject.slice(5)];
+    return entries.filter(row => {
+        const project = row.issueKey.split('-')[0];
+        return (Array.isArray(config?.projects) && config.projects.includes(project))
+            || (!!who.verifiedEmail && row.authorEmail === who.verifiedEmail)
+            || (!!row.accountId && Array.isArray(config?.authorIds) && config.authorIds.includes(row.accountId));
+    });
 };
 
 // ---------------------------------------------------------------- Jira kayıt geçmişi
@@ -251,6 +397,13 @@ export interface JiraIssueRecord {
     fixVersions: string[];
     originalEstimateSeconds: number | null;
     timeSpentSeconds: number | null;
+    historySummary?: JiraHistorySummary;
+    remainingEstimateSeconds?: number | null;
+    aggregateOriginalEstimateSeconds?: number | null;
+    aggregateRemainingEstimateSeconds?: number | null;
+    aggregateTimeSpentSeconds?: number | null;
+    parentKey?: string;
+    subtaskKeys?: string[];
     storyPoints: number | null;
     assignee: string;
     /** Atanan kişinin e-postası (Jira gizlemiyorsa) */
@@ -292,7 +445,11 @@ const isoOf = (v: unknown): string | null => {
     const d = new Date(v.replace(/([+-]\d{2})(\d{2})$/, '$1:$2'));
     return isNaN(d.getTime()) ? null : d.toISOString();
 };
-const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : null);
+const seconds = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : null);
+const jiraKey = (v: unknown): string | undefined => {
+    const key = str((v as { key?: unknown } | null)?.key).toUpperCase();
+    return ISSUE_KEY_RE.test(key) ? key : undefined;
+};
 const names = (v: unknown): string[] => (Array.isArray(v) ? v.map(x => str((x as { name?: unknown })?.name).trim()).filter(Boolean) : []);
 
 /** Jira wiki biçimini sade metne indirir ve kısaltır */
@@ -323,8 +480,75 @@ const cached = async <T>(cache: Cache<T>, key: string, ttlMs: number, load: () =
     }
 };
 
-type JiraHistoryRaw = { created?: string; items?: { field?: string; fieldId?: string; from?: unknown; to?: unknown; fromString?: unknown; toString?: unknown }[] };
+type JiraHistoryRaw = { id?: string; created?: string; author?: { displayName?: string; name?: string; emailAddress?: string }; items?: { field?: string; fieldId?: string; from?: unknown; to?: unknown; fromString?: unknown; toString?: unknown }[] };
 type JiraFullIssueRaw = { key: string; fields?: Record<string, unknown>; changelog?: { total?: number; histories?: JiraHistoryRaw[] } };
+
+const normalizeHistory = (rows: JiraHistoryRaw[]): JiraHistoryEntry[] => rows.flatMap((row, index) => {
+    const at = isoOf(row.created);
+    if (!at) return [];
+    const value = (raw: unknown): string | null => typeof raw === 'string' || typeof raw === 'number' ? String(raw) : null;
+    return [{
+        id: row.id || `${at}:${index}`,
+        at,
+        author: row.author?.displayName || row.author?.name || '',
+        authorEmail: clean(row.author?.emailAddress)?.toLowerCase(),
+        items: (row.items || []).filter(item => item.field || item.fieldId).map(item => ({
+            field: item.field || item.fieldId!, fieldId: item.fieldId,
+            from: value(item.from), fromString: value(item.fromString), to: value(item.to), toString: value(item.toString),
+        })),
+    }];
+}).sort((a, b) => b.at.localeCompare(a.at));
+
+const jiraReadWithRetry = async (f: typeof fetch, url: string, init: RequestInit): Promise<Response> => {
+    for (let attempt = 0; ; attempt++) {
+        const res = await f(url, init);
+        if (attempt === 2 || (res.status !== 429 && res.status < 500)) return res;
+        const retry = res.headers.get('retry-after');
+        const millis = retry ? (/^\d+$/.test(retry) ? Number(retry) * 1000 : Date.parse(retry) - Date.now()) : NaN;
+        if (millis > 3000) return res;
+        await res.body?.cancel().catch(() => undefined);
+        await new Promise(resolve => setTimeout(resolve, Number.isFinite(millis) ? Math.max(0, millis) : 200 * 2 ** attempt));
+    }
+};
+
+const MAX_HISTORY_ENTRIES = 5000;
+
+export const fetchJiraHistory = async (env: Env, key: string, fetchImpl?: typeof fetch): Promise<JiraHistoryEntry[]> => {
+    const normalized = key.trim().toUpperCase();
+    if (!ISSUE_KEY_RE.test(normalized)) throw Object.assign(new Error('Geçersiz Jira kayıt anahtarı.'), { status: 400 });
+    if (!jiraProjectAllowed(env, normalized.split('-')[0])) throw Object.assign(new Error("Bu proje sunucuda Jira erişimine açık değil."), { status: 403 });
+    const base = clean(env.JIRA_BASE_URL)!.replace(/\/+$/, '');
+    const f = fetchImpl || upstreamFetch(base, env);
+    const headers = { authorization: jiraAuth(env), accept: 'application/json' };
+    const get = async (path: string) => {
+        const res = await jiraReadWithRetry(f, base + path, { headers });
+        if (res.status === 404) throw Object.assign(new Error('Jira kaydı bulunamadı.'), { status: 404 });
+        if (res.status === 429) throw Object.assign(new Error('Jira istek sınırına ulaştı. Biraz sonra tekrar deneyin.'), { status: 429 });
+        if (!res.ok) throw Object.assign(new Error(`Jira geçmişi okunamadı (HTTP ${res.status}).`), { status: 502 });
+        return res.json();
+    };
+    const tooLong = () => Object.assign(new Error(`Jira geçmişi ${MAX_HISTORY_ENTRIES} kayıt sınırını aşıyor.`), { status: 422 });
+    const path = `/rest/api/${isJiraCloud(base) ? '3' : '2'}/issue/${encodeURIComponent(normalized)}`;
+    if (!isJiraCloud(base)) {
+        const issue = await get(path + '?expand=changelog&fields=none') as JiraFullIssueRaw;
+        const rows = issue.changelog?.histories || [];
+        if (rows.length > MAX_HISTORY_ENTRIES || (issue.changelog?.total || 0) > MAX_HISTORY_ENTRIES) throw tooLong();
+        if ((issue.changelog?.total || 0) > rows.length)
+            throw Object.assign(new Error('Jira Data Center eksik geçmiş döndürdü.'), { status: 502 });
+        return normalizeHistory(rows);
+    }
+    const all: JiraHistoryRaw[] = [];
+    for (;;) {
+        const page = await get(`${path}/changelog?startAt=${all.length}&maxResults=100`) as { values?: JiraHistoryRaw[]; total?: number; isLast?: boolean };
+        const values = page.values || [];
+        all.push(...values);
+        if (all.length > MAX_HISTORY_ENTRIES || (page.total || 0) > MAX_HISTORY_ENTRIES) throw tooLong();
+        if (page.isLast || all.length >= (page.total ?? Infinity) || (!values.length && page.total === undefined)) break;
+        if (!values.length) throw Object.assign(new Error('Jira eksik geçmiş döndürdü.'), { status: 502 });
+        if (all.length === MAX_HISTORY_ENTRIES) throw tooLong();
+    }
+    return normalizeHistory(all);
+};
 
 const transitionsOf = (histories: JiraHistoryRaw[], categories: Map<string, JiraStatusCategory>): JiraTransition[] => histories
     .flatMap(h => (h.items || [])
@@ -338,7 +562,23 @@ export const normalizeIssue = (raw: JiraFullIssueRaw, categories: Map<string, Ji
     const status = (f.status || {}) as { name?: unknown; id?: unknown; statusCategory?: { key?: unknown } };
     const links = Array.isArray(f.issuelinks) ? f.issuelinks as { type?: { name?: unknown; inward?: unknown }; inwardIssue?: { key?: unknown } }[] : [];
     const points = pointsField ? Number(f[pointsField]) : NaN;
+    const tracking = (f.timetracking || {}) as { originalEstimateSeconds?: unknown; remainingEstimateSeconds?: unknown; timeSpentSeconds?: unknown };
+    const parentKey = jiraKey(f.parent);
+    const subtaskKeys = Array.isArray(f.subtasks) ? f.subtasks.map(jiraKey).filter((v): v is string => !!v) : [];
+    const timeField = (field: string, nested: unknown) => f[field] === undefined ? seconds(nested) : seconds(f[field]);
+    const records = raw.changelog?.histories || [];
+    const closed = (id: string | null, label: string | null) => categories.get(id || '') === 'done'
+        || /^(done|closed|resolved|kapandı|kapalı|tamamlandı|çözüldü|iptal)$/i.test(label || '');
+    const historySummary = raw.changelog && summarizeJiraHistory(normalizeHistory(records), {
+        created: isoOf(f.created),
+        resolved: isoOf(f.resolutiondate),
+        current: str(status.name),
+        at: new Date(Math.floor(Date.now() / 60_000) * 60_000).toISOString(),
+        isClosed: closed,
+        partial: (raw.changelog.total || 0) > records.length,
+    });
     return {
+        ...(historySummary ? { historySummary } : {}),
         key: raw.key,
         summary: str(f.summary).trim(),
         description: plainDescription(f.description),
@@ -351,8 +591,14 @@ export const normalizeIssue = (raw: JiraFullIssueRaw, categories: Map<string, Ji
         components: names(f.components),
         labels: Array.isArray(f.labels) ? (f.labels as unknown[]).map(str).filter(Boolean) : [],
         fixVersions: names(f.fixVersions),
-        originalEstimateSeconds: num(f.timeoriginalestimate),
-        timeSpentSeconds: num(f.timespent),
+        originalEstimateSeconds: timeField('timeoriginalestimate', tracking.originalEstimateSeconds),
+        timeSpentSeconds: timeField('timespent', tracking.timeSpentSeconds),
+        remainingEstimateSeconds: timeField('timeestimate', tracking.remainingEstimateSeconds),
+        aggregateOriginalEstimateSeconds: seconds(f.aggregatetimeoriginalestimate),
+        aggregateRemainingEstimateSeconds: seconds(f.aggregatetimeestimate),
+        aggregateTimeSpentSeconds: seconds(f.aggregatetimespent),
+        ...(parentKey ? { parentKey } : {}),
+        subtaskKeys,
         storyPoints: Number.isFinite(points) && points > 0 ? points : null,
         assignee: str((f.assignee as { displayName?: unknown })?.displayName) || str((f.assignee as { name?: unknown })?.name),
         ...(str((f.assignee as { emailAddress?: unknown })?.emailAddress) ? { assigneeEmail: str((f.assignee as { emailAddress?: unknown }).emailAddress) } : {}),
@@ -365,7 +611,7 @@ export const normalizeIssue = (raw: JiraFullIssueRaw, categories: Map<string, Ji
     };
 };
 
-const ISSUE_FIELDS = 'summary,description,issuetype,status,priority,created,updated,resolutiondate,duedate,components,labels,fixVersions,timeoriginalestimate,timespent,assignee,issuelinks';
+const ISSUE_FIELDS = 'summary,description,issuetype,status,priority,created,updated,resolutiondate,duedate,components,labels,fixVersions,timeoriginalestimate,timespent,timeestimate,aggregatetimeoriginalestimate,aggregatetimeestimate,aggregatetimespent,timetracking,parent,subtasks,assignee,issuelinks';
 
 /**
  * Projenin kayıtlarından bir sayfa: alanlar ve durum geçmişi (changelog).
@@ -439,6 +685,7 @@ export interface JiraSyncSource {
     filterId?: string;
     /** Serbest metin araması (text ~); yalnız harf, rakam, boşluk, nokta, alt çizgi — JQL'e kaçış gerektirmez */
     text?: string;
+    duePeriod?: DayRange;
 }
 export const JIRA_SYNC_KEYS_MAX = 100;
 const ISSUE_KEY_RE = /^[A-Za-z][A-Za-z0-9_]{1,19}-\d{1,9}$/;
@@ -461,8 +708,10 @@ export const checkSyncSource = (env: Env, raw: unknown): { source: JiraSyncSourc
         return { error: 'Geçersiz proje anahtarı, etiket ya da filtre.', status: 400 };
     }
     if (text && !TEXT_RE.test(text)) return { error: 'Arama metni yalnız harf, rakam, boşluk, nokta ve alt çizgi içerebilir (2–100 karakter).', status: 400 };
+    const duePeriod = r.duePeriod;
+    if (duePeriod !== undefined && !isDayRange(duePeriod)) return { error: 'Geçersiz termin aralığı.', status: 400 };
     if (projectKey && !jiraProjectAllowed(env, projectKey)) return { error: `${projectKey} projesi bu sunucuda Jira erişimine açık değil.`, status: 403 };
-    return { source: { ...(projectKey ? { projectKey } : {}), ...(labels.length ? { labels } : {}), ...(filterId ? { filterId } : {}), ...(text ? { text } : {}) } };
+    return { source: { ...(projectKey ? { projectKey } : {}), ...(labels.length ? { labels } : {}), ...(filterId ? { filterId } : {}), ...(text ? { text } : {}), ...(isDayRange(duePeriod) ? { duePeriod: { start: duePeriod.start, end: duePeriod.end } } : {}) } };
 };
 
 /** Kaynak JQL'i: yalnız açık kayıtlar (istenirse); izin listesi varsa sorgu ona da daraltılır */
@@ -473,6 +722,7 @@ export const buildSyncJql = (env: Env, source: JiraSyncSource, openOnly = true):
         source.labels?.length ? `labels in (${quoted(source.labels)})` : '',
         source.filterId ? `filter = ${source.filterId}` : '',
         source.text ? `text ~ "${source.text}"` : '',
+        source.duePeriod ? `duedate >= "${source.duePeriod.start}" AND duedate <= "${source.duePeriod.end}"` : '',
         openOnly ? 'statusCategory != Done' : '',
     ].filter(Boolean).join(' AND ') + ' ORDER BY key ASC';
 };
@@ -547,10 +797,10 @@ export interface JiraUpdateChanges {
     /** YYYY-AA-GG; null termini siler */
     dueDate?: string | null;
     estimateHours?: number;
+    remainingEstimateHours?: number;
     /** Hedef durum kategorisi; iş akışındaki uygun geçiş uygulanır */
     status?: JiraStatusCategory;
     comment?: string;
-    worklogHours?: number;
     /** Hedef Jira durum adı (ör. TESTING): verilirse geçiş bu duruma göre seçilir, yoksa kategoriye göre */
     statusName?: string;
     /** Geçişte yazılacak çözüm (Türkçe ad ya da Jira adı; ekranda yoksa geçiş çözümsüz yeniden denenir) */
@@ -584,7 +834,7 @@ const jiraErrorText = (body: { errors?: Record<string, unknown>; errorMessages?:
  * bağımsızdır; biri başarısız olursa diğerleri yine uygulanır ve hata
  * alan bazında döner.
  */
-export const updateJiraIssue = async (env: Env, key: string, changes: JiraUpdateChanges, fetchImpl?: typeof fetch, now: Date = new Date()): Promise<JiraUpdateResult> => {
+export const updateJiraIssue = async (env: Env, key: string, changes: JiraUpdateChanges, fetchImpl?: typeof fetch): Promise<JiraUpdateResult> => {
     const base = clean(env.JIRA_BASE_URL)!.replace(/\/+$/, '');
     const f = fetchImpl || upstreamFetch(base, env);
     const headers = { authorization: jiraAuth(env), accept: 'application/json', 'content-type': 'application/json' };
@@ -609,10 +859,21 @@ export const updateJiraIssue = async (env: Env, key: string, changes: JiraUpdate
         else errors.push({ field: 'priority', message: "Jira'da karşılığı olan öncelik bulunamadı." });
     }
     if (changes.dueDate !== undefined) { fields.duedate = changes.dueDate; fieldOf.duedate = 'dueDate'; }
-    if (changes.estimateHours) { fields.timetracking = { originalEstimate: `${Math.max(1, Math.round(changes.estimateHours * 60))}m` }; fieldOf.timetracking = 'estimateHours'; }
+    const timeTracking = {
+        ...(changes.estimateHours ? { originalEstimate: `${Math.max(1, Math.round(changes.estimateHours * 60))}m` } : {}),
+        ...(changes.remainingEstimateHours !== undefined ? { remainingEstimate: `${Math.round(changes.remainingEstimateHours * 60)}m` } : {}),
+    };
+    if (Object.keys(timeTracking).length) {
+        fields.timetracking = timeTracking;
+        fieldOf.timetracking = changes.remainingEstimateHours !== undefined ? 'remainingEstimateHours' : 'estimateHours';
+    }
     for (let attempt = 0; attempt < 2 && Object.keys(fields).length; attempt++) {
         const r = await call('PUT', path, { fields });
-        if (r.ok) { applied.push(...Object.keys(fields).map(k => fieldOf[k])); break; }
+        if (r.ok) {
+            applied.push(...Object.keys(fields).map(k => fieldOf[k]));
+            if (fields.timetracking && timeTracking.originalEstimate && timeTracking.remainingEstimate !== undefined) applied.push('estimateHours');
+            break;
+        }
         const bad = Object.keys(r.body.errors || {}).filter(k => k in fields);
         if (attempt === 0 && bad.length && bad.length < Object.keys(fields).length) {
             bad.forEach(k => { errors.push({ field: fieldOf[k], message: str(r.body.errors![k]) || 'Jira bu alanı kabul etmedi.' }); delete fields[k]; });
@@ -660,10 +921,7 @@ export const updateJiraIssue = async (env: Env, key: string, changes: JiraUpdate
         const r = await call('POST', `${path}/comment`, { body: changes.comment });
         if (r.ok) applied.push('comment'); else errors.push({ field: 'comment', message: jiraErrorText(r.body, r.status) });
     }
-    if (changes.worklogHours) {
-        const r = await call('POST', `${path}/worklog`, { timeSpentSeconds: Math.max(60, Math.round(changes.worklogHours * 3600)), started: now.toISOString().replace('Z', '+0000') });
-        if (r.ok) applied.push('worklog'); else errors.push({ field: 'worklog', message: jiraErrorText(r.body, r.status) });
-    }
+
 
     let issue: JiraIssueRecord | undefined;
     try { issue = (await fetchJiraIssuesByKeys(env, [key], fetchImpl)).issues[0]; } catch { /* güncel hâl okunamadı: sonraki eşitlemede gelir */ }
@@ -911,7 +1169,8 @@ export const handleIntegrationRequest = async (request: Request, rawEnv: Env, op
     }
 
     if (request.method === 'OPTIONS') return new Response(null, { status: 204 });
-    if (request.method !== 'POST') return json(405, { error: 'Yalnızca POST.', code: 'bad_request' });
+    const method = opts.route === 'jira-history' ? 'GET' : 'POST';
+    if (request.method !== method) return json(405, { error: `Yalnızca ${method}.`, code: 'bad_request' });
 
     const auth = resolveAuthMode(env, !!opts.isDev);
     if (auth.problem) return json(503, { error: auth.problem, code: 'config' });
@@ -929,11 +1188,35 @@ export const handleIntegrationRequest = async (request: Request, rawEnv: Env, op
         return res;
     }
 
+    if (opts.route === 'jira-history') {
+        if (!status.jira) return json(501, { error: 'Jira bağlantısı yapılandırılmadı.', code: 'config' });
+        const key = new URL(request.url).searchParams.get('key') || '';
+        try {
+            return json(200, { entries: await fetchJiraHistory(env, key, opts.fetchImpl) });
+        } catch (e) {
+            const err = e as Error & { status?: number };
+            return json(err.status || 502, { error: err.status ? err.message : `Jira'ya ulaşılamadı: ${describeNetworkError(e)}`, code: 'upstream' });
+        }
+    }
+
     let body: Record<string, unknown>;
     try {
         body = await request.json() as Record<string, unknown>;
     } catch {
         return json(400, { error: 'Geçersiz istek gövdesi.', code: 'bad_request' });
+    }
+
+    const timezone = body.timeZone === undefined ? JIRA_WORK_TIME_ZONE : String(body.timeZone);
+    if (opts.route === 'jira-worklogs') {
+        try {
+            if (!timezone || timezone.length > 64) throw new Error();
+            new Intl.DateTimeFormat('tr-TR', { timeZone: timezone });
+        } catch {
+            return json(400, { error: 'Geçersiz worklog saat dilimi.', code: 'bad_request' });
+        }
+        if (status.jira && auth.mode !== 'supabase' && !(opts.isDev && auth.mode === 'none') && env.JIRA_WORKLOG_SINGLE_USER !== '1') {
+            return json(403, { error: 'Worklog okumak için kişisel Supabase oturumu veya tek kullanıcılı sunucu ayarı gerekir.', code: 'forbidden' });
+        }
     }
 
     if (opts.route === 'jira-worklogs' && Array.isArray(body.keys)) {
@@ -946,7 +1229,9 @@ export const handleIntegrationRequest = async (request: Request, rawEnv: Env, op
         const blocked = [...new Set(keys.map(k => k.split('-')[0]))].filter(p => !jiraProjectAllowed(env, p));
         if (blocked.length) return json(403, { error: `${blocked.join(', ')} projesi bu sunucuda Jira erişimine açık değil.`, code: 'forbidden' });
         try {
-            return json(200, await fetchJiraIssueWorklogs(env, keys, opts.fetchImpl));
+            const { entries, missing } = await fetchJiraIssueWorklogs(env, keys, opts.fetchImpl, timezone, body.incremental === true);
+            const visible = allowedWorklogs(env, who, entries);
+            return json(200, { entries: body.detail === true ? visible : visible.map(({ comment: _, ...entry }) => entry), missing });
         } catch (e) {
             const err = e as Error & { status?: number };
             return json(err.status || 502, { error: err.status ? err.message : `Jira'ya ulaşılamadı: ${describeNetworkError(e)}`, code: 'upstream' });
@@ -956,10 +1241,11 @@ export const handleIntegrationRequest = async (request: Request, rawEnv: Env, op
     if (opts.route === 'jira-worklogs') {
         if (!status.jira) return json(501, { error: "Jira bağlantısı yapılandırılmadı (kurum içi izin ve sunucu ayarı gerekir).", code: 'config' });
         const key = String(body.projectKey || ''), from = String(body.from || ''), to = String(body.to || '');
-        if (!KEY_RE.test(key) || !DATE_RE.test(from) || !DATE_RE.test(to) || from > to) return json(400, { error: 'Geçersiz proje anahtarı ya da tarih aralığı.', code: 'bad_request' });
+        if (!KEY_RE.test(key) || !isIsoDay(from) || !isIsoDay(to) || from > to) return json(400, { error: 'Geçersiz proje anahtarı ya da tarih aralığı.', code: 'bad_request' });
         if (!jiraProjectAllowed(env, key)) return json(403, { error: `${key.toUpperCase()} projesi bu sunucuda Jira erişimine açık değil.`, code: 'forbidden' });
         try {
-            return json(200, { entries: await fetchJiraWorklogs(env, key, from, to, opts.fetchImpl) });
+            const entries = allowedWorklogs(env, who, await fetchJiraWorklogs(env, key, from, to, opts.fetchImpl, timezone));
+            return json(200, { entries: body.detail === true ? entries : entries.map(({ comment: _, ...entry }) => entry) });
         } catch (e) {
             const err = e as Error & { status?: number };
             return json(err.status || 502, { error: err.status ? err.message : `Jira'ya ulaşılamadı: ${describeNetworkError(e)}`, code: 'upstream' });
@@ -1022,19 +1308,20 @@ export const handleIntegrationRequest = async (request: Request, rawEnv: Env, op
                 if (!keyAllowed(key)) return json(403, { error: `${key.split('-')[0]} projesi bu sunucuda Jira erişimine açık değil.`, code: 'forbidden' });
                 const c = (body.changes && typeof body.changes === 'object' ? body.changes : {}) as Record<string, unknown>;
                 const hours = (v: unknown, max: number) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? Math.min(v, max) : undefined);
+                if ('worklogHours' in c) return json(403, { error: 'Jira çalışma kayıtları salt okunurdur.', code: 'forbidden' });
                 const changes: JiraUpdateChanges = {
                     summary: typeof c.summary === 'string' ? c.summary.replace(/\s+/g, ' ').trim().slice(0, 255) || undefined : undefined,
                     priority: typeof c.priority === 'string' && Object.hasOwn(PRIORITY_PATTERNS, c.priority) ? c.priority : undefined,
                     dueDate: c.dueDate === null ? null : typeof c.dueDate === 'string' && DATE_RE.test(c.dueDate) ? c.dueDate : undefined,
                     estimateHours: hours(c.estimateHours, 10000),
+                    remainingEstimateHours: typeof c.remainingEstimateHours === 'number' && c.remainingEstimateHours >= 0 && c.remainingEstimateHours <= 10000 ? c.remainingEstimateHours : undefined,
                     status: asCategory(c.status) || undefined,
                     comment: typeof c.comment === 'string' ? c.comment.trim().slice(0, 30000) || undefined : undefined,
-                    worklogHours: hours(c.worklogHours, 24),
                     statusName: typeof c.statusName === 'string' && /^[\p{L}\p{N} ._'()&/-]{1,60}$/u.test(c.statusName.trim()) ? c.statusName.trim() : undefined,
                     resolution: typeof c.resolution === 'string' && /^[\p{L}\p{N} ._'()-]{1,60}$/u.test(c.resolution.trim()) ? c.resolution.trim() : undefined,
                 };
                 if (!Object.values(changes).some(v => v !== undefined)) return json(400, { error: 'Güncellenecek geçerli alan yok.', code: 'bad_request' });
-                return json(200, await updateJiraIssue(env, key, changes, opts.fetchImpl, opts.now));
+                return json(200, await updateJiraIssue(env, key, changes, opts.fetchImpl));
             }
         } catch (e) {
             return fail(e);

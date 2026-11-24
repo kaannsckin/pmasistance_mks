@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildForecast, detectCutoffMonth } from './forecast';
 import { createEmptyWorkspace, createProject } from './workspace';
-import { Allocation, Person, TitleDef, WorkspaceData } from '../types';
+import { Allocation, Person, Task, TaskStatus, TitleDef, WorkspaceData } from '../types';
 
 const person = (id: string, first: string, last: string, titleCode?: string): Person => ({
     id, firstName: first, lastName: last, departmentCode: 'U310', titleCode, availableAA: 1, roles: [],
@@ -114,4 +114,19 @@ describe('buildForecast', () => {
         expect(r.rows).toHaveLength(2);
         expect(r.rows[0].eac).toBeGreaterThanOrEqual(r.rows[1].eac); // azalan
     });
+});
+
+it('Jira kalan eforu bir kişiye ait birden çok iş paketi tahsisinde bir kez ekler', () => {
+    const ws = build([alloc('a1', 'p1', 'x', { 1: 1 }, { 2: 1 }), alloc('a2', 'p1', 'x', {}, { 2: 2 })], [person('p1', 'A', 'B')]);
+    const p = ws.projects[0];
+    ws.allocations.forEach(a => { a.projectId = p.id; });
+    p.settings.useJiraRemainingEstimate = true;
+    p.tasks = [{ status: TaskStatus.InProgress, resourceName: 'A B', remainingEstimateHours: 160, dueDate: '2026-02-10' } as Task];
+    const options = { year: 2026, method: 'naive', window: 3, dim: 'project', cutoffMonth: 1 } as const;
+    const r = buildForecast(ws, options);
+    expect(r.jiraRemainingApplied).toBe(true);
+    expect(r.total.months[1].forecast).toBe(1);
+    expect(r.total.months[2].forecast).toBe(0);
+    p.settings.useJiraRemainingEstimate = false;
+    expect(buildForecast(ws, options).total.months[2].forecast).toBe(1);
 });

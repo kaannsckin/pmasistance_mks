@@ -12,7 +12,7 @@ import { estimateRange, pertDays } from './lifecycle';
 import { GroupStat, SimGroup, SimResult } from './monteCarlo';
 import { estimateFromHistory, RecordDraft } from './referenceClass';
 import { BuiltSimulation, buildSimulation, dateAtOffset, offsetOf } from './simulationInput';
-import { formatDay, toIsoDay } from '../calendarRange';
+import { formatDay, isIsoDay, toIsoDay } from '../calendarRange';
 
 /**
  * Sürüm planlama sihirbazının saf hesapları:
@@ -385,6 +385,53 @@ export interface CommitResult {
     krIdOf: Record<string, string>;
 }
 
+export const canAddManualReleaseTask = (task: Task): boolean => task.status !== TaskStatus.Done;
+
+/** Manuel planda kullanıcı kapsamı ve sprinti seçer. Mevcut işlerin efor ve durum bilgileri korunur. */
+export const commitManualReleasePlan = (project: Project, plan: ReleasePlan, now = new Date()): CommitResult => {
+    if (!plan.name.trim()) throw new Error('Sürüm adı gerekli.');
+    if ((plan.startDate && !isIsoDay(plan.startDate)) || (plan.targetDate && !isIsoDay(plan.targetDate)) ||
+        (plan.startDate && plan.targetDate && plan.startDate > plan.targetDate)) throw new Error('Sürüm tarihleri geçersiz.');
+    const at = now.toISOString();
+    const versions = project.versions || [];
+    const version = versionForReleasePlan(versions, plan);
+    const byId = new Map(project.tasks.map(t => [t.id, t]));
+    const taskIdOf = new Map<string, string>();
+    const changed = new Map<string, Task>();
+    const skipped: CommitResult['skipped'] = [];
+    let created = 0;
+    let updated = 0;
+    for (const item of includedItems(plan)) {
+        const existing = item.sourceTaskId ? byId.get(item.sourceTaskId) : undefined;
+        if (item.sourceTaskId && (!existing || !canAddManualReleaseTask(existing) || changed.has(existing.id))) {
+            skipped.push({ itemId: item.id, name: item.name });
+            continue;
+        }
+        if (item.manualSprint !== undefined && (!Number.isSafeInteger(item.manualSprint) || item.manualSprint < 0)) throw new Error('Geçersiz hedef sprint.');
+        const fields = { fixVersion: version.name, ...(item.manualSprint === undefined ? {} : { version: item.manualSprint, includeInSprints: true }) };
+        const task: Task = existing ? { ...existing, ...fields } : {
+            id: newId('task'), name: item.name.trim(), notes: item.notes || '', jiraId: '', availability: true,
+            predecessor: null, priority: item.priority || 'Medium', status: TaskStatus.ToDo, version: 0,
+            resourceName: item.resourceName || '', unit: item.unit || '', issueType: item.issueType,
+            time: { best: 0, avg: 0, worst: 0 }, ...fields,
+        };
+        if (existing) updated++; else created++;
+        changed.set(task.id, task);
+        taskIdOf.set(item.id, task.id);
+    }
+    if (!changed.size) throw new Error('Aktarılabilecek görev bulunamadı.');
+    const committed: ReleasePlan = { ...plan, mode: 'manual', status: 'committed', updatedAt: at, versionId: version.id, manualCommit: { at, taskIds: [...changed.keys()] } };
+    return {
+        project: {
+            ...project,
+            versions: versions.includes(version) ? versions : [...versions, version],
+            tasks: [...project.tasks.map(t => changed.get(t.id) || t), ...[...changed.values()].filter(t => !byId.has(t.id))],
+            releasePlans: (project.releasePlans || []).map(p => p.id === plan.id ? committed : p),
+        },
+        plan: committed, created, updated, skipped, taskIdOf: Object.fromEntries(taskIdOf), krIdOf: {}, log: [],
+    };
+};
+
 /**
  * Planı projeye aktarır: kabul edilen satırlar görev olur (havuzdan
  * alınanlar güncellenir), her kayıt simülasyondaki P50 bitişine göre sprint
@@ -594,10 +641,21 @@ export const applyCommit = (current: Project, c: CommitResult): Project => {
     const committed = new Map(c.project.tasks.filter(t => ids.has(t.id)).map(t => [t.id, { ...t, fixVersion: version.name }]));
     const have = new Set(current.tasks.map(t => t.id));
     const known = new Set(current.objectives.map(o => o.id));
+    const manualItems = plan.mode === 'manual' ? new Map(plan.items.filter(i => i.sourceTaskId && c.taskIdOf[i.id] === i.sourceTaskId).map(i => [i.sourceTaskId!, i])) : null;
     return {
         ...current,
         versions: versions.includes(version) ? versions : [...versions, version],
-        tasks: [...current.tasks.map(t => (committed.has(t.id) ? { ...t, ...committed.get(t.id)! } : t)), ...[...committed.values()].filter(t => !have.has(t.id))],
+        tasks: [
+            ...current.tasks.map(t => {
+                const entry = committed.get(t.id);
+                if (!entry) return t;
+                if (!manualItems) return { ...t, ...entry };
+                if (!canAddManualReleaseTask(t)) return t;
+                const sprint = manualItems.get(t.id)?.manualSprint;
+                return { ...t, fixVersion: version.name, ...(sprint === undefined ? {} : { version: sprint, includeInSprints: true }) };
+            }),
+            ...[...committed.values()].filter(t => !have.has(t.id) && !manualItems?.has(t.id)),
+        ],
         objectives: [...current.objectives, ...c.project.objectives.filter(o => !known.has(o.id) && o.id === c.objectiveId)],
         releasePlans: plans.some(p => p.id === plan.id) ? plans.map(p => (p.id === plan.id ? plan : p)) : [...plans, plan],
     };

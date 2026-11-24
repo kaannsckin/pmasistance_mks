@@ -3,6 +3,8 @@ import { JiraIssueRecord, JiraSyncPage, JiraSyncSource, JiraUpdateChanges } from
 import { mapJiraPriority } from './jiraFields';
 import { JiraImportOptions, mergeJiraIssues } from './jiraImport';
 import { applyFieldPolicy, hasFieldPolicy, JiraPush, planPushes, pushesAny, withBase } from './jiraFieldSync';
+import { DayRange, inRange } from '../calendarRange';
+import { secondsToHours } from '../timeTracking';
 
 /**
  * Jira canlı eşitleme (saf mantık): hangi kayıtların çekileceği, sonucun
@@ -67,20 +69,21 @@ export interface JiraSyncFetch {
     fromSource: number;
 }
 
-type FetchPage = (o: { keys: string[] } | { source: JiraSyncSource; cursor?: string | null }) => Promise<JiraSyncPage>;
+type FetchPage = (o: { keys: string[] } | { source: JiraSyncSource; cursor?: string | null; openOnly?: boolean }) => Promise<JiraSyncPage>;
 
 /** Eşitleme verisini toplar: önce kaynak (keşif açıksa), sonra kaynakta dönmeyen bağlı açık kayıtlar anahtarla */
-export const collectJiraSync = async (tasks: Task[], settings: JiraSyncSettings | undefined, fetchPage: FetchPage, onProgress?: (done: number) => void): Promise<JiraSyncFetch> => {
+export const collectJiraSync = async (tasks: Task[], settings: JiraSyncSettings | undefined, fetchPage: FetchPage, onProgress?: (done: number) => void, period?: DayRange): Promise<JiraSyncFetch> => {
     const issues: JiraIssueRecord[] = [];
     const missing: string[] = [];
     let truncated = false;
-    const source = settings?.discover ? sourceOf(settings) : null;
+    const source = period || settings?.discover ? sourceOf(settings) : null;
+    if (period && !source) throw new Error('Aralık eşitlemesi için Jira projesi, etiket veya filtre seçin.');
     if (source) {
         let cursor: string | null = null;
         for (let page = 0; ; page++) {
             if (page >= SOURCE_MAX_PAGES) { truncated = true; break; }
-            const r = await fetchPage({ source, cursor });
-            issues.push(...r.issues);
+            const r = await fetchPage(period ? { source: { ...source, duePeriod: period }, openOnly: false, cursor } : { source, cursor });
+            issues.push(...(period ? r.issues.filter(issue => !!issue.due && inRange(issue.due, period)) : r.issues));
             onProgress?.(issues.length);
             if (!r.next) break;
             cursor = r.next;
@@ -88,7 +91,7 @@ export const collectJiraSync = async (tasks: Task[], settings: JiraSyncSettings 
     }
     const fromSource = issues.length;
     const got = new Set(issues.map(i => keyOf(i.key)));
-    const rest = linkedSyncKeys(tasks, settings).filter(k => !got.has(k));
+    const rest = period ? [] : linkedSyncKeys(tasks, settings).filter(k => !got.has(k));
     for (let i = 0; i < rest.length; i += KEYS_CHUNK) {
         const r = await fetchPage({ keys: rest.slice(i, i + KEYS_CHUNK) });
         issues.push(...r.issues);
@@ -188,7 +191,7 @@ export const syncDue = (settings: JiraSyncSettings | undefined, lastAt: string |
 
 // ---------------------------------------------------------------- uygulama ↔ Jira farkı (Jira'ya yazma)
 
-export type JiraDiffField = 'summary' | 'priority' | 'status' | 'dueDate';
+export type JiraDiffField = 'summary' | 'priority' | 'status' | 'dueDate' | 'remaining';
 export interface JiraDiffRow {
     field: JiraDiffField;
     label: string;
@@ -213,6 +216,11 @@ export const jiraDiff = (task: Task, issue: JiraIssueRecord): JiraDiffRow[] => {
     if (task.priority !== mapJiraPriority(issue.priority)) rows.push({ field: 'priority', label: 'Öncelik', local: PRIORITY_LABEL[task.priority], remote: issue.priority || '—' });
     if (issue.statusCategory && CATEGORY_OF[task.status] !== issue.statusCategory) rows.push({ field: 'status', label: 'Durum', local: CATEGORY_LABEL[CATEGORY_OF[task.status]], remote: issue.status || CATEGORY_LABEL[issue.statusCategory] });
     if (day(task.dueDate) !== day(issue.due)) rows.push({ field: 'dueDate', label: 'Termin', local: day(task.dueDate) || '—', remote: day(issue.due) || '—' });
+    const remaining = secondsToHours(issue.remainingEstimateSeconds);
+    if (issue.remainingEstimateSeconds !== undefined && task.remainingEstimateHours !== remaining) {
+        const format = (hours?: number) => hours === undefined ? '—' : `${hours.toLocaleString('tr-TR', { maximumFractionDigits: 2 })} sa`;
+        rows.push({ field: 'remaining', label: 'Kalan süre', local: format(task.remainingEstimateHours), remote: format(remaining) });
+    }
     return rows;
 };
 
@@ -224,6 +232,7 @@ export const diffToChanges = (task: Task, fields: Iterable<JiraDiffField>): Jira
         else if (f === 'priority') c.priority = task.priority;
         else if (f === 'status') c.status = CATEGORY_OF[task.status];
         else if (f === 'dueDate') c.dueDate = day(task.dueDate) || null;
+        else if (f === 'remaining' && task.remainingEstimateHours !== undefined) c.remainingEstimateHours = task.remainingEstimateHours;
     }
     return c;
 };
@@ -270,8 +279,9 @@ export const runProjectSync = async (
     fetchPage: FetchPage,
     onProgress?: (done: number) => void,
     now: Date = new Date(),
+    period?: DayRange,
 ): Promise<JiraSyncRun> => {
-    const fetched = await collectJiraSync(project.tasks, project.jiraSync, fetchPage, onProgress);
+    const fetched = await collectJiraSync(project.tasks, project.jiraSync, fetchPage, onProgress, period);
     const opts: JiraImportOptions = { importedAt: now.toISOString(), defaultUnit: defaultUnitOf(project.resources) };
     const addNew = !!project.jiraSync?.discover;
     const preview = applyJiraSync(project.tasks, fetched.issues, opts, addNew, [], project.jiraSync);
@@ -331,8 +341,9 @@ export const runFullSync = async (
     fetchPage: FetchPage,
     update: Parameters<typeof executePushes>[1] | null,
     onProgress?: (done: number) => void,
+    period?: DayRange,
 ): Promise<JiraFullSync> => {
-    const r = await runProjectSync(project, fetchPage, onProgress);
+    const r = await runProjectSync(project, fetchPage, onProgress, new Date(), period);
     const pushed = r.pushes.length && update ? await executePushes(r.pushes, update) : undefined;
     const issues = withPushedIssues(r.fetched.issues, pushed);
     const waiting = r.pushes.length && !update ? `${r.pushes.length} kayıt Jira'ya yazılmayı bekliyor (sunucuda JIRA_ALLOW_UPDATE kapalı)` : '';

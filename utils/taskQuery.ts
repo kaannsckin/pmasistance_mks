@@ -1,5 +1,6 @@
 import { IssueType, Task, TaskStatus } from '../types';
 import { ISSUE_TYPE_LABELS, pertDays } from './planning/lifecycle';
+import { taskTimeTracking } from './timeTracking';
 
 /**
  * Görev sorgu dili (JQL benzeri). Görevleri aramak, süzmek ve toplu seçmek
@@ -115,6 +116,9 @@ export const QUERY_FIELDS: FieldDef[] = [
     { key: 'resolved', label: 'kapanış', aliases: ['resolved', 'kapanis', 'resolutiondate'], type: 'date', hint: 'Kapanış tarihi' },
     { key: 'estimate', label: 'tahmin', aliases: ['estimate', 'efor'], type: 'number', hint: 'Tahmini efor (gün, PERT)' },
     { key: 'spent', label: 'harcanan', aliases: ['spent', 'timespent', 'worklog'], type: 'number', hint: 'Harcanan süre (saat, Jira)' },
+    { key: 'remaining', label: 'kalan', aliases: ['remaining', 'remainingestimate'], type: 'number', hint: 'Jira kalan süre (saat)' },
+    { key: 'effortOverrun', label: 'tahmin_aşılmış', aliases: ['overrun', 'tahmin_asilmis'], type: 'bool', hint: 'Harcanan tahmini aştı veya açık işin kalan süresi sıfır' },
+    { key: 'unestimated', label: 'tahminsiz', aliases: ['unestimated'], type: 'bool', hint: 'Jira veya plan tahmini girilmemiş' },
     { key: 'storyPoints', label: 'puan', aliases: ['storypoints', 'sp', 'story_points'], type: 'number', hint: 'Story point' },
     { key: 'overdue', label: 'gecikmiş', aliases: ['overdue', 'gecikmis', 'geciken'], type: 'bool', hint: 'Termini geçmiş ve açık: gecikmiş = evet' },
 ];
@@ -148,6 +152,7 @@ const numberValue = (f: FieldDef, t: Task): number | undefined => {
     switch (f.key) {
         case 'estimate': return pertDays(t) ?? undefined;
         case 'spent': return t.actualHours;
+        case 'remaining': return t.remainingEstimateHours;
         case 'storyPoints': return t.storyPoints;
         default: return undefined;
     }
@@ -167,6 +172,11 @@ const dateValue = (f: FieldDef, t: Task): number | undefined => {
 const isOverdue = (t: Task, ctx: TaskQueryContext) => {
     const due = isoDayNum(t.dueDate);
     return due !== undefined && t.status !== TaskStatus.Done && due < dayNum(ctx.now || new Date());
+};
+const booleanValue = (f: FieldDef, t: Task, ctx: TaskQueryContext): boolean => {
+    if (f.key === 'effortOverrun') return taskTimeTracking(t).overrun;
+    if (f.key === 'unestimated') return t.originalEstimateHours == null && !pertDays(t);
+    return isOverdue(t, ctx);
 };
 
 // ------------------------------------------------------------------ sözcükler
@@ -312,6 +322,12 @@ export const parseTaskQuery = (src: string): ParsedQuery => {
             // İşleçsiz sözcük: metin araması
             if (kw(t) && kw(t) !== 'EMPTY') return fail(`"${t.text}" burada beklenmiyor.`, t);
             p++;
+            const phraseEnd = normQ(t.text) === 'tahmin' && ['aşilmiş', 'asilmis'].includes(normQ(peek()?.text || '')) ? peek() : undefined;
+            const flag = fieldByName(phraseEnd ? 'tahmin_aşılmış' : t.text);
+            if (phraseEnd) p++;
+            if (flag?.type === 'bool' && flag.key !== 'overdue') {
+                return { kind: 'cmp', field: flag, op: '=', values: [{ kind: 'lit', text: 'evet', quoted: false, start: t.start, end: t.end }], start: t.start, end: t.end };
+            }
             return { kind: 'text', value: t.value };
         }
         const field = fieldByName(t.text);
@@ -354,6 +370,7 @@ export const parseTaskQuery = (src: string): ParsedQuery => {
             return fail('EMPTY yalnız = ya da != ile kullanılır.', toks[p - 1]);
         }
         const v = parseValue();
+        if (['remaining', 'spent'].includes(field.key) && v.kind === 'lit' && /^saat$/i.test(peek()?.text || '')) p++;
         if ((op === '>' || op === '<' || op === '>=' || op === '<=') && !['priority', 'number', 'date', 'sprint'].includes(field.type)) {
             fail(`${field.label} alanında ${op} kullanılamaz.`, o);
         }
@@ -576,7 +593,7 @@ const compileCmp = (node: Extract<QueryNode, { kind: 'cmp' }>, ctx: TaskQueryCon
         }
         case 'bool': {
             const want = resolveBool(values[0], ctx);
-            return wrap(t => isOverdue(t, ctx) === want);
+            return wrap(t => booleanValue(field, t, ctx) === want);
         }
         case 'sprint': {
             const nums = values.map(v => resolveSprint(v, ctx));
@@ -646,7 +663,7 @@ const sortValue = (f: FieldDef, t: Task, ctx: TaskQueryContext): string | number
         case 'sprint': return t.version || 0;
         case 'number': return numberValue(f, t);
         case 'date': return dateValue(f, t);
-        case 'bool': return isOverdue(t, ctx) ? 1 : 0;
+        case 'bool': return booleanValue(f, t, ctx) ? 1 : 0;
         default: { const v = textValues(f, t, ctx).filter(Boolean)[0]; return v || undefined; }
     }
 };
@@ -701,7 +718,9 @@ export const runTaskQuery = (tasks: Task[], src: string, ctx: TaskQueryContext =
 export const looksLikeQuery = (src: string): boolean => {
     let toks: Token[];
     try { toks = tokenize(src); } catch { return /["=<>~()]/.test(src); }
-    return toks.some(t => t.kind === 'op' || t.kind === 'lparen' || ['IN', 'IS', 'AND', 'OR', 'ORDER', 'NOT'].includes(kw(t) || ''));
+    return toks.some((t, i) => t.kind === 'op' || t.kind === 'lparen' || ['IN', 'IS', 'AND', 'OR', 'ORDER', 'NOT'].includes(kw(t) || '')
+        || (t.kind === 'word' && ['effortOverrun', 'unestimated'].includes(fieldByName(t.text)?.key || ''))
+        || (normQ(t.text) === 'tahmin' && ['aşilmiş', 'asilmis'].includes(normQ(toks[i + 1]?.text || ''))));
 };
 
 // ------------------------------------------------------------------ öneriler
@@ -843,6 +862,8 @@ export const suggestTaskQuery = (src: string, caret: number, tasks: Task[], ctx:
 
 /** Yardım ekranındaki örnekler */
 export const QUERY_EXAMPLES: { query: string; text: string }[] = [
+    { query: 'kalan > 4 saat AND tahmin aşılmış', text: 'Dört saatten fazla işi kalan ve tahmini aşan kayıtları bul.' },
+    { query: 'tahminsiz AND durum = Açık', text: 'Planlama öncesi açık ve tahminsiz işleri ayır.' },
     { query: 'durum = Süreçte AND öncelik >= Yüksek', text: 'Süreçteki yüksek ve engelleyici işler' },
     { query: 'atanan IS EMPTY AND durum = Açık', text: 'Atanmamış açık kayıtlar' },
     { query: 'sprint = Havuz ORDER BY öncelik DESC', text: 'Sürüm planı için havuzdaki işleri önceliğe göre sırala' },

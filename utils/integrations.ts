@@ -1,6 +1,8 @@
+import type { JiraHistoryEntry, JiraHistorySummary } from './jiraHistory';
 import { AiAuthMode } from './ai/protocol';
 import { authHeaders } from './ai/client';
-import { WorklogEntry } from '../types';
+import { JiraWorklogDetail, WorklogEntry } from '../types';
+import type { DayRange } from './calendarRange';
 
 /**
  * Sunucu entegrasyonları (Jira worklog ve kayıt geçmişi, Teams/e-posta bildirimi) için istemci.
@@ -56,24 +58,25 @@ const post = async <T>(route: string, body: unknown, authMode: AiAuthMode): Prom
     return j as T;
 };
 
-export const fetchJiraWorklogs = (o: { projectKey: string; from: string; to: string }, authMode: AiAuthMode): Promise<WorklogEntry[]> =>
+export const fetchJiraWorklogs = (o: { projectKey: string; from: string; to: string; timeZone?: string }, authMode: AiAuthMode): Promise<WorklogEntry[]> =>
     post<{ entries: WorklogEntry[] }>('jira-worklogs', o, authMode).then(r => r.entries || []);
 
 /** Jira'dan gelen worklog satırı (kayıt bazında sorgu; e-posta varsa küçük harfle) */
-export interface JiraIssueWorklog {
+export interface JiraIssueWorklog extends JiraWorklogDetail {
     issueKey: string;
-    date: string;
-    author: string;
     authorEmail?: string;
-    hours: number;
+    summary?: string;
 }
+
+export const fetchJiraTimesheet = (request: { projectKey: string; from: string; to: string; timeZone: string }, authMode: AiAuthMode): Promise<JiraIssueWorklog[]> =>
+    post<{ entries: JiraIssueWorklog[] }>('jira-worklogs', { ...request, detail: true }, authMode).then(r => r.entries || []);
 
 /** Sunucunun tek istekte kabul ettiği en çok kayıt sayısı */
 export const MAX_WORKLOG_KEYS = 50;
 
 /** Belirli kayıtların tüm worklog'ları (kim kaç saat: billing hours); en çok 50 anahtar */
-export const fetchJiraIssueWorklogs = (keys: string[], authMode: AiAuthMode): Promise<{ entries: JiraIssueWorklog[]; missing: string[] }> =>
-    post<{ entries: JiraIssueWorklog[]; missing: string[] }>('jira-worklogs', { keys: keys.slice(0, MAX_WORKLOG_KEYS) }, authMode)
+export const fetchJiraIssueWorklogs = (keys: string[], authMode: AiAuthMode, detail?: { timeZone: string }): Promise<{ entries: JiraIssueWorklog[]; missing: string[] }> =>
+    post<{ entries: JiraIssueWorklog[]; missing: string[] }>('jira-worklogs', { keys: keys.slice(0, MAX_WORKLOG_KEYS), incremental: true, ...(detail ? { detail: true, timeZone: detail.timeZone } : {}) }, authMode)
         .then(r => ({ entries: r.entries || [], missing: r.missing || [] }));
 
 /** Sunucunun döndürdüğü sadeleştirilmiş Jira kaydı (bkz. server/integrations/handler.ts) */
@@ -92,6 +95,13 @@ export interface JiraIssueRecord {
     fixVersions: string[];
     originalEstimateSeconds: number | null;
     timeSpentSeconds: number | null;
+    historySummary?: JiraHistorySummary;
+    remainingEstimateSeconds?: number | null;
+    aggregateOriginalEstimateSeconds?: number | null;
+    aggregateRemainingEstimateSeconds?: number | null;
+    aggregateTimeSpentSeconds?: number | null;
+    parentKey?: string;
+    subtaskKeys?: string[];
     storyPoints: number | null;
     assignee: string;
     /** Atanan kişinin e-postası (Jira gizlemiyorsa) */
@@ -202,6 +212,7 @@ export interface JiraSyncSource {
     filterId?: string;
     /** Serbest metin (özet/açıklama/yorum); tek başına kaynak sayılmaz, yukarıdakilerden biriyle birlikte */
     text?: string;
+    duePeriod?: DayRange;
 }
 export interface JiraMeta {
     user: string;
@@ -218,9 +229,9 @@ export interface JiraUpdateChanges {
     priority?: string;
     dueDate?: string | null;
     estimateHours?: number;
+    remainingEstimateHours?: number;
     status?: 'new' | 'indeterminate' | 'done';
     comment?: string;
-    worklogHours?: number;
     /** Hedef Jira durum adı (ör. TESTING); verilirse geçiş buna göre seçilir */
     statusName?: string;
     /** Geçişte yazılacak çözüm */
@@ -306,4 +317,21 @@ export const describeNotify = (r: NotifyResult): { ok: boolean; text: string } =
     one('E-posta', r.email);
     if (r.rejected?.length) parts.push(`kurum dışı adresler atlandı: ${r.rejected.join(', ')}`);
     return { ok, text: parts.length ? `${parts.join('; ')}.` : 'Gönderilecek kanal seçilmedi.' };
+};
+
+const historyCache = new Map<string, { until: number; entries: JiraHistoryEntry[] }>();
+
+export const fetchJiraIssueHistory = async (key: string, authMode: AiAuthMode, signal?: AbortSignal): Promise<JiraHistoryEntry[]> => {
+    const headers = await authHeaders(authMode);
+    const normalized = key.trim().toUpperCase();
+    const cacheKey = JSON.stringify([normalized, headers]);
+    const cached = historyCache.get(cacheKey);
+    if (cached && cached.until > Date.now()) return cached.entries;
+    const res = await fetch(`${BASE}/jira-history?key=${encodeURIComponent(normalized)}`, { headers, signal, cache: 'no-store' });
+    const result = await res.json().catch(() => ({})) as { entries?: JiraHistoryEntry[]; error?: string };
+    if (!res.ok) throw new Error(result.error || `Jira geçmişi alınamadı (HTTP ${res.status}).`);
+    const entries = result.entries || [];
+    if (historyCache.size >= 24) historyCache.delete(historyCache.keys().next().value!);
+    historyCache.set(cacheKey, { entries, until: Date.now() + 10 * 60_000 });
+    return entries;
 };

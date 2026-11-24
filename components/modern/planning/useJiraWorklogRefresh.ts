@@ -23,6 +23,7 @@ export const refreshWorklogsNow = async (
     force = false,
 ): Promise<{ records: number; entries: number; missing: string[] }> => {
     const health = await jiraHealth();
+    if (health.authMode === 'supabase') throw new Error('Güncel Jira kayıtlarını Zaman çizelgesi görünümünden alın.');
     if (!health.jira) throw new Error('Jira bağlantısı yapılandırılmamış (Yönetici konsolu › Entegrasyonlar).');
     const all = pendingWorklogKeys(projects, 2000, force);
     let entries = 0;
@@ -59,7 +60,7 @@ export const useJiraWorklogRefresh = (getProjects: () => Project[], apply: Apply
             running = true;
             try {
                 const health = await jiraHealth();
-                if (!health.jira) return;
+                if (!health.jira || health.authMode === 'supabase') { pauseUntil = Date.now() + 10 * 60_000; return; }
                 const r = await fetchJiraIssueWorklogs(keys, health.authMode);
                 r.missing.forEach(k => skip.add(k));
                 applyRef.current(keys, r.entries, r.missing);

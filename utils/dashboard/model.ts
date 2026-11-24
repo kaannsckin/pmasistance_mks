@@ -33,6 +33,8 @@ export const WIDGETS: WidgetDef[] = [
     { type: 'risks', label: 'Riskler', description: 'Açık riskler skoruna göre; bant dağılımı', icon: 'shield', group: 'Listeler', size: 2, config: { limit: 6 } },
     { type: 'sprint', label: 'Şu anki sprint', description: 'Sprint ilerlemesi, kalan gün ve sonraki sprintler', icon: 'rocket', group: 'Göstergeler', size: 2 },
     { type: 'worklog', label: 'Kim ne kadar çalıştı', description: "Jira worklog'larından kişi bazında saat ve maliyet", icon: 'clock', group: 'Tablolar', size: 2, config: { limit: 8 } },
+    { type: 'jiraBottlenecks', label: 'Jira darboğazları', description: 'Durumda ortanca ve ortalama çalışma saati, yeniden açılan ve değişen kayıtlar', icon: 'clock', group: 'Göstergeler', size: 2 },
+    { type: 'effortStatus', label: 'Efor durumu', description: 'Jira tahmini, tamamlanma tahmini (EAC) ve en çok aşan kayıtlar', icon: 'gauge', group: 'Göstergeler', size: 2 },
     { type: 'activity', label: 'Son değişiklikler', description: 'Durum geçişleri ve kapanışlar', icon: 'history', group: 'Listeler', size: 2, config: { limit: 8 } },
     { type: 'note', label: 'Not', description: 'Serbest metin: karar, uyarı, bağlantı, açıklama', icon: 'pen', group: 'Diğer', size: 2, config: { text: '' } },
 ];

@@ -9,6 +9,7 @@ import { relativeTime } from '../../../utils/recentChanges';
 import { RISK_BAND_LABELS, riskBand, riskScore } from '../../../utils/risks';
 import { taskStatusLabel } from '../../../utils/workflow';
 import { buildWorkforce } from '../../../utils/workforce';
+import { groupTimeTracking, taskTimeTracking, TimeTrackingGroup, totalTimeTracking } from '../../../utils/timeTracking';
 import { Icon } from '../icons';
 import { rowSep } from '../ui';
 
@@ -654,6 +655,92 @@ export const NoteWidget: React.FC<{ w: DashboardWidget }> = ({ w }) => {
     return <div className="text-[14.5px] leading-relaxed m-text whitespace-pre-wrap break-words">{text}</div>;
 };
 
+const JiraBottlenecks = ({ tasks, env }: { tasks: Task[]; env: WidgetEnv }) => {
+    const [metric, setMetric] = useState<'reopenCount' | 'assigneeChanges' | 'dueDateShifts'>('reopenCount');
+    const withHistory = tasks.filter(task => task.historySummary && !task.historySummary.partial);
+    const byStatus = new Map<string, number[]>();
+    for (const task of withHistory) {
+        for (const [status, hours] of Object.entries(task.historySummary!.timeInStatus)) {
+            const values = byStatus.get(status) || [];
+            values.push(hours);
+            byStatus.set(status, values);
+        }
+    }
+    const statuses = [...byStatus].map(([status, values]) => {
+        values.sort((a, b) => a - b);
+        const count = values.length;
+        const median = (values[Math.floor(count / 2)] + values[Math.floor((count - 1) / 2)]) / 2;
+        return { status, count, median, mean: values.reduce((sum, hours) => sum + hours, 0) / count };
+    }).sort((a, b) => b.median - a.median);
+    const top = withHistory.filter(task => task.historySummary![metric] > 0)
+        .sort((a, b) => b.historySummary![metric] - a.historySummary![metric]).slice(0, 5);
+    if (!withHistory.length) return <Empty>Durum süreleri için Jira kayıtlarını eşitleyin.</Empty>;
+    return (
+        <div className="grid gap-3">
+            <div className="overflow-x-auto">
+                <table className="w-full text-sm"><thead><tr>
+                    <th className="text-left">Durum</th><th className="text-right">Ortanca</th><th className="text-right">Ortalama</th><th className="text-right">Kayıt</th>
+                </tr></thead><tbody>
+                    {statuses.map(({ status, count, median, mean }) => <tr key={status}>
+                        <td className="py-1">{status}</td><td className="text-right whitespace-nowrap">{fmt(median)} sa</td>
+                        <td className="text-right whitespace-nowrap">{fmt(mean)} sa</td><td className="text-right">{count}</td>
+                    </tr>)}
+                </tbody></table>
+            </div>
+            <label className="text-sm grid gap-1">En çok değişen kayıtlar
+                <select className="m-input" value={metric} onChange={e => setMetric(e.target.value as typeof metric)}>
+                    <option value="reopenCount">Yeniden açılan</option>
+                    <option value="assigneeChanges">Atananı değişen</option>
+                    <option value="dueDateShifts">Termini kayan</option>
+                </select>
+            </label>
+            {top.length ? <ul className="m-0 p-0 list-none">{top.map(task => <li key={task.id}>
+                <button type="button" className="m-row-link w-full text-left p-1 flex gap-2 justify-between" onClick={() => env.onViewTask(task)}>
+                    <span className="text-sm min-w-0 truncate">{task.jiraId} · {task.name}</span>
+                    <span className="text-sm m-tabular">{task.historySummary![metric]}</span>
+                </button>
+            </li>)}</ul> : <span className="text-sm m-text-3">Bu türde değişen kayıt yok.</span>}
+        </div>
+    );
+};
+
+const EffortStatusWidget: React.FC<{ tasks: Task[]; env: WidgetEnv }> = ({ tasks, env }) => {
+    const [dimension, setDimension] = useState<TimeTrackingGroup>('project');
+    const totals = totalTimeTracking(tasks);
+    if (!totals.tracked) return <Empty>Jira zaman takibi için veri bulunamadı.</Empty>;
+    const over = tasks.map(task => ({ task, data: taskTimeTracking(task) }))
+        .filter(row => row.data.overrun || (row.data.variance ?? 0) > 0)
+        .sort((a, b) => (b.data.variance ?? 0) - (a.data.variance ?? 0)).slice(0, 5);
+    const max = Math.max(1, totals.comparableOriginal, totals.comparableEac);
+    const groups = dimension === 'project' ? [] : groupTimeTracking([{ ...env.project, tasks }], dimension).filter(g => g.tracked);
+    return <div className="flex flex-col gap-2">
+        {totals.comparable > 0 ? <>
+            {[{ label: 'İlk tahmin', value: totals.comparableOriginal }, { label: 'EAC', value: totals.comparableEac }].map(b => (
+                <div key={b.label} className="grid grid-cols-[90px_minmax(0,1fr)_auto] items-center gap-2 text-[13px] m-text-2">
+                    <span>{b.label}</span>
+                    <span aria-hidden="true" className="h-2 m-fill rounded-full overflow-hidden"><span className="block h-full rounded-full" style={{ width: `${b.value / max * 100}%`, background: b.label === 'EAC' && totals.comparableEac > totals.comparableOriginal ? 'var(--m-bad)' : 'var(--m-accent)' }} /></span>
+                    <span className="m-tabular">{fmt(b.value)} sa</span>
+                </div>
+            ))}
+            <p className="m-0 text-[12px] m-text-3">{totals.comparable} karşılaştırılabilir kayıt</p>
+        </> : <p className="m-0 text-[13px] m-text-3">Karşılaştırma için tahmin, harcanan ve kalan süre gerekli.</p>}
+        <label className="flex items-center flex-wrap gap-2 text-[13px] m-text-2">
+            Kırılım <select className="m-input !w-auto" value={dimension} onChange={e => setDimension(e.target.value as TimeTrackingGroup)}>
+                <option value="project">Proje</option><option value="release">Sürüm</option><option value="component">Bileşen</option><option value="person">Atanan kişi</option>
+            </select>
+        </label>
+        {groups.length > 0 && <ul className="m-0 p-0 list-none max-h-44 overflow-auto">
+            {groups.map(g => <li key={g.key} className="text-[13px] border-t m-sep py-1.5 break-words"><b className="m-text">{g.label}</b> <span className="m-text-2">· Tahmin {fmt(g.original)} sa · Harcanan {fmt(g.spent)} sa · Kalan {fmt(g.remaining)} sa</span></li>)}
+        </ul>}
+        {over.length > 0 && <div><p className="m-0 font-semibold text-[13px] m-text">En çok aşan kayıtlar</p>
+            {over.map(({ task, data }) => <button key={task.id} type="button" className="m-row-link flex items-center justify-between gap-2 py-1.5 text-[13px]" onClick={() => env.onViewTask(task)}>
+                <span className="truncate">{[task.jiraId, task.name].filter(Boolean).join(' · ')}</span>
+                <span className="m-ink-bad shrink-0">{(data.variance ?? 0) > 0 ? `+${fmt(data.variance!)} sa` : 'Aşım'}</span>
+            </button>)}
+        </div>}
+    </div>;
+};
+
 // ------------------------------------------------------------------ yönlendirici
 export const WidgetBody: React.FC<{ w: DashboardWidget; env: WidgetEnv }> = ({ w, env }) => {
     const tasks = useMemo(() => applyFilter(env.project.tasks, w.config?.filter), [env.project.tasks, w.config?.filter]);
@@ -672,6 +759,8 @@ export const WidgetBody: React.FC<{ w: DashboardWidget; env: WidgetEnv }> = ({ w
         case 'risks': return <RisksWidget w={w} env={env} />;
         case 'sprint': return <SprintWidget env={env} />;
         case 'worklog': return <WorklogWidget w={w} tasks={tasks} env={env} />;
+        case 'jiraBottlenecks': return <JiraBottlenecks tasks={tasks} env={env} />;
+        case 'effortStatus': return <EffortStatusWidget tasks={tasks} env={env} />;
         case 'activity': return <ActivityWidget w={w} tasks={tasks} env={env} />;
         case 'note': return <NoteWidget w={w} />;
     }
@@ -696,6 +785,8 @@ export const widgetTitle = (w: DashboardWidget, project: Project): string => {
         case 'risks': return 'Riskler';
         case 'sprint': return 'Şu anki sprint';
         case 'worklog': return 'Kim ne kadar çalıştı';
+        case 'jiraBottlenecks': return 'Jira darboğazları';
+        case 'effortStatus': return 'Efor durumu';
         case 'activity': return 'Son değişiklikler';
         case 'note': return 'Not';
     }

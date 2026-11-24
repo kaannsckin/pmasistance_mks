@@ -1,15 +1,16 @@
 import React, { useCallback, useState } from 'react';
-import { Leave, Person, Project, ReleasePlan, TaskStatus } from '../../../types';
-import { toIsoDay } from '../../../utils/calendarRange';
+import { Leave, Person, Project, ReleasePlan, Task, TaskStatus } from '../../../types';
+import { DayRange, formatRange, toIsoDay } from '../../../utils/calendarRange';
 import { PlanningModel } from '../../../utils/planning/ml/runModel';
 import { PlanningHistory } from '../../../utils/planning/history';
-import { BASELINE_ITERATIONS, baselineGroups, CommitResult, createReleasePlan, groupOf, includedItems, RELEASE_GROUP, RELEASE_STEPS } from '../../../utils/planning/releasePlan';
+import { BASELINE_ITERATIONS, baselineGroups, canAddManualReleaseTask, CommitResult, createReleasePlan, groupOf, includedItems, itemFromTask, RELEASE_GROUP, RELEASE_STEPS } from '../../../utils/planning/releasePlan';
 import { runSimulationAsync } from '../../../utils/planning/runSimulation';
 import { buildSimulation, dateAtOffset } from '../../../utils/planning/simulationInput';
 import { workdaysBetween } from '../../../utils/planning/workdays';
 import { Icon } from '../icons';
 import { rowSep } from '../ui';
 import ReleaseWizard from './ReleaseWizard';
+import ManualReleasePlan from './ManualReleasePlan';
 
 /**
  * Sürüm planları: taslaklar (kalınan adımdan sürdürülür) ve aktarılmış
@@ -32,6 +33,10 @@ interface Props {
     onDeletePlan: (projectId: string, id: string) => void;
     onCommit: (result: CommitResult) => void;
     onOpenGoals: () => void;
+    onViewTask: (task: Task) => void;
+    onOpenFilteredList: (query: string) => void;
+    initialPeriod?: DayRange | null;
+    initialTaskIds?: string[];
     /** Aktarılan planın görevlerini Jira'da açma (Jira'ya gönder paneli) */
     onSendToJira?: (taskIds: string[]) => void;
 }
@@ -39,14 +44,27 @@ interface Props {
 const fmtDay = (iso?: string) => (iso ? new Date(`${iso}T00:00:00`).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric' }) : '—');
 const pct = (v: number) => `%${Math.round(v * 100)}`;
 
-const ReleasePlanner: React.FC<Props> = ({ project, me, history, people, leaves, visibleProjectIds, canEdit, blindEstimate, aiBlocked, ml, onSavePlan, onDeletePlan, onCommit, onOpenGoals, onSendToJira }) => {
+const ReleasePlanner: React.FC<Props> = ({ project, me, history, people, leaves, visibleProjectIds, canEdit, blindEstimate, aiBlocked, ml, onSavePlan, onDeletePlan, onCommit, onOpenGoals, onSendToJira, onViewTask, onOpenFilteredList, initialPeriod, initialTaskIds }) => {
     const [openId, setOpenId] = useState<string | null>(null);
     const [justCommitted, setJustCommitted] = useState<string | null>(null);
+    const [periodOnly, setPeriodOnly] = useState(!!initialPeriod);
     const projectId = project.id;
     const savePlan = useCallback((p: ReleasePlan) => onSavePlan(projectId, p), [onSavePlan, projectId]);
     const plans = [...(project.releasePlans || [])].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    const shown = periodOnly && initialPeriod ? plans.filter(plan => {
+        const end = plan.targetDate || plan.baseline?.p80 || plan.startDate;
+        const start = plan.startDate || end;
+        return start && end && start <= initialPeriod.end && end >= initialPeriod.start;
+    }) : plans;
     const open = plans.find(p => p.id === openId);
+    const finish = (commit: CommitResult) => { onCommit(commit); setJustCommitted(commit.plan.id); };
+    const taken = new Set(plans.filter(p => p.status === 'draft').flatMap(p => p.items.map(i => i.sourceTaskId)));
+    const seed = project.tasks.filter(t => initialTaskIds?.includes(t.id) && canAddManualReleaseTask(t) && !taken.has(t.id));
 
+    if (open?.status === 'draft' && open.mode === 'manual') {
+        return <ManualReleasePlan key={open.id} project={project} initial={open} me={me} canEdit={canEdit}
+            onViewTask={onViewTask} onSave={savePlan} onCommit={finish} onClose={() => setOpenId(null)} />;
+    }
     if (open && open.status === 'draft') {
         return (
             <ReleaseWizard
@@ -63,15 +81,21 @@ const ReleasePlanner: React.FC<Props> = ({ project, me, history, people, leaves,
                 aiBlocked={aiBlocked}
                 ml={ml}
                 onSave={savePlan}
-                onCommit={c => { onCommit(c); setJustCommitted(c.plan.id); }}
+                onCommit={finish}
                 onClose={() => setOpenId(null)}
             />
         );
     }
-    if (open) return <BaselineView plan={open} project={project} history={history} people={people} leaves={leaves} fresh={justCommitted === open.id} onBack={() => setOpenId(null)} onOpenGoals={onOpenGoals} onSendToJira={canEdit ? onSendToJira : undefined} />;
+    if (open) return <BaselineView plan={open} project={project} history={history} people={people} leaves={leaves} fresh={justCommitted === open.id} onBack={() => setOpenId(null)} onOpenGoals={onOpenGoals} onSendToJira={canEdit ? onSendToJira : undefined} onViewTask={onViewTask} onOpenFilteredList={onOpenFilteredList} />;
 
-    const create = () => {
+    const create = (manual: boolean) => {
         const p = createReleasePlan(project);
+        if (initialPeriod) p.targetDate = initialPeriod.end;
+        if (manual) {
+            p.mode = 'manual';
+            p.startDate = initialPeriod?.start;
+            p.items = seed.map(itemFromTask);
+        }
         savePlan(p);
         setOpenId(p.id);
     };
@@ -81,13 +105,22 @@ const ReleasePlanner: React.FC<Props> = ({ project, me, history, people, leaves,
             <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
                     <h2 id="rp-list" className="m-0 text-[17px] font-semibold m-text">Sürüm planları</h2>
-                    <p className="m-0 mt-0.5 text-[14px] m-text-3">Sürümü tanımlayın, kayıtları girin; geçmiş kayıtlar ve AI önerir, simülasyon olasılıklı takvimi ve kilometre taşlarını verir, plan görevlere aktarılır.</p>
+                    <p className="m-0 mt-0.5 text-[14px] m-text-3">Sürümün kapsamını elle belirleyin veya tahmin ve simülasyonla planlayın.</p>
                 </div>
-                {canEdit && <button type="button" className="m-btn m-btn-primary" onClick={create}><Icon name="plus" size={18} strokeWidth={2.2} />Yeni sürüm planı</button>}
+                {canEdit && <div className="flex flex-wrap gap-2">
+                    <button type="button" className="m-btn m-btn-primary" onClick={() => create(true)}><Icon name="plus" size={18} />Manuel plan{seed.length ? ` (${seed.length} görevle)` : ''}</button>
+                    <button type="button" className="m-btn m-btn-gray" onClick={() => create(false)}><Icon name="rocket" size={18} />Akıllı plan</button>
+                </div>}
             </div>
-            {!plans.length && <p className="m-0 text-[15px] m-text-2">Henüz sürüm planı yok.</p>}
+            {initialPeriod && <div className="flex flex-wrap items-center gap-2">
+                <label className="inline-flex items-center gap-2 text-[14px] cursor-pointer m-text-2">
+                    <input type="checkbox" className="w-4 h-4" checked={periodOnly} onChange={e => setPeriodOnly(e.target.checked)} />
+                    {formatRange(initialPeriod)} ile çakışan planları göster
+                </label>
+            </div>}
+            {!shown.length && <p className="m-0 text-[15px] m-text-2">{periodOnly ? 'Bu aralıkla çakışan sürüm planı yok.' : 'Henüz sürüm planı yok.'}</p>}
             <div className="flex flex-col">
-                {plans.map((p, k) => {
+                {shown.map((p, k) => {
                     const sep = rowSep(k);
                     const committed = p.status === 'committed';
                     return (
@@ -95,7 +128,8 @@ const ReleasePlanner: React.FC<Props> = ({ project, me, history, people, leaves,
                             <span className="flex-1 min-w-[200px] flex flex-col gap-0.5">
                                 <span className="text-[15px] font-semibold m-text">{p.name.trim() || 'Adsız sürüm'}</span>
                                 <span className="text-[13px] m-text-3">
-                                    {committed ? `Aktarıldı ${fmtDay(p.baseline?.at.slice(0, 10))} · P80 ${fmtDay(p.baseline?.p80)}` : `Adım ${p.step}/6 · ${RELEASE_STEPS[p.step - 1]}`}
+                                    {p.mode === 'manual' ? `Manuel plan${p.manualCommit ? ` · aktarıldı ${fmtDay(p.manualCommit.at.slice(0, 10))}` : ''}`
+                                        : committed ? `Aktarıldı ${fmtDay(p.baseline?.at.slice(0, 10))} · P80 ${fmtDay(p.baseline?.p80)}` : `Adım ${p.step}/6 · ${RELEASE_STEPS[p.step - 1]}`}
                                     {' · '}{includedItems(p).length} kayıt{p.targetDate ? ` · hedef ${fmtDay(p.targetDate)}` : ''}
                                 </span>
                             </span>
@@ -111,10 +145,12 @@ const ReleasePlanner: React.FC<Props> = ({ project, me, history, people, leaves,
 };
 
 /** Aktarılmış plan: taban çizgisi ve güncel tahmin */
-const BaselineView: React.FC<{ plan: ReleasePlan; project: Project; history: PlanningHistory; people: Person[]; leaves: Leave[]; fresh: boolean; onBack: () => void; onOpenGoals: () => void; onSendToJira?: (taskIds: string[]) => void }> = ({ plan, project, history, people, leaves, fresh, onBack, onOpenGoals, onSendToJira }) => {
+const BaselineView: React.FC<{ plan: ReleasePlan; project: Project; history: PlanningHistory; people: Person[]; leaves: Leave[]; fresh: boolean; onBack: () => void; onOpenGoals: () => void; onSendToJira?: (taskIds: string[]) => void; onViewTask: (task: Task) => void; onOpenFilteredList: (query: string) => void }> = ({ plan, project, history, people, leaves, fresh, onBack, onOpenGoals, onSendToJira, onViewTask, onOpenFilteredList }) => {
     const b = plan.baseline;
     const [current, setCurrent] = useState<{ state: 'idle' | 'running' } | { state: 'done'; p50?: string; p80?: string; doneAll: boolean } >({ state: 'idle' });
-    const tasks = project.tasks.filter(t => b?.taskIds.includes(t.id));
+    const version = project.versions?.find(v => v.id === plan.versionId);
+    const ids = new Set(b?.taskIds || plan.manualCommit?.taskIds || []);
+    const tasks = project.tasks.filter(t => ids.has(t.id));
     const done = tasks.filter(t => t.status === TaskStatus.Done).length;
     const unlinked = tasks.filter(t => !t.jiraId?.trim() && t.status !== TaskStatus.Done).map(t => t.id);
 
@@ -137,15 +173,26 @@ const BaselineView: React.FC<{ plan: ReleasePlan; project: Project; history: Pla
                 <Icon name="chevronLeft" size={20} strokeWidth={2.2} />Sürüm planları
             </button>
             {fresh && (
-                <p role="status" className="m-0 rounded-xl px-3.5 py-2.5 m-tone-ok text-[15px] font-semibold flex items-center gap-2"><Icon name="check" size={18} strokeWidth={2.4} />Plan aktarıldı: görevler listede, kilometre taşları Hedefler ekranında.</p>
+                <p role="status" className="m-0 rounded-xl px-3.5 py-2.5 m-tone-ok text-[15px] font-semibold flex items-center gap-2"><Icon name="check" size={18} strokeWidth={2.4} />Plan aktarıldı. Görevler listede{b?.objectiveId ? ', kilometre taşları Hedefler ekranında' : ''}.</p>
             )}
             <div className="flex flex-wrap items-start justify-between gap-2">
                 <h2 id="rp-base" className="m-0 text-[20px] font-bold m-text">{plan.name || 'Adsız sürüm'}</h2>
-                {onSendToJira && unlinked.length > 0 && (
-                    <button type="button" className="m-btn m-btn-gray" onClick={() => onSendToJira(unlinked)}><Icon name="send" size={18} />Jira'da aç ({unlinked.length} kayıt)</button>
-                )}
+                <div className="flex flex-wrap gap-2">
+                    {version && <button type="button" className="m-btn m-btn-gray" onClick={() => onOpenFilteredList(`sürüm = ${JSON.stringify(version.name)}`)}>Görev listesinde aç</button>}
+                    {onSendToJira && unlinked.length > 0 && <button type="button" className="m-btn m-btn-gray" onClick={() => onSendToJira(unlinked)}><Icon name="send" size={18} />Jira'da aç ({unlinked.length} kayıt)</button>}
+                </div>
             </div>
             {plan.summary && <p className="m-0 text-[15px] m-text-2 whitespace-pre-line">{plan.summary}</p>}
+            {plan.manualCommit && (
+                <div className="flex flex-col gap-2">
+                    <p className="m-0 text-[14px] m-text-2">Manuel plan · {done}/{tasks.length} görev tamamlandı{plan.startDate ? ` · başlangıç ${fmtDay(plan.startDate)}` : ''}{plan.targetDate ? ` · hedef ${fmtDay(plan.targetDate)}` : ''}</p>
+                    <ul className="m-0 p-0 list-none">
+                        {tasks.map(t => <li key={t.id} className="border-t m-sep">
+                            <button type="button" className="m-row-link flex gap-2 py-2 px-1" onClick={() => onViewTask(t)}>{t.name}{t.jiraId && <span className="m-text-3">{t.jiraId}</span>}</button>
+                        </li>)}
+                    </ul>
+                </div>
+            )}
             {b && (
                 <>
                     <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">

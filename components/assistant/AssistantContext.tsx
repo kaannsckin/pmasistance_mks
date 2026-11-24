@@ -3,7 +3,9 @@ import { View, WorkspaceData } from '../../types';
 import { AgentStep, AGENT_MAX_STEPS, runAgentTurn, TRUNCATED_STOP_REASONS } from '../../utils/ai/agent';
 import { AttachmentInfo, ChatAttachment, composeUserContent } from '../../utils/ai/attachments';
 import { UiCommand, UiResult } from '../../utils/ai/uiActions';
-import { fetchIntegrationHealth, fetchJiraIssueWorklogs, fetchJiraMeta, fetchJiraSyncPage, fetchJiraWorklogs, IntegrationHealth } from '../../utils/integrations';
+import { getWorklogTimeZone } from '../../utils/workforce';
+import { ownsProject } from '../../utils/rbac';
+import { fetchIntegrationHealth, fetchJiraIssueHistory, fetchJiraIssueWorklogs, fetchJiraMeta, fetchJiraSyncPage, fetchJiraWorklogs, IntegrationHealth } from '../../utils/integrations';
 import { AiAction, AiProposal } from '../../utils/ai/actions';
 import type { AiDocument } from '../../utils/export/aiDocument';
 import { splitFollowUps } from '../../utils/ai/followUps';
@@ -225,12 +227,21 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, chat = tru
     }
     if (integrations?.jira) {
       const mode = integrations.authMode;
+      const email = ws.people.find(person => person.id === ctx.identity.personId)?.email?.trim().toLowerCase();
+      const ownedKeys = new Set(ws.projects.flatMap(project => ownsProject(project, ctx.identity)
+        ? [project.jiraProjectKey, ...project.tasks.flatMap(task => task.jiraId?.split('-')[0] || [])].filter(Boolean).map(key => key!.toUpperCase())
+        : []));
+      const visible = (row: { issueKey?: string; authorEmail?: string }) => mode === 'supabase'
+        || (!!row.issueKey && ownedKeys.has(row.issueKey.split('-')[0].toUpperCase()))
+        || (!!email && row.authorEmail === email);
+      const zone = getWorklogTimeZone();
       ctx.jira = {
         meta: () => fetchJiraMeta(mode, signal),
+        history: key => fetchJiraIssueHistory(key, mode, signal),
         byKeys: keys => fetchJiraSyncPage({ keys }, mode, signal),
         search: (source, o) => fetchJiraSyncPage({ source, openOnly: o.openOnly, pageSize: o.pageSize }, mode, signal),
-        worklogs: (projectKey, from, to) => fetchJiraWorklogs({ projectKey, from, to }, mode),
-        issueWorklogs: keys => fetchJiraIssueWorklogs(keys, mode),
+        worklogs: (projectKey, from, to) => fetchJiraWorklogs({ projectKey, from, to, timeZone: zone }, mode).then(rows => rows.filter(visible)),
+        issueWorklogs: keys => fetchJiraIssueWorklogs(keys, mode).then(result => ({ ...result, entries: result.entries.filter(visible) })),
       };
     }
     return ctx;

@@ -40,6 +40,8 @@ import ProjectListsSheet from './components/modern/ProjectListsSheet';
 import { cleanRoleMembers, projectRolesOf } from './utils/projectRoles';
 import { listId } from './utils/projectLists';
 import { BulkTaskPatch, previewBulkTaskEdit } from './utils/bulkTaskEdit';
+import type { DayRange } from './utils/calendarRange';
+import { moveSprintTasks } from './utils/planning/period';
 import { buildDeliveries, detectTaskEvents, NotificationDelivery } from './utils/notifications';
 import { AllocationSuggestion, ApplyMode, applyAllocationSuggestions } from './utils/taskToAllocation';
 import { applyBilledHoursActuals, planBilledHoursPoolAdditions, suggestBilledHoursActuals, BilledApplyMode, BilledHoursOptions, BilledHoursRecord } from './utils/billedHours';
@@ -103,7 +105,7 @@ import { ensureJiraPeople } from './utils/planning/jiraPeople';
 import { reportEvmSnapshot } from './utils/evm';
 import { useJiraAutoSync } from './components/modern/planning/useJiraAutoSync';
 import { refreshWorklogsNow, useJiraWorklogRefresh } from './components/modern/planning/useJiraWorklogRefresh';
-import { applyIssueWorklogs } from './utils/workforce';
+import { applyIssueWorklogs, scopedWorklogProject } from './utils/workforce';
 import ModernPortfolio from './components/modern/ModernPortfolio';
 import ProjectBoard from './components/modern/ProjectBoard';
 import ModernProjectOverview from './components/modern/ModernProjectOverview';
@@ -172,6 +174,9 @@ const MODERN_PROJECT_VIEWS: View[] = [View.Dashboard, View.Overview, View.Roadma
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<View>(View.Portfolio);
+  const [projectPeriods, setProjectPeriods] = useState(() => new Map<string, DayRange>());
+  const [planningEntry, setPlanningEntry] = useState<{ projectId: string; query?: string; jiraPeriod?: DayRange; releaseTasks?: string[]; sprintTasks?: string[] } | null>(null);
+  useEffect(() => { if (planningEntry) setPlanningEntry(null); }, [planningEntry]);
   const [workspace, setWorkspace] = useState<WorkspaceData | null>(null);
 
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
@@ -1329,14 +1334,15 @@ const App: React.FC = () => {
     });
   }, [updateWorkspace]);
 
-  const handleApplyJiraSync = useCallback((projectId: string, issues: JiraIssueRecord[], opts: JiraImportOptions, addNew: boolean, label: string, pushed?: JiraPushOutcome) => {
+  const handleApplyJiraSync = useCallback((projectId: string, issues: JiraIssueRecord[], opts: JiraImportOptions, addNew: boolean, label: string, pushed?: JiraPushOutcome, settings?: JiraSyncSettings) => {
     updateWorkspace(ws => {
       const project = ws.projects.find(p => p.id === projectId);
       if (!project || !canEditProjectContent(ws, identityOf(ws), projectId)) return ws;
-      const r = applyJiraSync(project.tasks, issues, opts, addNew, ws.projects.filter(p => p.id !== projectId).flatMap(p => p.tasks.map(t => t.id)), project.jiraSync);
+      const syncSettings = settings || project.jiraSync;
+      const r = applyJiraSync(project.tasks, issues, opts, addNew, ws.projects.filter(p => p.id !== projectId).flatMap(p => p.tasks.map(t => t.id)), syncSettings);
       const tasks = pushed?.done.length ? markPushed(r.tasks, pushed.done) : r.tasks;
       // Jira'daki atanan kişiler: Veri Havuzu'na ve proje ekibine (ayar açıksa)
-      const ppl = project.jiraSync?.autoPeople ? ensureJiraPeople(ws.people, project.resources, tasks, issues) : null;
+      const ppl = syncSettings?.autoPeople ? ensureJiraPeople(ws.people, project.resources, tasks, issues) : null;
       const peopleChanged = !!ppl && (ppl.people !== ws.people || ppl.resources !== project.resources);
       const tasksChanged = JSON.stringify(tasks) !== JSON.stringify(project.tasks);
       if (!tasksChanged && !peopleChanged) return ws;
@@ -1560,7 +1566,6 @@ const App: React.FC = () => {
       const r = await updateJiraIssue(key, {
         status, ...(exact ? { statusName: target.key } : {}),
         ...(input.comment?.trim() ? { comment: `[PlanAsistan · ${target.label}] ${input.comment.trim()}` } : {}),
-        ...(input.hours ? { worklogHours: input.hours } : {}),
         ...(resolution ? { resolution } : {}),
       }, health.authMode);
       if (r.errors.length) setFlowNotice(`Jira (${key}): ${r.errors.map(e => e.message).join('; ')}${r.applied.includes('status') ? '' : ' — uygulamadaki durum bir sonraki eşitlemede Jira\'daki duruma döner.'}`);
@@ -1686,6 +1691,18 @@ const App: React.FC = () => {
       return appendAudit(updated, 'task.bulkEdit', `${project.name} · ${changes.size} görev toplu düzenlendi`, projectId);
     });
     return { changed: preview.changes.length };
+  }, [storeProjectChange, updateWorkspace]);
+
+  const handleBulkSprint = useCallback((projectId: string, ids: ReadonlySet<string>, sprint: number) => {
+    updateWorkspace(ws => {
+      const project = ws.projects.find(p => p.id === projectId);
+      if (!project || !canEditProjectContent(ws, identityOf(ws), projectId)) return ws;
+      const tasks = moveSprintTasks(project.tasks, ids, sprint);
+      if (tasks === project.tasks) return ws;
+      const count = tasks.filter((task, i) => task !== project.tasks[i]).length;
+      return appendAudit(storeProjectChange(ws, project, { ...project, tasks }), 'task.bulkEdit',
+        `${project.name} · ${count} görev ${sprint ? `Sprint ${sprint}` : 'Havuz'} hedefine taşındı`, project.id);
+    });
   }, [storeProjectChange, updateWorkspace]);
 
   const saveTaskFromForm = (formTask: Task) => {
@@ -1925,7 +1942,8 @@ const App: React.FC = () => {
     if (currentView === View.Allocations && isModern) {
       return (
         <ModernAllocation
-          workforce={{ projects: visibleProjects, onRefresh: handleRefreshWorklogs }}
+          workforce={{ projects: visibleProjects.map(project => scopedWorklogProject(project, canEditProjectContent(workspace, identity, project.id),
+            workspace.people.find(person => person.id === identity.personId))), onRefresh: handleRefreshWorklogs }}
           allocations={workspace.allocations}
           people={workspace.people}
           departmentLeadIds={departmentLeads}
@@ -2089,9 +2107,21 @@ const App: React.FC = () => {
     // Sprint ekleme/silme (klasik pano ve modern zaman çizelgesi ortak)
     const insertSprint = (n: number) => setTasks(prev => prev.map(t => t.version >= n ? { ...t, version: t.version + 1 } : t));
     const deleteSprint = (n: number) => setTasks(prev => prev.map(t => t.version === n ? { ...t, version: 0, status: TaskStatus.Backlog } : t.version > n ? { ...t, version: t.version - 1 } : t));
+    const period = projectPeriods.get(activeProject.id) || null;
+    const entry = planningEntry?.projectId === activeProject.id ? planningEntry : undefined;
+    const canPlan = canEditProjectContent(workspace, identity, activeProject.id);
+    const openFilteredList = (query: string) => {
+      setPlanningEntry({ projectId: activeProject.id, query });
+      setCurrentView(View.Tasks);
+    };
+    const openManualRelease = (ids: ReadonlySet<string>) => {
+      setPlanningEntry({ projectId: activeProject.id, releaseTasks: [...ids] });
+      setCurrentView(View.Planning);
+    };
     if (isModern && currentView === View.Kanban) {
       return (
         <ModernTimeline
+          key={activeProject.id}
           // Salt okunur zaman çizelgesi admin'in öncelik süzgecini izler; düzenlenebilirde tüm görevler (otomatik plan gizlileri kaybetmesin)
           project={isManagementRole(identity.role) && roleView.minTaskPriority !== 'Low' ? { ...activeProject, tasks: activeProject.tasks.filter(t => taskPassesView(roleView, t)) } : activeProject}
           canEdit={!isManagementRole(identity.role)}
@@ -2107,12 +2137,28 @@ const App: React.FC = () => {
           onUpdateCalendar={(c: CalendarSettings) => updateActiveProject(p => ({ ...p, settings: { ...p.settings, ...c } }))}
           onViewTask={viewTask}
           onNewTask={newTask}
+          period={period}
+          me={boardMe}
+          initialSelection={entry?.sprintTasks}
+          onPeriodChange={value => setProjectPeriods(previous => {
+            const next = new Map(previous);
+            if (value) next.set(activeProject.id, value); else next.delete(activeProject.id);
+            return next;
+          })}
+          onBulkMove={canPlan ? (ids, sprint) => handleBulkSprint(activeProject.id, ids, sprint) : undefined}
+          onOpenFilteredList={openFilteredList}
+          onOpenPeriodJira={canPlan ? jiraPeriod => {
+            setPlanningEntry({ projectId: activeProject.id, jiraPeriod });
+            setCurrentView(View.Planning);
+          } : undefined}
+          onOpenManualRelease={canPlan ? openManualRelease : undefined}
         />
       );
     }
     if (isModern && currentView === View.Planning) {
       return (
         <ModernPlanning
+          key={activeProject.id}
           project={activeProject}
           workspace={workspace}
           me={boardMe}
@@ -2125,6 +2171,10 @@ const App: React.FC = () => {
           }}
           onViewTask={viewTask}
           onOpenList={() => setCurrentView(View.Tasks)}
+          onOpenFilteredList={openFilteredList}
+          period={period}
+          initialJiraPeriod={entry?.jiraPeriod}
+          initialReleaseTasks={entry?.releaseTasks}
           onSaveReleasePlan={handleSaveReleasePlan}
           onDeleteReleasePlan={handleDeleteReleasePlan}
           onCommitReleasePlan={handleCommitReleasePlan}
@@ -2132,7 +2182,7 @@ const App: React.FC = () => {
           onImportJira={(key, issues, opts, label) => handleImportJiraHistory(activeProject.id, key, issues, opts, label)}
           onLinkJira={(key, links) => handleLinkJira(activeProject.id, key, links)}
           onSaveJiraSync={settings => handleSetJiraSync(activeProject.id, settings)}
-          onApplyJiraSync={(issues, opts, addNew, label, pushed) => handleApplyJiraSync(activeProject.id, issues, opts, addNew, label, pushed)}
+          onApplyJiraSync={(issues, opts, addNew, label, pushed, settings) => handleApplyJiraSync(activeProject.id, issues, opts, addNew, label, pushed, settings)}
         />
       );
     }
@@ -2214,7 +2264,8 @@ const App: React.FC = () => {
       return (
         <ModernDashboard
           workspace={workspace}
-          project={activeProject}
+          project={scopedWorklogProject(activeProject, canEditProjectContent(workspace, identity, activeProject.id),
+            workspace.people.find(person => person.id === identity.personId))}
           canEdit={canEditProjectContent(workspace, identity, activeProject.id)}
           role={workspace.currentRole || 'py'}
           personId={workspace.currentPersonId}
@@ -2246,6 +2297,12 @@ const App: React.FC = () => {
         <ModernTaskList
           key={activeProject.id}
           projectId={activeProject.id}
+          initialQuery={entry?.query}
+          onPlanSprint={canPlan ? ids => {
+            setPlanningEntry({ projectId: activeProject.id, sprintTasks: [...ids] });
+            setCurrentView(View.Kanban);
+          } : undefined}
+          onPlanRelease={canPlan ? openManualRelease : undefined}
           tasks={tasks}
           resources={resources}
           bulkEdit={canEditProjectContent(workspace, identity, activeProject.id) ? {
@@ -2744,6 +2801,8 @@ const App: React.FC = () => {
           onSave={handleUpdateTask}
           onJiraPull={canEditProjectContent(workspace, identity, activeProject.id) ? issue => handleJiraPull(activeProject.id, issue) : undefined}
           workflow={activeScheme.workflow}
+          canViewProjectWorklogs={canEditProjectContent(workspace, identity, activeProject.id)}
+          worklogEmail={workspace.people.find(person => person.id === identity.personId)?.email}
           people={workspace.people}
           titles={workspace.titles}
         />

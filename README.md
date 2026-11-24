@@ -671,13 +671,13 @@ sequenceDiagram
 |---|---|
 | **Jira'dan geçmiş** | Kapanmış (istenirse açık) kayıtlar sayfa sayfa: başlık, açıklama, tür, önem, bileşen, etiket, sürüm, tahmin, harcanan süre, story point, sorumlu, engelleyen kayıt ve **durum geçmişi**. Önizleme, Jira anahtarıyla birleştirme, uygulamadaki planlama verisi korunur. Jira Server/DC ve Cloud. |
 | **Jira eşitleme** | Uygulamada Jira anahtarı olan **açık** kayıtlar Jira'daki güncel hâliyle yenilenir (kapananlar kapanır, silinen/taşınanlar bildirilir). İstenirse seçilen kaynaktaki — **proje, etiket ya da kayıtlı (sık kullanılan) filtre** — yeni açık kayıtlar da eklenir. Elle ("Şimdi eşitle") ya da proje bazında ayarlanan aralıkla (5–60 dk, uygulama açıkken) otomatik. Tüm Jira taranmaz; tarayıcıdan serbest JQL kabul edilmez. |
-| **Jira'yı güncelle** | Görev ayrıntısında kaydın Jira'daki hâli getirilir ve farklar (başlık, öncelik, durum, termin) gösterilir: "Jira'daki hâli al" ya da seçilen alanları, yorumu ve harcanan süreyi (worklog) Jira'ya yaz. Durum, iş akışındaki uygun geçişle değişir. Yalnız `JIRA_ALLOW_UPDATE=1` ile. |
+| **Jira'yı güncelle** | Görev ayrıntısında kaydın Jira'daki hâli getirilir ve farklar (başlık, öncelik, durum, termin) gösterilir: "Jira'daki hâli al" ya da seçilen alanları, kalan süreyi ve yorumu Jira'ya yaz. Çalışma kayıtları salt okunurdur. Durum, iş akışındaki uygun geçişle değişir. Yalnız `JIRA_ALLOW_UPDATE=1` ile. |
 | **Jira'ya gönder** | Anahtarı olmayan açık kayıtlar Jira'da açılır; tür/önem/bileşen eşlenir, anahtar göreve yazılır. Yalnız `JIRA_ALLOW_CREATE=1` ile. |
 | **Jira Billed Hours** | "Toplam Billed Hours" pivotu → Saat → Gün → Adam-Ay (TR çalışma günü takvimi) → gerçekleşen tahsis; eşleşmeyen proje ve kişiler tek tıkla havuza eklenir. |
 | **Claude (MCP)** | Claude Desktop / Claude Code'dan doğal dille sorgu; uygulamadaki araçların ve kapsam kurallarının aynısı; isteğe bağlı onaylı yazma (`PLANASISTAN_MCP_WRITE=1`). [docs/MCP_KURULUM.md](docs/MCP_KURULUM.md) |
 | **Supabase** | E-posta girişli çok kullanıcılı çalışma; notlar ve müşteri istekleri ayrı tabloda, yönetici rolleri RLS gereği okuyamaz. Kurulum ~10 dk: [supabase/KURULUM.md](supabase/KURULUM.md) |
 
-Jira adresi ve jetonu yalnız sunucu ortam değişkenlerindedir; tüm aktarımlar denetim günlüğüne yazılır.
+Jira adresi ve jetonu sunucu ayarlarında tutulur. Zaman takibi, kayıt geçmişi ve rol bazlı çalışma kaydı kurulumu için [Jira zaman takibi kılavuzuna](docs/JIRA_ZAMAN_TAKIBI.md) bakın.
 
 ### 🧰 Yönetici konsolu ve genel
 

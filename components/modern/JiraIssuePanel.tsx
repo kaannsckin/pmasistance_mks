@@ -8,8 +8,8 @@ import { Icon } from './icons';
 /**
  * Görev ayrıntısında Jira bağlantısı: kaydın Jira'daki güncel hâli getirilir,
  * uygulamadaki hâlle farkı gösterilir. Fark iki yöne de kapatılabilir:
- * "Jira'daki hâli al" (uygulamayı yeniler) ya da seçilen alanları, yorumu ve
- * harcanan süreyi Jira'ya yazar (sunucuda JIRA_ALLOW_UPDATE açıksa).
+ * "Jira'daki hâli al" (uygulamayı yeniler) ya da seçilen alanları ve yorumu
+ * Jira'ya yazar (sunucuda JIRA_ALLOW_UPDATE açıksa).
  */
 
 interface Props {
@@ -18,7 +18,7 @@ interface Props {
     onPull: (issue: JiraIssueRecord) => void;
 }
 
-const FIELD_LABEL: Record<string, string> = { summary: 'başlık', priority: 'öncelik', dueDate: 'termin', estimateHours: 'tahmin', status: 'durum', comment: 'yorum', worklog: 'worklog' };
+const FIELD_LABEL: Record<string, string> = { summary: 'başlık', priority: 'öncelik', dueDate: 'termin', estimateHours: 'tahmin', remainingEstimateHours: 'kalan süre', status: 'durum', comment: 'yorum' };
 
 const JiraIssuePanel: React.FC<Props> = ({ task, onPull }) => {
     const key = (task.jiraId || '').trim().toUpperCase();
@@ -29,7 +29,6 @@ const JiraIssuePanel: React.FC<Props> = ({ task, onPull }) => {
     const [note, setNote] = useState<string | null>(null);
     const [picked, setPicked] = useState<Set<JiraDiffField>>(new Set());
     const [comment, setComment] = useState('');
-    const [hours, setHours] = useState('');
     const abort = useRef<AbortController | null>(null);
 
     useEffect(() => {
@@ -57,12 +56,10 @@ const JiraIssuePanel: React.FC<Props> = ({ task, onPull }) => {
     };
 
     const diff = issue ? jiraDiff(task, issue) : [];
-    const worklogHours = Number(hours.replace(',', '.'));
-    const validHours = !hours.trim() || (Number.isFinite(worklogHours) && worklogHours > 0 && worklogHours <= 24);
-    const hasPush = picked.size > 0 || !!comment.trim() || (!!hours.trim() && validHours);
+    const hasPush = picked.size > 0 || !!comment.trim();
 
     const push = async () => {
-        if (!hasPush || !validHours) return;
+        if (!hasPush) return;
         setError(null); setNote(null);
         const c = new AbortController();
         abort.current = c;
@@ -71,11 +68,9 @@ const JiraIssuePanel: React.FC<Props> = ({ task, onPull }) => {
             const r = await updateJiraIssue(key, {
                 ...diffToChanges(task, picked),
                 ...(comment.trim() ? { comment: comment.trim() } : {}),
-                ...(hours.trim() ? { worklogHours } : {}),
             }, health.authMode, c.signal);
             if (r.issue) { setIssue(r.issue); onPull(r.issue); }
             if (r.applied.includes('comment')) setComment('');
-            if (r.applied.includes('worklog')) setHours('');
             setPicked(new Set());
             if (r.applied.length) setNote(`Jira güncellendi: ${r.applied.map(a => FIELD_LABEL[a] || a).join(', ')}.`);
             if (r.errors.length) setError(r.errors.map(x => `${FIELD_LABEL[x.field] || x.field}: ${x.message}`).join(' · '));
@@ -100,7 +95,7 @@ const JiraIssuePanel: React.FC<Props> = ({ task, onPull }) => {
                         Jira'da: <strong className="m-text">{issue.status || '—'}</strong>{issue.assignee ? ` · ${issue.assignee}` : ''}{issue.priority ? ` · ${issue.priority}` : ''}{issue.due ? ` · termin ${issue.due}` : ''}{issue.updated ? ` · ${relativeTime(issue.updated)} güncellendi` : ''}
                     </p>
                     {diff.length === 0 ? (
-                        <p className="m-0 text-[14px] m-ink-ok flex items-center gap-1.5"><Icon name="check" size={16} />Başlık, öncelik, durum ve termin Jira ile aynı.</p>
+                        <p className="m-0 text-[14px] m-ink-ok flex items-center gap-1.5"><Icon name="check" size={16} />Karşılaştırılan alanlar Jira ile aynı.</p>
                     ) : (
                         <div className="overflow-x-auto">
                             <table className="w-full text-[14px] border-collapse">
@@ -110,7 +105,7 @@ const JiraIssuePanel: React.FC<Props> = ({ task, onPull }) => {
                                 </tr></thead>
                                 <tbody>{diff.map(d => (
                                     <tr key={d.field}>
-                                        {health.jiraUpdate && <td className="py-1 pr-2"><input type="checkbox" className="w-4 h-4" aria-label={`${d.label}: Jira'ya yaz`} checked={picked.has(d.field)} disabled={busy !== null} onChange={() => toggle(d.field)} /></td>}
+                                        {health.jiraUpdate && <td className="py-1 pr-2"><input type="checkbox" className="w-4 h-4" aria-label={`${d.label}: Jira'ya yaz`} checked={picked.has(d.field)} disabled={busy !== null || (d.field === 'remaining' && task.remainingEstimateHours === undefined)} onChange={() => toggle(d.field)} /></td>}
                                         <td className="py-1 pr-3 m-text-3 whitespace-nowrap">{d.label}</td>
                                         <td className="py-1 pr-3 m-text break-words">{d.local}</td>
                                         <td className="py-1 m-text-2 break-words">{d.remote}</td>
@@ -122,13 +117,12 @@ const JiraIssuePanel: React.FC<Props> = ({ task, onPull }) => {
                     {health.jiraUpdate && (
                         <div className="flex flex-wrap items-end gap-2">
                             <div className="flex-1 min-w-[180px]"><input aria-label="Jira yorumu" className="m-input" value={comment} maxLength={2000} placeholder="Jira'ya yorum (isteğe bağlı)" disabled={busy !== null} onChange={e => setComment(e.target.value)} /></div>
-                            <div className="w-[130px] flex-none"><input aria-label="Harcanan süre (saat)" className="m-input" inputMode="decimal" value={hours} placeholder="Worklog (sa)" aria-invalid={!validHours} disabled={busy !== null} onChange={e => setHours(e.target.value)} /></div>
                         </div>
                     )}
                     <div className="flex flex-wrap items-center gap-2">
                         <button type="button" className="m-btn m-btn-gray" disabled={busy !== null} onClick={() => { onPull(issue); setNote("Jira'daki hâl göreve uygulandı."); }}><Icon name="download" size={16} />Jira'daki hâli al</button>
                         {health.jiraUpdate
-                            ? <button type="button" className="m-btn m-btn-primary" disabled={busy !== null || !hasPush || !validHours} onClick={push}><Icon name="upload" size={16} />{busy === 'push' ? 'Yazılıyor…' : "Seçilenleri Jira'ya yaz"}</button>
+                            ? <button type="button" className="m-btn m-btn-primary" disabled={busy !== null || !hasPush} onClick={push}><Icon name="upload" size={16} />{busy === 'push' ? 'Yazılıyor…' : "Seçilenleri Jira'ya yaz"}</button>
                             : <span className="text-[13px] m-text-3">Jira'ya yazma bu sunucuda kapalı (JIRA_ALLOW_UPDATE).</span>}
                     </div>
                 </>

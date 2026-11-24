@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { Project, Task, TaskStatus } from '../types';
 import { buildLanes, currentLaneVersion, laneRange, positionPct, segmentPct, unitCapacities } from './timelinePlan';
 import { createProject } from './workspace';
+import { toIsoDay } from './calendarRange';
+import { moveSprintTasks, periodTaskQuery, sprintsInPeriod } from './planning/period';
+import { runTaskQuery } from './taskQuery';
 
 const task = (id: string, version: number, unit: string, res: string, avg: number, extra: Partial<Task> = {}): Task => ({
     id, name: id, availability: true, priority: 'Medium', version, predecessor: null, unit, resourceName: res,
@@ -27,6 +30,27 @@ const buildProject = (): Project => {
     ];
     return p;
 };
+
+describe('aralık planı', () => {
+    it('sprintin test günlerini kapsar ve listeye aynı sprintleri veya aralıktaki terminleri taşır', () => {
+        const p = buildProject();
+        const sprint = buildLanes(p)[1];
+        const day = toIsoDay(sprint.testEnd!);
+        const period = { start: day, end: day };
+        expect(sprintsInPeriod(p, period)).toEqual([1]);
+        p.tasks = p.tasks.map(t => t.id === 'havuz' ? { ...t, dueDate: day } : t);
+        const query = runTaskQuery(p.tasks, periodTaskQuery([1], period));
+        expect(query.ok && query.tasks.map(t => t.id)).toEqual(['havuz', 'a', 'b', 'e', 'c']);
+    });
+
+    it('seçili açık görevleri taşır, tamamlanan ve plan dışı kayıtları korur', () => {
+        const p = buildProject();
+        const changed = moveSprintTasks(p.tasks, new Set(['havuz', 'a', 'b', 'dis']), 3);
+        expect(changed.map(t => t.version)).toEqual([3, 3, 1, 1, 1, 2, 2]);
+        expect(changed[2]).toBe(p.tasks[2]);
+        expect(moveSprintTasks(changed, new Set(['havuz']), 3)).toBe(changed);
+    });
+});
 
 describe('unitCapacities', () => {
     it('net iş günü (hafta×5 − test) × katılım, birim bazında', () => {

@@ -138,7 +138,7 @@ const serveStatic = (req: IncomingMessage, res: ServerResponse) => {
     res.end(req.method === 'HEAD' ? undefined : body);
 };
 
-const INTEGRATION_ROUTES: IntegrationRoute[] = ['health', 'jira-worklogs', 'jira-issues', 'jira-create', 'jira-sync', 'notify', 'cron-reminder'];
+const INTEGRATION_ROUTES: IntegrationRoute[] = ['health', 'jira-worklogs', 'jira-history', 'jira-issues', 'jira-create', 'jira-sync', 'notify', 'cron-reminder'];
 
 const openBrowser = (url: string) => {
     const [cmd, args] = process.platform === 'win32' ? ['cmd', ['/c', 'start', '""', url]]

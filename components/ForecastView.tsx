@@ -83,6 +83,7 @@ const ForecastView: React.FC<Props> = ({ allocations, people, projects, titles, 
                 </p>
             </div>
 
+            {fc.jiraRemainingApplied && <p className="text-sm text-gray-600 dark:text-gray-300">Kalan Jira eforu, süresi girilmiş açık kayıtların öngörüsüne dahil edildi.</p>}
             {/* KPI */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <Kpi label="Gerçekleşen (bugüne dek)" value={`${fmtAA(t.ytd)} AA`} accent="#0ea5e9" />

@@ -26,6 +26,7 @@ export const versionForReleasePlan = (versions: ProjectVersion[], plan: ReleaseP
         id: `version-${plan.id}`,
         name: plan.name.trim() || 'Adsız sürüm',
         description: plan.summary?.trim() || undefined,
+        startDate: plan.startDate,
         releaseDate: plan.targetDate,
         status: 'unreleased',
     };
@@ -44,7 +45,7 @@ export const migrateReleaseVersions = (project: Project): Project => {
         const version = versionForReleasePlan(versions, plan);
         if (!versions.includes(version)) versions.push(version);
         planVersions.set(plan.id, version);
-        plan.baseline?.taskIds.forEach(id => taskVersions.set(id, version.name));
+        (plan.baseline?.taskIds || plan.manualCommit?.taskIds)?.forEach(id => taskVersions.set(id, version.name));
     }
     return {
         ...project,

@@ -1,5 +1,8 @@
-import { Allocation, Person, WorkspaceData } from '../types';
+import { Allocation, Person, Project, TaskStatus, WorkspaceData } from '../types';
 import { MONTH_INDEXES } from './allocations';
+import { fullName } from './dataPool';
+import { effectiveWorkdays } from './planning/workdays';
+import { HOURS_PER_DAY } from './workforce';
 
 /**
  * İş yükü (Adam-Ay) öngörüsü.
@@ -62,6 +65,7 @@ export interface ForecastResult {
     total: ForecastRow; // portföy toplamı (grafik + KPI)
     rows: ForecastRow[]; // boyuta göre kırılım, EAC'ye göre azalan
     uncostedEacAA: number; // maliyetlenemeyen (ünvansız/oransız) EAC AA
+    jiraRemainingApplied?: boolean;
 }
 
 const round2 = (v: number) => Math.round(v * 100) / 100;
@@ -151,6 +155,22 @@ interface AllocFc {
     rate?: number;
 }
 
+/** Kalan Jira saati, eşleşen kişinin açık işlerinin tamamında mevcutsa öngörüye girer. */
+const jiraRemainingSeries = (project: Project | undefined, person: Person | undefined, year: number, cutoff: number): number[] | undefined => {
+    if (!project?.settings.useJiraRemainingEstimate || !person || cutoff >= 12) return undefined;
+    const key = fullName(person).trim().toLocaleLowerCase('tr-TR');
+    const tasks = project.tasks.filter(t => t.status !== TaskStatus.Done && t.resourceName?.trim().toLocaleLowerCase('tr-TR') === key
+        && (!t.dueDate || Number(t.dueDate.slice(0, 4)) <= year));
+    if (!tasks.length || tasks.some(t => t.remainingEstimateHours === undefined)) return undefined;
+    const hours = Array<number>(12).fill(0);
+    for (const task of tasks) {
+        const dueMonth = Number(task.dueDate?.slice(5, 7));
+        const index = Number(task.dueDate?.slice(0, 4)) === year && dueMonth > cutoff && dueMonth <= 12 ? dueMonth - 1 : cutoff;
+        hours[index] += task.remainingEstimateHours ?? 0;
+    }
+    return hours.map((value, i) => round2(value / (Math.max(1, effectiveWorkdays(year, i + 1)) * HOURS_PER_DAY)));
+};
+
 /** Portföy/boyut öngörüsünü tek seferde hesaplar. */
 export function buildForecast(
     ws: Pick<WorkspaceData, 'allocations' | 'people' | 'projects' | 'titles'>,
@@ -163,6 +183,7 @@ export function buildForecast(
     );
     const personById = new Map(ws.people.map(p => [p.id, p]));
     const projName = new Map(ws.projects.map(p => [p.id, p.name]));
+    const projectById = new Map(ws.projects.map(p => [p.id, p]));
 
     // Cutoff: kullanıcı verdiyse onu, yoksa yarım son ayı atlayan otomatik tespit.
     const cutoffMonth = opts.cutoffMonth != null
@@ -170,12 +191,31 @@ export function buildForecast(
         : detectCutoffMonth(ws, opts.year);
     const cutoffIdx = cutoffMonth - 1;
 
+    const allocationGroups = new Map<string, Allocation[]>();
+    const allocationKey = (a: Allocation) => JSON.stringify([a.projectId, a.personId]);
+    allocs.forEach(a => {
+        const key = allocationKey(a);
+        allocationGroups.set(key, [...(allocationGroups.get(key) || []), a]);
+    });
+    const remainingByAllocationGroup = new Map<string, number[] | undefined>();
+    let jiraRemainingApplied = false;
     const fcs: AllocFc[] = allocs.map(a => {
         const actual = MONTH_INDEXES.map(m => a.actual[m] || 0);
         const plan = MONTH_INDEXES.map(m => a.plan[m] || 0);
         const person = personById.get(a.personId);
         const rate = person?.titleCode ? rateByTitle.get(person.titleCode) : undefined;
-        return { alloc: a, series: projectSeries(actual, plan, cutoffIdx, opts.method, window), plan, person, rate };
+        const group = allocationKey(a);
+        if (!remainingByAllocationGroup.has(group))
+            remainingByAllocationGroup.set(group, jiraRemainingSeries(projectById.get(a.projectId), person, opts.year, cutoffMonth));
+        const useRemaining = remainingByAllocationGroup.get(group);
+        const otherAllocations = allocationGroups.get(group)!;
+        if (useRemaining) jiraRemainingApplied = true;
+        const series = useRemaining ? actual.map((value, i) => {
+            if (i < cutoffMonth) return value;
+            const monthlyPlan = otherAllocations.reduce((sum, alloc) => sum + (alloc.plan[i + 1] || 0), 0);
+            return useRemaining[i] * (monthlyPlan > 0 ? plan[i] / monthlyPlan : 1 / otherAllocations.length);
+        }) : projectSeries(actual, plan, cutoffIdx, opts.method, window);
+        return { alloc: a, series, plan, person, rate };
     });
 
     const makeRow = (key: string, label: string, subset: AllocFc[], sublabel?: string): ForecastRow => {
@@ -233,5 +273,5 @@ export function buildForecast(
         fcs.filter(f => !f.rate).reduce((s, f) => s + f.series.reduce((x, v) => x + v, 0), 0),
     );
 
-    return { year: opts.year, method: opts.method, window, cutoffMonth, dim: opts.dim, total, rows, uncostedEacAA };
+    return { year: opts.year, method: opts.method, window, cutoffMonth, dim: opts.dim, total, rows, uncostedEacAA, ...(jiraRemainingApplied ? { jiraRemainingApplied } : {}) };
 }

@@ -6,7 +6,7 @@ import { buildHistory } from './history';
 import { runMonteCarlo } from './monteCarlo';
 import { buildSimulation } from './simulationInput';
 import {
-    applyCommit, autoMilestones, BASELINE_ITERATIONS, baselineGroups, buildReleaseSimulation, choiceOf, commitGroups, commitReleasePlan, createReleasePlan, decisionOf, effortOf, finalizeCommit, groupOf, itemFromTask, newItem,
+    applyCommit, autoMilestones, BASELINE_ITERATIONS, baselineGroups, buildReleaseSimulation, choiceOf, commitGroups, commitManualReleasePlan, commitReleasePlan, createReleasePlan, decisionOf, effortOf, finalizeCommit, groupOf, itemFromTask, newItem,
     parsePastedItems, priorityOf, RELEASE_GROUP, releaseDates, sanitizeMilestones, suggestDescope, virtualProject, withReference,
 } from './releasePlan';
 
@@ -214,6 +214,21 @@ describe('kilometre taşları', () => {
 });
 
 describe('aktarım', () => {
+    it('manuel plan tahminsiz kayıtları aktarır ve yalnız kullanıcının seçtiği sprintleri değiştirir', () => {
+        const proj = project();
+        proj.tasks.push(task('bitti', { status: TaskStatus.Done }));
+        const manual = { ...plan([itemFromTask(proj.tasks[0]), { ...itemFromTask(proj.tasks[1]), manualSprint: 3 }, itemFromTask(proj.tasks[2]), newItem({ name: 'Tahminsiz kayıt', manualSprint: 3 })]), mode: 'manual' as const, startDate: '2026-12-01', targetDate: '2026-12-31' };
+        const c = commitManualReleasePlan(proj, manual, NOW);
+        expect(c.plan.baseline).toBeUndefined();
+        expect(c.plan.manualCommit?.taskIds).toHaveLength(3);
+        expect(c.skipped.map(i => i.name)).toEqual(['bitti kaydı']);
+        const updated = applyCommit({ ...proj, tasks: proj.tasks.map(t => t.id === 'mevcut' ? { ...t, notes: 'Son not', version: 4 } : t) }, c);
+        expect(updated.tasks.find(t => t.id === 'mevcut')).toMatchObject({ version: 4, notes: 'Son not', fixVersion: 'Sürüm 2.0' });
+        expect(updated.tasks.find(t => t.id === 'havuz')).toMatchObject({ version: 3, fixVersion: 'Sürüm 2.0' });
+        expect(updated.tasks.find(t => t.name === 'Tahminsiz kayıt')).toMatchObject({ version: 3, time: { avg: 0 }, fixVersion: 'Sürüm 2.0' });
+        expect(updated.versions?.[0]).toMatchObject({ startDate: '2026-12-01', releaseDate: '2026-12-31' });
+        expect(applyCommit(updated, c)).toBe(updated);
+    });
     it('görevler, hedef ve anahtar sonuçlar, termin, sprint takvimi, taban çizgisi ve günlük', () => {
         const proj = project();
         let p = plan([...plan().items, itemFromTask(proj.tasks[1]), newItem({ name: 'Çıkarılan', ownEstimateDays: 1, excluded: true })]);

@@ -3,6 +3,8 @@ import { JiraIssueRecord } from '../integrations';
 import { foldTr } from '../rag/text';
 import { mapJiraIssueType, mapJiraPriority, mapJiraStatus } from './jiraFields';
 import { analyzeRecords } from './recordQuality';
+import { jiraTimeFields, secondsToHours } from '../timeTracking';
+import { HOURS_PER_DAY } from '../workforce';
 
 /**
  * Jira API'den gelen kayıtları (alanlar + durum geçmişi) görev modeline
@@ -25,7 +27,6 @@ export interface JiraImportOptions {
 }
 
 const MAX_LOG = 50;
-const round1 = (v: number) => Math.round(v * 10) / 10;
 
 const statusOf = (category: JiraIssueRecord['statusCategory'], name: string): TaskStatus => {
     if (category === 'done') return TaskStatus.Done;
@@ -53,9 +54,8 @@ export const issueToTask = (issue: JiraIssueRecord, opts: JiraImportOptions, id 
     const statusLog = jiraStatusLog(issue);
     const startedAt = statusLog.find(c => c.to === TaskStatus.InProgress)?.at;
     const resolvedAt = status === TaskStatus.Done ? issue.resolved || [...statusLog].reverse().find(c => c.to === TaskStatus.Done)?.at : undefined;
-    const estimateHours = issue.originalEstimateSeconds ? round1(issue.originalEstimateSeconds / 3600) : undefined;
-    const estimateDays = estimateHours ? Math.max(1, Math.round(estimateHours / 8)) : 0;
-    const actualHours = issue.timeSpentSeconds ? round1(issue.timeSpentSeconds / 3600) : undefined;
+    const estimateHours = secondsToHours(issue.originalEstimateSeconds);
+    const estimateDays = estimateHours ? Math.max(1, Math.round(estimateHours / HOURS_PER_DAY)) : 0;
     const issueType = mapJiraIssueType(issue.issueType);
     return {
         id,
@@ -79,8 +79,9 @@ export const issueToTask = (issue: JiraIssueRecord, opts: JiraImportOptions, id 
         ...(resolvedAt ? { resolvedAt } : {}),
         ...(statusLog.length ? { statusLog } : {}),
         ...(issueType ? { issueType } : {}),
-        ...(estimateHours ? { originalEstimateHours: estimateHours, estimateSource: 'jira' as const } : {}),
-        ...(actualHours ? { actualHours } : {}),
+        ...jiraTimeFields(issue, opts.importedAt),
+        ...(issue.historySummary ? { historySummary: issue.historySummary } : {}),
+        ...(estimateHours ? { estimateSource: 'jira' as const } : {}),
         ...(issue.storyPoints ? { storyPoints: issue.storyPoints } : {}),
         ...(issue.fixVersions[0] ? { fixVersion: issue.fixVersions[0] } : {}),
         ...(issue.due ? { dueDate: issue.due } : {}),
@@ -111,8 +112,8 @@ const updateFrom = (e: Task, fresh: Task, issue: JiraIssueRecord): Task => ({
     components: issue.components.length ? fresh.components : e.components,
     updatedAt: fresh.updatedAt ?? e.updatedAt,
     resourceName: issue.assignee || e.resourceName,
-    originalEstimateHours: fresh.originalEstimateHours ?? e.originalEstimateHours,
-    actualHours: fresh.actualHours ?? e.actualHours,
+    ...jiraTimeFields(issue, fresh.timeTrackingAt),
+    ...(issue.historySummary ? { historySummary: issue.historySummary } : {}),
     storyPoints: fresh.storyPoints ?? e.storyPoints,
     fixVersion: fresh.fixVersion ?? e.fixVersion,
     ...(!e.dueDate && fresh.dueDate ? { dueDate: fresh.dueDate } : {}),
@@ -120,7 +121,14 @@ const updateFrom = (e: Task, fresh: Task, issue: JiraIssueRecord): Task => ({
 });
 
 /** Görevi undefined alanlar olmadan karşılaştırmak için */
-const same = (a: Task, b: Task) => JSON.stringify(a) === JSON.stringify(b);
+const same = (a: Task, b: Task) => {
+    const compare = (task: Task) => JSON.stringify({
+        ...task,
+        timeTrackingAt: task.timeTrackingAt ? true : undefined,
+        historySummary: task.historySummary ? { ...task.historySummary, at: undefined } : undefined,
+    });
+    return compare(a) === compare(b);
+};
 
 export interface JiraMergeResult {
     tasks: Task[];

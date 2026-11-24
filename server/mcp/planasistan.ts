@@ -1,3 +1,4 @@
+import { summarizeJiraWorklogForReport } from '../../utils/workforce.js';
 import { randomUUID } from 'node:crypto';
 import type { Person, UserRole, WorkspaceData } from '../../types.js';
 import { ROLE_LABELS } from '../../utils/allocations.js';
@@ -5,7 +6,7 @@ import { AiAction, applyAction } from '../../utils/ai/actions.js';
 import { appendAudit } from '../../utils/audit.js';
 import { JiraImportOptions, mergeJiraIssues, previewJiraImport, sinceMonths } from '../../utils/planning/jiraImport.js';
 import type { Env } from '../ai/config.js';
-import { fetchJiraIssuesPage, fetchJiraWorklogs, JiraIssueRecord, jiraProjectAllowed } from '../integrations/handler.js';
+import { fetchJiraHistory, fetchJiraIssuesPage, fetchJiraWorklogs, JiraIssueRecord, jiraProjectAllowed } from '../integrations/handler.js';
 import { aiPolicyOf } from '../../utils/ai/policy.js';
 import type { ToolSpec } from '../../utils/ai/protocol.js';
 import { buildToolContext, matchByText, personName, resolveProject, ToolContext } from '../../utils/ai/scope.js';
@@ -13,7 +14,7 @@ import { APP_MAP } from '../../utils/ai/systemPrompt.js';
 import { AI_TOOLS, executeTool, toolSpecsFor } from '../../utils/ai/tools.js';
 import { Retriever } from '../../utils/rag/retriever.js';
 import { guideDocs, workspaceDocs } from '../../utils/rag/sources.js';
-import { canEditProjectContent, identityNeedsPerson } from '../../utils/rbac.js';
+import { canEditProjectContent, identityNeedsPerson, ownsProject } from '../../utils/rbac.js';
 import { APP_VERSION } from '../../utils/workspace.js';
 import { validateArgs } from './args.js';
 import { McpServerOptions, McpTool, McpToolResult } from './protocol.js';
@@ -38,6 +39,13 @@ import { ConflictError, LoadedWorkspace, SourceError, WorkspaceSource } from './
 export const STATUS_TOOL = 'planasistan_durum';
 export const APPLY_TOOL = 'oneriyi_uygula';
 export const JIRA_IMPORT_TOOL = 'jira_aktar';
+export const JIRA_HISTORY_TOOL = 'jira_kayit_gecmisi';
+const JIRA_HISTORY_SPEC: McpTool = {
+    name: JIRA_HISTORY_TOOL,
+    description: "Görünür projeye bağlı tek Jira kaydının değişiklik geçmişinden bir sayfa oku.",
+    inputSchema: { type: 'object', properties: { anahtar: { type: 'string' }, sayfa: { type: 'integer' } }, required: ['anahtar'] },
+};
+
 export const JIRA_WORKLOG_TOOL = 'jira_worklog';
 
 /** Bir aktarımda en çok bu kadar Jira sayfası (100'er kayıt) alınır — uygulamadaki sınırla aynı */
@@ -173,6 +181,7 @@ const SCHEMAS = new Map<string, ToolSpec['parameters']>([
     ...AI_TOOLS.map(t => [t.spec.name, t.spec.parameters] as [string, ToolSpec['parameters']]),
     [JIRA_IMPORT_TOOL, JIRA_IMPORT_SPEC.inputSchema],
     [JIRA_WORKLOG_TOOL, JIRA_WORKLOG_SPEC.inputSchema],
+    [JIRA_HISTORY_TOOL, JIRA_HISTORY_SPEC.inputSchema],
     [APPLY_TOOL, APPLY_SPEC.inputSchema],
     [STATUS_TOOL, STATUS_SPEC.inputSchema],
     ...REPORT_SCHEMAS,
@@ -434,6 +443,8 @@ export const createPlanAsistanMcp = (o: PlanAsistanMcpOptions): McpServerOptions
         if (from > to) return fail('Başlangıç bitişten sonra olamaz.');
         let logs;
         try { logs = await fetchJiraWorklogs(o.jira.env, key, from, to, o.jira.fetchImpl); } catch (e) { return fail(`Jira'dan okunamadı: ${(e as Error).message}`); }
+        const email = s.ctx.ws.people.find(p => p.id === s.ctx.identity.personId)?.email?.trim().toLowerCase();
+        if (!ownsProject(project, s.ctx.identity)) logs = logs.filter(log => !!email && log.authorEmail === email);
         const sum = (rows: { hours: number }[]) => Math.round(rows.reduce((a, b) => a + b.hours, 0) * 10) / 10;
         const group = <K extends string>(by: (w: typeof logs[number]) => K) => {
             const m = new Map<K, typeof logs>();
@@ -460,7 +471,11 @@ export const createPlanAsistanMcp = (o: PlanAsistanMcpOptions): McpServerOptions
         const sunday = new Date(monday.getTime() + 6 * 86_400_000);
         const today = isoDay(now());
         const to = sunday.toISOString().slice(0, 10) < today ? sunday.toISOString().slice(0, 10) : today;
-        try { return await fetchJiraWorklogs(o.jira.env, key, monday.toISOString().slice(0, 10), to, o.jira.fetchImpl); } catch { return []; }
+        try {
+            const logs = await fetchJiraWorklogs(o.jira.env, key, monday.toISOString().slice(0, 10), to, o.jira.fetchImpl);
+            const email = s.ctx.ws.people.find(p => p.id === s.ctx.identity.personId)?.email?.trim().toLowerCase();
+            return summarizeJiraWorklogForReport(ownsProject(project, s.ctx.identity) ? logs : logs.filter(log => !!email && log.authorEmail === email));
+        } catch { return []; }
     };
 
     const reportTool = async (s: Session, name: string, args: Record<string, unknown>): Promise<McpToolResult> => {
@@ -493,7 +508,7 @@ export const createPlanAsistanMcp = (o: PlanAsistanMcpOptions): McpServerOptions
                 specs = toolSpecsFor(s.ctx);
                 reports = reportToolsFor(s.ctx, !s.reportBlock);
                 canApply = !s.writeBlock || reports.some(t => REPORT_WRITE_TOOLS.has(t.name));
-                if (o.jira) jira = [JIRA_WORKLOG_SPEC, ...(!s.writeBlock ? [JIRA_IMPORT_SPEC] : [])];
+                if (o.jira) jira = [JIRA_WORKLOG_SPEC, JIRA_HISTORY_SPEC, ...(!s.writeBlock ? [JIRA_IMPORT_SPEC] : [])];
             } catch (e) {
                 // Kaynak şu an okunamıyor: salt-okunur katalog sunulur, her çağrı nedeni döndürür
                 log(`araç listesi kapsamsız sunuldu: ${(e as Error).message}`);
@@ -517,6 +532,20 @@ export const createPlanAsistanMcp = (o: PlanAsistanMcpOptions): McpServerOptions
             }
             if (name === JIRA_IMPORT_TOOL) return jiraImport(s, args);
             if (REPORT_WRITE_TOOLS.has(name) || name === REPORT_READ_TOOL || name === REPORT_DRAFT_TOOL) return reportTool(s, name, args);
+            if (name === JIRA_HISTORY_TOOL) {
+                if (!o.jira) return fail('Jira bağlantısı yapılandırılmamış.');
+                const key = String(args.anahtar).toUpperCase();
+                const projectKey = key.split('-')[0];
+                if (!s.ctx.scoped.projects.some(p => p.jiraProjectKey?.toUpperCase() === projectKey || p.tasks.some(t => t.jiraId?.toUpperCase() === key)))
+                    return fail('Bu Jira kaydı görünür bir projeye bağlı değil.');
+                try {
+                    const history = await fetchJiraHistory(o.jira.env, key, o.jira.fetchImpl);
+                    const page = Math.max(1, Math.min(250, Number(args.sayfa) || 1));
+                    return text({ anahtar: key, toplam: history.length, sayfa: page, gecmis: history.slice((page - 1) * 20, page * 20).map(({ authorEmail: _, ...entry }) => entry) });
+                } catch (e) {
+                    return fail((e as Error).message);
+                }
+            }
             if (name === JIRA_WORKLOG_TOOL) return jiraWorklog(s, args);
             if (WRITE_TOOLS.has(name) && s.writeBlock) return fail(s.writeBlock);
             const out = await executeTool({ name, arguments: args }, s.ctx);

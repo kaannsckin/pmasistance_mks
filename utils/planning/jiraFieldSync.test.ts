@@ -126,3 +126,15 @@ describe('Jira\'daki kişiler', () => {
         expect(again.addedResources).toEqual([]);
     });
 });
+
+it('kalan süre, Jira boş değeri ve sıfır saat için ayrı çift yönlü değerler kullanır', () => {
+    const settings: JiraSyncSettings = { discover: false, autoMinutes: 0, fields: { remaining: 'both' } };
+    const remote = issue('MPS-1', { remainingEstimateSeconds: 7200, aggregateRemainingEstimateSeconds: 10800 });
+    const initial = applyJiraSync([task('a', 'MPS-1')], [remote], OPTS, false, [], settings).tasks[0];
+    expect(initial).toMatchObject({ remainingEstimateHours: 2, aggregateRemainingHours: 3, jiraBase: { remaining: '7200' } });
+    expect(planPushes([{ ...initial, remainingEstimateHours: 0 }], [remote], settings)[0]?.changes).toEqual({ remainingEstimateHours: 0 });
+    expect(planPushes([{ ...initial, remainingEstimateHours: 0 }], [remote], { ...settings, fields: { remaining: 'push' } })[0]?.changes).toEqual({ remainingEstimateHours: 0 });
+    const cleared = applyJiraSync([initial], [{ ...remote, remainingEstimateSeconds: null }], OPTS, false, [], settings).tasks[0];
+    expect(cleared.remainingEstimateHours).toBeUndefined();
+    expect(cleared.jiraBase?.remaining).toBe('');
+});

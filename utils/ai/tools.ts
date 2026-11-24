@@ -1270,7 +1270,7 @@ const AGENT_TOOLS: ToolDef[] = [
 
 const JIRA_KEY_RE = /^[A-Za-z][A-Za-z0-9_]{1,19}-\d{1,9}$/;
 const JIRA_PROJECT_RE = /^[A-Za-z][A-Za-z0-9_]{1,19}$/;
-const SEC_TO_HOURS = (v: number | null) => (v === null ? undefined : r2(v / 3600));
+const SEC_TO_HOURS = (v: number | null | undefined) => v == null ? undefined : r2(v / 3600);
 const STATUS_CAT_TR: Record<string, string> = { new: 'Yapılacak', indeterminate: 'Devam ediyor', done: 'Tamamlandı' };
 
 /** Jira proje anahtarı, kapsam dışındaki bir uygulama projesine bağlıysa reddeder */
@@ -1308,6 +1308,8 @@ const jiraRow = (ctx: ToolContext, i: JiraIssueRecord, detail: boolean) => ({
     story_point: i.storyPoints ?? undefined,
     tahmin_saat: SEC_TO_HOURS(i.originalEstimateSeconds),
     harcanan_saat: SEC_TO_HOURS(i.timeSpentSeconds),
+    kalan_saat: SEC_TO_HOURS(i.remainingEstimateSeconds),
+    gecmis_ozeti: i.historySummary,
     engelleyen: i.blockedBy.length ? i.blockedBy.join(', ') : undefined,
     uygulamada: appTaskOf(ctx, i.key),
     ...(detail ? {
@@ -1323,13 +1325,15 @@ const jiraFail = (e: unknown): never => {
 
 const JIRA_TOOLS: ToolDef[] = [
     {
-        label: 'Jira kaydı',
+        label: 'Jira kaydı ve geçmişi',
         requires: 'jira',
         spec: {
             name: 'jira_kayit_getir',
-            description: 'Anahtarı bilinen Jira kayıtlarının Jira\'daki GÜNCEL hâlini getirir (durum, atanan, öncelik, termin, sürüm, story point, tahmin/harcanan süre, açıklama, durum geçmişi) ve uygulamadaki karşılık gelen görevi gösterir. Örn. "MKS-123 ne durumda?".',
+            description: 'Anahtarı bilinen Jira kayıtlarının Jira\'daki GÜNCEL hâlini getirir (durum, atanan, öncelik, termin, sürüm, story point, tahmin/harcanan süre, açıklama, durum geçmişi) ve uygulamadaki karşılık gelen görevi gösterir. Değişikliklerin kim tarafından ne zaman yapıldığını görmek için gecmis seçeneğini kullan. Örn. "MKS-123 ne durumda?".',
             parameters: S.obj({
                 anahtarlar: S.str('Jira anahtarları, virgülle ayrılmış (en çok 20). Örn. "MKS-12, MKS-15".'),
+                gecmis: S.bool('Tek kayıt için değişiklik geçmişini getirir.'),
+                gecmis_sayfa: S.int('Geçmiş sayfası (en yeni ilk, her sayfa 20 değişiklik).'),
             }, ['anahtarlar']),
         },
         run: async (a, ctx) => {
@@ -1341,6 +1345,21 @@ const JIRA_TOOLS: ToolDef[] = [
             const bad = keys.filter(k => !JIRA_KEY_RE.test(k));
             if (bad.length) throw new ToolError(`Geçersiz Jira anahtarı: ${bad.join(', ')} (biçim: PROJE-123).`);
             keys.forEach(k => assertJiraKeyInScope(ctx, k.split('-')[0]));
+            if (a.gecmis === true) {
+                if (keys.length !== 1) throw new ToolError('Geçmişi okumak için bir Jira anahtarı verin.');
+                if (!ctx.jira.history) throw new ToolError('Jira geçmişi bu oturumda kullanılamıyor.');
+                const entries = await ctx.jira.history(keys[0]).catch(jiraFail);
+                const page = clampLimit(a.gecmis_sayfa, 1, 250);
+                return {
+                    anahtar: keys[0], toplam: entries.length, sayfa: page, sayfa_sayisi: Math.ceil(entries.length / 20),
+                    gecmis: entries.slice((page - 1) * 20, page * 20).map(entry => ({
+                        tarih: entry.at, yapan: entry.author, alanlar: entry.items.map(item => ({
+                            alan: item.field, eski: short(item.fromString ?? item.from ?? '', 200),
+                            yeni: short(item.toString ?? item.to ?? '', 200),
+                        })),
+                    })),
+                };
+            }
             const page = await ctx.jira.byKeys(keys).catch(jiraFail);
             const detail = page.issues.length <= 5;
             return {

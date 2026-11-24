@@ -4,9 +4,12 @@ import { exportSprintPlanToExcel } from '../../utils/exporter';
 import { planTaskVersionsDetailed, PlanWarning } from '../../utils/sprintPlanner';
 import { calculatePertFuzzyPert } from '../../utils/timeline';
 import { buildLanes, currentLaneVersion, laneRange, positionPct, segmentPct, SprintLane } from '../../utils/timelinePlan';
+import { DayRange, formatRange, isDayRange, toIsoDay } from '../../utils/calendarRange';
+import { canPlanSprintTask, periodTaskQuery, sprintsInPeriod } from '../../utils/planning/period';
 import { Icon } from './icons';
 import { COLUMN_META, columnOf, daysLate, initialsOf, PRIORITY_META, sprintLabel } from './taskMeta';
 import { Field, Sheet } from './ui';
+import TaskQueryPicker from './TaskQueryPicker';
 
 /**
  * Modern zaman çizelgesi (sprint planı). Üstte tüm sprintleri ve test
@@ -18,6 +21,7 @@ export interface CalendarSettings {
     projectStartDate: string;
     sprintDuration: number;
     globalTestDays: number;
+    useJiraRemainingEstimate?: boolean;
 }
 
 interface ModernTimelineProps {
@@ -31,6 +35,14 @@ interface ModernTimelineProps {
     onUpdateCalendar: (c: CalendarSettings) => void;
     onViewTask: (task: Task) => void;
     onNewTask: () => void;
+    period: DayRange | null;
+    me?: string;
+    initialSelection?: string[];
+    onPeriodChange: (period: DayRange | null) => void;
+    onBulkMove?: (ids: ReadonlySet<string>, sprint: number) => void;
+    onOpenFilteredList: (query: string) => void;
+    onOpenPeriodJira?: (period: DayRange) => void;
+    onOpenManualRelease?: (ids: ReadonlySet<string>) => void;
 }
 
 const dm = (d?: Date) => (d ? d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' }) : '');
@@ -96,6 +108,7 @@ const CalendarSheet: React.FC<{ value: CalendarSettings; onClose: () => void; on
     const [start, setStart] = useState(value.projectStartDate);
     const [weeks, setWeeks] = useState(value.sprintDuration);
     const [testDays, setTestDays] = useState(value.globalTestDays);
+    const [useRemaining, setUseRemaining] = useState(!!value.useJiraRemainingEstimate);
     return (
         <Sheet
             title="Takvim"
@@ -103,7 +116,7 @@ const CalendarSheet: React.FC<{ value: CalendarSettings; onClose: () => void; on
             footer={<>
                 <span className="flex-1 text-[13px] m-text-3">Tüm sprint tarihleri yeniden hesaplanır.</span>
                 <button type="button" className="m-btn m-btn-plain" onClick={onClose}>Vazgeç</button>
-                <button type="button" className="m-btn m-btn-primary" disabled={!start} onClick={() => onSave({ projectStartDate: start, sprintDuration: weeks, globalTestDays: testDays })}>Kaydet</button>
+                <button type="button" className="m-btn m-btn-primary" disabled={!start} onClick={() => onSave({ projectStartDate: start, sprintDuration: weeks, globalTestDays: testDays, useJiraRemainingEstimate: useRemaining })}>Kaydet</button>
             </>}
         >
             <Field label="Proje başlangıcı" htmlFor="tl-start">
@@ -118,14 +131,24 @@ const CalendarSheet: React.FC<{ value: CalendarSettings; onClose: () => void; on
             <Field label="Test dönemi (iş günü)" htmlFor="tl-test" hint="Her sprintin ardından test ve canlıya alma için ayrılan süre">
                 <input id="tl-test" type="number" min={0} max={20} className="m-input m-tabular" value={testDays} onChange={e => setTestDays(Math.max(0, Math.min(20, parseInt(e.target.value, 10) || 0)))} />
             </Field>
+            <label className="flex items-center gap-2 text-[14px] m-text">
+                <input type="checkbox" className="w-4 h-4" checked={useRemaining} onChange={e => setUseRemaining(e.target.checked)} />
+                EVM ve iş yükü tahmininde Jira kalan süresini kullan
+            </label>
         </Sheet>
     );
 };
 
-const ModernTimeline: React.FC<ModernTimelineProps> = ({ project, canEdit, onMoveTask, onPlanGenerated, onInsertSprint, onDeleteSprint, onRenameSprint, onUpdateCalendar, onViewTask, onNewTask }) => {
+const ModernTimeline: React.FC<ModernTimelineProps> = ({ project, canEdit, onMoveTask, onPlanGenerated, onInsertSprint, onDeleteSprint, onRenameSprint, onUpdateCalendar, onViewTask, onNewTask, period, me, initialSelection, onPeriodChange, onBulkMove, onOpenFilteredList, onOpenPeriodJira, onOpenManualRelease }) => {
     const [extra, setExtra] = useState(0);
-    const lanes = useMemo(() => buildLanes(project, extra), [project, extra]);
-    const range = useMemo(() => laneRange(lanes), [lanes]);
+    const [dates, setDates] = useState<DayRange>(period || { start: '', end: '' });
+    const [selection, setSelection] = useState<Set<string> | null>(() => initialSelection ? new Set(initialSelection) : null);
+    const [targetSprint, setDestination] = useState<number>();
+    const periodSprints = useMemo(() => period ? sprintsInPeriod(project, period) : [], [project.settings, period]);
+    const lastUsed = Math.max(0, ...project.tasks.filter(t => t.includeInSprints !== false).map(t => t.version || 0));
+    const lanes = useMemo(() => buildLanes(project, Math.max(extra, (periodSprints.at(-1) || 0) - lastUsed)), [project, extra, periodSprints, lastUsed]);
+    const sprints = period ? lanes.filter(l => periodSprints.includes(l.version)) : lanes.filter(l => l.version > 0);
+    const range = laneRange(sprints);
     const today = new Date();
     const nowVersion = currentLaneVersion(lanes, today);
     const names = project.settings.sprintNames || {};
@@ -139,8 +162,20 @@ const ModernTimeline: React.FC<ModernTimelineProps> = ({ project, canEdit, onMov
     const [result, setResult] = useState<{ warnings: PlanWarning[]; text: string } | null>(null);
     const laneRefs = useRef(new Map<number, HTMLElement>());
 
-    const sprints = lanes.filter(l => l.version > 0);
     const pool = lanes[0];
+    const bulkTasks = useMemo(() => project.tasks.filter(canPlanSprintTask), [project.tasks]);
+    const bulkContext = useMemo(() => ({ sprintNames: project.settings.sprintNames, workPackages: project.workPackages, me }), [project.settings.sprintNames, project.workPackages, me]);
+    const selected = new Set(bulkTasks.filter(t => selection?.has(t.id)).map(t => t.id));
+    const targets = sprints.length ? sprints.map(l => l.version) : [lastUsed + 1];
+    const destination = targetSprint ?? sprints.find(l => l.version === nowVersion)?.version ?? targets[0];
+    const moveCount = bulkTasks.filter(t => selected.has(t.id) && (t.version || 0) !== destination).length;
+    const setMonth = (offset: number) => {
+        const month = today.getMonth() + offset;
+        const next = { start: toIsoDay(new Date(today.getFullYear(), month, 1)), end: toIsoDay(new Date(today.getFullYear(), month + 1, 0)) };
+        setDates(next);
+        setDestination(undefined);
+        onPeriodChange(next);
+    };
 
     const autoPlan = () => {
         const placed = project.tasks.some(t => (t.version || 0) > 0 && t.status !== TaskStatus.Done);
@@ -155,7 +190,7 @@ const ModernTimeline: React.FC<ModernTimelineProps> = ({ project, canEdit, onMov
         }
     };
 
-    const exportExcel = () => exportSprintPlanToExcel(lanes.map((l): Sprint => ({
+    const exportExcel = () => exportSprintPlanToExcel((period ? sprints : lanes).map((l): Sprint => ({
         id: l.version,
         title: sprintLabel(l.version, names),
         tasks: l.tasks,
@@ -254,10 +289,56 @@ const ModernTimeline: React.FC<ModernTimelineProps> = ({ project, canEdit, onMov
                 </p>
                 <div className="flex flex-wrap items-center gap-2.5">
                     {canEdit && <button type="button" className="m-btn m-btn-gray" onClick={() => setCalendarOpen(true)}><Icon name="sliders" size={18} />Takvim</button>}
+                    {onBulkMove && <button type="button" className="m-btn m-btn-gray" aria-expanded={!!selection} onClick={() => {
+                        setSelection(selection ? null : new Set());
+                        setDestination(undefined);
+                    }}><Icon name="list" size={18} />Toplu sprint planı</button>}
                     <button type="button" className="m-btn m-btn-gray" onClick={exportExcel} disabled={!project.tasks.length}><Icon name="download" size={18} />Excel</button>
                     {canEdit && <button type="button" className="m-btn m-btn-primary" onClick={autoPlan} disabled={!project.tasks.length}><Icon name="rocket" size={18} />Otomatik planla</button>}
                 </div>
             </div>
+
+            <section aria-label="Plan aralığı" className="m-surface rounded-2xl p-3.5 flex flex-wrap items-end gap-2.5">
+                <Field label="Aralık başlangıcı" htmlFor="tl-period-start">
+                    <input id="tl-period-start" type="date" className="m-input" value={dates.start} onChange={e => setDates({ ...dates, start: e.target.value })} />
+                </Field>
+                <Field label="Aralık bitişi" htmlFor="tl-period-end">
+                    <input id="tl-period-end" type="date" className="m-input" value={dates.end} onChange={e => setDates({ ...dates, end: e.target.value })} />
+                </Field>
+                <button type="button" className="m-btn m-btn-primary" disabled={!isDayRange(dates)} onClick={() => { setDestination(undefined); onPeriodChange(dates); }}>Aralığı göster</button>
+                <button type="button" className="m-btn m-btn-plain" onClick={() => setMonth(0)}>Bu ay</button>
+                <button type="button" className="m-btn m-btn-plain" onClick={() => setMonth(1)}>Gelecek ay</button>
+                {period && <button type="button" className="m-btn m-btn-plain" onClick={() => { setDates({ start: '', end: '' }); setDestination(undefined); onPeriodChange(null); }}>Tüm sprintler</button>}
+                {period && (
+                    <div className="w-full flex flex-wrap items-center gap-2">
+                        <span className="text-[14px] m-text-2">{formatRange(period)} · {sprints.length} sprint · {sprints.reduce((n, lane) => n + lane.tasks.length - lane.done, 0)} açık görev</span>
+                        <button type="button" className="m-btn m-btn-gray !min-h-[36px]" onClick={() => onOpenFilteredList(periodTaskQuery(periodSprints, period))}>Aralığı görev listesinde aç</button>
+                        {onOpenManualRelease && <button type="button" className="m-btn m-btn-gray !min-h-[36px]" onClick={() => onOpenManualRelease(new Set())}>Aralığın sürüm planları</button>}
+                        {onOpenPeriodJira && <button type="button" className="m-btn m-btn-gray !min-h-[36px]" onClick={() => onOpenPeriodJira(period)}><Icon name="refresh" size={16} />Aralığı Jira ile eşitle</button>}
+                    </div>
+                )}
+            </section>
+
+            {selection && onBulkMove && (
+                <section aria-label="Toplu sprint planı" className="m-surface rounded-2xl p-4 flex flex-col gap-3">
+                    <TaskQueryPicker projectId={project.id} tasks={bulkTasks} ctx={bulkContext} selected={selected} onChange={setSelection} onViewTask={onViewTask} label="Sprint için görev bul" />
+                    <div className="flex flex-wrap gap-2 items-end">
+                        <Field label="Hedef sprint" htmlFor="tl-bulk-target">
+                            <select id="tl-bulk-target" className="m-input" value={destination} onChange={e => setDestination(Number(e.target.value))}>
+                                <option value={0}>Havuz</option>
+                                {[...new Set([...targets, ...(destination ? [destination] : [])])].map(v => <option key={v} value={v}>{sprintLabel(v, names)}</option>)}
+                            </select>
+                        </Field>
+                        <button type="button" className="m-btn m-btn-primary" disabled={!moveCount} onClick={() => {
+                            onBulkMove(selected, destination);
+                            setResult({ warnings: [], text: `${moveCount} görev ${sprintLabel(destination, names)} hedefine taşındı.` });
+                            setSelection(null);
+                            setExtra(0);
+                        }}>{moveCount} görevi taşı</button>
+                        {onOpenManualRelease && <button type="button" className="m-btn m-btn-gray" disabled={!selected.size} onClick={() => onOpenManualRelease(selected)}>Seçimle sürüm planı aç</button>}
+                    </div>
+                </section>
+            )}
 
             {result && (
                 <div role="status" className={`rounded-2xl px-4 py-3 flex items-start gap-3 ${result.warnings.length ? 'm-tone-warn' : 'm-tone-ok'}`}>
@@ -379,7 +460,7 @@ const ModernTimeline: React.FC<ModernTimelineProps> = ({ project, canEdit, onMov
 
             {calendarOpen && (
                 <CalendarSheet
-                    value={{ projectStartDate: project.settings.projectStartDate, sprintDuration: weeks, globalTestDays: testDays }}
+                    value={{ projectStartDate: project.settings.projectStartDate, sprintDuration: weeks, globalTestDays: testDays, useJiraRemainingEstimate: project.settings.useJiraRemainingEstimate }}
                     onClose={() => setCalendarOpen(false)}
                     onSave={c => { onUpdateCalendar(c); setCalendarOpen(false); }}
                 />

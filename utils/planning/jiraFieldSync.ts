@@ -14,7 +14,7 @@ import { mapJiraIssueType, mapJiraPriority } from './jiraFields';
  *           taraf da değiştiyse Jira esas alınır ve çakışma olarak bildirilir.
  *           İlk eşitlemede (taban yok) Jira esas alınır.
  *
- * Jira'ya yazılabilen alanlar: durum, öncelik, başlık, termin. Diğerleri
+ * Jira'ya yazılabilen alanlar: durum, öncelik, başlık, termin ve kalan süre. Diğerleri
  * (atanan, açıklama, etiket, süre, bileşen, sürüm, tür) yalnız Jira'dan alınır.
  *
  * Proje ayarında `fields` yoksa eski davranış sürer (tüm alanlar Jira'dan).
@@ -37,6 +37,7 @@ export const JIRA_SYNC_FIELDS: JiraSyncFieldSpec[] = [
     { id: 'description', label: 'Açıklama → not', hint: 'Jira açıklaması görev notunun yerine geçer', pushable: false },
     { id: 'labels', label: 'Etiketler', hint: 'Jira etiketleri görev etiketlerinin yerine geçer', pushable: false },
     { id: 'estimate', label: 'Tahmin ve harcanan süre', hint: 'Original estimate, time spent, story point', pushable: false },
+    { id: 'remaining', label: 'Kalan süre', hint: 'Jira “Remaining estimate” (saat)', pushable: true },
     { id: 'components', label: 'Bileşen → birim', hint: 'Jira\'daki ilk bileşen görevin birimi olur', pushable: false },
     { id: 'fixVersion', label: 'Düzeltme sürümü', hint: 'Jira "Fix version"', pushable: false },
     { id: 'issueType', label: 'Kayıt türü', hint: 'Bug / Story / Task …', pushable: false },
@@ -68,6 +69,7 @@ export const EXCEL_TRACKING_FIELDS: Record<JiraSyncFieldId, JiraSyncDirection> =
     description: 'off',
     labels: 'off',
     estimate: 'pull',
+    remaining: 'pull',
     components: 'off',
     fixVersion: 'pull',
     issueType: 'off',
@@ -80,7 +82,7 @@ export const fieldPolicy = (s: JiraSyncSettings | undefined): Record<JiraSyncFie
     if (!s?.fields) return { ...LEGACY };
     const out = {} as Record<JiraSyncFieldId, JiraSyncDirection>;
     JIRA_SYNC_FIELDS.forEach(f => {
-        let d = s.fields![f.id] || 'off';
+        let d = s.fields![f.id] || (f.id === 'remaining' && s.fields!.estimate === 'pull' ? 'pull' : 'off');
         if (!f.pushable && (d === 'push' || d === 'both')) d = 'pull';
         out[f.id] = d;
     });
@@ -108,6 +110,7 @@ export const localValue = (t: Task, f: JiraSyncFieldId): string => {
         case 'priority': return t.priority;
         case 'summary': return t.name.trim();
         case 'dueDate': return day(t.dueDate);
+        case 'remaining': return t.remainingEstimateHours !== undefined ? String(Math.round(t.remainingEstimateHours * 3600)) : '';
         case 'assignee': return /^atanmam/i.test(t.resourceName || '') ? '' : (t.resourceName || '').trim();
         default: return '';
     }
@@ -120,19 +123,21 @@ export const remoteValue = (i: JiraIssueRecord, f: JiraSyncFieldId): string => {
         case 'priority': return i.priority ? mapJiraPriority(i.priority) : '';
         case 'summary': return i.summary.trim();
         case 'dueDate': return day(i.due);
+        case 'remaining': return i.remainingEstimateSeconds == null ? '' : String(i.remainingEstimateSeconds);
         case 'assignee': return (i.assignee || '').trim();
         default: return '';
     }
 };
 
 /** Değerleri karşılaştırılabilen (taban tutulan) alanlar */
-const COMPARABLE = new Set<JiraSyncFieldId>(['status', 'priority', 'summary', 'dueDate', 'assignee']);
+const COMPARABLE = new Set<JiraSyncFieldId>(['status', 'priority', 'summary', 'dueDate', 'assignee', 'remaining']);
 
 export type FieldDecision = 'skip' | 'same' | 'pull' | 'push' | 'conflict';
 
 /** Bir alan için bu eşitlemede ne yapılacağı */
 export const decideField = (t: Task, issue: JiraIssueRecord, f: JiraSyncFieldId, dir: JiraSyncDirection): FieldDecision => {
     if (dir === 'off') return 'skip';
+    if (f === 'remaining' && issue.remainingEstimateSeconds === undefined) return 'skip';
     if (!COMPARABLE.has(f)) return dir === 'push' ? 'skip' : 'pull';
     const remote = remoteValue(issue, f);
     const local = localValue(t, f);
@@ -146,7 +151,7 @@ export const decideField = (t: Task, issue: JiraIssueRecord, f: JiraSyncFieldId,
     const base = t.jiraBase?.[f];
     if (base === undefined) return remoteEmpty ? (pushable && local ? 'push' : 'skip') : 'pull';
     if (local === base) return remoteEmpty ? 'skip' : 'pull';
-    if (remote === base) return pushable ? 'push' : 'skip';
+    if (remote === base) return pushable && (f !== 'remaining' || !!local) ? 'push' : 'skip';
     return remoteEmpty ? 'push' : 'conflict';
 };
 
@@ -160,7 +165,8 @@ const FIELD_PROPS: Record<JiraSyncFieldId, (keyof Task)[]> = {
     summary: ['name'],
     description: ['notes'],
     labels: ['labels'],
-    estimate: ['originalEstimateHours', 'actualHours', 'storyPoints', 'time', 'availability', 'estimateSource'],
+    estimate: ['originalEstimateHours', 'actualHours', 'aggregateOriginalEstimateHours', 'aggregateSpentHours', 'storyPoints', 'time', 'availability', 'estimateSource', 'jiraParentKey', 'jiraSubtaskKeys'],
+    remaining: ['remainingEstimateHours', 'aggregateRemainingHours'],
     components: ['unit'],
     fixVersion: ['fixVersion'],
     issueType: ['issueType'],
@@ -205,6 +211,8 @@ export const applyFieldPolicy = (before: Task, merged: Task, issue: JiraIssueRec
             if (COMPARABLE.has(f)) pulled.push(f);
             if (d === 'conflict') conflicts.push(f);
         }
+        if (f === 'remaining' && d === 'same' && (dir === 'pull' || dir === 'both')) copyProps(out, merged, ['aggregateRemainingHours']);
+        if ((f === 'estimate' || f === 'remaining') && (dir === 'pull' || dir === 'both') && merged.timeTrackingAt) out.timeTrackingAt = merged.timeTrackingAt;
         if (dir === 'both' && COMPARABLE.has(f) && d !== 'push' && d !== 'skip') base[f] = remoteValue(issue, f);
     }
     if (!out.dueDate) delete out.dueDate;
@@ -252,13 +260,14 @@ export const planPushes = (tasks: Task[], issues: JiraIssueRecord[], settings: J
             else if (f === 'priority') changes.priority = t.priority;
             else if (f === 'status') changes.status = CATEGORY_OF[t.status];
             else if (f === 'dueDate') changes.dueDate = day(t.dueDate) || null;
+            else if (f === 'remaining') changes.remainingEstimateHours = t.remainingEstimateHours;
         });
         out.push({ taskId: t.id, key: issue.key, fields, changes });
     });
     return out;
 };
 
-const APPLIED_FIELD: Record<string, JiraSyncFieldId> = { summary: 'summary', priority: 'priority', status: 'status', dueDate: 'dueDate' };
+const APPLIED_FIELD: Record<string, JiraSyncFieldId> = { summary: 'summary', priority: 'priority', status: 'status', dueDate: 'dueDate', remainingEstimateHours: 'remaining' };
 
 /** Jira'ya yazılan alanların tabanı uygulamadaki değer olur (sonraki eşitlemede "değişmedi" sayılır) */
 export const markPushed = (tasks: Task[], done: { taskId: string; applied: string[] }[]): Task[] => {

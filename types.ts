@@ -1,3 +1,4 @@
+import type { JiraHistorySummary } from './utils/jiraHistory';
 export enum TaskStatus {
   Backlog = 'Backlog',
   ToDo = 'ToDo',
@@ -64,6 +65,14 @@ export interface Task {
   forecast?: TaskForecast; // açılışta yapılan süre tahmini (kayıt kapanınca isabeti ölçülür)
   originalEstimateHours?: number; // kaynak sistemdeki ilk tahmin (Jira "Original Estimate")
   actualHours?: number; // harcanan efor (Jira "Time Spent" / worklog)
+  remainingEstimateHours?: number;
+  aggregateOriginalEstimateHours?: number;
+  aggregateRemainingHours?: number;
+  aggregateSpentHours?: number;
+  timeTrackingAt?: string;
+  historySummary?: JiraHistorySummary;
+  jiraParentKey?: string;
+  jiraSubtaskKeys?: string[];
   /**
    * Jira worklog'ları (billing hours): kim, hangi gün, kaç saat. Eşitlemede
    * actualHours değişince yenilenir; forHours o anki actualHours'tur.
@@ -357,6 +366,7 @@ export interface ReleasePlanItem {
   workPackageId?: string;
   predecessorId?: string; // aynı plandaki başka satır
   sourceTaskId?: string; // havuzdan alınan mevcut görev
+  manualSprint?: number; // manuel planda seçilen sprint, 0 = Havuz
   ownEstimateDays?: number;
   /** Havuzdan alınan görevin kendi aralığı (kendi tahmin değişmedikçe korunur) */
   ownRange?: EffortRange;
@@ -397,6 +407,8 @@ export interface ReleasePlan {
   name: string;
   summary: string;
   targetDate?: string;
+  startDate?: string;
+  mode?: 'manual';
   testDays: number;
   workPackageIds: string[];
   items: ReleasePlanItem[];
@@ -408,6 +420,7 @@ export interface ReleasePlan {
   updatedAt: string;
   baseline?: ReleaseBaseline;
   versionId?: string; // Aktarımda bağlanan proje sürümü
+  manualCommit?: { at: string; taskIds: string[] };
 }
 
 /**
@@ -643,6 +656,7 @@ export interface ProjectSettings {
   titleCosts?: Record<string, number>;
   sprintNames?: Record<number, string>;
   globalTestDays?: number;
+  useJiraRemainingEstimate?: boolean;
   manMonthTableColor?: string;
   costTableColor?: string;
 }
@@ -719,7 +733,7 @@ export interface JiraSyncSettings {
 }
 
 /** Eşitlenebilen alanlar (uygulama ↔ Jira) */
-export type JiraSyncFieldId = 'status' | 'assignee' | 'dueDate' | 'priority' | 'summary' | 'description' | 'labels' | 'estimate' | 'components' | 'fixVersion' | 'issueType';
+export type JiraSyncFieldId = 'status' | 'assignee' | 'dueDate' | 'priority' | 'summary' | 'description' | 'labels' | 'estimate' | 'remaining' | 'components' | 'fixVersion' | 'issueType';
 /** off: eşitlenmez · pull: Jira → uygulama · push: uygulama → Jira · both: çift yönlü (son eşitlemeden beri değişen taraf kazanır) */
 export type JiraSyncDirection = 'off' | 'pull' | 'push' | 'both';
 
@@ -742,6 +756,8 @@ export type DashboardWidgetType =
   | 'risks'         // risk özeti
   | 'sprint'        // şu anki sprint
   | 'worklog'       // Jira worklog: kim ne kadar çalıştı, maliyet
+  | 'jiraBottlenecks' // Jira durum süreleri ve değişiklik sayıları
+  | 'effortStatus'  // Jira tahmini, kalan süre ve gerçekleşen efor
   | 'activity'      // son değişiklikler
   | 'note';         // serbest not
 
@@ -1135,7 +1151,19 @@ export interface ReportEvent {
 export interface TaskJiraWorklog {
   at: string; // çekildiği an (ISO)
   forHours: number; // çekildiğindeki actualHours (değişince yeniden çekilir)
-  entries: { author: string; email?: string; date: string; hours: number }[];
+  entries: JiraWorklogDetail[];
+}
+
+export interface JiraWorklogDetail {
+  id?: string;
+  author: string;
+  email?: string;
+  accountId?: string;
+  started?: string;
+  date: string;
+  hours: number;
+  comment?: string;
+  updated?: string;
 }
 
 export interface WorklogEntry {
@@ -1145,6 +1173,7 @@ export interface WorklogEntry {
   summary: string;
   hours: number;
   comment?: string;
+  authorEmail?: string;
   source: 'file' | 'jira';
 }
 

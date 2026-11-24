@@ -1,5 +1,7 @@
 import { Project, ReportEvmSnapshot, TaskStatus, WorkspaceData } from '../types';
 import { MONTH_INDEXES } from './allocations';
+import { taskTimeTracking } from './timeTracking';
+import { HOURS_PER_DAY } from './workforce';
 
 /**
  * Kazanılmış Değer Yönetimi (EVM) + bütçe-gerçekleşen.
@@ -57,6 +59,16 @@ const round2 = (v: number): number => Math.round(v * 100) / 100;
 export const projectPercentComplete = (project: Project): number => {
     const tasks = project.tasks || [];
     if (tasks.length === 0) return 0;
+    if (project.settings?.useJiraRemainingEstimate && tasks.some(t => taskTimeTracking(t).progress !== undefined)) {
+        let total = 0, earned = 0;
+        for (const task of tasks) {
+            const tracking = taskTimeTracking(task);
+            const weight = tracking.eac || tracking.original || Math.max(task.time?.avg ?? 0, 0) * HOURS_PER_DAY;
+            total += weight;
+            earned += weight * (task.status === TaskStatus.Done ? 1 : tracking.progress ?? 0);
+        }
+        if (total > 0) return round2(earned / total);
+    }
     const w = (t: Project['tasks'][number]): number => Math.max(t.time?.avg ?? 0, 0);
     const totalW = tasks.reduce((s, t) => s + w(t), 0);
     if (totalW > 0) {

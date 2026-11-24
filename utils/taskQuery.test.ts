@@ -169,3 +169,16 @@ describe('sorgu önerileri', () => {
         expect(s?.insert).toBe('"Ayşe Demir" ');
     });
 });
+
+it('efor sorgusunda saat birimi, tahmin aşımı ve boş ile sıfır ayrımı', () => {
+    const candidates = [
+        task('over', { originalEstimateHours: 3, actualHours: 4, remainingEstimateHours: 5 }),
+        task('missing'),
+        task('zero', { originalEstimateHours: 0, actualHours: 0, remainingEstimateHours: 0 }),
+    ];
+    expect(runTaskQuery(candidates, 'kalan > 4 saat AND tahmin aşılmış', ctx)).toMatchObject({ ok: true, tasks: [{ id: 'over' }] });
+    expect(runTaskQuery(candidates, 'tahminsiz', ctx)).toMatchObject({ ok: true, tasks: [{ id: 'missing' }] });
+    expect(runTaskQuery(candidates, 'kalan = 0', ctx)).toMatchObject({ ok: true, tasks: [{ id: 'zero' }] });
+    expect(looksLikeQuery('tahmin aşılmış')).toBe(true);
+    expect(looksLikeQuery('tahminsiz')).toBe(true);
+});

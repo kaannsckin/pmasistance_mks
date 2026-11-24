@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { buildIssueJql, buildKeysJql, buildSyncJql, buildWorklogJql, checkRecipients, handleIntegrationRequest, integrationStatus, JiraIssueRecord, Mailer, pickIssueType, pickPriority, plainDescription, reminderMessage, teamsCard } from './handler';
+import { buildIssueJql, buildKeysJql, buildSyncJql, buildWorklogJql, checkRecipients, checkSyncSource, handleIntegrationRequest, integrationStatus, JiraIssueRecord, Mailer, pickIssueType, pickPriority, plainDescription, reminderMessage, teamsCard } from './handler';
 
 const TOKEN = 'erisim-kodu-12345678901234567890';
-const BASE_ENV = { AI_ACCESS_TOKEN: TOKEN };
+const BASE_ENV = { AI_ACCESS_TOKEN: TOKEN, JIRA_WORKLOG_SINGLE_USER: '1' };
 
 const post = (route: string, body: unknown, token: string | null = TOKEN) =>
     new Request(`http://localhost/api/integrations/${route}`, {
@@ -88,11 +88,11 @@ describe('Jira worklog', () => {
                 ],
             });
         }) as unknown as typeof fetch;
-        const res = await handleIntegrationRequest(post('jira-worklogs', { projectKey: 'mks', from: '2026-10-05', to: '2026-10-11' }), env, { route: 'jira-worklogs', fetchImpl });
+        const res = await handleIntegrationRequest(post('jira-worklogs', { projectKey: 'mks', from: '2026-10-05', to: '2026-10-11', detail: true }), env, { route: 'jira-worklogs', fetchImpl });
         const { entries } = await res.json();
         expect(calls[0]).toContain('https://jira.kurum.gov.tr/rest/api/2/search?jql=');
-        expect(calls[1]).toBe('https://jira.kurum.gov.tr/rest/api/2/issue/MKS-15/worklog');
-        expect(entries).toEqual([
+        expect(calls[1]).toBe('https://jira.kurum.gov.tr/rest/api/2/issue/MKS-15/worklog?startAt=0&maxResults=1000');
+        expect(entries).toMatchObject([
             { date: '2026-10-06', author: 'Kaan Demir', issueKey: 'MKS-12', summary: 'Multi-domain', hours: 2, comment: 'Alan adı doğrulama', source: 'jira' },
             { date: '2026-10-07', author: 'ali', issueKey: 'MKS-15', summary: 'Arşiv', hours: 1, comment: 'ADF yorum', source: 'jira' },
         ]);
@@ -131,7 +131,7 @@ describe('Jira worklog', () => {
         expect(res.status).toBe(200);
         const body = await res.json();
         expect(body.missing).toEqual(['MKS-9']);
-        expect(body.entries).toEqual([
+        expect(body.entries).toMatchObject([
             { date: '2026-10-06', author: 'Ayşe Kaya', authorEmail: 'ayse.kaya@kurum.gov.tr', issueKey: 'MKS-1', summary: '', hours: 2, source: 'jira' },
             { date: '2026-11-02', author: 'ali', issueKey: 'MKS-1', summary: '', hours: 0.5, source: 'jira' },
         ]);
@@ -193,7 +193,7 @@ describe('Jira kayıt geçmişi', () => {
             if (url.endsWith('/rest/api/2/status')) return jsonRes(200, STATUSES);
             if (url.endsWith('/rest/api/2/field')) return jsonRes(200, FIELDS);
             if (url.includes('/rest/api/2/search?')) {
-                return jsonRes(200, { total: 3, startAt: 0, issues: [issue('MKS-12'), issue('MKS-15', { status: { id: '3', name: 'Devam Ediyor' }, resolutiondate: null, assignee: null, customfield_10002: null }, { total: 5, histories: [] })] });
+                return jsonRes(200, { total: 3, startAt: 0, issues: [issue('MKS-12', { timeestimate: 0, aggregatetimeoriginalestimate: 72000, aggregatetimeestimate: 3600, aggregatetimespent: 81000, subtasks: [{ key: 'MKS-13' }] }), issue('MKS-15', { status: { id: '3', name: 'Devam Ediyor' }, resolutiondate: null, assignee: null, customfield_10002: null }, { total: 5, histories: [] })] });
             }
             if (url.includes('/rest/api/2/issue/MKS-15')) return jsonRes(200, { key: 'MKS-15', changelog: { total: 1, histories: [history('2026-09-05T08:00:00.000+0300', '1', 'Yapılacak', '10001', 'Test')] } });
             return jsonRes(404, {});
@@ -208,10 +208,10 @@ describe('Jira kayıt geçmişi', () => {
         expect(search).toContain(',customfield_10002&');
         expect(search).toContain('startAt=0');
         expect(body).toMatchObject({ total: 3, next: '2' });
-        expect(body.issues[0]).toEqual({
+        expect(body.issues[0]).toMatchObject({
             key: 'MKS-12', summary: 'Oturum hatası MKS-12', description: 'Giriş x ekranında kılavuz hata\n\nadım', issueType: 'Hata', status: 'Kapandı', statusCategory: 'done', priority: 'Yüksek',
             created: '2026-09-01T06:00:00.000Z', resolved: '2026-09-04T14:00:00.000Z', components: ['Yazılım'], labels: ['giris'], fixVersions: ['2.1'],
-            originalEstimateSeconds: 57600, timeSpentSeconds: 72000, storyPoints: 3, assignee: 'Ayşe Yılmaz', blockedBy: ['MKS-1'],
+            originalEstimateSeconds: 57600, timeSpentSeconds: 72000, remainingEstimateSeconds: 0, aggregateOriginalEstimateSeconds: 72000, aggregateRemainingEstimateSeconds: 3600, aggregateTimeSpentSeconds: 81000, subtaskKeys: ['MKS-13'], storyPoints: 3, assignee: 'Ayşe Yılmaz', blockedBy: ['MKS-1'],
             transitions: [
                 { at: '2026-09-02T06:30:00.000Z', from: 'Yapılacak', to: 'Devam Ediyor', fromCategory: 'new', toCategory: 'indeterminate' },
                 { at: '2026-09-03T07:00:00.000Z', from: 'Devam Ediyor', to: 'Kapandı', fromCategory: 'indeterminate', toCategory: 'done' },
@@ -219,7 +219,7 @@ describe('Jira kayıt geçmişi', () => {
             due: '2026-09-10',
         });
         // Durum kategorisi kaydın kendisinde yoksa durum listesinden; kısaltılmış geçmiş kayıttan tamamlanır
-        expect(body.issues[1]).toMatchObject({ statusCategory: 'indeterminate', resolved: null, assignee: '', storyPoints: null, transitions: [{ to: 'Test', toCategory: 'indeterminate' }] });
+        expect(body.issues[1]).toMatchObject({ statusCategory: 'indeterminate', resolved: null, assignee: '', remainingEstimateSeconds: null, aggregateRemainingEstimateSeconds: null, subtaskKeys: [], storyPoints: null, transitions: [{ to: 'Test', toCategory: 'indeterminate' }] });
         expect(JSON.stringify(body)).not.toContain('pat');
     });
 
@@ -229,7 +229,7 @@ describe('Jira kayıt geçmişi', () => {
         const fetchImpl = (async (url: string) => {
             calls.push(url);
             if (url.endsWith('/rest/api/2/status')) return jsonRes(200, STATUSES);
-            return jsonRes(200, { issues: [issue('MKS-3')], nextPageToken: 'abc-123', isLast: false });
+            return jsonRes(200, { issues: [issue('MKS-3', { timetracking: { remainingEstimateSeconds: 1800 }, parent: { key: 'MKS-2' } })], nextPageToken: 'abc-123', isLast: false });
         }) as unknown as typeof fetch;
         const res = await handleIntegrationRequest(post('jira-issues', { projectKey: 'MKS', cursor: 'onceki' }), env, { route: 'jira-issues', fetchImpl });
         const body = await res.json();
@@ -237,7 +237,7 @@ describe('Jira kayıt geçmişi', () => {
         const search = calls.find(c => c.includes('/search/jql?'))!;
         expect(search).toContain('nextPageToken=onceki');
         expect(decodeURIComponent(search)).toContain('statusCategory = Done ORDER BY key ASC');
-        expect(body).toMatchObject({ total: null, next: 'abc-123', issues: [{ key: 'MKS-3' }] });
+        expect(body).toMatchObject({ total: null, next: 'abc-123', issues: [{ key: 'MKS-3', remainingEstimateSeconds: 1800, parentKey: 'MKS-2' }] });
     });
 
     it('izin listesi, geçersiz girdi ve yapılandırma', async () => {
@@ -369,6 +369,13 @@ describe('Jira canlı eşitleme (jira-sync)', () => {
         expect(buildSyncJql({}, { labels: ['x'] }, false)).toBe('labels in ("x") ORDER BY key ASC');
         expect(buildKeysJql(['MKS-1', 'MKS-2'])).toBe('key in ("MKS-1", "MKS-2") ORDER BY key ASC');
         expect(buildSyncJql({}, { projectKey: 'MKS', text: 'giriş hatası' }, false)).toBe('project = "MKS" AND text ~ "giriş hatası" ORDER BY key ASC');
+        const duePeriod = { start: '2026-12-01', end: '2026-12-31' };
+        expect(checkSyncSource({}, { filterId: '7', duePeriod })).toEqual({ source: { filterId: '7', duePeriod } });
+        expect(buildSyncJql({ JIRA_ALLOWED_PROJECTS: 'MKS' }, { filterId: '7', duePeriod }, false))
+            .toBe('project in ("MKS") AND filter = 7 AND duedate >= "2026-12-01" AND duedate <= "2026-12-31" ORDER BY key ASC');
+        expect(checkSyncSource({}, { duePeriod })).toHaveProperty('status', 400);
+        expect(checkSyncSource({}, { projectKey: 'MKS', duePeriod: { ...duePeriod, end: '2026-12-99' } })).toHaveProperty('status', 400);
+        expect(checkSyncSource({}, { projectKey: 'MKS', duePeriod: { ...duePeriod, end: '2026-12-31" OR project = "ABC' } })).toHaveProperty('status', 400);
     });
 
     it('kapsamsız ya da geçersiz kaynak reddedilir; serbest JQL kabul edilmez', async () => {
@@ -476,6 +483,7 @@ describe('Jira canlı eşitleme (jira-sync)', () => {
         expect((await run({ op: 'update', key: 'MKS-1', changes: {} }, noop, on)).status).toBe(400);
         expect((await run({ op: 'update', key: 'MKS-1', changes: { priority: 'toString' } }, noop, on)).status).toBe(400);
         expect((await run({ op: 'update', key: 'XYZ-1', changes: { summary: 'x' } }, noop, { ...on, JIRA_ALLOWED_PROJECTS: 'MKS' })).status).toBe(403);
+        expect((await run({ op: 'update', key: 'MKS-1', changes: { worklogHours: 1 } }, noop, on)).status).toBe(403);
         expect(noop).not.toHaveBeenCalled();
 
         const sent: { method: string; url: string; body?: Record<string, unknown> }[] = [];
@@ -490,23 +498,22 @@ describe('Jira canlı eşitleme (jira-sync)', () => {
             if (url.endsWith('/transitions') && method === 'GET') return jsonRes(200, { transitions: [{ id: '11', name: 'İptal', to: { name: 'İptal', statusCategory: { key: 'done' } } }, { id: '21', name: 'Kapat', to: { name: 'Kapandı', statusCategory: { key: 'done' } } }, { id: '31', name: 'Başla', to: { name: 'Devam', statusCategory: { key: 'indeterminate' } } }] });
             if (url.endsWith('/transitions')) return new Response(null, { status: 204 });
             if (url.endsWith('/comment')) return jsonRes(201, { id: '1' });
-            if (url.endsWith('/worklog')) return jsonRes(400, { errorMessages: ['Zaman takibi kapalı.'] });
             if (url.includes('/issue/MKS-1?fields=status')) return jsonRes(200, { fields: { status: { statusCategory: { key: 'indeterminate' } } } });
             if (url.includes('/search?')) return jsonRes(200, { issues: [raw('MKS-1', '6')], total: 1 });
             return jsonRes(404, {});
         }) as unknown as typeof fetch;
-        const res = await run({ op: 'update', key: 'mks-1', changes: { summary: '  Yeni   başlık ', priority: 'High', dueDate: '2026-12-01', status: 'done', comment: 'Kapatıldı', worklogHours: 1.5 } }, fetchImpl, on);
+        const res = await run({ op: 'update', key: 'mks-1', changes: { summary: '  Yeni   başlık ', priority: 'High', dueDate: '2026-12-01', status: 'done', comment: 'Kapatıldı', remainingEstimateHours: 0 } }, fetchImpl, on);
         expect(res.status).toBe(200);
         const body = await res.json() as { applied: string[]; errors: { field: string; message: string }[]; issue: JiraIssueRecord };
-        expect(body.applied).toEqual(['summary', 'priority', 'status', 'comment']);
-        expect(body.errors).toEqual([{ field: 'dueDate', message: 'Alan ekranda yok.' }, { field: 'worklog', message: 'Zaman takibi kapalı.' }]);
+        expect(body.applied).toEqual(['summary', 'priority', 'remainingEstimateHours', 'status', 'comment']);
+        expect(body.errors).toEqual([{ field: 'dueDate', message: 'Alan ekranda yok.' }]);
         expect(body.issue).toMatchObject({ key: 'MKS-1', statusCategory: 'done' });
         const puts = sent.filter(x => x.method === 'PUT');
-        expect(puts[0].body).toEqual({ fields: { summary: 'Yeni başlık', priority: { id: '2' }, duedate: '2026-12-01' } });
-        expect(puts[1].body).toEqual({ fields: { summary: 'Yeni başlık', priority: { id: '2' } } });
+        expect(puts[0].body).toEqual({ fields: { summary: 'Yeni başlık', priority: { id: '2' }, duedate: '2026-12-01', timetracking: { remainingEstimate: '0m' } } });
+        expect(puts[1].body).toEqual({ fields: { summary: 'Yeni başlık', priority: { id: '2' }, timetracking: { remainingEstimate: '0m' } } });
         expect(sent.find(x => x.method === 'POST' && x.url.endsWith('/transitions'))!.body).toEqual({ transition: { id: '21' } }); // adı ipucuna uyan geçiş
         expect(sent.find(x => x.url.endsWith('/comment'))!.body).toEqual({ body: 'Kapatıldı' });
-        expect(sent.find(x => x.url.endsWith('/worklog'))!.body).toEqual({ timeSpentSeconds: 5400, started: '2026-11-13T08:00:00.000+0000' });
+        expect(sent.some(x => x.url.endsWith('/worklog'))).toBe(false);
     });
 
     it('durum zaten hedefteyse geçiş denenmez; geçiş yoksa hata alan bazında döner', async () => {
@@ -529,5 +536,104 @@ describe('Jira canlı eşitleme (jira-sync)', () => {
         const none = mk('new');
         expect(await (await run({ op: 'update', key: 'MKS-1', changes: { status: 'done' } }, none.fetchImpl, on)).json()).toMatchObject({ applied: [], errors: [{ field: 'status' }] });
         expect(none.methods.some(m => m.startsWith('POST'))).toBe(false);
+    });
+});
+
+describe('Jira değişiklik geçmişi ucu', () => {
+    const get = (key: string) => new Request(`http://localhost/api/integrations/jira-history?key=${key}`, {
+        headers: { authorization: `Bearer ${TOKEN}`, 'x-forwarded-for': 'history-test' },
+    });
+    const row = (id: number) => ({ id: String(id), created: '2026-11-24T09:20:00+0300', author: { displayName: 'Ayşe' },
+        items: [{ field: 'assignee', fieldId: 'assignee', from: null, to: '123', toString: 'Ayşe' }] });
+
+    it('Cloud v3 geçmişini 100’den fazla değişiklik için sayfalar ve proje kapsamını uygular', async () => {
+        const calls: number[] = [];
+        const fetchImpl = (async (url: string) => {
+            const u = new URL(url);
+            expect(u.pathname).toBe('/rest/api/3/issue/MKS-4/changelog');
+            const offset = Number(u.searchParams.get('startAt'));
+            calls.push(offset);
+            return jsonRes(200, { total: 105, values: Array.from({ length: Math.min(100, 105 - offset) }, (_, i) => row(i + offset)) });
+        }) as typeof fetch;
+        const env = { ...BASE_ENV, JIRA_BASE_URL: 'https://history-fixture.atlassian.net', JIRA_TOKEN: 'secret', JIRA_ALLOWED_PROJECTS: 'MKS' };
+        const opts = { route: 'jira-history' as const, fetchImpl };
+        const res = await handleIntegrationRequest(get('mks-4'), env, opts);
+        expect(res.status).toBe(200);
+        const { entries } = await res.json();
+        expect(entries).toHaveLength(105);
+        expect(entries[100]).toMatchObject({ id: '100', at: '2026-11-24T06:20:00.000Z', author: 'Ayşe', items: [{ from: null, to: '123', toString: 'Ayşe' }] });
+        expect((await handleIntegrationRequest(get('ABC-4'), env, opts)).status).toBe(403);
+        expect(calls).toEqual([0, 100]);
+    });
+
+    it('Data Center geçmişi expand=changelog ile alınır', async () => {
+        const fetchImpl = (async (url: string) => {
+            expect(url).toBe('https://history-dc.example/rest/api/2/issue/MKS-4?expand=changelog&fields=none');
+            return jsonRes(200, { changelog: { total: 2, histories: [row(1), row(2)] } });
+        }) as typeof fetch;
+        const env = { ...BASE_ENV, JIRA_BASE_URL: 'https://history-dc.example', JIRA_TOKEN: 'secret' };
+        const res = await handleIntegrationRequest(get('MKS-4'), env, { route: 'jira-history', fetchImpl });
+        expect(res.status).toBe(200);
+        expect((await res.json()).entries).toHaveLength(2);
+    });
+});
+
+describe('Jira worklog ayrıntısı ve artımlı yenileme', () => {
+    const dc = { ...BASE_ENV, JIRA_BASE_URL: 'https://worklog-dc.example', JIRA_TOKEN: 'pat' };
+    const row = (id: string, email: string, seconds = 1800) => ({
+        id, issueId: '42', started: '2026-11-23T23:10:00.000+0000', updated: '2026-11-24T04:30:00.000+0000',
+        timeSpentSeconds: seconds, author: { displayName: email, emailAddress: email, accountId: id + '-account' }, comment: `Özel yorum ${id}`,
+    });
+
+    it('kimliği doğrulanan üye yalnız kendi saat ve yorumunu görür, eşlenen yönetici proje kayıtlarını görür', async () => {
+        const env = { ...dc, AI_AUTH_MODE: 'supabase', SUPABASE_URL: 'https://auth-worklog.example', SUPABASE_ANON_KEY: 'anon',
+            JIRA_WORKLOG_ACCESS: '{"manager":{"projects":["MKS"]}}' };
+        const fetchImpl = (async (url: string, init?: RequestInit) => {
+            const authorization = new Headers(init?.headers).get('authorization');
+            if (url.includes('/auth/v1/user')) {
+                const manager = authorization === 'Bearer manager-mock-token';
+                return jsonRes(200, { id: manager ? 'manager' : 'member', email: 'ayse@example.org', email_confirmed_at: '2026-01-01' });
+            }
+            if (url.includes('/rest/v1/workspace_members')) return jsonRes(200, [{ role: 'py' }]);
+            return jsonRes(200, { worklogs: [row('1', 'ayse@example.org'), row('2', 'ali@example.org')] });
+        }) as typeof fetch;
+        const request = (auth: string) => post('jira-worklogs', { keys: ['MKS-1'], detail: true, timeZone: 'Europe/Istanbul', manager: true }, auth);
+        const member = await handleIntegrationRequest(request('member-mock-token'), env, { route: 'jira-worklogs', fetchImpl });
+        expect(member.status).toBe(200);
+        const { entries } = await member.json();
+        expect(entries).toHaveLength(1);
+        expect(entries[0]).toMatchObject({
+            id: '1', accountId: '1-account', started: '2026-11-23T23:10:00.000+00:00', date: '2026-11-24',
+            updated: '2026-11-24T04:30:00.000Z', comment: 'Özel yorum 1',
+        });
+        const manager = await handleIntegrationRequest(request('manager-mock-token'), env, { route: 'jira-worklogs', fetchImpl });
+        expect((await manager.json()).entries).toHaveLength(2);
+    });
+
+    it('düzenlenen ve silinen kayıtları Jira akışlarından tek yenilemede işler', async () => {
+        const now = vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-11-24T09:00:00Z'));
+        try {
+            const calls: string[] = [];
+            const fetchImpl = (async (url: string, init?: RequestInit) => {
+                calls.push(url);
+                if (url.includes('/search?')) return jsonRes(200, { total: 1, issues: [{ key: 'MKS-10', id: '42' }] });
+                if (url.includes('/worklog/updated')) return jsonRes(200, { values: [{ worklogId: 1 }, { worklogId: 3 }], until: Date.now(), lastPage: true });
+                if (url.includes('/worklog/deleted')) return jsonRes(200, { values: [{ worklogId: 2 }], until: Date.now(), lastPage: true });
+                if (url.endsWith('/worklog/list')) {
+                    expect(JSON.parse(String(init?.body))).toEqual({ ids: [1, 3] });
+                    return jsonRes(200, [row('1', 'ayse@example.org', 5400), { ...row('3', 'ali@example.org'), issueId: '99' }]);
+                }
+                return jsonRes(200, { worklogs: [row('1', 'ayse@example.org'), row('2', 'ayse@example.org')] });
+            }) as typeof fetch;
+            const run = () => handleIntegrationRequest(post('jira-worklogs', { keys: ['MKS-10'], detail: true, incremental: true }), dc, { route: 'jira-worklogs', fetchImpl });
+            expect((await (await run()).json()).entries).toHaveLength(2);
+            now.mockReturnValue(Date.parse('2026-11-24T09:01:00Z'));
+            const next = await (await run()).json();
+            expect(next.entries).toHaveLength(1);
+            expect(next.entries[0]).toMatchObject({ id: '1', hours: 1.5 });
+            expect(calls.filter(url => url.includes('/issue/MKS-10/'))).toHaveLength(1);
+        } finally {
+            now.mockRestore();
+        }
     });
 });

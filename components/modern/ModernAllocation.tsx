@@ -1,3 +1,4 @@
+import JiraTimesheet from './JiraTimesheet';
 import React, { useMemo, useState } from 'react';
 import { Allocation, Leave, Person, PlanLock, PlanLockStatus, Project, TitleDef, UserRole } from '../../types';
 import { EffortField, MONTHS_TR } from '../../utils/allocations';
@@ -93,7 +94,7 @@ const cellText = (c: HeatCell): string => (c.level === 'empty' ? '—' : c.level
 const ModernAllocation: React.FC<ModernAllocationProps> = (props) => {
     const { allocations, people, projects, leaves, identity, onViewPerson } = props;
     const thisYear = new Date().getFullYear();
-    const [page, setPage] = useState<'allocation' | 'workforce'>('allocation');
+    const [page, setPage] = useState<'allocation' | 'workforce' | 'timesheet'>('allocation');
     const [ctl, setCtl] = useState<AllocationControlState>({ year: thisYear, mode: 'plan', tab: 'grid', projectFilter: 'all', deptFilter: 'all' });
     const [view, setView] = useState<ViewKey>('heat');
     const [tool, setTool] = useState<ToolKey | null>(null);
@@ -173,8 +174,16 @@ const ModernAllocation: React.FC<ModernAllocationProps> = (props) => {
         <div className="m-segmented mt-3" role="tablist" aria-label="Ekip ve tahsis sayfası">
             <button type="button" role="tab" className="m-segment" aria-selected={page === 'allocation'} onClick={() => setPage('allocation')}>Tahsis</button>
             <button type="button" role="tab" className="m-segment" aria-selected={page === 'workforce'} onClick={() => setPage('workforce')}>İş güçleri</button>
+            <button type="button" role="tab" className="m-segment" aria-selected={page === 'timesheet'} onClick={() => setPage('timesheet')}>Zaman çizelgesi</button>
         </div>
     ) : null;
+
+    if (page === 'timesheet' && props.workforce) return (
+        <div className="flex flex-col gap-5 min-w-0">
+            <header><h1 className="m-0 text-[34px] font-bold m-text">Ekip ve tahsis</h1>{pageTabs}</header>
+            <JiraTimesheet projects={props.workforce.projects} people={people} leaves={leaves} titles={props.titles} identity={identity} />
+        </div>
+    );
 
     if (page === 'workforce' && props.workforce) {
         return (

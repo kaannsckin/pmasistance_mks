@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { JiraSyncDirection, JiraSyncFieldId, JiraSyncSettings, Project } from '../../../types';
+import { DayRange, formatRange } from '../../../utils/calendarRange';
 import { fetchIntegrationHealth, fetchJiraMeta, fetchJiraSyncPage, IntegrationHealth, JiraIssueRecord, JiraMeta, updateJiraIssue } from '../../../utils/integrations';
 import { JiraImportOptions } from '../../../utils/planning/jiraImport';
 import { AUTO_SYNC_OPTIONS, hasSyncWork, JIRA_SYNC_EVENT, JiraPushOutcome, linkedSyncKeys, parseLabels, readSyncState, runFullSync, sourceLabel, sourceOf, writeSyncState } from '../../../utils/planning/jiraSync';
@@ -17,8 +18,9 @@ import { Field } from '../ui';
 
 interface Props {
     project: Project;
+    period?: DayRange;
     onSaveSettings: (settings: JiraSyncSettings) => void;
-    onApply: (issues: JiraIssueRecord[], opts: JiraImportOptions, addNew: boolean, label: string, pushed?: JiraPushOutcome) => void;
+    onApply: (issues: JiraIssueRecord[], opts: JiraImportOptions, addNew: boolean, label: string, pushed?: JiraPushOutcome, settings?: JiraSyncSettings) => void;
     onClose: () => void;
 }
 
@@ -26,7 +28,7 @@ const KEY_RE = /^[A-Za-z][A-Za-z0-9_]{1,19}$/;
 const LABEL_RE = /^[^\s"\\,()]{1,100}$/;
 const num = (v: number) => v.toLocaleString('tr-TR');
 
-const JiraSync: React.FC<Props> = ({ project, onSaveSettings, onApply, onClose }) => {
+const JiraSync: React.FC<Props> = ({ project, period, onSaveSettings, onApply, onClose }) => {
     const saved = project.jiraSync;
     const [health, setHealth] = useState<IntegrationHealth | null>(null);
     const [meta, setMeta] = useState<JiraMeta | null>(null);
@@ -69,24 +71,25 @@ const JiraSync: React.FC<Props> = ({ project, onSaveSettings, onApply, onClose }
     const shownFields = fields || fieldPolicy(undefined);
     const setField = (id: JiraSyncFieldId, d: JiraSyncDirection) => setFields({ ...shownFields, [id]: d });
     const invalid = (!!projectKey.trim() && !KEY_RE.test(projectKey.trim())) || labelList.some(l => !LABEL_RE.test(l)) || (!!filterId.trim() && !/^\d{1,12}$/.test(filterId.trim()));
-    const needsSource = discover && !sourceOf(draft);
+    const needsSource = (!!period || discover) && !sourceOf(draft);
     const dirty = JSON.stringify(draft) !== JSON.stringify(saved || { discover: false, autoMinutes: 0 });
     const linked = useMemo(() => linkedSyncKeys(project.tasks, draft).length, [project.tasks, draft]);
     const candidate = { ...project, jiraSync: draft };
-    const canRun = !!health?.jira && !invalid && !needsSource && busy === null && hasSyncWork(candidate);
+    const canRun = !!health?.jira && !invalid && !needsSource && busy === null && (!!period || hasSyncWork(candidate));
 
     const run = async () => {
         if (!health || !canRun) return;
-        if (dirty) onSaveSettings(draft);
+        if (dirty && !period) onSaveSettings(draft);
         setError(null);
         const c = new AbortController();
         abort.current = c;
         setBusy(0);
         try {
             const update = health.jiraUpdate ? (key: string, changes: Parameters<typeof updateJiraIssue>[1]) => updateJiraIssue(key, changes, health.authMode, c.signal) : null;
-            const r = await runFullSync(candidate, o => fetchJiraSyncPage(o, health.authMode, c.signal), update, setBusy);
-            if (r.shouldApply) onApply(r.issues, r.opts, r.addNew, 'elle', r.pushed);
-            writeSyncState(project.id, { at: new Date().toISOString(), ok: true, text: r.text });
+            const r = await runFullSync(candidate, o => fetchJiraSyncPage(o, health.authMode, c.signal), update, setBusy, period);
+            const label = period ? formatRange(period) : 'elle';
+            if (r.shouldApply) onApply(r.issues, r.opts, r.addNew, label, r.pushed, period ? draft : undefined);
+            writeSyncState(project.id, { at: new Date().toISOString(), ok: true, text: period ? `${label} · ${r.text}` : r.text });
         } catch (e) {
             if ((e as Error)?.name !== 'AbortError') setError(e instanceof Error ? e.message : String(e));
         } finally {
@@ -99,7 +102,9 @@ const JiraSync: React.FC<Props> = ({ project, onSaveSettings, onApply, onClose }
             <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                     <h3 id="js-title" className="m-0 text-[17px] font-semibold m-text">Jira eşitleme</h3>
-                    <p className="m-0 mt-0.5 text-[14px] m-text-3">Uygulamada Jira anahtarı olan kayıtlar seçtiğiniz alanlarda Jira ile eşitlenir (Jira'dan alınır, Jira'ya yazılır ya da çift yönlü). Tüm Jira taranmaz: yeni kayıt yalnız seçtiğiniz proje, etiket ya da kayıtlı filtreden gelir. Jeton yalnız sunucudadır.</p>
+                    <p className="m-0 mt-0.5 text-[14px] m-text-3">{period
+                        ? <><b>{formatRange(period)}</b> · Seçili kaynakta Jira termin tarihi aralığa giren kayıtlar, seçtiğiniz alanlara göre eşitlenir.</>
+                        : "Jira anahtarı olan kayıtlar, seçtiğiniz alanlarda Jira'dan alınır veya Jira'ya yazılır. Yeni kayıtlar seçtiğiniz proje, etiket ya da kayıtlı filtreden gelir."}</p>
                 </div>
                 <button type="button" className="m-icon-btn" aria-label="Kapat" onClick={() => { abort.current?.abort(); onClose(); }}><Icon name="x" size={18} /></button>
             </div>
@@ -143,19 +148,19 @@ const JiraSync: React.FC<Props> = ({ project, onSaveSettings, onApply, onClose }
                     <div className="flex flex-wrap items-end gap-x-5 gap-y-3">
                         <label className="flex items-center gap-2.5 text-[15px] m-text min-h-[40px] cursor-pointer">
                             <input type="checkbox" className="w-4 h-4" checked={discover} disabled={busy !== null} onChange={e => setDiscover(e.target.checked)} />
-                            Kaynaktaki yeni açık kayıtları da ekle
+                            {period ? 'Aralıktaki yeni kayıtları da ekle' : 'Kaynaktaki yeni açık kayıtları da ekle'}
                         </label>
-                        <Field label="Otomatik eşitleme" htmlFor="js-auto">
+                        {!period && <Field label="Otomatik eşitleme" htmlFor="js-auto">
                             <select id="js-auto" className="m-input" value={autoMinutes} disabled={busy !== null} onChange={e => setAutoMinutes(Number(e.target.value))}>
                                 {AUTO_SYNC_OPTIONS.map(m => <option key={m} value={m}>{m ? `${m} dakikada bir` : 'Kapalı (yalnız elle)'}</option>)}
                             </select>
-                        </Field>
+                        </Field>}
                     </div>
                     <fieldset className="m-0 p-0 border-0 flex flex-col gap-2">
                         <legend className="text-[15px] font-semibold m-text mb-1">Alanlar ve yön</legend>
                         <p className="m-0 text-[13px] m-text-3">
                             Her alan için yön seçin. <strong>Çift yönlü</strong>: son eşitlemeden beri hangi taraf değiştiyse o kazanır; iki taraf da değiştiyse Jira esas alınır ve çakışma bildirilir.
-                            Uygulamadan Jira'ya yalnız durum, termin, öncelik ve başlık yazılabilir.
+                            Uygulamadan Jira'ya durum, termin, öncelik, başlık ve kalan süre yazılabilir.
                             {!fields && ' Şu an eski davranış geçerli: tüm alanlar Jira\'dan alınır.'}
                         </p>
                         <div className="grid gap-x-4 gap-y-2 sm:grid-cols-2">
@@ -182,15 +187,15 @@ const JiraSync: React.FC<Props> = ({ project, onSaveSettings, onApply, onClose }
                         )}
                     </fieldset>
                     {invalid && <p role="alert" className="m-0 text-[14px] m-ink-bad">Proje anahtarı, etiket ya da filtre numarası geçersiz.</p>}
-                    {needsSource && <p role="alert" className="m-0 text-[14px] m-ink-warn">Yeni kayıt eklemek için proje, etiket ya da kayıtlı filtre seçin.</p>}
-                    {!needsSource && !invalid && !linked && !discover && <p className="m-0 text-[14px] m-text-3">Bu projede eşitlenecek Jira anahtarlı kayıt yok; kaynak seçip "yeni açık kayıtları da ekle"yi açabilirsiniz.</p>}
+                    {needsSource && <p role="alert" className="m-0 text-[14px] m-ink-warn">{period ? 'Aralığı eşitlemek için' : 'Yeni kayıt eklemek için'} proje, etiket ya da kayıtlı filtre seçin.</p>}
+                    {!period && !needsSource && !invalid && !linked && !discover && <p className="m-0 text-[14px] m-text-3">Bu projede eşitlenecek Jira anahtarlı kayıt yok; kaynak seçip "yeni açık kayıtları da ekle"yi açabilirsiniz.</p>}
                     <div className="flex flex-wrap items-center gap-2">
                         <button type="button" className="m-btn m-btn-primary" disabled={!canRun} onClick={run}>
-                            <Icon name="refresh" size={18} />{busy !== null ? `Eşitleniyor… ${num(busy)}` : 'Şimdi eşitle'}
+                            <Icon name="refresh" size={18} />{busy !== null ? `Eşitleniyor… ${num(busy)}` : period ? 'Bu aralığı eşitle' : 'Şimdi eşitle'}
                         </button>
                         {busy !== null && <button type="button" className="m-btn m-btn-plain" onClick={() => abort.current?.abort()}>Durdur</button>}
-                        <button type="button" className="m-btn m-btn-gray" disabled={!dirty || invalid || needsSource || busy !== null} onClick={() => onSaveSettings(draft)}>{dirty ? 'Ayarı kaydet' : 'Ayar kayıtlı'}</button>
-                        {sourceOf(draft) && <span className="text-[13px] m-text-3">Kaynak: {sourceLabel(draft)} · yalnız açık kayıtlar</span>}
+                        {!period && <button type="button" className="m-btn m-btn-gray" disabled={!dirty || invalid || needsSource || busy !== null} onClick={() => onSaveSettings(draft)}>{dirty ? 'Ayarı kaydet' : 'Ayar kayıtlı'}</button>}
+                        {sourceOf(draft) && <span className="text-[13px] m-text-3">Kaynak · {sourceLabel(draft)}{period ? '' : ' · yalnız açık kayıtlar'}</span>}
                     </div>
                     {error && <p role="alert" className="m-0 text-[14px] m-ink-bad">{error}</p>}
                     {state && (

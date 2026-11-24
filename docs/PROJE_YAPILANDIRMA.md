@@ -100,7 +100,7 @@ Sonrası işlemlerde **Alan güncelle**: öncelik; termin (temizle / bugün + N 
 
 ## Jira'ya geri yazma
 
-Yapılandırmada **Durum geçişlerini Jira'ya da yaz** açıksa, Jira'ya bağlı görev uygulamada bir duruma geçince Jira'da da geçirilir: belirli durum seçildiyse Jira'da **aynı adlı** duruma (ör. TESTING), yalnız kategori istendiyse o kategoriye götüren geçişle. Geçiş notu Jira'ya yorum, harcanan süre worklog, çözüm resolution olarak yazılır (Jira geçiş ekranında çözüm yoksa çözümsüz geçilir ve bildirilir). Jira geçişi reddederse Jira'daki geçişler listelenerek uyarı gösterilir ve sonraki eşitlemede Jira'daki durum geçerli olur. Sunucuda `JIRA_ALLOW_UPDATE=1` gerekir; yalnız proje içeriğini düzenleyebilen kullanıcıların (ve onayladıkları AI önerilerinin) geçişleri yazılır; yazılanlar denetim günlüğüne girer.
+Yapılandırmada **Durum geçişlerini Jira'ya da yaz** açıksa, Jira'ya bağlı görev uygulamada bir duruma geçince Jira'da da geçirilir: belirli durum seçildiyse Jira'da **aynı adlı** duruma (ör. TESTING), yalnız kategori istendiyse o kategoriye götüren geçişle. Geçiş notu Jira'ya yorum, çözüm Jira çözümü olarak yazılır (Jira geçiş ekranında çözüm yoksa çözümsüz geçilir ve bildirilir). Çalışma kayıtları salt okunurdur. Jira geçişi reddederse Jira'daki geçişler listelenerek uyarı gösterilir ve sonraki eşitlemede Jira'daki durum geçerli olur. Sunucuda `JIRA_ALLOW_UPDATE=1` gerekir; yalnız proje içeriğini düzenleyebilen kullanıcıların (ve onayladıkları AI önerilerinin) geçişleri yazılır; yazılanlar denetim günlüğüne girer.
 
 ## AI asistanı
 

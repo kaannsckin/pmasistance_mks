@@ -8,6 +8,9 @@ import { ISSUE_TYPE_LABELS, taskDurations } from '../../utils/planning/lifecycle
 import { daysLate, initialsOf, PRIORITY_META, shortDate, sprintLabel, TASK_STATUS_LABELS } from './taskMeta';
 import { JiraIssueRecord } from '../../utils/integrations';
 import JiraIssuePanel from './JiraIssuePanel';
+import TaskTimeTracking from './TaskTimeTracking';
+import TaskJiraHistory from './TaskJiraHistory';
+import TaskJiraWorklogs from './TaskJiraWorklogs';
 import { TaskWorklogSummary } from './WorkforceParts';
 import { Sheet } from './ui';
 import { Icon } from './icons';
@@ -34,12 +37,15 @@ interface TaskDetailSheetProps {
     /** Harcanan süre (Jira worklog) kırılımı ve maliyeti için kişi havuzu ve ünvanlar */
     people?: Person[];
     titles?: TitleDef[];
+    canViewProjectWorklogs?: boolean;
+    worklogEmail?: string;
 }
 
 const num = (v: number) => v.toLocaleString('tr-TR', { maximumFractionDigits: 1 });
 
-const TaskDetailSheet: React.FC<TaskDetailSheetProps> = ({ task, project, authorName, canEdit, onClose, onEdit, onSave, onJiraPull, workflow, people, titles }) => {
+const TaskDetailSheet: React.FC<TaskDetailSheetProps> = ({ task, project, authorName, canEdit, onClose, onEdit, onSave, onJiraPull, workflow, people, titles, canViewProjectWorklogs, worklogEmail }) => {
     const [comment, setComment] = useState('');
+    const [tab, setTab] = useState<'detail' | 'history' | 'worklogs'>('detail');
     const pred = task.predecessor ? project.tasks.find(t => t.id === task.predecessor) : undefined;
     const wp = task.workPackageId ? project.workPackages.find(w => w.id === task.workPackageId) : undefined;
     const objective = task.keyResultId ? project.objectives.find(o => o.keyResults.some(kr => kr.id === task.keyResultId)) : undefined;
@@ -114,6 +120,14 @@ const TaskDetailSheet: React.FC<TaskDetailSheetProps> = ({ task, project, author
                 </div>
             </div>
 
+            {(task.jiraId || task.statusLog?.length) ? (
+                <div role="group" aria-label="Görev görünümü" className="flex flex-wrap gap-2">
+                    <button type="button" className={`m-btn ${tab === 'detail' ? 'm-btn-primary' : 'm-btn-gray'}`} aria-pressed={tab === 'detail'} onClick={() => setTab('detail')}>Ayrıntılar</button>
+                    <button type="button" className={`m-btn ${tab === 'history' ? 'm-btn-primary' : 'm-btn-gray'}`} aria-pressed={tab === 'history'} onClick={() => setTab('history')}>Geçmiş</button>
+                    {task.jiraId && <button type="button" className={`m-btn ${tab === 'worklogs' ? 'm-btn-primary' : 'm-btn-gray'}`} aria-pressed={tab === 'worklogs'} onClick={() => setTab('worklogs')}>Çalışma kayıtları</button>}
+                </div>
+            ) : null}
+            {tab === 'history' ? <TaskJiraHistory key={task.id} task={task} /> : tab === 'worklogs' && task.jiraId ? <TaskJiraWorklogs issueKey={task.jiraId} canViewProject={!!canViewProjectWorklogs} email={worklogEmail} /> : <>
             {canEdit ? (
                 <div className="flex items-center gap-2 self-start">
                     <span className="text-[13px] font-semibold m-text-2">Durum</span>
@@ -134,8 +148,9 @@ const TaskDetailSheet: React.FC<TaskDetailSheetProps> = ({ task, project, author
                 ))}
             </dl>
 
+            <TaskTimeTracking task={task} />
             {onJiraPull && task.jiraId && <JiraIssuePanel task={task} onPull={onJiraPull} />}
-            {people && titles && <TaskWorklogSummary task={task} project={project} people={people} titles={titles} />}
+            {canViewProjectWorklogs && people && titles && <TaskWorklogSummary task={task} project={project} people={people} titles={titles} />}
 
             {task.notes && <p className="m-0 text-[15px] leading-relaxed m-text whitespace-pre-line rounded-xl m-fill-2 px-4 py-3">{task.notes}</p>}
 
@@ -176,6 +191,7 @@ const TaskDetailSheet: React.FC<TaskDetailSheetProps> = ({ task, project, author
                     <button type="button" className="m-btn m-btn-gray" disabled={!comment.trim()} onClick={addComment}>Gönder</button>
                 </div>
             </div>
+            </>}
         </Sheet>
     );
 };

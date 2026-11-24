@@ -34,6 +34,15 @@ describe('projectPercentComplete', () => {
     it('efor-ağırlıklı tamamlanma', () => {
         expect(projectPercentComplete(buildWs().projects[0])).toBe(0.5);
     });
+    it('açıksa Jira kalan süreyi ilerleme ölçümüne katar', () => {
+        const p = createProject('Jira');
+        p.tasks = [{ ...task('t', 2, TaskStatus.InProgress), originalEstimateHours: 12, actualHours: 4, remainingEstimateHours: 4 }];
+        expect(projectPercentComplete(p)).toBe(0);
+        p.settings.useJiraRemainingEstimate = true;
+        expect(projectPercentComplete(p)).toBe(0.5);
+        p.tasks[0].remainingEstimateHours = undefined;
+        expect(projectPercentComplete(p)).toBe(0);
+    });
     it('görev yoksa 0', () => {
         const p = createProject('boş');
         expect(projectPercentComplete(p)).toBe(0);

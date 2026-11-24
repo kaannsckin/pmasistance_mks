@@ -52,6 +52,7 @@ const fromTask = (t: Task): Draft => ({
     time: { ...t.time }, jiraId: t.jiraId, notes: t.notes, status: t.status, labels: t.labels || [], includeInSprints: t.includeInSprints ?? true,
     keyResultId: t.keyResultId, workPackageId: t.workPackageId, dueDate: t.dueDate, subtasks: t.subtasks, comments: t.comments,
     issueType: t.issueType, estimateSource: t.estimateSource, jiraStatus: t.jiraStatus, components: t.components, fixVersion: t.fixVersion,
+    remainingEstimateHours: t.remainingEstimateHours,
 });
 
 const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
@@ -249,6 +250,12 @@ const TaskFormSheet: React.FC<TaskFormSheetProps> = ({ task, tasks, resources, p
                         {num('avg', 'Olası')}
                         {num('worst', 'En kötü')}
                     </div>
+                    {d.jiraId.trim() && (
+                        <Field label="Jira kalan süre (saat)" htmlFor="tf-remaining" hint="Yerel kalan süreyi düzenler. Jira’ya yazmak için eşitleme yönünü seçin.">
+                            <input id="tf-remaining" type="number" min={0} max={10000} step="any" className="m-input" value={d.remainingEstimateHours ?? ''}
+                                onChange={e => set({ remainingEstimateHours: e.target.value === '' ? undefined : Math.min(10000, Math.max(0, e.target.valueAsNumber)) })} />
+                        </Field>
+                    )}
                     <div className="flex flex-wrap items-center justify-between gap-2">
                         <span className={`text-[14px] ${timeError ? 'm-ink-bad' : 'm-text-3'}`} role={timeError ? 'alert' : undefined}>
                             {timeError || (pert > 0 ? `PERT süresi ≈ ${pert.toLocaleString('tr-TR', { maximumFractionDigits: 1 })} gün` : 'Tahmin girilmezse planlamada süre 0 sayılır.')}

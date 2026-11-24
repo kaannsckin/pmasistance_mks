@@ -14,7 +14,7 @@ import { AiConfig } from './config.js';
 export type AuthConfig = Pick<AiConfig, 'authMode' | 'accessToken' | 'supabaseUrl' | 'supabaseAnonKey'>;
 
 export type AuthResult =
-    | { ok: true; subject: string }
+    | { ok: true; subject: string; verifiedEmail?: string }
     | { ok: false; status: number; message: string };
 
 /** Sabit zamanlı karşılaştırma — erişim kodu harf harf tahmin edilemesin */
@@ -35,16 +35,16 @@ const bearer = (request: Request): string | undefined => {
 };
 
 const SUPABASE_CACHE_MS = 60_000;
-const supabaseCache = new Map<string, { subject: string; until: number }>();
+const supabaseCache = new Map<string, { subject: string; until: number; verifiedEmail?: string }>();
 
 const verifySupabase = async (config: AuthConfig, jwt: string, fetchImpl: typeof fetch, now: number): Promise<AuthResult> => {
     const cached = supabaseCache.get(jwt);
-    if (cached && cached.until > now) return { ok: true, subject: cached.subject };
+    if (cached && cached.until > now) return { ok: true, subject: cached.subject, verifiedEmail: cached.verifiedEmail };
 
     const headers = { apikey: config.supabaseAnonKey!, authorization: `Bearer ${jwt}` };
     const userRes = await fetchImpl(`${config.supabaseUrl}/auth/v1/user`, { headers });
     if (!userRes.ok) return { ok: false, status: 401, message: 'Oturum doğrulanamadı; bulut penceresinden yeniden giriş yapın.' };
-    const user = await userRes.json().catch(() => null) as { id?: string } | null;
+    const user = await userRes.json().catch(() => null) as { id?: string; email?: string; email_confirmed_at?: string } | null;
     if (!user?.id) return { ok: false, status: 401, message: 'Oturum doğrulanamadı; bulut penceresinden yeniden giriş yapın.' };
 
     const memRes = await fetchImpl(`${config.supabaseUrl}/rest/v1/workspace_members?select=role&limit=1`, { headers });
@@ -54,9 +54,10 @@ const verifySupabase = async (config: AuthConfig, jwt: string, fetchImpl: typeof
     }
 
     const subject = `user:${user.id}`;
+    const verifiedEmail = user.email_confirmed_at ? user.email?.trim().toLowerCase() : undefined;
     if (supabaseCache.size > 1000) supabaseCache.clear();
-    supabaseCache.set(jwt, { subject, until: now + SUPABASE_CACHE_MS });
-    return { ok: true, subject };
+    supabaseCache.set(jwt, { subject, until: now + SUPABASE_CACHE_MS, verifiedEmail });
+    return { ok: true, subject, verifiedEmail };
 };
 
 export const authorize = async (

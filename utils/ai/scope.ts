@@ -1,7 +1,9 @@
+import type { JiraHistoryEntry } from '../jiraHistory';
 import { Person, Project, WorkspaceData, WorklogEntry } from '../../types';
+import { scopedWorklogProject } from '../workforce';
 import { can } from '../permissions';
 import { aiPolicyOf } from './policy';
-import { Identity, identityOf, visibleProjectIds } from '../rbac';
+import { Identity, identityOf, ownsProject, visibleProjectIds } from '../rbac';
 import type { RagHit } from '../rag/retriever';
 import type { Citation, RagSourceType } from '../rag/sources';
 import type { AiProposal } from './actions';
@@ -59,6 +61,7 @@ export interface ToolContext {
      */
     jira?: {
         meta: () => Promise<JiraMeta>;
+        history?: (key: string) => Promise<JiraHistoryEntry[]>;
         byKeys: (keys: string[]) => Promise<JiraSyncPage>;
         search: (source: JiraSyncSource, o: { openOnly: boolean; pageSize: number }) => Promise<JiraSyncPage>;
         worklogs: (projectKey: string, from: string, to: string) => Promise<WorklogEntry[]>;
@@ -82,9 +85,10 @@ export const buildToolContext = (ws: WorkspaceData, now: Date = new Date()): Too
     const identity = identityOf(ws);
     const visible = visibleProjectIds(ws, identity);
     const canSeePrivate = can(identity, 'notes.private');
+    const person = ws.people.find(person => person.id === identity.personId);
     const projects = ws.projects
         .filter(p => visible.has(p.id))
-        .map(p => (canSeePrivate ? p : { ...p, notes: [], customerRequests: [] }));
+        .map(p => scopedWorklogProject(canSeePrivate ? p : { ...p, notes: [], customerRequests: [] }, ownsProject(p, identity), person));
     const scoped: WorkspaceData = {
         ...ws,
         projects,
