@@ -9,6 +9,7 @@ import { canPlanSprintTask, periodTaskQuery, sprintsInPeriod } from '../../utils
 import { Icon } from './icons';
 import { COLUMN_META, columnOf, daysLate, initialsOf, PRIORITY_META, sprintLabel } from './taskMeta';
 import { Field, Sheet } from './ui';
+import { Identity } from '../../utils/rbac';
 import TaskQueryPicker from './TaskQueryPicker';
 import SprintTeamCalendar from './SprintTeamCalendar';
 import PlanReadinessSheet from './planning/PlanReadinessSheet';
@@ -32,6 +33,8 @@ interface ModernTimelineProps {
     project: Project;
     people: Person[];
     leaves: Leave[];
+    /** Jira çalışma kayıtlarının görünürlüğü için */
+    identity: Identity;
     canEdit: boolean;
     onMoveTask: (taskId: string, version: number) => void;
     onPlanGenerated: (tasks: Task[]) => void;
@@ -154,7 +157,7 @@ const CalendarSheet: React.FC<{ value: CalendarSettings; onClose: () => void; on
     );
 };
 
-const ModernTimeline: React.FC<ModernTimelineProps> = ({ project, people, leaves, canEdit, onMoveTask, onPlanGenerated, onInsertSprint, onDeleteSprint, onRenameSprint, onUpdateCalendar, onViewTask, onNewTask, period, me, initialSelection, initialSprint, onPeriodChange, onBulkMove, onOpenFilteredList, onOpenPeriodJira, onOpenManualRelease }) => {
+const ModernTimeline: React.FC<ModernTimelineProps> = ({ project, people, leaves, identity, canEdit, onMoveTask, onPlanGenerated, onInsertSprint, onDeleteSprint, onRenameSprint, onUpdateCalendar, onViewTask, onNewTask, period, me, initialSelection, initialSprint, onPeriodChange, onBulkMove, onOpenFilteredList, onOpenPeriodJira, onOpenManualRelease }) => {
     const [extra, setExtra] = useState(0);
     const [dates, setDates] = useState<DayRange>(period || { start: '', end: '' });
     const [selection, setSelection] = useState<Set<string> | null>(() => initialSelection ? new Set(initialSelection) : null);
@@ -528,7 +531,7 @@ const ModernTimeline: React.FC<ModernTimelineProps> = ({ project, people, leaves
                     onViewTask={onViewTask}
                     onSave={saveReadinessEdits} />
             )}
-            {teamCalendarLane && <SprintTeamCalendar project={project} lane={teamCalendarLane} people={people} leaves={leaves}
+            {teamCalendarLane && <SprintTeamCalendar project={project} lane={teamCalendarLane} people={people} leaves={leaves} identity={identity}
                 selection={teamCalendarSelection} onSelection={setTeamCalendarSelection}
                 onClose={() => setTeamCalendarSprint(null)} onViewTask={onViewTask} />}
         </div>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Person, Task, TaskStatus } from '../types';
-import { buildSprintTeamCalendar } from './sprintTeamCalendar';
+import { buildSprintTeamCalendar, indexSprintWorklogs } from './sprintTeamCalendar';
 import { buildLanes } from './timelinePlan';
 import { createProject } from './workspace';
 
@@ -30,6 +30,7 @@ describe('sprint ekip takvimi', () => {
         expect(ayse.cells[0]).toMatchObject({ hours: 11.2, capacity: 3 });
         expect([...ayse.cells[0].byComponent.values()]).toEqual([8, 11.2]);
         expect(ayse.cells[2].hours).toBeCloseTo(3.2);
+        expect(Object.fromEntries(ayse.cells[0].byTask)).toEqual({ portal: 8, service: 3.2 });
         expect(ayse.cells.reduce((sum, cell) => sum + cell.hours, 0)).toBeCloseTo(32);
         expect(ece.components.has('component:portal')).toBe(true);
         expect(ece.tasks).toEqual([]);
@@ -54,5 +55,20 @@ describe('sprint ekip takvimi', () => {
         expect(cell('2026-10-28')).toMatchObject({ hours: 4, capacity: 4 });
         expect(cell('2026-10-29')).toMatchObject({ hours: 0, capacity: 0 });
         expect(row.tasks.find(item => item.task.id === 'tahminsiz')?.hours).toBeUndefined();
+    });
+
+    it('Jira kayıtlarını e-posta ya da ada göre takvim kişisine ve gününe yerleştirir', () => {
+        const people: Person[] = [{ id: 'a', firstName: 'Ayşe', lastName: 'Demir', email: 'ayse@kurum.gov.tr', departmentCode: 'U300', availableAA: 1, roles: [] }];
+        const entry = (author: string, date: string, hours: number, authorEmail?: string) => ({ issueKey: 'MKS-1', author, authorEmail, date, hours });
+        const index = indexSprintWorklogs(['ayşe demir', 'ali can'], [
+            entry('A. Demir', '2026-11-23', 2, 'AYSE@kurum.gov.tr'),
+            entry('Ayşe Demir', '2026-11-23', 1.5),
+            entry(' ALİ  CAN ', '2026-11-24', 3),
+            entry('Başka Biri', '2026-11-24', 4),
+            entry('Ali Can', 'geçersiz', 1),
+        ], people);
+        expect(index.byRow.get('ayşe demir')?.get('2026-11-23')?.map(e => e.hours)).toEqual([2, 1.5]);
+        expect(index.byRow.get('ali can')?.get('2026-11-24')?.map(e => e.hours)).toEqual([3]);
+        expect(index.unmatched).toBe(2);
     });
 });

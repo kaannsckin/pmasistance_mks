@@ -2,11 +2,12 @@ import { Leave, Person, Project, Resource, Task, TaskStatus } from '../types';
 import { effectiveCapacity } from './availability';
 import { isIsoDay, toIsoDay } from './calendarRange';
 import { fullName } from './dataPool';
+import { JiraIssueWorklog } from './integrations';
 import { isUnassigned } from './planning/jiraPeople';
 import { isHalfDay, isWorkday } from './planning/workdays';
 import { plannedShare } from './resourcePlan';
 import { SprintLane, taskLoadDays } from './timelinePlan';
-import { HOURS_PER_DAY } from './workforce';
+import { HOURS_PER_DAY, matchWorklogPerson } from './workforce';
 
 const keyOf = (value: string) => value.trim().replace(/\s+/g, ' ').toLocaleLowerCase('tr-TR');
 const componentKey = (name: string) => `component:${keyOf(name)}`;
@@ -29,6 +30,8 @@ export interface SprintLoadCell {
     hours: number;
     capacity?: number;
     byComponent: Map<string, number>;
+    /** Görev kimliği → o gün için planlanan saat */
+    byTask: Map<string, number>;
 }
 
 interface SprintLoadPerson {
@@ -83,7 +86,7 @@ export const buildSprintTeamCalendar = (project: Project, lane: SprintLane, peop
             const resource = resources.get(key);
             const personLeaves = person ? leaves.filter(leave => leave.personId === person.id) : [];
             row = { key, name: person ? fullName(person) : name.trim(), components: new Set(), tasks: [],
-                cells: days.map(day => ({ hours: 0, capacity: capacityOf(day, resource, person, personLeaves), byComponent: new Map() })) };
+                cells: days.map(day => ({ hours: 0, capacity: capacityOf(day, resource, person, personLeaves), byComponent: new Map(), byTask: new Map() })) };
             rows.set(key, row);
         }
         return row;
@@ -127,10 +130,34 @@ export const buildSprintTeamCalendar = (project: Project, lane: SprintLane, peop
             const hours = item.hours * (day.workShare / totalShare);
             const cell = row.cells[day.index];
             cell.hours += hours;
+            cell.byTask.set(task.id, (cell.byTask.get(task.id) || 0) + hours);
             item.components.forEach(key => cell.byComponent.set(key, (cell.byComponent.get(key) || 0) + hours));
         }
     }
 
     return { days, rows: [...rows.values()].sort((a, b) => a.name.localeCompare(b.name, 'tr')),
         components: [...components].sort((a, b) => a[1].localeCompare(b[1], 'tr')), unassigned };
+};
+
+export interface SprintWorklogIndex {
+    /** Takvim satırı → gün (YYYY-AA-GG) → o gün girilen Jira çalışma kayıtları */
+    byRow: Map<string, Map<string, JiraIssueWorklog[]>>;
+    /** Takvimdeki bir kişiyle eşleşmeyen kayıt sayısı */
+    unmatched: number;
+}
+
+/** Jira worklog'larını kişi (e-posta, yoksa ad) ve güne göre takvim satırlarına yerleştirir. */
+export const indexSprintWorklogs = (rowKeys: Iterable<string>, entries: JiraIssueWorklog[], people: Person[]): SprintWorklogIndex => {
+    const rows = new Set(rowKeys);
+    const byRow = new Map<string, Map<string, JiraIssueWorklog[]>>();
+    let unmatched = 0;
+    for (const entry of entries) {
+        const person = matchWorklogPerson(people, entry.author, entry.authorEmail);
+        const key = keyOf(person ? fullName(person) : entry.author || '');
+        if (!rows.has(key) || !isIsoDay(entry.date)) { unmatched++; continue; }
+        const days = byRow.get(key) || new Map<string, JiraIssueWorklog[]>();
+        days.set(entry.date, [...(days.get(entry.date) || []), entry]);
+        byRow.set(key, days);
+    }
+    return { byRow, unmatched };
 };

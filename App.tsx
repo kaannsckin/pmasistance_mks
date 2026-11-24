@@ -2254,6 +2254,7 @@ const App: React.FC = () => {
           project={isManagementRole(identity.role) && roleView.minTaskPriority !== 'Low' ? { ...activeProject, tasks: activeProject.tasks.filter(t => taskPassesView(roleView, t)) } : activeProject}
           people={workspace.people}
           leaves={workspace.leaves || []}
+          identity={identity}
           canEdit={!isManagementRole(identity.role)}
           onMoveTask={(id: string, v: number) => setTasks(prev => prev.map(t => t.id === id ? { ...t, version: v } : t))}
           onPlanGenerated={setTasks}
