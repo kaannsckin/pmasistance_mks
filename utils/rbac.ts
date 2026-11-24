@@ -1,6 +1,6 @@
-import { PermissionKey, PlanLock, Project, UserRole, WorkspaceData } from '../types';
-import { getPlanLockStatus } from './allocations';
-import { can, canFor, PermissionHolder, permissionsFor } from './permissions';
+import { PermissionKey, PlanLock, Project, UserRole, WorkspaceData } from '../types.js';
+import { getPlanLockStatus } from './allocations.js';
+import { can, canFor, PermissionHolder, permissionsFor } from './permissions.js';
 
 /**
  * RBAC — kimlik + sahiplik + net kapsam.

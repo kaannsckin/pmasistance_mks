@@ -1,5 +1,5 @@
-import { addDays, parseIsoDay } from './calendarRange';
-import { isHalfDay, isWorkday } from './planning/workdays';
+import { addDays, parseIsoDay } from './calendarRange.js';
+import { isHalfDay, isWorkday } from './planning/workdays.js';
 
 export interface JiraHistoryItem {
     field: string;

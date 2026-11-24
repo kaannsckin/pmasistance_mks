@@ -1,4 +1,4 @@
-import { Leave, Person } from '../types';
+import { Leave, Person } from '../types.js';
 
 /**
  * Uygunluk / efektif kapasite — izin/tatil/yarı-zaman kişinin o aydaki
