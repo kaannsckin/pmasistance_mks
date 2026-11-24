@@ -207,19 +207,31 @@ export const getClient = (): SupabaseClient | null => {
     }
 };
 
+// supabase-js 5xx yanıtlarında gövdeyi okumaz; ileti çoğu zaman "{}" olur.
+export const CLOUD_CODE_SEND_FAILED = 'Supabase kod e-postasını gönderemedi. Supabase panelinde Authentication → Emails → SMTP Settings bilgilerini (sunucu, port, kullanıcı adı, şifre, doğrulanmış gönderen adresi) kontrol edin; ayrıntılı hata Logs → Auth kayıtlarında görünür.';
+export const cloudAuthServerError = (error: { status?: number; message?: string }): string | null => {
+    if (error.status === undefined || error.status < 500) return null;
+    const message = error.message?.trim();
+    return message && message !== '{}' ? `Supabase sunucu hatası (${error.status}): ${message}` : `Supabase sunucu hatası (${error.status}).`;
+};
+
 export const requestCloudCode = async (email: string): Promise<string | null> => {
     const c = getClient();
     if (!c) return 'Önce bağlantı ayarlarını kaydedin.';
     const { error } = await c.auth.signInWithOtp({ email, options: { shouldCreateUser: true } });
     if (!error) return null;
-    return error.status === 429 ? 'Yeni bir kod istemeden önce bekleyin.' : error.message;
+    if (error.status === 429) return 'Yeni bir kod istemeden önce bekleyin.';
+    if (error.status !== undefined && error.status >= 500) return CLOUD_CODE_SEND_FAILED;
+    return error.message && error.message !== '{}' ? error.message : 'Kod gönderilemedi. Bağlantı ayarlarını kontrol edip tekrar deneyin.';
 };
 
 export const verifyCloudCode = async (email: string, token: string): Promise<string | null> => {
     const c = getClient();
     if (!c) return 'Önce bağlantı ayarlarını kaydedin.';
     const { error } = await c.auth.verifyOtp({ email, token, type: 'email' });
-    return error ? (error.status === 400 || error.status === 403 ? 'Kod geçersiz veya süresi dolmuş. Kodu kontrol edin ya da yeni kod isteyin.' : error.message) : null;
+    if (!error) return null;
+    if (error.status === 400 || error.status === 403) return 'Kod geçersiz veya süresi dolmuş. Kodu kontrol edin ya da yeni kod isteyin.';
+    return cloudAuthServerError(error) ?? error.message;
 };
 
 export const signOut = async (): Promise<string | null> => {
