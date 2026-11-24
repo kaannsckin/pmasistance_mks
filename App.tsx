@@ -92,6 +92,7 @@ import { riskScore } from './utils/risks';
 import { upsertLeave } from './utils/availability';
 import { AiReportAssessment, ProjectAiProfile, ReportAiLogEntry, ReportEvalRun, ReportGatePolicy, ExpectationStatus, ExpectationUrgency, HealthConfig, MeetingStatus, PestelItem, ReportFlow, ReportSettings, Risk, RoleViewConfig, SwotItem, WeeklyReport } from './types';
 import ModernSidebar from './components/modern/ModernSidebar';
+import MobileDock from './components/modern/MobileDock';
 import ModernProjectHeader from './components/modern/ModernProjectHeader';
 import ModernPlanning from './components/modern/ModernPlanning';
 import { appendEstimateLog } from './utils/planning/estimateLog';
@@ -2848,7 +2849,7 @@ const App: React.FC = () => {
             onHyperdrive={() => setEgg({ kind: 'hyper' })}
           />
           <div className="flex-1 min-w-0 flex flex-col">
-            <div className="lg:hidden sticky top-0 z-30 m-surface border-b m-sep flex items-center gap-1 px-1.5 h-14">
+            <div className="m-mobile-bar lg:hidden sticky top-0 z-30 m-surface border-b m-sep flex items-center gap-1 px-1.5 h-14">
               <button type="button" className="m-icon-btn" aria-label="Menüyü aç" onClick={() => setIsSidebarOpen(true)}><Icon name="menu" /></button>
               <span className="flex-1 min-w-0 truncate text-[17px] font-semibold m-text">{inProjectView && activeProject ? activeProject.name : consoleMode ? 'Yönetici konsolu' : 'PlanAsistan'}</span>
               {!consoleMode && <button type="button" className="m-icon-btn" aria-label="Ara" onClick={() => setIsPaletteOpen(true)}><Icon name="search" /></button>}
@@ -2856,7 +2857,7 @@ const App: React.FC = () => {
                 <span aria-hidden="true" className="w-8 h-8 rounded-full m-fill flex items-center justify-center text-[12px] font-semibold m-text">{initialsOf(currentActorName)}</span>
               </button>
             </div>
-            <main className="flex-1 w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-10 py-6 lg:py-8">
+            <main className={`flex-1 w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-10 py-6 lg:py-8 ${modernTheme === 'bubble' && !consoleMode ? 'm-with-mobile-dock' : ''}`}>
               {inProjectView && activeProject && (
                 <ModernProjectHeader
                   project={activeProject}
@@ -2874,6 +2875,10 @@ const App: React.FC = () => {
               )}
               <div className={usesModernScreen ? '' : 'm-legacy'}>{renderView()}</div>
             </main>
+            {modernTheme === 'bubble' && !consoleMode && (
+              <MobileDock view={currentView} sections={inProjectView ? roleView.projectSections : undefined} menuOpen={isSidebarOpen}
+                onNavigate={setCurrentView} onOpenMenu={() => setIsSidebarOpen(true)} />
+            )}
           </div>
         </div>
       ) : (

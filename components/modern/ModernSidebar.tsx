@@ -148,8 +148,9 @@ const ModernSidebar: React.FC<ModernSidebarProps> = (props) => {
 
     return (
         <>
-            {isOpen && <div className="lg:hidden fixed inset-0 z-[65] bg-black/30" onClick={onClose} aria-hidden="true"></div>}
+            {isOpen && <div className="m-sidebar-overlay lg:hidden fixed inset-0 z-[65] bg-black/30" onClick={onClose} aria-hidden="true"></div>}
             <nav
+                id="modern-sidebar"
                 aria-label="Ana menü"
                 className={`m-sidebar m-surface border-r m-sep h-screen lg:sticky top-0 flex flex-col gap-5 px-3 py-4 overflow-y-auto ${isOpen ? 'is-open' : ''}`}
             >
@@ -237,13 +238,13 @@ const ModernSidebar: React.FC<ModernSidebarProps> = (props) => {
                             Asistan
                         </button>
                     )}
-                    <div className="relative flex items-center gap-1 pt-2 border-t m-sep">
+                    <div className="m-sidebar-footer relative flex items-center gap-1 pt-2 border-t m-sep">
                         <button
                             type="button"
                             onClick={() => { onOpenProfile(); onClose(); }}
                             aria-haspopup="dialog"
                             title={props.cloudLinked ? 'Bulut hesabı' : 'Profil değiştir'}
-                            className="m-row-link flex-1 min-w-0 flex items-center gap-2.5 min-h-[52px] px-2 rounded-xl"
+                            className="m-sidebar-profile m-row-link flex-1 min-w-0 flex items-center gap-2.5 min-h-[52px] px-2 rounded-xl"
                         >
                             <span className="w-9 h-9 rounded-full m-fill flex items-center justify-center text-[13px] font-semibold flex-none" aria-hidden="true">
                                 {person ? person.initials : ROLE_LABELS[currentRole].charAt(0)}
@@ -256,7 +257,7 @@ const ModernSidebar: React.FC<ModernSidebarProps> = (props) => {
                             </span>
                         </button>
                         <button type="button" className="m-icon-btn" aria-label="Diğer araçlar" aria-haspopup="menu" aria-expanded={menuOpen} onClick={() => setMenuOpen(o => !o)}><Icon name="more" /></button>
-                        <button type="button" className="m-icon-btn" aria-label="Ayarlar" onClick={onOpenSettings}><Icon name="sliders" /></button>
+                        <button type="button" className="m-icon-btn" aria-label="Ayarlar" onClick={() => { onOpenSettings(); onClose(); }}><Icon name="sliders" /></button>
                         {menuOpen && (
                             <>
                                 <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} aria-hidden="true"></div>

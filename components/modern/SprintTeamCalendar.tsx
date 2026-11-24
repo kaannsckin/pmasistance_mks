@@ -10,7 +10,7 @@ import { fmtHours } from './WorkforceParts';
 import { COLUMN_META, columnOf, sprintLabel } from './taskMeta';
 import TaskKeyButton from './TaskKeyButton';
 import SprintSpanBadge from './SprintSpanBadge';
-import { Field, Sheet } from './ui';
+import { Field, SelectionStrip, Sheet } from './ui';
 import { useJiraTimesheet } from './useJiraTimesheet';
 
 interface Selection {
@@ -107,10 +107,10 @@ const SprintTeamCalendar = ({ project, lane, people, leaves, identity, selection
                     </select>
                 </Field>
             </div>
-            <div className="m-segmented" role="group" aria-label="Görünüm">
+            <SelectionStrip className="m-segmented" role="group" label="Görünüm" selection={view}>
                 <button type="button" className="m-segment" aria-pressed={view === 'tasks'} onClick={() => setView('tasks')}>Görevler</button>
                 <button type="button" className="m-segment" aria-pressed={view === 'tempo'} onClick={() => setView('tempo')}>Tempo</button>
-            </div>
+            </SelectionStrip>
             </div>
             <dl className="m-0 flex flex-wrap gap-3" aria-label="Sprint yoğunluk özeti">
                 <div className="rounded-xl m-fill-2 px-3 py-2"><dt className="text-[13px] m-text-3">Sprint yükü</dt><dd className="m-0 font-semibold m-tabular">{fmtHours(hours)}</dd></div>

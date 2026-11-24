@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import type { WorkspaceData } from '../types';
 import { ROLE_LABELS } from '../utils/allocations';
 import { normalizeCloudConnection } from '../utils/cloudConnection';
+import { ToggleSwitch } from './modern/ui';
 import {
   applyCloudMembership, checkCloudConnection, clearConflictFlag, CloudWorkspaceOption,
   createCloudWorkspace, CLOUD_SCHEMA_MESSAGE, getCloudUser, getDeploymentCloudConnection,
@@ -269,12 +270,12 @@ const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ workspace, onReplaceWor
   const handleClose = () => { if (!busy) onClose(); };
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 backdrop-blur-sm p-3 sm:p-4" onClick={handleClose}>
+    <div className="m-sheet-backdrop fixed inset-0 z-[200] flex items-center justify-center bg-black/50 backdrop-blur-sm p-3 sm:p-4" onClick={handleClose}>
       <div role="dialog" aria-modal="true" aria-labelledby="cloud-title" onKeyDown={e => { if (e.key === 'Escape') handleClose(); }}
-        className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto border border-gray-100 dark:border-gray-700" onClick={e => e.stopPropagation()}>
-        <div className="sticky top-0 bg-white dark:bg-gray-900 px-4 sm:px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between z-10">
+        className="m-app-dialog bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto border border-gray-100 dark:border-gray-700" onClick={e => e.stopPropagation()}>
+        <div className="m-app-dialog-header sticky top-0 bg-white dark:bg-gray-900 px-4 sm:px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between z-10">
           <h3 id="cloud-title" className="text-lg font-semibold text-gray-900 dark:text-white">Bulut veritabanı</h3>
-          <button type="button" disabled={busy} aria-label="Kapat" onClick={handleClose} className="w-9 h-9 rounded-lg text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-40">
+          <button type="button" disabled={busy} aria-label="Kapat" onClick={handleClose} className="m-app-dialog-close w-9 h-9 rounded-lg text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-40">
             <i aria-hidden="true" className="fa-solid fa-times"></i>
           </button>
         </div>
@@ -343,15 +344,16 @@ const CloudSyncModal: React.FC<CloudSyncModalProps> = ({ workspace, onReplaceWor
           {linkedId && (
             <section className={panel} aria-label="Bağlı çalışma alanı">
               <h4 className={label}>{currentName ?? 'Bağlı çalışma alanı'}</h4>
-              <label className={`${label} flex items-center gap-2`}>
-                <input type="checkbox" checked={config?.autoSync !== false} disabled={busy} onChange={e => {
+              <div className={`m-switch-row ${label} flex items-center justify-between gap-3`}>
+                <span>Otomatik eşitleme</span>
+                <ToggleSwitch label="Otomatik eşitleme" checked={config?.autoSync !== false} disabled={busy} onChange={checked => {
                   const latest = loadCloudConfig();
                   if (!latest) return;
-                  const next = { ...latest, autoSync: e.target.checked };
+                  const next = { ...latest, autoSync: checked };
                   saveCloudConfig(next);
                   setConfig(next);
-                }} /> Otomatik eşitleme
-              </label>
+                }} />
+              </div>
               {config?.lastSyncAt && <p className={help}>Son eşitleme {new Date(config.lastSyncAt).toLocaleString('tr-TR')}</p>}
               <div className="flex flex-wrap gap-2">
                 <button type="button" className={primary} disabled={busy} onClick={() => void run(send)}>Şimdi gönder</button>

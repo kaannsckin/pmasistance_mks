@@ -12,7 +12,7 @@ import { ModernTheme, Task, TaskStatus } from '../types';
  *  - Gece yarısı, cuma akşamı ve pazartesi sabahı → küçük selamlar
  *  - Yazı alanı dışında kelime yazmak (temalara özel):
  *      "egg" / "yumurta" → sürpriz rehberi kartı
- *      "pop" (Baloncuk) · "aurora" (Aurora) · "ship" (Pro) · "boing" (Kil)
+ *      "pop" (Cam) · "aurora" (Aurora) · "ship" (Pro) · "boing" (Kil)
  */
 
 export const prefersReducedMotion = (): boolean => {
