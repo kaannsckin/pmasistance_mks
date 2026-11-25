@@ -2,7 +2,7 @@ import { Project, ProjectData, ProjectSettings, WorkspaceData } from '../types';
 import { migrateRolePermissions, PERMISSIONS_REV } from './permissions';
 import { migrateReleaseVersions } from './projectLists';
 
-export const APP_VERSION = '3.4.0';
+export const APP_VERSION = '3.5.0';
 export const WORKSPACE_SCHEMA_VERSION = 3; // 3: veri havuzu + tahsis + plan kilidi
 
 /** v2 çalışma alanı anahtarı */
