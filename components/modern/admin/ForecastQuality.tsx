@@ -237,7 +237,7 @@ const completeDirect = async (status: AiStatus, prompt: string, signal: AbortSig
     return r.text;
 };
 
-const GoldenGate: React.FC<Props & { history: PlanningHistory }> = ({ workspace, history, onUpdateAiPolicy, onSetGolden, onAddEvalRun }) => {
+const GoldenGate: React.FC<Omit<Props, 'onAddModelEval'> & { history: PlanningHistory }> = ({ workspace, history, onUpdateAiPolicy, onSetGolden, onAddEvalRun }) => {
     const policy = aiPolicyOf(workspace);
     const gate = policy.estimateGate;
     const golden = workspace.goldenSet || [];

@@ -1,8 +1,10 @@
-import { Project, ReleaseMilestone, ReleasePlan, Task, TaskStatus } from '../../types';
+import { Leave, Person, Project, ReleaseMilestone, ReleasePlan, Task, TaskStatus } from '../../types';
+import { capacityModel } from './capacity';
+import type { PlanChange } from './planOptimizer';
 import { calculatePertFuzzyPert } from '../timeline';
 import { buildSprintWindows, SprintWindow } from '../taskToAllocation';
 import { sprintCalendar } from '../sprintCalendar';
-import { isInSprint, lastSprintOf, requestedSprintSpan, sprintSpanOf } from '../sprintSpan';
+import { isInSprint, lastSprintOf, sprintSpanOf } from '../sprintSpan';
 
 /**
  * Plan panosu motoru: sürüm (manuel sürüm planı) × kilometre taşı × sprint.
@@ -16,8 +18,6 @@ import { isInSprint, lastSprintOf, requestedSprintSpan, sprintSpanOf } from '../
  */
 
 export const UNASSIGNED = 'Atanmamış';
-/** Otomatik dağıtımın bakacağı en uzak sprint (bugünden itibaren) */
-export const DISTRIBUTE_HORIZON = 104;
 /** Hız için bakılan biten sprint sayısı */
 export const VELOCITY_WINDOW = 6;
 
@@ -127,14 +127,6 @@ export interface PlanBoard {
     total: { tasks: number; open: number; effort: number; remaining: number };
 }
 
-/** Kişi bazında sprint kapasitesi (gün): net gün × katılım */
-export const resourceCapacity = (project: Project): Map<string, number> => {
-    const net = sprintCalendar(project.settings).netDays;
-    const m = new Map<string, number>();
-    project.resources.forEach(r => m.set(r.name, (m.get(r.name) || 0) + net * ((r.participation || 0) / 100)));
-    return m;
-};
-
 /** Sprintteki kişi yükleri (açık görevler; sprinte yayılan görev eşit bölünür) */
 const sprintLoads = (tasks: Task[], version: number): Map<string, number> => {
     const m = new Map<string, number>();
@@ -145,7 +137,14 @@ const sprintLoads = (tasks: Task[], version: number): Map<string, number> => {
     return m;
 };
 
-export const buildPlanBoard = (project: Project, plan: ReleasePlan, now: Date = new Date(), opts: { extraSprints?: number } = {}): PlanBoard => {
+export interface BoardOptions {
+    extraSprints?: number;
+    /** İzinler ve kişi eşleşmesi için veri havuzu (verilmezse izin düşülmez) */
+    people?: Person[];
+    leaves?: Leave[];
+}
+
+export const buildPlanBoard = (project: Project, plan: ReleasePlan, now: Date = new Date(), opts: BoardOptions = {}): PlanBoard => {
     const scope = planTasks(project, plan);
     const lastUsed = Math.max(0, ...scope.map(lastSprintOf));
     const { windows, current } = sprintWindowsUntil(project, now, 1);
@@ -153,20 +152,19 @@ export const buildPlanBoard = (project: Project, plan: ReleasePlan, now: Date = 
     const first = Math.max(1, Math.min(current, ...scope.filter(t => (t.version || 0) > 0).map(t => t.version)));
     const lastShown = Math.max(current + 3, lastUsed) + (opts.extraSprints || 0);
     const all = buildSprintWindows(project, Math.max(lastShown, windows.length));
-    const caps = resourceCapacity(project);
-    const net = sprintCalendar(project.settings).netDays;
-    // Projede kaynak kaydı olmayan kişi (havuzdan atanmış) tek kişilik kapasiteyle sayılır
-    const capOf = (who: string) => caps.get(who) ?? net;
-    const capacity = round1([...caps.values()].reduce((s, c) => s + c, 0));
+    // Kapasite: tatil ve izinler düşülmüş tam sprint (tampon yok); optimizasyon aynı modeli kullanır
+    const cap = capacityModel({ project, people: opts.people, leaves: opts.leaves });
+    const names = [...new Set(project.resources.map(r => r.name))];
     const today = dayStart(now);
 
     const sprints: BoardSprint[] = all.filter(w => w.sprint >= first && w.sprint <= lastShown).map(w => {
         const loads = sprintLoads(project.tasks, w.sprint);
         const planLoads = sprintLoads(scope, w.sprint);
+        const capOf = (who: string) => cap(w, who).full;
         return {
             version: w.sprint, start: w.start, end: w.end, testEnd: w.testEnd,
             past: dayStart(w.end) < today, current: w.sprint === current,
-            capacity,
+            capacity: round1(names.reduce((sum, n) => sum + capOf(n), 0)),
             load: round1([...loads.values()].reduce((s, x) => s + x, 0)),
             planLoad: round1([...planLoads.values()].reduce((s, x) => s + x, 0)),
             // Atanmamış işler kişi kapasitesine yazılmaz; ayrıca uyarı olarak gösterilir
@@ -237,127 +235,10 @@ export const buildPlanBoard = (project: Project, plan: ReleasePlan, now: Date = 
     };
 };
 
-// ------------------------------------------------------------------ otomatik dağıtım
+// ------------------------------------------------------------------ devir
 
-export interface SprintChange { taskId: string; from: number; to: number }
-
-export interface DistributeWarning {
-    taskId?: string;
-    kind: 'oversized' | 'unassigned' | 'horizon' | 'late';
-    message: string;
-}
-
-export interface DistributeResult {
-    changes: SprintChange[];
-    warnings: DistributeWarning[];
-    /** Dağıtım sonrası pano (önizleme) */
-    preview: PlanBoard;
-}
-
-/**
- * Sürümün açık görevlerini sprintlere dağıtır:
- *  - Bugünkü sprintten başlar; biten sprintte kalmış işler de yeniden yerleşir (devir).
- *  - Sıra: kilometre taşı (hedef tarihe göre) → öncül → öncelik → termin.
- *  - Öncül bitmeden ardıl başlamaz (öncülün son sprintinden sonra).
- *  - Kişi kapasitesi: net gün × katılım; sürüm dışındaki işlerin yükü önceden düşülür.
- *  - Devam eden ve bugünkü sprintte olan görev yerinde kalır (iş başlamış).
- *  - Sığmayan büyük iş, kişinin boş olduğu ilk sprinte taşma uyarısıyla konur.
- */
-export const distributePlan = (project: Project, plan: ReleasePlan, now: Date = new Date()): DistributeResult => {
-    const scope = planTasks(project, plan);
-    const scopeIds = new Set(scope.map(t => t.id));
-    const { current } = sprintWindowsUntil(project, now, 1);
-    const caps = resourceCapacity(project);
-    const net = sprintCalendar(project.settings).netDays;
-    const capOf = (who: string) => (who === UNASSIGNED ? net : caps.get(who) ?? net);
-
-    const keep = (t: Task) => !isOpen(t) || (t.status === TaskStatus.InProgress && (t.version || 0) >= current);
-    const fixed = project.tasks.filter(t => !scopeIds.has(t.id) || keep(t));
-    const movable = scope.filter(t => !keep(t) && t.includeInSprints !== false);
-
-    // Önceden dolu kapasite: sürüm dışı açık işler + yerinde kalan sürüm işleri
-    const usage = new Map<string, number>(); // `${sprint}|${kişi}`
-    const use = (v: number, who: string, d: number) => usage.set(`${v}|${who}`, (usage.get(`${v}|${who}`) || 0) + d);
-    const used = (v: number, who: string) => usage.get(`${v}|${who}`) || 0;
-    fixed.filter(t => isOpen(t) && (t.version || 0) >= current && t.includeInSprints !== false)
-        .forEach(t => { for (let k = 0; k < sprintSpanOf(t); k++) use(t.version + k, t.resourceName || UNASSIGNED, effortOf(t) / sprintSpanOf(t)); });
-
-    // Sıralama: taş sırası, öncelik, termin, plan sırası; öncüller önce (Kahn)
-    const msOrder = new Map(orderedMilestones(plan).map((m, i) => [m.id, i]));
-    const rank = (t: Task) => msOrder.get(milestoneOfTask(plan, t.id)?.id || '') ?? Number.MAX_SAFE_INTEGER;
-    const planIndex = new Map(scope.map((t, i) => [t.id, i]));
-    const cmp = (a: Task, b: Task) => rank(a) - rank(b) || PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority]
-        || (a.dueDate || '9999').localeCompare(b.dueDate || '9999') || (planIndex.get(a.id)! - planIndex.get(b.id)!);
-    const movIds = new Set(movable.map(t => t.id));
-    const pending = new Map(movable.map(t => [t.id, t.predecessor && movIds.has(t.predecessor) && t.predecessor !== t.id ? 1 : 0]));
-    const placedEnd = new Map<string, number>(); // görev → son sprint
-    const byId = new Map(project.tasks.map(t => [t.id, t]));
-    const result = new Map<string, number>();
-    const warnings: DistributeWarning[] = [];
-    const queue = movable.filter(t => !pending.get(t.id)).sort(cmp);
-    const placedSet = new Set<string>();
-
-    const place = (t: Task) => {
-        const who = t.resourceName || UNASSIGNED;
-        const span = requestedSprintSpan(t);
-        const share = effortOf(t) / span;
-        let min = current;
-        const pred = t.predecessor && t.predecessor !== t.id ? byId.get(t.predecessor) : undefined;
-        if (pred && isOpen(pred)) {
-            const predEnd = placedEnd.get(pred.id) ?? ((pred.version || 0) > 0 ? lastSprintOf(pred) : 0);
-            if (predEnd > 0) min = Math.max(min, predEnd + 1);
-        }
-        const cap = capOf(who);
-        const fits = (s: number) => Array.from({ length: span }, (_, k) => s + k).every(v => used(v, who) + share <= cap + 1e-9);
-        let at = 0;
-        for (let s = min; s < current + DISTRIBUTE_HORIZON; s++) if (fits(s)) { at = s; break; }
-        if (!at) {
-            // Sığmıyor: kişinin boş olduğu ilk sprint (taşma uyarısı)
-            for (let s = min; s < current + DISTRIBUTE_HORIZON; s++) {
-                if (Array.from({ length: span }, (_, k) => s + k).every(v => used(v, who) === 0)) { at = s; break; }
-            }
-            if (at) warnings.push({ taskId: t.id, kind: 'oversized', message: `${t.jiraId || t.name}: ${tr(share)} gün/sprint, ${who} kapasitesini (${tr(cap)} gün) aşıyor; Sprint ${at}'e taşarak kondu. Görevi bölmeyi ya da sprint sayısını artırmayı düşünün.` });
-            else { at = min; warnings.push({ taskId: t.id, kind: 'horizon', message: `${t.jiraId || t.name}: ${DISTRIBUTE_HORIZON} sprint içinde yer bulunamadı.` }); }
-        }
-        if (who === UNASSIGNED && share > 0) warnings.push({ taskId: t.id, kind: 'unassigned', message: `${t.jiraId || t.name}: sorumlusu yok; tek kişilik kapasiteyle planlandı.` });
-        for (let k = 0; k < span; k++) use(at + k, who, share);
-        result.set(t.id, at);
-        placedEnd.set(t.id, at + span - 1);
-    };
-
-    while (queue.length) {
-        const t = queue.shift()!;
-        place(t);
-        placedSet.add(t.id);
-        // Bu görevi bekleyen ardıllar hazır olur
-        const ready = movable.filter(s => s.predecessor === t.id && pending.get(s.id) && !placedSet.has(s.id));
-        ready.forEach(s => pending.set(s.id, 0));
-        if (ready.length) { queue.push(...ready); queue.sort(cmp); }
-    }
-    // Öncül döngüsü: kalanlar sırayla
-    movable.filter(t => !placedSet.has(t.id)).sort(cmp).forEach(t => { place(t); placedSet.add(t.id); });
-
-    const changes: SprintChange[] = movable
-        .map(t => ({ taskId: t.id, from: t.version || 0, to: result.get(t.id) || 0 }))
-        .filter(c => c.from !== c.to);
-    const nextProject = applySprintChanges(project, changes);
-    const preview = buildPlanBoard(nextProject, plan, now);
-    preview.rows.filter(r => r.status === 'late').forEach(r => warnings.push({ kind: 'late', message: `${r.milestone?.name || 'Taşsız işler'}: ${r.note.toLocaleLowerCase('tr-TR')} (tahmini bitiş ${r.forecastEnd}). Kapsamı daraltmayı, iş kaydırmayı ya da hedefi güncellemeyi düşünün.` }));
-    return { changes, warnings, preview };
-};
-
-/** Sprint değişikliklerini görevlere uygular (değişmeyen görevler aynı nesne kalır) */
-export const applySprintChanges = (project: Project, changes: SprintChange[], now?: Date): Project => {
-    if (!changes.length) return project;
-    const to = new Map(changes.map(c => [c.taskId, c.to]));
-    const stamp = now?.toISOString();
-    return {
-        ...project,
-        tasks: project.tasks.map(t => (to.has(t.id) && to.get(t.id) !== (t.version || 0)
-            ? { ...t, version: to.get(t.id)!, includeInSprints: true, ...(stamp ? { updatedAt: stamp } : {}) }
-            : t)),
-    };
-};
+/** Sprint değişikliği (optimizasyonun PlanChange'i; devirde yalnız sprint değişir) */
+export type SprintChange = PlanChange;
 
 /** Devir: biten sprintte kalmış açık görevleri bugünkü sprinte taşır */
 export const carryoverChanges = (board: PlanBoard): SprintChange[] =>

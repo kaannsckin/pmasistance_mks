@@ -91,7 +91,8 @@ describe('araç kataloğu', () => {
         console.log(`dosya ve hafıza araçları: ${files}`);
         // 3 000 → 6 000: rapor dosyasına gösterge (KPI), vurgu ve grafik bölümleri; sohbete hesap motoru
         // (veri_analiz) ve yetenek oyun kitabı (yetenek_yukle) eklendi. Yalnız tarayıcı sohbetinde gider.
-        expect(files).toBeLessThan(6_000);
+        // 6 000 → 7 000: sürüm planı optimizasyonu (plan_optimizasyonu: taş tahmini, kurtarma senaryoları, onaylı öneri).
+        expect(files).toBeLessThan(7_000);
         let base = 0;
         for (const role of ['py', 'mudur', 'bolum_sorumlu', 'pyb_destek', 'pyb_sorumlu', 'admin'] as UserRole[]) {
             const ctx = buildToolContext(buildWs(role, role === 'py' || role === 'bolum_sorumlu' ? 'p1' : null), NOW);

@@ -84,6 +84,11 @@ const ModernPlanning: React.FC<Props> = ({ project, workspace, me, visibleProjec
     const guide = useGuide('planning', autoGuide);
     const { history, leaves, aiBlocked, ml } = usePlanningContext(workspace);
     const overall = useMemo(() => calibrator(history)({}), [history]);
+    // Plan optimizasyonu: görev başına geçmiş sapma (birim + tür, yoksa genel) — gerçekleşen ÷ tahmin ortancası
+    const calibrate = useMemo(() => {
+        const fn = calibrator(history);
+        return (t: Task) => fn({ unit: t.unit, issueType: t.issueType })?.median;
+    }, [history]);
     const people = workspace.people;
 
     return (
@@ -131,7 +136,8 @@ const ModernPlanning: React.FC<Props> = ({ project, workspace, me, visibleProjec
             {mode === 'plan' ? (
                 <PlanBoard key={project.id} project={project} canEdit={canEdit} me={me} initialTaskIds={releaseTasks}
                     onSavePlan={plan => onSaveReleasePlan(project.id, plan)} onSetSprints={onSetSprints} onUpdateCalendar={onUpdateCalendar}
-                    onViewTask={onViewTask} onOpenSimulation={() => setMode('simulate')} />
+                    onViewTask={onViewTask} onOpenSimulation={() => setMode('simulate')}
+                    people={people} leaves={leaves} calibrate={overall ? calibrate : undefined} calibrationHint={overall?.median} />
             ) : mode === 'record' ? (
                 <NewRecordPlanner key={project.id} project={project} history={history} people={people} leaves={leaves} visibleProjectIds={visibleProjectIds} canEdit={canEdit} blindEstimate={aiPolicyOf(workspace).blindEstimate} aiBlocked={aiBlocked} ml={ml} onAddTask={onAddTask} onOpenList={onOpenList} onSendToJira={sendToJira} />
             ) : mode === 'release' ? (

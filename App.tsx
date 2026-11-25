@@ -41,7 +41,8 @@ import { cleanRoleMembers, projectRolesOf } from './utils/projectRoles';
 import { listId } from './utils/projectLists';
 import { BulkTaskPatch, previewBulkTaskEdit } from './utils/bulkTaskEdit';
 import { describeTaskDelete, previewTaskDelete, removeTasks } from './utils/taskDelete';
-import { applySprintChanges, SprintChange } from './utils/planning/planBoard';
+import { SprintChange } from './utils/planning/planBoard';
+import { applyPlanChanges } from './utils/planning/planOptimizer';
 import type { DayRange } from './utils/calendarRange';
 import { moveSprintTasks } from './utils/planning/period';
 import { applyJiraSprintTransfer, JiraSprintTransfer } from './utils/planning/jiraSprintImport';
@@ -1876,7 +1877,7 @@ const App: React.FC = () => {
     updateWorkspace(ws => {
       const project = ws.projects.find(p => p.id === projectId);
       if (!project || !canEditProjectContent(ws, identityOf(ws), projectId)) return ws;
-      const next = applySprintChanges(project, changes, new Date());
+      const next = applyPlanChanges(project, changes, new Date());
       if (next === project) return ws;
       return appendAudit(storeProjectChange(ws, project, next), 'task.bulkEdit', `${project.name} · plan: ${label}`, projectId);
     });
@@ -2135,7 +2136,6 @@ const App: React.FC = () => {
             workspace.people.find(person => person.id === identity.personId))), onRefresh: handleRefreshWorklogs }}
           allocations={workspace.allocations}
           people={workspace.people}
-          departmentLeadIds={departmentLeads}
           projects={workspace.projects}
           planLocks={workspace.planLocks}
           leaves={workspace.leaves || []}

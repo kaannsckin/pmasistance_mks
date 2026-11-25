@@ -13,7 +13,12 @@ import { initialStatus, resolveTransition, taskStatusLabel, taskWorkflow } from 
 import { projectRolesOf } from '../projectRoles';
 import { applyTransition, conditionProblem, inputProblems, ruleFor, TransitionActor, TransitionEffect } from '../transitions';
 import { MAX_BULK_DELETE, removeTasks } from '../taskDelete';
+import { applyPlanChanges, PlanChange, withoutFromMilestone } from '../planning/planOptimizer';
+import { MAX_SPRINT_SPAN } from '../sprintSpan';
 import { applyPoolAction, describePoolAction, isPoolAction, PoolAction, validatePoolAction } from './poolActions';
+
+/** Sprint adı (arayüzdeki taskMeta.sprintLabel ile aynı kural; iş mantığı arayüze bağımlı olmasın) */
+const sprintLabel = (v: number, names?: Record<number, string>): string => (v === 0 ? 'Havuz' : names?.[v]?.trim() || `Sprint ${v}`);
 
 /** Öneriyi uygulayan kişi (aktif kimlik) — geçiş koşulları için */
 const actorOf = (ws: WorkspaceData): TransitionActor => {
@@ -49,7 +54,10 @@ export type AiAction =
     // Bir projedeki görevlerin alanlarını toplu günceller (termin, atanan, öncelik, tahmin, etiket)
     | { type: 'gorev_guncelle'; projectId: string; changes: TaskFieldChange[] }
     // Görevleri siler; ardıllarının öncül bağı kaldırılır. Kullanıcı onayı ve geri al ile.
-    | { type: 'gorev_sil'; projectId: string; taskIds: string[]; reason?: string };
+    | { type: 'gorev_sil'; projectId: string; taskIds: string[]; reason?: string }
+    // Plan optimizasyonu sonucu: görevlerin sprinti, sprint sayısı ve (aynı birimde) kişisi; isteğe bağlı
+    // kapsam daraltma (görevler taştan çıkar) ya da taş hedef tarihi. Değişiklikleri motor hesaplar, model yazmaz.
+    | { type: 'plan_uygula'; projectId: string; planId: string; label: string; changes: PlanChange[]; descope?: { milestoneId: string; taskIds: string[] }; retarget?: { milestoneId: string; date: string } };
 
 /** Görev alanı değişikliği; verilmeyen alan değişmez. resourceName '' → atama kaldırılır, dueDate '' → termin silinir */
 export interface TaskFieldChange {
@@ -262,6 +270,23 @@ export const validateAction = (ws: WorkspaceData, action: AiAction): string | nu
             if (!action.changes.some(c => taskChangeParts(project.tasks.find(x => x.id === c.taskId)!, c).length)) return 'Görevlerde değişen bir şey yok.';
             return null;
         }
+        case 'plan_uygula': {
+            const plan = (project.releasePlans || []).find(p => p.id === action.planId);
+            if (!plan) return 'Sürüm planı bulunamadı (silinmiş olabilir).';
+            if (!action.changes.length && !action.descope && !action.retarget) return 'Uygulanacak değişiklik yok.';
+            const ids = new Map(project.tasks.map(t => [t.id, t]));
+            const people = new Set(project.resources.map(r => r.name));
+            for (const c of action.changes) {
+                const t = ids.get(c.taskId);
+                if (!t) return 'Görevlerden biri bulunamadı (silinmiş olabilir).';
+                if ((t.version || 0) !== c.from) return `${t.jiraId || t.name}: sprinti öneriden sonra değişmiş; planı yeniden hesaplayın.`;
+                if (!Number.isSafeInteger(c.to) || c.to < 0) return 'Geçersiz sprint.';
+                if (c.toSpan !== undefined && !(Number.isSafeInteger(c.toSpan) && c.toSpan >= 1 && c.toSpan <= MAX_SPRINT_SPAN)) return `Sprint sayısı 1-${MAX_SPRINT_SPAN} olmalı.`;
+                if (c.toResource && !people.has(c.toResource)) return `"${c.toResource}" proje ekibinde yok.`;
+            }
+            if (action.retarget && !DAY_RE.test(action.retarget.date)) return 'Hedef tarih YYYY-AA-GG olmalı.';
+            return null;
+        }
         case 'gorev_sil': {
             if (!action.taskIds.length) return 'Silinecek görev yok.';
             if (action.taskIds.length > MAX_BULK_DELETE) return `Tek öneride en çok ${MAX_BULK_DELETE} görev silinebilir.`;
@@ -378,6 +403,24 @@ export const describeAction = (ws: WorkspaceData, action: AiAction): { title: st
                 details: [
                     ...rows.slice(0, 30).map(({ c, t }) => ({ label: t!.jiraId ? `${t!.jiraId} ${t!.name}` : t!.name, value: taskChangeParts(t!, c).join(' · ') })),
                     ...(rows.length > 30 ? [{ label: '…', value: `ve ${rows.length - 30} görev daha` }] : []),
+                ],
+            };
+        }
+        case 'plan_uygula': {
+            const byId = new Map((project?.tasks || []).map(t => [t.id, t]));
+            const names = project?.settings.sprintNames;
+            const ms = (id: string) => (project?.releasePlans || []).find(p => p.id === action.planId)?.milestones.find(m => m.id === id)?.name || '?';
+            return {
+                title: `Plan: ${action.label} · ${pName}`,
+                details: [
+                    ...action.changes.slice(0, 30).map(c => {
+                        const t = byId.get(c.taskId);
+                        const parts = [`${sprintLabel(c.from, names)} → ${sprintLabel(c.to, names)}`, c.toSpan !== undefined ? `${c.toSpan} sprint` : '', c.toResource !== undefined ? `${c.fromResource || 'atanmamış'} → ${c.toResource || 'atanmamış'}` : '', c.reason || ''].filter(Boolean);
+                        return { label: t ? (t.jiraId ? `${t.jiraId} ${t.name}` : t.name) : '?', value: parts.join(' · ') };
+                    }),
+                    ...(action.changes.length > 30 ? [{ label: '…', value: `ve ${action.changes.length - 30} görev daha` }] : []),
+                    ...(action.descope ? [{ label: 'Kapsam daraltma', value: `${ms(action.descope.milestoneId)} taşından çıkar: ${action.descope.taskIds.map(id => byId.get(id)?.jiraId || byId.get(id)?.name).join(', ')}` }] : []),
+                    ...(action.retarget ? [{ label: 'Yeni hedef', value: `${ms(action.retarget.milestoneId)} → ${action.retarget.date}` }] : []),
                 ],
             };
         }
@@ -656,6 +699,23 @@ export const applyAction = (ws: WorkspaceData, action: AiAction): { ws: Workspac
                 return { ...p, tasks, resources };
             });
             summary = `"${project.name}" · ${n} görev güncellendi`;
+            break;
+        }
+        case 'plan_uygula': {
+            const at = new Date();
+            next = touch(ws, project.id, p => {
+                let q = applyPlanChanges(p, action.changes, at);
+                const plans = (q.releasePlans || []).map(rp => {
+                    if (rp.id !== action.planId) return rp;
+                    let np = action.descope ? withoutFromMilestone(rp, action.descope.milestoneId, action.descope.taskIds) : rp;
+                    if (action.retarget) np = { ...np, milestones: np.milestones.map(m => (m.id === action.retarget!.milestoneId ? { ...m, targetDate: action.retarget!.date } : m)) };
+                    return np === rp ? rp : { ...np, updatedAt: at.toISOString() };
+                });
+                q = { ...q, releasePlans: plans };
+                return q;
+            });
+            next = appendAudit(next, 'task.bulkEdit', `${project.name} · plan: ${action.label} (${action.changes.length} görev)`, project.id);
+            summary = `"${project.name}" planı uygulandı: ${action.label}`;
             break;
         }
         case 'gorev_sil': {

@@ -32,6 +32,9 @@ import {
     groupBy, Measure, outliers, PERIODS, Period, pivot, profile, topRows, trend,
 } from './dataAnalysis';
 import { SKILLS, skillById } from './skills';
+import { DEFAULT_OPTIONS, describeMetrics, optimizePlan, rescueScenarios } from '../planning/planOptimizer';
+import { buildHistory, calibrator } from '../planning/history';
+import { calendarLabel, sprintCalendar } from '../sprintCalendar';
 import { JsonSchema, ToolCall, ToolSpec } from './protocol';
 import { knownWorkflow, taskStatusLabel } from '../workflow';
 import { effectiveScheme } from '../projectScheme';
@@ -1989,7 +1992,73 @@ const measuresArg = (v: unknown): Measure[] => listArg(v).filter((x): x is Args 
 
 // Analiz araçları sohbet çalışma zamanına (files) bağlıdır: tarayıcı sohbetinde sunulur, temel istek
 // (MCP — orada Claude kendi analizini yapar) büyümez.
+/** Plan optimizasyonu (asistan): Plan ekranındaki "Optimize et" ile aynı motor */
+const planOptimizeTool: ToolDef = {
+    label: 'Plan optimizasyonu',
+    requires: 'files',
+    spec: {
+        name: 'plan_optimizasyonu',
+        description: 'Sürüm planını (kilometre taşı × sprint) optimize eder: taş tahminleri önce/sonra, kapasite, hız kontrolü, gecikmeye kurtarma senaryoları ve gerekçeli değişiklikler. "Taşa yetişir miyiz, nasıl yetiştiririz, planı düzelt" sorularında. oner=true (ve senaryo) ile hesaplanan değişiklikler onaylı öneri kartı olur.',
+        parameters: S.obj({
+            proje: P.project,
+            surum: S.str('Sürüm planı adı (yoksa son taslak)'),
+            hedef_doluluk: S.int('% (varsayılan 85)'),
+            kisi_degisikligi: S.bool('Aynı birimde kişi değişikliği'),
+            bol: S.bool('Büyük işi böl (varsayılan açık)'),
+            bastan: S.bool('Baştan dağıt'),
+            gecmis_sapma: S.bool('Eforu geçmiş sapmayla düzelt'),
+            senaryo: S.str('Önerilecek senaryo kimliği (önceki sonuçtan)'),
+            oner: S.bool('Öneri kartı hazırla'),
+        }),
+    },
+    run: (a, ctx) => {
+        const project = resolveProject(ctx, a.proje);
+        const plans = (project.releasePlans || []).filter(p => p.mode === 'manual');
+        if (!plans.length) throw new ToolError(`${project.name} projesinde sürüm planı yok. Planlama › Plan ekranında görevleri seçip bir sürüm oluşturun.`);
+        const want = str(a.surum).toLocaleLowerCase('tr-TR');
+        const plan = (want ? plans.find(p => p.name.toLocaleLowerCase('tr-TR').includes(want)) : undefined)
+            || [...plans].sort((x, y) => Number(y.status === 'draft') - Number(x.status === 'draft') || y.updatedAt.localeCompare(x.updatedAt))[0];
+        const hist = a.gecmis_sapma === true ? calibrator(buildHistory(ctx.scoped.projects)) : undefined;
+        const load = typeof a.hedef_doluluk === 'number' && a.hedef_doluluk >= 30 && a.hedef_doluluk <= 100 ? a.hedef_doluluk / 100 : DEFAULT_OPTIONS.targetLoad;
+        const base = optimizePlan(project, plan, {
+            mode: a.bastan === true ? 'fresh' : 'stable', targetLoad: load, split: a.bol !== false, reassign: a.kisi_degisikligi === true,
+            useRemaining: true, people: ctx.ws.people, leaves: ctx.ws.leaves || [], now: ctx.now,
+            ...(hist ? { calibrate: (t: Task) => hist({ unit: t.unit, issueType: t.issueType })?.median } : {}),
+        });
+        const scenarios = rescueScenarios(project, plan, base);
+        const pick = str(a.senaryo) ? scenarios.find(x => x.id === str(a.senaryo)) : undefined;
+        if (str(a.senaryo) && !pick) throw new ToolError(`"${str(a.senaryo)}" senaryosu yok. Senaryolar: ${scenarios.map(x => x.id).join(', ') || 'yok (gecikme yok)'}.`);
+        const shown = pick?.result || base;
+        const names = project.settings.sprintNames || {};
+        const sl = (v: number) => (v === 0 ? 'Havuz' : names[v] || `Sprint ${v}`);
+        const keyOf = (id: string) => { const t = project.tasks.find(x => x.id === id); return t ? t.jiraId || t.name : id; };
+        const out: Args = {
+            surum: plan.name,
+            takvim: calendarLabel(sprintCalendar(project.settings)),
+            secenekler: { hedef_doluluk: `%${Math.round(shown.options.targetLoad * 100)}`, kisi_degisikligi: shown.options.reassign, bol: shown.options.split, kip: shown.options.mode === 'stable' ? 'yalnız gerekeni değiştir' : 'baştan' },
+            once: describeMetrics(shown.before),
+            sonra: describeMetrics(shown.after),
+            taslar: shown.after.milestones.map(m => ({ tas: m.name, hedef: m.target, simdi: shown.before.milestones.find(x => x.id === m.id)?.forecast, optimize: m.forecast, durum: m.status })),
+            ...(shown.velocity ? { hiz: { gun_sprint: shown.velocity.perSprint, sprint: shown.velocity.sprints, plan_varsayimi: shown.velocity.planned, ...(shown.velocity.recommendedLoad ? { onerilen_doluluk: `%${Math.round(shown.velocity.recommendedLoad * 100)}` } : {}) } } : {}),
+            uyarilar: shown.warnings.slice(0, 8).map(w => w.message),
+            senaryolar: scenarios.map(x => ({ id: x.id, ad: x.label, aciklama: x.detail, sonuc: x.retarget ? 'plan değişmez, hedef güncellenir' : describeMetrics(x.result.after), degisiklik: x.result.changes.length })),
+            degisiklik_sayisi: shown.changes.length,
+            degisiklikler: shown.changes.slice(0, 25).map(c => ({ gorev: keyOf(c.taskId), sprint: `${sl(c.from)} → ${sl(c.to)}`, ...(c.toSpan !== undefined ? { sprint_sayisi: c.toSpan } : {}), ...(c.toResource !== undefined ? { kisi: `${c.fromResource || 'atanmamış'} → ${c.toResource || 'atanmamış'}` } : {}), neden: c.reason })),
+            yontem: 'Kapasite: katılım × iş günü (tatil, izin düşülür) × hedef doluluk; bu sprintte yalnız kalan günler. Sıra: taş → Blocker → kritik zincir → öncelik → termin; öncül bittiği sprintten sonra ardıl başlar. Sezgisel yöntem: en iyiyi garanti etmez.',
+        };
+        if (a.oner === true) {
+            if (!ctx.canWrite) throw new ToolError('Bu rol plan değişikliği öneremez; Planlama › Plan › Optimize et ekranını projenin PY\'si kullanır.');
+            out.oneri = propose(ctx, {
+                type: 'plan_uygula', projectId: project.id, planId: plan.id, label: pick ? pick.label : `optimize (${shown.changes.length} değişiklik)`,
+                changes: shown.changes, ...(pick?.descope ? { descope: pick.descope } : {}), ...(pick?.retarget ? { retarget: pick.retarget } : {}),
+            });
+        }
+        return out;
+    },
+};
+
 const ANALYSIS_TOOLS: ToolDef[] = [
+    planOptimizeTool,
     {
         label: 'Veri analizi',
         requires: 'files',

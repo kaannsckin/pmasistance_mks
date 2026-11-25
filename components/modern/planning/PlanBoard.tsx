@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Project, ReleaseMilestone, ReleasePlan, Task, TaskStatus } from '../../../types';
+import { Leave, Person, Project, ReleaseMilestone, ReleasePlan, Task, TaskStatus } from '../../../types';
 import { calendarLabel, sprintCalendar } from '../../../utils/sprintCalendar';
 import { isInSprint } from '../../../utils/sprintSpan';
 import { canAddManualReleaseTask, createReleasePlan, itemFromTask, newId } from '../../../utils/planning/releasePlan';
 import {
-    BoardRow, buildPlanBoard, carryoverChanges, distributePlan, DistributeResult, effortOf, MilestoneStatus, milestoneOfTask, SprintChange,
+    BoardRow, buildPlanBoard, carryoverChanges, effortOf, MilestoneStatus, milestoneOfTask, SprintChange,
 } from '../../../utils/planning/planBoard';
+import PlanOptimizerSheet from './PlanOptimizerSheet';
 import { CalendarSettings, CalendarSheet } from '../ModernTimeline';
 import TaskQueryPicker from '../TaskQueryPicker';
 import TaskKeyButton from '../TaskKeyButton';
@@ -20,7 +21,8 @@ import { Field, Sheet } from '../ui';
  *    sütun "Planlanmamış". Kart sürüklenince sprinti (görevde) ve taşı (planda)
  *    değişir; aynı işler klavyeyle kartın "Taşı" menüsünden de yapılır.
  *  - Sprint takvimi projenin takvimidir (yol haritası ve otomatik planla aynı).
- *  - Otomatik dağıt: taş sırası, öncül, kişi kapasitesi; önce önizleme.
+ *  - Optimize et: kapasite (izin, tatil, tampon), kritik zincir, kişi değişikliği ve bölme
+ *    seçenekleri; gecikmede kurtarma senaryoları. Önce önizleme (bkz. PlanOptimizerSheet).
  *  - Sıkı takip: bu sprintin yükü, biten sprintte kalan işlerin devri, hızla bitiş tahmini.
  */
 
@@ -35,6 +37,12 @@ interface Props {
     onUpdateCalendar: (c: CalendarSettings) => void;
     onViewTask: (task: Task) => void;
     onOpenSimulation: () => void;
+    /** Kapasitede izinler için veri havuzu */
+    people?: Person[];
+    leaves?: Leave[];
+    /** Geçmiş sapma çarpanı (benzer kapanmış işlerin gerçekleşen ÷ tahmin oranı) */
+    calibrate?: (t: Task) => number | undefined;
+    calibrationHint?: number;
 }
 
 const STATUS_META: Record<MilestoneStatus, { label: string; tone: string; dot: string }> = {
@@ -54,7 +62,7 @@ const dm = (d?: Date | string) => {
 const isoOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const manualPlans = (p: Project) => (p.releasePlans || []).filter(r => r.mode === 'manual');
 
-const PlanBoard: React.FC<Props> = ({ project, canEdit, me, initialTaskIds, onSavePlan, onSetSprints, onUpdateCalendar, onViewTask, onOpenSimulation }) => {
+const PlanBoard: React.FC<Props> = ({ project, canEdit, me, initialTaskIds, onSavePlan, onSetSprints, onUpdateCalendar, onViewTask, onOpenSimulation, people, leaves, calibrate, calibrationHint }) => {
     const plans = manualPlans(project);
     const [planId, setPlanId] = useState<string | null>(() => {
         const drafts = plans.filter(p => p.status === 'draft').sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
@@ -64,7 +72,7 @@ const PlanBoard: React.FC<Props> = ({ project, canEdit, me, initialTaskIds, onSa
     const [extra, setExtra] = useState(0);
     const [calendarOpen, setCalendarOpen] = useState(false);
     const [pickOpen, setPickOpen] = useState(false);
-    const [preview, setPreview] = useState<DistributeResult | null>(null);
+    const [optimizeOpen, setOptimizeOpen] = useState(false);
     const [moving, setMoving] = useState<Task | null>(null);
     const [drag, setDrag] = useState<{ row: string; version: number } | null>(null);
     const [notice, setNotice] = useState('');
@@ -99,7 +107,7 @@ const PlanBoard: React.FC<Props> = ({ project, canEdit, me, initialTaskIds, onSa
         setNotice(`${added} görev "${target.name}" planına alındı${skipped > 0 ? `; ${skipped} görev zaten kapsamdaydı ya da bitmişti` : ''}.`);
     }, [initialTaskIds]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    const board = useMemo(() => (plan ? buildPlanBoard(project, plan, new Date(), { extraSprints: extra }) : null), [project, plan, extra]);
+    const board = useMemo(() => (plan ? buildPlanBoard(project, plan, new Date(), { extraSprints: extra, people, leaves }) : null), [project, plan, extra, people, leaves]);
 
     if (!plan || !board) {
         return (
@@ -208,7 +216,7 @@ const PlanBoard: React.FC<Props> = ({ project, canEdit, me, initialTaskIds, onSa
                     <span className="flex-1" />
                     {canEdit && <button type="button" className="m-btn m-btn-gray" onClick={() => setPickOpen(true)}><Icon name="plus" size={17} />Görev ekle</button>}
                     {canEdit && <button type="button" className="m-btn m-btn-gray" onClick={addMilestone}><Icon name="flag" size={17} />Kilometre taşı</button>}
-                    {canEdit && <button type="button" className="m-btn m-btn-primary" disabled={!board.total.open} onClick={() => setPreview(distributePlan(project, plan))}><Icon name="rocket" size={17} />Otomatik dağıt</button>}
+                    {canEdit && <button type="button" className="m-btn m-btn-primary" disabled={!board.total.open} onClick={() => setOptimizeOpen(true)}><Icon name="rocket" size={17} />Optimize et</button>}
                 </div>
                 {notice && <p className="m-0 text-[14px] m-ink-ok" role="status">{notice}</p>}
                 {/* Göstergeler */}
@@ -355,46 +363,15 @@ const PlanBoard: React.FC<Props> = ({ project, canEdit, me, initialTaskIds, onSa
                 </Sheet>
             )}
 
-            {preview && (
-                <Sheet wide title="Otomatik dağıtım önizlemesi" subtitle={`${preview.changes.length} görevin sprinti değişecek · ${calendarLabel(cal)}`} onClose={() => setPreview(null)}
-                    footer={<div className="ml-auto flex gap-2">
-                        <button type="button" className="m-btn m-btn-plain" onClick={() => setPreview(null)}>Vazgeç</button>
-                        <button type="button" className="m-btn m-btn-primary" disabled={!preview.changes.length} onClick={() => {
-                            onSetSprints(preview.changes, `"${plan.name}" otomatik dağıtıldı (${preview.changes.length} görev)`);
-                            setNotice(`${preview.changes.length} görev sprintlere dağıtıldı.`);
-                            setPreview(null);
-                        }}>Planı uygula</button>
-                    </div>}>
-                    <p className="m-0 text-[14px] m-text-2">Sıra: kilometre taşı (hedef tarih) → öncül → öncelik → termin. Bugünkü sprintten başlar; biten sprintte kalan işler devredilir, devam eden işler yerinde kalır; kişi kapasitesinden sürüm dışı işlerin yükü düşülür.</p>
-                    <section aria-label="Taş tahminleri" className="rounded-xl m-fill-2 px-3 py-2">
-                        <ul className="m-0 p-0 list-none text-[14px]">
-                            {preview.preview.rows.map(r => (
-                                <li key={rowKey(r)} className="flex flex-wrap gap-x-2 py-1">
-                                    <span className="font-semibold m-text">{r.milestone?.name || 'Taşsız işler'}</span>
-                                    <span className="m-text-3">tahmin {r.forecastEnd ? dm(r.forecastEnd) : '—'}{r.milestone?.targetDate ? ` · hedef ${dm(r.milestone.targetDate)}` : ''}</span>
-                                    <span className={`font-semibold ${STATUS_META[r.status].tone}`}>{STATUS_META[r.status].label}</span>
-                                </li>
-                            ))}
-                        </ul>
-                    </section>
-                    {preview.warnings.length > 0 && (
-                        <ul className="m-0 pl-5 text-[14px] m-ink-warn" aria-label="Uyarılar">{preview.warnings.map((w, i) => <li key={i}>{w.message}</li>)}</ul>
-                    )}
-                    {preview.changes.length > 0 ? (
-                        <ul className="m-0 p-0 list-none max-h-72 overflow-y-auto">
-                            {preview.changes.map(c => {
-                                const t = project.tasks.find(x => x.id === c.taskId)!;
-                                return (
-                                    <li key={c.taskId} className="flex items-center gap-2 border-t m-sep py-1.5 text-[14px]">
-                                        <TaskKeyButton task={t} onOpen={() => onViewTask(t)} />
-                                        <span className="flex-1 min-w-0 truncate m-text">{t.name}</span>
-                                        <span className="m-text-3 whitespace-nowrap">{sprintLabel(c.from, names)} → <strong className="m-text">{sprintLabel(c.to, names)}</strong></span>
-                                    </li>
-                                );
-                            })}
-                        </ul>
-                    ) : <p className="m-0 text-[14px] m-text-2">Plan zaten uygun; değişiklik yok.</p>}
-                </Sheet>
+            {optimizeOpen && (
+                <PlanOptimizerSheet project={project} plan={plan} people={people} leaves={leaves} calibrate={calibrate} calibrationHint={calibrationHint}
+                    onViewTask={onViewTask} onClose={() => setOptimizeOpen(false)}
+                    onApply={(changes, label, nextPlan) => {
+                        if (nextPlan) save(nextPlan);
+                        if (changes.length) onSetSprints(changes, label);
+                        setNotice(`${label}.`);
+                        setOptimizeOpen(false);
+                    }} />
             )}
         </section>
     );

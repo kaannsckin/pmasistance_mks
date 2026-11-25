@@ -137,7 +137,7 @@ Korelasyonu nedensellik gibi sunma; kanıtı zayıf hipotezi "olası" diye işar
         when: 'Kim ne kadar dolu, kapasite aşımı, adam-ay, işgücü, maliyet, kaynak dengesi, "kime iş verebilirim".',
         triggers: [/kapasite|doluluk|adam[- ]?ay|\bAA\b|iş ?gücü|kaynak|tahsis|yük|müsait|uygun kişi|maliyet|worklog|saat/i],
         playbook: `Oyun kitabı — Kapasite ve kaynak
-1. Veri: doluluk_analizi, kapasite_talep, tahsis_ozeti, is_yuku_ongorusu, uygun_kisi_bul, is_gucu_raporu, maliyet_raporu, departman_karnesi.
+1. Veri: doluluk_analizi, kapasite_talep, tahsis_ozeti, is_yuku_ongorusu, uygun_kisi_bul, is_gucu_raporu, maliyet_raporu, departman_karnesi. Sprint düzeyinde (kim hangi hafta dolu, iş kaydırma) sürüm planı varsa plan_optimizasyonu (kisi_degisikligi=true) kullan.
 2. Arz-talep dengesini kur: dönem başına kapasite vs talep (AA), açık/fazla; aşım > %100 olan kişi-ay sayısı; %70 altı atıl kapasite.
 3. Yoğunlaşma ve kırılganlık: işin/maliyetin kaçta kaçı kaç kişide (veri_analiz ozet + pay %); tek kişiye bağlı kritik işler.
 4. Eğilim: önümüzdeki 3 ayda aşım büyüyor mu (trend)?
@@ -149,8 +149,9 @@ Birimler: 1 AA = bir kişinin tam zamanlı bir ayı; gün = saat ÷ 8.`,
         id: 'tahmin',
         name: 'Tahmin ve senaryo',
         when: '"Ne zaman biter, yetişir mi, hedefe ulaşır mıyız, bu hızla, ya şöyle olursa" gibi ileriye dönük sorular.',
-        triggers: [/ne zaman biter|yetişir|tahmin|öngörü|projeksiyon|senaryo|ya .* olursa|bu hızla|hedefe ulaş|teslim tarihi|monte carlo|p50|p80/i],
+        triggers: [/ne zaman biter|yetişir|yetiştir|tahmin|öngörü|projeksiyon|senaryo|ya .* olursa|bu hızla|hedefe ulaş|teslim tarihi|monte carlo|p50|p80|optimize|planı düzelt|kilometre taşı|milestone/i],
         playbook: `Oyun kitabı — Tahmin ve senaryo
+0. Projede sürüm planı (kilometre taşları) varsa önce plan_optimizasyonu çağır: taş tahminleri önce/sonra, hız kontrolü ve kurtarma senaryoları oradan gelir. "Nasıl yetiştiririz" sorusunda senaryoları bedelleriyle karşılaştır (kişi değişikliği, bölme, tampon, kapsam daraltma, yeni hedef) ve birini öner; kullanıcı isterse aynı aracı oner=true ve senaryo ile çağırıp öneri kartı hazırla. Hız uyarısı varsa tarihlerin iyimser olduğunu açıkça söyle.
 1. Geçmiş hızı ölç: tamamlanan iş/dönem (veri_analiz trend), son 3-6 dönemin ortalaması ve oynaklığı. Kalan işi sapmasıyla birlikte al (proje_detayi, evm_analizi, is_yuku_ongorusu).
 2. Tek nokta tahmin verme; aralık ver: iyimser / beklenen / kötümser (ya da P50/P80). Kalan iş ÷ hız; oynaklık yüksekse aralık geniş.
 3. Varsayımları açık yaz: ekip büyüklüğü sabit, kapsam sabit, izinler … Hangi varsayım kırılırsa tarih ne kadar kayar (duyarlılık)?
