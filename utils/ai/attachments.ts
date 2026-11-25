@@ -1,5 +1,6 @@
 import { AI_LIMITS } from './protocol';
 import { ExtractError, extractText, MAX_FILE_BYTES, SUPPORTED_EXTENSIONS } from '../rag/extract';
+import { DataTable, tableFromGrid } from './dataAnalysis';
 
 /**
  * Sohbete eklenen dosyalar (ek). Metin tamamen tarayıcıda çıkarılır; dosyanın
@@ -17,7 +18,15 @@ export interface ChatAttachment {
     name: string;
     size: number;
     text: string;
+    /**
+     * Excel/CSV/TSV ekinin tabloları (sayfa başına, tüm satırlar). Modele giden
+     * metin kısaltılabilir; veri_analiz bu tablolar üzerinde tam hesap yapar.
+     */
+    tables?: DataTable[];
 }
+
+/** Bir sohbette analiz için tutulan en çok tablo */
+export const MAX_SESSION_TABLES = 12;
 
 /** Ekranda gösterilen özet (metin sohbet geçmişinde ayrıca tutulur) */
 export interface AttachmentInfo {
@@ -31,6 +40,27 @@ export interface AttachmentInfo {
 const ext = (name: string): string => {
     const i = name.lastIndexOf('.');
     return i === -1 ? '' : name.slice(i).toLowerCase();
+};
+
+/** Çalışma kitabının sayfalarını tabloya çevirir (tarih hücreleri ISO metin olur) */
+export const tablesFromWorkbook = async (fileName: string, data: Uint8Array | string): Promise<DataTable[]> => {
+    if (typeof data === 'string') {
+        // CSV/TSV: SheetJS Türkçe ondalık virgülü binlik ayırıcı sayıyor ("12,5" → 125); hücreler metin
+        // olarak okunur, sayılar toCell ile Türkçe/İngilizce biçimden çözülür
+        const Papa = (await import('papaparse')).default;
+        const parsed = Papa.parse<string[]>(data.replace(/^\uFEFF/, ''), { delimiter: fileName.toLowerCase().endsWith('.tsv') ? '\t' : '', skipEmptyLines: 'greedy' });
+        const t = tableFromGrid(fileName, parsed.data);
+        return t ? [t] : [];
+    }
+    const XLSX = await import('xlsx');
+    const wb = XLSX.read(data, { type: 'array', cellDates: true });
+    const out: DataTable[] = [];
+    for (const name of wb.SheetNames) {
+        const grid = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[name], { header: 1, raw: true, blankrows: false, defval: null });
+        const t = tableFromGrid(wb.SheetNames.length > 1 || !/\.(csv|tsv)$/i.test(fileName) ? `${fileName} / ${name}` : fileName, grid);
+        if (t) out.push(t);
+    }
+    return out;
 };
 
 const extractSheet = async (file: File): Promise<string> => {
@@ -55,12 +85,16 @@ export const readAttachment = async (file: File): Promise<ChatAttachment> => {
     }
     if (file.size > MAX_FILE_BYTES) throw new ExtractError(`Dosya çok büyük (en fazla ${MAX_FILE_BYTES / 1024 / 1024} MB).`);
     let text: string;
-    if (e === '.xlsx' || e === '.xls') text = await extractSheet(file);
-    else if (['.tsv', '.json', '.log', '.xml'].includes(e)) text = await file.text();
+    let tables: DataTable[] | undefined;
+    if (e === '.xlsx' || e === '.xls') {
+        text = await extractSheet(file);
+        tables = await tablesFromWorkbook(file.name, new Uint8Array(await file.arrayBuffer())).catch(() => undefined);
+    } else if (['.tsv', '.json', '.log', '.xml'].includes(e)) text = await file.text();
     else text = await extractText(file);
+    if (e === '.csv' || e === '.tsv') tables = await tablesFromWorkbook(file.name, await file.text()).catch(() => undefined);
     text = text.replace(/\u0000/g, '').trim();
     if (!text) throw new ExtractError('Dosyada okunabilir metin bulunamadı.');
-    return { id: `ek-${Date.now().toString(36)}-${++seq}`, name: file.name, size: file.size, text };
+    return { id: `ek-${Date.now().toString(36)}-${++seq}`, name: file.name, size: file.size, text, ...(tables?.length ? { tables } : {}) };
 };
 
 const PROMPT_FOR_FILES = 'Ekteki dosyayı incele: kısaca özetle ve proje yönetimi açısından önemli noktaları çıkar.';

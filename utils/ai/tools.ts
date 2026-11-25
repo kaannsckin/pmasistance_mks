@@ -26,7 +26,12 @@ import { fullName, PERSON_ISSUE_LABELS, personIssues, trNorm, trUpper } from '..
 import { MAX_POOL_ROWS, parseMoney, PoolNewPerson, PoolPersonChange, PoolTitle, titleCodeFor } from './poolActions';
 import { WorkspaceData } from '../../types';
 import { labelFamilies, milestonePlan } from '../dashboard/data';
-import { DOC_FORMAT_LABELS, DOC_FORMATS, DocBlock, DocError, DocFormat, documentStats, normalizeDocument, tableFromResult } from '../export/aiDocument';
+import { CALLOUT_TONES, CalloutTone, CHART_TYPES, ChartType, DOC_FORMAT_LABELS, DOC_FORMATS, DocBlock, DocError, DocFormat, documentStats, KPI_STATUSES, KpiStatus, normalizeDocument, tableFromResult } from '../export/aiDocument';
+import {
+    AGG_FNS, AggFn, AnalysisError, applyFilters, correlation, DataTable, describeTable, distribution, Filter, FILTER_OPS, FilterOp,
+    groupBy, Measure, outliers, PERIODS, Period, pivot, profile, topRows, trend,
+} from './dataAnalysis';
+import { SKILLS, skillById } from './skills';
 import { JsonSchema, ToolCall, ToolSpec } from './protocol';
 import { knownWorkflow, taskStatusLabel } from '../workflow';
 import { effectiveScheme } from '../projectScheme';
@@ -1795,8 +1800,25 @@ const listArg = (v: unknown): unknown[] => {
 const sourceTool = (name: string, ctx: ToolContext): ToolDef => {
     const def = TOOL_MAP.get(name);
     if (!def || !toolAvailable(def, ctx)) throw new ToolError(`"${name}" kaynak olarak kullanılamaz (bu rolde yok ya da bilinmiyor).`);
-    if (def.writeOnly || def.poolWrite || def.requires === 'ui' || def.requires === 'files') throw new ToolError(`"${name}" bir okuma aracı değil; kaynak yalnız okuma araçları olabilir.`);
+    if (def.writeOnly || def.poolWrite || def.requires === 'ui' || (def.requires === 'files' && def.spec.name !== 'veri_analiz')) throw new ToolError(`"${name}" bir okuma aracı değil; kaynak yalnız okuma araçları olabilir.`);
     return def;
+};
+
+/** Okuma aracını çalıştırıp sonucundaki listeyi tabloya çevirir (dosya, grafik ve analiz kaynağı) */
+const loadSourceTable = async (name: string, argJson: string, field: string, ctx: ToolContext, where: string): Promise<{ columns: string[]; rows: (string | number | null)[][]; field: string }> => {
+    const def = sourceTool(name, ctx);
+    let args: Args = {};
+    if (argJson) { try { args = JSON.parse(argJson); } catch { throw new ToolError(`${where}: kaynak_arg geçerli JSON değil.`); } }
+    const result = await withBulkLimit(SOURCE_ROW_LIMIT, () => def.run(normalizeEnumArgs(def.spec.parameters, args || {}), ctx));
+    try { return tableFromResult(result, field || undefined); } catch (e) { throw new ToolError(`${where} (${name}): ${(e as Error).message}`); }
+};
+
+const pickColumns = (t: { columns: string[]; rows: (string | number | null)[][] }, want: string[], where: string) => {
+    if (!want.length) return t;
+    const idx = want.map(w => t.columns.findIndex(c => c.toLocaleLowerCase('tr-TR') === w.toLocaleLowerCase('tr-TR')));
+    const missing = want.filter((_, k) => idx[k] < 0);
+    if (missing.length) throw new ToolError(`${where}: ${missing.join(', ')} sütunu sonuçta yok. Var olanlar: ${t.columns.join(', ')}.`);
+    return { columns: idx.map(k => t.columns[k]), rows: t.rows.map(r => idx.map(k => r[k])) };
 };
 
 const FILE_TOOLS: ToolDef[] = [
@@ -1805,7 +1827,7 @@ const FILE_TOOLS: ToolDef[] = [
         requires: 'files',
         spec: {
             name: 'dosya_olustur',
-            description: 'Kullanıcı Excel, CSV, Word, PDF ya da PowerPoint çıktısı isteyince dosya hazırlar; sohbette indirme kartı çıkar. Tabloyu tercihen kaynak_arac ile bir okuma aracının sonucundan doldur (sayıları kendin yazma). Tüm içeriği TEK çağrıda ver.',
+            description: 'Excel/CSV/Word/PDF/PowerPoint dosyası hazırlar (sohbette indirme kartı). Raporda: özet, gosterge, vurgu, grafik, tablolar; ham döküm sonda. Tablo/grafik verisini kaynak_arac ile bir okuma aracından ya da veri_analiz\'den al. TEK çağrı.',
             parameters: S.obj({
                 bicim: S.str('', ['xlsx', 'csv', 'docx', 'pdf', 'pptx']),
                 baslik: S.str(''),
@@ -1813,8 +1835,16 @@ const FILE_TOOLS: ToolDef[] = [
                 bolumler: {
                     type: 'array',
                     items: S.obj({
-                        tur: S.str('', ['baslik', 'alt_baslik', 'paragraf', 'liste', 'tablo']),
-                        metin: S.str('Başlık/paragraf; tabloda tablo adı'),
+                        tur: S.str('', ['baslik', 'alt_baslik', 'paragraf', 'liste', 'tablo', 'gosterge', 'vurgu', 'grafik']),
+                        metin: S.str('Başlık/paragraf/vurgu metni; tablo/grafik adı'),
+                        vurgu_basligi: S.str('Mesaj cümlesi'),
+                        ton: S.str('', CALLOUT_TONES),
+                        gostergeler: { type: 'array', items: S.obj({ ad: S.str(''), deger: S.str('"%78", "₺1,2 Mn"'), degisim: S.str('Kıyas'), durum: S.str('', KPI_STATUSES), not: S.str('') }, ['ad', 'deger']) },
+                        grafik_turu: S.str('', CHART_TYPES),
+                        etiketler: { type: 'array', items: S.str('') },
+                        seriler: { type: 'array', items: S.obj({ ad: S.str(''), degerler: { type: 'array', items: S.num('') } }) },
+                        etiket_sutun: S.str('Grafik kaynağında etiket sütunu'),
+                        deger_sutunlari: { type: 'array', items: S.str('') },
                         maddeler: { type: 'array', items: S.str('') },
                         sutunlar: { type: 'array', items: S.str('') },
                         satirlar: { type: 'array', items: { type: 'array', items: S.str('') } },
@@ -1840,32 +1870,46 @@ const FILE_TOOLS: ToolDef[] = [
                 if (tur === 'baslik' || tur === 'alt_baslik') blocks.push({ kind: 'heading', text: str(b.metin), level: tur === 'baslik' ? 1 : 2 });
                 else if (tur === 'paragraf') blocks.push({ kind: 'paragraph', text: str(b.metin) });
                 else if (tur === 'liste') blocks.push({ kind: 'list', items: listArg(b.maddeler).map(x => String(x ?? '')) });
-                else if (tur === 'tablo') {
+                else if (tur === 'gosterge') {
+                    const items = listArg(b.gostergeler).filter((x): x is Args => !!x && typeof x === 'object')
+                        .map(k => ({ label: str(k.ad), value: String(k.deger ?? '').trim(), change: str(k.degisim) || undefined, status: (KPI_STATUSES.includes(str(k.durum) as KpiStatus) ? str(k.durum) : 'notr') as KpiStatus, note: str(k.not) || undefined }));
+                    if (!items.length) throw new ToolError(`${i + 1}. bölüm: gosterge için gostergeler listesi gerekli.`);
+                    blocks.push({ kind: 'kpi', items });
+                } else if (tur === 'vurgu') {
+                    const tone = (CALLOUT_TONES.includes(str(b.ton) as CalloutTone) ? str(b.ton) : 'bulgu') as CalloutTone;
+                    blocks.push({ kind: 'callout', tone, title: str(b.vurgu_basligi) || undefined, text: str(b.metin) });
+                } else if (tur === 'grafik') {
+                    const chart = (CHART_TYPES.includes(str(b.grafik_turu) as ChartType) ? str(b.grafik_turu) : 'bar') as ChartType;
+                    const name = str(b.kaynak_arac);
+                    let labels: string[], series: { name: string; values: (number | null)[] }[];
+                    if (name) {
+                        const t = await loadSourceTable(name, str(b.kaynak_arg), str(b.kaynak_alan), ctx, `${i + 1}. bölüm`);
+                        const where = `${i + 1}. bölüm`;
+                        const lab = str(b.etiket_sutun) || t.columns[0];
+                        const vals = listArg(b.deger_sutunlari).map(String);
+                        const want = vals.length ? vals : t.columns.filter((c, k) => c !== lab && t.rows.some(r => typeof r[k] === 'number')).slice(0, 1);
+                        const picked = pickColumns(t, [lab, ...want], where);
+                        labels = picked.rows.slice(0, 40).map(r => String(r[0] ?? '(boş)'));
+                        series = picked.columns.slice(1, 7).map((c, k) => ({ name: c, values: picked.rows.slice(0, 40).map(r => (typeof r[k + 1] === 'number' ? r[k + 1] as number : null)) }));
+                    } else {
+                        labels = listArg(b.etiketler).map(x => String(x ?? ''));
+                        series = listArg(b.seriler).filter((x): x is Args => !!x && typeof x === 'object').map(se => ({ name: str(se.ad), values: listArg(se.degerler).map(v => (typeof v === 'number' ? v : Number.isFinite(Number(v)) && v !== '' && v !== null ? Number(v) : null)) }));
+                    }
+                    blocks.push({ kind: 'chart', chart, title: str(b.metin) || undefined, labels, series, note: str(b.not) || undefined });
+                    if (name) sources.push({ arac: name, alan: str(b.kaynak_alan) || '(grafik)', satir: labels.length });
+                } else if (tur === 'tablo') {
                     const note = str(b.not) || undefined;
                     const name = str(b.kaynak_arac);
                     if (name) {
-                        const def = sourceTool(name, ctx);
-                        let args: Args = {};
-                        if (str(b.kaynak_arg)) { try { args = JSON.parse(str(b.kaynak_arg)); } catch { throw new ToolError(`${i + 1}. bölüm: kaynak_arg geçerli JSON değil.`); } }
-                        const result = await withBulkLimit(SOURCE_ROW_LIMIT, () => def.run(normalizeEnumArgs(def.spec.parameters, args || {}), ctx));
-                        let t: ReturnType<typeof tableFromResult>;
-                        try { t = tableFromResult(result, str(b.kaynak_alan) || undefined); } catch (e) { throw new ToolError(`${i + 1}. bölüm (${name}): ${(e as Error).message}`); }
+                        const t = await loadSourceTable(name, str(b.kaynak_arg), str(b.kaynak_alan), ctx, `${i + 1}. bölüm`);
                         // İstenen sütunlar verildiyse yalnız onlar ve o sırayla (başlık adına göre, büyük/küçük harf duyarsız)
-                        const want = listArg(b.sutunlar).map(x => String(x));
-                        let { columns, rows } = t;
-                        if (want.length) {
-                            const idx = want.map(w => columns.findIndex(c => c.toLocaleLowerCase('tr-TR') === w.toLocaleLowerCase('tr-TR')));
-                            const missing = want.filter((_, k) => idx[k] < 0);
-                            if (missing.length) throw new ToolError(`${i + 1}. bölüm: ${missing.join(', ')} sütunu sonuçta yok. Var olanlar: ${columns.join(', ')}.`);
-                            columns = idx.map(k => columns[k]);
-                            rows = rows.map(r => idx.map(k => r[k]));
-                        }
+                        const { columns, rows } = pickColumns(t, listArg(b.sutunlar).map(x => String(x)), `${i + 1}. bölüm`);
                         blocks.push({ kind: 'table', title: str(b.metin) || undefined, columns, rows, note });
                         sources.push({ arac: name, alan: t.field, satir: rows.length });
                     } else {
                         blocks.push({ kind: 'table', title: str(b.metin) || undefined, columns: listArg(b.sutunlar).map(x => String(x ?? '')), rows: listArg(b.satirlar).map(r => (Array.isArray(r) ? r : [r])) as (string | number | null)[][], note });
                     }
-                } else throw new ToolError(`${i + 1}. bölüm: tur baslik, alt_baslik, paragraf, liste ya da tablo olmalı.`);
+                } else throw new ToolError(`${i + 1}. bölüm: tur baslik, alt_baslik, paragraf, liste, tablo, gosterge, vurgu ya da grafik olmalı.`);
             }
             let doc;
             try {
@@ -1877,7 +1921,8 @@ const FILE_TOOLS: ToolDef[] = [
             ctx.files.push(doc);
             const st = documentStats(doc);
             return {
-                dosya: doc.title, bicim: DOC_FORMAT_LABELS[format], tablo: st.tables, satir: st.rows,
+                dosya: doc.title, bicim: DOC_FORMAT_LABELS[format], tablo: st.tables, satir: st.rows, grafik: st.charts, gosterge: st.kpis, vurgu: st.callouts,
+                ...(!st.kpis && !st.callouts && st.tables ? { kalite_notu: 'Dosyada gösterge ya da bulgu/öneri vurgusu yok. Kullanıcı yalnız veri dökümü istediyse sorun yok; analiz ya da rapor istediyse gosterge ve vurgu bölümleriyle bir kez daha hazırla.' } : {}),
                 tablolar: doc.blocks.filter(b => b.kind === 'table').map(b => ({ ad: (b as Extract<DocBlock, { kind: 'table' }>).title, sutunlar: (b as Extract<DocBlock, { kind: 'table' }>).columns, satir: (b as Extract<DocBlock, { kind: 'table' }>).rows.length })),
                 ...(sources.length ? { kaynaklar: sources } : {}),
                 durum: 'Dosya hazır; kullanıcı sohbetteki karttan indirir (diğer biçimler de kartta). İçeriği yanıtta tekrar yazma; neyi içerdiğini bir iki cümleyle söyle.',
@@ -1885,6 +1930,118 @@ const FILE_TOOLS: ToolDef[] = [
         },
     },
 ];
+
+// ---------------------------------------------------------------------------
+// Analiz: hesap motoru (veri_analiz) ve yetenek oyun kitapları (yetenek_yukle).
+// Model sayıyı kafadan üretmez; ekli tablolar ya da okuma araçlarının sonuçları
+// üzerinde burada hesaplatır.
+// ---------------------------------------------------------------------------
+
+const ISLEMLER = ['profil', 'ozet', 'pivot', 'trend', 'dagilim', 'aykiri', 'korelasyon', 'satirlar'] as const;
+
+/** Analiz edilecek tablo: kaynak_arac verildiyse onun sonucu, yoksa ekli tablolardan biri */
+const analysisTable = async (a: Args, ctx: ToolContext): Promise<DataTable> => {
+    const name = str(a.kaynak_arac);
+    if (name) {
+        if (name === 'veri_analiz') throw new ToolError('veri_analiz kendi kaynağı olamaz.');
+        const t = await loadSourceTable(name, str(a.kaynak_arg), str(a.kaynak_alan), ctx, 'Kaynak');
+        return { name: `${name}${t.field ? ` → ${t.field}` : ''}`, columns: t.columns, rows: t.rows };
+    }
+    const tables = ctx.tables || [];
+    if (!tables.length) throw new ToolError('Analiz edilecek tablo yok: kullanıcı Excel/CSV eklemedi. Uygulama verisi için kaynak_arac ile bir okuma aracı (ör. gorev_ara, is_gucu_raporu, maliyet_raporu) ver.');
+    const want = str(a.tablo);
+    if (!want) {
+        if (tables.length === 1) return tables[0];
+        throw new ToolError(`Birden çok tablo var; tablo adını ver: ${tables.map(t => `"${t.name}"`).join(', ')}.`);
+    }
+    const f = (s: string) => s.toLocaleLowerCase('tr-TR');
+    const hit = tables.find(t => f(t.name) === f(want)) || tables.filter(t => f(t.name).includes(f(want)))[0];
+    if (!hit) throw new ToolError(`"${want}" tablosu yok. Tablolar: ${tables.map(t => `"${t.name}"`).join(', ')}.`);
+    return hit;
+};
+
+const measuresArg = (v: unknown): Measure[] => listArg(v).filter((x): x is Args => !!x && typeof x === 'object')
+    .map(m => ({ sutun: str(m.sutun) || undefined, fonk: (str(m.fonk) || 'toplam') as AggFn, ad: str(m.ad) || undefined }));
+
+// Analiz araçları sohbet çalışma zamanına (files) bağlıdır: tarayıcı sohbetinde sunulur, temel istek
+// (MCP — orada Claude kendi analizini yapar) büyümez.
+const ANALYSIS_TOOLS: ToolDef[] = [
+    {
+        label: 'Veri analizi',
+        requires: 'files',
+        spec: {
+            name: 'veri_analiz',
+            description: 'Hesap motoru (ekli tablonun TÜM satırları ya da kaynak_arac sonucu). profil: yapı ve veri kalitesi; ozet: grupla+ölç+pay %; pivot: grupla[0]×grupla[1]; trend: tarih_sutun, dönem, değişim, eğilim; dagilim; aykiri (IQR); korelasyon (sutun, sutun2); satirlar: süz-sırala-ilk N. Toplam/ortalama/pay/sıralamayı kafadan değil bununla hesapla.',
+            parameters: S.obj({
+                islem: S.str('', [...ISLEMLER]),
+                tablo: S.str('Ek tablo adı'),
+                kaynak_arac: S.str('Okuma aracı (ek yerine)'),
+                kaynak_arg: S.str('JSON'),
+                kaynak_alan: S.str(''),
+                filtre: { type: 'array', items: S.obj({ sutun: S.str(''), op: S.str('', FILTER_OPS), deger: S.str('') }) },
+                grupla: { type: 'array', items: S.str('') },
+                olcumler: { type: 'array', items: S.obj({ sutun: S.str(''), fonk: S.str('', AGG_FNS), ad: S.str('') }) },
+                sutun: S.str(''),
+                sutun2: S.str(''),
+                tarih_sutun: S.str(''),
+                periyot: S.str('', PERIODS),
+                sirala: S.str(''),
+                artan: S.bool(''),
+                limit: S.int(''),
+                goster: { type: 'array', items: S.str('') },
+            }, ['islem']),
+        },
+        run: async (a, ctx) => {
+            const t = await analysisTable(a, ctx);
+            const islem = str(a.islem) as typeof ISLEMLER[number];
+            try {
+                const filters = listArg(a.filtre).filter((x): x is Args => !!x && typeof x === 'object')
+                    .map(f => ({ sutun: str(f.sutun), op: (str(f.op) || '=') as FilterOp, deger: f.deger } as Filter));
+                const rows = applyFilters(t, filters);
+                const head = { tablo: t.name, toplam_satir: t.rows.length, ...(filters.length ? { suzulen_satir: rows.length } : {}) };
+                const groups = listArg(a.grupla).map(String).filter(Boolean);
+                const ms = measuresArg(a.olcumler);
+                const limit = typeof a.limit === 'number' ? a.limit : undefined;
+                switch (islem) {
+                    case 'profil': return { ...profile(t, rows), ...(filters.length ? { suzulen_satir: rows.length } : {}) };
+                    case 'ozet': return { ...head, ...groupBy(t, rows, groups, ms, { sirala: str(a.sirala) || undefined, artan: a.artan === true, limit }) };
+                    case 'pivot':
+                        if (groups.length < 2) throw new AnalysisError('pivot için grupla: [satır sütunu, sütun sütunu] gerekli.');
+                        return { ...head, ...pivot(t, rows, groups[0], groups[1], ms[0] || { fonk: 'say' }) };
+                    case 'trend':
+                        if (!str(a.tarih_sutun)) throw new AnalysisError('trend için tarih_sutun gerekli.');
+                        return { ...head, ...trend(t, rows, str(a.tarih_sutun), ms[0] || { fonk: 'say' }, (str(a.periyot) || 'ay') as Period) };
+                    case 'dagilim': return { ...head, ...distribution(t, rows, str(a.sutun)) };
+                    case 'aykiri': return { ...head, ...outliers(t, rows, str(a.sutun), listArg(a.goster).map(String)) };
+                    case 'korelasyon': return { ...head, ...correlation(t, rows, str(a.sutun), str(a.sutun2)) };
+                    case 'satirlar': return { ...head, ...topRows(t, rows, { sirala: str(a.sirala) || undefined, artan: a.artan === true, limit, sutunlar: listArg(a.goster).map(String) }) };
+                    default: throw new AnalysisError(`islem ${ISLEMLER.join(', ')} olmalı.`);
+                }
+            } catch (e) {
+                if (e instanceof AnalysisError) throw new ToolError(e.message);
+                throw e;
+            }
+        },
+    },
+    {
+        label: 'Yetenek yükleme',
+        requires: 'files',
+        spec: {
+            name: 'yetenek_yukle',
+            description: 'Yeteneğin oyun kitabını (adımlar, şablon, kalite kontrol) açar; istek bir yeteneğe uyuyor ama "Etkin yetenek" yoksa yanıtlamadan önce çağır.',
+            parameters: S.obj({ ad: S.str('', SKILLS.map(s => s.id)) }, ['ad']),
+        },
+        run: a => {
+            const sk = skillById(str(a.ad));
+            if (!sk) throw new ToolError(`"${str(a.ad)}" diye bir yetenek yok. Yetenekler: ${SKILLS.map(s => s.id).join(', ')}.`);
+            return { yetenek: sk.name, oyun_kitabi: sk.playbook };
+        },
+    },
+];
+
+/** Ekli tabloların modele gösterilen listesi (sistem talimatında) */
+export const tablesPromptSection = (tables: DataTable[] | undefined): string =>
+    tables?.length ? `Ekli tablolar (veri_analiz ile TÜM satırlar üzerinde hesap yapılabilir; mesajdaki EK metni kısaltılmış olabilir):\n${tables.slice(0, 12).map(t => `- ${describeTable(t)}`).join('\n')}` : '';
 
 // ---------------------------------------------------------------------------
 // Hafıza: kullanıcının kalıcı tercihleri (bu tarayıcıda). Yazma ve silme yalnız
@@ -1939,7 +2096,7 @@ const MEMORY_TOOLS: ToolDef[] = [
     },
 ];
 
-AI_TOOLS.push(...PROPOSAL_TOOLS, ...AGENT_TOOLS, ...JIRA_TOOLS, ...WORKFORCE_TOOLS, ...POOL_TOOLS, ...FILE_TOOLS, ...MEMORY_TOOLS);
+AI_TOOLS.push(...PROPOSAL_TOOLS, ...AGENT_TOOLS, ...JIRA_TOOLS, ...WORKFORCE_TOOLS, ...POOL_TOOLS, ...ANALYSIS_TOOLS, ...FILE_TOOLS, ...MEMORY_TOOLS);
 
 const TOOL_MAP = new Map(AI_TOOLS.map(t => [t.spec.name, t]));
 
@@ -1956,7 +2113,7 @@ export const toolLabel = (name: string): string => TOOL_MAP.get(name)?.label || 
 export const toolKind = (name: string): 'read' | 'propose' | 'ui' | 'jira' | 'file' | 'memory' => {
     const t = TOOL_MAP.get(name);
     if (!t) return 'read';
-    if (t.requires === 'files') return 'file';
+    if (t.requires === 'files') return t.spec.name === 'dosya_olustur' ? 'file' : 'read';
     if (t.requires === 'memory') return 'memory';
     if (t.requires === 'ui') return 'ui';
     // Onay isteyen öneriler (ör. oner_jira_esitle) Jira'ya bağlı olsa da öneri sayılır

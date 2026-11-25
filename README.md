@@ -944,6 +944,7 @@ Tam liste: [`.env.example`](.env.example) · [docs/AI_KURULUM.md](docs/AI_KURULU
 |---|---|
 | [docs/AI_KURULUM.md](docs/AI_KURULUM.md) | Kurumsal AI asistanı kurulumu, araçlar, kapsam kuralları |
 | [docs/MCP_KURULUM.md](docs/MCP_KURULUM.md) | Claude Desktop / Claude Code bağlantısı |
+| [docs/ASISTAN_YETENEKLERI.md](docs/ASISTAN_YETENEKLERI.md) | Asistanın analiz ve rapor yetenekleri: oyun kitapları, hesap motoru, analitik dosyalar |
 | [docs/RAPOR_AI.md](docs/RAPOR_AI.md) | Haftalık rapor AI asistanı |
 | [docs/RAPOR_AI_PLANI.md](docs/RAPOR_AI_PLANI.md) | Rapor AI geliştirme planı |
 | [docs/INCE_AYAR_KARARI.md](docs/INCE_AYAR_KARARI.md) | İnce ayar karar kaydı ve uygulama adımları |

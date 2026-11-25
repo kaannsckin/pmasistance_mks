@@ -8,6 +8,7 @@ import type { RagHit } from '../rag/retriever';
 import type { Citation, RagSourceType } from '../rag/sources';
 import type { AiProposal } from './actions';
 import type { AiDocument } from '../export/aiDocument';
+import type { DataTable } from './dataAnalysis';
 import type { MemoryStore } from './memory';
 import type { UiCommand, UiResult } from './uiActions';
 import type { JiraIssueWorklog, JiraMeta, JiraSyncPage, JiraSyncSource } from '../integrations';
@@ -79,6 +80,11 @@ export interface ToolContext {
      * kullanıcı açıkça isterse yapılır, ekteki bir talimat hafızaya yazamaz.
      */
     memory?: { store: MemoryStore; userPrompt: string };
+    /**
+     * Bu sohbete eklenen Excel/CSV dosyalarının tabloları (tüm satırlar; modele
+     * giden metin kısaltılmış olabilir). veri_analiz bunlar üzerinde hesap yapar.
+     */
+    tables?: DataTable[];
 }
 
 export const buildToolContext = (ws: WorkspaceData, now: Date = new Date()): ToolContext => {

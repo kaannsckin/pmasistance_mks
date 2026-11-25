@@ -4,7 +4,7 @@ import { AiProposal } from '../../utils/ai/actions';
 import { ATTACHMENT_EXTENSIONS, AttachmentInfo } from '../../utils/ai/attachments';
 import { fmtFileSize as fmtKb, useChatAttachments } from '../assistant/useChatAttachments';
 import { toolKind } from '../../utils/ai/tools';
-import { AiDocument, DOC_FORMAT_LABELS, documentStats } from '../../utils/export/aiDocument';
+import { AiDocument, DOC_FORMAT_LABELS, documentStats, documentSummary } from '../../utils/export/aiDocument';
 import { formatsFor, useDocumentDownload } from '../assistant/useDocumentDownload';
 import { useSlashMenu } from '../assistant/useSlashMenu';
 import { extractText, SUPPORTED_EXTENSIONS } from '../../utils/rag/extract';
@@ -202,7 +202,7 @@ const FileCards: React.FC<{ files: AiDocument[] }> = ({ files }) => {
                             <span className="w-9 h-9 rounded-lg m-tone-accent flex items-center justify-center flex-none"><Icon name="report" size={18} /></span>
                             <span className="flex-1 min-w-0">
                                 <span className="block text-[14px] font-semibold m-text break-words">{f.title}</span>
-                                <span className="block text-[12.5px] m-text-3">{[f.subtitle, st.tables ? `${st.tables} tablo · ${st.rows.toLocaleString('tr-TR')} satır` : `${f.blocks.length} bölüm`].filter(Boolean).join(' · ')}</span>
+                                <span className="block text-[12.5px] m-text-3">{[f.subtitle, documentSummary(st, f.blocks.length)].filter(Boolean).join(' · ')}</span>
                             </span>
                         </div>
                         <div className="flex flex-wrap items-center gap-1.5">

@@ -3,6 +3,12 @@
 Her sürümün başlığı `## vX.Y.Z` biçimindedir; GitHub sürüm sayfası bu bölümü
 buradan alır (`.github/workflows/exe.yml`).
 
+## Yayımlanmamış
+
+- Asistan analist gibi çalışıyor: veriyi döküm yerine yorumluyor (kıyas, eğilim, yoğunlaşma, aykırı değer, neden ve somut öneri). Anthropic Agent Skills modeline göre 9 yetenek (oyun kitabı) eklendi: veri analizi, analitik rapor, yönetici özeti, sapma ve kök neden, risk, kapasite, tahmin, karar destek, toplantı hazırlığı. Uyan oyun kitabı otomatik yükleniyor ya da `/analiz`, `/analizrapor`, `/yonetici`, `/kokneden`, `/tahmin`, `/karar`, `/toplanti` komutlarıyla açılıyor.
+- Hesap motoru (`veri_analiz`): ekli Excel/CSV'nin tüm satırları ya da uygulama verisi üzerinde profil, gruplama ve pay, pivot, trend, dağılım, aykırı değer, korelasyon. Model sayıları kafadan toplamıyor. CSV'de Türkçe ondalık virgül doğru okunuyor.
+- Rapor dosyalarında gösterge kartları, bulgu / dikkat / öneri / karar kutuları ve grafikler (çubuk, çizgi, pasta) var: PowerPoint'te yerel grafik, PDF'te çizim, Word'de değer ve çubuk tablosu, Excel'de özet sayfası ve grafik verisi. Ayrıntı: [docs/ASISTAN_YETENEKLERI.md](docs/ASISTAN_YETENEKLERI.md).
+
 ## v3.4.0
 
 - Jira Cloud ve Data Center’dan ilk tahmin, kalan süre, harcanan süre ve alt görev toplamları alınır. Kalan süre alanı dört eşitleme yönünü destekler. Efor sütunları, sorgu alanları ve Efor durumu dashboard bileşeni eklendi.

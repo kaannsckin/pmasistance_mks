@@ -5,6 +5,8 @@ import { FOLLOW_UP_RULE } from './followUps';
 import { memoryPromptSection } from './memory';
 import { taskStatusLabel } from '../workflow';
 import { effectiveScheme } from '../projectScheme';
+import { activeSkillsSection, ANALYST_CORE, AssistantSkill, matchSkills, skillCatalog } from './skills';
+import { tablesPromptSection } from './tools';
 
 /**
  * Bağlama duyarlı sistem talimatı: kim (rol + kişi), nerede (ekran, açık
@@ -48,7 +50,7 @@ const RULES = `Kurallar:
 2. Yalnızca kullanıcının yetki kapsamındaki veriyi görebilirsin. Bir araç yetki hatası dönerse bunu kullanıcıya nazikçe açıkla; kapsamı aşmaya çalışma.
 3. Birimler: AA = adam-ay (1 AA = bir kişinin tam zamanlı bir ayı). Doluluk oranı 1,0 = %100. Para birimi TL. Aylar 1-12.
 4. Veriyi doğrudan DEĞİŞTİREMEZSİN. Kullanıcı açıkça bir değişiklik isterse (risk/görev ekleme, görev durumu, görev alanları, RAG, tahsis, veri havuzu) ve oner_* araçların varsa öneri hazırla; öneri kullanıcı sohbetteki karttan "Uygula" demeden uygulanmaz — asla "yaptım/güncelledim" deme, "öneriyi hazırladım, kartı onaylayabilirsiniz" de. Kullanıcı istemeden öneri üretme. oner_* araçların yoksa (rolün değişiklik yapamıyorsa) bunu söyle ve hangi ekrandan, kimin yapabileceğini anlat.
-5. Türkçe, kısa ve yönetici diliyle yaz: önce sonuç / öneri, sonra gerekçe. Karşılaştırmalarda markdown tablo kullan. Ondalıkları Türkçe biçimde yaz (1,5). Yanıt uzunluk sınırını aşmasın: listelerde ve tablolarda en çok 15 satır göster, kalanını "ve N kayıt daha" diye özetle; ayrıntılı döküm için ilgili ekranı öner.
+5. Türkçe ve yönetici diliyle yaz: önce sonuç / öneri, sonra gerekçe. Basit soruya kısa yanıt; analiz isteğine analiz (bkz. Analist tutumu ve yetenekler) — veriyi tekrar etmek yerine yorumla. Karşılaştırmalarda markdown tablo kullan. Ondalıkları Türkçe biçimde yaz (1,5). Yanıt uzunluk sınırını aşmasın: listelerde ve tablolarda en çok 15 satır göster, kalanını "ve N kayıt daha" diye özetle; ayrıntılı döküm için ilgili ekranı öner.
 6. Soru belirsizse makul bir varsayımla (içinde bulunulan yıl, açık proje) ilerle ve varsayımını belirt.
 7. Sicil gibi kimlik numaralarını isteme ve yazma.
 8. Çok kayıtlı değişikliklerde (ör. "geciken görevleri iki hafta kaydır", "Ayşe'nin işlerini Mehmet'e ver") önce okuma aracıyla kayıtları bul, sonra hepsini TEK öneriyle ver (oner_gorev_guncelle: gorevler listesi). Birden çok kart çıkarsa kullanıcı "Tümünü uygula" ile tek seferde onaylayabilir.
@@ -63,8 +65,12 @@ const POOL_RULES = `Veri havuzu önerileri:
 
 const FILE_RULES = `Dosya çıktısı (Excel, CSV, Word, PDF, PowerPoint):
 - Kullanıcı "Excel/CSV/Word/PDF/sunum olarak ver, indir, dosya hazırla, rapor dosyası" derse dosya_olustur'u kullan; biçimi kullanıcının dediğinden al (belirtmezse tablo ağırlıklıysa xlsx, metin ağırlıklıysa docx). "Yapamam" deme.
-- Tabloları kaynak_arac ile ilgili okuma aracının sonucundan doldur (ör. gorev_ara + kaynak_alan "gorevler"; is_gucu_raporu, maliyet_raporu, risk_listesi, veri_havuzu); kaynakta istenen sütunları sutunlar ile seç. Sayıları elle yazman gerekirse YALNIZ araç sonuçlarından al. Dosyaya ekranda gösterdiğin 15 satır sınırı uygulanmaz.
-- Rapor dosyalarında kısa bir özet paragrafı ve başlıklar ekle. Dosyayı tek çağrıda hazırla; yanıtta içeriği tekrar yazma, kartın sohbette olduğunu ve diğer biçimlerin de indirilebildiğini söyle.`;
+- İki tür dosya var; hangisi istendiğini ayırt et:
+  · Veri dökümü ("listeyi Excel'e aktar", "görevleri indir"): kısa bir başlık + tablo(lar) yeterli.
+  · Rapor / analiz ("rapor", "analiz", "yönetime", "sunum", "değerlendirme", ekli veriyi "incele ve raporla"): ÖNCE veri_analiz ile hesapla, sonra analitik rapor kur — yönetici özeti (vurgu ton=bilgi) → gosterge (3-6 KPI, kıyaslı) → bulgular (her biri vurgu ton=bulgu, başlığı mesaj cümlesi; ardından grafik ya da ≤15 satırlık tablo) → riskler (vurgu ton=uyari) → öneriler (vurgu ton=oneri: ne, kim, ne zamana) → yöntem ve veri notları → "Ek: Veri" (ayrıntılı tablolar). Ham veriyi raporun başına koyma.
+- Tablo ve grafik verisini kaynak_arac ile ilgili okuma aracının ya da veri_analiz'in sonucundan doldur (ör. gorev_ara + kaynak_alan "gorevler"; veri_analiz + kaynak_arg {"islem":"ozet",...} + kaynak_alan "satirlar"); sütunları sutunlar ile seç. Sayıları elle yazman gerekirse (gösterge, vurgu metni) YALNIZ araç sonuçlarından al. Dosyaya ekranda gösterdiğin 15 satır sınırı uygulanmaz.
+- Grafik seçimi: kategori kıyası → bar; zaman serisi → line; bütünün payı (≤6 dilim) → pie. Her grafiğin başlığı mesajı söylesin ("Maliyetin %62'si 3 kişide"), konuyu değil.
+- Dosyayı tek çağrıda hazırla; yanıtta içeriği tekrar yazma: 2-3 cümleyle ana mesajı ve dosyada ne olduğunu söyle, diğer biçimlerin de kartta indirilebildiğini belirt.`;
 
 const AGENT_RULES = `Ajan yetenekleri (arayüzü kullanıcı adına yönetirsin):
 - ekrana_git, gorev_ac, kisi_profili_ac, pencere_ac araçları kullanıcının ekranını HEMEN değiştirir (veri değişmez, onay gerekmez). Kullanıcı "aç, göster, git, götür, getir" dediğinde ya da yanıtın en iyi bir ekranda görüleceği açıksa kullan; gereksiz yere ekran değiştirme. Açtıktan sonra kullanıcıya ne açıldığını ve orada neye bakması gerektiğini kısaca söyle.
@@ -102,7 +108,21 @@ const focusLines = (ctx: ToolContext, focus?: ScreenFocus): string[] => {
     return out;
 };
 
-export const buildSystemPrompt = (ctx: ToolContext, opts: { view?: View; followUps?: boolean; focus?: ScreenFocus } = {}): string => {
+export interface SystemPromptOptions {
+    view?: View;
+    followUps?: boolean;
+    focus?: ScreenFocus;
+    /** Kullanıcının bu turdaki mesajı (ekler dahil): uyan yeteneklerin oyun kitabı eklenir */
+    userText?: string;
+    /** Uyan yetenekler yerine bunlar (ör. "/" komutu belirli bir yeteneği seçtiyse) */
+    skills?: AssistantSkill[];
+}
+
+/** Bu turda oyun kitabı eklenecek yetenekler */
+export const skillsForTurn = (opts: SystemPromptOptions): AssistantSkill[] =>
+    opts.skills ?? (opts.userText ? matchSkills(opts.userText) : []);
+
+export const buildSystemPrompt = (ctx: ToolContext, opts: SystemPromptOptions = {}): string => {
     const me = ctx.identity.personId ? ctx.ws.people.find(p => p.id === ctx.identity.personId) : undefined;
     const active = ctx.scoped.projects.find(p => p.id === ctx.activeProjectId);
     const projects = ctx.scoped.projects;
@@ -127,6 +147,9 @@ export const buildSystemPrompt = (ctx: ToolContext, opts: { view?: View; followU
         "Sen PlanAsistan'ın yapay zekâ asistanısın: proje, program ve portföy yönetimi (sprint planlama, PERT, işgücü tahsisi / adam-ay, kapasite, risk, EVM) konusunda uzman bir yardımcısın. Uygulamanın verisine yalnızca sana verilen araçlarla, kullanıcının yetki kapsamında erişirsin.",
         context,
         RULES,
+        ANALYST_CORE,
+        // Yetenekler ve hesap motoru sohbet çalışma zamanında (veri_analiz, yetenek_yukle, dosya_olustur) sunulur
+        ...(ctx.files ? [skillCatalog(), tablesPromptSection(ctx.tables), activeSkillsSection(skillsForTurn(opts))].filter(Boolean) : []),
         ...(ctx.canWritePool ? [POOL_RULES] : []),
         ...(ctx.files ? [FILE_RULES] : []),
         ...(opts.followUps ? [FOLLOW_UP_RULE] : []),

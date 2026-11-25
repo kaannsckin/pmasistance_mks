@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { View, WorkspaceData } from '../../types';
 import { AgentStep, AGENT_MAX_STEPS, runAgentTurn, TRUNCATED_STOP_REASONS } from '../../utils/ai/agent';
-import { AttachmentInfo, ChatAttachment, composeUserContent } from '../../utils/ai/attachments';
+import { AttachmentInfo, ChatAttachment, composeUserContent, MAX_SESSION_TABLES } from '../../utils/ai/attachments';
 import { UiCommand, UiResult } from '../../utils/ai/uiActions';
 import { getWorklogTimeZone } from '../../utils/workforce';
 import { ownsProject } from '../../utils/rbac';
@@ -9,7 +9,7 @@ import { fetchIntegrationHealth, fetchJiraIssueHistory, fetchJiraIssueWorklogs, 
 import { AiAction, AiProposal } from '../../utils/ai/actions';
 import type { AiDocument } from '../../utils/export/aiDocument';
 import { splitFollowUps } from '../../utils/ai/followUps';
-import { expandSlash, SlashContext } from '../../utils/ai/slashCommands';
+import { expandSlash, SlashContext, slashSkillFor } from '../../utils/ai/slashCommands';
 import { chatOwner, chatTitle, ChatSummary, deleteChat, listChats, loadChat, newChatId, saveChat, StoredMessage, summarize, toStored } from '../../utils/ai/chatStore';
 import { createMemoryStore, MemoryItem, memoryKey } from '../../utils/ai/memory';
 import { AiError, configureMasking, embedTexts, fetchAiStatus, hasCredentials, saveAccessToken, streamChat } from '../../utils/ai/client';
@@ -18,6 +18,8 @@ import { aiPolicyOf } from '../../utils/ai/policy';
 import { AiStatus, ChatMessage } from '../../utils/ai/protocol';
 import { buildToolContext } from '../../utils/ai/scope';
 import { buildSystemPrompt, ScreenFocus } from '../../utils/ai/systemPrompt';
+import type { DataTable } from '../../utils/ai/dataAnalysis';
+import { skillById } from '../../utils/ai/skills';
 import { executeTool, toolLabel, toolSpecsFor } from '../../utils/ai/tools';
 import { Citation, RagRef } from '../../utils/rag/sources';
 import { configureEmbedder, rebuildIndex, searchKnowledge, searchMode, syncIndex } from '../../utils/rag/service';
@@ -307,9 +309,14 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, sessionSco
     };
   }, [getWorkspace, focusNow]);
 
+  // Sohbete eklenen Excel/CSV tabloları (sohbet başına, bu oturumda): sonraki sorularda da veri_analiz kullanılabilir
+  const tablesRef = useRef(new Map<string, DataTable[]>());
+
   const send = useCallback(async (raw: string, files: ChatAttachment[] = []) => {
     let prompt = raw.trim();
     if (!status || abortRef.current) return;
+    // "/analiz", "/yonetici" gibi komutlar belirli bir yeteneğin oyun kitabını açar
+    const slashSkill = prompt.startsWith('/') ? slashSkillFor(prompt) : undefined;
     if (prompt.startsWith('/')) {
       const expanded = expandSlash(prompt, slashContext());
       if (expanded && typeof expanded === 'object') {
@@ -323,8 +330,16 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, sessionSco
     const ctx = makeContext(ctrl.signal, prompt);
     if (!ctx) return;
 
-    const system = buildSystemPrompt(ctx, { view: getView(), followUps: true, focus: focusNow() });
+    const chatKey = chatIdRef.current;
+    const added = files.flatMap(f => f.tables || []);
+    const known = tablesRef.current.get(chatKey) || [];
+    const tables = [...known.filter(t => !added.some(a => a.name === t.name)), ...added].slice(-MAX_SESSION_TABLES);
+    if (added.length) tablesRef.current.set(chatKey, tables);
+    if (tables.length) ctx.tables = tables;
+
     const composed = composeUserContent(prompt, files);
+    const forced = slashSkill ? skillById(slashSkill) : undefined;
+    const system = buildSystemPrompt(ctx, { view: getView(), followUps: true, focus: focusNow(), userText: composed.content, ...(forced ? { skills: [forced] } : {}) });
     const attachments: AttachmentInfo[] = composed.infos.map((info, i) => ({ ...info, size: files[i].size }));
     // Önceki turlar yalnızca görünen metinleriyle (ekler dahil) gider; araç ayrıntıları tekrar gönderilmez
     const history: ChatMessage[] = [

@@ -15,11 +15,37 @@ export const DOC_FORMAT_LABELS: Record<DocFormat, string> = {
 
 export type Cell = string | number | null;
 
+/** Gösterge durumu: kartın rengi */
+export type KpiStatus = 'iyi' | 'dikkat' | 'kritik' | 'notr';
+export const KPI_STATUSES: KpiStatus[] = ['iyi', 'dikkat', 'kritik', 'notr'];
+
+export interface KpiItem {
+    label: string;
+    value: string;
+    /** Kıyas: "+%12 geçen aya göre", "planın 3 gün gerisinde" */
+    change?: string;
+    status?: KpiStatus;
+    note?: string;
+}
+
+/** Vurgu kutusu türü: bulgu, uyarı, öneri, karar, bilgi */
+export type CalloutTone = 'bulgu' | 'uyari' | 'oneri' | 'karar' | 'bilgi';
+export const CALLOUT_TONES: CalloutTone[] = ['bulgu', 'uyari', 'oneri', 'karar', 'bilgi'];
+export const CALLOUT_LABELS: Record<CalloutTone, string> = { bulgu: 'Bulgu', uyari: 'Dikkat', oneri: 'Öneri', karar: 'Karar gerekli', bilgi: 'Özet' };
+
+export type ChartType = 'bar' | 'line' | 'pie';
+export const CHART_TYPES: ChartType[] = ['bar', 'line', 'pie'];
+
+export interface ChartSeries { name: string; values: (number | null)[] }
+
 export type DocBlock =
     | { kind: 'heading'; text: string; level: 1 | 2 }
     | { kind: 'paragraph'; text: string }
     | { kind: 'list'; items: string[] }
-    | { kind: 'table'; title?: string; columns: string[]; rows: Cell[][]; note?: string };
+    | { kind: 'table'; title?: string; columns: string[]; rows: Cell[][]; note?: string }
+    | { kind: 'kpi'; items: KpiItem[] }
+    | { kind: 'callout'; tone: CalloutTone; title?: string; text: string }
+    | { kind: 'chart'; chart: ChartType; title?: string; labels: string[]; series: ChartSeries[]; note?: string };
 
 export interface AiDocument {
     id: string;
@@ -98,6 +124,32 @@ export const normalizeDocument = (doc: Omit<AiDocument, 'id' | 'createdAt'> & Pa
         } else if (b.kind === 'list') {
             const items = b.items.map(i => plainText(i, 1000)).filter(Boolean).slice(0, 500);
             if (items.length) blocks.push({ kind: 'list', items });
+        } else if (b.kind === 'kpi') {
+            const items = b.items
+                .map(k => ({
+                    label: plainText(k.label, 60), value: plainText(k.value, 40),
+                    ...(plainText(k.change, 80) ? { change: plainText(k.change, 80) } : {}),
+                    status: KPI_STATUSES.includes(k.status as KpiStatus) ? k.status : 'notr',
+                    ...(plainText(k.note, 160) ? { note: plainText(k.note, 160) } : {}),
+                } as KpiItem))
+                .filter(k => k.label && k.value).slice(0, 8);
+            if (items.length) blocks.push({ kind: 'kpi', items });
+        } else if (b.kind === 'callout') {
+            const text = plainText(b.text, 1500);
+            if (text) blocks.push({ kind: 'callout', tone: CALLOUT_TONES.includes(b.tone) ? b.tone : 'bilgi', ...(plainText(b.title, 160) ? { title: plainText(b.title, 160) } : {}), text });
+        } else if (b.kind === 'chart') {
+            const labels = b.labels.map(l => plainText(l, 60) || '(boş)').slice(0, 40);
+            if (!labels.length) throw new DocError(`"${b.title || 'Grafik'}" grafiğinde etiket yok.`);
+            const series = b.series.slice(0, 6).map((s, i) => ({
+                name: plainText(s.name, 60) || `Seri ${i + 1}`,
+                values: labels.map((_, k) => { const v = toCell(s.values[k]); return typeof v === 'number' ? v : null; }),
+            })).filter(s => s.values.some(v => v !== null));
+            if (!series.length) throw new DocError(`"${b.title || 'Grafik'}" grafiğinde sayısal değer yok.`);
+            const chart: ChartType = CHART_TYPES.includes(b.chart) ? b.chart : 'bar';
+            blocks.push({
+                kind: 'chart', chart: chart === 'pie' && series.length > 1 ? 'bar' : chart, labels, series,
+                ...(b.title ? { title: plainText(b.title, 120) } : {}), ...(b.note ? { note: plainText(b.note, 500) } : {}),
+            });
         } else {
             const columns = b.columns.map(c => plainText(c, 120)).slice(0, DOC_LIMITS.columns);
             if (!columns.length) throw new DocError(`"${b.title || 'Tablo'}" tablosunun sütunları yok.`);
@@ -119,10 +171,31 @@ export const normalizeDocument = (doc: Omit<AiDocument, 'id' | 'createdAt'> & Pa
     };
 };
 
-export const documentStats = (doc: AiDocument): { tables: number; rows: number } => {
+export const documentStats = (doc: AiDocument): { tables: number; rows: number; charts: number; kpis: number; callouts: number } => {
     const tables = doc.blocks.filter((b): b is Extract<DocBlock, { kind: 'table' }> => b.kind === 'table');
-    return { tables: tables.length, rows: tables.reduce((s, t) => s + t.rows.length, 0) };
+    const count = (k: DocBlock['kind']) => doc.blocks.filter(b => b.kind === k).length;
+    return {
+        tables: tables.length, rows: tables.reduce((s, t) => s + t.rows.length, 0),
+        charts: count('chart'), kpis: doc.blocks.reduce((s, b) => s + (b.kind === 'kpi' ? b.items.length : 0), 0), callouts: count('callout'),
+    };
 };
+
+/** Dosya kartındaki kısa içerik özeti: "4 gösterge · 2 grafik · 3 bulgu/öneri · 1 tablo (120 satır)" */
+export const documentSummary = (st: ReturnType<typeof documentStats>, blocks: number): string => {
+    const parts = [
+        st.kpis ? `${st.kpis} gösterge` : '',
+        st.charts ? `${st.charts} grafik` : '',
+        st.callouts ? `${st.callouts} bulgu/öneri` : '',
+        st.tables ? `${st.tables} tablo · ${st.rows.toLocaleString('tr-TR')} satır` : '',
+    ].filter(Boolean);
+    return parts.length ? parts.join(' · ') : `${blocks} bölüm`;
+};
+
+/** Grafik verisini tablo olarak (Excel, CSV ve grafiği çizemeyen biçimler için) */
+export const chartTable = (c: Extract<DocBlock, { kind: 'chart' }>): { columns: string[]; rows: Cell[][] } => ({
+    columns: ['', ...c.series.map(s => s.name)],
+    rows: c.labels.map((l, i) => [l, ...c.series.map(s => s.values[i] ?? null)]),
+});
 
 /** Araç sonucu anahtarlarındaki ASCII sözcüklerin Türkçesi (sütun başlığı için) */
 const TR_WORDS: Record<string, string> = {

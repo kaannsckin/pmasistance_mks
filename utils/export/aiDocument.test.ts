@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import JSZip from 'jszip';
-import { AiDocument, fileNameFor, normalizeDocument, tableFromResult, toCell } from './aiDocument';
+import { AiDocument, documentStats, fileNameFor, normalizeDocument, tableFromResult, toCell } from './aiDocument';
+import { chartSvg, niceScale, textBar } from './chartSvg';
 import { renderCsv, renderDocument } from './renderAiDocument';
 
 const doc = (): AiDocument => normalizeDocument({
@@ -99,4 +100,75 @@ describe('dosya biçimleri', () => {
         expect(new TextDecoder().decode(bytes.slice(0, 5))).toBe('%PDF-');
         expect(new TextDecoder('latin1').decode(bytes)).toMatch(/FontFile2|Roboto/);
     }, 30_000);
+});
+
+const analytic = (): AiDocument => normalizeDocument({
+    title: 'ATLAS maliyet analizi',
+    format: 'docx',
+    createdAt: '2026-11-20T09:00:00Z',
+    blocks: [
+        { kind: 'callout', tone: 'bilgi', text: 'Maliyet planın **%14** üstünde; artışın 3/4\'ü dış kaynaktan.' },
+        { kind: 'kpi', items: [
+            { label: 'Gerçekleşen', value: '₺1,2 Mn', change: '+%14 plana göre', status: 'kritik' },
+            { label: 'SPI', value: '0,92', status: 'dikkat' },
+            { label: 'Tamamlanma', value: '%64', status: 'iyi', note: 'Plan %60' },
+            { label: '', value: 'boş etiket atılır' },
+        ] },
+        { kind: 'heading', text: 'Bulgular', level: 1 },
+        { kind: 'callout', tone: 'bulgu', title: 'Maliyetin %62\'si 3 kişide', text: '12 kişiden 3\'ü.' },
+        { kind: 'chart', chart: 'bar', title: 'Aylık maliyet', labels: ['Eyl', 'Eki', 'Kas'], series: [{ name: 'Plan', values: [100, 120, '130'] as never }, { name: 'Gerçek', values: [110, 150, null] }] },
+        { kind: 'chart', chart: 'pie', title: 'Bölüm payı', labels: ['U310', 'U320'], series: [{ name: 'Pay', values: [62, 38] }] },
+        { kind: 'callout', tone: 'oneri', title: 'Dış kaynak sözleşmesini gözden geçir', text: 'Sahip: PYB · 15 Aralık' },
+    ],
+});
+
+describe('analitik bloklar (gösterge, vurgu, grafik)', () => {
+    it('normalleştirme: boş göstergeler düşer, grafik değerleri sayıya çevrilir, çok serili pasta çubuğa döner', () => {
+        const d = analytic();
+        const kpi = d.blocks[1] as Extract<AiDocument['blocks'][number], { kind: 'kpi' }>;
+        expect(kpi.items).toHaveLength(3);
+        expect(kpi.items[1]).toEqual({ label: 'SPI', value: '0,92', status: 'dikkat' });
+        const bar = d.blocks[4] as Extract<AiDocument['blocks'][number], { kind: 'chart' }>;
+        expect(bar.series[0].values).toEqual([100, 120, 130]);
+        const multiPie = normalizeDocument({ title: 'x', format: 'pdf', blocks: [{ kind: 'chart', chart: 'pie', labels: ['a'], series: [{ name: 'A', values: [1] }, { name: 'B', values: [2] }] }] });
+        expect((multiPie.blocks[0] as { chart: string }).chart).toBe('bar');
+        expect(() => normalizeDocument({ title: 'x', format: 'pdf', blocks: [{ kind: 'chart', chart: 'bar', labels: ['a'], series: [{ name: 'A', values: [null] }] }] })).toThrow(/sayısal değer yok/);
+        expect(documentStats(d)).toMatchObject({ charts: 2, kpis: 3, callouts: 3, tables: 0 });
+    });
+
+    it('Excel: özet sayfasında göstergeler ve bulgular; grafik verisi ayrı sayfada', async () => {
+        const XLSX = await import('xlsx');
+        const wb = XLSX.read(new Uint8Array(await (await renderDocument(analytic(), 'xlsx')).blob.arrayBuffer()), { type: 'array' });
+        expect(wb.SheetNames).toEqual(['Özet', 'Grafik Aylık maliyet', 'Grafik Bölüm payı']);
+        const rows = XLSX.utils.sheet_to_json<string[]>(wb.Sheets['Özet'], { header: 1 }).map(r => r.join('|'));
+        expect(rows).toContain('Gerçekleşen|₺1,2 Mn|+%14 plana göre|Kritik|');
+        expect(rows).toContain('► Bulgu: Maliyetin %62\'si 3 kişide');
+        expect(wb.Sheets['Grafik Aylık maliyet'].C3).toMatchObject({ t: 'n', v: 150 });
+        expect(renderCsv(analytic())).toContain('Kategori;Plan;Gerçek\r\nEyl;100;110');
+    });
+
+    it('Word, PowerPoint (yerel grafik) ve PDF (SVG grafik) üretilir', async () => {
+        const docx = await JSZip.loadAsync(await (await renderDocument(analytic(), 'docx')).blob.arrayBuffer());
+        const xml = await docx.file('word/document.xml')!.async('string');
+        expect(xml).toContain('Bulgu: Maliyetin %62');
+        expect(xml).toContain('₺1,2 Mn');
+        expect(xml).toContain('█');
+        const pptx = await JSZip.loadAsync(await (await renderDocument(analytic(), 'pptx')).blob.arrayBuffer());
+        expect(Object.keys(pptx.files).filter(f => /^ppt\/charts\/chart\d+\.xml$/.test(f))).toHaveLength(2);
+        const pdf = new Uint8Array(await (await renderDocument(analytic(), 'pdf')).blob.arrayBuffer());
+        expect(new TextDecoder().decode(pdf.slice(0, 5))).toBe('%PDF-');
+    }, 30_000);
+
+    it('SVG grafik: çubuk, çizgi ve pasta; metin kaçışlı', () => {
+        const d = analytic();
+        const bar = d.blocks[4] as Extract<AiDocument['blocks'][number], { kind: 'chart' }>;
+        const svg = chartSvg(bar);
+        expect(svg.startsWith('<svg')).toBe(true);
+        expect((svg.match(/<rect /g) || []).length).toBeGreaterThanOrEqual(5 + 2); // 5 çubuk + 2 lejant
+        expect(chartSvg({ ...bar, chart: 'line' })).toContain('<polyline');
+        expect(chartSvg({ ...bar, chart: 'pie', series: [bar.series[0]] })).toContain('<polygon');
+        expect(chartSvg({ ...bar, chart: 'pie', series: [bar.series[0]], labels: ['<a>', 'b', 'c'] })).toContain('&lt;a&gt;');
+        expect(niceScale(0, 137)).toEqual({ lo: 0, hi: 150, step: 50 });
+        expect(textBar(5, 10, 10)).toBe('█████');
+    });
 });

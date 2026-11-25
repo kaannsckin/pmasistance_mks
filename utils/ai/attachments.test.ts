@@ -47,3 +47,23 @@ describe('sohbet ekleri', () => {
         expect(att.text).toBe('## Sayfa: Plan\nGörev,Gün\nAnaliz,3');
     });
 });
+
+describe('ek tabloları (veri_analiz için)', () => {
+    it('Excel ve CSV ekleri tüm satırlarıyla tabloya çevrilir', async () => {
+        const XLSX = await import('xlsx');
+        const wb = XLSX.utils.book_new();
+        const rows = [['Bütçe Raporu'], [], ['Kalem', 'Tutar', 'Tarih'], ...Array.from({ length: 3000 }, (_, i) => [`K${i}`, i, new Date(Date.UTC(2026, 0, 1 + (i % 28)))])];
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows, { cellDates: true }), 'Kalemler');
+        const buf = XLSX.write(wb, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer;
+        const att = await readAttachment(new File([buf], 'butce.xlsx'));
+        expect(att.tables).toHaveLength(1);
+        const t = att.tables![0];
+        expect(t.name).toBe('butce.xlsx / Kalemler');
+        expect(t.columns).toEqual(['Kalem', 'Tutar', 'Tarih']);
+        expect(t.rows).toHaveLength(3000);
+        expect(t.rows[1]).toEqual(['K1', 1, '2026-01-02']);
+
+        const csv = await readAttachment(new File(['Kişi;Saat\nAyşe;12,5\nAli;3'], 'saat.csv'));
+        expect(csv.tables?.[0]).toMatchObject({ name: 'saat.csv', columns: ['Kişi', 'Saat'], rows: [['Ayşe', 12.5], ['Ali', 3]] });
+    });
+});
