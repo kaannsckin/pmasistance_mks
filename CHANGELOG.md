@@ -3,11 +3,24 @@
 Her sürümün başlığı `## vX.Y.Z` biçimindedir; GitHub sürüm sayfası bu bölümü
 buradan alır (`.github/workflows/exe.yml`).
 
-## Yayımlanmamış
+## v3.5.0
 
+**Asistan: analiz ve rapor yetenekleri**
 - Asistan analist gibi çalışıyor: veriyi döküm yerine yorumluyor (kıyas, eğilim, yoğunlaşma, aykırı değer, neden ve somut öneri). Anthropic Agent Skills modeline göre 9 yetenek (oyun kitabı) eklendi: veri analizi, analitik rapor, yönetici özeti, sapma ve kök neden, risk, kapasite, tahmin, karar destek, toplantı hazırlığı. Uyan oyun kitabı otomatik yükleniyor ya da `/analiz`, `/analizrapor`, `/yonetici`, `/kokneden`, `/tahmin`, `/karar`, `/toplanti` komutlarıyla açılıyor.
 - Hesap motoru (`veri_analiz`): ekli Excel/CSV'nin tüm satırları ya da uygulama verisi üzerinde profil, gruplama ve pay, pivot, trend, dağılım, aykırı değer, korelasyon. Model sayıları kafadan toplamıyor. CSV'de Türkçe ondalık virgül doğru okunuyor.
 - Rapor dosyalarında gösterge kartları, bulgu / dikkat / öneri / karar kutuları ve grafikler (çubuk, çizgi, pasta) var: PowerPoint'te yerel grafik, PDF'te çizim, Word'de değer ve çubuk tablosu, Excel'de özet sayfası ve grafik verisi. Ayrıntı: [docs/ASISTAN_YETENEKLERI.md](docs/ASISTAN_YETENEKLERI.md).
+
+**Sprint planlama ve ekip takvimi**
+- Görevler birden çok ardışık sprinte yayılabilir ("Sprintler arası · 2 → 3"); efor sprintlere eşit bölünür, otomatik plan ardışık sprintlerde yer arar.
+- Jira sprint aktarımı ve sürüm sihirbazı geliştirildi: bitmemiş kayıt önceki sprintinde kalıp sonraki sprinte devredilebilir; önizleme devredilecek kayıtları gösterir.
+- Otomatik plan öncesi kontrol: süresi, bileşeni ya da sorumlusu eksik görevler listelenir ve tek ekranda düzeltilir. Takvime "Test sonraki sprintle paralel yürüsün" seçeneği eklendi.
+- Sprint ekip takvimi görev listesiyle açılır (efor, Jira'ya girilen süre, kalan süre); Tempo görünümünde günlük plan ve Jira çalışma kayıtları yan yana, gün ayrıntısında sprint görev havuzu ve "Sprint sonuna yetişmez" uyarısı.
+- Sprintin son görevi bitince tamamlama animasyonu (hareketi azalt açıksa yalnız bildirim).
+
+**Arayüz ve bulut**
+- Cam teması ve cam mercek geçişleri.
+- Bulut girişi e-posta koduyla ya da (tanımlıysa) parolayla; proje erişimi yönetimi. Kod gönderimindeki Supabase sunucu hataları anlaşılır gösteriliyor.
+- Vercel'de `/api/ai` ve `/api/integrations` fonksiyonlarının modül bulunamadı hatasıyla çökmesi düzeltildi.
 
 ## v3.4.0
 
