@@ -435,6 +435,30 @@
   .ui-modern .m-sidebar.is-open { transform: none; box-shadow: var(--m-pop-shadow); }
 }
 
+/* Daraltılabilir kenar çubuğu: menü sabitken (geniş ekran) yalnız simgelerden oluşan dar şerit.
+   Dar ekrandaki çekmece her zaman tam genişlikte açılır; daraltma düğmesi orada gizli. */
+.ui-modern .m-sidebar-collapse { display: none; }
+.ui-modern .m-project-initials { display: none; }
+@media (min-width: 1024px) {
+  .ui-modern .m-sidebar { transition: width 0.22s ease, padding 0.22s ease; }
+  .ui-modern .m-sidebar-collapse { display: inline-flex; }
+  .ui-modern .m-sidebar.is-collapsed { width: 76px; padding-inline: 10px; overflow-x: hidden; }
+  .ui-modern .m-sidebar.is-collapsed :is(.m-nav-label, .m-sidebar-logo) { display: none; }
+  .ui-modern .m-sidebar.is-collapsed .m-sidebar-head { justify-content: center; }
+  .ui-modern .m-sidebar.is-collapsed :is(.m-nav-item, .m-search) { justify-content: center; padding-inline: 0; gap: 0; }
+  .ui-modern .m-sidebar.is-collapsed .m-nav-badge {
+    position: absolute; top: 4px; right: 6px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px;
+    font-size: 11px; line-height: 18px; text-align: center; background: var(--m-accent); color: #fff;
+  }
+  .ui-modern .m-sidebar.is-collapsed .m-nav-project .m-project-dot { position: absolute; top: 7px; right: 9px; width: 8px; height: 8px; }
+  .ui-modern .m-sidebar.is-collapsed .m-project-initials { display: inline; }
+  .ui-modern .m-sidebar.is-collapsed .m-sidebar-footer { flex-direction: column; align-items: center; }
+  .ui-modern .m-sidebar.is-collapsed .m-sidebar-profile { flex: none; justify-content: center; padding-inline: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ui-modern .m-sidebar { transition: none; }
+}
+
 /* AI yanıtlarındaki markdown (ortak Markdown bileşeni) modern renklerle */
 .ui-modern .m-md code { background: var(--m-fill); color: var(--m-label); }
 .ui-modern .m-md pre code { background: transparent; color: inherit; }
@@ -665,3 +689,61 @@ html:not(.dark) .ui-modern .text-gray-300, html:not(.dark) .ui-modern .text-gray
 .ui-modern .m-dash-w.is-drop { outline: 2px solid var(--m-accent); }
 .ui-modern .m-dash-w.is-dragging { opacity: 0.45; }
 .ui-modern .m-viz-tip { position: absolute; pointer-events: none; z-index: 5; padding: 6px 9px; border-radius: 10px; font-size: 12.5px; line-height: 1.35; white-space: nowrap; background: var(--m-surface-pop, var(--m-surface)); color: var(--m-label); box-shadow: var(--m-pop-shadow); }
+
+/* Küçültülmüş asistan: sağ altta animasyonlu AI simgesi ------------------- */
+/* Hâller: çalışıyor (dönen ışık halkası), yanıt hazır (yeşil işaret, bir kez zıplar),
+   boşta (yavaş nefes alan parıltı). Hareketi azalt açıksa yalnız renk ve işaret. */
+.ui-modern .m-ai-orb-wrap { position: fixed; right: 20px; bottom: 20px; z-index: 60; display: flex; align-items: center; gap: 10px; }
+@media (max-width: 1023px) { .ui-modern .m-ai-orb-wrap { bottom: calc(84px + env(safe-area-inset-bottom, 0px)); right: 14px; } }
+.ui-modern .m-ai-orb {
+  position: relative; width: 56px; height: 56px; border-radius: 50%; border: 0; cursor: pointer; padding: 0;
+  display: grid; place-items: center; color: #fff;
+  background: radial-gradient(circle at 30% 25%, color-mix(in srgb, var(--m-accent) 70%, #fff), var(--m-accent) 60%, color-mix(in srgb, var(--m-accent) 70%, #000));
+  box-shadow: 0 6px 20px color-mix(in srgb, var(--m-accent) 40%, transparent), var(--m-pop-shadow, 0 4px 14px rgb(0 0 0 / 18%));
+  transition: transform 0.15s ease;
+}
+.ui-modern .m-ai-orb:hover { transform: scale(1.06); }
+.ui-modern .m-ai-orb:focus-visible { outline: 3px solid var(--m-accent); outline-offset: 3px; }
+.ui-modern .m-ai-orb-core { position: relative; z-index: 1; display: grid; place-items: center; }
+.ui-modern .m-ai-orb-ring { position: absolute; inset: -5px; border-radius: 50%; pointer-events: none; opacity: 0; }
+.ui-modern .m-ai-orb-badge {
+  position: absolute; top: -2px; right: -2px; z-index: 2; width: 20px; height: 20px; border-radius: 50%;
+  display: grid; place-items: center; color: #fff; background: var(--m-ok); border: 2px solid var(--m-surface-pop, #fff);
+}
+.ui-modern .m-ai-orb-label {
+  max-width: 260px; padding: 6px 12px; border-radius: 999px; font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  background: var(--m-surface-pop); color: var(--m-label); box-shadow: var(--m-pop-shadow, 0 4px 14px rgb(0 0 0 / 18%));
+  opacity: 0; transform: translateX(6px); transition: opacity 0.2s ease, transform 0.2s ease; pointer-events: none;
+}
+/* Etiket: çalışırken ve yanıt hazırken görünür, boştayken yalnız üzerine gelince */
+.ui-modern .m-ai-orb-wrap:is(.is-working, .is-done) .m-ai-orb-label,
+.ui-modern .m-ai-orb-wrap:is(:hover, :focus-within) .m-ai-orb-label { opacity: 1; transform: none; }
+.ui-modern .m-ai-orb-dismiss {
+  position: absolute; right: -4px; bottom: -4px; z-index: 3; width: 22px; height: 22px; border-radius: 50%; border: 0; cursor: pointer;
+  display: grid; place-items: center; background: var(--m-surface-pop); color: var(--m-label-2, var(--m-label)); box-shadow: var(--m-pop-shadow, 0 2px 8px rgb(0 0 0 / 20%));
+  opacity: 0; transition: opacity 0.15s ease;
+}
+.ui-modern .m-ai-orb-wrap:is(:hover, :focus-within) .m-ai-orb-dismiss { opacity: 1; }
+@media (hover: none) { .ui-modern .m-ai-orb-dismiss { opacity: 1; } }
+
+/* Çalışıyor: dönen ışık halkası, çekirdek hafif titrer */
+.ui-modern .is-working .m-ai-orb-ring {
+  opacity: 1;
+  background: conic-gradient(from 0deg, transparent 0 55%, color-mix(in srgb, var(--m-accent) 30%, #fff) 70%, var(--m-accent) 85%, transparent 100%);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px));
+  animation: m-orb-spin 1.1s linear infinite;
+}
+.ui-modern .is-working .m-ai-orb-core { animation: m-orb-think 1.4s ease-in-out infinite; }
+/* Yanıt hazır: yeşil işaret, bir kez zıplar, yumuşak yeşil hale */
+.ui-modern .is-done .m-ai-orb { animation: m-orb-pop 0.7s cubic-bezier(0.34, 1.8, 0.64, 1) 1; box-shadow: 0 0 0 4px color-mix(in srgb, var(--m-ok) 35%, transparent), 0 6px 20px color-mix(in srgb, var(--m-ok) 35%, transparent); }
+/* Boşta: yavaş nefes */
+.ui-modern .is-idle .m-ai-orb { animation: m-orb-breathe 3.6s ease-in-out infinite; }
+@keyframes m-orb-spin { to { transform: rotate(360deg); } }
+@keyframes m-orb-think { 0%, 100% { transform: scale(1) rotate(0); } 50% { transform: scale(1.12) rotate(12deg); } }
+@keyframes m-orb-pop { 0% { transform: scale(0.85); } 60% { transform: scale(1.12); } 100% { transform: scale(1); } }
+@keyframes m-orb-breathe { 0%, 100% { transform: scale(1); filter: brightness(1); } 50% { transform: scale(1.04); filter: brightness(1.1); } }
+@media (prefers-reduced-motion: reduce) {
+  .ui-modern :is(.m-ai-orb, .m-ai-orb-ring, .m-ai-orb-core) { animation: none !important; }
+  .ui-modern .is-working .m-ai-orb-ring { background: var(--m-accent); }
+}

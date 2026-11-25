@@ -1014,6 +1014,30 @@ const PROPOSAL_TOOLS: ToolDef[] = [
         },
     },
     {
+        label: 'Görev silme önerisi',
+        writeOnly: true,
+        spec: {
+            name: 'oner_gorev_sil',
+            description: 'Görev silmeyi ÖNERİR (onaysız silinmez). Yalnız açık istekte; tümü TEK çağrıda.',
+            parameters: S.obj({
+                proje: P.project,
+                gorevler: { type: 'array', items: S.str('Ad/anahtar') },
+                gerekce: S.str(''),
+            }, ['gorevler']),
+        },
+        run: (a, ctx) => {
+            const project = resolveProject(ctx, a.proje);
+            const { ok, skipped } = eachRow(listArg(a.gorevler).map(g => ({ gorev: String(g ?? "") })), r => {
+                const hits = matchByText(project.tasks, str(r.gorev), t => [t.name, t.jiraId]);
+                if (!hits.length) throw new ToolError(`"${str(r.gorev)}" ${project.name} projesinde yok.`);
+                if (hits.length > 1) throw new ToolError(`"${str(r.gorev)}" birden çok görevle eşleşti: ${hits.slice(0, 5).map(t => t.jiraId || t.name).join(', ')}; Jira anahtarıyla belirtin.`);
+                return hits[0].id;
+            });
+            if (!ok.length) throw new ToolError(`Silinecek görev bulunamadı: ${skipped.join(' ')}`);
+            return withSkipped(propose(ctx, { type: 'gorev_sil', projectId: project.id, taskIds: [...new Set(ok)], reason: str(a.gerekce) || undefined }), skipped);
+        },
+    },
+    {
         label: 'RAG önerisi',
         writeOnly: true,
         spec: {

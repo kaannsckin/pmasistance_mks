@@ -69,6 +69,13 @@ interface AssistantApi {
   isStreaming: boolean;
   isOpen: boolean;
   setOpen: (open: boolean) => void;
+  /** Panel küçük AI simgesine küçültüldü (sohbet sürer; simge çalışıyor / yanıt hazır / boşta gösterir) */
+  isMinimized: boolean;
+  minimize: () => void;
+  /** Küçük simgeyi kaldırır (panel kapalı kalır) */
+  dismissMinimized: () => void;
+  /** Panel küçükken bir yanıt tamamlandı ve henüz görülmedi */
+  hasUnread: boolean;
   /** Durum kontrolünü (ilk kullanımda) başlatır */
   ensureReady: () => void;
   recheck: () => void;
@@ -150,6 +157,18 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, sessionSco
   const [messages, setMessages] = useState<UiMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [isOpen, setOpen] = useState(false);
+  const [isMinimized, setMinimized] = useState(false);
+  const [hasUnread, setUnread] = useState(false);
+  const minimize = useCallback(() => { setOpen(false); setMinimized(true); }, []);
+  const dismissMinimized = useCallback(() => { setMinimized(false); setUnread(false); }, []);
+  // Panel açılınca küçük simge kalkar ve yanıt görülmüş sayılır
+  useEffect(() => { if (isOpen) { setMinimized(false); setUnread(false); } }, [isOpen]);
+  // Panel küçükken akış biterse "yanıt hazır" gösterilir
+  const wasStreaming = useRef(false);
+  useEffect(() => {
+    if (wasStreaming.current && !isStreaming && !isOpen) setUnread(true);
+    wasStreaming.current = isStreaming;
+  }, [isStreaming, isOpen]);
   const [isKbOpen, setKbOpen] = useState(false);
   const [integrations, setIntegrations] = useState<IntegrationHealth | null>(null);
   const messagesRef = useRef<UiMessage[]>([]);
@@ -596,10 +615,10 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, sessionSco
   }, [enabled, phase, status]);
 
   const api = useMemo<AssistantApi>(() => ({
-    enabled, chatEnabled: enabled && chat, embeddedEnabled: enabled && embedded, phase, status, authError, messages, isStreaming, isOpen, setOpen,
+    enabled, chatEnabled: enabled && chat, embeddedEnabled: enabled && embedded, phase, status, authError, messages, isStreaming, isOpen, setOpen, isMinimized, minimize, dismissMinimized, hasUnread,
     ensureReady, recheck, send, ask, stop, clear, saveToken, isKbOpen, setKbOpen, refreshIndex, navigate, resolveProposal, resolveAllProposals, memory, forgetMemory, clearMemory, chats, currentChatId, openChat, removeChat, askAbout, pinned, unpin, complete,
     jiraEnabled: !!integrations?.jira,
-  }), [enabled, chat, embedded, phase, status, authError, messages, isStreaming, isOpen, ensureReady, recheck, send, ask, stop, clear, saveToken, isKbOpen, refreshIndex, navigate, resolveProposal, resolveAllProposals, memory, forgetMemory, clearMemory, chats, currentChatId, openChat, removeChat, askAbout, pinned, unpin, complete, integrations]);
+  }), [enabled, chat, embedded, phase, status, authError, messages, isStreaming, isOpen, isMinimized, minimize, dismissMinimized, hasUnread, ensureReady, recheck, send, ask, stop, clear, saveToken, isKbOpen, refreshIndex, navigate, resolveProposal, resolveAllProposals, memory, forgetMemory, clearMemory, chats, currentChatId, openChat, removeChat, askAbout, pinned, unpin, complete, integrations]);
 
   return <Ctx.Provider value={api}>{children}</Ctx.Provider>;
 };

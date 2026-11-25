@@ -3,6 +3,13 @@
 Her sürümün başlığı `## vX.Y.Z` biçimindedir; GitHub sürüm sayfası bu bölümü
 buradan alır (`.github/workflows/exe.yml`).
 
+## Yayımlanmamış
+
+- Görevler listesinde seçili görevler topluca silinebilir: onay penceresi silinecek görevleri ve öncül bağı kaldırılacak görevleri gösterir; Jira kayıtları silinmez. Tekli silme de aynı kuralla çalışır (ardılların öncül bağı temizlenir) ve denetim günlüğüne yazılır.
+- Asistan görev silmeyi önerebilir (`oner_gorev_sil`): ad ya da Jira anahtarıyla bulunan görevler tek öneri kartında listelenir, kullanıcı onaylamadan silinmez ve uygulandıktan sonra geri alınabilir.
+- Modern arayüzde sol menü daraltılıp yalnız simgelerden oluşan dar şeride indirilebilir; tercih tarayıcıda hatırlanır.
+- Asistan paneli küçültülebilir: sağ altta küçük AI simgesi olarak çalışmayı sürdürür. Simge çalışırken dönen ışık halkası ve o anki adımı, yanıt hazır olunca yeşil işaret, boşta yavaş bir parıltı gösterir; tıklanınca panel açılır.
+
 ## v3.5.0
 
 **Asistan: analiz ve rapor yetenekleri**

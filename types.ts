@@ -1565,7 +1565,7 @@ export type AuditAction =
   | 'report.submit' | 'report.approve' | 'report.return' | 'report.publish'
   | 'meeting.submit' | 'meeting.approve' | 'meeting.reject' | 'meeting.held'
   | 'release.commit' | 'data.export'
-  | 'task.bulkEdit'
+  | 'task.bulkEdit' | 'task.delete'
   | 'report.ai';
 
 export interface AuditEntry {

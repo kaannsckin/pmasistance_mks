@@ -102,7 +102,9 @@ describe('araç kataloğu', () => {
             base = Math.max(base, size);
         }
         console.log(`çalışma zamanısız en büyük istek: ${base}, çalışma zamanlı: ${runtime}`);
-        expect(base).toBeLessThan(18_000);
+        // 18 000 → 18 500: PY / Bölüm Sorumlusu'na görev silme önerisi (oner_gorev_sil, ~600 karakter).
+        // Yazma aracı almayan yönetici rollerinin istek boyutu değişmedi.
+        expect(base).toBeLessThan(18_500);
         // 5 000 → 7 000: ajan + Jira okuma araçlarına Jira worklog raporu, eşitleme önerisi, iş gücü
         // raporu ve kayıt worklog'u eklendi. Yalnız Jira bağlıyken gönderilir; temel istek BL-15'te kalır.
         expect(runtime).toBeLessThan(7_000);

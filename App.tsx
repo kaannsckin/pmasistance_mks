@@ -40,6 +40,7 @@ import ProjectListsSheet from './components/modern/ProjectListsSheet';
 import { cleanRoleMembers, projectRolesOf } from './utils/projectRoles';
 import { listId } from './utils/projectLists';
 import { BulkTaskPatch, previewBulkTaskEdit } from './utils/bulkTaskEdit';
+import { describeTaskDelete, previewTaskDelete, removeTasks } from './utils/taskDelete';
 import type { DayRange } from './utils/calendarRange';
 import { moveSprintTasks } from './utils/planning/period';
 import { applyJiraSprintTransfer, JiraSprintTransfer } from './utils/planning/jiraSprintImport';
@@ -207,6 +208,12 @@ const App: React.FC = () => {
   const [isGibImportOpen, setIsGibImportOpen] = useState(false);
   // Modern arayüz: dar ekranda kenar çubuğu çekmecesi, "yeni proje" isteği, sürprizler
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  // Geniş ekranda sol menünün dar (yalnız simge) hâli; tercih bu tarayıcıda saklanır
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => { try { return localStorage.getItem('pm-sidebar-collapsed') === '1'; } catch { return false; } });
+  const toggleSidebarCollapsed = useCallback(() => setIsSidebarCollapsed(v => {
+    try { localStorage.setItem('pm-sidebar-collapsed', v ? '0' : '1'); } catch { /* gizli pencere */ }
+    return !v;
+  }), []);
   const [newProjectRequest, setNewProjectRequest] = useState(0);
   const [egg, setEgg] = useState<EggEvent | null>(null);
   const [undo, setUndo] = useState<{ message: string; snapshot: WorkspaceData } | null>(null);
@@ -1839,6 +1846,26 @@ const App: React.FC = () => {
     return { changed: preview.changes.length };
   }, [storeProjectChange, updateWorkspace]);
 
+  /** Görev silme (tekli, toplu, asistan önerisi): yetki, öncül bağı temizliği ve denetim kaydı */
+  const handleDeleteTasks = useCallback((projectId: string, ids: ReadonlySet<string>): { deleted: number } | { error: string } => {
+    const ws0 = workspaceRef.current;
+    const project0 = ws0?.projects.find(p => p.id === projectId);
+    if (!ws0 || !project0 || !canEditProjectContent(ws0, identityOf(ws0), projectId)) return { error: 'Bu projenin görevlerini silme yetkiniz yok.' };
+    const preview = previewTaskDelete(project0, ids);
+    if ('error' in preview) return preview;
+    if (!preview.tasks.length) return { error: 'Silinecek görev bulunamadı (başka bir yerde silinmiş olabilir).' };
+    const now = new Date();
+    updateWorkspace(ws => {
+      const project = ws.projects.find(p => p.id === projectId);
+      if (!project || !canEditProjectContent(ws, identityOf(ws), projectId)) return ws;
+      const tasks = removeTasks(project.tasks, ids, now);
+      if (tasks === project.tasks) return ws;
+      return appendAudit(storeProjectChange(ws, project, { ...project, tasks }, now), 'task.delete',
+        `${project.name} · ${describeTaskDelete(preview)}`, projectId);
+    });
+    return { deleted: preview.tasks.length };
+  }, [storeProjectChange, updateWorkspace]);
+
   const handleBulkSprint = useCallback((projectId: string, ids: ReadonlySet<string>, sprint: number) => {
     updateWorkspace(ws => {
       const project = ws.projects.find(p => p.id === projectId);
@@ -2240,7 +2267,11 @@ const App: React.FC = () => {
     );
     const viewTask = (t: Task) => { setViewingTask(t); setIsDetailModalOpen(true); };
     const editTask = (t: Task) => { setEditingTask(t); setIsFormModalOpen(true); };
-    const deleteTask = (taskId: string) => { if (window.confirm('Emin misiniz?')) setTasks(prev => prev.filter(t => t.id !== taskId)); };
+    const deleteTask = (taskId: string) => {
+      if (!window.confirm('Emin misiniz?')) return;
+      const r = handleDeleteTasks(activeProject.id, new Set([taskId]));
+      if ('error' in r) window.alert(r.error);
+    };
     const notifyTask = (t: Task) => { setTeamsTask(t); setIsTeamsModalOpen(true); };
     const newTask = () => { setEditingTask(null); setIsFormModalOpen(true); };
     const celebrate = (message: string) => setEgg({ kind: 'celebrate', message });
@@ -2469,6 +2500,7 @@ const App: React.FC = () => {
             versions: activeProject.versions,
             requiredFields: activeScheme.requiredFields,
             onApply: (selected, patch) => handleBulkEditTasks(activeProject.id, selected, patch),
+            onDelete: selected => handleDeleteTasks(activeProject.id, selected),
           } : undefined}
           sprintNames={ps.sprintNames}
           workPackages={activeProject.workPackages}
@@ -2496,7 +2528,7 @@ const App: React.FC = () => {
             tasks={tasks} resources={resources}
             onEditTask={(t) => { setEditingTask(t); setIsFormModalOpen(true); }} onViewTask={(t) => { setViewingTask(t); setIsDetailModalOpen(true); }}
             onNotifyTask={(t) => { setTeamsTask(t); setIsTeamsModalOpen(true); }} onNewTask={() => { setEditingTask(null); setIsFormModalOpen(true); }}
-            onDeleteTask={(taskId) => { if(window.confirm('Emin misiniz?')) setTasks(prev => prev.filter(t => t.id !== taskId)); }}
+            onDeleteTask={deleteTask}
             onDataImport={(nt, nr) => { setTasks(prev => [...prev, ...nt]); setResources(prev => [...prev, ...nr]); }}
             onTaskStatusChange={(id, s) => setTasks(prev => prev.map(t => t.id === id ? { ...t, status: s } : t))}
           />
@@ -2549,7 +2581,7 @@ const App: React.FC = () => {
             onNewTask={() => { setEditingTask(null); setIsFormModalOpen(true); }}
             onViewTask={(t) => { setViewingTask(t); setIsDetailModalOpen(true); }}
             onEditTask={(t) => { setEditingTask(t); setIsFormModalOpen(true); }}
-            onDeleteTask={(taskId) => { if(window.confirm('Emin misiniz?')) setTasks(prev => prev.filter(t => t.id !== taskId)); }}
+            onDeleteTask={deleteTask}
           />
         );
       case View.Goals:
@@ -2847,6 +2879,8 @@ const App: React.FC = () => {
             onOpenAbout={() => setIsAboutModalOpen(true)}
             onLogoLaunch={() => setCurrentView(inProjectView ? View.Dashboard : View.Portfolio)}
             onHyperdrive={() => setEgg({ kind: 'hyper' })}
+            collapsed={isSidebarCollapsed}
+            onToggleCollapsed={toggleSidebarCollapsed}
           />
           <div className="flex-1 min-w-0 flex flex-col">
             <div className="m-mobile-bar lg:hidden sticky top-0 z-30 m-surface border-b m-sep flex items-center gap-1 px-1.5 h-14">

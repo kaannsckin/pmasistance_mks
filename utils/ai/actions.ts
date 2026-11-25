@@ -12,6 +12,7 @@ import { effectiveScheme, missingRequiredFields, allowedIssueTypes } from '../pr
 import { initialStatus, resolveTransition, taskStatusLabel, taskWorkflow } from '../workflow';
 import { projectRolesOf } from '../projectRoles';
 import { applyTransition, conditionProblem, inputProblems, ruleFor, TransitionActor, TransitionEffect } from '../transitions';
+import { MAX_BULK_DELETE, removeTasks } from '../taskDelete';
 import { applyPoolAction, describePoolAction, isPoolAction, PoolAction, validatePoolAction } from './poolActions';
 
 /** Öneriyi uygulayan kişi (aktif kimlik) — geçiş koşulları için */
@@ -46,7 +47,9 @@ export type AiAction =
     | { type: 'istek_karari'; projectId: string; requestId: string; decision: 'kabul' | 'ret'; reason: string; day?: string; task?: { name?: string; priority: Task['priority']; resourceName?: string; dueDate?: string; time?: { best: number; avg: number; worst: number } } }
     | { type: 'not_ekle'; projectId: string; content: string; day?: string }
     // Bir projedeki görevlerin alanlarını toplu günceller (termin, atanan, öncelik, tahmin, etiket)
-    | { type: 'gorev_guncelle'; projectId: string; changes: TaskFieldChange[] };
+    | { type: 'gorev_guncelle'; projectId: string; changes: TaskFieldChange[] }
+    // Görevleri siler; ardıllarının öncül bağı kaldırılır. Kullanıcı onayı ve geri al ile.
+    | { type: 'gorev_sil'; projectId: string; taskIds: string[]; reason?: string };
 
 /** Görev alanı değişikliği; verilmeyen alan değişmez. resourceName '' → atama kaldırılır, dueDate '' → termin silinir */
 export interface TaskFieldChange {
@@ -259,6 +262,13 @@ export const validateAction = (ws: WorkspaceData, action: AiAction): string | nu
             if (!action.changes.some(c => taskChangeParts(project.tasks.find(x => x.id === c.taskId)!, c).length)) return 'Görevlerde değişen bir şey yok.';
             return null;
         }
+        case 'gorev_sil': {
+            if (!action.taskIds.length) return 'Silinecek görev yok.';
+            if (action.taskIds.length > MAX_BULK_DELETE) return `Tek öneride en çok ${MAX_BULK_DELETE} görev silinebilir.`;
+            const ids = new Set(project.tasks.map(t => t.id));
+            if (action.taskIds.some(id => !ids.has(id))) return 'Görevlerden biri bulunamadı (silinmiş olabilir).';
+            return null;
+        }
         case 'not_ekle':
             if (!action.content.trim()) return 'Not boş olamaz.';
             if (action.day && !/^\d{4}-\d{2}-\d{2}$/.test(action.day)) return 'Tarih YYYY-AA-GG biçiminde olmalı.';
@@ -368,6 +378,21 @@ export const describeAction = (ws: WorkspaceData, action: AiAction): { title: st
                 details: [
                     ...rows.slice(0, 30).map(({ c, t }) => ({ label: t!.jiraId ? `${t!.jiraId} ${t!.name}` : t!.name, value: taskChangeParts(t!, c).join(' · ') })),
                     ...(rows.length > 30 ? [{ label: '…', value: `ve ${rows.length - 30} görev daha` }] : []),
+                ],
+            };
+        }
+        case 'gorev_sil': {
+            const want = new Set(action.taskIds);
+            const tasks = (project?.tasks || []).filter(t => want.has(t.id));
+            const unlinked = (project?.tasks || []).filter(t => !want.has(t.id) && t.predecessor && want.has(t.predecessor)).length;
+            return {
+                title: `Görev sil: ${tasks.length} görev · ${pName}`,
+                details: [
+                    ...tasks.slice(0, 30).map(t => ({ label: t.jiraId || 'Görev', value: t.name })),
+                    ...(tasks.length > 30 ? [{ label: '…', value: `ve ${tasks.length - 30} görev daha` }] : []),
+                    ...(unlinked ? [{ label: 'Öncül bağı', value: `${unlinked} görevin öncül bağı kaldırılacak` }] : []),
+                    ...(action.reason ? [{ label: 'Gerekçe', value: action.reason }] : []),
+                    { label: 'Not', value: 'Jira kayıtları silinmez; yalnız uygulamadaki kopya kaldırılır. Uygulandıktan sonra geri alınabilir.' },
                 ],
             };
         }
@@ -631,6 +656,14 @@ export const applyAction = (ws: WorkspaceData, action: AiAction): { ws: Workspac
                 return { ...p, tasks, resources };
             });
             summary = `"${project.name}" · ${n} görev güncellendi`;
+            break;
+        }
+        case 'gorev_sil': {
+            const ids = new Set(action.taskIds);
+            const names = project.tasks.filter(t => ids.has(t.id)).map(t => t.jiraId || t.name);
+            next = touch(ws, project.id, p => ({ ...p, tasks: removeTasks(p.tasks, ids) }));
+            next = appendAudit(next, 'task.delete', `${project.name} · ${names.length} görev: ${names.slice(0, 5).join(', ')}${names.length > 5 ? ' …' : ''}`, project.id);
+            summary = `"${project.name}" · ${names.length} görev silindi`;
             break;
         }
         case 'not_ekle': {
