@@ -5,6 +5,12 @@ buradan alır (`.github/workflows/exe.yml`).
 
 ## Yayımlanmamış
 
+- Planlama'nın ana ekranı artık **Plan**: sürüm → kilometre taşları → sprintler. Satırlar kilometre taşları (hedef tarih sırasıyla), sütunlar sprint takvimindeki sprintler; kartlar sürükle-bırakla ya da "Taşı" penceresiyle başka sprinte veya taşa alınır. Her taşın tahmini bitişi hedefiyle karşılaştırılır (yolunda / riskli / gecikiyor / planlanmamış iş). Sprint başlığında yük/kapasite, hedef tarih ızgarada işaretli.
+- **Otomatik dağıt**: sürümün açık işleri kilometre taşı sırası, öncül, öncelik ve kişi kapasitesine göre bugünkü sprintten itibaren dağıtılır; sürüm dışı işlerin yükü düşülür, devam eden işler yerinde kalır. Önce önizleme (değişen sprintler, taş tahminleri, kapasite ve gecikme uyarıları), sonra uygulama.
+- **Sıkı takip**: bu sprintin yükü ve kapasite aşımı, biten sprintte kalan işler için "Bu sprinte devret", son sprintlerin hızıyla bitiş tahmini. Görev listesinde "Sürüm planına al" seçili görevleri Plan'a getirir.
+- Sprint takvimi tek kaynak ve yapılandırılabilir: test günü 0 olabilir (test sprint içinde; eskiden 0 yazılınca 4 gün sayılıyordu ve haftalık sprintte kişi kapasitesi 1 güne düşüyordu). Hazır ritimler: Sürekli geliştirme (1 hafta), İki haftalık (paralel test), Klasik. Yol haritası, otomatik plan ve Plan aynı takvimi kullanır.
+- Planlama sekmeleri: Plan · Sürüm sihirbazı · Plan simülasyonu · Jira sprintleri. Tahminli yeni kayıt Görevler ekranına taşındı ("Tahminli yeni kayıt").
+- Düzeltmeler: modern menüde "Yedekten yükle" seçilen dosyayı okumuyordu (dosya seçici menüyle birlikte kapanıyordu). Açık bir işi başka sprinte taşımak, kalan işleri bitmiş sprint için yanlışlıkla "sprint tamamlandı" kutlaması gösteriyordu.
 - Görevler listesinde seçili görevler topluca silinebilir: onay penceresi silinecek görevleri ve öncül bağı kaldırılacak görevleri gösterir; Jira kayıtları silinmez. Tekli silme de aynı kuralla çalışır (ardılların öncül bağı temizlenir) ve denetim günlüğüne yazılır.
 - Asistan görev silmeyi önerebilir (`oner_gorev_sil`): ad ya da Jira anahtarıyla bulunan görevler tek öneri kartında listelenir, kullanıcı onaylamadan silinmez ve uygulandıktan sonra geri alınabilir.
 - Modern arayüzde sol menü daraltılıp yalnız simgelerden oluşan dar şeride indirilebilir; tercih tarayıcıda hatırlanır.

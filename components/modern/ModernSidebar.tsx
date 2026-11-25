@@ -105,8 +105,7 @@ const NavItem: React.FC<{ icon: IconName; label: string; active: boolean; onClic
 );
 
 /** "Diğer" menüsü: yedek, bulut, veri sağlığı, denetim ve arayüz (profil seçimi ayrı pencerede) */
-const ToolsMenu: React.FC<Pick<ModernSidebarProps, 'onSwitchToClassic' | 'onSaveBackup' | 'onLoadBackup' | 'cloudLinked' | 'onOpenCloud' | 'healthAlerts' | 'onOpenHealth' | 'onOpenAudit' | 'onOpenAbout' | 'onOpenProfile' | 'consoleMode'> & { onDone: () => void }> = (p) => {
-    const fileRef = useRef<HTMLInputElement>(null);
+const ToolsMenu: React.FC<Pick<ModernSidebarProps, 'onSwitchToClassic' | 'onSaveBackup' | 'onLoadBackup' | 'cloudLinked' | 'onOpenCloud' | 'healthAlerts' | 'onOpenHealth' | 'onOpenAudit' | 'onOpenAbout' | 'onOpenProfile' | 'consoleMode'> & { onDone: () => void; onPickBackup: () => void }> = (p) => {
     const item = (icon: IconName, label: string, run: () => void, trailing?: React.ReactNode) => (
         <button type="button" role="menuitem" onClick={() => { run(); p.onDone(); }} className="m-row-link w-full flex items-center gap-3 min-h-[44px] px-3.5 text-[15px]">
             <span className="m-text-3"><Icon name={icon} size={18} /></span>
@@ -119,7 +118,7 @@ const ToolsMenu: React.FC<Pick<ModernSidebarProps, 'onSwitchToClassic' | 'onSave
             {item('userCog', p.cloudLinked ? 'Bulut hesabı' : 'Profil değiştir', p.onOpenProfile)}
             <div className="border-t m-sep my-1"></div>
             {p.onSaveBackup && item('download', 'Yedeği indir', p.onSaveBackup)}
-            {p.onLoadBackup && item('upload', 'Yedekten yükle', () => fileRef.current?.click())}
+            {p.onLoadBackup && item('upload', 'Yedekten yükle', p.onPickBackup)}
             {/* Yerel modda yedek yalnız Yönetici yetkisiyle: düğme gizlenmesin, yolu göstersin */}
             {!p.onSaveBackup && !p.onLoadBackup && !p.cloudLinked && item('upload', 'Yedek al / yükle', p.onOpenProfile, <span className="text-[13px] m-text-3">Admin kimliğiyle</span>)}
             {item('cloud', 'Bulut veritabanı', p.onOpenCloud, p.cloudLinked ? <span className="text-[13px] m-ink-ok font-semibold">Bağlı</span> : undefined)}
@@ -128,15 +127,6 @@ const ToolsMenu: React.FC<Pick<ModernSidebarProps, 'onSwitchToClassic' | 'onSave
             {item('info', 'Hakkında', p.onOpenAbout)}
             {!p.consoleMode && <div className="border-t m-sep my-1"></div>}
             {!p.consoleMode && item('swap', 'Klasik arayüze dön', p.onSwitchToClassic)}
-            {p.onLoadBackup && (
-                <input
-                    ref={fileRef}
-                    type="file"
-                    accept=".json"
-                    className="hidden"
-                    onChange={(e) => { const f = e.target.files?.[0]; if (f) p.onLoadBackup!(f); e.target.value = ''; p.onDone(); }}
-                />
-            )}
         </div>
     );
 };
@@ -147,6 +137,8 @@ const ModernSidebar: React.FC<ModernSidebarProps> = (props) => {
     // Dar şerit yalnız çekmece kapalıyken (geniş ekran); dar ekranda açılan çekmece her zaman tam genişlikte
     const compact = !!props.collapsed && !isOpen;
     const [menuOpen, setMenuOpen] = useState(false);
+    // Yedek dosyası seçici menünün dışında: menü kapanınca (öğe tıklanınca) kaldırılırsa seçilen dosya okunmuyordu
+    const backupRef = useRef<HTMLInputElement>(null);
     const assistant = useAssistantOptional();
     const person = people.find(p => p.id === currentPersonId);
     const go = (view: View) => { onNavigate(view); onClose(); };
@@ -281,11 +273,15 @@ const ModernSidebar: React.FC<ModernSidebarProps> = (props) => {
                         {menuOpen && (
                             <>
                                 <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} aria-hidden="true"></div>
-                                <ToolsMenu {...props} onOpenProfile={() => { onOpenProfile(); onClose(); }} onDone={() => setMenuOpen(false)} />
+                                <ToolsMenu {...props} onOpenProfile={() => { onOpenProfile(); onClose(); }} onDone={() => setMenuOpen(false)} onPickBackup={() => backupRef.current?.click()} />
                             </>
                         )}
                     </div>
                 </div>
+                {props.onLoadBackup && (
+                    <input ref={backupRef} type="file" accept=".json,application/json" className="hidden" aria-hidden="true" tabIndex={-1}
+                        onChange={e => { const f = e.target.files?.[0]; if (f) props.onLoadBackup!(f); e.target.value = ''; }} />
+                )}
             </nav>
         </>
     );

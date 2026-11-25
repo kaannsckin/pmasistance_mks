@@ -32,19 +32,20 @@ export interface Guide {
 
 const PLANNING: Guide = {
     id: 'planning',
-    version: 3,
+    version: 4,
     title: 'Planlama asistanı rehberi',
     steps: [
         {
             id: 'welcome', icon: 'rocket', title: 'Planlama asistanı',
-            summary: 'Yeni kayıtların süresini, sürüm planlarını ve teslim tarihini, ekibinizin geçmişte işleri gerçekte ne kadar sürede kapattığına bakarak tahmin eder.',
+            summary: 'Sürümü kilometre taşları ve sprintlerle planlar, haftalık takip eder; tahminleri ekibinizin geçmişte işleri gerçekte ne kadar sürede kapattığına dayanır.',
             how: [
-                'Yeni kayıt: tek bir kaydın süresi, eforu, önemi ve hangi sprinte sığacağı.',
-                'Sürüm planı: bir sürümün kayıtlarını altı adımda planlayıp görevlere aktarma.',
+                'Plan: sürüm → kilometre taşları → sprintler; sürükle-bırak, otomatik dağıtım, devir ve hızla bitiş tahmini.',
+                'Sürüm sihirbazı: bir sürümün kayıtlarını altı adımda tahminleyip görevlere aktarma.',
+                'Tahminli yeni kayıt artık Görevler ekranında: "Tahminli yeni kayıt" düğmesi.',
                 'Plan simülasyonu: açık işlerle olasılıklı teslim tarihi (P50 · P80 · P95).',
                 "Jira'dan geçmiş: tahminlerin öğrendiği kapanmış kayıtları içe alma.",
             ],
-            scenario: { title: 'İlk kez kullanıyorsanız', text: 'Önce "Jira\'dan geçmiş" ile son bir iki yılın kapanmış kayıtlarını aktarın. Başlıktaki "Eğitime uygun kapanmış kayıt" sayısı arttıkça öneriler güvenilir hâle gelir. Ardından yeni kayıtlarınızı "Yeni kayıt" kipinden açın.' },
+            scenario: { title: 'İlk kez kullanıyorsanız', text: 'Önce "Jira\'dan geçmiş" ile son bir iki yılın kapanmış kayıtlarını aktarın. Başlıktaki "Eğitime uygun kapanmış kayıt" sayısı arttıkça öneriler güvenilir hâle gelir. Ardından yeni kayıtlarınızı Görevler ekranındaki "Tahminli yeni kayıt" ile açın.' },
             tip: 'Bu rehberi istediğiniz an sayfa başlığındaki "?" düğmesiyle yeniden açabilirsiniz.',
         },
         {
@@ -60,7 +61,20 @@ const PLANNING: Guide = {
             tip: 'Jira bağlantısı sunucuda yapılandırılmamışsa aynı alanları görev listesindeki "İçe / dışa aktar › Jira CSV dosyasından" ile alabilirsiniz (durum geçmişi hariç).',
         },
         {
-            id: 'record', icon: 'plus', title: 'Yeni kayıt: geçmişten tahmin', mode: 'record',
+            id: 'plan', icon: 'calendar', title: 'Plan: sürüm, kilometre taşları, sprintler', mode: 'plan',
+            summary: 'Planlama\'nın ana ekranı. Satırlar kilometre taşları, sütunlar projenin sprint takvimindeki sprintler; her taşın tahmini bitişi hedefiyle karşılaştırılır.',
+            how: [
+                'Görevler listesinde görevleri seçip "Sürüm planına al" deyin ya da Plan\'da "Görev ekle" ile kapsamı seçin.',
+                '"Kilometre taşı" ile taş ekleyin; adını ve hedef tarihini satır başında girin. Kartı başka satıra sürükleyince taşı, başka sütuna sürükleyince sprinti değişir.',
+                'Sprint takvimi düğmesi ritmi ayarlar (ör. "Sürekli geliştirme": 1 hafta, test sprint içinde). Yol haritası ve otomatik plan aynı takvimi kullanır.',
+                '"Otomatik dağıt" işleri taş sırası, öncül ve kişi kapasitesiyle bugünkü sprintten başlayarak dağıtır; önce önizleme gösterir. Devam eden işler yerinde kalır.',
+                'Her hafta: "Bu sprint" bandında yük/kapasite ve biten sprintte kalan işler; "Bu sprinte devret" ile tek tıkla taşınır. Hız, son sprintlerde biten efordan bitiş tarihini tahmin eder.',
+            ],
+            scenario: { title: 'Örnek senaryo', text: 'Haftalık sprintle çalışan ekip: MS1 Demo 11 Aralık, MS2 Pilot 31 Aralık. Otomatik dağıtım MS1 işlerini Sprint 2-3\'e koyar, MS2\'yi "hedeften 4 gün geç" gösterir. Bir işi MS2\'den çıkarıp hedefi tutturursunuz; pazartesi biten sprintte kalan 2 işi tek tıkla yeni sprinte devredersiniz.' },
+            tip: 'Jira eşitlemesi açıksa sprint ve durumlar Jira\'dan güncellenir; Plan ekranı her açılışta güncel veriyle hesaplanır.',
+        },
+        {
+            id: 'record', icon: 'plus', title: 'Tahminli yeni kayıt (Görevler ekranında)', mode: 'record',
             summary: 'Başlık ve açıklama yazdıkça en benzer kapanmış kayıtlar bulunur; öneri, onların gerçek sürelerinden bir aralık olarak verilir.',
             how: [
                 'Başlığı ve açıklamayı yazın; türü, birimi ve varsa iş paketini seçin.',

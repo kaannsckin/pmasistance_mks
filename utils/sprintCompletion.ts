@@ -13,8 +13,11 @@ export const newlyCompletedSprints = (before: Task[], after: Task[]): number[] =
         const inSprint = planned(tasks).filter(t => isInSprint(t, sprint));
         return inSprint.length > 0 && inSprint.every(t => t.status === TaskStatus.Done);
     };
+    // Yalnız bu değişiklikle biten görev sayılır: açık işin başka sprinte taşınması sprinti "bitirmez"
+    const wasDone = new Set(before.filter(t => t.status === TaskStatus.Done).map(t => t.id));
+    const finishedHere = (sprint: number) => planned(after).some(t => isInSprint(t, sprint) && t.status === TaskStatus.Done && !wasDone.has(t.id));
     const sprints = [...new Set(planned(after).flatMap(sprintsOf))].sort((a, b) => a - b);
-    return sprints.filter(sprint => allDone(after, sprint) && planned(before).some(t => isInSprint(t, sprint)) && !allDone(before, sprint));
+    return sprints.filter(sprint => allDone(after, sprint) && planned(before).some(t => isInSprint(t, sprint)) && !allDone(before, sprint) && finishedHere(sprint));
 };
 
 export interface SprintCompletionSummary {

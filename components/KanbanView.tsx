@@ -120,7 +120,7 @@ const KanbanView: React.FC<KanbanViewProps> = ({ tasks, resources, sprintDuratio
     setIsLoading(true);
     setTimeout(() => {
       try {
-        const result = planTaskVersionsDetailed(tasks, resources, sprintDuration, globalTestDays || 4);
+        const result = planTaskVersionsDetailed(tasks, resources, sprintDuration, globalTestDays ?? 4);
         onPlanGenerated(result.tasks);
         setPlanWarnings(result.warnings);
       } catch (e) {
@@ -142,7 +142,7 @@ const KanbanView: React.FC<KanbanViewProps> = ({ tasks, resources, sprintDuratio
         sprintMap.set(i, { id: i, title: title, tasks: [], unitLoads: {} });
     }
 
-    const testDaysCount = globalTestDays || 4;
+    const testDaysCount = globalTestDays ?? 4;
     const sprintNetWorkdays = Math.max(0, (sprintDuration * 5) - testDaysCount);
     const capacityPerUnit: Record<string, number> = {};
     resources.forEach(r => {

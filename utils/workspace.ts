@@ -77,7 +77,7 @@ export const legacyToProject = (legacy: ProjectData, name: string): Project => {
             tagColors: s.tagColors || {},
             titleCosts: s.titleCosts || {},
             sprintNames: s.sprintNames || {},
-            globalTestDays: s.globalTestDays || 4,
+            globalTestDays: typeof s.globalTestDays === 'number' ? s.globalTestDays : 4,
             manMonthTableColor: s.manMonthTableColor,
             costTableColor: s.costTableColor,
         },

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { CALENDAR_PRESETS, calendarLabel, sprintCalendar } from '../../utils/sprintCalendar';
 import { Leave, Person, Project, Sprint, Task, TaskStatus } from '../../types';
 import { exportSprintPlanToExcel } from '../../utils/exporter';
 import { planTaskVersionsDetailed, PlanWarning } from '../../utils/sprintPlanner';
@@ -119,7 +120,7 @@ const TaskChip: React.FC<{ task: Task; draggable: boolean; onOpen: () => void; s
     );
 };
 
-const CalendarSheet: React.FC<{ value: CalendarSettings; onClose: () => void; onSave: (c: CalendarSettings) => void }> = ({ value, onClose, onSave }) => {
+export const CalendarSheet: React.FC<{ value: CalendarSettings; onClose: () => void; onSave: (c: CalendarSettings) => void }> = ({ value, onClose, onSave }) => {
     const [start, setStart] = useState(value.projectStartDate);
     const [weeks, setWeeks] = useState(value.sprintDuration);
     const [testDays, setTestDays] = useState(value.globalTestDays);
@@ -130,11 +131,26 @@ const CalendarSheet: React.FC<{ value: CalendarSettings; onClose: () => void; on
             title="Takvim"
             onClose={onClose}
             footer={<>
-                <span className="flex-1 text-[13px] m-text-3">Tüm sprint tarihleri yeniden hesaplanır.</span>
+                <span className="flex-1 text-[13px] m-text-3">{calendarLabel(sprintCalendar({ sprintDuration: weeks, globalTestDays: testDays, parallelTest }))} · kişi başı {sprintCalendar({ sprintDuration: weeks, globalTestDays: testDays, parallelTest }).netDays} gün. Tüm sprint tarihleri yeniden hesaplanır.</span>
                 <button type="button" className="m-btn m-btn-plain" onClick={onClose}>Vazgeç</button>
-                <button type="button" className="m-btn m-btn-primary" disabled={!start} onClick={() => onSave({ projectStartDate: start, sprintDuration: weeks, globalTestDays: testDays, parallelTest, useJiraRemainingEstimate: useRemaining })}>Kaydet</button>
+                <button type="button" className="m-btn m-btn-primary" disabled={!start} onClick={() => onSave({ projectStartDate: start, sprintDuration: weeks, globalTestDays: testDays, parallelTest: parallelTest && testDays > 0, useJiraRemainingEstimate: useRemaining })}>Kaydet</button>
             </>}
         >
+            <div className="flex flex-col gap-1.5">
+                <span className="text-[13px] font-semibold m-text-2">Hazır ritim</span>
+                <div className="flex flex-wrap gap-2">
+                    {CALENDAR_PRESETS.map(p => {
+                        const on = weeks === p.value.sprintDuration && testDays === p.value.globalTestDays && parallelTest === !!p.value.parallelTest;
+                        return (
+                            <button key={p.id} type="button" aria-pressed={on} className={`m-btn ${on ? 'm-btn-primary' : 'm-btn-gray'} !min-h-[36px] flex-col !items-start !gap-0 text-left`}
+                                onClick={() => { setWeeks(p.value.sprintDuration); setTestDays(p.value.globalTestDays ?? 0); setParallelTest(!!p.value.parallelTest); }}>
+                                <span className="text-[14px] font-semibold">{p.label}</span>
+                                <span className="text-[12px] opacity-80">{p.hint}</span>
+                            </button>
+                        );
+                    })}
+                </div>
+            </div>
             <Field label="Proje başlangıcı" htmlFor="tl-start">
                 <input id="tl-start" type="date" className="m-input" value={start} onChange={e => setStart(e.target.value)} />
             </Field>
@@ -144,7 +160,7 @@ const CalendarSheet: React.FC<{ value: CalendarSettings; onClose: () => void; on
                     {[1, 2, 3, 4, 5, 6].map(w => <button key={w} type="button" className="m-segment" aria-pressed={weeks === w} onClick={() => setWeeks(w)}>{w} hf</button>)}
                 </SelectionStrip>
             </div>
-            <Field label="Test dönemi (iş günü)" htmlFor="tl-test" hint="Her sprintin ardından test ve canlıya alma için ayrılan süre">
+            <Field label="Test dönemi (iş günü)" htmlFor="tl-test" hint="0: test sprint içinde (sürekli geliştirme, ayrı test dönemi yok). Sprint başına kişi kapasitesi = hafta × 5 − test günü.">
                 <input id="tl-test" type="number" min={0} max={20} className="m-input m-tabular" value={testDays} onChange={e => setTestDays(Math.max(0, Math.min(20, parseInt(e.target.value, 10) || 0)))} />
             </Field>
             <div className="m-switch-row flex items-center justify-between gap-3 text-[14px] m-text">
@@ -152,7 +168,7 @@ const CalendarSheet: React.FC<{ value: CalendarSettings; onClose: () => void; on
                     Test sonraki sprintle paralel yürüsün
                     <span className="text-[13px] m-text-3">Test sprint bitince başlar; sonraki sprint testin bitmesini beklemeden hemen başlar.</span>
                 </span>
-                <ToggleSwitch label="Test sonraki sprintle paralel yürüsün" checked={parallelTest} onChange={setParallelTest} />
+                <ToggleSwitch label="Test sonraki sprintle paralel yürüsün" checked={parallelTest && testDays > 0} onChange={setParallelTest} disabled={testDays === 0} />
             </div>
             <div className="m-switch-row flex items-center justify-between gap-3 text-[14px] m-text">
                 <span>EVM ve iş yükü tahmininde Jira kalan süresini kullan</span>
@@ -175,9 +191,7 @@ const ModernTimeline: React.FC<ModernTimelineProps> = ({ project, people, leaves
     const today = new Date();
     const nowVersion = currentLaneVersion(lanes, today);
     const names = project.settings.sprintNames || {};
-    const weeks = project.settings.sprintDuration || 3;
-    const testDays = project.settings.globalTestDays || 4;
-    const parallelTest = !!project.settings.parallelTest;
+    const { weeks, testDays, parallelTest } = sprintCalendar(project.settings);
     const excluded = project.tasks.filter(t => t.includeInSprints === false).length;
     const [poolOpen, setPoolOpen] = useState(false);
     const [renaming, setRenaming] = useState<{ v: number; name: string } | null>(null);

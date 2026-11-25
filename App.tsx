@@ -41,6 +41,7 @@ import { cleanRoleMembers, projectRolesOf } from './utils/projectRoles';
 import { listId } from './utils/projectLists';
 import { BulkTaskPatch, previewBulkTaskEdit } from './utils/bulkTaskEdit';
 import { describeTaskDelete, previewTaskDelete, removeTasks } from './utils/taskDelete';
+import { applySprintChanges, SprintChange } from './utils/planning/planBoard';
 import type { DayRange } from './utils/calendarRange';
 import { moveSprintTasks } from './utils/planning/period';
 import { applyJiraSprintTransfer, JiraSprintTransfer } from './utils/planning/jiraSprintImport';
@@ -96,6 +97,7 @@ import ModernSidebar from './components/modern/ModernSidebar';
 import MobileDock from './components/modern/MobileDock';
 import ModernProjectHeader from './components/modern/ModernProjectHeader';
 import ModernPlanning from './components/modern/ModernPlanning';
+import NewRecordPanel from './components/modern/planning/NewRecordPanel';
 import { appendEstimateLog } from './utils/planning/estimateLog';
 import { applyCommit, CommitResult } from './utils/planning/releasePlan';
 import { appendEvalRun } from './utils/planning/evaluation';
@@ -181,7 +183,7 @@ const MODERN_PROJECT_VIEWS: View[] = [View.Dashboard, View.Overview, View.Roadma
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<View>(View.Portfolio);
   const [projectPeriods, setProjectPeriods] = useState(() => new Map<string, DayRange>());
-  const [planningEntry, setPlanningEntry] = useState<{ projectId: string; query?: string; jiraPeriod?: DayRange; releaseTasks?: string[]; sprintTasks?: string[]; sprint?: number } | null>(null);
+  const [planningEntry, setPlanningEntry] = useState<{ projectId: string; query?: string; jiraPeriod?: DayRange; releaseTasks?: string[]; sprintTasks?: string[]; sprint?: number; planningMode?: 'plan' | 'record' | 'release' | 'simulate' | 'jira-sprints' } | null>(null);
   useEffect(() => { if (planningEntry) setPlanningEntry(null); }, [planningEntry]);
   const [workspace, setWorkspace] = useState<WorkspaceData | null>(null);
 
@@ -208,6 +210,8 @@ const App: React.FC = () => {
   const [isGibImportOpen, setIsGibImportOpen] = useState(false);
   // Modern arayüz: dar ekranda kenar çubuğu çekmecesi, "yeni proje" isteği, sürprizler
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  // Görevler: tahminli yeni kayıt paneli (eski Planlama › Yeni kayıt)
+  const [isRecordOpen, setIsRecordOpen] = useState(false);
   // Geniş ekranda sol menünün dar (yalnız simge) hâli; tercih bu tarayıcıda saklanır
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => { try { return localStorage.getItem('pm-sidebar-collapsed') === '1'; } catch { return false; } });
   const toggleSidebarCollapsed = useCallback(() => setIsSidebarCollapsed(v => {
@@ -973,7 +977,7 @@ const App: React.FC = () => {
   const handleLoadProject = useCallback((file: File) => {
     const current = workspaceRef.current;
     if (!current || !can(identityOf(current), 'app.backup')) return;
-    if (!file || file.type !== 'application/json') {
+    if (!file || (file.type !== 'application/json' && !/\.json$/i.test(file.name))) {
       alert('Lütfen geçerli bir JSON yedek dosyası seçin.');
       return;
     }
@@ -1866,6 +1870,18 @@ const App: React.FC = () => {
     return { deleted: preview.tasks.length };
   }, [storeProjectChange, updateWorkspace]);
 
+  /** Plan ekranı: sürükle-bırak, otomatik dağıtım ve devirle görevlerin sprintini değiştirir */
+  const handleSetTaskSprints = useCallback((projectId: string, changes: SprintChange[], label: string) => {
+    if (!changes.length) return;
+    updateWorkspace(ws => {
+      const project = ws.projects.find(p => p.id === projectId);
+      if (!project || !canEditProjectContent(ws, identityOf(ws), projectId)) return ws;
+      const next = applySprintChanges(project, changes, new Date());
+      if (next === project) return ws;
+      return appendAudit(storeProjectChange(ws, project, next), 'task.bulkEdit', `${project.name} · plan: ${label}`, projectId);
+    });
+  }, [storeProjectChange, updateWorkspace]);
+
   const handleBulkSprint = useCallback((projectId: string, ids: ReadonlySet<string>, sprint: number) => {
     updateWorkspace(ws => {
       const project = ws.projects.find(p => p.id === projectId);
@@ -2372,6 +2388,9 @@ const App: React.FC = () => {
           onLinkJira={(key, links) => handleLinkJira(activeProject.id, key, links)}
           onSaveJiraSync={settings => handleSetJiraSync(activeProject.id, settings)}
           onApplyJiraSync={(issues, opts, addNew, label, pushed, settings) => handleApplyJiraSync(activeProject.id, issues, opts, addNew, label, pushed, settings)}
+          onSetSprints={(changes: SprintChange[], label: string) => handleSetTaskSprints(activeProject.id, changes, label)}
+          onUpdateCalendar={(c: CalendarSettings) => updateActiveProject(p => ({ ...p, settings: { ...p.settings, ...c } }))}
+          initialMode={entry?.planningMode}
         />
       );
     }
@@ -2483,8 +2502,19 @@ const App: React.FC = () => {
     }
     if (isModern && currentView === View.Roadmap) return renderProjectBoard();
     if (isModern && currentView === View.Tasks) {
+      const canAddRecord = canEditProjectContent(workspace, identity, activeProject.id);
       return (
+        <div className="flex flex-col gap-5">
+        {isRecordOpen && canAddRecord && (
+          <NewRecordPanel project={activeProject} workspace={workspace} visibleProjectIds={visibleProjectIdSet} canEdit={canAddRecord}
+            onAddTask={(t: Task, log: EstimateLogEntry) => {
+              updateActiveProject(p => ({ ...p, tasks: [...p.tasks, t] }));
+              updateWorkspace(ws => ({ ...ws, estimateLog: appendEstimateLog(ws.estimateLog, log) }));
+            }}
+            onClose={() => setIsRecordOpen(false)} />
+        )}
         <ModernTaskList
+          onNewRecord={canAddRecord ? () => setIsRecordOpen(true) : undefined}
           key={activeProject.id}
           projectId={activeProject.id}
           initialQuery={entry?.query}
@@ -2517,6 +2547,7 @@ const App: React.FC = () => {
           minPriority={roleView.minTaskPriority}
           sortKey={roleView.taskSort}
         />
+        </div>
       );
     }
 
@@ -2558,7 +2589,7 @@ const App: React.FC = () => {
             tasks={tasks} resources={resources}
             sprintDuration={ps.sprintDuration} projectStartDate={ps.projectStartDate}
             sprintNames={ps.sprintNames || {}} setSprintNames={setSprintNames}
-            globalTestDays={ps.globalTestDays || 4} parallelTest={ps.parallelTest} setGlobalTestDays={setGlobalTestDays as React.Dispatch<React.SetStateAction<number>>}
+            globalTestDays={ps.globalTestDays ?? 4} parallelTest={ps.parallelTest} setGlobalTestDays={setGlobalTestDays as React.Dispatch<React.SetStateAction<number>>}
             onPlanGenerated={setTasks} onTaskSprintChange={(id, v) => setTasks(prev => prev.map(t => t.id === id ? { ...t, version: v } : t))}
             onTaskStatusChange={(id, s) => setTasks(prev => prev.map(t => t.id === id ? { ...t, status: s } : t))}
             onInsertSprint={insertSprint}

@@ -40,6 +40,8 @@ interface ModernTaskListProps {
     /** Admin görünüm ayarı: en düşük öncelik ve sıralama */
     minPriority?: TaskPriority;
     sortKey?: TaskSortKey;
+    /** Tahminli yeni kayıt panelini açar (benzer kayıtlardan süre/efor önerisi) */
+    onNewRecord?: () => void;
     bulkEdit?: {
         people: Person[];
         versions?: ProjectVersion[];
@@ -56,7 +58,7 @@ const lower = (s: string) => s.toLocaleLowerCase('tr-TR');
 
 type ImportKind = 'excel' | 'jira' | 'csv';
 
-const ModernTaskList: React.FC<ModernTaskListProps> = ({ projectId, initialQuery, onPlanSprint, onPlanRelease, tasks, resources, sprintNames, workPackages, me, onStatusChange, onWorkflowChange, workflow, onViewTask, onEditTask, onDeleteTask, onNotifyTask, onDataImport, onCelebrate, minPriority = 'Low' as TaskPriority, sortKey = 'smart' as TaskSortKey, bulkEdit }) => {
+const ModernTaskList: React.FC<ModernTaskListProps> = ({ projectId, initialQuery, onPlanSprint, onPlanRelease, tasks, resources, sprintNames, workPackages, me, onStatusChange, onWorkflowChange, workflow, onViewTask, onEditTask, onDeleteTask, onNotifyTask, onDataImport, onCelebrate, minPriority = 'Low' as TaskPriority, sortKey = 'smart' as TaskSortKey, bulkEdit, onNewRecord }) => {
     const [query, setQuery] = useState('');
     const [queryOpen, setQueryOpen] = useState(!!initialQuery);
     const [querySeed, setQuerySeed] = useState(initialQuery || '');
@@ -251,7 +253,8 @@ const ModernTaskList: React.FC<ModernTaskListProps> = ({ projectId, initialQuery
                         </select>}
                     </>
                 )}
-                <div className="relative ml-auto">
+                <div className="relative ml-auto flex flex-wrap gap-2">
+                    {onNewRecord && <button type="button" className="m-btn m-btn-gray" onClick={onNewRecord} title="Benzer kapanmış kayıtlardan süre, efor ve önem önerisiyle yeni kayıt"><Icon name="sparkles" size={18} />Tahminli yeni kayıt</button>}
                     <button type="button" className="m-btn m-btn-gray" aria-haspopup="menu" aria-expanded={ioOpen} disabled={busy} onClick={() => setIoOpen(o => !o)}>
                         <Icon name="download" size={18} />
                         {busy ? 'Yükleniyor…' : 'İçe / dışa aktar'}
