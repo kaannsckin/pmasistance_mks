@@ -1,23 +1,19 @@
-# Ajanda — Burak (son güncelleme 2026-11-19)
+# Ajanda — burak (26 Kasım 2026)
 
-| Madde | Kime | Termin | Durum |
-|---|---|---|---|
-| NHR toparlanma planı Ahmet'e | ahmet | 2026-11-12 | tamam |
-| NHR teklif planı (18 Kasım hedefi) H47 raporu ve notla Ahmet'e iletildi, 1 gün gecikti | ahmet | 2026-11-18 | tamam |
-| 20 Kasım yük testi tarihini ekiple teyit et | ahmet | 2026-11-20 | acik |
-| NHR için tek sürüm tarihi öner (yük testi sonucuyla) | ahmet | 2026-11-24 | acik |
-| PSL gecikmiş 9 görevin yeni tarihleri (Jira'da tarih aracı yok; liste ile Mert'e) | mert | 2026-11-20 | ertelendi |
-| NHR gecikmiş görev tarihleri teklif listesi (18/20/24/27 Kasım, 4 Aralık) | ahmet | 2026-11-20 | ertelendi |
-| Kurum C değişiklik talebi (NHR proje notuna yazıldı) | ahmet | 2026-11-19 | tamam |
-| NHR-118/NHR-123 ortak kök neden planı | Sena Tekin | 2026-11-20 | acik |
-| NHR performans ölçüm raporu | Ozan Kılıç | 2026-11-23 | acik |
-| NHR-78 ölçüm sonuçları, NHR-92/NHR-82 sapma nedenleri | Aslı Çakır | 2026-11-23 | acik |
-| Kurum C kapsam netleştirme toplantısı | Aslı Çakır | 2026-11-19 | acik |
-| NHR-109 sapma nedenleri | Sena Tekin | 2026-11-19 | acik |
-| PSL-124 kök neden ve düzeltme planı | Ece Polat | 2026-11-20 | acik |
-| PSL-120 çökme nedeni ve test senaryosu | Kerem Doğan | 2026-11-20 | acik |
-| PSL test senaryoları güncelleme | Barış Güneş | 2026-11-23 | acik |
-| PSL-78 tarama bulguları listesi | Kerem Doğan | 2026-11-20 | ertelendi |
-| PSL H45 iadesi: taslağa alınırsa yeniden gönder | mert | 2026-11-20 | acik |
-| NHR plan kilidi talebi (H46 onayı sonrası) ve 45,57 AA teyidi | mert | 2026-11-23 | ertelendi |
-| PSL 2026 plan onayı için Barış'ın nedenleri | ahmet | 2026-11-23 | ertelendi |
+- [tamam] NHR için tek sürüm tarihi önerisi (18 Aralık, tahmin) Ahmet'e gönderildi, 2 gün gecikme — ahmet, termin 2026-11-24
+- [tamam] NHR gecikmiş görev teklif tarih listesi Ahmet'e gönderildi — ahmet, termin 2026-11-20
+- [ertelendi] PSL gecikmiş 8 görevin teklif tarih listesi Mert'e (6 görev; 2 görev listelenemedi) — mert, termin 2026-11-20
+- [acik] PSL kalan 2 gecikmiş görevin tarihleri (gorev_ara hatası) Mert'e — mert, termin 2026-11-27
+- [acik] Ahmet'ten sürüm tarihi ve teklif listesi kararı — ahmet, termin 2026-11-30
+- [acik] NHR-78 alt kayıt bölme önerisi ekiple paylaşılacak — ekip, termin 2026-11-27
+- [ertelendi] NHR plan kilidi talebi gönderilecek, 45,57 AA teyidi — mert, termin 2026-11-27
+- [ertelendi] PSL 2026 plan onayı için Barış'ın nedenleri — ahmet, termin 2026-11-30
+- [acik] Yazılamayan Jira aktarımı, RAG ve proje notları (oneriyi_uygula hatası) yeniden denenecek — burak, termin 2026-11-27
+- [acik] PSL-124 kök neden planı — barış güneş, termin 2026-11-30
+- [acik] PSL-120 çökme nedeni + test senaryosu — kerem doğan, termin 2026-12-01
+- [acik] PSL saha test kullanıcı listesi ve takvim — kerem doğan, termin 2026-11-27
+- [acik] NHR-118/NHR-123 ortak kök neden — sena tekin, termin 2026-11-27
+- [acik] NHR-128 tahmin + performans ölçüm raporu — tuğba kurt, termin 2026-11-27
+- [acik] NHR kapsam talebi etki analizi — tuğba kurt, termin 2026-11-30
+- [acik] NHR-78 ölçüm sonuçları, NHR-92/NHR-82 sapma nedenleri — aslı çakır, termin 2026-11-30
+- [acik] PSL saha test katılımı riski ve NHR kilit personel izni riski (Ozan, NHR-128) risk kaydına işlenecek (oner_risk_ekle/guncelle) — burak, termin 2026-11-27

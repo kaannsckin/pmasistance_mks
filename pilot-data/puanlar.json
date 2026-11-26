@@ -398,5 +398,85 @@
       "eksi": 0
     },
     "gerekce": "ön puan: ATL-157 devrini kapasite verisiyle onayladı, kilit beklentisini doğru olarak \"inceleniyor\" tuttu; demo yoklaması 1/1/1 çağrı. Aralık kararını Selin'in \"gerekmiyor\" notuna rağmen aynen bıraktı; Selin/Mert \"çelişkisi\" yanlış okuma."
+  },
+  {
+    "tarih": "2026-11-26",
+    "persona": "elif",
+    "puan": 72,
+    "kaynak": "koordinator",
+    "kirilim": {
+      "tutarlilik": 26,
+      "dongu": 12,
+      "rapor": 14,
+      "gerekce": 13,
+      "iletisim": 8,
+      "bulgu": 4,
+      "eksi": -5
+    },
+    "gerekce": "ön puan: tüm yazmalar sürüm çakışmasıyla reddedildi (kendi hatası değil); rakamlar tutarlı, Onur'un izinde olduğu halde toplantı katılımcısı yazılması ve olay sayımı farkını yakaladı. Ancak 'H48 raporu gönderilmedi' dedi; geçmişte 05:54 create+submit görünüyor (yazma hatası döndü ama rapor yazılmış); durumu doğrulamadı. Selin ATL için karar veremedi."
+  },
+  {
+    "tarih": "2026-11-26",
+    "persona": "burak",
+    "puan": 82,
+    "kaynak": "koordinator",
+    "kirilim": {
+      "tutarlilik": 27,
+      "dongu": 15,
+      "rapor": 18,
+      "gerekce": 13,
+      "iletisim": 8,
+      "bulgu": 4,
+      "eksi": -3
+    },
+    "gerekce": "ön puan: PSL ve NHR H48 raporları gönderildi, plan maddeleri tek tek, teklif tarih listesi ve NHR-128 devri; EVM 19→26 farkını yazdı. 40 araç çağrısı sınırını aştı (≈60); risk, görev ve not yazmaları sürüm çakışmasıyla reddedildi."
+  },
+  {
+    "tarih": "2026-11-26",
+    "persona": "selin",
+    "puan": 88,
+    "kaynak": "koordinator",
+    "kirilim": {
+      "tutarlilik": 28,
+      "dongu": 18,
+      "rapor": 18,
+      "gerekce": 14,
+      "iletisim": 8,
+      "bulgu": 4,
+      "eksi": -2
+    },
+    "gerekce": "ön puan: PSL ve NHR H48'i araç rakamlarıyla doğrulayıp gerekçeli onayladı; 0,3 AA için üç talebi 0,9 AA ile toplayıp yönetime taşıdı. ATL H48'i 'gönderilmedi' diye karar dışı bıraktı; haftalik_rapor geçmişi create/submit gösteriyordu, yeterince doğrulamadı."
+  },
+  {
+    "tarih": "2026-11-26",
+    "persona": "mert",
+    "puan": 80,
+    "kaynak": "koordinator",
+    "kirilim": {
+      "tutarlilik": 26,
+      "dongu": 16,
+      "rapor": 16,
+      "gerekce": 12,
+      "iletisim": 8,
+      "bulgu": 4,
+      "eksi": -2
+    },
+    "gerekce": "ön puan: H47'den kalan ATL/PSL/KLK'yi onaylayıp H47 haftasını yayınladı (2. denemede); yazma çakışmasını bulgu yaptı. H48'e Selin kararından önce baktığı için PSL/NHR H48 bugün yayına girmedi (paralel sırada koordinatör payı). Maliyet/worklog kontrolü yapılmadı."
+  },
+  {
+    "tarih": "2026-11-26",
+    "persona": "ahmet",
+    "puan": 88,
+    "kaynak": "koordinator",
+    "kirilim": {
+      "tutarlilik": 28,
+      "dongu": 17,
+      "rapor": 17,
+      "gerekce": 14,
+      "iletisim": 9,
+      "bulgu": 3,
+      "eksi": 0
+    },
+    "gerekce": "ön puan: 16 gündür açık ATL kilit beklentisini ve Selin'in U310 beklentisini rakamla (SPI/CPI/VAC, 0,3/0,9 AA) karara bağladı; demo yoklaması 1/1/1 çağrı, tutarlı. Kilit hâlâ kapalı; karar uygulamaya yazılamadı."
   }
 ]

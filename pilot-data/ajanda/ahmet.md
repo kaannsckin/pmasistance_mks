@@ -1,13 +1,6 @@
-# Ajanda — Ahmet (son güncelleme 2026-11-19)
+# Ajanda — ahmet (26 Kasım 2026)
 
-| Madde | Kime | Termin | Durum |
-|---|---|---|---|
-| Can Erdem KLK 0,2 AA görüşmesi sonucu | elif | 2026-11-21 | acik |
-| ATL plan kilidi: yönetim düzeyinde çözüm; açılınca aynı gün planı yeniden onayla | mert | 2026-11-21 | acik |
-| ATL-157 Emre Koç'a Jira devri | elif | 2026-11-20 | acik |
-| Rol atanmamış 0,4 AA (U340) rol girişi, H45 ATL/PSL ve NHR H46 çıkmazı | mert | 2026-11-21 | acik |
-| NHR teklif tarih listesi + tek sürüm tarihi + NHR-118/123 kök neden planı | burak | 2026-11-24 | acik |
-| KLK H45 onaylayanının teyidi | selin | 2026-11-21 | acik |
-| KLK Onur payı 0 AA uygulaması | selin | 2026-11-19 | tamam |
-| PSL 2026 plan onayı (Barış Güneş nedenleri sonrası); PSL-124 durumu | burak | 2026-11-24 | ertelendi |
-| ATL geciken görev artışı (4→7) toparlanma tarihi | elif | 2026-11-21 | acik |
+- [acik] Burak'ın NHR v1.16 sürüm tarihi (18 Aralık, tahmin) için kesin karar — burak, termin 2026-11-30
+- [acik] YILDIZ 1 Aralık başlangıcı ve U320 Test Mühendisi açığı (1,6 AA) için kapasite_talep ile değerlendirme — selin, termin 2026-11-30
+- [acik] Mert: U340 rolsüz 0,4 AA satırına rol girişi — mert, termin 2026-11-30
+- [acik] Elif: ATL-157 Jira atamasını Emre Koç'a yapma — elif, termin 2026-11-27

@@ -1,11 +1,7 @@
-# Ajanda — Mert (son güncelleme 2026-11-19)
+# Ajanda — mert (26 Kasım 2026)
 
-| Madde | Kime | Termin | Durum |
-|---|---|---|---|
-| H45 ATL/PSL çıkmazı (değişmez, bölüm sorumlusunda): çözülünce EVM ve biçim denetimi | elif / burak / selin | 2026-11-23 | acik |
-| NHR H46 PYB'de askıda: yayın sonrası onay yolu | selin / ahmet | 2026-11-23 | acik |
-| KLK H47 raporu yazıldı mı kontrol | can | 2026-11-20 | acik |
-| H47 ATL, PSL, NHR: biçim denetimi (Selin onayı verildi) | mert | 2026-11-20 | acik |
-| NHR plan kilidi talebi gelince plan 45,57 AA teyidi | burak | 2026-11-23 | acik |
-| KLK bs_approve ve rolsüz NHR 0,4 AA satırı (Can Erdem) teyidi | can | 2026-11-23 | acik |
-| Ekim gerçekleşen AA ↔ worklog karşılaştırmasını Kasım kapanışında yinele | mert | 2026-12-01 | acik |
+- [acik] ATL, PSL, NHR H48 raporlarına Selin kararı gelince biçim denetimi (oner_rapor_karari) ve haftayı yayınlama — mert, termin 2026-11-27
+- [acik] KLK H48 raporu bekleniyor; hatırlatma Can'a yazıldı — can, termin 2026-11-27
+- [acik] Maliyet raporu ve tahsis kontrolü, worklog ve AA tutarlılığı, U340 rol girişi (0,4 AA) — mert, termin 2026-12-03
+- [acik] H45 ATL/PSL iade yolu ve NHR H46 çıkmazı: Ahmet'e yönetim çözümü talebi — ahmet, termin 2026-12-03
+- [acik] Burak'ın NHR 45,57 AA teyidi (kendisi yazacak) ve NHR plan kilidi talebi (27 Kasım'a kadar) — burak, termin 2026-11-27

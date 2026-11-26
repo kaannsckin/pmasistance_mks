@@ -1,10 +1,7 @@
-# Ajanda — Selin (son güncelleme 2026-11-19)
+# Ajanda — selin (26 Kasım 2026)
 
-| Madde | Kime | Termin | Durum |
-|---|---|---|---|
-| ATL plan kilidi: kilit açılınca Kasım Onur 0,42 / Selin 0,3 / Emre +0,1 (Aralık için ek değişiklik gerekmiyor, 0,64) | ahmet | 2026-11-24 | acik |
-| KLK Onur payı 0 AA (Kasım+Aralık) uygulandı | ahmet | 2026-11-19 | tamam |
-| ATL-157 devri (Emre/Cem) 20 Kasım: Emre/Cem Kasım doluluğunu araçtan doğrula | elif | 2026-11-20 | acik |
-| NHR H46/H47, PSL H47, ATL H47 onaylandı | burak | 2026-11-19 | tamam |
-| H45 ATL/PSL raporları: aşama düzeltmesi bekleniyor | mert | 2026-11-24 | ertelendi |
-| Onur Nisan-Ekim 1,2/0,9 yapısal aşım kalıcı çözüm gündemi | selin | 2026-11-26 | ertelendi |
+- [acik] NHR-128 tahmini ve devri, NHR-118 kök neden kontrolü; tutmazsa H49 iade — burak, termin 2026-11-27
+- [acik] Elif ve Burak'a kaynak beklentisi kararını yaz (öncelik/ek kaynak sonucu) — elif, termin 2026-11-27
+- [acik] ATL H48 raporu: Elif gönderince değerlendir — elif, termin 2026-11-27
+- [acik] PSL-124 kök neden planı kontrolü; yoksa H49 iade — burak, termin 2026-11-30
+- [acik] KLK H45 onaycısı Mert ile netleştir — mert, termin 2026-11-27
