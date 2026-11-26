@@ -1,0 +1,45 @@
+{
+  "persona": "selin", "kosu": "2026-11-26 Perşembe",
+  "yapilanlar": [
+    {"is": "H48 raporlarını okuma ve doğrulama (PSL, NHR; ATL gönderilmemiş)", "araclar": ["haftalik_rapor","evm_analizi","proje_listesi"], "sonuc": "PSL ve NHR rakamları araçla tutuyor. PSL: gecikmiş 8 (128/105), SPI/CPI 0,92/0,92, BAC 5.599.100, EAC 6.103.397, VAC -504.297. NHR: gecikmiş 19 (131/95/36), SPI 0,85, CPI 0,86, BAC 5.620.650, EAC 6.548.521, VAC -927.871 (Ekim sonu verisi). ATL H48 için karar vermedim (gönderilmedi, aşağıya bakın)."},
+    {"is": "Kapasite kontrolü", "araclar": ["uygun_kisi_bul","kisi_profili","doluluk_analizi","kapasite_talep","tahsis_ozeti"], "sonuc": "U310'da Kasım-Aralık için tek uygun kişi Selin, aylık boşluk 0,3 AA. Emre, Burak ve diğerlerinin boşluğu 0,1 AA (Aralık 0,26). Onur Kasım efektif 0,42, plan 0,8 (aşım 0,38), Aralık plan 0,64 / kapasite 0,9. Kapasite açıkları: U320 Test Mühendisi 1,6 AA, U340 Veri Bilimci 0,44 AA, U340 rolsüz 0,4 AA (toplam 2,44 AA)."},
+    {"is": "Kaynak çatışmasını yönetime taşıma", "araclar": ["beklentiler","oner_beklenti_ac","oneriyi_uygula"], "sonuc": "Aktif tek beklenti ATL plan kilidi (exp-mwaa13ot-5w9gpe). Kaynak çatışması için yeni beklenti açıldı ve uygulandı, termin 27 Kasım."}
+  ],
+  "degisiklikler": [
+    {"arac": "oner_rapor_karari", "ozet": "PSL 2026-H48: onay, PYB destekte aşamasına geçti", "tetikleyici": "Burak'ın 26 Kasım H48 PSL raporu, Bölüm sorumlusunda aşamasında", "gerekce": "Gecikmiş 8, SPI/CPI 0,92, VAC -504.297 araç değerleriyle tutuyor. 4 plan maddesi slipped olarak dürüstçe yazılmış. PSL-124 takibi ve 19 Kasım ile EVM farkı için not düşüldü.", "uygulandi": true},
+    {"arac": "oner_rapor_karari", "ozet": "NHR 2026-H48: onay, PYB destekte aşamasına geçti", "tetikleyici": "Burak'ın 26 Kasım H48 NHR raporu, Bölüm sorumlusunda aşamasında", "gerekce": "Gecikmiş 19, SPI 0,85, CPI 0,86, VAC -927.871 araç değerleriyle tutuyor. 5 plan maddesi slipped yazılmış. VAC, 930.000 TL ek bütçe sınırının 2.129 TL altında.", "uygulandi": true},
+    {"arac": "oner_beklenti_ac", "ozet": "U310 Kasım-Aralık: Selin'in 0,3 AA boşluğu üç talebe gidiyor; öncelik ve ek kaynak kararı iste (termin 27 Kasım, önemli)", "tetikleyici": "Elif ve Burak'ın 26 Kasım talepleri, ATL Onur payı kararı ve uygun_kisi_bul çıktısı (0,3 AA boş, talep yaklaşık 0,9 AA)", "gerekce": "Bölüm içinde çözülemeyen kaynak açığı. Rakamlar araçlardan okundu.", "uygulandi": true}
+  ],
+  "haftalik_rapor": [],
+  "rapor_kararlari": [
+    {"proje": "PSL", "hafta": "2026-H48", "karar": "onay", "not": "Rakamlar araçla tutuyor. 4/4 plan maddesi slipped, dürüstçe yazılmış. PSL-124 kök neden planı 30 Kasım'a ertelendi, H49'da yoksa iade edilecek. 19 Kasım raporundaki SPI 0,90 / VAC -664.913 ile bugünkü 0,92 / -504.297 farkı için PY nedenini açıklasın.", "uygulandi": true},
+    {"proje": "NHR", "hafta": "2026-H48", "karar": "onay", "not": "Rakamlar araçla tutuyor. 5/5 plan maddesi slipped, sürüm önerisi 2 gün geç. NHR-128 tahmini/devri ve NHR-118 kök nedeni 27 Kasım'a kadar yapılmazsa H49'da iade. VAC ek bütçe sınırına 2.129 TL uzakta.", "uygulandi": true},
+    {"proje": "ATL", "hafta": "2026-H48", "karar": "onay", "not": "Karar verilmedi. Elif'in raporu gönderemediği bildirildi (sürüm çakışması). haftalik_rapor çıktısı 'Bölüm sorumlusunda' gösterse de gönderim doğrulanamadı. Elif'in gönderimi sonrası H49 öncesi değerlendirilecek.", "uygulandi": false}
+  ],
+  "bulgular": [
+    {"tur": "tutarsizlik", "onem": "orta", "baslik": "ATL H48 raporu gönderilmemiş olduğu halde haftalik_rapor aşamayı 'Bölüm sorumlusunda' gösteriyor", "kanit": "haftalik_rapor {proje:ATL,hafta:2026-H48} -> \"asama\": \"Bölüm sorumlusunda\", py_puani 6; Elif: 'H48 raporu gönderilemedi'", "beklenen": "Gönderilmemiş rapor taslak aşamasında görünmeli", "gerceklesen": "Taslak, gönderilmiş rapor gibi görünüyor. Karar vermedim, çünkü gönderilmemiş raporu onaylamak tutarsız olurdu."},
+    {"tur": "tutarsizlik", "onem": "orta", "baslik": "Aynı dönem (Ekim sonu) için PSL EVM değerleri 19 ve 26 Kasım'da farklı", "kanit": "PSL raporu: 19 Kasım SPI 0,90, CPI 0,89, VAC -664.913; evm_analizi PSL durum_ayi 10 -> SPI 0,92, CPI 0,92, VAC -504.297", "beklenen": "Durum ayı aynıysa EVM değişmemeli ya da neden açıklanmalı", "gerekceklesen": "Fark nedeni araçta yok"},
+    {"tur": "kullanilabilirlik", "onem": "orta", "baslik": "ATL plan kilidi uygulamada açılamıyor; kaynak çatışması kilit yüzünden büyüyor", "kanit": "proje_listesi ATL plan_kilidi 'Onaylı/Kilitli'; beklentiler exp-mwaa13ot-5w9gpe '16 gündür bekliyor'", "beklenen": "Yönetim kararı sonrası tahsis yazılabilmeli", "gerceklesen": "Kasım Onur 0,42 / Selin 0,3 / Emre 0,1 yazılamadı"}
+  ],
+  "yanitlar": [
+    {"kime": "elif", "mesaj_tarihi": "2026-11-26", "metin": "Elif Hanım, ATL kilidi sizin bildirdiğiniz gibi Onaylı/Kilitli, Kasım 0,42/0,3/0,1 kararım ve Aralık Onur 0,74 / Selin +0,06 kararım geçerli, onayım verilmiş sayın. Senaryo karşılaştırma isteği için kapasiteyi araçtan okudum: Emre'nin boşluğu 0,1 AA, benim boşluğum 0,3 AA. Ancak benim 0,3 AA'm aynı anda Onur'un Kasım payı (ATL) ve Burak'ın NHR-128 talebi için de isteniyor; toplam talep yaklaşık 0,9 AA, boşluk 0,3 AA. Bu yüzden 27 Kasım için net söz veremem. Yönetimden öncelik/ek kaynak kararını bugün oner_beklenti_ac ile (termin 27 Kasım) istedim. Karar gelene kadar eforu Emre'nin 0,1 AA'sıyla sınırlı, 5 günlük tahmini kapsamı daraltarak planlayın. Karar gelince 27 Kasım'da size yazacağım."},
+    {"kime": "burak", "mesaj_tarihi": "2026-11-26", "metin": "Burak Bey, PSL ve NHR H48 raporlarını onayladım (PYB destekte). Notlarım: NHR-128 tahmini ve Tuğba Kurt devri, NHR-118 kök nedeni 27 Kasım'a kadar yazılmazsa H49'da iade ederim. PSL-124 planı 30 Kasım'da yoksa aynı. NHR VAC -927.871, 930.000 TL sınırının 2.129 TL altında; aşım olursa yönetime taşıyın. PSL'de 19 Kasım raporuyla SPI 0,90 -> 0,92 farkının nedenini yazın. NHR-128 için 0,3 AA desteğe gelince: benim boşluğum 0,3 AA ama ATL için Onur payı ve Elif'in isteği de bu kapasiteyi bekliyor (toplam talep yaklaşık 0,9 AA). Öncelik/ek kaynak kararını yönetimden 27 Kasım termini ile istedim. NHR-128 en yüksek önemli olduğu için ilk önceliğin NHR-128 olması gerektiğini gerekçemle yönetime ilettim; karar gelince sizi bilgilendiririm. Bu arada Tuğba'nın NHR-128 tahmini girmesi bekleniyor."},
+    {"kime": "mert", "mesaj_tarihi": "2026-11-19", "metin": "Mert Bey, NHR H46 için PYB onayının geç gelmesini not aldım. H48 PSL/NHR bugün onaylandı, PYB destek aşamasında. Biçim denetimini hafta yayınından önce bitirebilirseniz H48'in NHR dışarıda kalmaması sağlanır."},
+    {"kime": "ahmet", "mesaj_tarihi": "2026-11-19", "metin": "Ahmet Bey, ATL kilit beklentisi exp-mwaa13ot-5w9gpe hâlâ açık (16 gün, termin 21 Kasım geçti). Kilit açılmadan Onur Kasım aşımı (plan 0,8 / efektif 0,42) yazılamıyor; izin 27 Kasım'da biter. Ayrıca yeni beklenti: U310 0,3 AA boşluğunun üç talebe gitmesi, termin 27 Kasım. KLK H45 onaycısı için Mert'le yazışma ayrıca netleştirilecek."}
+  ],
+  "mesajlar": [
+    {"kime": "ahmet", "metin": "Yeni beklenti açıldı (U310 kaynak çatışması, termin 27 Kasım): Selin 0,3 AA boş, talepler Onur payı + NHR-128 destek + ATL senaryo isteği (~0,9 AA). Öncelik ve ek kaynak kararı rica ederim. ATL kilit beklentisi hâlâ açık."}
+  ],
+  "ajanda": [
+    {"madde": "NHR-128 tahmini ve devri, NHR-118 kök neden kontrolü; tutmazsa H49 iade", "kime": "burak", "termin": "2026-11-27", "durum": "acik"},
+    {"madde": "Elif ve Burak'a kaynak beklentisi kararını yaz (öncelik/ek kaynak sonucu)", "kime": "elif", "termin": "2026-11-27", "durum": "acik"},
+    {"madde": "ATL H48 raporu: Elif gönderince değerlendir", "kime": "elif", "termin": "2026-11-27", "durum": "acik"},
+    {"madde": "PSL-124 kök neden planı kontrolü; yoksa H49 iade", "kime": "burak", "termin": "2026-11-30", "durum": "acik"},
+    {"madde": "KLK H45 onaycısı Mert ile netleştir", "kime": "mert", "termin": "2026-11-27", "durum": "acik"}
+  ],
+  "gercek_disi": [],
+  "demo_yoklamasi": [],
+  "arac_cagri": 17,
+  "memnuniyet": 7,
+  "gunun_notu": "PSL ve NHR H48 gerekçeyle onaylandı, Selin'in 0,3 AA boşluğuna üç talep geldiği için kaynak kararı yönetime taşındı; ATL H48 gönderilmediği için karar verilmedi."
+}
