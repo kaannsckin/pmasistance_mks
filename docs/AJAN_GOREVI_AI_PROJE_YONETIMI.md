@@ -14,11 +14,17 @@ Sen bu depoda çalışan kıdemli bir full-stack (TypeScript / React / Node) mü
 - K'nın PlanAsistan'da verdiği kararlar ve yorumlar GitHub'a, ajanların zaten okuduğu yerlere düşer.
 - Bunların hiçbiri LLM çağırmaz. Köprü sıfır token harcar.
 
+**Görev dağılımı (K'nın kararı, 26 Kasım):**
+
+- **Planın sahibi Claude'dur.** Bu belge plandır. Codex planı yeniden yazmaz.
+- Codex plana itirazını ya da eksik bulduğu noktayı "Codex inceleme notları" bölümüne ya da PR yorumuna yazar. Claude planı revize eder ve bölüm 16'da yanıtlar.
+- Codex yalnız durum dosyasını yazar: `docs/AJAN_YONETIMI_DURUM.md`. Bu dosyada faz durumu, ölçümler, aldığı varsayımlar ve harcanan AI kullanımı (bölüm 10.2) bulunur.
+
 Çalışma sırası:
 
-1. **Aşama 0: Keşif ve plan** (§9 F0). Kodu oku, `docs/AJAN_YONETIMI_PLANI.md` plan ve durum dosyasını yaz, commit'le.
+1. **F0: Doğrulama** (§9). Taban çizgisini ve plandaki kod gerçeklerini doğrula, durum dosyasını aç, commit'le. Plan metnini değiştirme.
 2. **Fazlar F1–F9** (§9). Sırayla uygula. Her faz ayrı commit; her commit'ten önce `npx vitest run` ve `npx tsc --noEmit` yeşil olmalı.
-3. Her fazın sonunda plan dosyasındaki durum tablosunu güncelle.
+3. Her fazın sonunda durum dosyasını güncelle (faz durumu ve AI kullanımı).
 4. Bitince PR aç (§13). Claude son kontrolü yapar (§14), K merge eder.
 
 Belirsizlikte makul varsayılanı seç; varsayımı plan dosyasına ve commit mesajına yaz, ilerle. **Yalnız şu durumlarda dur ve sor:**
@@ -131,17 +137,17 @@ Why: <neden>
 
 | ID | Gereksinim | Kabul ölçütü (özet) |
 |---|---|---|
-| G-01 | Lee issue'ları PlanAsistan'da görev olarak görünür; kaynak GitHub'dır | Anahtar `LEE-LOCAL-NNN`, durum `durum:*`'dan, kapalılar Done; aynı eşitleme iki kez koşunca değişiklik 0 |
+| G-01 | Lee issue'ları PlanAsistan'da görev olarak görünür; kaynak GitHub'dır | Kalıcı kimlik `repo#numara`. Görünen anahtar `GH-412` → `LEE-LOCAL-086` olunca **aynı görev** güncellenir. `durum:draft` → Backlog. İptal kayıtları ilerlemeye girmez (§7.5). Aynı eşitleme iki kez koşunca değişiklik 0 |
 | G-02 | Ajanlar persona olarak görünür (ör. "Claude · Orchestrator", "Claude · iOS", "Codex · Backend", "Copilot") | `runtime:*` + `sahip:*` → `resourceName`; personalar veri havuzunda "AI Ajan" ünvanıyla |
-| G-03 | `karar` issue'ları "Yönetimden beklentiler"de görünür | Ajanın soru yorumu, seçenekleri, P0–P3 aciliyeti, 48 saat son tarihi ve issue bağlantısı kayıtta |
-| G-04 | K'nın beklenti yanıtı GitHub'a düşer | Önizleme ve onaydan sonra issue'ya bir "K kararı" yorumu ve #288'e bir gelen kutusu satırı; tekrar gönderimde kopya oluşmaz |
+| G-03 | `karar` issue'ları "Yönetimden beklentiler"de görünür | Ajanın soru yorumu, seçenekleri, P0–P3 aciliyeti, issue bağlantısı kayıtta. Son tarih = `karar` label'ının eklendiği an + 48 saat (issue olaylarından); bir kez yazılır, yeni yorumlarla ilerlemez (§8.6) |
+| G-04 | K'nın beklenti yanıtı GitHub'a düşer ve Lee tarafında **doğrulanabilir** bir insan kararıdır | Önizleme ve onaydan sonra issue'ya "K kararı" yorumu, #288'e gelen kutusu satırı. İkisi de K'nın GitHub hesabından yazılır, hedef issue'yu ve yanıtlanan soru yorumunun kimliğini taşır (§8.3). Yeniden deneme yalnız eksik adımı tamamlar; etkisi bir kez görülür (§8.7) |
 | G-05 | K, plana (göreve) yorum yazabilir; tür seçer: Not / Değişiklik iste / Onayla | §8.4'teki biçim ve kurallar; yalnız `durum:ready` iken "Değişiklik iste" label'ı `durum:draft`'a çevirir |
 | G-06 | Haftalık plan md'leri haftalık not olarak görünür; "K'dan bu hafta istenen" maddeleri beklenti olur | Hafta ve yıl doğru; madde başına bir beklenti; tekrar içe alımda kopya yok |
 | G-07 | Ajan koşuları görünür: kim, hangi model, sonuç | Başladı / Dönüş / Kapanış yorumlarından; bilinmeyen alan "bilinmiyor"; token yoksa boş |
 | G-08 | Karar süresi yaklaşınca ya da aşılınca K'ya bildirim gider | Mevcut kanallar (Teams / Slack / e-posta) ve kural seti; günlük tek özet |
 | G-09 | Köprü LLM kullanmaz; ajan tarafındaki ek okuma en az düzeyde kalır | Kodda AI çağrısı yok; GitHub'a yazılan her mesaj ≤ 1500 karakter |
 | G-10 | Lee'nin tek-yazar kuralı bozulmaz | Köprü `docs/ROADMAP.md`, `registry.json`, `INDEX`, `NOW`, `memory` dosyalarına ve kod dosyalarına **yazmaz**; `karar` label'ını kaldırmaz |
-| G-11 | Gizlilik: ajan yönetim verisi paylaşılan kullanıcılara görünmez | §6'daki dağıtım seçenekleri belgelenir; yazma rotaları yalnız K'nın kimliğiyle çalışır |
+| G-11 | Gizlilik: ajan yönetim verisi ve Lee içeriği paylaşılan kullanıcılara görünmez | §6'daki dağıtım seçenekleri belgelenir. GitHub rotasının **okuma ve yazma** op'ları yalnız §8.2'deki yetki tablosuna göre çalışır. Başka bir çalışma alanının üyesi Lee issue'larını okuyamaz (kabul testi §11.2) |
 | G-12 | Güvenlik: issue içeriği veri sayılır; arayüzde düz metin işlenir | XSS testi; içerikten komut, talimat ya da URL yürütülmez |
 
 ---
@@ -263,7 +269,7 @@ Aynı Supabase projesinde kim neyi görebilir (`supabase/schema.sql` ile doğrul
 | `durum:in-progress` / `in-review` / `rework` | `InProgress`, `jiraStatus` = label adı | |
 | Açık, `durum:*` yok | `Backlog` | |
 | Kapalı `completed` | `Done`, `resolution = "Tamamlandı"` | |
-| Kapalı `not_planned` / `duplicate` | `Done`, `resolution = "Yapılmayacak"` / `"Tekrar"` | |
+| Kapalı `not_planned` / `duplicate` | `Done`, `resolution = "Yapılmayacak"` / `"Tekrar"`, `cancelled = true` | İlerlemeye ve teslim göstergelerine girmez (§7.5) |
 | `P0` / `P1` / `P2` / `P3` | `priority = Blocker` / `High` / `Medium` / `Low` | Yoksa `Medium` |
 | `MS0`…`MS11` | `fixVersions` + `labels` | |
 | `runtime:*` + `sahip:*` | `resourceName` = persona adı (§7.3) | `runtime:*` yoksa "Atanmamış" |
@@ -272,7 +278,18 @@ Aynı Supabase projesinde kim neyi görebilir (`supabase/schema.sql` ile doğrul
 | `html_url`, numara | `github` (yeni, §7.2) | |
 | PR'lar | İçe alınmaz | Issue'ya bağlı PR bağlantısı `github.prUrls` olarak tutulabilir (gövde ya da timeline'daki `Closes #N` / `Refs #N`; zorunlu değil) |
 
-Çeviri saf bir fonksiyondur: `githubIssueToRecord(issue, opts): JiraIssueRecord`. `statusCategory` `new` / `indeterminate` / `done`'dan seçilir. Böylece `mergeJiraIssues` **değiştirilmeden** kullanılır. Değiştirmek gerekirse Jira testlerinin hepsi yeşil kalmalı.
+Çeviri saf bir fonksiyondur: `githubIssueToRecord(issue, opts): JiraIssueRecord`. `statusCategory` `new` / `indeterminate` / `done`'dan seçilir. `mergeJiraIssues` **değiştirilmez**; iki eksiği köprünün kendi saf adımları kapatır.
+
+Bu eksikler v3.7.0'da doğrulandı (Codex notu, Claude teyidi):
+
+- `statusOf`, `new` kategorisini durum adında "backlog/bekleme" yoksa `ToDo` yapar. Bu yüzden `durum:draft` ToDo olur.
+- Birleştirme yalnız anahtarla eşleşir (`keyOf(t.jiraId)`). Anahtar değişince ikinci görev açılır.
+
+Eşitleme hattı bu yüzden üç adımdır:
+
+1. **`rekeyByGithubRef(tasks, issues)`.** Birleştirmeden önce çalışır. Kalıcı kimlik `task.github.repo` + `task.github.number`'dır. Gelen issue'nun anahtarı görevdekinden farklıysa (`GH-412` → `LEE-LOCAL-086`) görevin `jiraId`'si yeni anahtara çevrilir. Görev kimliği, planlama alanları ve yorumlar korunur. Aynı repo ve numaraya bağlı iki görev bulunursa (eski veri) birleştirilmez; uyarı üretilir, K karar verir.
+2. **`mergeJiraIssues`.** Olduğu gibi kullanılır.
+3. **`applyLeeStatus(tasks, issues)`.** Birleştirmeden sonra çalışır. §7.1 tablosunu kesin uygular: `durum:draft` ve `durum:*`'suz açık issue → Backlog; iptal edilen → `cancelled = true`. Eşleme `mergeJiraIssues`'a bırakılmaz.
 
 ### 7.2 Yeni isteğe bağlı alanlar (şema değişikliği yok)
 
@@ -290,7 +307,8 @@ github?: {
 };
 
 // Task
-github?: GithubRef & { prUrls?: string[] };
+github?: GithubRef & { prUrls?: string[] };  // kalıcı kimlik: repo + number (§7.1)
+cancelled?: boolean;            // iptal / tekrar: ilerlemeye girmez (§7.5)
 agentRuns?: AgentRun[];         // en çok 20, en yeni sonda (F7)
 
 interface AgentRun {
@@ -300,7 +318,13 @@ interface AgentRun {
 }
 
 // ManagementExpectation
-source?: GithubRef & { kind: 'karar' | 'weekly'; week?: string; questionCommentUrl?: string };
+source?: GithubRef & {
+  kind: 'karar' | 'weekly'; week?: string;
+  questionCommentId?: number;   // yanıtlanan soru yorumunun kimliği (§8.3)
+  questionCommentUrl?: string;
+  requestedAt?: string;         // `karar` label'ının eklendiği an; bir kez yazılır (§8.6)
+  requestedAtSource?: 'event' | 'ilk-gozlem';  // olaydan mı, ilk gözlemden mi
+};
 options?: string[];             // ajanın sunduğu seçenekler (A/B/C …), varsa
 thread?: { author: string; text: string; date: string; githubCommentUrl?: string }[];
 outbound?: OutboundState;       // giden kutusu durumu
@@ -309,10 +333,16 @@ outbound?: OutboundState;       // giden kutusu durumu
 // { author, text, date, kind?: 'not' | 'degisiklik' | 'onay', outbound?: OutboundState }
 
 interface OutboundState {
-  status: 'taslak' | 'gonderildi' | 'hata';
+  status: 'taslak' | 'gonderiliyor' | 'gonderildi' | 'kismi' | 'hata';
   marker: string;               // idempotentlik işareti (§8.3)
-  sentAt?: string; commentUrl?: string; inboxCommentUrl?: string; error?: string;
+  createdAt: string;            // işaret aramasının başlangıcı (§8.7)
+  steps: {                      // her adım ayrı izlenir; yeniden deneme yalnız eksik adımı yapar
+    issueComment?: StepState;
+    inbox?: StepState;
+    relabel?: StepState;        // yalnız "Değişiklik iste"
+  };
 }
+interface StepState { status: 'bekliyor' | 'tamam' | 'atlandi' | 'hata'; url?: string; at?: string; note?: string }
 ```
 
 ### 7.3 Personalar
@@ -331,6 +361,15 @@ interface OutboundState {
 - **Yeni bir üst düzey `WorkspaceData` alanı eklenirse** beyaz listeye ve okuma yoluna da eklenmelidir; yoksa bulutta sessizce kaybolur. Bu görev üst düzey alan **eklememeyi** hedefler. Eklemek zorunda kalırsan F0 planına yaz ve test et.
 - `Project.notes` buluta `workspace_private` ile gider. Haftalık plan notlarını Müdür rolü okuyamaz; D-09 bu yüzden var.
 
+### 7.5 İptal edilen kayıtlar ve ilerleme
+
+Bugün `utils/progress.ts` › `taskProgressPercent`, `status === Done` olan her görevi %100 sayar; çözüm (`resolution`) bakılmaz. Lee'de `not_planned` ile kapanan iş teslim değildir. Bu kural değişmeden içe alınırsa ilerleme şişer.
+
+- **Kural:** `cancelled === true` olan görev ilerleme paydasına ve payına girmez. Teslim sayılarına da girmez (`done`). Kaynak, mevcut ilerleme modeli (`progressOf` / `projectProgress`).
+- **Kapsam:** Yalnız `cancelled` alanı olan görevler. Jira hattı bu alanı yazmaz, bu yüzden Jira kullanıcıları için davranış **değişmez**. Jira'daki "Won't Do" kayıtlarının da dışlanması ayrı bir K kararıdır, bu görevde yok.
+- **F0'da:** `status === Done` ya da `TaskStatus.Done` sayan diğer hesapları (sağlık, EVM, hız, Monte Carlo verimi, yönetim ekranı) `grep` ile listele. Hangilerinin `cancelled`'ı dışlaması gerektiğini durum dosyasına yaz. En az `progressOf` ve proje kartındaki teslim göstergesi dışlar. Diğerleri için Claude'a not düş; plan revizyonuyla karar verilir.
+- **Kabul örneği:** 2 tamamlanan + 1 iptal + 1 yapılacak görev → ilerleme %67 (2/3), %75 değil. `done` = 2.
+
 ---
 
 ## 8. Sunucu vekili ve geri kanal
@@ -347,7 +386,8 @@ interface OutboundState {
 | `comments` | Tek issue'nun yorumları (son sayfadan, `per_page` ≤ 50) ya da `since` ile repo geneli | Hayır |
 | `file` | `GET /repos/{repo}/contents/{path}`; yalnız izinli yollar: `docs/planning/weekly/*.md`, `docs/agents/runtime.json`, isteğe bağlı `docs/tasks/registry.json` | Hayır |
 | `post-comment` | Issue'ya yorum ekler (§8.3 kurallarıyla) | **Evet** |
-| `relabel` | Yalnız `durum:ready` → `durum:draft`; önce güncel label'ları okur, `durum:ready` değilse hiçbir şey yapmaz ve nedenini döner | **Evet** |
+| `relabel` | Yalnız `durum:ready` → `durum:draft`: önce `durum:ready` silinir, 404'te durur, başarılıysa `durum:draft` eklenir (§8.7) | **Evet** |
+| `events` | Tek issue'nun olayları; `karar` label'ının eklendiği anı bulmak için (§8.6) | Hayır |
 
 Ortam değişkenleri:
 
@@ -356,16 +396,24 @@ Ortam değişkenleri:
 | `GITHUB_TOKEN` | Fine-grained PAT (D-07) |
 | `GITHUB_ALLOWED_REPOS` | Virgüllü liste, ör. `kaannsckin/Lee`. Listede olmayan repoya hiçbir istek gitmez |
 | `GITHUB_ALLOW_WRITE` | `1` değilse yazma op'ları kuru çalışır: gönderilecek gövdeyi `{ dryRun: true }` ile döner |
-| `GITHUB_WRITERS` | Yazabilecek doğrulanmış e-postalar (Supabase kipi), virgüllü |
+| `GITHUB_USERS` | Barındırılan kurulumda GitHub rotasını **okuyup yazabilecek** doğrulanmış e-postalar (Supabase kipi), virgüllü. Pratikte yalnız K (§8.2) |
+| `GITHUB_K_LOGIN` | K'nın GitHub kullanıcı adı. Yazılan yorumların yazarı sunucuda bununla doğrulanır (§8.7) |
 | `GITHUB_API_URL` | İsteğe bağlı; varsayılan `https://api.github.com`. Testte sahte sunucu |
 | `AI_CA_CERTS` | Kurum ağında mevcut sertifika deseni geçerli |
 
 ### 8.2 Erişim kuralları
 
-- **Okuma op'ları:** entegrasyon rotalarının mevcut kimlik kipiyle aynı koruma.
-- **Yazma op'ları:**
-  - Yalnız `supabase` kimlik kipinde ve doğrulanmış e-posta `GITHUB_WRITERS` içindeyse çalışır, ya da yerel sürümde 127.0.0.1'den gelen istekte.
-  - `none` ve `token` kiplerinde yazma **403** döner. Ortak erişim kodunu bilen biri K adına yorum yazamamalı.
+Mevcut entegrasyon yetkisi (`server/ai/auth.ts` › `verifySupabase`) **herhangi bir** çalışma alanına üyeliği yeterli sayar (`workspace_members?select=role&limit=1`). Bu, Jira ve AI için uygundur ama Lee içeriği için yetmez: paylaşılan bir dağıtımda başka bir alanın üyesi Lee issue'larını okuyabilirdi. GitHub rotası bu yüzden **kendi yetki kontrolünü** yapar; okuma da yazma da aynı tabloya bağlıdır.
+
+| Kurulum | Nasıl tanınır | Okuma (`meta` hariç) | Yazma |
+|---|---|---|---|
+| **Yerel sürüm** | `server/local/main.ts` rotayı `{ local: true }` ile çağırır; sunucu 127.0.0.1'e bağlıdır ve istek döngü adresinden gelir | İzinli | Yalnız `GITHUB_ALLOW_WRITE=1` ise; değilse kuru çalıştırma |
+| **Barındırılan (Vercel), `supabase` kipi** | `authorize` sonucu `verifiedEmail` | Yalnız `verifiedEmail ∈ GITHUB_USERS` ise; değilse **403** | Aynı koşul + `GITHUB_ALLOW_WRITE=1`; değilse kuru çalıştırma |
+| **Barındırılan, `none` ya da `token` kipi** | `resolveAuthMode` | **403** | **403** |
+
+- `local: true` bayrağını yalnız yerel sunucu geçirir. Vercel fonksiyonu (`api/integrations/github.ts`) bu bayrağı hiçbir zaman geçirmez; bayrak istekten okunmaz.
+- `GITHUB_USERS` (eski adıyla `GITHUB_WRITERS`) yalnız K'nın e-postasını içerir. Sunucudaki PAT K'nın hesabıdır; listedeki herkes GitHub'a K olarak yazar.
+- `meta` op'u yetkisiz de çalışır ama yalnız "yapılandırılmış mı / yazma açık mı" bilgisini döner. Repo adı, issue ve token bilgisi dönmez.
 - Hız sınırı: kişi başına dakikada en çok 10 yazma (`server/ai/rateLimit.ts`).
 - Her yazma sunucu loguna yazılır: kim, repo, issue, op, işaret. Metnin kendisi loglanmaz.
 
@@ -373,8 +421,8 @@ Ortam değişkenleri:
 
 Ortak kurallar:
 
-- Her mesajın son satırı gizli bir idempotentlik işaretidir: `<!-- planasistan:v1 kind=<tür> ref=<kayıt-id> -->`.
-- Gönderimden önce vekil o issue'nun son 50 yorumunda aynı işareti arar. Varsa yeniden yazmaz, mevcut yorumun bağlantısını döner.
+- Her mesajın son satırı gizli bir idempotentlik işaretidir: `<!-- planasistan:v1 kind=<tür> ref=<kayıt-id> issue=<hedef no> soru=<soru yorum id ya da -> -->`.
+- Aynı işaretin daha önce yazılıp yazılmadığı §8.7'deki gibi aranır (son 50 yorum değil).
 - Metin en çok 1500 karakter (G-09). Uzunsa kısaltılır ve "ayrıntı PlanAsistan'da" denir.
 - Sicil, parola, token, e-posta ve sağlık verisi yazılmaz. Metin içinde `@kullanıcı` varsa ters tırnağa alınır; istenmeyen bildirim gitmesin.
 - Ham kullanıcı metni Markdown olarak gider. Başındaki ``` / `~~~` dengesizliği kapatılır.
@@ -383,11 +431,11 @@ Ortak kurallar:
 
 ```
 **K kararı** · PlanAsistan · 2026-11-27
-Soru: <beklenti başlığı>
+Soru: <beklenti başlığı> (yanıtlanan soru: <soru yorumunun bağlantısı>)
 Yanıt: <seçilen seçenek ya da metin>
 Gerekçe: <isteğe bağlı>
 Kayda geçirme: orchestrator (ROADMAP karar kaydı); `karar` label'ını kaydı yazan kaldırır.
-<!-- planasistan:v1 kind=karar ref=<expectationId> -->
+<!-- planasistan:v1 kind=karar ref=<expectationId> issue=<NNN> soru=<soru yorum id> -->
 ```
 
 **b) Gelen kutusu satırı → #288** (`inbox_parse` ile birebir uyumlu; ilk dört satır başlık)
@@ -398,15 +446,30 @@ To: claude
 Date: 2026-11-27
 Why: #NNN K kararı
 - [ ] #NNN: <≤200 karakter özet> → <a'daki yorumun bağlantısı>
-<!-- planasistan:v1 kind=inbox ref=<expectationId> -->
+<!-- planasistan:v1 kind=inbox ref=<expectationId> issue=<NNN> soru=<soru yorum id> -->
 ```
+
+**İnsan kararının doğrulanabilirliği (iki depolu kabul koşulu).** Lee'nin `inbox_unread`'i bugün göndereni yorum metnindeki `From:` satırından okur ve yorumun yazarına bakmaz. Biçimin doğru çözülmesi, kararı K'nın verdiğini kanıtlamaz. Bu yüzden:
+
+- **PlanAsistan tarafı (bu görev):**
+  - (a) ve (b) K'nın PAT'iyle yazılır; GitHub yorumun yazarını K'nın hesabı olarak kaydeder.
+  - Vekil, yazdığı yorumun yanıtındaki `user.login`'in `GITHUB_K_LOGIN` olduğunu doğrular; değilse adımı `hata` sayar.
+  - İşaret hedef issue'yu ve soru yorumunun kimliğini taşır. Ajan soruyu sonradan yeniden sorarsa (yeni soru yorumu), eski yanıt o soruya uygulanmaz.
+- **Lee tarafı (Claude'un Lee PR'ı; bu görev dışı, canlı yazmanın ön koşulu):** `/plan-inbox`, `From: K` maddesini ancak şu dördü tutarsa karar kaydına geçirir:
+  1. Gelen kutusu yorumunun yazarı (`user.login`) Lee'de tanımlı K kullanıcı adıdır.
+  2. Maddedeki bağlantı, işaretteki `issue` numarasında, aynı yazarın (a) yorumuna gider.
+  3. (a)'daki `soru` kimliği, o issue'daki en güncel `karar` sorusudur.
+  4. Aynı `ref` daha önce işlenmemiştir.
+
+  Tutmazsa madde işlenmez; hub K'ya sorar.
+- **Sıra:** Lee PR'ı merge olmadan `GITHUB_ALLOW_WRITE=1` canlı Lee'de açılmaz (§15).
 
 **c) Plan yorumu → ilgili issue**
 
 ```
 **K yorumu** · PlanAsistan · <Not | Değişiklik isteği | Onay>
 <metin>
-<!-- planasistan:v1 kind=plan-yorum ref=<taskId>:<yorumId> -->
+<!-- planasistan:v1 kind=plan-yorum ref=<taskId>:<yorumId> issue=<NNN> soru=- -->
 ```
 
 ### 8.4 Plan yorumu türlerinin kuralı
@@ -414,7 +477,7 @@ Why: #NNN K kararı
 | Tür | Issue yorumu | Gelen kutusu satırı | Label |
 |---|---|---|---|
 | Not | Evet | Hayır | Yok |
-| Değişiklik iste | Evet | Evet (`Why: #NNN plan değişikliği`) | Yalnız güncel label `durum:ready` ise `durum:draft`. `in-progress` / `in-review` / `rework`'te label değişmez; arayüz "iş sürüyor, karar ajanda" uyarısını gösterir |
+| Değişiklik iste | Evet | Evet (`Why: #NNN plan değişikliği`) | Yalnız o an `durum:ready` ise `durum:draft` (§8.7 "label geçişi"). `in-progress` / `in-review` / `rework`'te label değişmez; arayüz "iş sürüyor, karar ajanda" uyarısını gösterir |
 | Onayla | Evet | Evet (`Why: #NNN K onayı`) | Yok |
 
 Bu kural Lee'nin "yeni açık soru çıkan ready → draft" geçişine dayanır (`PLAN_LOOP.md`). Süren bir işin planı geri çekilmez.
@@ -430,27 +493,68 @@ Bu kural Lee'nin "yeni açık soru çıkan ready → draft" geçişine dayanır 
   - Başlık bulunamazsa beklenti üretilmez; not yine içe alınır.
 - Bu beklentilere verilen yanıt hangi issue'ya yazılır? Maddede tek bir `#N` varsa o issue'ya yorum + #288 satırı. Birden çoksa ya da hiç yoksa yalnız #288 satırı (`Why: Hafta Www beklentisi`).
 
+### 8.6 Karar süresi (48 saat)
+
+- **Başlangıç anı:** `karar` label'ının issue'ya eklendiği an. `GET /repos/{repo}/issues/{n}/events` içindeki en son `labeled` olayından (`label.name == "karar"`) alınır; `requestedAtSource = 'event'`.
+- **Yedek:** Olay okunamazsa beklentinin **ilk görüldüğü an**; `requestedAtSource = 'ilk-gozlem'`. Arayüzde "yaklaşık" diye gösterilir.
+- **Bir kez yazılır.** `requestedAt` sonraki eşitlemelerde yeniden hesaplanmaz. `updated_at` asla kullanılmaz; her yeni yorum onu ileri taşır.
+- **Yeni tur:** Label kaldırılıp yeniden eklenirse (yeni `labeled` olayı) yeni bir karar turu başlar. Eski beklenti `resolved` kalır, yenisi açılır.
+- **Son tarih** = `requestedAt + 48 saat`.
+
+**Bildirim nereye, ne zaman ulaşır** (F8):
+
+| Kurulum | Yeni kritik talep ne zaman görülür | Bildirim |
+|---|---|---|
+| Yerel sürüm | Yalnız uygulama açıkken: açılışta ve 15 dakikada bir eşitlemede | Uygulama içi uyarı ve tarayıcı bildirimi (izin verilirse). **Uygulama kapalıyken PlanAsistan bildirim göndermez** |
+| Barındırılan (Seviye 2) | Aynı: kullanıcı oturumundan tetiklenen eşitleme (D-02) | Aynı. Arka planda sunucu eşitlemesi bu görevde yok (sonraki iş: webhook / cron) |
+
+Uygulama kapalıyken K'yı uyaran kanal **Lee'nin kendisidir**: 48 saat karar süresi yükseltmesi ve günlük Slack raporu (Lee `CLAUDE.md` › Çalışma sözleşmesi). F9 belgesi bunu açıkça yazar. PlanAsistan bu kanalın yerine geçmez.
+
+### 8.7 Gönderim anlamı: en az bir kez teslim, bir kez etki
+
+Son 50 yorumu taramak iki durumda tek teslimi garanti etmez: iki sekme aynı anda gönderirse ya da önceki yorum pencerenin dışında kalırsa. Hedef bu yüzden "tek teslim" değil, **"etkisi bir kez"**:
+
+1. **Adımlar ayrı izlenir.** Bir beklenti yanıtı en çok üç adımdır: issue yorumu → gelen kutusu satırı → (yalnız "Değişiklik iste") label geçişi. Her adımın durumu `outbound.steps`'te tutulur. Yeniden deneme yalnız `tamam` olmayan adımı yapar. Issue yorumu başarılı, gelen kutusu başarısız ise yeniden denemede yalnız gelen kutusu satırı yazılır.
+2. **İşaret araması tam yapılır.** Her yazmadan hemen önce hedef issue'nun yorumları `since = outbound.createdAt` ile **sayfa sayfa sonuna kadar** okunur ve aynı işaret aranır. Varsa adım `tamam` sayılır, bağlantısı kaydedilir, yeniden yazılmaz.
+3. **Aynı tarayıcıda eşzamanlı gönderim kilitlenir.** `navigator.locks.request('pa-gh-' + marker, …)`. Sekmeler aynı IndexedDB'yi paylaştığı için gönderim başlarken durum `gonderiliyor` yazılır; başka sekme bu durumu görünce bekler.
+4. **Kalan risk tüketicide kapanır.** Farklı cihazlardan aynı anda gönderim gibi nadir bir durumda aynı işaret iki kez yazılabilir. Lee tarafı aynı `ref`'i bir kez işler (§8.3, Lee koşulu 4). Bu yüzden ikinci kopya etki üretmez. Köprü yorum **silmez**.
+5. **Label geçişi ezmez.**
+   - Tüm label'ları yeniden yazan istek (`PUT .../labels`) **kullanılmaz**.
+   - Önce `DELETE /repos/{repo}/issues/{n}/labels/durum:ready` yapılır. 404 dönerse issue o an `durum:ready` değildir: adım `atlandi` olur, nedeni not edilir, `durum:draft` **eklenmez**.
+   - Silme başarılıysa `POST .../labels` ile yalnız `durum:draft` eklenir.
+   - Böylece arada ajanın koyduğu `durum:in-progress` ezilmez. İkinci adım başarısız olursa `durum:*`'suz kalan issue yeniden denemede tamamlanır.
+6. **Yazar doğrulaması.** Her yazmanın yanıtındaki `user.login` `GITHUB_K_LOGIN` değilse adım `hata` olur (§8.3).
+
 ---
 
 ## 9. Fazlar
 
 Her faz: kod, test, plan dosyasında durum. Fazlar **sırayla**; F4 F3'e, F5 F4'e bağlıdır.
 
-### F0 — Keşif ve plan (≈0,5 gün)
+### F0 — Doğrulama (≈0,5 gün)
 
-- §2.2'deki dosyaları oku. `mergeJiraIssues`'ın `statusCategory` / `jiraStatus` / `resolution` eşlemesini ve `JiraSync.tsx` akışını çıkar.
-- `docs/AJAN_YONETIMI_PLANI.md` dosyasını oluştur:
-  - fazlar ve durum tablosu;
+Plan Claude'undur (§0); bu fazda plan metni değişmez.
+
+- §2.2'deki dosyaları oku. `JiraSync.tsx` akışını çıkar.
+- §7.1'deki eşleme eksiklerini (draft → ToDo, anahtar değişince ikinci görev) ve §7.5'teki ilerleme davranışını örnek girdilerle yeniden üret. Bunları F1'in ilk testleri yap; şimdilik kırmızı olarak işaretlenir.
+- §7.5'teki `Done` sayan hesapların listesini çıkar.
+- `docs/AJAN_YONETIMI_DURUM.md` dosyasını oluştur:
+  - faz durumu tablosu;
+  - taban test sayısı;
   - aldığın varsayımlar;
   - üst düzey alan gerekip gerekmediği (§7.4);
-  - D-05 eşlemesinin `mergeJiraIssues` ile sağlanıp sağlanmadığı.
-- **Kabul:** plan dosyası commit'lendi; taban test sayısı plana yazıldı.
+  - `Done` sayan hesaplar listesi;
+  - AI kullanım tablosu (§10.2).
+- Planla çelişen bir kod gerçeği bulursan durma; durum dosyasına yaz, Claude'a not düş, çelişmeyen kısımla devam et.
+- **Kabul:** durum dosyası commit'lendi.
 
 ### F1 — Tipler ve saf eşleme (≈1 gün)
 
 - §7.2 tipleri.
 - `utils/integrations/github.ts` (saf fonksiyonlar):
   - `parseLeeKey`, `labelsToStatus`, `priorityOf`, `personaOf`, `githubIssueToRecord`;
+  - `rekeyByGithubRef`, `applyLeeStatus` (§7.1); `cancelled`'ı dışlayan ilerleme düzeltmesi (§7.5);
+  - `kararRequestedAt` (olaylardan, §8.6);
   - `parseAgentComment` (F7 için de);
   - `buildKararComment`, `buildInboxMessage`, `buildPlanComment`, `outboundMarker`, `findMarker`;
   - `parseWeeklyPlan` (hafta, yıl, "K'dan bu hafta istenen" maddeleri).
@@ -460,9 +564,14 @@ Her faz: kod, test, plan dosyasında durum. Fazlar **sırayla**; F4 F3'e, F5 F4'
 ### F2 — Sunucu vekili, okuma (≈1,5 gün)
 
 - `server/integrations/github.ts`, `api/integrations/github.ts`, yerel sunucuda rota.
-- Okuma op'ları: `meta`, `issues`, `comments`, `file`.
+- Okuma op'ları: `meta`, `issues`, `comments`, `events`, `file`.
+- **§8.2 yetki tablosu bu fazda tam uygulanır:** okuma da `GITHUB_USERS` / yerel kural ister. Mevcut `authorize` yeterli sayılmaz.
 - Repo izin listesi, sayfalama (en çok 20 sayfa), 403/404/429 hataları Türkçe mesajla. 429'da `retry-after`.
-- **Kabul:** sahte `fetch` ile testler §11.2; `GITHUB_ALLOWED_REPOS` dışı repo 403; token hiçbir yanıtta ve logda görünmez.
+- **Kabul:**
+  - sahte `fetch` ile testler §11.2;
+  - `GITHUB_ALLOWED_REPOS` dışı repo 403;
+  - başka çalışma alanının üyesi (listede değil) okumada 403;
+  - token hiçbir yanıtta ve logda görünmez.
 
 ### F2b — İsteğe bağlı: registry'den efor ve bağımlılık (≈0,5 gün)
 
@@ -477,7 +586,13 @@ Her faz: kod, test, plan dosyasında durum. Fazlar **sırayla**; F4 F3'e, F5 F4'
 - Persona öneri kartı (§7.3).
 - Proje için "Lee ajan iş akışı" yapılandırma önerisi: `durum:*` adlarıyla durumlar ve kategoriler. Yönetici konsolundaki iş akışı şemalarıyla; mevcut şema motoru kullanılır, yenisi yazılmaz.
 - Görev listelerinde anahtar `TaskKeyButton`.
-- **Kabul:** sahte veriyle Lee benzeri 30 issue eşitlenir. İkinci eşitlemede değişiklik 0. PY'nin elle girdiği planlama alanları (tahmin, öncül, iş paketi) korunur. Kapanan issue Done olur.
+- **Kabul:**
+  - Sahte veriyle Lee benzeri 30 issue eşitlenir. İkinci eşitlemede değişiklik 0.
+  - PY'nin elle girdiği planlama alanları (tahmin, öncül, iş paketi) korunur.
+  - Kapanan issue Done olur.
+  - `durum:draft` Backlog'dur.
+  - `GH-412` → `LEE-LOCAL-086` yeniden adlandırması aynı görevi günceller (görev sayısı değişmez).
+  - `not_planned` kayıt ilerlemeye girmez.
 
 ### F4 — Beklentiler: içe alım ve yanıt (≈1,5 gün)
 
@@ -485,7 +600,8 @@ Her faz: kod, test, plan dosyasında durum. Fazlar **sırayla**; F4 F3'e, F5 F4'
   - Soru metni: issue'nun son yorumlarında `karar` etiketinin eklendiği andan sonraki ilk ajan yorumu. Bulunamazsa issue başlığı.
   - Seçenekler: soru metnindeki `A)`, `B)` / `- A:` gibi satırlardan.
   - Aciliyet: P0 → `critical`, P1 → `important`, diğer → `normal`.
-  - Son tarih: etiketin eklendiği an + 48 saat. Bilinemezse issue'nun `updated_at`'i + 48 saat; varsayım kayda düşer.
+  - Son tarih: §8.6. `karar` label'ının eklendiği an + 48 saat; olay okunamazsa ilk gözlem anı. Bir kez yazılır; `updated_at` kullanılmaz.
+  - Soru yorumunun kimliği (`questionCommentId`) kaydedilir.
   - Açan: persona.
 - Label kalkınca ya da issue kapanınca beklenti `resolved` olur; K'nın yanıtı korunur.
 - Yanıt arayüzü:
@@ -495,15 +611,17 @@ Her faz: kod, test, plan dosyasında durum. Fazlar **sırayla**; F4 F3'e, F5 F4'
 
 ### F5 — Geri kanal: giden kutusu ve yazma (≈2 gün)
 
-- Yazma op'ları (`post-comment`, `relabel`), §8.2 erişim kuralları, §8.3 idempotentlik.
+- Yazma op'ları (`post-comment`, `relabel`); §8.2 erişim kuralları; §8.3 biçim ve yazar doğrulaması; §8.7 adım adım gönderim, tam işaret araması, sekme kilidi ve ezmeyen label geçişi.
 - "Giden kutusu" paneli: gönderilecek her mesajın **tam metni**, hedef issue ve tür. Tek tek ya da toplu "GitHub'a gönder". Kuru çalıştırma kipinde düğme "Önizlemeyi doğrula" der.
 - Gönderim sonucu kayda (`outbound`) ve `appendAudit`'e yazılır.
 - Hata (403, 404, 422, ağ) kayıtta `hata` durumuyla kalır; yeniden denenebilir.
 - **Kabul:**
-  - Aynı yanıt iki kez gönderilince GitHub'a tek yorum düşer.
+  - Aynı yanıt iki kez gönderilince GitHub'a tek yorum düşer. İşaret 50'den eski bir sayfada olsa bile.
+  - Issue yorumu başarılı, gelen kutusu başarısız → yeniden deneme yalnız gelen kutusu satırını yazar.
   - Kuru çalıştırma hiçbir yazma isteği yapmaz.
-  - `token` kipinde yazma 403.
-  - `relabel` güncel label `durum:in-progress` iken hiçbir şey yapmaz.
+  - Barındırılan `none` / `token` kipinde okuma ve yazma 403.
+  - `relabel`: issue o an `durum:in-progress` ise (DELETE 404) `durum:draft` eklenmez, mevcut label'lar değişmez.
+  - Yanıttaki yorum yazarı `GITHUB_K_LOGIN` değilse adım `hata`.
 
 ### F6 — Plan yorumları ve haftalık plan (≈1,5 gün)
 
@@ -527,9 +645,9 @@ Her faz: kod, test, plan dosyasında durum. Fazlar **sırayla**; F4 F3'e, F5 F4'
 ### F8 — Karar süresi bildirimi (≈1 gün)
 
 - Mevcut kural setlerine tetikleyici: "Beklentinin son tarihine N saat kaldı / son tarih geçti" (N varsayılan 12). Zaten varsa yeniden kullan.
-- Eylem: mevcut bildirim kanalları. Günde en çok bir özet; anlık bildirim yalnız `critical` için.
-- Vercel Hobby'de cron günde bir kez çalışır (`docs/OTOMASYON.md`). Bu sınırlama belgeye yazılır.
-- **Kabul:** kural motoru testleri; çift bildirim yok.
+- Eylem: uygulama içi uyarı ve tarayıcı bildirimi; mevcut kanallar (Teams / Slack / e-posta) isteğe bağlı. Günde en çok bir özet; anlık bildirim yalnız `critical` için.
+- **Kapsam sınırı (§8.6 tablosu):** Bildirim yalnız eşitleme koştuğunda, yani uygulama açıkken üretilir. Uygulama kapalıyken yeni talep algılanmaz. Sunucu tarafı arka plan eşitlemesi bu görevde yok. Uygulama dışındaki uyarı kanalı Lee'nin kendi 48 saat yükseltmesi ve günlük Slack raporudur. F9 belgesi bunu ve Vercel Hobby'nin günde bir cron sınırını yazar.
+- **Kabul:** kural motoru testleri; çift bildirim yok; son tarih yeniden eşitlemede kaymaz.
 
 ### F9 — Belgeler (≈1 gün)
 
@@ -547,6 +665,14 @@ Her faz: kod, test, plan dosyasında durum. Fazlar **sırayla**; F4 F3'e, F5 F4'
 
 ## 10. Token ve maliyet modeli
 
+Üç gider ayrı izlenir; biri ötekinin yerine sayılmaz:
+
+1. **İşletim:** köprünün çalışırken harcadığı (10.1).
+2. **Geliştirme:** bu görevi AI ajanların yazması ve incelemesi (10.2).
+3. **Altyapı:** yerel ya da bulut (10.3).
+
+### 10.1 Köprünün işletimi
+
 | Kalem | Token | Not |
 |---|---|---|
 | İçe alım, eşleme, geri kanal (F1–F8) | **0** | LLM çağrısı yok (G-09). GitHub API: PAT ile saatte 5000 istek; artımlı eşitleme tipik olarak 3–10 istek |
@@ -557,6 +683,34 @@ Her faz: kod, test, plan dosyasında durum. Fazlar **sırayla**; F4 F3'e, F5 F4'
 
 Referans fiyatlar ($ / 1M token, giriş / çıkış): Opus 5.5 4 / 20; Sonnet 5.5 2 / 10; Haiku 5.5 0,10 / 0,50. Önbellekten okuma Opus 5.5'te 0,20, Sonnet 5.5'te 0,10. Batch API %50 indirimli. Codex/GPT tarafı OpenAI fiyatlarına tabidir. Abonelikle çalışılıyorsa ölçü dolar değil kotadır.
 
+Köprünün model çağrısı sıfırdır. Ama ajanların kodlama, inceleme, tekrar ve köprünün yazdığı mesajları okuma kullanımı sürer. Bu kullanım 10.2'de ve Lee'nin kendi bütçesinde izlenir.
+
+### 10.2 Geliştirme bütçesi (bu görevi AI ajanlar yapar)
+
+Bu görevi insan değil AI ajanlar geliştirir. Bütçe bu yüzden insan-günle değil, ajanların gerçek kullanımıyla ifade edilir. §9'daki "gün" değerleri yalnız göreli büyüklüktür.
+
+| Birim | Nerede ölçülür | Kim yazar |
+|---|---|---|
+| Abonelik kotası (Codex / ChatGPT planı, Claude planı) | İlgili uygulamanın kullanım ekranı: faz başı ve sonu yüzdesi ya da kalan | Codex (kendi), Claude (inceleme) |
+| Ek kredi | Sağlayıcının kredi ekranı | Aynı |
+| API ücreti (API anahtarıyla çalışılıyorsa) | Sağlayıcının kullanım ve maliyet raporu, $ | Aynı |
+| Oturum ve tekrar sayısı | Faz başına oturum, "rework" turu | Aynı |
+
+Kurallar:
+
+- Codex her fazın sonunda durum dosyasındaki AI kullanım tablosunu doldurur: faz, oturum sayısı, birim, başlangıç → bitiş değeri, not.
+- Ölçülemeyen değer "bilinmiyor" yazılır; tahmin yazılmaz.
+- **Bütçe kapısı:** K bir toplam bütçe verir (kota yüzdesi, kredi ya da $). Verilmezse Codex F0 sonunda F0'ın gerçek kullanımını ve kalan fazlar için kaba bir projeksiyonu durum dosyasına yazıp K'ya sorar.
+- Herhangi bir faz projeksiyonun 2 katını aşarsa Codex durur ve sorar.
+- Claude'un incelemesi ayrı satırdır: PR başına bir son kontrol oturumu, her "rework" turu için bir yeniden inceleme.
+
+### 10.3 Altyapı
+
+| Kurulum | Gider |
+|---|---|
+| Yerel sürüm (Seviye 0) | Ek gider yok. GitHub REST API PAT ile ücretsiz (saatte 5000 istek) |
+| Ayrı Supabase + Vercel (Seviye 2) | K'nın seçeceği planlara bağlı; ücretsiz katmanlar kişisel kullanımda büyük olasılıkla yeter. Güncel fiyatlar K tarafından doğrulanır. Ayrı satır olarak izlenir |
+
 ---
 
 ## 11. Test planı
@@ -564,6 +718,10 @@ Referans fiyatlar ($ / 1M token, giriş / çıkış): Opus 5.5 4 / 20; Sonnet 5.
 ### 11.1 Birim (saf fonksiyonlar, `utils/integrations/github.test.ts`)
 
 - Anahtar: `[LEE-LOCAL-086] …` → `LEE-LOCAL-086`; önekin yoksa `GH-412`; başlıkta iki anahtar varsa ilki.
+- `rekeyByGithubRef`: `GH-412` olarak içe alınmış görev, issue başlığı `[LEE-LOCAL-086]` olunca aynı görev kimliğiyle `LEE-LOCAL-086` olur; görev sayısı değişmez; planlama alanları korunur. Aynı repo ve numaraya iki görev → uyarı, birleştirme yok.
+- `applyLeeStatus`: `durum:draft` → Backlog (v3.7.0 hattı ToDo veriyordu).
+- İlerleme: 2 tamamlanan + 1 `cancelled` + 1 yapılacak → %67, `done` = 2. `cancelled`'sız Jira görevlerinde sonuç değişmez (mevcut ilerleme testleri yeşil).
+- `kararRequestedAt`: olaylarda iki `labeled karar` varsa en sonuncusu; olay yoksa ilk gözlem ve `ilk-gozlem` kaynağı; ikinci eşitlemede değer değişmez.
 - Durum tablosunun (§7.1) her satırı; birden çok `durum:*` label'ı (bozuk veri) varsa en ileri durum seçilir ve uyarı üretilir.
 - Öncelik, MS, persona; `runtime` yokken "Atanmamış".
 - `buildInboxMessage`: başlık sırası, `To: claude`, madde `- [ ] `, işaret satırı madde sayılmaz, 200 karakter sınırı.
@@ -577,17 +735,33 @@ Referans fiyatlar ($ / 1M token, giriş / çıkış): Opus 5.5 4 / 20; Sonnet 5.
 
 - İzin listesi dışı repo → 403, GitHub'a istek gitmez.
 - Token yanıtta, hata mesajında ve logda yok.
+- **Yetki tablosu (§8.2), her hücre ayrı test:**
+  - yerel + döngü adresi → okuma 200;
+  - barındırılan `supabase` + `GITHUB_USERS` içi → okuma 200;
+  - barındırılan `supabase` + başka çalışma alanının üyesi (listede değil) → okuma **403**;
+  - barındırılan `none` / `token` → okuma ve yazma 403;
+  - Vercel giriş noktası istekte `local` alanı gönderilse bile yerel sayılmaz.
 - Sayfalama, PR ayıklama, `since`.
-- Yazma: `GITHUB_ALLOW_WRITE` yokken kuru çalıştırma; `token` kipinde 403; `GITHUB_WRITERS` dışı e-posta 403; işaret varken ikinci yazma yok; `relabel` yalnız `durum:ready`'de.
+- Yazma:
+  - `GITHUB_ALLOW_WRITE` yokken kuru çalıştırma;
+  - işaret 3. sayfada olsa bile ikinci yazma yok;
+  - issue yorumu var, gelen kutusu yok → yalnız gelen kutusu yazılır;
+  - yanıt yazarı `GITHUB_K_LOGIN` değil → `hata`.
+- `relabel`:
+  - `durum:ready` → DELETE + POST;
+  - `durum:in-progress` → DELETE 404, POST yapılmaz, `atlandi`;
+  - POST başarısız → yeniden denemede yalnız POST.
 - 429 ve `retry-after`; 404 issue.
 
 ### 11.3 Uçtan uca senaryo (sahte GitHub ile)
 
 1. 30 issue'luk Lee fixture'ı eşitlenir. Görev, persona ve 2 `karar` beklentisi oluşur.
 2. K, bir beklentiye "B" yanıtı verir. Giden kutusunda tam metin görünür. Gönderilir: issue'ya 1 yorum, #288'e 1 satır.
-3. Aynı yanıt tekrar gönderilir: yeni yorum yok.
+3. Aynı yanıt tekrar gönderilir: yeni yorum yok. Gelen kutusu adımı yapay olarak başarısız yapılıp yeniden denenir: yalnız gelen kutusu satırı yazılır.
 4. `durum:ready` bir plana "Değişiklik iste": yorum + satır + label `durum:draft`. `durum:in-progress` bir plana aynı tür: label değişmez.
 5. Sahte GitHub'da `karar` label'ı kaldırılır, eşitlenir: beklenti `resolved`, K'nın yanıtı korunur.
+6. Beklentinin son tarihi, araya yeni yorumlar girip yeniden eşitlenince değişmez.
+7. Bir issue'nun başlığına `[LEE-LOCAL-NNN]` eklenir, eşitlenir: görev sayısı aynı, anahtar yeni.
 
 ### 11.4 Canlı doğrulama (yalnız K'nın onayıyla)
 
@@ -634,7 +808,7 @@ Claude PR'ı şu sırayla denetler. Biri bile kırmızıysa PR "rework" ile dön
 3. **Güvenlik:**
    - token hiçbir yanıtta, logda ve tarayıcıda yok;
    - izin listesi dışı repoya istek yok;
-   - yazma `none` / `token` kipinde 403;
+   - §8.2 yetki tablosunun her hücresi testli: barındırılan `none` / `token` kipinde okuma ve yazma 403; başka alanın üyesi okumada 403; yerel bayrak yalnız yerel sunucudan;
    - kuru çalıştırma varsayılan;
    - XSS testi var ve geçiyor;
    - issue metni hiçbir yerde HTML olarak işlenmiyor (`dangerouslySetInnerHTML` ya da Markdown → HTML yok).
@@ -642,7 +816,10 @@ Claude PR'ı şu sırayla denetler. Biri bile kırmızıysa PR "rework" ile dön
    - `buildInboxMessage` çıktısı `plan_loop.py` › `inbox_parse` ile çözülebilir. Claude bunu Lee'nin betiğiyle ayrıca dener. §8.3 (b) biçimi 26 Kasım'da `Lee@a17869e`'deki `inbox_parse` ve `inbox_unread` ile denendi: başlıklar ve tek madde doğru çözüldü, işaret satırı madde sayılmadı.
    - Köprü ROADMAP / registry / kod dosyalarına yazmıyor ve `karar` label'ını kaldırmıyor.
    - `relabel` yalnız `durum:ready → durum:draft`.
-5. **İdempotentlik:** aynı gönderim iki kez → tek yorum (test ve kod incelemesi).
+5. **Gönderim anlamı (§8.7):** aynı gönderim iki kez → tek yorum, işaret eski sayfada olsa bile; yarım gönderimde yalnız eksik adım; `relabel` hiçbir senaryoda ajanın label'ını ezmiyor; yazar doğrulaması var.
+5a. **Görev kimliği ve ilerleme (§7.1, §7.5):** yeniden adlandırmada tek görev; `durum:draft` Backlog; iptal ilerlemeye girmiyor; Jira ilerleme sonuçları değişmemiş.
+5b. **Karar süresi (§8.6):** son tarih olaydan ya da ilk gözlemden; yeniden eşitlemede kaymıyor; bildirim kapsamı belgede doğru.
+5c. **Bütçe (§10.2):** durum dosyasında faz başına AI kullanımı dolu ya da "bilinmiyor"; tahmin yazılmamış.
 6. **Gizlilik:** §6 belgede doğru ve kodla tutarlı. Yerel kipte (Seviye 0) uçtan uca çalıştığı gösterilmiş (yerel sürüm derlemesi ve rota testi).
 7. **Arayüz kuralı:** yeni görev listelerinde anahtar `TaskKeyButton` ile; karşılığı olmayan anahtar düz etiket. Metinler Türkçe ve kısa.
 8. **Belgeler:** `docs/GITHUB_AJAN_KOPRUSU.md` komutları ve env adları kodla birebir; `.env.example` güncel; CHANGELOG girdisi var.
@@ -660,6 +837,9 @@ Claude PR'ı şu sırayla denetler. Biri bile kırmızıysa PR "rework" ile dön
 | GitHub kimliği | Fine-grained PAT (Lee ile sınırlı, 90 gün). GitHub App sonraki iş |
 | Kapsam | Yalnız `kaannsckin/Lee`; birden çok repo yapı olarak desteklenir (`GITHUB_ALLOWED_REPOS`), arayüz proje başına tek repo |
 | Lee yorum şablonuna token alanı eklensin mi? | Bu görevde yok; Lee'de ayrı öneri (Claude) |
+| Canlı Lee'de yazma ne zaman açılır? | **Yalnız** Lee'deki `/plan-inbox` yazar doğrulaması PR'ı (§8.3, dört koşul) merge olduktan ve §11.4 test deposu denemesi geçtikten sonra |
+| Jira'da "Won't Do" kayıtları da ilerlemeden düşsün mü? | Bu görevde **hayır**; yalnız GitHub'dan gelen `cancelled` görevler (§7.5). Jira için ayrı K kararı |
+| Geliştirme bütçesi | K verir (§10.2). Verilmezse Codex F0 sonunda ölçüp projeksiyonla sorar |
 
 ---
 
