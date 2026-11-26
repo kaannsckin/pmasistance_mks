@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { boardRole, canCreateBoard, cleanAccess, visibleBoards } from './access';
+import { addNodes, castVote, createBoard, makeNode, startVoting } from './model';
 
 describe('whiteboard erişimi', () => {
     const board = { ownerId: 'k1', access: { everyone: 'view' as const, people: { k2: 'edit' as const, k3: 'none' as const } } };
@@ -45,5 +46,19 @@ describe('pano değişikliği yetkisi', async () => {
         expect(commitDenied(b, undefined, { projectEditor: true })).toBeNull();
         expect(commitDenied(undefined, b, { projectEditor: false })).toContain('kişi seçili');
         expect(commitDenied(undefined, b, { personId: 'k5', projectEditor: false })).toBeNull();
+    });
+});
+
+describe('görüntüleyenin oyu', () => {
+    it('oylama sürerken yalnız kendi oyunu verebilir', async () => {
+        const { commitDenied } = await import('../../components/modern/whiteboard/useWhiteboardCollab');
+        const note = makeNode('sticky', 0, 0);
+        const b0 = { ...addNodes(createBoard('O'), [note]), ownerId: 'k1', access: { everyone: 'view' as const } };
+        const viewer = { personId: 'k2', projectEditor: false };
+        const active = startVoting(b0, 3);
+        expect(commitDenied(active, castVote(active, note.id, 'k2'), viewer)).toBeNull();
+        expect(commitDenied(active, castVote(active, note.id, 'k3'), viewer)).toMatch(/görüntüleyebilirsiniz/);
+        expect(commitDenied(active, { ...castVote(active, note.id, 'k2'), name: 'Yeni ad' }, viewer)).toMatch(/görüntüleyebilirsiniz/);
+        expect(commitDenied(b0, { ...b0, name: 'x' }, viewer)).toMatch(/görüntüleyebilirsiniz/);
     });
 });

@@ -504,7 +504,7 @@ export const ModernChat: React.FC<{
                             <button type="submit" className="absolute right-2 bottom-2 w-10 h-10 rounded-full border-0 cursor-pointer flex items-center justify-center m-accent-bg disabled:opacity-40 disabled:cursor-not-allowed" aria-label="Gönder" disabled={(!input.trim() && !files.length) || reading > 0}><Icon name="arrowUp" size={18} strokeWidth={2.4} /></button>
                         )}
                     </form>
-                    <p className="m-0 mt-1.5 text-[12px] m-text-3 text-center">Asistan ekranları sizin yerinize açabilir; veri değişikliklerini yalnızca önerir — siz "Uygula" demeden hiçbir veri değişmez. Ekler yalnız bu sohbette kullanılır.</p>
+                    <p className="m-0 mt-1.5 text-[12px] m-text-3 text-center">Asistan ekranları sizin yerinize açabilir; veri değişikliklerini yalnızca önerir — siz "Uygula" demeden hiçbir veri değişmez. İstediğinizde açık Whiteboard'a doğrudan çizer (Ctrl+Z ile geri alınır). Ekler yalnız bu sohbette kullanılır.</p>
                 </div>
             )}
         </div>

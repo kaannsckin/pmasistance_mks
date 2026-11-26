@@ -2708,7 +2708,7 @@ const App: React.FC = () => {
           people={workspace.people}
           onSwitchProfile={openProfile}
           actor={currentActorName}
-          voter={workspace.currentPersonId || identity.role}
+          voter={identity.personId || identity.role}
           onUpdateProject={updateActiveProject}
           onViewTask={viewTask}
         />

@@ -37,7 +37,7 @@ export const VIEW_LABELS: Record<View, string> = {
     [View.Admin]: 'Yönetici konsolu (yetkiler, görünüm, rapor akışı, sağlık puanı, yapay zekâ, tahmin kalitesi, makine öğrenmesi modeli ve ince ayar kararı, profiller)',
     [View.Planning]: 'Planlama asistanı (yeni kayıt tahmini, sürüm planı, plan simülasyonu)',
     [View.Dashboard]: 'Proje dashboard\'u (kişiselleştirilebilir göstergeler, kilometre taşları, kırılımlar, projeye özel göstergeler)',
-    [View.Whiteboard]: 'Proje whiteboard\'u (FigJam tarzı: yapışkan not, şekil, bağlantı, bölüm; "/" ile görev, sprint, iş paketi ve risk kartı; şablonlar, oylama, zamanlayıcı)',
+    [View.Whiteboard]: 'Proje whiteboard\'u (FigJam tarzı: yapışkan not, şekil, bağlantı, bölüm; "/" ile görev, sprint, iş paketi ve risk kartı; şablonlar, oylama, zamanlayıcı). Kullanıcı "panoya çiz" ya da çizim, işaretleme, ekran taslağı, akış şeması istediğinde panoya_ciz aracını kullan; seçili ekran görüntüsünü araç görür.',
 };
 
 export const APP_MAP = `Uygulama haritası ("nasıl yapılır" sorularında ekranları buna göre tarif et):

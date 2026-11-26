@@ -1098,6 +1098,8 @@ export interface WbNode {
   author?: string;
   /** Oylama: kişi anahtarı → oy sayısı */
   votes?: Record<string, number>;
+  /** Şekil: içi boş, kalın kenarlı (işaretleme çerçevesi) */
+  hollow?: boolean;
 }
 
 export interface WbEdge {
@@ -1115,6 +1117,14 @@ export interface WbVoting {
   perPerson: number;
   startedAt: string;
   endedAt?: string;
+  /** Oylanan soru (ör. "Önce hangisini çözelim?") */
+  title?: string;
+  /** Yalnız bu bölümün içindekiler oylanır (bölüm nesnesinin kimliği) */
+  scope?: string;
+  /** Bir nesneye kişi başına en fazla oy (yoksa sınır yok) */
+  maxPerNode?: number;
+  /** Süreli oylama: bu anda kendiliğinden biter */
+  endsAt?: string;
 }
 
 /** Pano erişim düzeyi: görmez · görüntüler · düzenler */

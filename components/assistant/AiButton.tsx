@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AiError } from '../../utils/ai/client';
+import { ChatImage } from '../../utils/ai/protocol';
 import { useAssistantOptional } from './AssistantContext';
 
 /**
@@ -18,7 +19,7 @@ export const useAiRun = (kind: 'embedded' | 'scoring' = 'embedded') => {
   useEffect(() => () => ctrl.current?.abort(), []);
 
   /** Hata olursa null döner ve hata gösterilir; onError iptal dışındaki hatalarda çağrılır (günlük için) */
-  const run = useCallback(async <T,>(system: string, prompt: string, parse: (text: string) => T, opts?: { onError?: (message: string) => void }): Promise<T | null> => {
+  const run = useCallback(async <T,>(system: string, prompt: string, parse: (text: string) => T, opts?: { onError?: (message: string) => void; images?: ChatImage[] }): Promise<T | null> => {
     if (!a) return null;
     ctrl.current?.abort();
     const c = new AbortController();
@@ -26,7 +27,7 @@ export const useAiRun = (kind: 'embedded' | 'scoring' = 'embedded') => {
     setLoading(true);
     setError(null);
     try {
-      return parse(await a.complete(system, prompt, c.signal));
+      return parse(await a.complete(system, prompt, c.signal, opts?.images?.length ? { images: opts.images } : undefined));
     } catch (e) {
       if (c.signal.aborted || (e instanceof AiError && e.code === 'aborted')) return null;
       const message = (e as Error)?.message || 'AI isteği başarısız.';

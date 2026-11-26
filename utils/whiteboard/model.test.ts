@@ -4,7 +4,7 @@ import { createProject } from '../workspace';
 import {
     addEdge, addNodes, boardOutline, castVote, createBoard, dragSet, duplicateNodes, edgeEnds, endVoting, insertToken, makeNode, moveNodes,
     projectSprints, removeNodes, searchProject, sectionChildren, startTimer, startVoting, taskFromNode, tasksOfRef, textSegments, timerLeft,
-    voteResults, votesUsed, wantsReference,
+    voteRefusal, voteResults, votesUsed, voteTally, votingDue, wantsReference,
 } from './model';
 import { WB_TEMPLATES } from './templates';
 
@@ -172,5 +172,39 @@ describe('whiteboard şablonları', () => {
         expect(risk.nodes.filter(n => n.type === 'risk').map(n => n.ref)).toEqual(['r1']);
         const ux = WB_TEMPLATES.find(t => t.key === 'uxreview')!.build(p, { x: 0, y: 0 });
         expect(ux.nodes.filter(n => n.type === 'section').map(n => n.text)).toEqual(['01 — Gereksinim', '02 — Mevcut arayüz', '03 — Alternatif tasarımlar', '04 — Ekip değerlendirmesi', '05 — Oylama', '06 — Karar ve aksiyon']);
+    });
+});
+
+describe('whiteboard: oylama kurulumu', () => {
+    const sec = makeNode('section', 0, 0, { w: 600, h: 400 });
+    const inside = makeNode('sticky', 50, 50);
+    const outside = makeNode('sticky', 900, 50);
+    const base = addNodes(createBoard('X'), [sec, inside, outside]);
+    it('kapsam: yalnız bölümün içindekiler oylanır', () => {
+        const b = startVoting(base, { perPerson: 3, scope: sec.id, title: '  Öncelik? ' });
+        expect(b.voting).toMatchObject({ active: true, perPerson: 3, scope: sec.id, title: 'Öncelik?' });
+        expect(voteRefusal(b, outside.id, 'k1')).toBe('notVotable');
+        expect(voteRefusal(b, sec.id, 'k1')).toBe('notVotable');
+        expect(castVote(b, inside.id, 'k1').nodes.find(n => n.id === inside.id)?.votes).toEqual({ k1: 1 });
+    });
+    it('nota en fazla 1 oy ve kalan hak', () => {
+        let b = startVoting(base, { perPerson: 3, maxPerNode: 1 });
+        b = castVote(b, inside.id, 'k1');
+        expect(voteRefusal(b, inside.id, 'k1')).toBe('nodeLimit');
+        b = castVote(b, outside.id, 'k1');
+        b = castVote(b, outside.id, 'k2');
+        expect(voteTally(b)).toEqual({ voters: 2, votes: 3 });
+        expect(voteRefusal(b, inside.id, 'k1', -1)).toBeNull();
+    });
+    it('süreli oylama zamanlayıcıyla başlar, süresi dolunca biter ve zamanlayıcıyı kapatır', () => {
+        const t0 = new Date('2026-11-26T10:00:00Z');
+        const b = startVoting(base, { perPerson: 2, minutes: 5 }, t0);
+        expect(b.timer?.seconds).toBe(300);
+        expect(votingDue(b, new Date('2026-11-26T10:04:59Z'))).toBe(false);
+        expect(votingDue(b, new Date('2026-11-26T10:05:00Z'))).toBe(true);
+        const ended = endVoting(b, new Date('2026-11-26T10:05:01Z'));
+        expect(ended.voting?.active).toBe(false);
+        expect(ended.timer).toBeUndefined();
+        expect(endVoting(startTimer(startVoting(base, 2), 60)).timer).toBeDefined(); // ayrı zamanlayıcı kalır
     });
 });

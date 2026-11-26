@@ -21,7 +21,7 @@ Panolar **eş zamanlı düzenlenir**: aynı panodaki herkes birbirinin imlecini,
 |---|---|---|
 | Yönetir | Sahip, projenin PY'si | İçeriği düzenler, adlandırır, erişimi ve sahibi değiştirir, panoyu siler |
 | Düzenler | Düzenleme yetkisi verilen | İçeriği düzenler, adlandırır, oylamaya katılır |
-| Görüntüler | Görüntüleme yetkisi verilen | Panoyu canlı izler; değişiklik yapamaz |
+| Görüntüler | Görüntüleme yetkisi verilen | Panoyu canlı izler, oylamada oy verir; başka değişiklik yapamaz |
 | Göremez | Yetkisi olmayan | Pano listede görünmez |
 
 **Görünür işaretler:**
@@ -92,7 +92,29 @@ Seçim araç çubuğu: renk, şekil, yazı boyutu, göreve dönüştür, görevl
 
 ## Toplantı araçları
 
-- **Oylama**: kişi başına oy hakkı (1, 3, 5, 10) seçilerek başlatılır. Nota tıklayan oy verir, Alt + tık geri alır. Oylama sürerken herkes yalnız kendi oyunu görür; **Bitir** deyince toplamlar ve sıralı sonuç listesi görünür.
+- **Oylama**: sağ üstteki **Oylama** düğmesi kurulum penceresini açar:
+
+  | Ayar | Açıklama |
+  |---|---|
+  | Ne oylanıyor? | İsteğe bağlı soru; oylama şeridinde ve sonuçlarda görünür |
+  | Kişi başına oy | 1, 3, 5 ya da 10 |
+  | Bir nota en fazla 1 oy | Kapalıyken aynı nota birden çok oy verilebilir |
+  | Neler oylanır? | Bir bölüm seçiliyken: tüm pano ya da yalnız o bölüm |
+  | Süre | Süresiz, 2, 5 ya da 10 dakika; süre dolunca oylama kendiliğinden biter |
+
+  Oylama sürerken:
+  - Üstteki mor şeritte soru, kalan oy hakkınız (noktalar) ve kaç kişinin oy verdiği görünür.
+  - Nota tıklayan oy verir. Notun üstündeki kendi oy rozetine tıklayınca oy geri alınır (Alt + tık da olur).
+  - Oylanamayan nesneler soluklaşır.
+  - Herkes yalnız kendi oyunu görür.
+
+  Panoyu görüntüleme yetkisi olanlar da oy verir. Bulutta sunucu (RLS) bunu yalnız oylama sürerken ve yalnız kişinin kendi oy satırı için kabul eder.
+
+  Oylama bitince sonuç paneli herkeste açılır: sıralı liste, oy çubukları, kaç kişinin kaç oy verdiği. Düzenleyenler için eylemler:
+  - En çok oy alanları seçme (ilk üç sıra, beraberlikler dahil)
+  - Sonucu panoya not olarak yazma
+  - Yeni oylama başlatma
+  - Oyları silme
 - **Zamanlayıcı**: 1–15 dakikalık ortak geri sayım. Pano bulutla eşitlendiğinde aynı panoyu açan herkes aynı süreyi görür.
 
 ## Şablonlar
@@ -109,6 +131,32 @@ Yeni pano boş ya da şablondan açılır. Şablonlar mevcut panoya `/` › "Şa
 | Risk değerlendirme | Açık riskler skor bandına göre (bağlı kartlar) |
 | Akış şeması | Başla → adım → karar → sonuç, bağlantılarla |
 
+## Asistan
+
+Panodaki **Asistan** düğmesi (alt araç çubuğu) ya da bir görsel seçiliyken **Asistana sor**, uygulamanın kendi asistanına panoya çizdirir.
+
+**Nasıl çalışır:**
+1. İstek asistan sohbetine gider (aynı AI ayarları, ad maskelemesi ve sohbet geçmişi).
+2. Asistan `panoya_ciz` aracıyla açık panoya çizer.
+3. Düzeltmeyi aynı sohbetten isteyebilirsiniz ("2 numarayı da kırmızıyla işaretle").
+4. Sohbet panelinden de "panoya çiz …" diye istenebilir; Whiteboard ekranı açıkken araç kullanılabilir.
+
+**Ekran görüntüsünde değişiklik talebi:**
+1. Görseli panoya yapıştırın, seçin.
+2. Talebinizi yazın (ör. "Kaydet düğmesini sağ üste al, tabloya durum filtresi ekle").
+3. Asistan değişecek alanları görselin üstünde kırmızı çerçeve ve numarayla işaretler, her numaranın açıklamasını yanına not olarak yazar.
+4. İsterseniz yanına "Önerilen ekran" bölümünde yeni ekranın tel kafes taslağını çizer.
+
+**Ne yapabilir:** not, metin, şekil, bölüm, ok, işaretleme çerçevesi, numara ekler; seçili notları taşıyarak gruplar. Silmez.
+
+**Kurallar:**
+- Asistan seçili nesnelerle çalışır; seçim yoksa görünen alanı görür.
+- Çizimin tamamı tek adımda geri alınır (Ctrl+Z).
+- Görsel, ad maskelemesi uygulanamadan AI sağlayıcısına gider. Pencerede "Görseli asistana göster" kapatılırsa asistan yalnız açıklamaya göre çizer.
+- Görsel okuyamayan bir modelde asistan bir kez görselsiz dener ve bunu bildirir.
+- Görsel AI proxy'sine en fazla 1280 piksel JPEG olarak gider. OpenAI, Azure, Anthropic ve Gemini biçimleri desteklenir.
+- Asistan sohbeti kapalı, ekran içi AI açıksa çizim pencerede doğrudan yapılır.
+
 ## Pano menüsü
 
 Yeniden adlandır (sekmeye çift tık da olur), çoğalt, özeti Markdown olarak kopyala ya da indir (bölüm bölüm notlar, kartlar ve oylar), panoyu JSON olarak indir, sil. **Tam ekran** düğmesi tuvali ekranı kaplayacak şekilde açar. Son açılan pano ve her panonun görünümü (kaydırma, yakınlaştırma) bu cihazda hatırlanır.
@@ -117,6 +165,6 @@ Yeniden adlandır (sekmeye çift tık da olur), çoğalt, özeti Markdown olarak
 
 - Aynı notun metninde karakter düzeyinde birleştirme yok (aynı nota aynı anda yazma kilitle önlenir).
 - Çevrimdışı yapılan ve bulutta da değişmiş bir nesnenin değişikliği, yeniden bağlanınca buluttaki hâline bırakılır. Yalnız bulutta olmayan yeni nesneler ve panolar yüklenir.
-- Yorum dizileri, sesli görüşme, spotlight, AI ile pano üretme ve PNG / PDF dışa aktarma.
+- Yorum dizileri, sesli görüşme, spotlight ve PNG / PDF dışa aktarma.
 
-Kod: [`utils/whiteboard/model.ts`](../utils/whiteboard/model.ts) (saf işlemler), [`utils/whiteboard/collab.ts`](../utils/whiteboard/collab.ts) (op'lar ve birleştirme), [`utils/whiteboard/access.ts`](../utils/whiteboard/access.ts) (pano erişimi), [`utils/whiteboard/transport.ts`](../utils/whiteboard/transport.ts) (Realtime / sekmeler arası iletim), [`utils/whiteboard/cloudStore.ts`](../utils/whiteboard/cloudStore.ts), [`utils/whiteboard/templates.ts`](../utils/whiteboard/templates.ts), [`components/modern/whiteboard/`](../components/modern/whiteboard/). Testler: [`utils/whiteboard/model.test.ts`](../utils/whiteboard/model.test.ts), [`utils/whiteboard/collab.test.ts`](../utils/whiteboard/collab.test.ts).
+Kod: [`utils/whiteboard/model.ts`](../utils/whiteboard/model.ts) (saf işlemler), [`utils/whiteboard/collab.ts`](../utils/whiteboard/collab.ts) (op'lar ve birleştirme), [`utils/whiteboard/access.ts`](../utils/whiteboard/access.ts) (pano erişimi), [`utils/whiteboard/transport.ts`](../utils/whiteboard/transport.ts) (Realtime / sekmeler arası iletim), [`utils/whiteboard/cloudStore.ts`](../utils/whiteboard/cloudStore.ts), [`utils/whiteboard/templates.ts`](../utils/whiteboard/templates.ts), [`utils/whiteboard/assistant.ts`](../utils/whiteboard/assistant.ts) (asistan istemi ve yanıtın pano nesnelerine çevrilmesi), [`utils/whiteboard/bridge.ts`](../utils/whiteboard/bridge.ts) (uygulama asistanı ↔ açık pano), [`components/modern/whiteboard/`](../components/modern/whiteboard/). Testler: [`utils/whiteboard/model.test.ts`](../utils/whiteboard/model.test.ts), [`utils/whiteboard/collab.test.ts`](../utils/whiteboard/collab.test.ts).

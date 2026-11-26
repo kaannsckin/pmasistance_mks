@@ -1,4 +1,4 @@
-import { AI_LIMITS, AiStatus, BROWSER_BASE_URL_HEADER, BROWSER_KEY_HEADER, BROWSER_MODEL_HEADER, BROWSER_PROVIDER_HEADER, ChatMessage, ChatRequestBody, TOOL_NAME_PATTERN, ToolCall, ToolSpec } from '../../utils/ai/protocol.js';
+import { AI_LIMITS, AiStatus, CHAT_IMAGE_MIMES, ChatImage, BROWSER_BASE_URL_HEADER, BROWSER_KEY_HEADER, BROWSER_MODEL_HEADER, BROWSER_PROVIDER_HEADER, ChatMessage, ChatRequestBody, TOOL_NAME_PATTERN, ToolCall, ToolSpec } from '../../utils/ai/protocol.js';
 import { AuthResult, authorize } from './auth.js';
 import { Env, readAiConfig } from './config.js';
 import { buildEmbedRequest, parseEmbedResponse, readEmbeddingConfig, validateEmbedBody } from './embeddings.js';
@@ -156,6 +156,7 @@ export const validateChatBody = (raw: unknown): { body?: ChatRequestBody; error?
     let total = system.length + toolCheck.size;
     const clean: ChatMessage[] = [];
     const callIds = new Set<string>();
+    let imageCount = 0;
     for (const m of messages) {
         const role = (m as any)?.role;
         const content = (m as any)?.content;
@@ -166,7 +167,19 @@ export const validateChatBody = (raw: unknown): { body?: ChatRequestBody; error?
 
         if (role === 'user') {
             if (!content.trim()) return { error: 'Mesaj içeriği boş olamaz.' };
-            clean.push({ role, content });
+            const rawImages = (m as any)?.images;
+            if (rawImages === undefined) { clean.push({ role, content }); continue; }
+            if (!Array.isArray(rawImages)) return { error: 'Görsel listesi geçersiz.' };
+            const images: ChatImage[] = [];
+            for (const img of rawImages) {
+                const mime = (img as any)?.mime, data = (img as any)?.data;
+                if (!CHAT_IMAGE_MIMES.includes(mime)) return { error: 'Görsel PNG, JPEG ya da WebP olmalı.' };
+                if (typeof data !== 'string' || !data || data.length > AI_LIMITS.maxImageChars || !/^[A-Za-z0-9+/]+={0,2}$/.test(data)) return { error: 'Görsel çok büyük ya da geçersiz.' };
+                images.push({ mime, data });
+            }
+            imageCount += images.length;
+            if (imageCount > AI_LIMITS.maxImages) return { error: `En fazla ${AI_LIMITS.maxImages} görsel gönderilebilir.` };
+            clean.push(images.length ? { role, content, images } : { role, content });
         } else if (role === 'assistant') {
             const rawCalls = (m as any)?.toolCalls;
             if (rawCalls !== undefined && (!Array.isArray(rawCalls) || rawCalls.length > AI_LIMITS.maxToolCallsPerMessage)) {
@@ -300,7 +313,7 @@ export const handleAiRequest = async (request: Request, rawEnv: Env, opts: Handl
     }
 
     const rawText = await request.text();
-    if (rawText.length > AI_LIMITS.maxTotalChars * 2 + 10_000) return errorResponse(413, 'bad_request', 'İstek çok büyük.', cors);
+    if (rawText.length > AI_LIMITS.maxTotalChars * 2 + AI_LIMITS.maxImages * (AI_LIMITS.maxImageChars + 100) + 10_000) return errorResponse(413, 'bad_request', 'İstek çok büyük.', cors);
     let parsed: unknown;
     try {
         parsed = JSON.parse(rawText);

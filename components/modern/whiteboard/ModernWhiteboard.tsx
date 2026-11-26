@@ -262,6 +262,7 @@ const ModernWhiteboard: React.FC<{
             <div className="relative" style={{ height: full ? 'calc(100vh - 80px)' : 'max(560px, calc(100vh - 300px))' }}>
                 {active && (
                     <WhiteboardEditor key={active.id} board={active} project={project} canEdit={editable} canCreateTasks={canEdit} actor={actor} voter={voter}
+                        canVote={editable || (!!viewerPersonId && voter === viewerPersonId)}
                         onCommit={onCommit} onViewTask={onViewTask}
                         collab={{
                             peers: collab.peersOn(active.id),

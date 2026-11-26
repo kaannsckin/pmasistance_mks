@@ -363,11 +363,33 @@ export const wantsReference = (text: string, caret: number): boolean => {
 // ------------------------------------------------------------------ oylama ve zamanlayıcı
 
 export const votesUsed = (b: Whiteboard, voter: string): number => b.nodes.reduce((s, n) => s + (n.votes?.[voter] || 0), 0);
+export const votesLeft = (b: Whiteboard, voter: string): number => Math.max(0, (b.voting?.perPerson || 0) - votesUsed(b, voter));
 
-/** Oy verir (hak bittiyse değişmez); `delta` −1 ile geri alınır */
+const VOTABLE_TYPES = new Set<WbNodeType>(['sticky', 'text', 'shape', 'image', 'stamp', 'task', 'sprint', 'workPackage', 'risk', 'version']);
+
+/** Oylanabilir mi: tür uygun ve (kapsam varsa) bölümün içinde */
+export const isVotable = (b: Pick<Whiteboard, 'nodes' | 'voting'>, node: WbNode): boolean => {
+    if (!VOTABLE_TYPES.has(node.type)) return false;
+    const scope = b.voting?.scope ? b.nodes.find(n => n.id === b.voting!.scope && n.type === 'section') : undefined;
+    return !scope || sectionChildren(b, scope).some(n => n.id === node.id);
+};
+
+export type VoteRefusal = 'inactive' | 'notVotable' | 'noVotesLeft' | 'nodeLimit' | null;
+
+/** Oy verilemiyorsa nedeni (verilebiliyorsa null) */
+export const voteRefusal = (b: Whiteboard, nodeId: string, voter: string, delta: 1 | -1 = 1): VoteRefusal => {
+    if (!b.voting?.active) return 'inactive';
+    const node = b.nodes.find(n => n.id === nodeId);
+    if (!node || !isVotable(b, node)) return 'notVotable';
+    if (delta < 0) return null;
+    if (votesUsed(b, voter) >= b.voting.perPerson) return 'noVotesLeft';
+    if (b.voting.maxPerNode && (node.votes?.[voter] || 0) >= b.voting.maxPerNode) return 'nodeLimit';
+    return null;
+};
+
+/** Oy verir (hak bittiyse, nesne oylanamıyorsa değişmez); `delta` −1 ile geri alınır */
 export const castVote = (b: Whiteboard, nodeId: string, voter: string, delta: 1 | -1 = 1): Whiteboard => {
-    if (!b.voting?.active) return b;
-    if (delta > 0 && votesUsed(b, voter) >= b.voting.perPerson) return b;
+    if (voteRefusal(b, nodeId, voter, delta)) return b;
     return updateNodes(b, [nodeId], n => {
         const cur = n.votes?.[voter] || 0;
         const next = Math.max(0, cur + delta);
@@ -380,11 +402,43 @@ export const castVote = (b: Whiteboard, nodeId: string, voter: string, delta: 1 
 
 export const voteTotal = (n: Pick<WbNode, 'votes'>): number => Object.values(n.votes || {}).reduce((a, b) => a + b, 0);
 
-export const startVoting = (b: Whiteboard, perPerson: number, now = new Date()): Whiteboard =>
-    touch({ ...b, voting: { active: true, perPerson: Math.max(1, Math.min(20, Math.round(perPerson))), startedAt: now.toISOString() }, nodes: b.nodes.map(n => (n.votes ? { ...n, votes: undefined } : n)) });
+export interface VotingSetup {
+    perPerson: number;
+    title?: string;
+    /** Bölüm kimliği */
+    scope?: string;
+    maxPerNode?: number;
+    /** Süre (dakika); verilirse ortak zamanlayıcı da başlar */
+    minutes?: number;
+}
 
-export const endVoting = (b: Whiteboard, now = new Date()): Whiteboard =>
-    b.voting ? touch({ ...b, voting: { ...b.voting, active: false, endedAt: now.toISOString() } }) : b;
+export const startVoting = (b: Whiteboard, setup: number | VotingSetup, now = new Date()): Whiteboard => {
+    const s: VotingSetup = typeof setup === 'number' ? { perPerson: setup } : setup;
+    const per = Math.max(1, Math.min(20, Math.round(s.perPerson)));
+    const minutes = s.minutes && s.minutes > 0 ? Math.min(60, s.minutes) : 0;
+    const endsAt = minutes ? new Date(now.getTime() + minutes * 60_000).toISOString() : undefined;
+    const title = s.title?.trim().slice(0, 140);
+    const scope = s.scope && b.nodes.some(n => n.id === s.scope && n.type === 'section') ? s.scope : undefined;
+    const maxPerNode = s.maxPerNode && s.maxPerNode > 0 && s.maxPerNode < per ? Math.round(s.maxPerNode) : undefined;
+    return touch({
+        ...b,
+        voting: { active: true, perPerson: per, startedAt: now.toISOString(), ...(title ? { title } : {}), ...(scope ? { scope } : {}), ...(maxPerNode ? { maxPerNode } : {}), ...(endsAt ? { endsAt } : {}) },
+        ...(endsAt ? { timer: { seconds: minutes * 60, endsAt } } : {}),
+        nodes: b.nodes.map(n => (n.votes ? { ...n, votes: undefined } : n)),
+    });
+};
+
+/** Süreli oylamanın süresi doldu mu */
+export const votingDue = (b: Pick<Whiteboard, 'voting'>, now = new Date()): boolean =>
+    !!b.voting?.active && !!b.voting.endsAt && now.getTime() >= Date.parse(b.voting.endsAt);
+
+export const endVoting = (b: Whiteboard, now = new Date()): Whiteboard => {
+    if (!b.voting?.active) return b;
+    // Oylamayla başlayan zamanlayıcı oylamayla biter
+    const { timer, ...rest } = b;
+    const keepTimer = timer && timer.endsAt !== b.voting.endsAt;
+    return touch({ ...rest, ...(keepTimer ? { timer } : {}), voting: { ...b.voting, active: false, endedAt: now.toISOString() } });
+};
 
 export const clearVoting = (b: Whiteboard): Whiteboard => {
     const { voting: _v, ...rest } = b;
@@ -394,6 +448,14 @@ export const clearVoting = (b: Whiteboard): Whiteboard => {
 /** Sonuçlar: oy alan nesneler, çoktan aza */
 export const voteResults = (b: Whiteboard): { node: WbNode; votes: number }[] =>
     b.nodes.map(node => ({ node, votes: voteTotal(node) })).filter(r => r.votes > 0).sort((a, b) => b.votes - a.votes);
+
+/** Kaç kişi oy verdi, toplam kaç oy */
+export const voteTally = (b: Whiteboard): { voters: number; votes: number } => {
+    const who = new Set<string>();
+    let votes = 0;
+    b.nodes.forEach(n => Object.entries(n.votes || {}).forEach(([k, v]) => { if (v > 0) { who.add(k); votes += v; } }));
+    return { voters: who.size, votes };
+};
 
 export const startTimer = (b: Whiteboard, seconds: number, now = new Date()): Whiteboard =>
     touch({ ...b, timer: { seconds, endsAt: new Date(now.getTime() + seconds * 1000).toISOString() } });

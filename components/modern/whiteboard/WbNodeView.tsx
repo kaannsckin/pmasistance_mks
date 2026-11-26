@@ -15,6 +15,8 @@ export interface NodeEnv {
     voter: string;
     votingActive: boolean;
     showVotes: boolean;
+    /** Oylamada kendi oy rozetine tıklayınca oy geri alınır */
+    canUnvote?: boolean;
 }
 
 const stop = (e: React.PointerEvent | React.MouseEvent) => e.stopPropagation();
@@ -38,8 +40,9 @@ const VoteBadge: React.FC<{ n: WbNode; env: NodeEnv }> = ({ n, env }) => {
     const shown = env.votingActive ? mine : env.showVotes ? total : 0;
     if (!shown) return null;
     return (
-        <span className="absolute -top-2.5 -right-2.5 min-w-[26px] h-[26px] px-1.5 rounded-full grid place-items-center text-[13px] font-bold text-white shadow-md"
-            style={{ background: env.votingActive ? '#7c3aed' : '#dc2626' }} title={env.votingActive ? `Sizin oyunuz: ${mine}` : `${total} oy`}>
+        <span {...(env.votingActive && env.canUnvote ? { 'data-vote-badge': '' } : {})}
+            className={`absolute -top-2.5 -right-2.5 min-w-[26px] h-[26px] px-1.5 rounded-full grid place-items-center text-[13px] font-bold text-white shadow-md ${env.votingActive && env.canUnvote ? 'cursor-pointer' : ''}`}
+            style={{ background: env.votingActive ? '#7c3aed' : '#dc2626' }} title={env.votingActive ? `Sizin oyunuz: ${mine}${env.canUnvote ? ' · geri almak için tıklayın' : ''}` : `${total} oy`}>
             {shown}
         </span>
     );
@@ -150,8 +153,11 @@ const LinkedBody: React.FC<{ n: WbNode; env: NodeEnv }> = ({ n, env }) => {
 
 const ShapeSvg: React.FC<{ n: WbNode; fill: string; edge: string }> = ({ n, fill, edge }) => {
     const { w, h } = n;
-    const sw = 2;
-    const common = { fill, stroke: edge, strokeWidth: sw };
+    // İçi boş işaretleme çerçevesi: kalın, doygun renk
+    const sw = n.hollow ? 3 : 2;
+    const common = n.hollow
+        ? { fill: 'transparent', stroke: PEN_COLORS[n.color || 'red'] || '#dc2626', strokeWidth: sw }
+        : { fill, stroke: edge, strokeWidth: sw };
     return (
         <svg className="absolute inset-0 overflow-visible" width={w} height={h} aria-hidden="true">
             {n.shape === 'ellipse' && <ellipse cx={w / 2} cy={h / 2} rx={w / 2 - sw} ry={h / 2 - sw} {...common} />}

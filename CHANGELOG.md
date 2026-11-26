@@ -23,6 +23,14 @@ buradan alır (`.github/workflows/exe.yml`).
   - Projeyi gören ve profilinde kişi seçili olan herkes pano açar ve panonun sahibi olur.
   - Sahip ve projenin PY'si "Erişim" penceresinden projeyi gören herkes için varsayılan düzeyi (göremez / görüntüler / düzenler) ve kişi bazında görüntüleme / düzenleme yetkisini belirler.
   - Bulutta kural sunucuda (RLS) zorlanır. Özel panonun satırları ve canlı kanalı yalnız yetkililere açıktır; erişimi değiştirmek ve silmek yöneticiye özeldir.
+- **Oylama**: kurulum penceresinde soru, kişi başına oy, "bir nota en fazla 1 oy", kapsam (tüm pano ya da seçili bölüm) ve süre seçilir.
+  - Sürerken üst şeritte kalan hak ve katılım görünür. Oy rozetine tıklayınca oy geri alınır.
+  - Görüntüleyenler de oy verir; bulutta RLS bunu yalnız kişinin kendi oy satırı için ve yalnız oylama sürerken kabul eder.
+  - Bitince sonuç paneli herkeste açılır (sıralama, çubuklar); en çok oy alanlar seçilebilir, sonuç panoya not olarak yazılabilir.
+- **Asistan**: uygulamanın asistanı panoya çizer (yeni `panoya_ciz` aracı; panodaki Asistan düğmesi ya da sohbetten "panoya çiz").
+  - Seçili ekran görüntüsünde değişiklik talebini görselin üstünde çerçeve ve numarayla işaretler, açıklamaları not olarak yazar, istenirse yeni ekranın tel kafes taslağını çizer.
+  - Çizim tek adımda geri alınır.
+  - AI proxy'si artık kullanıcı mesajında görsel taşır (OpenAI, Azure, Anthropic, Gemini; istek başına en çok 2 görsel). Görsel maskelenmez.
 - Pano özeti Markdown olarak kopyalanır ya da indirilir; pano JSON olarak indirilir. Ayrıntı: [docs/WHITEBOARD.md](docs/WHITEBOARD.md).
 
 **GİB PoC skoru: Jira'dan her an üretilen rapor**

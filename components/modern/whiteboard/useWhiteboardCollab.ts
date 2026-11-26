@@ -50,7 +50,13 @@ export const commitDenied = (prev: Whiteboard | undefined, next: Whiteboard | un
     if (!next) return role === 'manage' ? null : 'Panoyu yalnız sahibi ya da projenin PY\'si silebilir.';
     const a = metaOf(prev), b = metaOf(next);
     if ((JSON.stringify(a.access || null) !== JSON.stringify(b.access || null) || a.ownerId !== b.ownerId) && role !== 'manage') return 'Erişimi yalnız panonun sahibi ya da projenin PY\'si değiştirebilir.';
-    return canEditBoard(role) ? null : 'Bu panoyu yalnız görüntüleyebilirsiniz.';
+    if (canEditBoard(role)) return null;
+    // Görüntüleyen de oylamada kendi oyunu verir (bulutta RLS aynı kuralı uygular)
+    if (role === 'view' && viewer.personId && next.voting?.active) {
+        const ops = diffBoards(prev, next, next.id, () => ({ t: 0, by: '' }));
+        if (ops.length && ops.every(o => o.k === 'vote' && o.voter === viewer.personId)) return null;
+    }
+    return 'Bu panoyu yalnız görüntüleyebilirsiniz.';
 };
 
 export const useWhiteboardCollab = (opts: {

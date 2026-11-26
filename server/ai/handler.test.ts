@@ -277,3 +277,16 @@ describe('araç çağrısını desteklemeyen sunucu', () => {
         expect((await res.json()).error).toMatch(/araç çağrısını \(tool calling\) reddetti/);
     });
 });
+
+describe('validateChatBody: görsel', () => {
+    const img = { mime: 'image/jpeg', data: 'QUJD' };
+    it('geçerli görseli kabul eder', () => {
+        expect(validateChatBody({ messages: [{ role: 'user', content: 'a', images: [img] }] }).body?.messages[0]).toEqual({ role: 'user', content: 'a', images: [img] });
+    });
+    it('tür, biçim ve sayı sınırı', () => {
+        expect(validateChatBody({ messages: [{ role: 'user', content: 'a', images: [{ mime: 'image/gif', data: 'QUJD' }] }] }).error).toMatch(/PNG/);
+        expect(validateChatBody({ messages: [{ role: 'user', content: 'a', images: [{ mime: 'image/png', data: 'not base64!' }] }] }).error).toMatch(/geçersiz/);
+        expect(validateChatBody({ messages: [{ role: 'user', content: 'a', images: [img, img, img] }] }).error).toMatch(/En fazla/);
+        expect(validateChatBody({ messages: [{ role: 'user', content: 'a', images: 'x' }] }).error).toMatch(/Görsel listesi/);
+    });
+});

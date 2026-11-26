@@ -610,6 +610,30 @@ begin
 end;
 $$;
 
+-- Oylamada görüntüleyen de oy verir: yalnız kendi oy satırı (v:<nesne>:<kişi>),
+-- yalnız oylama sürerken
+create or replace function public.can_cast_whiteboard_vote(ws uuid, project text, board text, item text, kind text, data jsonb)
+returns boolean language plpgsql stable security definer set search_path = '' as $$
+declare
+    person text;
+begin
+    if kind is distinct from 'vote' or data is null or data->>'node' is null or data->>'voter' is null
+        or item is distinct from ('v:' || (data->>'node') || ':' || (data->>'voter')) then
+        return false;
+    end if;
+    if public.whiteboard_access_level(ws, project, board) <> 'view' then
+        return false;
+    end if;
+    select m.person_id into person from public.workspace_members m where m.workspace_id = ws and m.user_id = auth.uid();
+    if person is null or data->>'voter' is distinct from person then
+        return false;
+    end if;
+    return exists (select 1 from public.workspace_whiteboard_items i
+        where i.workspace_id = ws and i.project_id = project and i.board_id = board and i.item_id = 'meta'
+        and not i.deleted and (i.data->'voting'->>'active') = 'true');
+end;
+$$;
+
 -- Son yazan kazanır; kimlik alanları sabit; erişim, sahip ve silme yalnız yöneticide
 create or replace function public.whiteboard_item_lww()
 returns trigger language plpgsql as $$
@@ -652,12 +676,15 @@ drop policy if exists "wb_items_insert" on public.workspace_whiteboard_items;
 create policy "wb_items_insert" on public.workspace_whiteboard_items
     for insert with check (
         public.whiteboard_access_level(workspace_id, project_id, board_id) in ('manage', 'edit')
-        or (item_id = 'meta' and kind = 'meta' and public.can_open_whiteboard(workspace_id, project_id, board_id, data)));
+        or (item_id = 'meta' and kind = 'meta' and public.can_open_whiteboard(workspace_id, project_id, board_id, data))
+        or public.can_cast_whiteboard_vote(workspace_id, project_id, board_id, item_id, kind, data));
 
 drop policy if exists "wb_items_update" on public.workspace_whiteboard_items;
 create policy "wb_items_update" on public.workspace_whiteboard_items
-    for update using (public.whiteboard_access_level(workspace_id, project_id, board_id) in ('manage', 'edit'))
-    with check (public.whiteboard_access_level(workspace_id, project_id, board_id) in ('manage', 'edit'));
+    for update using (public.whiteboard_access_level(workspace_id, project_id, board_id) in ('manage', 'edit')
+        or public.can_cast_whiteboard_vote(workspace_id, project_id, board_id, item_id, kind, data))
+    with check (public.whiteboard_access_level(workspace_id, project_id, board_id) in ('manage', 'edit')
+        or public.can_cast_whiteboard_vote(workspace_id, project_id, board_id, item_id, kind, data));
 
 revoke all on public.workspace_whiteboard_items from anon;
 grant select, insert, update on public.workspace_whiteboard_items to authenticated;

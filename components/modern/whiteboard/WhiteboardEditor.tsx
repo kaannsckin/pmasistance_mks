@@ -3,12 +3,17 @@ import { Project, Task, WbEdge, WbNode, WbNodeType, WbShape, Whiteboard } from '
 import {
     addEdge, addNodes, boundsOf, castVote, cloneNodes, contains, defaultUnit, dragSet, drawOrder, duplicateNodes, edgeEnds, endVoting,
     clearVoting, insertToken, intersects, makeNode, moveNodes, NODE_SIZE, Rect, removeEdges, removeNodes, reorder, sectionWithTasks,
-    startTimer, startVoting, STAMPS, stopTimer, taskCards, taskFromNode, tasksOfRef, timerLeft, updateNodes, voteResults, votesUsed, wantsReference,
-    WB_COLORS, WbRefKind,
+    isVotable, sectionChildren, startTimer, startVoting, STAMPS, stopTimer, taskCards, taskFromNode, tasksOfRef, timerLeft, updateNodes, voteRefusal, voteResults,
+    VotingSetup, votingDue, wantsReference, WB_COLORS, WbRefKind,
 } from '../../../utils/whiteboard/model';
 import { WB_TEMPLATE_BY_KEY } from '../../../utils/whiteboard/templates';
 import { Icon, IconName } from '../icons';
 import { NodeEnv, PEN_COLORS, penPath, WbNodeBody } from './WbNodeView';
+import { VoteBanner, VoteResults, VoteSetup } from './WbVoting';
+import WbAssistant from './WbAssistant';
+import { applyWbAiResult, WbAiResult } from '../../../utils/whiteboard/assistant';
+import { clearWhiteboardBridge, setWhiteboardBridge, whiteboardImageConsent, WhiteboardBridge } from '../../../utils/whiteboard/bridge';
+import { runWbAssistant } from './wbAiRun';
 import { changedSnap, currentSnap, initials, ItemSnap, restoreSnap, snapIsEmpty, WbPeer } from '../../../utils/whiteboard/collab';
 import type { LiveRect } from './useWhiteboardCollab';
 import { PaletteAction, WbPalette } from './WbPalette';
@@ -38,7 +43,6 @@ type Interaction =
 const MIN_ZOOM = 0.1, MAX_ZOOM = 3;
 const clampZoom = (z: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z));
 const EDITABLE = new Set<WbNodeType>(['sticky', 'text', 'shape', 'section']);
-const VOTABLE = (t: WbNodeType) => t !== 'section' && t !== 'pen';
 const viewKey = (id: string) => `PLANASISTAN_WB_VIEW:${id}`;
 
 const TOOLS: { tool: Tool; label: string; key: string; icon: IconName }[] = [
@@ -91,6 +95,8 @@ export interface WhiteboardEditorProps {
     actor: string;
     /** Oylamada kişi anahtarı */
     voter: string;
+    /** Oy verebilir (düzenleyen ya da kişisi seçili görüntüleyen); yoksa canEdit */
+    canVote?: boolean;
     /** Değişiklik: yeni hâl, değişikliğin dayandığı hâl (eş zamanlı birleştirme farkı buna göre alır) */
     onCommit: (next: Whiteboard, prev: Whiteboard, newTasks?: Task[]) => void;
     onViewTask: (t: Task) => void;
@@ -106,7 +112,7 @@ export interface EditorCollab {
     liveMove: (nodes: { id: string; x: number; y: number; w: number; h: number }[]) => void;
 }
 
-const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ board, project, canEdit, canCreateTasks = canEdit, actor, voter, onCommit, onViewTask, collab }) => {
+const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ board, project, canEdit, canCreateTasks = canEdit, actor, voter, canVote = canEdit, onCommit, onViewTask, collab }) => {
     const [doc, setDoc] = useState<Whiteboard>(board);
     const docRef = useRef(doc);
     docRef.current = doc;
@@ -130,6 +136,8 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ board, project, can
     const [stamp, setStamp] = useState(STAMPS[0]);
     const [penColor, setPenColor] = useState('gray');
     const [selection, setSelection] = useState<string[]>([]);
+    const selectionRef = useRef(selection);
+    selectionRef.current = selection;
     const [edgeSel, setEdgeSel] = useState<string | null>(null);
     const [interaction, setInteractionState] = useState<Interaction | null>(null);
     const interactionRef = useRef<Interaction | null>(null);
@@ -141,6 +149,8 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ board, project, can
     const editRef = useRef<HTMLTextAreaElement | HTMLInputElement | null>(null);
     const [palette, setPalette] = useState<{ at: Pt; board: Pt; mode: 'insert' | 'reference' } | null>(null);
     const [votePanel, setVotePanel] = useState(false);
+    const [voteSetup, setVoteSetup] = useState(false);
+    const [aiOpen, setAiOpen] = useState(false);
     const [toast, setToast] = useState<string | null>(null);
     const space = useRef(false);
     const lastPointer = useRef<Pt | null>(null);
@@ -158,7 +168,7 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ board, project, can
 
     const tasksById = useMemo(() => new Map(project.tasks.map(t => [t.id, t])), [project.tasks]);
     const byId = useMemo(() => new Map(doc.nodes.map(n => [n.id, n])), [doc.nodes]);
-    const env: NodeEnv = { project, tasksById, onViewTask, voter, votingActive: !!doc.voting?.active, showVotes: !!doc.voting && !doc.voting.active };
+    const env: NodeEnv = { project, tasksById, onViewTask, voter, votingActive: !!doc.voting?.active, showVotes: !!doc.voting && !doc.voting.active, canUnvote: canVote };
 
     // ---- kayıt ve geçmiş
     // Yeni eklenip hemen yazılan nesne: ilk yazı oluşturmayla tek geri alma adımıdır
@@ -270,14 +280,24 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ board, project, can
     }, []);
 
     // Zamanlayıcı: saniyede bir çizim
+    const commitRef = useRef<(next: Whiteboard) => void>(() => undefined);
     useEffect(() => {
-        if (!doc.timer) return;
+        if (!doc.timer && !doc.voting?.endsAt) return;
         const id = window.setInterval(() => {
             forceTick(t => t + 1);
+            // Süreli oylama süresi dolunca biter (düzenleyenlerden biri yazar; aynı sonuç)
+            if (votingDue(docRef.current)) { if (canEdit) commitRef.current(endVoting(docRef.current)); return; }
             if (timerLeft(docRef.current) === 0 && docRef.current.timer) setToast('Süre doldu');
         }, 1000);
         return () => window.clearInterval(id);
-    }, [doc.timer]);
+    }, [doc.timer, doc.voting?.endsAt, canEdit]);
+    // Oylama bitince sonuçlar herkeste açılır (pano açılırken eski sonuç açılmaz)
+    const seenEnd = useRef(board.voting?.endedAt);
+    useEffect(() => {
+        const end = doc.voting && !doc.voting.active ? doc.voting.endedAt : undefined;
+        if (end && end !== seenEnd.current) { setVotePanel(true); setVoteSetup(false); }
+        seenEnd.current = end;
+    }, [doc.voting]);
     useEffect(() => { if (!toast) return; const id = window.setTimeout(() => setToast(null), 3500); return () => window.clearTimeout(id); }, [toast]);
 
     // ---- nesne oluşturma
@@ -372,12 +392,13 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ board, project, can
         }
         if (edgeEl && !node) { setEdgeSel(edgeEl.dataset.edgeId || null); setSelection([]); return; }
         if (node) {
-            // Oylama: tıklayan oy verir (Alt ile geri alır)
-            if (doc.voting?.active && canEdit && VOTABLE(node.type) && !e.shiftKey) {
-                const before = votesUsed(docRef.current, voter);
-                const next = castVote(docRef.current, node.id, voter, e.altKey ? -1 : 1);
-                if (next !== docRef.current) commit(next);
-                else if (!e.altKey && before >= (doc.voting.perPerson || 0)) setToast(`Oy hakkınız bitti (${doc.voting.perPerson}). Alt + tık ile geri alabilirsiniz.`);
+            // Oylama: tıklayan oy verir; kendi oy rozetine (ya da Alt ile) tıklayınca geri alır
+            if (doc.voting?.active && canVote && isVotable(docRef.current, node) && !e.shiftKey) {
+                const unvote = e.altKey || !!target.closest('[data-vote-badge]');
+                const why = voteRefusal(docRef.current, node.id, voter, unvote ? -1 : 1);
+                if (!why) commit(castVote(docRef.current, node.id, voter, unvote ? -1 : 1));
+                else if (why === 'noVotesLeft') setToast(`Oy hakkınız bitti (${doc.voting.perPerson}). Geri almak için bir notun üstündeki oy rozetine tıklayın.`);
+                else if (why === 'nodeLimit') setToast('Bu nota verebileceğiniz en fazla oyu verdiniz.');
                 return;
             }
             setEdgeSel(null);
@@ -560,10 +581,27 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ board, project, can
     };
 
     // ---- oturum: oylama ve zamanlayıcı
-    const toggleVoting = (per = 3) => {
+    const toggleVoting = () => {
         if (!canEdit) return;
         if (doc.voting?.active) { commit(endVoting(docRef.current)); setVotePanel(true); }
-        else { commit(startVoting(docRef.current, per)); setTool('select'); setToast(`Oylama başladı: kişi başına ${per} oy. Notlara tıklayarak oy verin.`); }
+        else { setVotePanel(false); setVoteSetup(true); }
+    };
+    const beginVoting = (setup: VotingSetup) => {
+        commit(startVoting(docRef.current, setup));
+        setVoteSetup(false); setVotePanel(false); setTool('select'); setSelection([]);
+    };
+    /** Sonucu panoya yaz: oy alanlar sırayla, oylanan alanın sağına bir not */
+    const addVoteSummary = () => {
+        const res = voteResults(docRef.current);
+        if (!res.length) return;
+        const v = docRef.current.voting;
+        const label = (n: WbNode) => (n.text || (n.type === 'task' ? tasksById.get(n.ref || '')?.name : '') || 'Adsız').replace(/\s+/g, ' ').slice(0, 80);
+        const lines = [`Oylama: ${v?.title || doc.name}`, ...res.slice(0, 10).map((r, i) => `${i + 1}. ${label(r.node)} (${r.votes} oy)`)];
+        const c = viewportCenter();
+        const area = boundsOf(res.map(r => r.node)) || { x: c.x, y: c.y, w: 0, h: 0 };
+        const n = makeNode('sticky', area.x + area.w + 80, area.y, { color: 'purple', text: lines.join('\n'), w: 340, h: Math.min(560, 70 + lines.length * 24), author: actor });
+        place([n]);
+        setSelection([n.id]);
     };
 
     // ---- seçim eylemleri
@@ -691,6 +729,49 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ board, project, can
         void addImages(files, toBoard(e.clientX, e.clientY));
     };
 
+    commitRef.current = next => commit(next);
+
+    // ---- asistan
+    const visibleRect = (): Rect => {
+        const r = viewport.current?.getBoundingClientRect();
+        const v = viewRef.current;
+        return { x: -v.x / v.zoom, y: -v.y / v.zoom, w: (r?.width || 800) / v.zoom, h: (r?.height || 600) / v.zoom };
+    };
+    const applyAi = (r: WbAiResult) => {
+        const before = selectionRef.current;
+        commit(applyWbAiResult(docRef.current, r));
+        const ids = new Set([...before, ...r.nodes.map(n => n.id), ...r.moves.map(m => m.id)]);
+        setSelection(r.nodes.map(n => n.id));
+        window.setTimeout(() => fit(docRef.current.nodes.filter(n => ids.has(n.id))), 0);
+    };
+    const applyAiRef = useRef(applyAi);
+    applyAiRef.current = applyAi;
+    const projectRef = useRef(project);
+    projectRef.current = project;
+    const visibleRef = useRef(visibleRect);
+    visibleRef.current = visibleRect;
+    // Uygulamanın asistanı bu panoya çizebilsin (sohbette "panoya_ciz" aracı); pano kapanınca kayıt silinir
+    useEffect(() => {
+        if (!canEdit) return;
+        const bridge: WhiteboardBridge = {
+            describe: () => {
+                const d = docRef.current;
+                const sel = selectionRef.current.map(id => d.nodes.find(n => n.id === id)).filter((n): n is WbNode => !!n);
+                const img = sel.some(n => n.type === 'image');
+                return `"${d.name}" panosu, ${d.nodes.length} nesne${sel.length ? `; ${sel.length} nesne seçili${img ? ' (ekran görüntüsü dahil)' : ''}` : '; seçim yok (görünen alana çizilir)'}`;
+            },
+            draw: async (request, complete) => {
+                const d = docRef.current;
+                const selection = selectionRef.current.map(id => d.nodes.find(n => n.id === id)).filter((n): n is WbNode => !!n);
+                const r = await runWbAssistant({ board: d, project: projectRef.current, selection, visible: visibleRef.current(), request, sendImage: whiteboardImageConsent(), complete });
+                applyAiRef.current(r.result);
+                return { summary: r.result.summary, added: r.result.nodes.length, moved: r.result.moves.length, noImage: r.noImage };
+            },
+        };
+        setWhiteboardBridge(bridge);
+        return () => clearWhiteboardBridge(bridge);
+    }, [canEdit]);
+
     // ---- çizim
     const nodes = drawOrder(doc.nodes);
     const selSet = new Set(selection);
@@ -786,6 +867,9 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ board, project, can
                                 outlineOffset: ring ? 3 * sw : undefined,
                                 borderRadius: n.type === 'section' ? 16 : 6,
                                 transition: lv ? 'left 60ms linear, top 60ms linear' : undefined,
+                                // Oylamada oylanamayanlar soluk, oylananlar tıklanabilir görünür
+                                opacity: doc.voting?.active && n.type !== 'section' && n.type !== 'pen' && !isVotable(doc, n) ? 0.35 : undefined,
+                                cursor: doc.voting?.active && canVote && isVotable(doc, n) ? 'pointer' : undefined,
                             }}>
                             <WbNodeBody n={n} env={env} editor={editor(n)} />
                             {n.locked && <span className="absolute -top-3 -left-3 w-6 h-6 rounded-full grid place-items-center m-surface shadow m-text-3" title="Kilitli"><Icon name="lock" size={12} /></span>}
@@ -917,6 +1001,7 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ board, project, can
                         ))}
                         {convertible.length > 0 && <button type="button" className="m-btn m-btn-primary !min-h-[34px] !px-3 text-[13px] flex-none whitespace-nowrap" onClick={convertToTasks} title="Not metninden görev oluşturur ve notu görev kartıyla değiştirir"><Icon name="check" size={14} />Göreve dönüştür{convertible.length > 1 ? ` (${convertible.length})` : ''}</button>}
                         {linked && <button type="button" className="m-btn m-btn-gray !min-h-[34px] !px-3 text-[13px] flex-none whitespace-nowrap" onClick={() => expandLinked(linked)}><Icon name="plus" size={14} />Görevlerini ekle</button>}
+                        {selectedNodes.some(n => n.type === 'image') && <button type="button" className="m-btn m-btn-gray !min-h-[34px] !px-3 text-[13px] flex-none whitespace-nowrap" onClick={() => setAiOpen(true)} title="Değişiklik talebinizi yazın; asistan görselin üstünde işaretlesin ve yeni ekranı çizsin"><Icon name="sparkles" size={14} />Asistana sor</button>}
                         {selectedNodes.length > 0 && <>
                             <span className="w-px h-6 m-fill-2 mx-0.5 flex-none" />
                             <button type="button" title="Öne getir" aria-label="Öne getir" className={toolbarBtn(false)} onClick={() => commit(reorder(doc, ids, 'front'))}><Icon name="bringFront" size={17} /></button>
@@ -961,22 +1046,12 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ board, project, can
                         {canEdit && <button type="button" aria-label="Zamanlayıcıyı durdur" className="w-8 h-8 rounded-lg border-0 bg-transparent cursor-pointer m-text-3" onClick={() => commit(stopTimer(doc))}><Icon name="x" size={15} /></button>}
                     </span>
                 )}
-                {doc.voting?.active && (
-                    <span className="inline-flex items-center gap-2 h-10 pl-3 pr-1 rounded-xl shadow-md text-[13.5px] font-semibold text-white" style={{ background: '#7c3aed' }}>
-                        <Icon name="thumbsUp" size={15} />Oylama · kalan hakkınız {Math.max(0, doc.voting.perPerson - votesUsed(doc, voter))}
-                        {canEdit && <button type="button" className="h-8 px-2.5 rounded-lg border-0 cursor-pointer text-[13px] font-semibold" style={{ background: 'rgba(255,255,255,0.2)', color: '#fff' }} onClick={() => toggleVoting()}>Bitir</button>}
-                    </span>
-                )}
                 {canEdit && !doc.voting?.active && (
-                    <details className="relative">
-                        <summary className="list-none h-10 px-3 rounded-xl m-surface m-pop shadow-md inline-flex items-center gap-1.5 cursor-pointer text-[13.5px] font-semibold m-text"><Icon name="thumbsUp" size={15} />Oylama</summary>
-                        <div className="absolute right-0 mt-2 w-60 p-3 rounded-xl m-surface m-pop shadow-xl flex flex-col gap-2 text-[13.5px]" style={{ border: '1px solid var(--m-sep, #e5e7eb)' }}>
-                            <span className="m-text-2">Kişi başına oy hakkı</span>
-                            <div className="flex gap-1.5">{[1, 3, 5, 10].map(n => <button key={n} type="button" className="m-btn m-btn-gray !min-h-[34px] flex-1" onClick={e => { (e.currentTarget.closest('details') as HTMLDetailsElement).open = false; toggleVoting(n); }}>{n}</button>)}</div>
-                            {results.length > 0 && <button type="button" className="m-btn m-btn-plain !min-h-[32px]" onClick={() => setVotePanel(true)}>Son sonuçlar</button>}
-                            {doc.voting && <button type="button" className="m-btn m-btn-plain !min-h-[32px]" onClick={() => { commit(clearVoting(doc)); setVotePanel(false); }}>Oyları temizle</button>}
-                        </div>
-                    </details>
+                    <button type="button" className={`h-10 px-3 rounded-xl m-surface m-pop shadow-md inline-flex items-center gap-1.5 border-0 cursor-pointer text-[13.5px] font-semibold ${voteSetup ? 'm-tone-accent' : 'm-text'}`}
+                        aria-expanded={voteSetup} onClick={() => { setVotePanel(false); setVoteSetup(v => !v); }}><Icon name="thumbsUp" size={15} />Oylama</button>
+                )}
+                {!canEdit && !doc.voting?.active && results.length > 0 && (
+                    <button type="button" className="h-10 px-3 rounded-xl m-surface m-pop shadow-md inline-flex items-center gap-1.5 border-0 cursor-pointer text-[13.5px] font-semibold m-text" onClick={() => setVotePanel(v => !v)}><Icon name="thumbsUp" size={15} />Sonuçlar</button>
                 )}
                 {canEdit && (
                     <details className="relative">
@@ -994,18 +1069,23 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ board, project, can
                 </span>
             </div>
 
-            {/* Oylama sonuçları */}
-            {votePanel && results.length > 0 && (
-                <div data-ui className="absolute top-16 right-3 z-30 w-80 max-h-[60%] overflow-y-auto p-3 rounded-2xl m-surface m-pop shadow-xl" style={{ border: '1px solid var(--m-sep, #e5e7eb)' }} onPointerDown={e => e.stopPropagation()}>
-                    <div className="flex items-center gap-2 mb-2"><b className="flex-1 text-[15px] m-text">Oylama sonuçları</b><button type="button" aria-label="Kapat" className="w-8 h-8 rounded-lg border-0 bg-transparent cursor-pointer m-text-3" onClick={() => setVotePanel(false)}><Icon name="x" size={15} /></button></div>
-                    <ol className="m-0 pl-5 flex flex-col gap-1.5 text-[14px] m-text">
-                        {results.slice(0, 15).map(r => (
-                            <li key={r.node.id}><button type="button" className="bg-transparent border-0 p-0 cursor-pointer text-left m-text" onClick={() => { setSelection([r.node.id]); fit([r.node]); }}>
-                                <b className="m-tabular">{r.votes} oy</b> · {(r.node.text || (r.node.type === 'task' ? tasksById.get(r.node.ref || '')?.name : '') || r.node.type).slice(0, 80)}
-                            </button></li>
-                        ))}
-                    </ol>
-                </div>
+            {/* Oylama: sürerken şerit, kurulum ve sonuçlar */}
+            {doc.voting?.active && (
+                <VoteBanner board={doc} voter={voter} canVote={canVote} canEnd={canEdit} secondsLeft={doc.voting.endsAt ? timer : null}
+                    scopeName={doc.voting.scope ? (byId.get(doc.voting.scope)?.text || 'Bölüm') : undefined} onEnd={() => toggleVoting()} />
+            )}
+            {voteSetup && canEdit && !doc.voting?.active && (
+                <VoteSetup section={single?.type === 'section' ? single : selectedNodes.find(n => n.type === 'section')} hasResults={results.length > 0}
+                    onStart={beginVoting} onShowResults={() => { setVoteSetup(false); setVotePanel(true); }} onClose={() => setVoteSetup(false)} />
+            )}
+            {votePanel && doc.voting && !doc.voting.active && (
+                <VoteResults board={doc} results={results} tasksById={tasksById} canEdit={canEdit}
+                    onFocus={n => { setSelection([n.id]); fit([n]); }}
+                    onSelectTop={ids => { setSelection(ids); fit(doc.nodes.filter(n => ids.includes(n.id))); }}
+                    onAddSummary={addVoteSummary}
+                    onRestart={() => { setVotePanel(false); setVoteSetup(true); }}
+                    onClear={() => { commit(clearVoting(docRef.current)); setVotePanel(false); }}
+                    onClose={() => setVotePanel(false)} />
             )}
 
             {/* Alt araç çubuğu */}
@@ -1038,9 +1118,19 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ board, project, can
                             <input type="file" accept="image/*" multiple className="hidden" onChange={e => { void addImages([...(e.target.files || [])], viewportCenter()); e.target.value = ''; }} />
                         </label>
                         <button type="button" title="Geri al (Ctrl+Z)" aria-label="Geri al" className={toolbarBtn(false)} onClick={undo}><Icon name="undo" size={18} /></button>
+                        <span className="w-px h-7 m-fill-2 mx-1" />
+                        <button type="button" title="Asistan: isteğinizi yazın, panoya çizsin (seçili ekran görüntüsünde değişiklikleri işaretler)" aria-pressed={aiOpen}
+                            className={`h-10 px-3 rounded-xl border-0 cursor-pointer inline-flex items-center gap-1.5 text-[14px] font-semibold ${aiOpen ? 'm-tone-accent' : 'bg-transparent m-text'}`} onClick={() => setAiOpen(o => !o)}>
+                            <Icon name="sparkles" size={16} />Asistan
+                        </button>
                     </>}
                 </div>
             </div>
+
+            {aiOpen && canEdit && (
+                <WbAssistant board={doc} project={project} selection={selectedNodes} visible={visibleRect()}
+                    onApply={applyAi} onUndo={undo} onClose={() => { setAiOpen(false); viewport.current?.focus(); }} />
+            )}
 
             {palette && (
                 <WbPalette project={project} tasksById={tasksById} at={palette.at} mode={palette.mode} canEdit={canEdit} votingActive={!!doc.voting?.active}
