@@ -41,6 +41,7 @@ import { describeNotify, fetchIntegrationHealth, fetchJiraSyncPage, JiraIssueRec
 import { boardForProject, DEFAULT_SCHEME_ID, effectiveScheme, migrateTasksToWorkflow, schemeOf, schemeUsage, validateProjectWorkflow, validateScheme } from './utils/projectScheme';
 import ProjectWorkflowSheet from './components/modern/ProjectWorkflowSheet';
 import ProjectListsSheet from './components/modern/ProjectListsSheet';
+import ModernWhiteboard from './components/modern/whiteboard/ModernWhiteboard';
 import { cleanRoleMembers, projectRolesOf } from './utils/projectRoles';
 import { listId } from './utils/projectLists';
 import { BulkTaskPatch, previewBulkTaskEdit } from './utils/bulkTaskEdit';
@@ -185,7 +186,7 @@ const createSampleProject = (): Project =>
   });
 
 /** Modern arayüzde proje başlığının gösterildiği ekranlar */
-const MODERN_PROJECT_VIEWS: View[] = [View.Dashboard, View.Overview, View.Roadmap, View.Tasks, View.Kanban, View.Planning, View.Risks, View.Resources, View.Goals, View.Requests, View.Notes, View.AI];
+const MODERN_PROJECT_VIEWS: View[] = [View.Dashboard, View.Whiteboard, View.Overview, View.Roadmap, View.Tasks, View.Kanban, View.Planning, View.Risks, View.Resources, View.Goals, View.Requests, View.Notes, View.AI];
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<View>(View.Portfolio);
@@ -1830,7 +1831,7 @@ const App: React.FC = () => {
   const handleSetUiStyle = useCallback((uiStyle: UiStyle) => {
     updateWorkspace(ws => ({ ...ws, settings: { ...ws.settings, uiStyle } }));
     // Genel bakış yalnız modern arayüzde var
-    if (uiStyle === 'classic') setCurrentView(v => (v === View.Overview || v === View.Dashboard ? View.Roadmap : v));
+    if (uiStyle === 'classic') setCurrentView(v => (v === View.Overview || v === View.Dashboard || v === View.Whiteboard ? View.Roadmap : v));
   }, [updateWorkspace]);
 
   // Görünüm (modern tema, gündüz/gece): ayarlar penceresinde seçildiği an uygulanır
@@ -2682,6 +2683,19 @@ const App: React.FC = () => {
         />
       );
     }
+    if (isModern && currentView === View.Whiteboard) {
+      return (
+        <ModernWhiteboard
+          key={activeProject.id}
+          project={activeProject}
+          canEdit={canEditProjectContent(workspace, identity, activeProject.id)}
+          actor={currentActorName}
+          voter={workspace.currentPersonId || identity.role}
+          onUpdateProject={updateActiveProject}
+          onViewTask={viewTask}
+        />
+      );
+    }
     if (isModern && currentView === View.Overview) {
       return (
         <ModernProjectOverview
@@ -2801,6 +2815,7 @@ const App: React.FC = () => {
           </div>
         );
       case View.Dashboard:
+      case View.Whiteboard: // whiteboard yalnız modern arayüzde
       case View.Overview: // klasik arayüzde karşılığı pano
       case View.Roadmap:
         return (

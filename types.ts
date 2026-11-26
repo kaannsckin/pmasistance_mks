@@ -663,6 +663,7 @@ export enum View {
   Admin, // Yönetici (admin): rol yetkileri ve profiller
   Planning, // Planlama asistanı: yeni kayıt tahmini ve plan simülasyonu (modern arayüz)
   Dashboard, // Proje dashboard'u: kişiselleştirilebilir bileşenler (modern arayüzde projenin ilk ekranı)
+  Whiteboard, // Proje whiteboard'u: FigJam tarzı serbest çalışma alanı (modern arayüz)
 }
 
 export interface UnitLoad {
@@ -736,7 +737,7 @@ export type PermissionKey =
 export type RolePermissions = Partial<Record<UserRole, PermissionKey[]>>;
 
 /** Proje içi sekmeler (admin rol bazında gizleyebilir; genel bakış her zaman açık) */
-export type ProjectSectionKey = 'dashboard' | 'overview' | 'board' | 'list' | 'timeline' | 'planning' | 'risks' | 'team' | 'goals' | 'workPackages' | 'assistant';
+export type ProjectSectionKey = 'dashboard' | 'overview' | 'board' | 'list' | 'timeline' | 'planning' | 'risks' | 'team' | 'goals' | 'workPackages' | 'assistant' | 'whiteboard';
 /** Yönetim ekranı kartları (admin rol bazında gizleyebilir) */
 export type ExecSectionKey = 'summary' | 'kpis' | 'expectations' | 'meetings' | 'health' | 'attention' | 'approvals' | 'risks' | 'departments' | 'changes';
 export type TaskSortKey = 'smart' | 'priority' | 'due' | 'name';
@@ -1054,6 +1055,77 @@ export interface ProjectPoc {
   settings?: PocScoreSettings;
 }
 
+// ---------------------------------------------------------------------------
+// Whiteboard (FigJam tarzı): projeye özel panolar
+// ---------------------------------------------------------------------------
+
+/**
+ * Pano nesnesi. Konum ve boyut pano koordinatında (piksel, yakınlaştırma 1).
+ * Bağlı kartlar (görev, sprint, iş paketi, risk, sürüm) yalnız kimlik tutar;
+ * içerik her çizimde projeden okunur, böylece kart Jira eşitlemesiyle güncel kalır.
+ */
+export type WbNodeType = 'sticky' | 'text' | 'shape' | 'section' | 'stamp' | 'pen' | 'image'
+  | 'task' | 'sprint' | 'workPackage' | 'risk' | 'version';
+export type WbShape = 'rect' | 'ellipse' | 'diamond' | 'triangle';
+
+export interface WbNode {
+  id: string;
+  type: WbNodeType;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  text?: string;
+  /** Renk anahtarı (yellow, green, blue …) */
+  color?: string;
+  shape?: WbShape;
+  /** Bağlı kayıt: görev kimliği, sprint numarası, iş paketi / risk / sürüm kimliği */
+  ref?: string;
+  /** Kalem çizgisi: nesneye göre [x0, y0, x1, y1, …] */
+  points?: number[];
+  /** Metin boyutu (px); yoksa türün varsayılanı */
+  fontSize?: number;
+  /** Damga (emoji) */
+  stamp?: string;
+  /** Görsel (küçültülmüş data URL) */
+  src?: string;
+  locked?: boolean;
+  /** Ekleyen kişi (görünen ad) */
+  author?: string;
+  /** Oylama: kişi anahtarı → oy sayısı */
+  votes?: Record<string, number>;
+}
+
+export interface WbEdge {
+  id: string;
+  from: string;
+  to: string;
+  label?: string;
+  /** arrow: tek yönlü ok (varsayılan) · line: oksuz çizgi */
+  style?: 'arrow' | 'line';
+}
+
+export interface WbVoting {
+  active: boolean;
+  /** Kişi başına oy hakkı */
+  perPerson: number;
+  startedAt: string;
+  endedAt?: string;
+}
+
+export interface Whiteboard {
+  id: string;
+  name: string;
+  nodes: WbNode[];
+  edges: WbEdge[];
+  voting?: WbVoting;
+  /** Ortak geri sayım */
+  timer?: { endsAt: string; seconds: number };
+  createdAt: string;
+  updatedAt: string;
+  createdBy?: string;
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -1084,6 +1156,8 @@ export interface Project {
   kpis?: ProjectKpi[];
   /** Müşteri PoC test listesi ve skor modeli (GİB PoC skoru) */
   poc?: ProjectPoc;
+  /** FigJam tarzı panolar (fikir, planlama, retro, inceleme) */
+  whiteboards?: Whiteboard[];
   risks?: Risk[];
   pestelItems?: PestelItem[]; // PESTEL dış çevre analizi
   swotItems?: SwotItem[]; // SWOT stratejik analizi

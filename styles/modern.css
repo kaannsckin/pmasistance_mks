@@ -424,6 +424,11 @@
 .ui-modern .m-row-link.m-surface:hover { background: var(--m-fill-2); }
 
 .ui-modern :focus-visible { outline: 3px solid var(--m-accent); outline-offset: 2px; }
+/* Whiteboard tuvali renkleri: notlar pastel kalır, zemin, nokta ızgara ve bağlantılar temaya uyar */
+.ui-modern .m-wb-canvas { --wb-canvas: #F4F4F6; --wb-dot: rgba(120, 120, 130, 0.35); --wb-ink: #3F3F46; background-color: var(--wb-canvas); }
+.dark .ui-modern .m-wb-canvas { --wb-canvas: #141416; --wb-dot: rgba(200, 200, 210, 0.16); --wb-ink: #D1D1D6; }
+/* Whiteboard tuvali: odakta kalın çerçeve yerine ince iç çizgi (klavye kısayolları tuval odaktayken çalışır) */
+.ui-modern .m-wb-canvas:focus-visible { outline: none; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--m-accent) 45%, transparent); }
 
 /* .m-icon-btn gibi display veren sınıflar Tailwind'in lg:hidden'ını ezmesin */
 @media (min-width: 1024px) { .ui-modern .lg\:hidden { display: none !important; } }

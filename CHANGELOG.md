@@ -5,6 +5,15 @@ buradan alır (`.github/workflows/exe.yml`).
 
 ## Yayımlanmamış
 
+**Whiteboard: FigJam tarzı proje panosu**
+- Projede yeni **Whiteboard** sekmesi (modern arayüz): sonsuz tuval, yapışkan not, metin, şekil, bölüm, bağlantı, kalem, damga ve görsel. Seçim, çoğaltma, kilit, katman sırası, geri al / yinele ve klavye kısayolları FigJam'deki gibi.
+- **"/" komutları**: görev, sprint, iş paketi, risk ve sürüm kart olarak eklenir; kartlar Jira eşitlemesiyle güncel kalır. Sprint ya da iş paketi görevleriyle birlikte bir bölüm içinde eklenebilir.
+- **Notta "//"**: görev referansı eklenir ve notta görev kodu düğmesi olarak görünür.
+- **Göreve dönüştür**: seçili notlardan görev açılır (Yapılacak, havuzda, "Whiteboard" etiketiyle).
+- **Toplantı araçları**: kişi başına oy haklı gizli oylama ve ortak zamanlayıcı.
+- **Şablonlar**: retrospektif, sprint planlama, önceliklendirme matrisi, UI/UX inceleme panosu, Kanban, risk değerlendirme, akış şeması.
+- Pano özeti Markdown olarak kopyalanır ya da indirilir; pano JSON olarak indirilir. Ayrıntı: [docs/WHITEBOARD.md](docs/WHITEBOARD.md).
+
 **GİB PoC skoru: Jira'dan her an üretilen rapor**
 - **Test listesi saklanır**: Excel aktarımı Test Kalemleri'nin tamamını (göreve dönüşmeyen karşılanmış ve değerlendirme dışı testler dahil) projeye yazar. Skorun paydası ve sonuç dağılımları (ör. 238 test: 47 / 28 / 163) yeniden hesaplanabilir.
 - **Dört skor**: İlk (GİB PoC sonucu), Doğrulanmış (Güncel Sonuç ile), Bugün (görevin son Jira eşitlemesindeki durumu × süreç katsayısı) ve Olası (seçilen kapsamdaki maddeler tamamlanmış sayılır). Test puanı p = b + (1 − b) · k.

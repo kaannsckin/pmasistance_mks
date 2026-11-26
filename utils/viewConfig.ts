@@ -25,6 +25,7 @@ export const PROJECT_SECTIONS: { key: ProjectSectionKey; label: string; view?: V
     { key: 'risks', label: 'Riskler', view: View.Risks },
     { key: 'team', label: 'Ekip', view: View.Resources },
     { key: 'goals', label: 'Hedefler', view: View.Goals },
+    { key: 'whiteboard', label: 'Whiteboard', view: View.Whiteboard },
     { key: 'workPackages', label: 'İş paketleri' },
     { key: 'assistant', label: 'Asistan', view: View.AI },
 ];
