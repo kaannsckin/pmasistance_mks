@@ -1,5 +1,8 @@
-import { DashboardProgressWeights, Project, ProjectProgressModel, Task, TaskStatus } from '../types';
-import { workflowKey } from './workflow';
+import type { DashboardProgressWeights, Project, ProjectProgressModel, Task, TaskStatus } from '../types';
+
+// Yaprak modül: sunucu (zamanlanmış rapor) da kullanır; çalışma zamanında başka modüle bağlı değildir
+const DONE = 'Done' as TaskStatus;
+const workflowKey = (name: string): string => name.trim().toUpperCase().replace(/\s+/g, ' ');
 
 /**
  * Durum yüzdeleriyle ilerleme. Varsayılan yalnız Tamamlandı = %100; proje
@@ -7,7 +10,7 @@ import { workflowKey } from './workflow';
  * kısmi ilerleme sayılır. Ayrıntılı durum yüzdesi kategori yüzdesinden önce gelir.
  */
 
-export const defaultProgressPercent = (category: TaskStatus): number => (category === TaskStatus.Done ? 100 : 0);
+export const defaultProgressPercent = (category: TaskStatus): number => (category === DONE ? 100 : 0);
 export const isProgressPercent = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 100;
 
 export const hasProgressWeights = (w?: DashboardProgressWeights): boolean =>
@@ -16,7 +19,7 @@ export const hasProgressWeights = (w?: DashboardProgressWeights): boolean =>
 /** Görevin tamamlanma yüzdesi (0–100) */
 export const taskProgressPercent = (task: Pick<Task, 'status' | 'jiraStatus'>, weights?: DashboardProgressWeights): number => {
     // Tamamlanmış iş her zaman %100: yüzde yalnız yolda olan işi kısmi sayar
-    if (task.status === TaskStatus.Done) return 100;
+    if (task.status === DONE) return 100;
     const specific = task.jiraStatus?.trim() ? weights?.statuses?.[workflowKey(task.jiraStatus)] : undefined;
     if (isProgressPercent(specific)) return specific;
     const category = weights?.categories?.[task.status];
@@ -45,7 +48,7 @@ export const progressOf = (tasks: Task[], model?: ProjectProgressModel, override
     if (basis === 'effort' && !tasks.some(t => effortWeight(t) > 0)) basis = 'count';
     let sum = 0, total = 0, done = 0;
     for (const t of tasks) {
-        if (t.status === TaskStatus.Done) done++;
+        if (t.status === DONE) done++;
         const w = basis === 'effort' ? effortWeight(t) : 1;
         sum += w * taskProgressPercent(t, weights);
         total += w;

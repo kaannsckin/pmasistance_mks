@@ -26,6 +26,7 @@ const GROUPS = [
     { id: 'jira', title: 'Jira', hint: 'Excel\'deki Jira No\'ların eşitlenmesi, atananlar, worklog\'lar ve tahsis için' },
     { id: 'teams', title: 'Microsoft Teams', hint: 'Bildirim ve haftalık hatırlatma kanalı' },
     { id: 'email', title: 'E-posta (SMTP)', hint: 'Bildirim ve hatırlatma e-postaları' },
+    { id: 'reports', title: 'Rapor kanalları (Slack, Notion)', hint: 'Zamanlanmış proje raporları. Notion: iç entegrasyon oluşturup rapor sayfasını ona paylaşın. Sunucunun kendisi göndermesi için CRON_SECRET ve SUPABASE_SERVICE_ROLE_KEY ortam değişkeni gerekir; yoksa raporu uygulama açıkken tarayıcı gönderir.' },
 ] as const;
 
 const formOf = (s: IntegrationAdminState): IntegrationValues =>
@@ -169,6 +170,9 @@ const IntegrationSettings: React.FC<Props> = ({ onChanged }) => {
                     {statusChip(s.status.jiraUpdate, 'Jira\'ya yazma')}
                     {statusChip(s.status.teams, 'Teams')}
                     {statusChip(s.status.email, 'E-posta')}
+                    {statusChip(!!s.status.slack, 'Slack')}
+                    {statusChip(!!s.status.notion, 'Notion')}
+                    {statusChip(!!s.status.reportCron, 'Rapor zamanlayıcısı')}
                 </div>
             </div>
             {!s.store.available && <p role="alert" className="m-0 text-[14px] m-ink-warn">{s.store.problem} Test edilebilir ama kaydedilemez.</p>}

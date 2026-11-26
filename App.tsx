@@ -1,6 +1,6 @@
 
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { View, Task, Resource, TaskStatus, Note, CustomerRequest, Objective, Project, Person, WorkspaceData, RagStatus, ProjectStatus, UserRole, PlanLockStatus, WorkPackage, UiStyle, ModernTheme, ColorMode, PermissionKey, EstimateLogEntry, JiraSyncSettings, ReleasePlan, GoldenItem, EvalRun, ModelEvalRun, BoardConfig, ProjectScheme, WorkflowConfig, TransitionRule, ProjectComponent, ProjectVersion, ProjectRoleDef, AutomationRule } from './types';
+import { View, Task, Resource, TaskStatus, Note, CustomerRequest, Objective, Project, Person, WorkspaceData, RagStatus, ProjectStatus, UserRole, PlanLockStatus, WorkPackage, UiStyle, ModernTheme, ColorMode, PermissionKey, EstimateLogEntry, JiraSyncSettings, ReleasePlan, GoldenItem, EvalRun, ModelEvalRun, BoardConfig, ProjectScheme, WorkflowConfig, TransitionRule, ProjectComponent, ProjectVersion, ProjectRoleDef, AutomationRule, ReportSchedule } from './types';
 import { INITIAL_TASKS, INITIAL_RESOURCES, INITIAL_OBJECTIVES } from './constants';
 import {
   WORKSPACE_STORAGE_KEY,
@@ -32,6 +32,8 @@ import { applyRuleAction, RuleAction, ruleActionLabel } from './utils/ai/reportR
 import { stampLifecycle } from './utils/planning/lifecycle';
 import { AutomationEffect, recordAutomation, runAutomation, runScheduledAutomation } from './utils/automation';
 import AutomationRulesSheet from './components/modern/AutomationRulesSheet';
+import ReportSchedulesSheet from './components/modern/ReportSchedulesSheet';
+import { buildReport, isReportDue, previousSnapshot, progressSnapshot, trClock, withSnapshot } from './utils/reportAutomation';
 import { canTransition, DEFAULT_WORKFLOW, resolveTransition, taskStatusLabel, taskWorkflow, workflowKey, workflowOptions, WorkflowStatus } from './utils/workflow';
 import { applyTransition, conditionProblem, needsInput, ruleFor, TransitionActor, TransitionEffect, TransitionInput, TransitionNeeds, transitionNeeds } from './utils/transitions';
 import TransitionDialog from './components/modern/TransitionDialog';
@@ -232,6 +234,7 @@ const App: React.FC = () => {
   const [listsSheetProject, setListsSheetProject] = useState<string | null>(null);
   const [listsSheetTab, setListsSheetTab] = useState<'roles' | 'components' | 'progress' | undefined>(undefined);
   const [automationSheetProject, setAutomationSheetProject] = useState<string | null>(null);
+  const [reportSheetProject, setReportSheetProject] = useState<string | null>(null);
   useEffect(() => { if (!flowNotice) return; const id = window.setTimeout(() => setFlowNotice(null), 6000); return () => window.clearTimeout(id); }, [flowNotice]);
   const [storageFull, setStorageFull] = useState(false);
   const [storageWarnClosed, setStorageWarnClosed] = useState(false);
@@ -704,17 +707,19 @@ const App: React.FC = () => {
   const storeProjectChange = useCallback((ws: WorkspaceData, previous: Project, input: Project, now = new Date()) => {
     if (previous === input) return ws;
     let next = input;
-    // Yerel görev değişikliklerinde yaşam döngüsü damgaları ve bildirim şeması uygulanır.
-    let tasks = next.tasks !== previous.tasks ? stampLifecycle(previous.tasks, next.tasks, now) : next.tasks;
-    // Kural setleri: değişen görevlere olay kuralları (zincir ve döngü koruması motorda)
-    if (tasks !== previous.tasks && next.automationRules?.some(r => r.enabled)) {
-      const r = runAutomation({ ...next, tasks }, previous.tasks, tasks, { now, workflow: effectiveScheme(ws, next).workflow, people: ws.people, roleDefs: projectRolesOf(ws) });
+    let raw = next.tasks;
+    // Kural setleri: değişen görevlere olay kuralları (zincir ve döngü koruması motorda). Yaşam döngüsü
+    // damgası kuralın sonucuna basılır: Çözüldü → (kural) Testte geçişi "kapandı" sayılmaz.
+    if (raw !== previous.tasks && next.automationRules?.some(r => r.enabled)) {
+      const r = runAutomation(next, previous.tasks, raw, { now, workflow: effectiveScheme(ws, next).workflow, people: ws.people, roleDefs: projectRolesOf(ws) });
       if (r.log.length) {
-        tasks = stampLifecycle(previous.tasks, r.tasks, now);
+        raw = r.tasks;
         next = recordAutomation(next, r, now);
         automationQueue.current.push(...r.effects);
       }
     }
+    // Yerel görev değişikliklerinde yaşam döngüsü damgaları ve bildirim şeması uygulanır.
+    const tasks = raw !== previous.tasks ? stampLifecycle(previous.tasks, raw, now) : raw;
     const project = { ...next, tasks, updatedAt: now.toISOString() };
     if (tasks !== previous.tasks) queueNotifications(ws, project, previous.tasks, tasks);
     return { ...ws, projects: ws.projects.map(p => p.id === previous.id ? project : p) };
@@ -1526,6 +1531,75 @@ const App: React.FC = () => {
     // Yeni günlük kural kaydedildiği gün çalışır
     window.setTimeout(() => runDailyRules(), 0);
   }, [updateWorkspace, runDailyRules]);
+  // ---- Rapor otomasyonu: kaydet, gönder, tarayıcı yedek göndericisi (sunucu zamanlayıcısı yoksa)
+  const handleSaveReportSchedules = useCallback((projectId: string, schedules: ReportSchedule[], summary: string) => {
+    updateWorkspace(ws => {
+      const project = ws.projects.find(p => p.id === projectId);
+      const who = identityOf(ws);
+      if (!project || !(can(who, 'screen.admin') || canEditProjectContent(ws, who, projectId))) return ws;
+      const next = { ...ws, projects: ws.projects.map(p => (p.id === projectId ? { ...p, reportSchedules: schedules.length ? schedules : undefined, progressSnapshots: withSnapshot(p.progressSnapshots, progressSnapshot(p, new Date())), updatedAt: new Date().toISOString() } : p)) };
+      return appendAudit(next, 'config.update', `"${project.name}" rapor otomasyonu: ${summary}`, projectId);
+    });
+  }, [updateWorkspace]);
+  /** Raporu hesaplayıp kanallara gönderir; zamanlanmış gönderimde son gönderim ve ölçüm kaydedilir */
+  const sendScheduledReport = useCallback(async (projectId: string, s: ReportSchedule, scheduled: boolean): Promise<string> => {
+    const ws = workspaceRef.current;
+    const project = ws?.projects.find(p => p.id === projectId);
+    if (!ws || !project) return 'Proje bulunamadı.';
+    const now = new Date();
+    const r = buildReport(project, s, { now, previous: previousSnapshot(project.progressSnapshots, now), since: s.lastSentAt ? new Date(s.lastSentAt) : undefined, people: ws.people, roleDefs: projectRolesOf(ws), appUrl: window.location.origin });
+    let text: string;
+    try {
+      const health = await fetchIntegrationHealth();
+      const res = await sendNotification({
+        subject: r.subject, text: r.text, sections: r.sections,
+        ...(s.channels.teams ? { teams: true } : {}), ...(s.channels.slack ? { slack: true } : {}), ...(s.channels.notion ? { notion: true } : {}),
+        ...(s.channels.email?.length ? { email: { bcc: s.channels.email } } : {}),
+      }, health.authMode);
+      text = describeNotify(res).text || 'Gönderildi.';
+    } catch (e) {
+      text = `Gönderilemedi: ${(e as Error).message}`;
+    }
+    const at = now.toISOString();
+    updateWorkspace(w => ({
+      ...w,
+      projects: w.projects.map(p => (p.id !== projectId ? p : {
+        ...p,
+        progressSnapshots: withSnapshot(p.progressSnapshots, r.snapshot),
+        reportSchedules: (p.reportSchedules || []).map(x => (x.id !== s.id ? x : scheduled ? { ...x, lastSentDay: trClock(now).day, lastSentAt: at, lastResult: text } : { ...x, lastResult: `Deneme: ${text}` })),
+      })),
+    }));
+    return text;
+  }, [updateWorkspace]);
+  const runDueReports = useCallback(async () => {
+    const ws = workspaceRef.current;
+    if (!ws) return;
+    const now = new Date();
+    const mine = ws.projects.filter(p => p.reportSchedules?.some(s => s.enabled) && canEditProjectContent(ws, identityOf(ws), p.id));
+    if (!mine.length) return;
+    // Günlük ölçüm (önceki rapora göre fark için)
+    const day = trClock(now).day;
+    if (mine.some(p => !(p.progressSnapshots || []).some(x => x.day === day))) {
+      updateWorkspace(w => ({ ...w, projects: w.projects.map(p => (mine.some(m => m.id === p.id) && !(p.progressSnapshots || []).some(x => x.day === day) ? { ...p, progressSnapshots: withSnapshot(p.progressSnapshots, progressSnapshot(p, now)) } : p)) }));
+    }
+    const due = mine.flatMap(p => (p.reportSchedules || []).filter(s => isReportDue(s, now)).map(s => ({ p, s })));
+    if (!due.length) return;
+    let health;
+    try { health = await fetchIntegrationHealth(); } catch { return; }
+    if (health.unreachable || health.reportCron) return; // sunucu gönderiyor (ya da ulaşılamıyor)
+    for (const { p, s } of due) {
+      // Aynı tarayıcıda açık iki sekme aynı raporu göndermesin
+      const lock = `pm-report-sent:${p.id}:${s.id}:${day}`;
+      try { if (localStorage.getItem(lock)) continue; localStorage.setItem(lock, '1'); } catch { /* depolama yoksa yine gönder */ }
+      await sendScheduledReport(p.id, s, true);
+    }
+  }, [updateWorkspace, sendScheduledReport]);
+  useEffect(() => {
+    if (!hasWorkspace) return;
+    const first = window.setTimeout(() => { void runDueReports(); }, 5000);
+    const id = window.setInterval(() => { void runDueReports(); }, 10 * 60 * 1000);
+    return () => { window.clearTimeout(first); window.clearInterval(id); };
+  }, [hasWorkspace, runDueReports]);
   // Proje rolü tanımları (admin): silinen rolün üyelikleri projelerden temizlenir
   const handleSaveProjectRoles = useCallback((defs: ProjectRoleDef[]) => {
     updateWorkspace(ws => {
@@ -2506,6 +2580,7 @@ const App: React.FC = () => {
           costTableColor={ps.costTableColor || '#10b981'}
           project={activeProject}
           roleDefs={projectRolesOf(workspace)}
+          workflow={activeScheme.workflow}
           onViewTask={viewTask}
           onEditSetup={canEditProjectContent(workspace, identity, activeProject.id) ? tab => { setListsSheetTab(tab); setListsSheetProject(activeProject.id); } : undefined}
         />
@@ -3038,6 +3113,7 @@ const App: React.FC = () => {
                   onNewTask={() => { setEditingTask(null); setIsFormModalOpen(true); }}
                   onOpenWorkPackages={() => setIsWpManagerOpen(true)}
                   onOpenAutomation={() => setAutomationSheetProject(activeProject.id)}
+                  onOpenReports={() => setReportSheetProject(activeProject.id)}
                   sections={roleView.projectSections}
                 />
               )}
@@ -3290,6 +3366,18 @@ const App: React.FC = () => {
             people={[...new Set([...p.resources.map(r => r.name), ...workspace.people.map(x => `${x.firstName} ${x.lastName}`.trim())])].filter(Boolean).sort((a, b) => a.localeCompare(b, 'tr'))}
             onClose={() => { setListsSheetProject(null); setListsSheetTab(undefined); }}
             onSave={(patch, summary) => { handleSaveProjectLists(p.id, patch, summary); setListsSheetProject(null); setListsSheetTab(undefined); }} />
+        );
+        return isModern ? sheet : <div className={modernScope}>{sheet}</div>;
+      })()}
+      {reportSheetProject && workspace && (() => {
+        const p = workspace.projects.find(x => x.id === reportSheetProject);
+        if (!p) return null;
+        const sheet = (
+          <ReportSchedulesSheet project={p} people={workspace.people} roleDefs={projectRolesOf(workspace)}
+            canEdit={can(identity, 'screen.admin') || canEditProjectContent(workspace, identity, p.id)}
+            onClose={() => setReportSheetProject(null)}
+            onSave={(list, summary) => { handleSaveReportSchedules(p.id, list, summary); setReportSheetProject(null); }}
+            onSendNow={s => sendScheduledReport(p.id, s, false)} />
         );
         return isModern ? sheet : <div className={modernScope}>{sheet}</div>;
       })()}

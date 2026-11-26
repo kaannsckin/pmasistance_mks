@@ -16,6 +16,9 @@ export const INTEGRATION_FIELDS = [
     { key: 'JIRA_ALLOW_CREATE', group: 'jira', label: 'Uygulamadan Jira kaydı açma', bool: true },
     { key: 'JIRA_STORY_POINTS_FIELD', group: 'jira', label: 'Story point alanı', placeholder: 'Boş = adından bulunur · ör. customfield_10002' },
     { key: 'TEAMS_WEBHOOK_URL', group: 'teams', label: 'Teams webhook adresi', secret: true },
+    { key: 'SLACK_WEBHOOK_URL', group: 'reports', label: 'Slack gelen webhook adresi', secret: true, placeholder: 'https://hooks.slack.com/services/…' },
+    { key: 'NOTION_TOKEN', group: 'reports', label: 'Notion iç entegrasyon jetonu', secret: true },
+    { key: 'NOTION_PARENT_PAGE_ID', group: 'reports', label: 'Notion rapor sayfası kimliği', placeholder: 'Sayfa bağlantısının sonundaki 32 hane' },
     { key: 'SMTP_HOST', group: 'email', label: 'SMTP sunucusu' },
     { key: 'SMTP_PORT', group: 'email', label: 'Port', placeholder: '587' },
     { key: 'SMTP_SECURE', group: 'email', label: 'TLS (465)', bool: true },
@@ -34,7 +37,7 @@ export interface IntegrationAdminState {
     updatedAt?: string;
     panel: IntegrationValues;
     env: IntegrationValues;
-    status: { jira: boolean; jiraCreate: boolean; jiraUpdate: boolean; teams: boolean; email: boolean; reminder: boolean };
+    status: { jira: boolean; jiraCreate: boolean; jiraUpdate: boolean; teams: boolean; email: boolean; reminder: boolean; slack?: boolean; notion?: boolean; reportCron?: boolean };
 }
 export interface IntegrationTest { jira: { ok: boolean; user?: string; projects?: string[]; error?: string } }
 

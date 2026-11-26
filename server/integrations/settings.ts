@@ -14,11 +14,11 @@ import { decryptSecret, encryptSecret, fileBackend, resolveSettingsStore, Settin
 
 export const INTEGRATION_KEYS = [
     'JIRA_BASE_URL', 'JIRA_TOKEN', 'JIRA_EMAIL', 'JIRA_API_TOKEN', 'JIRA_ALLOWED_PROJECTS', 'JIRA_ALLOW_UPDATE', 'JIRA_ALLOW_CREATE', 'JIRA_STORY_POINTS_FIELD',
-    'TEAMS_WEBHOOK_URL',
+    'TEAMS_WEBHOOK_URL', 'SLACK_WEBHOOK_URL', 'NOTION_TOKEN', 'NOTION_PARENT_PAGE_ID',
     'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS', 'SMTP_FROM', 'SMTP_SECURE', 'NOTIFY_ALLOWED_DOMAINS', 'REPORT_REMINDER_TO',
 ] as const;
 export type IntegrationKey = typeof INTEGRATION_KEYS[number];
-export const INTEGRATION_SECRETS: IntegrationKey[] = ['JIRA_TOKEN', 'JIRA_API_TOKEN', 'TEAMS_WEBHOOK_URL', 'SMTP_PASS'];
+export const INTEGRATION_SECRETS: IntegrationKey[] = ['JIRA_TOKEN', 'JIRA_API_TOKEN', 'TEAMS_WEBHOOK_URL', 'SLACK_WEBHOOK_URL', 'NOTION_TOKEN', 'SMTP_PASS'];
 export type IntegrationValues = Partial<Record<IntegrationKey, string>>;
 
 const MAX_LEN = 2000;
@@ -33,6 +33,8 @@ export const validateIntegration = (v: IntegrationValues): string | null => {
     }
     if (v.JIRA_BASE_URL && !/^https?:\/\/[^\s/]+/i.test(v.JIRA_BASE_URL)) return 'Jira adresi http(s):// ile başlamalı.';
     if (v.TEAMS_WEBHOOK_URL && !/^https:\/\//i.test(v.TEAMS_WEBHOOK_URL)) return 'Teams webhook adresi https:// ile başlamalı.';
+    if (v.SLACK_WEBHOOK_URL && !/^https:\/\/hooks\.slack\.com\//i.test(v.SLACK_WEBHOOK_URL)) return 'Slack webhook adresi https://hooks.slack.com/ ile başlamalı.';
+    if (v.NOTION_PARENT_PAGE_ID && !/^[0-9a-f]{32}$/i.test(v.NOTION_PARENT_PAGE_ID.replace(/-/g, ''))) return 'Notion sayfa kimliği 32 haneli olmalı (sayfa bağlantısının sonundaki kimlik).';
     if (v.JIRA_ALLOWED_PROJECTS && !/^\s*[A-Za-z][A-Za-z0-9_]{1,19}(\s*,\s*[A-Za-z][A-Za-z0-9_]{1,19})*\s*$/.test(v.JIRA_ALLOWED_PROJECTS)) return 'İzinli Jira projeleri virgülle ayrılmış proje anahtarları olmalı (ör. MKS, MPS).';
     if (v.SMTP_PORT && !/^\d{1,5}$/.test(v.SMTP_PORT)) return 'SMTP portu sayı olmalı.';
     return null;

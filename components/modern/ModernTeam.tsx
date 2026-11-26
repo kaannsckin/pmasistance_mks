@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { Person, Project, ProjectRoleDef, Resource, Task } from '../../types';
+import { Person, Project, ProjectRoleDef, Resource, Task, WorkflowConfig } from '../../types';
 import TeamAnalytics from './TeamAnalytics';
 import { exportResourcePlanToExcel } from '../../utils/exporter';
 import {
@@ -34,6 +34,7 @@ interface ModernTeamProps {
     onViewTask?: (task: Task) => void;
     /** Proje ayarlarını aç: rol üyeleri ya da bileşenler */
     onEditSetup?: (tab: 'roles' | 'components') => void;
+    workflow?: WorkflowConfig;
 }
 
 type Tab = 'team' | 'teams' | 'components' | 'plan' | 'cost';
@@ -110,7 +111,7 @@ const PersonSheet: React.FC<{
     );
 };
 
-const ModernTeam: React.FC<ModernTeamProps> = ({ resources, tasks, people, canEdit, onUpdate, setResources, titleCosts, setTitleCosts, costTableColor, project, roleDefs = [], onViewTask, onEditSetup }) => {
+const ModernTeam: React.FC<ModernTeamProps> = ({ resources, tasks, people, canEdit, onUpdate, setResources, titleCosts, setTitleCosts, costTableColor, project, roleDefs = [], onViewTask, onEditSetup, workflow }) => {
     const [tab, setTab] = useState<Tab>('team');
     const [sheet, setSheet] = useState<{ resource?: Resource } | null>(null);
     const [notice, setNotice] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
@@ -184,7 +185,7 @@ const ModernTeam: React.FC<ModernTeamProps> = ({ resources, tasks, people, canEd
             )}
 
             {(tab === 'teams' || tab === 'components') && project && (
-                <TeamAnalytics project={project} roles={roleDefs} people={people} mode={tab === 'teams' ? 'team' : 'component'}
+                <TeamAnalytics project={project} roles={roleDefs} people={people} workflow={workflow} mode={tab === 'teams' ? 'team' : 'component'}
                     onViewTask={t => onViewTask?.(t)} onEditSetup={onEditSetup ? () => onEditSetup(tab === 'teams' ? 'roles' : 'components') : undefined} />
             )}
 

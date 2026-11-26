@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { Person, Project, ProjectRoleDef, Task, TaskStatus } from '../../types';
+import { Person, Project, ProjectRoleDef, Task, TaskStatus, WorkflowConfig } from '../../types';
+import { taskWorkflow } from '../../utils/workflow';
 import { componentAnalytics, GroupStats, Insight, teamAnalytics } from '../../utils/teamAnalytics';
 import { Icon } from './icons';
 import TaskKeyButton from './TaskKeyButton';
@@ -27,7 +28,7 @@ const Spark: React.FC<{ values: number[]; label: string }> = ({ values, label })
 const TONE: Record<Insight['tone'], string> = { bad: 'm-ink-bad', warn: 'm-ink-warn', ok: 'm-ink-ok' };
 const TONE_ICON: Record<Insight['tone'], 'alert' | 'info' | 'check'> = { bad: 'alert', warn: 'info', ok: 'check' };
 
-const GROUP_COLS = 'minmax(170px,1.4fr) 64px minmax(120px,1fr) 78px 72px 78px 82px 104px 84px 76px 80px';
+const GROUP_COLS = 'minmax(150px,1.4fr) 44px minmax(110px,1fr) 64px 64px 56px 72px 96px 72px 64px 76px';
 
 const TeamAnalytics: React.FC<{
     project: Project;
@@ -37,7 +38,9 @@ const TeamAnalytics: React.FC<{
     onViewTask: (task: Task) => void;
     /** Takım üyeleri / bileşen listesi düzenleme (Proje ayarları) */
     onEditSetup?: () => void;
-}> = ({ project, roles, people, mode, onViewTask, onEditSetup }) => {
+    /** Durum adları için projenin iş akışı */
+    workflow?: WorkflowConfig;
+}> = ({ project, roles, people, mode, onViewTask, onEditSetup, workflow }) => {
     const [period, setPeriod] = useState<(typeof PERIODS)[number]>(30);
     const [selected, setSelected] = useState<string | null>(null);
     const data = useMemo(() => (mode === 'team' ? teamAnalytics : componentAnalytics)(project, roles, people, { periodDays: period }), [mode, project, roles, people, period]);
@@ -124,18 +127,18 @@ const TeamAnalytics: React.FC<{
             )}
 
             <section aria-label={`${noun} karşılaştırması`} className="m-surface rounded-2xl p-1.5 overflow-x-auto">
-                <div style={{ minWidth: 1040 }}>
+                <div style={{ minWidth: 960 }}>
                     {header}
                     {rows.map(row)}
                 </div>
             </section>
 
-            {current && <GroupDetail g={current} period={period} onViewTask={onViewTask} />}
+            {current && <GroupDetail g={current} period={period} onViewTask={onViewTask} workflow={workflow} />}
         </div>
     );
 };
 
-const GroupDetail: React.FC<{ g: GroupStats; period: number; onViewTask: (t: Task) => void }> = ({ g, period, onViewTask }) => {
+const GroupDetail: React.FC<{ g: GroupStats; period: number; onViewTask: (t: Task) => void; workflow?: WorkflowConfig }> = ({ g, period, onViewTask, workflow }) => {
     const [showAll, setShowAll] = useState(false);
     const now = new Date();
     const open = g.tasks.filter(t => t.status !== TaskStatus.Done)
@@ -176,7 +179,7 @@ const GroupDetail: React.FC<{ g: GroupStats; period: number; onViewTask: (t: Tas
                             <TaskKeyButton task={t} onOpen={() => onViewTask(t)} />
                             <span className="flex-1 min-w-0 flex flex-col">
                                 <span className="text-[14px] m-text truncate">{t.name}</span>
-                                <span className="text-[12px] m-text-3 truncate">{[t.jiraStatus || t.status, t.resourceName, t.priority === 'Blocker' ? 'Blocker' : ''].filter(Boolean).join(' · ')}</span>
+                                <span className="text-[12px] m-text-3 truncate">{[taskWorkflow(t, workflow).label, t.resourceName, t.priority === 'Blocker' ? 'Blocker' : ''].filter(Boolean).join(' · ')}</span>
                             </span>
                             {late > 0 && <span className="text-[12px] font-semibold m-ink-bad whitespace-nowrap">{late} gün gecikti</span>}
                         </div>

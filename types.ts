@@ -216,6 +216,48 @@ export interface ProjectRoleDef {
   description?: string;
 }
 
+// ---------------------------------------------------------------- Rapor otomasyonu
+
+/** Zamanlanmış rapordaki bölümler (sırasıyla) */
+export type ReportBlockKey = 'progress' | 'activity' | 'bugs' | 'overdue' | 'sprint' | 'milestones' | 'teams' | 'blockers' | 'risks';
+
+/**
+ * Zamanlanmış proje raporu: seçilen periyotta (TR saati) Teams, Slack, Notion
+ * ve/veya e-postaya ilerleme özeti gönderir. Kanal adresleri ve jetonlar
+ * sunucuda (yönetici › entegrasyonlar) tutulur; burada yalnız seçim vardır.
+ */
+export interface ReportSchedule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  cadence: 'daily' | 'weekdays' | 'weekly';
+  /** Haftalıkta gün: 1 Pazartesi … 7 Pazar */
+  weekday?: number;
+  /** Gönderim saati (0–23, Türkiye saati) */
+  hour: number;
+  channels: { teams?: boolean; slack?: boolean; notion?: boolean; email?: string[] };
+  blocks: ReportBlockKey[];
+  /** Kapsam: yalnız bu hedef sürümdeki görevler */
+  fixVersion?: string;
+  /** Rapora eklenen sabit not */
+  note?: string;
+  lastSentDay?: string;
+  lastSentAt?: string;
+  lastResult?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Günlük ilerleme ölçümü (rapordaki "önceki rapora göre" farkı için) */
+export interface ProgressSnapshot {
+  day: string;
+  pct: number;
+  done: number;
+  total: number;
+  open: number;
+  bugsOpen: number;
+}
+
 // ---------------------------------------------------------------- Kural setleri (otomasyon)
 
 /**
@@ -979,6 +1021,9 @@ export interface Project {
   /** Kural setleri (otomasyon) ve son çalışmaları (en yeni sonda, en çok 200) */
   automationRules?: AutomationRule[];
   automationLog?: AutomationLogEntry[];
+  /** Zamanlanmış raporlar ve günlük ilerleme ölçümleri (en çok 90 gün) */
+  reportSchedules?: ReportSchedule[];
+  progressSnapshots?: ProgressSnapshot[];
   /** Proje dashboard'unun varsayılan düzeni (PY kaydeder; kişisel düzeni olmayan herkes bunu görür) */
   dashboard?: DashboardLayout;
   /** Projeye özel göstergeler (ör. PoC skoru): elle girilir ya da aktarımla güncellenir, geçmişiyle */
