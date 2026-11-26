@@ -49,7 +49,9 @@ export const SLASH_COMMANDS: SlashCommand[] = [
         : c.personName
             ? `Ekranda açık kişiyi (${c.personName}) özetle: iş yükü, projeleri, açık görevleri ve dikkat edilmesi gerekenler.${topic(a)}`
             : `${scope(c)} şu anki durumunu kısaca açıkla.${topic(a)}`) },
-    { cmd: 'hatirla', label: 'Bir tercihi hatırlat', arg: 'tercih', build: (_c, a) => (a ? `Şunu hatırla ve bundan sonra uygula: ${a}` : 'Hafızanda benimle ilgili hangi tercihler var?') },
+    { cmd: 'hafiza', label: 'Hafızaya not ekle', arg: 'not', build: (_c, a) => (a ? `Bunu hafızaya not olarak ekle (gerekirse konu etiketiyle): ${a}` : 'Hafızanda benimle ilgili neler var? Üslup, tercihler ve notlar olarak kısaca listele.') },
+    { cmd: 'uslup', label: 'Hitap ve yazım tarzı', arg: 'tarz', build: (_c, a) => (a ? `Bunu üslup olarak hafızaya kaydet ve bundan sonra uygula: ${a}` : 'Hafızandaki üslup tercihlerimi (hitap, yazım tarzı, yanıt uzunluğu) göster; yoksa ne kaydedebileceğimi tek cümleyle söyle.') },
+    { cmd: 'hatirla', label: 'Bir tercihi hatırlat', arg: 'tercih', build: (_c, a) => (a ? `Şunu hatırla ve bundan sonra tercih olarak uygula: ${a}` : 'Hafızanda benimle ilgili hangi tercihler var?') },
     { cmd: 'unut', label: 'Hafızadan sil', arg: 'not', build: (_c, a) => (a ? `Hafızandan şunu unut: ${a}` : 'Hafızandaki notları listele; hangisini unutmamı istersin diye sor.') },
     { cmd: 'yardim', label: 'Neler yapabilirsin?', build: () => 'Neler yapabilirsin? Rolüme göre kısa örneklerle anlat (okuma, veri analizi ve analitik raporlar, öneri kartları, dosya çıktısı, ekran açma, hafıza) ve analiz yeteneklerini (/analiz, /yonetici, /kokneden, /tahmin, /karar, /toplanti) tanıt.' },
 ];

@@ -71,7 +71,8 @@ Kullanıcı dosya isterse dosya_olustur ile rapor yap (bkz. Rapor yazımı); tab
         id: 'analitik-rapor',
         name: 'Analitik rapor (Word/PDF/Excel/sunum)',
         when: 'Rapor, sunum, yönetim raporu, Excel/Word/PDF raporu istendiğinde; dosya bir veri dökümü değil, analiz olmalı.',
-        triggers: [/rapor|sunum|brifing|yönetime|üst yönetim|dosya hazırla|excel|word|pdf|powerpoint|slayt/i],
+        // Yalın "Excel'e aktar" bir veri dökümüdür; analitik rapor yalnız rapor/sunum istenince
+        triggers: [/analitik rapor|analiz raporu|yönetim raporu|yönetime (sun|rapor)|üst yönetim(e)? (rapor|sunum)|raporla|rapora dök|rapor (hazırla|oluştur|çıkar)|sunum (hazırla|yap|oluştur)|sunumu|slayt/i],
         playbook: `Oyun kitabı — Analitik rapor
 Hedef: okuyan yönetici ilk 30 saniyede durumu, nedenini ve ne yapılacağını anlamalı. Ham tablo rapor değildir; eke konur.
 Adımlar:
@@ -94,7 +95,7 @@ Sohbette dosyayı tekrar yazma; 2-3 cümleyle ana mesajı ve dosyada ne olduğun
         id: 'yonetici-ozeti',
         name: 'Yönetici özeti / durum notu',
         when: 'Üst yönetime, sponsora ya da paydaşa kısa durum notu, brifing, e-posta, "ne durumdayız" özeti.',
-        triggers: [/yönetici özeti|özetle|durum notu|ne durumda|brifing|paydaş|sponsor|yönetime bilgi|e-?posta yaz|bilgilendirme/i],
+        triggers: [/yönetici özeti|durum notu|brifing|paydaş|sponsor|yönetime bilgi|üst yönetime (yaz|özet|not)|bilgilendirme e-?postası/i],
         playbook: `Oyun kitabı — Yönetici özeti
 Kitleye göre yaz: üst yönetim (sonuç, risk, karar; ≤200 kelime), proje ekibi (ayrıntı, sahip, tarih), müşteri (fayda, takvim, jargon yok).
 Şablon (üst yönetim):
@@ -110,7 +111,7 @@ Kurallar: süreci değil sonucu anlat ("14 toplantı yaptık" değil "X teslim e
         id: 'kok-neden',
         name: 'Sapma ve kök neden analizi',
         when: '"Neden gecikti, neden arttı/azaldı, sapmanın sebebi, ne değişti" gibi açıklama gerektiren sorular.',
-        triggers: [/\bneden\b|\bniye\b|niçin|sebeb|sebep|kök neden|sapma|gecik|arttı|azaldı|düştü|yükseldi|ne değişti|kaydı|aşım/i],
+        triggers: [/\bneden\b|\bniye\b|niçin|sebeb|sebep|kök neden|sapmanın|sapma analizi|ne değişti/i],
         playbook: `Oyun kitabı — Sapma ve kök neden
 1. Sapmayı ölç: ne, ne kadar (mutlak + %), neye göre (plan/baseline/önceki dönem), ne zamandan beri. (evm_analizi, proje_detayi, son_degisiklikler, jira_kayit_getir gecmis=true, is_gucu_raporu)
 2. Ayrıştır (katkı analizi): toplam sapmayı bileşenlere böl — hangi iş paketi/kişi/bölüm/görev türü sapmanın ne kadarını açıklıyor? veri_analiz ozet ile katkıları hesapla, payları topla = %100 olduğunu kontrol et.
@@ -123,7 +124,7 @@ Korelasyonu nedensellik gibi sunma; kanıtı zayıf hipotezi "olası" diye işar
         id: 'risk-degerlendirme',
         name: 'Risk değerlendirme',
         when: 'Risk analizi, risk raporu, "neler ters gidebilir", erken uyarı, risk matrisi yorumu.',
-        triggers: [/risk|tehdit|ters gide|erken uyarı|olasılık|etki|matris|pestel|swot/i],
+        triggers: [/risk|tehdit|ters gide|erken uyarı|pestel|swot/i],
         playbook: `Oyun kitabı — Risk değerlendirme
 1. Veri: risk_listesi, proje_detayi (geciken işler, sağlık), doluluk_analizi/kapasite_talep (kaynak riski), evm_analizi (maliyet/takvim performansı), bilgi_ara (notlardaki sinyaller).
 2. Puanla ve sırala: olasılık × etki (5×5); en yüksek skorlar ve son dönemde ARTANLAR önce. Skoru yüksek ama aksiyonu/sahibi olmayan riskleri ayrıca işaretle.
@@ -135,7 +136,7 @@ Korelasyonu nedensellik gibi sunma; kanıtı zayıf hipotezi "olası" diye işar
         id: 'kapasite-kaynak',
         name: 'Kapasite ve kaynak analizi',
         when: 'Kim ne kadar dolu, kapasite aşımı, adam-ay, işgücü, maliyet, kaynak dengesi, "kime iş verebilirim".',
-        triggers: [/kapasite|doluluk|adam[- ]?ay|\bAA\b|iş ?gücü|kaynak|tahsis|yük|müsait|uygun kişi|maliyet|worklog|saat/i],
+        triggers: [/kapasite|doluluk|adam[- ]?ay|\bAA\b|iş ?gücü|kaynak (plan|ihtiya|yetersiz|açığı)|tahsis|iş ?yükü|müsait|uygun kişi|işgücü maliyeti|personel maliyeti/i],
         playbook: `Oyun kitabı — Kapasite ve kaynak
 1. Veri: doluluk_analizi, kapasite_talep, tahsis_ozeti, is_yuku_ongorusu, uygun_kisi_bul, is_gucu_raporu, maliyet_raporu, departman_karnesi. Sprint düzeyinde (kim hangi hafta dolu, iş kaydırma) sürüm planı varsa plan_optimizasyonu (kisi_degisikligi=true) kullan. Takım ya da bileşen karşılaştırması (hız, hata, gecikme, darboğaz kişi) için ekip_analizi (kirilim takim|bilesen).
 2. Arz-talep dengesini kur: dönem başına kapasite vs talep (AA), açık/fazla; aşım > %100 olan kişi-ay sayısı; %70 altı atıl kapasite.
@@ -162,7 +163,7 @@ Birimler: 1 AA = bir kişinin tam zamanlı bir ayı; gün = saat ÷ 8.`,
         id: 'karar-destek',
         name: 'Karar destek',
         when: '"Hangisini seçelim, X mi Y mi, önceliklendir, ne yapmalıyım, artı/eksi" gibi seçim gerektiren sorular.',
-        triggers: [/hangisi|seçel|mi yoksa|önceliklendir|öncelik sırası|karar ver|ne yapmalı|tavsiye|artı.*eksi|trade-?off|alternatif/i],
+        triggers: [/seçel|(^|\s)m[iı]\s.{0,40}yoksa|önceliklendir|öncelik sırası|karar ver|hangisini seç|artı.*eksi|trade-?off|alternatifler|seçenekleri/i],
         playbook: `Oyun kitabı — Karar destek
 1. Kararı tek cümleyle çerçevele ve son tarihi/kısıtı belirt.
 2. Seçenekleri listele (2-4; "hiçbir şey yapmamak" da bir seçenek).
@@ -175,7 +176,7 @@ Birimler: 1 AA = bir kişinin tam zamanlı bir ayı; gün = saat ÷ 8.`,
         id: 'toplanti-hazirlik',
         name: 'Toplantı hazırlığı',
         when: 'Toplantı, sprint gözden geçirme, retro, müşteri görüşmesi, yönlendirme kurulu hazırlığı; gündem ve konuşma notları.',
-        triggers: [/toplantı|gündem|retro|sprint (review|gözden)|yönlendirme kurulu|steering|görüşmeye hazırla|konuşma notu/i],
+        triggers: [/toplantı(ya|yı)? hazırl|toplantı gündemi|gündem|retro|sprint (review|gözden)|yönlendirme kurulu|steering|görüşmeye hazırla|konuşma notu/i],
         playbook: `Oyun kitabı — Toplantı hazırlığı
 1. Toplantının amacı ve katılımcılar: bilgi mi, karar mı, sorun çözme mi?
 2. Veri: son_degisiklikler (son toplantıdan beri ne değişti), proje_detayi, risk_listesi, musteri_istekleri, notlari_ara (önceki kararlar ve açık aksiyonlar).
@@ -204,8 +205,12 @@ export const MAX_AUTO_SKILLS = 2;
  * Yalnız kullanıcının kendi metni ve EK başlıkları bakılır; ek içeriğindeki
  * sözcükler yetenek tetiklemez.
  */
+/** "Nasıl yaparım / hangi ekranda" soruları kullanım sorusudur: analiz yönergesi açılmaz */
+const HOW_TO = /nasıl \S*(rim|rız|ilir|lır)\b|hangi ekran|nereden (yap|gir|ekle|aç)/i;
+
 export const matchSkills = (userText: string, max = MAX_AUTO_SKILLS): AssistantSkill[] => {
     const own = userText.split('[Kullanıcı ')[0];
+    if (HOW_TO.test(own) && !/<<<EK /.test(userText)) return [];
     const heads = (userText.match(/<<<EK \d+:[^>]*>>>/g) || []).join('\n');
     const scored = SKILLS.map((s, order) => ({
         s, order,

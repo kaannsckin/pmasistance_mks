@@ -12,6 +12,7 @@ import { addUploadedDoc, indexStatus, listUploadedDocs, onDocsChange, removeUplo
 import { Citation, RAG_SOURCE_LABELS, RagSourceType, UploadedDoc } from '../../utils/rag/sources';
 import { citedSources } from '../assistant/AssistantChat';
 import { useAssistant } from '../assistant/AssistantContext';
+import { EditableSection, memoryAgeLabel, SECTION_OPTIONS, useMemoryEditor } from '../assistant/useMemoryEditor';
 import Markdown from '../Markdown';
 import { Icon } from './icons';
 import { rowSep, Sheet } from './ui';
@@ -72,30 +73,63 @@ const ChatHistory: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     );
 };
 
-/** Hafıza: asistanın kalıcı tercihleri (bu tarayıcıda); görüntüle ve sil */
+/** Hafıza: kullanıcının hafiza.md belgesi (bu tarayıcıda); bölümler, elle ekleme, düzenleme, indir/yükle */
 const MemoryPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-    const a = useAssistant();
+    const m = useMemoryEditor();
+    const fileRef = useRef<HTMLInputElement>(null);
+    const field = 'text-[13px] rounded-lg border m-sep m-text px-2 py-1.5';
+    const fieldStyle = { background: 'var(--m-surface, transparent)', borderStyle: 'solid', borderWidth: 1 } as const;
     return (
         <section aria-label="Asistan hafızası" className="flex-none border-b m-sep px-4 py-3 flex flex-col gap-2" style={{ borderBottomStyle: 'solid', borderBottomWidth: 1 }}>
-            <div className="flex items-center gap-2">
-                <span className="flex-1 text-[14px] font-semibold m-text">Hafıza · {a.memory.length}</span>
-                {a.memory.length > 0 && <button type="button" className="m-btn m-btn-plain !min-h-[32px] !px-2.5 text-[13px]" onClick={() => { if (window.confirm('Asistanın hafızasındaki tüm notlar silinsin mi?')) a.clearMemory(); }}>Tümünü sil</button>}
+            <div className="flex items-center gap-1 flex-wrap">
+                <span className="flex-1 text-[14px] font-semibold m-text">Hafıza · {m.activeCount}{m.archived > 0 && <span className="font-normal m-text-3"> (+{m.archived} arşiv)</span>}</span>
+                {m.mode === 'list' && <button type="button" className="m-icon-btn" aria-label="hafiza.md belgesini düzenle" title="Düzenle" onClick={m.startEdit}><Icon name="pencil" size={16} /></button>}
+                <button type="button" className="m-icon-btn" aria-label="hafiza.md olarak indir" title="İndir" onClick={m.download}><Icon name="download" size={16} /></button>
+                <button type="button" className="m-icon-btn" aria-label=".md dosyasından yükle" title="Yükle" onClick={() => fileRef.current?.click()}><Icon name="upload" size={16} /></button>
+                <input ref={fileRef} type="file" accept=".md,.markdown,.txt,text/markdown,text/plain" className="hidden" onChange={e => { void m.upload(e.target.files?.[0]); e.target.value = ''; }} />
+                {m.activeCount + m.archived > 0 && <button type="button" className="m-icon-btn" aria-label="Tümünü sil" title="Tümünü sil" onClick={m.clear}><Icon name="trash" size={16} /></button>}
                 <button type="button" className="m-icon-btn" aria-label="Hafızayı kapat" onClick={onClose}><Icon name="x" size={16} /></button>
             </div>
-            {a.memory.length === 0 ? (
-                <p className="m-0 text-[13px] m-text-3">Henüz not yok. Asistana "Bundan sonra süreleri gün olarak ver, hatırla" gibi bir tercih söyleyin; her soruda buna uyar.</p>
+            {m.mode === 'edit' ? (
+                <div className="flex flex-col gap-2">
+                    <textarea aria-label="hafiza.md" value={m.draft} onChange={e => m.setDraft(e.target.value)} rows={14} spellCheck={false} className={`${field} font-mono !text-[12px] w-full`} style={fieldStyle} />
+                    <div className="flex gap-2 justify-end">
+                        <button type="button" className="m-btn m-btn-plain !min-h-[32px] !px-3 text-[13px]" onClick={m.cancelEdit}>Vazgeç</button>
+                        <button type="button" className="m-btn m-btn-primary !min-h-[32px] !px-3 text-[13px]" onClick={m.saveEdit}>Kaydet</button>
+                    </div>
+                </div>
             ) : (
-                <ol className="m-0 p-0 list-none flex flex-col gap-1 max-h-48 overflow-y-auto">
-                    {a.memory.map((m, i) => (
-                        <li key={m.id} className="flex items-start gap-2 text-[13.5px] m-text">
-                            <span className="m-text-3 m-tabular w-5 flex-none">{i + 1}.</span>
-                            <span className="flex-1 min-w-0 break-words">{m.text}</span>
-                            <button type="button" className="m-icon-btn !w-7 !h-7 flex-none" aria-label={`Sil: ${m.text}`} title="Sil" onClick={() => a.forgetMemory(m.id)}><Icon name="trash" size={14} /></button>
-                        </li>
-                    ))}
-                </ol>
+                <>
+                    <form className="flex gap-1.5 items-center" onSubmit={e => { e.preventDefault(); m.add(); }}>
+                        <select aria-label="Bölüm" value={m.section} onChange={e => m.setSection(e.target.value as EditableSection)} className={field} style={fieldStyle}>
+                            {SECTION_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                        </select>
+                        <input aria-label="Hafızaya eklenecek satır" value={m.text} onChange={e => m.setText(e.target.value)} maxLength={300} placeholder={m.hint} className={`${field} flex-1 min-w-0`} style={fieldStyle} />
+                        <label className="text-[13px] m-text-3 flex items-center gap-1" title="Önemli: daha yavaş eskir"><input type="checkbox" checked={m.important} onChange={e => m.setImportant(e.target.checked)} />!</label>
+                        <button type="submit" disabled={!m.text.trim()} className="m-btn m-btn-primary !min-h-[32px] !px-3 text-[13px]">Ekle</button>
+                    </form>
+                    <div className="flex flex-col gap-2 max-h-64 overflow-y-auto">
+                        {m.groups.map(g => (
+                            <div key={g.section}>
+                                <p className="m-0 text-[11.5px] font-semibold uppercase tracking-wide m-text-3">{g.title}{g.section === 'not' ? ' · ilgili sorularda okunur, eskir' : ' · her yanıtta'}</p>
+                                {g.items.length === 0 ? <p className="m-0 text-[13px] m-text-3">—</p> : (
+                                    <ul className="m-0 p-0 list-none flex flex-col gap-0.5">
+                                        {g.items.map(it => (
+                                            <li key={it.id} className="flex items-start gap-2 text-[13.5px] m-text">
+                                                <span className="flex-1 min-w-0 break-words">{it.important && <b className="mr-1" style={{ color: 'var(--m-warn, #b45309)' }} title="Önemli">!</b>}{it.text}</span>
+                                                {g.section === 'not' && <span className="text-[12px] m-text-3 m-tabular flex-none">{memoryAgeLabel(it)}</span>}
+                                                <button type="button" className="m-icon-btn !w-7 !h-7 flex-none" aria-label={`Sil: ${it.text}`} title="Sil" onClick={() => m.forget(it.id)}><Icon name="trash" size={14} /></button>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </>
             )}
-            <p className="m-0 text-[12px] m-text-3">Yalnız bu tarayıcıda ve bu kimlik için saklanır; her soruda asistana iletilir.</p>
+            {m.error && <p role="alert" className="m-0 text-[13px]" style={{ color: 'var(--m-danger, #dc2626)' }}>{m.error}</p>}
+            <p className="m-0 text-[12px] m-text-3">Yalnız bu tarayıcıda ve bu kimlik için saklanır. Asistana her soruda üslup ve tercihler, notlardan ise yalnız soruyla ilgili olanlar gider; notların etkisi yaşla azalır, 6 aydan eski notlar arşive iner.</p>
         </section>
     );
 };
@@ -254,6 +288,7 @@ export const ModernChat: React.FC<{
     const [token, setToken] = useState('');
     const [preview, setPreview] = useState<Citation | null>(null);
     const [memoryOpen, setMemoryOpen] = useState(false);
+    const activeMemory = a.memory.filter(m => m.section !== 'arsiv').length;
     const [historyOpen, setHistoryOpen] = useState(false);
     const att = useChatAttachments();
     const { files, reading, errors: fileErrors, dragging, fileRef } = att;
@@ -386,9 +421,9 @@ export const ModernChat: React.FC<{
                     <h2 className="m-0 text-[17px] font-semibold m-text leading-tight">Asistan</h2>
                     <p className="m-0 text-[12.5px] m-text-3 truncate">{a.phase === 'ready' ? `Bağlı${a.status?.model ? ` · ${a.status.model}` : ''} · değişiklikler onayınızla` : a.phase === 'loading' ? 'Bağlanıyor…' : 'Hazır değil'}</p>
                 </div>
-                <button type="button" className="m-icon-btn relative" aria-label={`Hafıza (${a.memory.length} not)`} aria-expanded={memoryOpen} title="Asistanın hafızası" onClick={() => { setMemoryOpen(o => !o); setHistoryOpen(false); }}>
+                <button type="button" className="m-icon-btn relative" aria-label={`Hafıza (${activeMemory} not)`} aria-expanded={memoryOpen} title="Asistanın hafızası" onClick={() => { setMemoryOpen(o => !o); setHistoryOpen(false); }}>
                     <Icon name="pen" size={18} />
-                    {a.memory.length > 0 && <span aria-hidden="true" className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full m-accent-bg text-[10px] font-bold flex items-center justify-center">{a.memory.length}</span>}
+                    {activeMemory > 0 && <span aria-hidden="true" className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full m-accent-bg text-[10px] font-bold flex items-center justify-center">{activeMemory}</span>}
                 </button>
                 <button type="button" className="m-icon-btn" aria-label="Bilgi Bankası" title="Bilgi Bankası" onClick={() => a.setKbOpen(true)}><Icon name="book" size={18} /></button>
                 {a.messages.length > 0 && <button type="button" className="m-icon-btn" aria-label="Yeni sohbet" title="Yeni sohbet (bu sohbet geçmişte kalır)" onClick={a.clear}><Icon name="plus" size={18} /></button>}

@@ -3,6 +3,15 @@
 Her sürümün başlığı `## vX.Y.Z` biçimindedir; GitHub sürüm sayfası bu bölümü
 buradan alır (`.github/workflows/exe.yml`).
 
+## Yayımlanmamış
+
+**Asistan: kişisel hafıza, odaklı tarama, kısa yanıt**
+- **Hafıza belgesi (hafiza.md)**: Üslup (hitap, yazım tarzı, yanıt uzunluğu), Tercihler, Notlar ve Arşiv bölümleri. Belge panelde düzenlenir, `.md` olarak indirilir ve yüklenir. Notlar her soruda yalnız ilgili olanlarla (en çok 6) asistana gider. Notun ağırlığı 30 günlük yarı ömürle azalır (önemli notlarda 90 gün); 6 aydan eski notlar arşive iner ve taranmaz. `Anahtar: değer` biçimli yeni satır eskisinin yerini alır. `/hafiza` ve `/uslup` komutları eklendi. Eski hafıza notları Tercihler'e taşınır. Ayrıntı: [docs/ASISTAN_HAFIZA.md](docs/ASISTAN_HAFIZA.md).
+- **Odaklı araç seçimi**: her soruda yalnız ilgili araç grupları gönderilir. Eksik grubu model `arac_ac` ile açar. Ölçüm setinde istek başına araç sayısı ortalama 47'den 14'e indi, kapsama %100.
+- **Takip soruları**: önceki yanıtın araç sonuçlarının kısa özeti sonraki tura taşınır; veri baştan çekilmez.
+- **Kısa yanıt**: varsayılan uzunluk kısadır (~120 kelime, tablo en çok 8 satır). Üslup'tan `orta` ya da `ayrıntılı` seçilebilir. Genel sözcükler ("yük", "saat", "excel", "özetle") artık ağır analiz yönergesini açmıyor.
+- **Ölçüm seti** (`utils/ai/evalSet.ts`): 48 gerçekçi soru; yönlendirme kapsaması, istek başına araç sayısı ve yetenek eşleşmesi her test çalıştırmasında ölçülür.
+
 ## v3.6.0
 
 **İlerleme, ekip analizi ve otomasyon**
