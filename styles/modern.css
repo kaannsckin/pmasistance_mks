@@ -443,22 +443,36 @@
 /* Daraltılabilir kenar çubuğu: menü sabitken (geniş ekran) yalnız simgelerden oluşan dar şerit.
    Dar ekrandaki çekmece her zaman tam genişlikte açılır; daraltma düğmesi orada gizli. */
 .ui-modern .m-sidebar-collapse { display: none; }
-.ui-modern .m-project-initials { display: none; }
+.ui-modern .m-sidebar-sep { height: 1px; margin: 6px 12px; background: var(--m-sep, rgba(0,0,0,0.08)); }
+/* Daraltılmış şeritte proje: baş harfler, RAG rengi halka */
+.ui-modern .m-project-tile {
+  width: 30px; height: 30px; border-radius: 9px; flex: none; display: grid; place-items: center;
+  font-size: 12px; font-weight: 700; letter-spacing: 0.02em; background: var(--m-fill-2); color: var(--m-label);
+}
+.ui-modern .m-nav-project[aria-current] .m-project-tile { background: var(--m-accent); color: #fff; }
+/* Profil avatarında bulut işareti */
+.ui-modern .m-sidebar-cloud {
+  position: absolute; right: -3px; bottom: -3px; width: 16px; height: 16px; border-radius: 50%;
+  display: grid; place-items: center; background: var(--m-ok); color: #fff; box-shadow: 0 0 0 2px var(--m-sidebar-bg, var(--m-surface));
+}
 @media (min-width: 1024px) {
   .ui-modern .m-sidebar { transition: width 0.22s ease, padding 0.22s ease; }
   .ui-modern .m-sidebar-collapse { display: inline-flex; }
-  .ui-modern .m-sidebar.is-collapsed { width: 76px; padding-inline: 10px; overflow-x: hidden; }
-  .ui-modern .m-sidebar.is-collapsed :is(.m-nav-label, .m-sidebar-logo) { display: none; }
+  .ui-modern .m-sidebar.is-collapsed { width: 72px; padding-inline: 10px; overflow-x: hidden; gap: 14px; }
+  .ui-modern .m-sidebar.is-collapsed .m-nav-label { display: none; }
   .ui-modern .m-sidebar.is-collapsed .m-sidebar-head { justify-content: center; }
-  .ui-modern .m-sidebar.is-collapsed :is(.m-nav-item, .m-search) { justify-content: center; padding-inline: 0; gap: 0; }
+  .ui-modern .m-sidebar.is-collapsed .m-logo { padding-inline: 0; }
+  .ui-modern .m-sidebar.is-collapsed :is(.m-nav-item, .m-search) { justify-content: center; padding-inline: 0; gap: 0; min-height: 42px; }
+  .ui-modern .m-sidebar.is-collapsed .m-search { width: 42px; margin-inline: auto; }
+  .ui-modern .m-sidebar.is-collapsed .m-nav-item { width: 42px; margin-inline: auto; }
   .ui-modern .m-sidebar.is-collapsed .m-nav-badge {
-    position: absolute; top: 4px; right: 6px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px;
-    font-size: 11px; line-height: 18px; text-align: center; background: var(--m-accent); color: #fff;
+    position: absolute; top: 3px; right: 2px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px;
+    font-size: 10.5px; line-height: 17px; text-align: center; background: var(--m-accent); color: #fff;
+    box-shadow: 0 0 0 2px var(--m-sidebar-bg, var(--m-surface));
   }
-  .ui-modern .m-sidebar.is-collapsed .m-nav-project .m-project-dot { position: absolute; top: 7px; right: 9px; width: 8px; height: 8px; }
-  .ui-modern .m-sidebar.is-collapsed .m-project-initials { display: inline; }
-  .ui-modern .m-sidebar.is-collapsed .m-sidebar-footer { flex-direction: column; align-items: center; }
-  .ui-modern .m-sidebar.is-collapsed .m-sidebar-profile { flex: none; justify-content: center; padding-inline: 0; }
+  .ui-modern .m-sidebar.is-collapsed .m-nav-project.m-accent-tint { background: transparent; box-shadow: none; }
+  .ui-modern .m-sidebar.is-collapsed .m-sidebar-footer { flex-direction: column; align-items: center; gap: 2px; }
+  .ui-modern .m-sidebar.is-collapsed .m-sidebar-profile { flex: none; justify-content: center; padding-inline: 0; min-height: 46px; width: 46px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .ui-modern .m-sidebar { transition: none; }

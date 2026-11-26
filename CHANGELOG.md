@@ -5,6 +5,11 @@ buradan alır (`.github/workflows/exe.yml`).
 
 ## Yayımlanmamış
 
+**Sol menü ve "Hakkında"**
+- Daraltılmış menü: logo görünür, projeler baş harfli kutucuk (RAG rengi halka) olarak gösterilir, "Diğer" menüsü şeridin sağına açılır, genişletme düğmesi alta taşındı; profil, Asistan ve Ayarlar tek sütunda.
+- Asistan ve Ayarlar menünün altında ayrı satırlar; profil satırında rol artık kesilmiyor.
+- "Hakkında" penceresi yenilendi: sürüm, bu oturumun kimliği, verinin nerede tutulduğu (bulut / bu tarayıcı), kapsamdaki proje ve kişi sayısı, yapay zekâ durumu, sürüm notlarından son yenilikler ve kısayollar. Eski GitHub Pages rehberi ve "veriler yalnız tarayıcıda" notu kaldırıldı.
+
 **Yetki düzeltmesi: PY başkasının projesini düzenleyemez**
 - Kanban/zaman çizelgesi, Pano, Liste, Ekip, Hedefler, görev ayrıntısı, müşteri istekleri ve "Yeni görev" düğmeleri yalnız projenin PY'sine açık. Önceden yönetim rolü olmayan herkese (PY, bölüm sorumlusu, PYB Destek) açıktı; başka bir PY'nin projesinde görev, ekip ve hedef değiştirilebiliyordu.
 - Kayıt anında son kontrol: düzenleme hangi ekrandan gelirse gelsin, sahibi olmayanın proje değişikliği kaydedilmez ve uyarı gösterilir. Panoların (Whiteboard) kendi erişim kuralı vardır. Proje adı, RAG, durum, sahip ve silme işlemleri de işlem anında yetkiyle doğrulanır.

@@ -71,6 +71,7 @@ import RoadmapView from './components/RoadmapView';
 import SettingsModal from './components/SettingsModal';
 import NotesView from './components/NotesView';
 import AboutModal from './components/AboutModal';
+import AboutSheet from './components/modern/AboutSheet';
 import CustomerRequestsView from './components/CustomerRequestsView';
 import AIAssistant from './components/AIAssistant';
 import GoalsView from './components/GoalsView';
@@ -3291,7 +3292,11 @@ const App: React.FC = () => {
           onSave={handleSaveSettings} onClose={() => setIsSettingsModalOpen(false)} onResetData={handleResetData}
         />
       )}
-      {isAboutModalOpen && <AboutModal onClose={() => setIsAboutModalOpen(false)} />}
+      {isAboutModalOpen && (isModern
+        ? <AboutSheet onClose={() => setIsAboutModalOpen(false)} cloudLinked={!!loadCloudConfig()?.workspaceId} lastSyncAt={loadCloudConfig()?.lastSyncAt}
+            projectCount={visibleProjects.length} peopleCount={workspace?.people.length || 0} who={currentActorName} role={ROLE_LABELS[identity.role]}
+            onOpenCloud={() => setIsCloudModalOpen(true)} onOpenSettings={() => setIsSettingsModalOpen(true)} />
+        : <AboutModal onClose={() => setIsAboutModalOpen(false)} />)}
       {isCloudModalOpen && workspace && (
         <CloudSyncModal
           workspace={workspace}

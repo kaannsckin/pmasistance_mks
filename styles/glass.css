@@ -340,12 +340,17 @@
 @media (min-width: 768px) and (max-width: 1023px) {
   /* Cam temada menü 768 px'ten itibaren sabit: daraltma da bu aralıkta çalışır */
   .ui-modern.mt-bubble .m-sidebar-collapse { display: inline-flex; }
-  .ui-modern.mt-bubble .m-sidebar.m-surface.is-collapsed { width: 76px; padding-inline: 10px; overflow-x: hidden; }
-  .ui-modern.mt-bubble .m-sidebar.is-collapsed :is(.m-nav-label, .m-sidebar-logo) { display: none; }
-  .ui-modern.mt-bubble .m-sidebar.is-collapsed :is(.m-nav-item, .m-search) { justify-content: center; padding-inline: 0; gap: 0; }
-  .ui-modern.mt-bubble .m-sidebar.is-collapsed .m-project-initials { display: inline; }
-  .ui-modern.mt-bubble .m-sidebar.is-collapsed .m-sidebar-footer { flex-direction: column; align-items: center; }
-  .ui-modern.mt-bubble .m-sidebar.is-collapsed .m-sidebar-profile { flex: none; justify-content: center; padding-inline: 0; }
+  .ui-modern.mt-bubble .m-sidebar.m-surface.is-collapsed { width: 72px; padding-inline: 10px; overflow-x: hidden; gap: 14px; }
+  .ui-modern.mt-bubble .m-sidebar.is-collapsed .m-nav-label { display: none; }
+  .ui-modern.mt-bubble .m-sidebar.is-collapsed .m-sidebar-head { justify-content: center; }
+  .ui-modern.mt-bubble .m-sidebar.is-collapsed .m-logo { padding-inline: 0; }
+  .ui-modern.mt-bubble .m-sidebar.is-collapsed :is(.m-nav-item, .m-search) { justify-content: center; padding-inline: 0; gap: 0; width: 42px; min-height: 42px; margin-inline: auto; }
+  .ui-modern.mt-bubble .m-sidebar.is-collapsed .m-nav-badge {
+    position: absolute; top: 3px; right: 2px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px;
+    font-size: 10.5px; line-height: 17px; text-align: center; background: var(--m-accent); color: #fff;
+  }
+  .ui-modern.mt-bubble .m-sidebar.is-collapsed .m-sidebar-footer { flex-direction: column; align-items: center; flex-wrap: nowrap; gap: 2px; }
+  .ui-modern.mt-bubble .m-sidebar.is-collapsed .m-sidebar-profile { flex: none; justify-content: center; padding-inline: 0; min-height: 46px; width: 46px; }
   .ui-modern.mt-bubble .m-sidebar.m-surface { width: clamp(188px, 25vw, 230px); }
   .ui-modern.mt-bubble .m-sidebar-footer { flex-wrap: wrap; justify-content: flex-end; }
   .ui-modern.mt-bubble .m-sidebar-profile { flex: 1 0 100%; }
