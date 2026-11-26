@@ -78,7 +78,7 @@ const PlanOptimizerSheet: React.FC<Props> = ({ project, plan, people, leaves, ca
     const scenarios = useMemo<Scenario[]>(() => rescueScenarios(project, plan, base), [project, plan, base]);
     const scenario = scenarios.find(s => s.id === scenarioId) || null;
     const shown = scenario?.result || base;
-    const byId = new Map(project.tasks.map(t => [t.id, t]));
+    const byId = new Map<string, Task>(project.tasks.map(t => [t.id, t]));
     const msName = (id: string) => plan.milestones.find(m => m.id === id)?.name || '';
 
     const apply = () => {
