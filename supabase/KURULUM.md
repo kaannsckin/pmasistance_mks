@@ -32,3 +32,13 @@ Her kullanıcı e-postasına gelen tek kullanımlık kodla giriş yapar. Çalı�
 - Aynı projede ya da ortak veride eşzamanlı düzenleme varsa uygulama sürüm çakışmasını bildirir. Farklı proje satırları ayrı sürümler taşır.
 
 Kurulumu komut satırından denetlemek için Node.js ile `node supabase/dogrula.mjs PROJE_ADRESI PUBLIC_ANAHTAR` çalıştırılabilir. `--e2e` geçici bir test alanıyla veritabanı politikalarını denetler. E-posta teslimatını ve kod girişini uygulama üzerinden doğrulayın.
+
+## Demo / eğitim hesabı (tüm roller)
+
+Bulutta her kullanıcının rolü üyelikten gelir ve uygulamada değiştirilemez. Demo ya da eğitim için bir hesabın tüm rollere ve kişilere geçebilmesi gerekiyorsa üyeliğinde `all_roles` işaretlenir. İşaretli hesapta "Profil değiştir" bulutta da açılır; seçilen rol ve kişi o cihazda uygulanır. Sunucu tarafında bu hesap erişim yöneticisi gibi tam yetkilidir.
+
+1. Hesap uygulamada e-posta koduyla bir kez giriş yapar.
+2. SQL Editor'de [demo_tum_roller.sql](./demo_tum_roller.sql) çalıştırılır (dosyadaki e-postayı gerekirse değiştirin).
+3. Uygulamada çalışma alanı yeniden açılır (Bulut › çalışma alanını aç) ya da sayfa yenilenir.
+
+Gerçek kullanıcı hesaplarında bu işaret açılmamalıdır: hesap tüm projeleri görür ve düzenler.

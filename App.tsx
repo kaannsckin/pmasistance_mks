@@ -275,7 +275,8 @@ const App: React.FC = () => {
     setWorkspace(empty);
   }, [cacheClearedWorkspace, clearCloudViews]);
   const openProfile = useCallback(() => {
-    if (loadCloudConfig()?.workspaceId) setIsCloudModalOpen(true);
+    // Bulutta rol üyelikten gelir; demo hesabı (tüm roller) profil seçer
+    if (loadCloudConfig()?.workspaceId && !workspaceRef.current?.cloudMembership?.allRoles) setIsCloudModalOpen(true);
     else setIsProfileOpen(true);
   }, []);
 
@@ -933,7 +934,7 @@ const App: React.FC = () => {
 
   // ---- Kimlik / RBAC ----
   const handleChangeIdentity = useCallback((role: UserRole, personId?: string) => {
-    if (loadCloudConfig()?.workspaceId) return;
+    if (loadCloudConfig()?.workspaceId && !workspaceRef.current?.cloudMembership?.allRoles) return;
     updateWorkspace(ws => {
       const next = { ...ws, currentRole: role, currentPersonId: personId };
       // Kapsam değişince görünmeyen bir proje aktifse ilk görünür projeye/portföye geç
@@ -3340,7 +3341,7 @@ const App: React.FC = () => {
           onClose={() => setIsAuditModalOpen(false)}
         />
       )}
-      {isProfileOpen && workspace && !loadCloudConfig()?.workspaceId && (() => {
+      {isProfileOpen && workspace && (!loadCloudConfig()?.workspaceId || workspace.cloudMembership?.allRoles) && (() => {
         const sheet = <ProfileSwitcherSheet workspace={workspace} onSelect={handleChangeIdentity} onClose={() => setIsProfileOpen(false)} />;
         // Klasik arayüzde modern pencere kendi stil kabında açılır
         return isModern ? sheet : <div className={modernScope}>{sheet}</div>;

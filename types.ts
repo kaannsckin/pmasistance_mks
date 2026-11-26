@@ -724,6 +724,8 @@ export interface CloudMembership {
   personId: string | null;
   projectIds: string[] | null;
   accessAdmin: boolean;
+  /** Demo / eğitim hesabı: bulutta da tüm rollere ve kişilere geçebilir (profil değiştir) */
+  allRoles?: boolean;
 }
 
 /** Rol bazlı özellik yetkileri (katalog ve varsayılanlar: utils/permissions.ts) */

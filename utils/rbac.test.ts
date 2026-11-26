@@ -148,3 +148,16 @@ describe('tahsis hücresi düzenleme', () => {
     });
 });
 
+
+describe('demo hesabı (tüm roller)', () => {
+    const base = { ...createEmptyWorkspace(), currentRole: 'mudur' as const, currentPersonId: 'k9' };
+    it('kimlik cihazdaki profil seçiminden gelir ve tam bulut erişimlidir', () => {
+        const ws = { ...base, cloudMembership: { role: 'pyb_destek' as const, personId: null, projectIds: null, accessAdmin: true, allRoles: true } };
+        expect(identityOf(ws)).toMatchObject({ role: 'mudur', personId: 'k9', fullCloudProjectAccess: true });
+        expect(identityOf(ws).projectIds).toBeUndefined();
+    });
+    it('demo değilse rol ve kişi üyelikten gelir', () => {
+        const ws = { ...base, cloudMembership: { role: 'pyb_destek' as const, personId: 'k1', projectIds: null, accessAdmin: true } };
+        expect(identityOf(ws)).toMatchObject({ role: 'pyb_destek', personId: 'k1' });
+    });
+});

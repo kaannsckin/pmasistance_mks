@@ -188,3 +188,15 @@ describe('Supabase giriş hataları', () => {
         expect(cloudAuthServerError({ status: 400, message: 'x' })).toBeNull();
     });
 });
+
+describe('demo hesabı üyeliği', () => {
+    it('tüm roller işaretliyse cihazdaki rol ve kişi korunur; değilse üyelikteki uygulanır; işaret değişimi farklı üyeliktir', async () => {
+        const { applyCloudMembership, sameCloudMembership } = await import('./cloudSync');
+        const ws = { ...createEmptyWorkspace(), currentRole: 'py' as const, currentPersonId: 'k3' };
+        const demo = { role: 'pyb_destek' as const, personId: 'k1', projectIds: null, accessAdmin: true, allRoles: true };
+        expect(applyCloudMembership(ws, demo, 'w1')).toMatchObject({ currentRole: 'py', currentPersonId: 'k3' });
+        const normal = { ...demo, allRoles: undefined };
+        expect(applyCloudMembership(ws, normal, 'w1')).toMatchObject({ currentRole: 'pyb_destek', currentPersonId: 'k1' });
+        expect(sameCloudMembership(demo, normal)).toBe(false);
+    });
+});

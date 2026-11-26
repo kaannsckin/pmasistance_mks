@@ -76,6 +76,9 @@ alter table public.workspace_members add column if not exists person_id text;
 -- NULL: tüm projeler, boş liste: hiçbir proje.
 alter table public.workspace_members add column if not exists project_ids text[];
 alter table public.workspace_members add column if not exists access_admin boolean not null default false;
+-- Demo / eğitim hesabı: uygulamada tüm rollere ve kişilere geçebilir (profil değiştir).
+-- Sunucu tarafında erişim yöneticisi gibi tam yetkilidir (bkz. supabase/demo_tum_roller.sql).
+alter table public.workspace_members add column if not exists all_roles boolean not null default false;
 update public.workspace_members m set access_admin = true, project_ids = null
 from public.workspaces w where m.workspace_id = w.id and m.user_id = w.created_by
 and (not m.access_admin or m.project_ids is not null);
@@ -402,7 +405,7 @@ begin
     return jsonb_build_object('core', workspace_core, 'version', stored.version, 'projects', project_rows,
         'private', private_row.data, 'privateVersion', private_row.version,
         'membership', jsonb_build_object('role', member.role, 'personId', member.person_id,
-            'projectIds', member.project_ids, 'accessAdmin', member.access_admin));
+            'projectIds', member.project_ids, 'accessAdmin', member.access_admin, 'allRoles', member.all_roles));
 end;
 $$;
 

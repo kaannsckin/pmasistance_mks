@@ -46,6 +46,10 @@ const SCOPED_PERMISSIONS = new Set<PermissionKey>(['portfolio.viewAll', 'screen.
 
 export const identityOf = (ws: Pick<WorkspaceData, 'currentRole' | 'currentPersonId' | 'rolePermissions' | 'cloudMembership'>): Identity => {
     const membership = ws.cloudMembership;
+    // Demo hesabı (tüm roller): kimlik cihazdaki profil seçiminden; sunucuda tam yetkili
+    if (membership?.allRoles) {
+        return { ...identityFor(ws, ws.currentRole ?? membership.role, ws.currentPersonId ?? membership.personId ?? undefined), fullCloudProjectAccess: true };
+    }
     const identity = identityFor(ws, membership?.role ?? ws.currentRole ?? 'py', membership ? membership.personId ?? undefined : ws.currentPersonId);
     if (!membership) return identity;
     if (membership.projectIds === null) return { ...identity, fullCloudProjectAccess: true };
