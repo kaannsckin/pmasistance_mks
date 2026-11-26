@@ -1,0 +1,41 @@
+{
+  "persona": "ahmet", "kosu": "2026-11-26 Perşembe",
+  "yapilanlar": [
+    {"is": "Açık beklentileri okuma", "araclar": ["beklentiler"], "sonuc": "2 aktif: ATL plan kilidi exp-mwaa13ot-5w9gpe (16 gün, termin 11 Kasım, 15 gün gecikti) ve Selin'in yeni U310 kaynak beklentisi exp-mwx581mm-6iuf3p (termin 27 Kasım)."},
+    {"is": "ATL kilit beklentisini kapatma", "araclar": ["tahsis_ozeti", "kisi_profili", "oner_beklenti_yanitla", "oneriyi_uygula"], "sonuc": "tahsis_ozeti 26 Kasım: plan_kilidi 'Onaylı/Kilitli'. Onur Kasım plan 0,8, efektif 0,42 (aşım 0,38), Aralık 0,64 plan / 0,9 kapasite. Kilit kimsenin araçlarıyla açılamadığı için bekletmek yerine karar: Kasım için ek kaynak ayrılmaz, aşım izin 27 Kasım'da bitince erir; Aralık küçük aşım tolere edilir; ATL-157 devri Emre'ye onaylı. Beklenti Karşılandı yapıldı."},
+    {"is": "U310 kaynak çatışması kararı", "araclar": ["oner_beklenti_yanitla", "oneriyi_uygula", "kapasite_talep", "evm_analizi", "proje_detayi"], "sonuc": "Selin'in 0,3 AA'sı NHR-128'e (Burak, 27 Kasım'dan) gider; ATL senaryo isteği (Elif 0,3 AA) Aralık'ta Emre'nin 0,26 AA boşluğuyla 1 Aralık haftası başlar, 11 Aralık'a kadar; Onur payı için kaynak ayrılmaz. Gerekçe: NHR Kritik (SPI 0,85, CPI 0,86, VAC -927.871 TL). Beklenti Karşılandı."},
+    {"is": "H47 yayınlanan raporları okuma", "araclar": ["haftalik_rapor"], "sonuc": "ATL, PSL, NHR, KLK H47 'Onaylandı / hafta yayınlandı; değişmez'."},
+    {"is": "Burak'ın NHR sürüm önerisini değerlendirme", "araclar": [], "sonuc": "v1.16 18 Aralık (tahmin) önerisi: kapsam donuk koşuluyla kabul eğilimi; kesin onay 30 Kasım'a kadar, 20 Kasım yük testi sonucu kayıtlarda olmadığı için bu tarih tahmin."}
+  ],
+  "degisiklikler": [
+    {"arac": "oner_beklenti_yanitla", "ozet": "ATL plan kilidi beklentisi Karşılandı: Kasım için kaynak ayrılmaz, Aralık aşımı (0,06) tolere, ATL-157 -> Emre", "tetikleyici": "Selin 26 Kasım mesajı + beklenti 15 gün gecikmiş; tahsis_ozeti kilit hâlâ Onaylı/Kilitli", "gerekce": "Kilit hiçbir rolün araçlarıyla açılamıyor; Onur izni 27 Kasım'da bitiyor, Kasım ayı sonuna 4 gün kaldı", "uygulandi": true},
+    {"arac": "oner_beklenti_yanitla", "ozet": "U310 çatışması Karşılandı: Selin 0,3 AA -> NHR-128 (Burak); ATL senaryo isteği Aralık'a (Emre 0,26 AA)", "tetikleyici": "Selin'in 26 Kasım beklentisi, termin 27 Kasım; talep ~0,9 AA / boş 0,3 AA", "gerekce": "NHR Kritik: SPI 0,85, CPI 0,86, VAC -927.871 TL (evm_analizi); NHR-128 Highest, Ozan 4 Aralık'a kadar izinde", "uygulandi": true}
+  ],
+  "haftalik_rapor": [],
+  "rapor_kararlari": [],
+  "bulgular": [
+    {"tur": "eksik_ozellik", "onem": "yuksek", "baslik": "Onaylı plan kilidini geri çekme/açma yolu yok", "kanit": "tahsis_ozeti ATL: \"plan_kilidi\": \"Onaylı/Kilitli\"; Mert/Selin/ben: geri çekme yetkisi yok (beklenti exp-mwaa13ot-5w9gpe 16 gün açık kaldı)", "beklenen": "Yönetimin (müdür/PYB sorumlusu) kilidi açabilmesi", "gerceklesen": "Yönetim kararı uygulamaya yazılamadı; beklenti 16 gün bekledi, karar sonunda kilidi açmadan alındı"},
+    {"tur": "eksik_ozellik", "onem": "orta", "baslik": "Yayınlanmış haftada 'Bölüm sorumlusunda' kalan raporlar için iade/yeniden açma yolu yok (H45 ATL/PSL, NHR H46)", "kanit": "Mert 26 Kasım mesajı: 'araçta iade/yeniden açma yolum yok, bu yönetim çözümü'", "beklenen": "Yönetimde bu raporları kapatacak araç", "gerceklesen": "Müdür araçlarında da rapor yönetim aracı yok (araclar listesi)"}
+  ],
+  "yanitlar": [
+    {"kime": "selin", "mesaj_tarihi": "2026-11-26", "metin": "Selin, iki beklentin de Karşılandı yapıldı. ATL kilit: 26 Kasım itibarıyla Onaylı/Kilitli, açılamıyor; Kasım'da Onur için ek kaynak yok (aşım 0,38, izin 27 Kasım biter), Aralık aşımı 0,06 tolere. U310: 0,3 AA Burak'ın NHR-128 desteğine, 27 Kasım'dan; ATL senaryo isteği Aralık'ta Emre'nin 0,26 AA boşluğuyla. KLK onaycısı Mert'le ayrı netleşecek."},
+    {"kime": "elif", "mesaj_tarihi": "2026-11-26", "metin": "Elif, ATL-157 Emre Koç'a devri onaylı; Jira atamasını sen yap, uygulamada hâlâ Onur görünüyor. Senaryo karşılaştırma isteği (0,3 AA) Kasım'da yok, Aralık'ta Emre ile 1 Aralık haftasından, 11 Aralık'a kadar. Geciken görev hedefi 3 (şu an 5); toparlanma 30 Kasım."},
+    {"kime": "burak", "mesaj_tarihi": "2026-11-26", "metin": "Burak, v1.16 18 Aralık (tahmin) önerini kapsam donuk koşuluyla kabul yönündeyim; kesin onayı 30 Kasım'a kadar vereceğim, 20 Kasım yük testi sonucunu ve NHR-118/123 kök neden planını (27 Kasım) o güne kadar yaz. Selin'in 0,3 AA'sı NHR-128 desteğin için 27 Kasım'dan. Öncelik sıran (NHR-118 > NHR-128 > PSL-124 > PSL-120) uygundur. Teklif tarih listeni sahiplerle netleştirip ilet."},
+    {"kime": "mert", "mesaj_tarihi": "2026-11-26", "metin": "Mert, H47 yayınları için teşekkürler. H45 ATL/PSL ve NHR H46 için araç tarafında çözüm yok, bulgu olarak kaydettim. U340 rolsüz 0,4 AA satırına rol girmeni rica ederim (kapasite_talep: 0,4 AA rolsüz açık)."}
+  ],
+  "mesajlar": [],
+  "ajanda": [
+    {"madde": "Burak'ın NHR v1.16 sürüm tarihi (18 Aralık, tahmin) için kesin karar", "kime": "burak", "termin": "2026-11-30", "durum": "acik"},
+    {"madde": "YILDIZ 1 Aralık başlangıcı ve U320 Test Mühendisi açığı (1,6 AA) için kapasite_talep ile değerlendirme", "kime": "selin", "termin": "2026-11-30", "durum": "acik"},
+    {"madde": "Mert: U340 rolsüz 0,4 AA satırına rol girişi", "kime": "mert", "termin": "2026-11-30", "durum": "acik"},
+    {"madde": "Elif: ATL-157 Jira atamasını Emre Koç'a yapma", "kime": "elif", "termin": "2026-11-27", "durum": "acik"}
+  ],
+  "gercek_disi": [],
+  "demo_yoklamasi": [
+    {"soru": 1, "araclar": ["portfoy_ozeti"], "cagri": 1, "tutarli": true, "yanit_ozeti": "NHR (skor 19, SPI 0,85, CPI 0,86, 19 geciken görev, 2 yüksek risk) ve PSL (skor 44, 8 geciken, söz tutma %23) Kritik; ATL (62) ve KLK (77) Riskli. Portföy sağlığı 64."},
+    {"soru": 2, "araclar": ["kapasite_talep"], "cagri": 1, "tutarli": true, "yanit_ozeti": "Açık: U320 Test Mühendisi 1,6 AA, U340 Veri Bilimci 0,44 AA, rolsüz 0,4 AA (toplam 2,44 AA). Boş kapasite U320/U340 içinde; önce kaydırma, kalıcı U320 açığı sürerse işe alım; kararı YILDIZ 1 Aralık başlangıcıyla birlikte değerlendiririm."},
+    {"soru": 3, "araclar": ["proje_detayi"], "cagri": 1, "tutarli": true, "yanit_ozeti": "En riskli NHR: ek bütçe tavanı 930.000 TL (VAC -927.871 TL), kapsam donuk; v1.16 tek sürüm 18 Aralık (Burak'ın tahmini, 30 Kasım'a kadar kesinleşir); NHR-118/123 kök neden planı 27 Kasım."}
+  ],
+  "arac_cagrisi": 16, "memnuniyet": 7,
+  "gunun_notu": "ATL kilidi 16 gün sonra kapatılamadığı için kilit açılmadan karara bağlandı; U310 0,3 AA kritik NHR-128'e verildi."
+}
