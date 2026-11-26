@@ -35,6 +35,7 @@ import {
     groupBy, Measure, outliers, PERIODS, Period, pivot, profile, topRows, trend,
 } from './dataAnalysis';
 import { SKILLS, skillById } from './skills';
+import { ALL_GROUPS, groupCatalog, groupsOfTool, ToolGroup } from './toolRouting';
 import { DEFAULT_OPTIONS, describeMetrics, optimizePlan, rescueScenarios } from '../planning/planOptimizer';
 import { buildHistory, calibrator } from '../planning/history';
 import { calendarLabel, sprintCalendar } from '../sprintCalendar';
@@ -69,7 +70,7 @@ export interface ToolDef {
     /** Yalnız bu yetkiyi taşıyan rollere sunulur (ör. denetim günlüğü, veri sağlığı) */
     permission?: PermissionKey;
     /** Tarayıcı çalışma zamanı gerektirir: ui (ajan gezinmesi) ya da jira (sunucuda Jira bağlantısı) */
-    requires?: 'ui' | 'jira' | 'files' | 'memory';
+    requires?: 'ui' | 'jira' | 'files' | 'memory' | 'toolGroups';
     run: (args: Args, ctx: ToolContext) => unknown | Promise<unknown>;
 }
 
@@ -2174,8 +2175,9 @@ export const tablesPromptSection = (tables: DataTable[] | undefined): string =>
 // kullanıcı bu turda kendi mesajında açıkça isterse yapılır.
 // ---------------------------------------------------------------------------
 
-const REMEMBER_INTENT = /hatırla|unutma|aklında tut|bundan (sonra|böyle)|her zaman|hep |tercih|kaydet|not al|bilmelisin|bil ki/i;
+const REMEMBER_INTENT = /hatırla|unutma|aklında tut|bundan (sonra|böyle)|her zaman|hep |tercih|kaydet|not al|bilmelisin|bil ki|hafıza|hafiza|hitap|diye seslen/i;
 const FORGET_INTENT = /unut|sil|kaldır|çıkar|temizle|hatırlama/i;
+const MEMORY_SECTIONS = ['uslup', 'tercih', 'not'] as const;
 
 const MEMORY_TOOLS: ToolDef[] = [
     {
@@ -2183,15 +2185,27 @@ const MEMORY_TOOLS: ToolDef[] = [
         requires: 'memory',
         spec: {
             name: 'hafiza_kaydet',
-            description: 'Kullanıcının kalıcı tercihini ya da bağlamını hafızaya kaydeder (ör. "Raporlarda süreyi gün olarak ver", "Ana projesi ATLAS"). Yalnız kullanıcı açıkça isterse; kısa, genel bir cümle.',
-            parameters: S.obj({ not: S.str('En çok 300 karakter') }, ['not']),
+            description: 'Kullanıcının hafiza.md belgesine bir satır yazar. Yalnız kullanıcı açıkça isterse; kısa, genel bir cümle. Değişebilecek bilgi "Anahtar: değer" biçiminde (ör. "Ana proje: ATLAS", "Hitap: Murat Bey") yazılırsa aynı anahtarlı eski satırın yerini alır.',
+            parameters: S.obj({
+                not: S.str('En çok 300 karakter'),
+                bolum: S.str('uslup: hitap, yazım tarzı, yanıt uzunluğu (her yanıtta, eskimez); tercih: kalıcı çalışma tercihi (her yanıtta, eskimez); not: tarihli bağlam (yalnız ilgili sorularda, eskir). Varsayılan not.', [...MEMORY_SECTIONS]),
+                onemli: S.bool('Önemli not: daha yavaş eskir'),
+                etiketler: { type: 'array', items: S.str('Tek kelime, ör. atlas'), description: 'Notun konusu (proje kodu, kişi, konu); ilgili sorularda bulunmasını sağlar' },
+            }, ['not']),
         },
         run: (a, ctx) => {
             if (!ctx.memory) throw new ToolError('Hafıza bu ortamda kullanılamıyor.');
             if (!REMEMBER_INTENT.test(ctx.memory.userPrompt)) throw new ToolError('Kullanıcı bu mesajda hatırlamanı istemedi; hafızaya yalnız açık istekle yazılır.');
+            const bolum = MEMORY_SECTIONS.find(x => x === str(a.bolum)) || 'not';
             try {
-                const r = ctx.memory.store.add(str(a.not));
-                return { kaydedildi: r.item.text, toplam: ctx.memory.store.list().length, ...(r.replaced ? { silinen_en_eski: r.replaced.text } : {}) };
+                const r = ctx.memory.store.add(str(a.not), { section: bolum, important: a.onemli === true, tags: listArg(a.etiketler).map(String) });
+                return {
+                    kaydedildi: r.item.text,
+                    bolum,
+                    ...(r.replaced ? { yerini_aldi: r.replaced.text } : {}),
+                    ...(r.existed ? { not: 'Bu satır zaten vardı; tarihi yenilendi.' } : {}),
+                    toplam: ctx.memory.store.list().filter(i => i.section !== 'arsiv').length,
+                };
             } catch (e) {
                 throw new ToolError((e as Error).message);
             }
@@ -2202,8 +2216,8 @@ const MEMORY_TOOLS: ToolDef[] = [
         requires: 'memory',
         spec: {
             name: 'hafiza_sil',
-            description: 'Hafızadaki bir notu (numara ya da metin parçasıyla) ya da hepsini siler; yalnız kullanıcı "unut/sil" derse.',
-            parameters: S.obj({ not: S.str('Numara ya da metin parçası'), hepsi: S.bool('Tümünü sil') }),
+            description: 'Hafızadaki bir satırı (metin parçasıyla) ya da hepsini siler; yalnız kullanıcı "unut/sil" derse.',
+            parameters: S.obj({ not: S.str('Metin parçası'), hepsi: S.bool('Tümünü sil') }),
         },
         run: (a, ctx) => {
             if (!ctx.memory) throw new ToolError('Hafıza bu ortamda kullanılamıyor.');
@@ -2214,15 +2228,39 @@ const MEMORY_TOOLS: ToolDef[] = [
                 return { silinen: n };
             }
             const ref = typeof a.not === 'number' ? a.not : str(a.not);
-            if (ref === '') throw new ToolError('Silinecek notu (numara ya da metin) verin.');
+            if (ref === '') throw new ToolError('Silinecek notu (metin parçası) verin.');
             const hit = ctx.memory.store.remove(ref);
             if (!hit) throw new ToolError(`"${ref}" hafızada bulunamadı.`);
-            return { silindi: hit.text, kalan: ctx.memory.store.list().length };
+            return { silindi: hit.text, kalan: ctx.memory.store.list().filter(i => i.section !== 'arsiv').length };
         },
     },
 ];
 
-AI_TOOLS.push(...PROPOSAL_TOOLS, ...AGENT_TOOLS, ...JIRA_TOOLS, ...WORKFORCE_TOOLS, ...POOL_TOOLS, ...ANALYSIS_TOOLS, ...FILE_TOOLS, ...MEMORY_TOOLS);
+// ---------------------------------------------------------------------------
+// Araç grubu açma: soruya göre seçilen gruplar yetmezse model eksik grubu açar
+// ---------------------------------------------------------------------------
+
+const ROUTING_TOOLS: ToolDef[] = [
+    {
+        label: 'Araç açma',
+        requires: 'toolGroups',
+        spec: {
+            name: 'arac_ac',
+            description: `Bu turda sana yalnız soruyla ilgili araçlar verildi. Gereken araç yoksa ilgili grubu aç; açılan araçlar sonraki adımda kullanılabilir. Gruplar: ${groupCatalog()}.`,
+            parameters: S.obj({ gruplar: { type: 'array', items: S.str('', ALL_GROUPS.filter(g => g !== 'temel')), description: 'Açılacak gruplar' } }, ['gruplar']),
+        },
+        run: (a, ctx) => {
+            if (!ctx.toolGroups) throw new ToolError('Bu ortamda tüm araçlar zaten açık.');
+            const want = listArg(a.gruplar).map(String).filter((g): g is ToolGroup => (ALL_GROUPS as string[]).includes(g));
+            if (!want.length) throw new ToolError(`Geçerli bir grup verin: ${ALL_GROUPS.filter(g => g !== 'temel').join(', ')}.`);
+            for (const g of want) ctx.toolGroups.add(g);
+            const opened = AI_TOOLS.filter(t => toolAvailable(t, ctx) && groupsOfTool(t.spec.name).some(g => want.includes(g))).map(t => t.spec.name);
+            return { acilan_gruplar: want, araclar: opened, ...(opened.length ? {} : { not: 'Bu gruplarda rolünüze açık araç yok.' }) };
+        },
+    },
+];
+
+AI_TOOLS.push(...PROPOSAL_TOOLS, ...AGENT_TOOLS, ...JIRA_TOOLS, ...WORKFORCE_TOOLS, ...POOL_TOOLS, ...ANALYSIS_TOOLS, ...FILE_TOOLS, ...MEMORY_TOOLS, ...ROUTING_TOOLS);
 
 const TOOL_MAP = new Map(AI_TOOLS.map(t => [t.spec.name, t]));
 
@@ -2231,7 +2269,14 @@ const toolAvailable = (t: ToolDef, ctx: ToolContext): boolean =>
     (!t.privateOnly || ctx.canSeePrivate) && (!t.writeOnly || ctx.canWrite) && (!t.poolWrite || ctx.canWritePool) && (!t.permission || can(ctx.identity, t.permission))
     && (!t.requires || !!ctx[t.requires]);
 
-export const toolSpecsFor = (ctx: ToolContext): ToolSpec[] => AI_TOOLS.filter(t => toolAvailable(t, ctx)).map(t => t.spec);
+/** Bu turda modele sunulan araçlar: rol kapsamı + (tarayıcı sohbetinde) soruya göre seçilen gruplar */
+const inRoute = (t: ToolDef, ctx: ToolContext): boolean => {
+    if (!ctx.toolGroups) return true;
+    const groups = groupsOfTool(t.spec.name);
+    return groups.length === 0 || groups.some(g => ctx.toolGroups!.has(g));
+};
+
+export const toolSpecsFor = (ctx: ToolContext): ToolSpec[] => AI_TOOLS.filter(t => toolAvailable(t, ctx) && inRoute(t, ctx)).map(t => t.spec);
 
 export const toolLabel = (name: string): string => TOOL_MAP.get(name)?.label || name;
 
@@ -2241,6 +2286,7 @@ export const toolKind = (name: string): 'read' | 'propose' | 'ui' | 'jira' | 'fi
     if (!t) return 'read';
     if (t.requires === 'files') return t.spec.name === 'dosya_olustur' ? 'file' : 'read';
     if (t.requires === 'memory') return 'memory';
+    if (t.requires === 'toolGroups') return 'read';
     if (t.requires === 'ui') return 'ui';
     // Onay isteyen öneriler (ör. oner_jira_esitle) Jira'ya bağlı olsa da öneri sayılır
     if (t.writeOnly || t.poolWrite) return 'propose';

@@ -18,7 +18,8 @@ export interface AgentTurnOptions {
     system: string;
     /** Önceki turlar + en sonda yeni kullanıcı mesajı */
     history: ChatMessage[];
-    tools: ToolSpec[];
+    /** Araç tanımları; işlev verilirse her adımda yeniden okunur (arac_ac turun ortasında grup açar) */
+    tools: ToolSpec[] | (() => ToolSpec[]);
     execute: (call: ToolCall) => { content: string; ok: boolean } | Promise<{ content: string; ok: boolean }>;
     stream: (body: ChatRequestBody, onDelta: (full: string) => void) => Promise<StreamChatResult>;
     maxSteps?: number;
@@ -34,7 +35,35 @@ export interface AgentTurnResult {
     hitStepLimit: boolean;
     /** Uzunluk sınırında kesilen yanıt için kaç kez "devam et" istendi */
     continuations: number;
+    /** Bu turda yapılan araç çağrıları ve sonuçları (sonraki tura özet taşımak için) */
+    calls: { name: string; arguments: Record<string, unknown>; content: string; ok: boolean }[];
 }
+
+/** Bir sonraki tura taşınan araç özeti için üst sınırlar */
+export const DIGEST_MAX_CHARS = 3_000;
+const DIGEST_PER_CALL = 900;
+/** Kendi başına veri taşımayan araçlar özete girmez */
+const NO_DIGEST = new Set(['arac_ac', 'yetenek_yukle', 'hafiza_kaydet', 'hafiza_sil', 'ekrana_git', 'gorev_ac', 'kisi_profili_ac', 'pencere_ac', 'dosya_olustur']);
+
+/**
+ * Önceki turun araç sonuçlarının kısa özeti: takip sorusunda ("peki bunu kişiye
+ * göre kır") model veriyi baştan çekmek ya da kendi metninden tahmin etmek
+ * zorunda kalmaz. Yalnız başarılı okuma çağrıları; her biri kısaltılır.
+ */
+export const toolDigest = (calls: AgentTurnResult['calls'], maxChars = DIGEST_MAX_CHARS): string => {
+    const rows: string[] = [];
+    let used = 0;
+    for (const c of calls) {
+        if (!c.ok || NO_DIGEST.has(c.name) || c.name.startsWith('oner_')) continue;
+        const args = JSON.stringify(c.arguments || {});
+        const body = c.content.length > DIGEST_PER_CALL ? `${c.content.slice(0, DIGEST_PER_CALL)}…(kısaltıldı)` : c.content;
+        const row = `- ${c.name}(${args.length > 160 ? `${args.slice(0, 160)}…` : args}) → ${body}`;
+        if (used + row.length > maxChars) break;
+        rows.push(row);
+        used += row.length;
+    }
+    return rows.length ? `[Önceki turda kullanılan veriler (kısaltılmış; ayrıntı gerekirse aracı yeniden çağır):\n${rows.join('\n')}]` : '';
+};
 
 /** Sağlayıcıların "çıktı sınırına ulaşıldı" durma nedenleri */
 export const TRUNCATED_STOP_REASONS = new Set(['length', 'max_tokens']);
@@ -67,9 +96,8 @@ export const compactToolResults = (messages: ChatMessage[], budget: number): Cha
 export const runAgentTurn = async (o: AgentTurnOptions): Promise<AgentTurnResult> => {
     const maxSteps = o.maxSteps ?? DEFAULT_MAX_STEPS;
     const labelFor = o.labelFor || ((n: string) => n);
-    const toolChars = JSON.stringify(o.tools).length;
-    // Sunucu sınırının altında kal: sistem + araç tanımları + %10 pay
-    const budget = Math.floor(AI_LIMITS.maxTotalChars * 0.9) - o.system.length - toolChars;
+    const toolsNow = typeof o.tools === 'function' ? o.tools : () => o.tools as ToolSpec[];
+    const calls: AgentTurnResult['calls'] = [];
 
     let messages: ChatMessage[] = [...o.history];
     const steps: AgentStep[] = [];
@@ -82,11 +110,15 @@ export const runAgentTurn = async (o: AgentTurnOptions): Promise<AgentTurnResult
     for (;;) {
         const prefix = shown ? (glue ? shown : `${shown}\n\n`) : '';
         glue = false;
+        const tools = toolsNow();
+        const toolChars = JSON.stringify(tools).length;
+        // Sunucu sınırının altında kal: sistem + araç tanımları + %10 pay
+        const budget = Math.floor(AI_LIMITS.maxTotalChars * 0.9) - o.system.length - toolChars;
         messages = compactToolResults(messages, budget);
         const body: ChatRequestBody = {
             system: o.system,
             messages: trimHistory(messages, o.system.length + toolChars),
-            ...(o.tools.length ? { tools: o.tools } : {}),
+            ...(tools.length ? { tools } : {}),
         };
         const res = await o.stream(body, full => o.onText?.(prefix + full));
         if (res.text.trim()) shown = prefix + res.text;
@@ -103,7 +135,7 @@ export const runAgentTurn = async (o: AgentTurnOptions): Promise<AgentTurnResult
                 }
                 continue;
             }
-            return { text: shown, steps, stopReason, hitStepLimit: false, continuations };
+            return { text: shown, steps, stopReason, hitStepLimit: false, continuations, calls };
         }
 
         messages.push({ role: 'assistant', content: res.text, toolCalls: res.toolCalls });
@@ -112,10 +144,11 @@ export const runAgentTurn = async (o: AgentTurnOptions): Promise<AgentTurnResult
             steps.push(step);
             o.onSteps?.(steps.map(s => ({ ...s })));
             const out = await o.execute(call);
+            calls.push({ name: call.name, arguments: call.arguments, content: out.content, ok: out.ok });
             step.status = out.ok ? 'done' : 'error';
             o.onSteps?.(steps.map(s => ({ ...s })));
             messages.push({ role: 'tool', toolCallId: call.id, name: call.name, content: out.content });
         }
-        if (++toolRounds >= maxSteps) return { text: shown, steps, stopReason, hitStepLimit: true, continuations };
+        if (++toolRounds >= maxSteps) return { text: shown, steps, stopReason, hitStepLimit: true, continuations, calls };
     }
 };

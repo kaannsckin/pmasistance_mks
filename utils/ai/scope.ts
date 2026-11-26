@@ -10,6 +10,7 @@ import type { AiProposal } from './actions';
 import type { AiDocument } from '../export/aiDocument';
 import type { DataTable } from './dataAnalysis';
 import type { MemoryStore } from './memory';
+import type { ToolGroup } from './toolRouting';
 import type { UiCommand, UiResult } from './uiActions';
 import type { JiraIssueWorklog, JiraMeta, JiraSyncPage, JiraSyncSource } from '../integrations';
 
@@ -85,6 +86,12 @@ export interface ToolContext {
      * giden metin kısaltılmış olabilir). veri_analiz bunlar üzerinde hesap yapar.
      */
     tables?: DataTable[];
+    /**
+     * Bu turda modele sunulan araç grupları (bkz. toolRouting.ts). Tarayıcı
+     * sohbeti soruya göre seçer, model arac_ac ile genişletir; yoksa (MCP) tüm
+     * araçlar sunulur.
+     */
+    toolGroups?: Set<ToolGroup>;
 }
 
 export const buildToolContext = (ws: WorkspaceData, now: Date = new Date()): ToolContext => {

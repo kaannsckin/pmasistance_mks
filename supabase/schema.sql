@@ -461,3 +461,50 @@ create trigger projects_touch before update on public.workspace_projects
 drop trigger if exists app_settings_touch on public.app_settings;
 create trigger app_settings_touch before update on public.app_settings
     for each row execute function public.touch_updated_at();
+
+-- ---------------------------------------------------------------------------
+-- Asistan hafızası (hafiza.md): kullanıcıya ÖZEL. Satırı yalnız sahibi okur ve
+-- yazar; yönetici rolleri dahil başka hiçbir kullanıcı göremez. Yazmak için
+-- çalışma alanı üyeliği gerekir. Bir kullanıcı uygulamada birden çok kimlikle
+-- (rol + kişi) çalışabildiği için her kimliğin hafızası ayrı satırdır.
+-- İstemci üç yönlü birleştirme yapar; version iyimser kilit içindir.
+-- ---------------------------------------------------------------------------
+create table if not exists public.assistant_memory (
+    user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+    workspace_id uuid not null references public.workspaces(id) on delete cascade,
+    identity_key text not null,
+    content text not null default '',
+    version bigint not null default 1,
+    updated_at timestamptz not null default now(),
+    primary key (user_id, workspace_id, identity_key),
+    constraint assistant_memory_size check (char_length(content) <= 60000),
+    constraint assistant_memory_key check (char_length(identity_key) between 1 and 200)
+);
+
+alter table public.assistant_memory enable row level security;
+
+drop policy if exists "memory_select_own" on public.assistant_memory;
+create policy "memory_select_own" on public.assistant_memory
+    for select using (user_id = auth.uid());
+
+drop policy if exists "memory_insert_own" on public.assistant_memory;
+create policy "memory_insert_own" on public.assistant_memory
+    for insert with check (user_id = auth.uid() and public.member_role(workspace_id) is not null);
+
+drop policy if exists "memory_update_own" on public.assistant_memory;
+create policy "memory_update_own" on public.assistant_memory
+    for update using (user_id = auth.uid())
+    with check (user_id = auth.uid() and public.member_role(workspace_id) is not null);
+
+drop policy if exists "memory_delete_own" on public.assistant_memory;
+create policy "memory_delete_own" on public.assistant_memory
+    for delete using (user_id = auth.uid());
+
+revoke all on public.assistant_memory from anon;
+grant select, insert, delete on public.assistant_memory to authenticated;
+revoke update on public.assistant_memory from authenticated;
+grant update (content, version) on public.assistant_memory to authenticated;
+
+drop trigger if exists assistant_memory_touch on public.assistant_memory;
+create trigger assistant_memory_touch before update on public.assistant_memory
+    for each row execute function public.touch_updated_at();

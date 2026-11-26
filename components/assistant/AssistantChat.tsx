@@ -6,6 +6,7 @@ import { AiProposal } from '../../utils/ai/actions';
 import { browserSettingsExpired } from '../../utils/ai/client';
 import { Citation, RAG_SOURCE_LABELS } from '../../utils/rag/sources';
 import { useAssistant } from './AssistantContext';
+import { EditableSection, memoryAgeLabel, MEMORY_STORAGE_NOTE, SECTION_OPTIONS, useMemoryEditor } from './useMemoryEditor';
 import { ATTACHMENT_EXTENSIONS } from '../../utils/ai/attachments';
 import { toolKind } from '../../utils/ai/tools';
 import { AiDocument, DOC_FORMAT_LABELS, documentStats, documentSummary } from '../../utils/export/aiDocument';
@@ -72,30 +73,68 @@ const ChatHistory: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   );
 };
 
-/** Hafıza: asistanın kalıcı tercihleri (bu tarayıcıda); görüntüle ve sil */
+/** Hafıza: kullanıcının hafiza.md belgesi (bu tarayıcıda); bölümler, elle ekleme, düzenleme, indir/yükle */
 const MemoryPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-  const a = useAssistant();
+  const m = useMemoryEditor();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const btn = 'text-[11px] font-semibold text-gray-500 hover:text-indigo-600';
   return (
     <section aria-label="Asistan hafızası" className="flex-none border-b border-gray-100 dark:border-gray-700 bg-indigo-50/50 dark:bg-indigo-900/10 px-4 py-3 space-y-2">
-      <div className="flex items-center gap-2">
-        <span className="flex-1 text-xs font-bold text-gray-800 dark:text-gray-100"><i aria-hidden="true" className="fa-solid fa-bookmark text-indigo-500 mr-1.5"></i>Hafıza · {a.memory.length}</span>
-        {a.memory.length > 0 && <button onClick={() => { if (window.confirm('Asistanın hafızasındaki tüm notlar silinsin mi?')) a.clearMemory(); }} className="text-[11px] font-semibold text-gray-500 hover:text-red-500">Tümünü sil</button>}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="flex-1 text-xs font-bold text-gray-800 dark:text-gray-100"><i aria-hidden="true" className="fa-solid fa-bookmark text-indigo-500 mr-1.5"></i>Hafıza · {m.activeCount}{m.archived > 0 && <span className="font-normal text-gray-400"> (+{m.archived} arşiv)</span>}</span>
+        {m.mode === 'list' && <button onClick={m.startEdit} className={btn} title="hafiza.md belgesini düzenle">Düzenle</button>}
+        <button onClick={m.download} className={btn} title="hafiza.md olarak indir">İndir</button>
+        <button onClick={() => fileRef.current?.click()} className={btn} title=".md dosyasından yükle">Yükle</button>
+        <input ref={fileRef} type="file" accept=".md,.markdown,.txt,text/markdown,text/plain" className="hidden" onChange={e => { void m.upload(e.target.files?.[0]); e.target.value = ''; }} />
+        {m.activeCount + m.archived > 0 && <button onClick={m.clear} className="text-[11px] font-semibold text-gray-500 hover:text-red-500">Tümünü sil</button>}
         <button aria-label="Hafızayı kapat" onClick={onClose} className="w-6 h-6 rounded text-gray-400 hover:text-gray-700"><i aria-hidden="true" className="fa-solid fa-xmark text-xs"></i></button>
       </div>
-      {a.memory.length === 0 ? (
-        <p className="text-[11px] text-gray-500">Henüz not yok. Asistana "Bundan sonra süreleri gün olarak ver, hatırla" gibi bir tercih söyleyin; her soruda buna uyar.</p>
+      {m.mode === 'edit' ? (
+        <div className="space-y-1.5">
+          <textarea aria-label="hafiza.md" value={m.draft} onChange={e => m.setDraft(e.target.value)} rows={12} spellCheck={false} className="w-full text-[11px] font-mono p-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-100" />
+          <div className="flex gap-2 justify-end">
+            <button onClick={m.cancelEdit} className="text-[11px] font-semibold text-gray-500 px-2 py-1">Vazgeç</button>
+            <button onClick={m.saveEdit} className="text-[11px] font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded px-3 py-1">Kaydet</button>
+          </div>
+        </div>
       ) : (
-        <ol className="space-y-1 max-h-40 overflow-y-auto">
-          {a.memory.map((m, i) => (
-            <li key={m.id} className="flex items-start gap-2 text-[11px] text-gray-700 dark:text-gray-200">
-              <span className="text-gray-400 w-4 flex-none">{i + 1}.</span>
-              <span className="flex-1 min-w-0 break-words">{m.text}</span>
-              <button aria-label={`Sil: ${m.text}`} title="Sil" onClick={() => a.forgetMemory(m.id)} className="text-gray-400 hover:text-red-500 flex-none"><i aria-hidden="true" className="fa-solid fa-trash text-[10px]"></i></button>
-            </li>
-          ))}
-        </ol>
+        <>
+          <form className="flex gap-1.5 items-center" onSubmit={e => { e.preventDefault(); m.add(); }}>
+            <select aria-label="Bölüm" value={m.section} onChange={e => m.setSection(e.target.value as EditableSection)} className="text-[11px] rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 px-1 py-1">
+              {SECTION_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+            <input aria-label="Hafızaya eklenecek satır" value={m.text} onChange={e => m.setText(e.target.value)} maxLength={300} placeholder={m.hint} className="flex-1 min-w-0 text-[11px] rounded border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 px-2 py-1" />
+            <label className="text-[11px] text-gray-500 flex items-center gap-1" title="Önemli: daha yavaş eskir"><input type="checkbox" checked={m.important} onChange={e => m.setImportant(e.target.checked)} />!</label>
+            <button type="submit" disabled={!m.text.trim()} className="text-[11px] font-semibold text-white bg-indigo-600 disabled:opacity-40 rounded px-2 py-1">Ekle</button>
+          </form>
+          <div className="space-y-2 max-h-56 overflow-y-auto">
+            {m.groups.map(g => (
+              <div key={g.section}>
+                <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">{g.title}{g.section === 'not' ? ' · ilgili sorularda okunur, eskir' : ' · her yanıtta'}</p>
+                {g.items.length === 0 ? <p className="text-[11px] text-gray-400">—</p> : (
+                  <ul className="space-y-0.5">
+                    {g.items.map(it => (
+                      <li key={it.id} className="flex items-start gap-2 text-[11px] text-gray-700 dark:text-gray-200">
+                        <span className="flex-1 min-w-0 break-words">{it.important && <b className="text-amber-600 mr-1" title="Önemli">!</b>}{it.text}</span>
+                        {g.section === 'not' && <span className="text-[10px] text-gray-400 flex-none">{memoryAgeLabel(it)}</span>}
+                        <button aria-label={`Sil: ${it.text}`} title="Sil" onClick={() => m.forget(it.id)} className="text-gray-400 hover:text-red-500 flex-none"><i aria-hidden="true" className="fa-solid fa-trash text-[10px]"></i></button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ))}
+          </div>
+        </>
       )}
-      <p className="text-[10px] text-gray-400">Yalnız bu tarayıcıda ve bu kimlik için saklanır; her soruda asistana iletilir.</p>
+      {m.error && <p role="alert" className="text-[11px] text-red-600">{m.error}</p>}
+      <div className="flex items-center gap-2 text-[11px] border-t border-indigo-100 dark:border-gray-700 pt-2">
+        <i aria-hidden="true" className={`fa-solid ${m.sync.state === 'syncing' ? 'fa-rotate fa-spin' : 'fa-cloud'} ${m.sync.state === 'error' ? 'text-red-500' : 'text-indigo-400'}`}></i>
+        <span role="status" className={`flex-1 min-w-0 ${m.sync.state === 'error' ? 'text-red-600' : 'text-gray-500'}`}>{m.syncText}</span>
+        {m.sync.available && <label className="flex items-center gap-1 text-gray-600 dark:text-gray-300" title="Asistan açılınca, hafıza değişince ve sekmeye dönünce kendiliğinden eşitler"><input type="checkbox" checked={m.sync.auto} onChange={e => m.setAutoSync(e.target.checked)} />Otomatik</label>}
+        <button onClick={() => void m.syncNow()} disabled={!m.sync.available || m.sync.state === 'syncing'} className="font-semibold text-indigo-600 hover:text-indigo-800 disabled:opacity-40">Şimdi eşitle</button>
+      </div>
+      <p className="text-[10px] text-gray-400">{MEMORY_STORAGE_NOTE}</p>
     </section>
   );
 };
@@ -274,6 +313,7 @@ const AssistantChat: React.FC<Props> = ({ variant, suggestions, onClose, onExpan
   const [token, setToken] = useState('');
   const [preview, setPreview] = useState<Citation | null>(null);
   const [memoryOpen, setMemoryOpen] = useState(false);
+  const activeMemory = a.memory.filter(m => m.section !== 'arsiv').length;
   const [historyOpen, setHistoryOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -311,9 +351,9 @@ const AssistantChat: React.FC<Props> = ({ variant, suggestions, onClose, onExpan
         </div>
       </div>
       <div className="flex items-center gap-1 flex-none">
-        <button aria-label={`Hafıza (${a.memory.length} not)`} aria-expanded={memoryOpen} onClick={() => { setMemoryOpen(o => !o); setHistoryOpen(false); }} title="Asistanın hafızası" className="relative w-8 h-8 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-white dark:hover:bg-gray-800 transition-colors">
+        <button aria-label={`Hafıza (${activeMemory} not)`} aria-expanded={memoryOpen} onClick={() => { setMemoryOpen(o => !o); setHistoryOpen(false); }} title="Asistanın hafızası" className="relative w-8 h-8 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-white dark:hover:bg-gray-800 transition-colors">
           <i aria-hidden="true" className="fa-solid fa-bookmark text-xs"></i>
-          {a.memory.length > 0 && <span aria-hidden="true" className="absolute top-0.5 right-0.5 min-w-[14px] h-3.5 px-0.5 rounded-full bg-indigo-600 text-white text-[9px] font-bold leading-[14px]">{a.memory.length}</span>}
+          {activeMemory > 0 && <span aria-hidden="true" className="absolute top-0.5 right-0.5 min-w-[14px] h-3.5 px-0.5 rounded-full bg-indigo-600 text-white text-[9px] font-bold leading-[14px]">{activeMemory}</span>}
         </button>
         <button aria-label="Bilgi Bankası — dizin durumu ve kurumsal dokümanlar" onClick={() => a.setKbOpen(true)} title="Bilgi Bankası — dizin durumu ve kurumsal dokümanlar" className="w-8 h-8 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-white dark:hover:bg-gray-800 transition-colors">
           <i aria-hidden="true" className="fa-solid fa-book text-xs"></i>

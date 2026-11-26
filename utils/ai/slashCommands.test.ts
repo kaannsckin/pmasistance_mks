@@ -21,7 +21,7 @@ describe('"/" komutları', () => {
         expect(expandSlash('/excel riskler', { projectName: 'ATLAS' })).toBe('riskler için Excel dosyası hazırla (ATLAS).');
         expect(expandSlash('/pdf', { hasAnswer: true })).toBe('Son yanıttaki veriyi PDF dosyası olarak hazırla.');
         expect(expandSlash('/bu', { taskLabel: 'ATL-59 Harita katmanı' })).toContain('Ekranda açık görevi (ATL-59 Harita katmanı)');
-        expect(expandSlash('/hatirla süreleri gün olarak ver', {})).toBe('Şunu hatırla ve bundan sonra uygula: süreleri gün olarak ver');
+        expect(expandSlash('/hatirla süreleri gün olarak ver', {})).toBe('Şunu hatırla ve bundan sonra tercih olarak uygula: süreleri gün olarak ver');
         expect(expandSlash('/yok', {})).toEqual({ error: expect.stringContaining('"/yok" diye bir komut yok') });
         expect(expandSlash('normal soru', {})).toBeNull();
     });

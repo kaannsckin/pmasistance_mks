@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { View, WorkspaceData } from '../../types';
-import { AgentStep, AGENT_MAX_STEPS, runAgentTurn, TRUNCATED_STOP_REASONS } from '../../utils/ai/agent';
+import { AgentStep, AGENT_MAX_STEPS, runAgentTurn, toolDigest, TRUNCATED_STOP_REASONS } from '../../utils/ai/agent';
 import { AttachmentInfo, ChatAttachment, composeUserContent, MAX_SESSION_TABLES } from '../../utils/ai/attachments';
 import { UiCommand, UiResult } from '../../utils/ai/uiActions';
 import { getWorklogTimeZone } from '../../utils/workforce';
@@ -11,13 +11,15 @@ import type { AiDocument } from '../../utils/export/aiDocument';
 import { splitFollowUps } from '../../utils/ai/followUps';
 import { expandSlash, SlashContext, slashSkillFor } from '../../utils/ai/slashCommands';
 import { chatOwner, chatTitle, ChatSummary, deleteChat, listChats, loadChat, newChatId, saveChat, StoredMessage, summarize, toStored } from '../../utils/ai/chatStore';
-import { createMemoryStore, MemoryItem, memoryKey } from '../../utils/ai/memory';
+import { createMemoryStore, MemoryItem, memoryKey, MemorySection } from '../../utils/ai/memory';
+import { routeToolGroups } from '../../utils/ai/toolRouting';
+import { MemorySyncStatus, useMemorySync } from './useMemorySync';
 import { AiError, configureMasking, embedTexts, fetchAiStatus, hasCredentials, saveAccessToken, streamChat } from '../../utils/ai/client';
 import { buildMasker, collectMaskEntries, Masker } from '../../utils/ai/masking';
 import { aiPolicyOf } from '../../utils/ai/policy';
 import { AiStatus, ChatMessage } from '../../utils/ai/protocol';
 import { buildToolContext } from '../../utils/ai/scope';
-import { buildSystemPrompt, ScreenFocus } from '../../utils/ai/systemPrompt';
+import { buildSystemPrompt, ScreenFocus, skillsForTurn } from '../../utils/ai/systemPrompt';
 import type { DataTable } from '../../utils/ai/dataAnalysis';
 import { skillById } from '../../utils/ai/skills';
 import { executeTool, toolLabel, toolSpecsFor } from '../../utils/ai/tools';
@@ -48,6 +50,8 @@ export interface UiMessage {
   attachments?: AttachmentInfo[];
   /** Modele giden içerik (ek blokları dahil); sonraki turlarda geçmiş olarak gönderilir */
   modelContent?: string;
+  /** Bu yanıtta kullanılan araç sonuçlarının kısa özeti: yalnız bir sonraki tura taşınır */
+  toolDigest?: string;
 }
 
 export interface ApplyResult {
@@ -113,6 +117,16 @@ interface AssistantApi {
   memory: MemoryItem[];
   forgetMemory: (id: string) => void;
   clearMemory: () => void;
+  /** Elle hafızaya satır ekler (panelden) */
+  addMemory: (text: string, section: Exclude<MemorySection, 'arsiv'>, important?: boolean) => string | null;
+  /** Hafıza belgesi (hafiza.md) */
+  memoryMarkdown: () => string;
+  /** Elle düzenlenen belgeyi kaydeder; hata varsa açıklamasını döner */
+  saveMemoryMarkdown: (md: string) => string | null;
+  /** Hafızanın bulut eşitlemesi: durum, elle tetikleme, otomatik aç/kapat */
+  memorySync: MemorySyncStatus;
+  syncMemoryNow: () => Promise<void>;
+  setMemoryAutoSync: (auto: boolean) => void;
   /** Tek seferlik AI tamamlama (araçsız) — ekranlara gömülü özellikler için */
   complete: (system: string, prompt: string, signal?: AbortSignal) => Promise<string>;
 }
@@ -228,6 +242,26 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, sessionSco
   const refreshMemory = useCallback(() => setMemory(memoryStore()?.list() || []), [memoryStore]);
   const forgetMemory = useCallback((id: string) => { memoryStore()?.remove(id); refreshMemory(); }, [memoryStore, refreshMemory]);
   const clearMemory = useCallback(() => { memoryStore()?.clear(); refreshMemory(); }, [memoryStore, refreshMemory]);
+  const addMemory = useCallback((text: string, section: Exclude<MemorySection, 'arsiv'>, important?: boolean): string | null => {
+    const store = memoryStore();
+    if (!store) return 'Hafıza kullanılamıyor.';
+    try { store.add(text, { section, important }); } catch (e) { return (e as Error).message; }
+    refreshMemory();
+    return null;
+  }, [memoryStore, refreshMemory]);
+  const memoryKeyNow = useCallback(() => {
+    const ws = getWorkspace();
+    return ws ? memoryKey(ws.currentRole || 'py', ws.currentPersonId) : null;
+  }, [getWorkspace]);
+  const { status: memorySync, syncNow: syncMemoryNow, setAuto: setMemoryAutoSync } = useMemorySync(memoryKeyNow, refreshMemory, isOpen);
+  const memoryMarkdown = useCallback(() => memoryStore()?.markdown() || '', [memoryStore]);
+  const saveMemoryMarkdown = useCallback((md: string): string | null => {
+    const r = memoryStore()?.setMarkdown(md);
+    if (!r) return 'Hafıza kullanılamıyor.';
+    if (!r.ok) return r.error;
+    refreshMemory();
+    return null;
+  }, [memoryStore, refreshMemory]);
 
   const makeContext = useCallback((signal?: AbortSignal, userPrompt = '') => {
     const ws = getWorkspace();
@@ -358,13 +392,28 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, sessionSco
 
     const composed = composeUserContent(prompt, files);
     const forced = slashSkill ? skillById(slashSkill) : undefined;
-    const system = buildSystemPrompt(ctx, { view: getView(), followUps: true, focus: focusNow(), userText: composed.content, ...(forced ? { skills: [forced] } : {}) });
+    const view = getView();
+    const promptOpts = { view, followUps: true, focus: focusNow(), userText: composed.content, ...(forced ? { skills: [forced] } : {}) };
+    // Yalnız soruyla ilgili araç grupları; takip sorusu önceki turun alanında kalır
+    const lastReply = [...messagesRef.current].reverse().find(m => m.role === 'assistant');
+    ctx.toolGroups = routeToolGroups({
+      text: prompt,
+      view,
+      hasAttachments: files.length > 0 || tables.length > 0,
+      skills: skillsForTurn(promptOpts).map(s => s.id),
+      previousTools: lastReply?.steps?.map(s => s.name),
+    });
+    const system = buildSystemPrompt(ctx, promptOpts);
     const attachments: AttachmentInfo[] = composed.infos.map((info, i) => ({ ...info, size: files[i].size }));
     // Önceki turlar yalnızca görünen metinleriyle (ekler dahil) gider; araç ayrıntıları tekrar gönderilmez
+    // Son yanıtın araç özeti yalnız bir sonraki tura taşınır (takip soruları veriyi baştan çekmesin)
+    const prior = messagesRef.current.filter(m => (m.role === 'user' || m.role === 'assistant') && (m.modelContent || m.content).trim());
+    const lastIdx = prior.map(m => m.role).lastIndexOf('assistant');
     const history: ChatMessage[] = [
-      ...messagesRef.current
-        .filter(m => (m.role === 'user' || m.role === 'assistant') && (m.modelContent || m.content).trim())
-        .map(m => ({ role: m.role as 'user' | 'assistant', content: m.modelContent || m.content })),
+      ...prior.map((m, i) => ({
+        role: m.role as 'user' | 'assistant',
+        content: i === lastIdx && m.toolDigest ? `${m.modelContent || m.content}\n\n${m.toolDigest}` : (m.modelContent || m.content),
+      })),
       { role: 'user', content: composed.content },
     ];
 
@@ -381,7 +430,7 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, sessionSco
       const result = await runAgentTurn({
         system,
         history,
-        tools: toolSpecsFor(ctx),
+        tools: () => toolSpecsFor(ctx),
         execute: call => executeTool(call, ctx),
         stream: (body, onDelta) => streamChat(body, { authMode: status.authMode, signal: ctrl.signal, onDelta: (_, full) => onDelta(full) }),
         onText: text => update(replyId, { content: splitFollowUps(text).body }),
@@ -399,7 +448,8 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, sessionSco
           : m)));
       } else {
         const { body, followUps } = splitFollowUps(result.text);
-        update(replyId, { content: [body, ...notes].join('\n\n'), streaming: false, ...(followUps.length && !notes.length ? { followUps } : {}) });
+        const digest = toolDigest(result.calls);
+        update(replyId, { content: [body, ...notes].join('\n\n'), streaming: false, ...(followUps.length && !notes.length ? { followUps } : {}), ...(digest ? { toolDigest: digest } : {}) });
       }
     } catch (e) {
       const err = e instanceof AiError ? e : new AiError('Beklenmeyen bir hata oluştu.', 'upstream');
@@ -616,9 +666,9 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, sessionSco
 
   const api = useMemo<AssistantApi>(() => ({
     enabled, chatEnabled: enabled && chat, embeddedEnabled: enabled && embedded, phase, status, authError, messages, isStreaming, isOpen, setOpen, isMinimized, minimize, dismissMinimized, hasUnread,
-    ensureReady, recheck, send, ask, stop, clear, saveToken, isKbOpen, setKbOpen, refreshIndex, navigate, resolveProposal, resolveAllProposals, memory, forgetMemory, clearMemory, chats, currentChatId, openChat, removeChat, askAbout, pinned, unpin, complete,
+    ensureReady, recheck, send, ask, stop, clear, saveToken, isKbOpen, setKbOpen, refreshIndex, navigate, resolveProposal, resolveAllProposals, memory, forgetMemory, clearMemory, addMemory, memoryMarkdown, saveMemoryMarkdown, memorySync, syncMemoryNow, setMemoryAutoSync, chats, currentChatId, openChat, removeChat, askAbout, pinned, unpin, complete,
     jiraEnabled: !!integrations?.jira,
-  }), [enabled, chat, embedded, phase, status, authError, messages, isStreaming, isOpen, isMinimized, minimize, dismissMinimized, hasUnread, ensureReady, recheck, send, ask, stop, clear, saveToken, isKbOpen, refreshIndex, navigate, resolveProposal, resolveAllProposals, memory, forgetMemory, clearMemory, chats, currentChatId, openChat, removeChat, askAbout, pinned, unpin, complete, integrations]);
+  }), [enabled, chat, embedded, phase, status, authError, messages, isStreaming, isOpen, isMinimized, minimize, dismissMinimized, hasUnread, ensureReady, recheck, send, ask, stop, clear, saveToken, isKbOpen, refreshIndex, navigate, resolveProposal, resolveAllProposals, memory, forgetMemory, clearMemory, addMemory, memoryMarkdown, saveMemoryMarkdown, memorySync, syncMemoryNow, setMemoryAutoSync, chats, currentChatId, openChat, removeChat, askAbout, pinned, unpin, complete, integrations]);
 
   return <Ctx.Provider value={api}>{children}</Ctx.Provider>;
 };
