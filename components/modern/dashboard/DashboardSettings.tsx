@@ -4,6 +4,7 @@ import { DIM_LABELS, labelCounts, labelFamilies, MEASURE_LABELS } from '../../..
 import { addKpiPoint, defaultProgressPercent, formatKpi, isProgressPercent, KPI_UNIT_LABELS, METRICS, newKpiId } from '../../../utils/dashboard/metrics';
 import { TEMPLATES, WIDGET_BY_TYPE, WIDGETS } from '../../../utils/dashboard/model';
 import { CATEGORY_LABELS, CATEGORY_ORDER, workflowOptions } from '../../../utils/workflow';
+import { categoryName, categoryPrefixOf, defaultPocScope, pocCategories } from '../../../utils/gibPoc';
 import { Icon, IconName } from '../icons';
 import { Field, rowSep, Sheet } from '../ui';
 
@@ -162,17 +163,20 @@ const ProgressPercentInput = ({ label, value, fallback, onChange }: {
     );
 };
 
-export const ProgressWeightsEditor = ({ project, workflow, value, onChange, hint, title = 'Duruma göre ilerleme (%)' }: {
+export const ProgressWeightsEditor = ({ project, workflow, value, onChange, hint, title = 'Duruma göre ilerleme (%)', includeDone = false, resetLabel = 'Varsayılan yüzdelere dön' }: {
     project: Pick<Project, 'tasks'>;
     workflow: WorkflowConfig;
     value?: DashboardProgressWeights;
     onChange: (weights: DashboardProgressWeights | undefined) => void;
     hint?: string;
     title?: string;
+    /** Tamamlandı da ayarlanabilsin (PoC süreç katsayısı: tamamlanan iş GİB doğrulaması bekleyebilir) */
+    includeDone?: boolean;
+    resetLabel?: string;
 }) => {
-    // Tamamlanan iş her zaman %100: yalnız yoldaki durumlar ayarlanır
-    const groups = useMemo(() => workflowOptions(project.tasks, workflow).filter(g => g.category !== TaskStatus.Done), [project.tasks, workflow]);
-    const categories = CATEGORY_ORDER.filter(c => c !== TaskStatus.Done);
+    // İlerlemede tamamlanan iş her zaman %100: yalnız yoldaki durumlar ayarlanır
+    const groups = useMemo(() => workflowOptions(project.tasks, workflow).filter(g => includeDone || g.category !== TaskStatus.Done), [project.tasks, workflow, includeDone]);
+    const categories = CATEGORY_ORDER.filter(c => includeDone || c !== TaskStatus.Done);
     const occurrences = new Map<string, number>();
     for (const { statuses } of groups) {
         for (const { label } of statuses) occurrences.set(label, (occurrences.get(label) || 0) + 1);
@@ -192,7 +196,7 @@ export const ProgressWeightsEditor = ({ project, workflow, value, onChange, hint
         <fieldset className="m-0 p-0 border-0 flex flex-col gap-3">
             <legend className="text-[15px] font-semibold m-text mb-1">{title}</legend>
             <p className="m-0 text-[13px] m-text-3">{hint || 'Kart, görevlerin yüzdelerinin ortalamasını gösterir. Ayrıntılı durum boşsa kategori yüzdesi kullanılır. Boş bırakılırsa projenin ilerleme modeli kullanılır.'}</p>
-            <div className="grid gap-2 grid-cols-3">
+            <div className={`grid gap-2 ${categories.length > 3 ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'}`}>
                 {categories.map(category => (
                     <div key={category} className="min-w-0">
                         <ProgressPercentInput label={CATEGORY_LABELS[category]} value={value?.categories?.[category]}
@@ -221,7 +225,7 @@ export const ProgressWeightsEditor = ({ project, workflow, value, onChange, hint
                     </div>
                 </details>
             )}
-            {(value?.categories || value?.statuses) && <button type="button" className="m-btn m-btn-plain self-start" onClick={() => onChange(undefined)}>Varsayılan yüzdelere dön</button>}
+            {(value?.categories || value?.statuses) && <button type="button" className="m-btn m-btn-plain self-start" onClick={() => onChange(undefined)}>{resetLabel}</button>}
         </fieldset>
     );
 };
@@ -283,6 +287,23 @@ export const WidgetSettings: React.FC<{
                         </div>
                     </Field>
                 )}
+
+                {w.type === 'pocScore' && (() => {
+                    const cats = pocCategories(project.tasks, categoryPrefixOf(project.poc));
+                    const scope = cfg.pocScope?.length ? cfg.pocScope : defaultPocScope(project);
+                    const toggle = (c: string) => setCfg({ pocScope: scope.includes(c) ? scope.filter(x => x !== c) : [...scope, c] });
+                    return (
+                        <fieldset className="m-0 p-0 border-0 flex flex-col gap-2">
+                            <legend className="text-[15px] font-semibold m-text mb-1">Olası skorun kapsamı</legend>
+                            <p className="m-0 text-[13px] m-text-3">Seçilen kategorilerdeki maddeler tamamlanmış sayılır. Boş bırakılırsa proje ayarındaki kapsam (Proje ayarları › PoC skoru) kullanılır.</p>
+                            {cats.length === 0 && <p className="m-0 text-[13px] m-text-3">Projede planlama kategorisi etiketi yok.</p>}
+                            <div className="flex flex-wrap gap-2">
+                                {cats.map(c => <label key={c} className="m-pill flex items-center gap-2 text-[14px]"><input type="checkbox" checked={scope.includes(c)} onChange={() => toggle(c)} />{categoryName(c)}</label>)}
+                            </div>
+                            {cfg.pocScope?.length ? <button type="button" className="m-btn m-btn-plain self-start" onClick={() => setCfg({ pocScope: undefined })}>Proje ayarındaki kapsamı kullan</button> : null}
+                        </fieldset>
+                    );
+                })()}
 
                 {(w.type === 'breakdown' || w.type === 'milestones' || w.type === 'team') && (
                     <DimPicker id="ws-dim" label={w.type === 'milestones' ? 'Kilometre taşları neye göre' : w.type === 'team' ? 'Gruplama' : 'Neye göre kırılsın'} value={cfg.dim} tasks={project.tasks} onChange={d => setCfg({ dim: d })} />

@@ -23,6 +23,7 @@ Excel güncellendikçe aynı dosyayı yeniden aktarın ve hedef olarak mevcut pr
 | EMS / İstemci / Test / Dizin (gün) | Efor (gün). En çok eforu olan ekip görevin birimi olur. Efor Kaynağı bir CR'ı gösteriyorsa CR eforu bağlı maddelere eşit bölünür. |
 | Atanan (kişi) | Kaynak: ilk kişi. Birden çok kişi varsa hepsi notta listelenir. |
 | MS, Önem, PoC Sonucu, Güncel Sonuç, Rapor 5.1 | Etiketler (MS'ler renkli) |
+| Önem Kademesi, Öncelik (puan), CR kırılımı | Etiket aileleri: "Kademe: 2", "Öncelik puanı: 7,5", "CR: CR-05" (filtre, kırılım, çapraz tablo) |
 | Rapordaki tespit, beklenen sonuç, test notu, sorular, aksiyon planı, MS notu, iş kodu | Görev notu |
 | Hedef Tarih · Başlangıç · Kapanış | Termin · ilk başlama · kapanış damgası |
 | Epic Listesi (EP-01…EP-08) | İş paketleri. Görevin epic'i CR Listesi kırılımından bulunur. |
@@ -31,10 +32,19 @@ Excel güncellendikçe aynı dosyayı yeniden aktarın ve hedef olarak mevcut pr
 | Milestone → Başlangıç tarihi | Proje başlangıcı |
 | GİB rapor ve toplantı çıktıları | Müşteri istekleri (PY'ye özel alan; görevlere dönüştürülebilir) |
 | Giriş (MS0/MS1, öncelik tanımları) | Proje kartı sözlüğü (haftalık rapor AI'sının bağlamı) |
-| Test Kalemleri | PoC skoru ve zorunlu açık. Önizlemede ve denetim günlüğünde görünür. |
+| Test Kalemleri | Projenin PoC test listesi (tamamı, göreve dönüşmeyenler dahil). Skor bundan ve görevlerin Jira durumundan her an hesaplanır. |
 | Öncelikli Bulgular → Olası Etki | Görev notu ("Olası etki") |
-| Aralık Teslimi · Aralık Sonrası Teslim | Etiket ("Aralık teslimi" / "Aralık sonrası teslim") ve not: alt küme, karar kaynağı, sunumdaki başlık, toplantı notu |
-| GİB'den Yanıt Beklenenler | Etiket "GİB yanıtı bekleniyor" ve not: yanıt durumu ve açıklama |
+| Aralık Teslimi · Aralık Sonrası Teslim · GİB'den Yanıt Beklenenler | Planlama kategorisi etiketi (aşağıda) ve not: alt küme, karar kaynağı, sunumdaki başlık, toplantı notu, yanıt durumu |
+| GİB'den Yanıt Beklenenler | Ayrıca "GİB yanıtı bekleniyor" etiketi |
+
+**Planlama kategorileri** ("Planlama:" etiket ailesi; yalnız etiket ve filtre, sıraları yoktur):
+
+| Etiket | Kural |
+|---|---|
+| Planlama: Aralık 2026 | "Aralık Teslimi" sayfası; alt kümesi "Dahil edilmeye çalışılacak" olanlar hariç |
+| Planlama: GİB netleştirme | "Aralık Sonrası Teslim" alt kümesi 3 (Müşteri ile iletişime geçilecek) + "GİB'den Yanıt Beklenenler" (Aralık planında olmayanlar) |
+| Planlama: Müşteri sonrası | "Aralık Sonrası Teslim" alt kümesi 2 (GİB'in ilk teslimat sonrası talebi) |
+| Planlama: Proje ekibi | "Aralık Sonrası Teslim" alt kümesi 1 (Proje ekibi kısıtı) + Aralık "Dahil edilmeye çalışılacak" |
 
 Excel'deki formül sütunlarının (Sorumlu, Epic, İş Kodu, İlerleme) değerleri dosyada kayıtlı olmayabilir. Bu yüzden aktarım bunları ham girdilerden yeniden hesaplar. Sütunlar başlık adıyla bulunur; yerleri değişse de okunur. Dashboard, Milestone (başlangıç tarihi dışında), Rehber, EMS Sprintler ve Sayfa1 sayfaları aktarılmaz: bunlar türetilmiş görünümler ya da karalama notlarıdır. Uygulama aynı bilgiyi kendi ekranlarında hesaplar.
 
@@ -58,6 +68,46 @@ Aktarımın önerdiği ayar ("Excel takibi önerisi"): durum, atanan, termin, ha
 **Kişiler:** "Jira'daki atanan kişileri … otomatik ekle" açıkken (aktarımda açık gelir) Jira'daki atananlar, Veri Havuzu'nda yoksa e-postalarıyla kişi olarak açılır. Proje ekibinde yoksa da kaynak olarak eklenir; birimleri, görevlerinde en sık geçen birimdir. Aynı kişi ikinci kez açılmaz.
 
 Eşitleme elle ya da proje ayarındaki aralıkla otomatik çalışır (uygulama açıkken). Her eşitleme denetim günlüğüne yazılır: güncellenen, kapanan, Jira'ya yazılan kayıtlar, çakışmalar ve eklenen kişiler. Kod: [`utils/planning/jiraFieldSync.ts`](../utils/planning/jiraFieldSync.ts), [`utils/planning/jiraPeople.ts`](../utils/planning/jiraPeople.ts).
+
+## PoC skoru
+
+Skor Excel aktarımında bir kez değil, proje verisinden her an hesaplanır. Dashboard bileşeni, zamanlanmış rapor ve GİB raporu sunumu aynı hesabı kullanır ([`utils/gibPoc.ts`](../utils/gibPoc.ts)).
+
+Her test GİB puanından başlar ve kalan açığı, bağlı görevin (`gib-<Test No>`) son Jira eşitlemesindeki durumuna PY'nin girdiği katsayı (k) kadar kapatır:
+
+- Test puanı: p = b + (1 − b) · k
+- Skor = 100 · Σ w·p / Σ w (w: Zorunlu 3, Olması beklenen 2, İsteğe bağlı 1)
+- b: Güncel Sonuç varsa o, yoksa PoC sonucu (karşılandı 1, kısmen 0,5, karşılanmadı 0)
+- Değerlendirilmemiş testler (test edilemedi, üreticiye sorulacak, değerlendirme dışı) paydada yoktur; varsayılan kurala göre madde tamamlanınca (k = 1) 1 puanla girer.
+
+| Skor | Başlangıç | Katsayı | Ne için |
+|---|---|---|---|
+| İlk | Yalnız GİB PoC sonucu | 0 | GİB raporundaki referans |
+| Doğrulanmış | Güncel Sonuç, yoksa PoC sonucu | 0 | GİB'in yeniden test edip kabul ettiği durum |
+| Bugün | Doğrulanmış ile aynı | Son Jira durumu × k | Sunumdaki "Bugün" |
+| Olası | Bugün ile aynı | Seçilen kapsamdaki maddeler 1 | "Aralık sonrası" gibi senaryolar |
+
+**Kategori katkısı**: Olası kapsamın dışındaki her kategorinin katkısı, kalan açığın (100 − Olası) o kategorideki eksik ağırlıklı puan payıdır. Hesap kategorilerin sırasına bağlı değildir. "Tek başına" katkı (yalnız o kategori eklenseydi) ipucunda gösterilir; bu değerler toplanmaz.
+
+**Ayarlar** (Proje ayarları › PoC skoru):
+- **Süreç katsayısı**: her Jira durum kategorisine ya da ayrıntılı duruma 0–100 (k × 100). Ayrıntılı durum kategoriden önce gelir. Boşsa yalnız Tamamlandı = 1. İptal edilen madde 0 sayılır.
+- **Değerlendirilmemiş testler**: tamamlanınca paydaya girer (varsayılan) ya da GİB yeniden değerlendirene kadar girmez.
+- **Olası skorun kapsamı**: bir ya da birden çok planlama kategorisi (varsayılan: Aralık 2026).
+
+**Güncel kalma**: her Jira eşitlemesinde (elle, otomatik ya da asistandan) son eşitleme zamanı, "PoC skoru" ve "Zorunlu açık madde" göstergelerinin günlük ölçümü ve günlük ilerleme ölçümündeki PoC skoru yazılır. Raporlar "Bugün" skorunun hangi tarihteki Jira verisine dayandığını gösterir. Excel yeniden aktarılınca test listesi yenilenir; PY'nin skor ayarları korunur.
+
+**Çıktılar**:
+- Dashboard › **PoC skoru ve katkılar**: İlk, Doğrulanmış, Bugün, Olası ve katkı köprüsü. Kategoriye tıklayınca maddeler açılır.
+- Rapor otomasyonu › **PoC skoru** bölümü: dört skor, önceki ölçüme göre fark, Jira verisinin tarihi, katkılar, dönemde durumu değişen maddeler.
+- **GİB raporu (PPTX)** (PoC bileşeninde): kapak, ilk değerlendirme ve sonuç dağılımı, bugün ve olası skor, başlık bazında kapsam maddeleri, kategoriler ve katkılar, yöntem.
+
+Kontrol değerleri (İlk %40,51 · Doğrulanmış %45,76 · Olası (Aralık 2026) %87,06 · katkılar +6,17 / +3,32 / +3,45) gerçek Excel ile [`utils/gibPoc.control.test.ts`](../utils/gibPoc.control.test.ts) testinde denetlenir:
+
+```bash
+GIB_XLSX=/yol/GIB_PoC_Bulgu_Takip_lv.xlsx npx vitest run utils/gibPoc.control.test.ts
+```
+
+Kapsam dışı: Başkanlık (TÜBİTAK) gereksinim seti ayrı faza bırakıldı.
 
 ## Ekip tahsisi ve Jira
 

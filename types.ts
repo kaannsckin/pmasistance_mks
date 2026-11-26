@@ -219,7 +219,7 @@ export interface ProjectRoleDef {
 // ---------------------------------------------------------------- Rapor otomasyonu
 
 /** Zamanlanmış rapordaki bölümler (sırasıyla) */
-export type ReportBlockKey = 'progress' | 'activity' | 'bugs' | 'overdue' | 'sprint' | 'milestones' | 'teams' | 'blockers' | 'risks';
+export type ReportBlockKey = 'progress' | 'poc' | 'activity' | 'bugs' | 'overdue' | 'sprint' | 'milestones' | 'teams' | 'blockers' | 'risks';
 
 /**
  * Zamanlanmış proje raporu: seçilen periyotta (TR saati) Teams, Slack, Notion
@@ -256,6 +256,10 @@ export interface ProgressSnapshot {
   total: number;
   open: number;
   bugsOpen: number;
+  /** PoC "Bugün" skoru (0–100); proje PoC test listesi taşıyorsa */
+  poc?: number;
+  /** PoC skorunun dayandığı son Jira eşitlemesi (ISO) */
+  pocSyncAt?: string;
 }
 
 // ---------------------------------------------------------------- Kural setleri (otomasyon)
@@ -881,6 +885,8 @@ export interface JiraSyncSettings {
   fields?: Partial<Record<JiraSyncFieldId, JiraSyncDirection>>;
   /** Jira'daki atanan kişiler Veri Havuzu'na ve proje ekibine otomatik eklensin mi */
   autoPeople?: boolean;
+  /** Son başarılı eşitlemenin zamanı (ISO); PoC "Bugün" skoru bu ana dayanır */
+  lastSyncAt?: string;
 }
 
 /** Eşitlenebilen alanlar (uygulama ↔ Jira) */
@@ -910,6 +916,7 @@ export type DashboardWidgetType =
   | 'jiraBottlenecks' // Jira durum süreleri ve değişiklik sayıları
   | 'effortStatus'  // Jira tahmini, kalan süre ve gerçekleşen efor
   | 'activity'      // son değişiklikler
+  | 'pocScore'      // PoC skoru: İlk · Doğrulanmış · Bugün · Olası ve kategori katkıları
   | 'note';         // serbest not
 
 /** Gruplama boyutu; labels: bir etiket ailesi (önek, ör. "MS") ya da seçilen etiketler */
@@ -957,6 +964,8 @@ export interface DashboardWidgetConfig {
   progressWeights?: DashboardProgressWeights;
   /** kpi: projedeki gösterge */
   kpiId?: string;
+  /** pocScore: Olası skorun kapsamı (etiketler); boşsa proje PoC ayarı */
+  pocScope?: string[];
   /** note: metin */
   text?: string;
   limit?: number;
@@ -1000,6 +1009,51 @@ export interface ProjectKpi {
   note?: string;
 }
 
+/**
+ * Müşteri PoC test kalemi (ör. GİB "Test Kalemleri" sayfası). Göreve
+ * dönüşmeyen (karşılanmış, değerlendirme dışı) testler de saklanır; skorun
+ * paydası ve sonuç dağılımları bunlardan yeniden hesaplanır. Test, görevine
+ * `gib-<Test No>` kimliğiyle bağlanır.
+ */
+export interface PocTestItem {
+  testNo: string;
+  area?: string;
+  /** Zorunlu · Olması beklenen · İsteğe bağlı */
+  importance: string;
+  /** Ağırlık (Zorunlu 3, Olması beklenen 2, İsteğe bağlı 1) */
+  weight: number;
+  /** Müşterinin ilk değerlendirmesi (ham metin: Karşılandı, Kısmen karşılandı …) */
+  pocResult: string;
+  /** Müşterinin yeniden test edip verdiği güncel sonuç (Genel Liste "Güncel Sonuç") */
+  currentResult?: string;
+  /** Bağlı görevin kimliği; verilmezse `gib-<Test No>` */
+  taskId?: string;
+}
+
+/** PoC skor modeli ayarları (PY girer) */
+export interface PocScoreSettings {
+  /**
+   * Süreç katsayısı k: Jira durum kategorisi ya da ayrıntılı Jira durumu
+   * başına 0–100 (k × 100). Ayrıntılı durum kategoriden önce gelir. Boşsa
+   * yalnız Tamamlandı = 100.
+   */
+  coefficients?: DashboardProgressWeights;
+  /** Değerlendirilmemiş testler: k = 1 olunca paydaya 1 puanla girer (varsayılan) ya da hiç girmez */
+  unevaluated?: 'whenComplete' | 'never';
+  /** Olası skorun kapsamı: bu etiketlerden birini taşıyan maddeler tamamlanmış sayılır */
+  scopeLabels?: string[];
+  /** Planlama kategorisi etiket ailesi (varsayılan "Planlama:") */
+  categoryPrefix?: string;
+}
+
+export interface ProjectPoc {
+  tests: PocTestItem[];
+  importedAt?: string;
+  /** Aktarılan dosyanın adı */
+  source?: string;
+  settings?: PocScoreSettings;
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -1028,6 +1082,8 @@ export interface Project {
   dashboard?: DashboardLayout;
   /** Projeye özel göstergeler (ör. PoC skoru): elle girilir ya da aktarımla güncellenir, geçmişiyle */
   kpis?: ProjectKpi[];
+  /** Müşteri PoC test listesi ve skor modeli (GİB PoC skoru) */
+  poc?: ProjectPoc;
   risks?: Risk[];
   pestelItems?: PestelItem[]; // PESTEL dış çevre analizi
   swotItems?: SwotItem[]; // SWOT stratejik analizi

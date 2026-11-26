@@ -12,6 +12,7 @@ import { buildWorkforce } from '../../../utils/workforce';
 import { groupTimeTracking, taskTimeTracking, TimeTrackingGroup, totalTimeTracking } from '../../../utils/timeTracking';
 import { Icon } from '../icons';
 import { rowSep } from '../ui';
+import { PocScoreWidget } from './PocScoreWidget';
 
 /** Bileşen çizimleri: her biri süzülmüş veriden hesaplar, yalnız gösterir */
 
@@ -762,6 +763,7 @@ export const WidgetBody: React.FC<{ w: DashboardWidget; env: WidgetEnv }> = ({ w
         case 'jiraBottlenecks': return <JiraBottlenecks tasks={tasks} env={env} />;
         case 'effortStatus': return <EffortStatusWidget tasks={tasks} env={env} />;
         case 'activity': return <ActivityWidget w={w} tasks={tasks} env={env} />;
+        case 'pocScore': return <PocScoreWidget w={w} env={env} />;
         case 'note': return <NoteWidget w={w} />;
     }
 };
@@ -788,6 +790,7 @@ export const widgetTitle = (w: DashboardWidget, project: Project): string => {
         case 'jiraBottlenecks': return 'Jira darboğazları';
         case 'effortStatus': return 'Efor durumu';
         case 'activity': return 'Son değişiklikler';
+        case 'pocScore': return 'PoC skoru';
         case 'note': return 'Not';
     }
 };

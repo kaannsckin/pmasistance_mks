@@ -1,11 +1,12 @@
 import type { Person, ProgressSnapshot, Project, ProjectRoleDef, ReportBlockKey, ReportSchedule, Task, TaskStatus } from '../types';
 import { progressOf } from './progress.js';
+import { computePocScores, pct as pocPct, pocCoefficient, pocSnapshotValue, signedPoints, syncLabel, testTaskId } from './gibPoc.js';
 
 /**
  * Rapor otomasyonu: zamanlanmış proje ilerleme raporu (Teams, Slack, Notion,
  * e-posta). Saf ve yaprak modül: tarayıcı (yedek gönderici) ve sunucu
  * (Vercel cron, bulut verisi) aynı içeriği üretir. Çalışma zamanında yalnız
- * progress modülüne bağlıdır.
+ * progress ve gibPoc (PoC skoru) modüllerine bağlıdır.
  */
 
 const DAY = 86_400_000;
@@ -20,6 +21,7 @@ const ts = (iso?: string) => (iso ? new Date(iso).getTime() : NaN);
 
 export const BLOCK_LABELS: Record<ReportBlockKey, string> = {
     progress: 'İlerleme ve günlük fark',
+    poc: 'PoC skoru (İlk, Doğrulanmış, Bugün, Olası) ve kategori katkıları',
     activity: 'Dönemde olanlar (biten, yeni, ilerleyen)',
     bugs: 'Hatalar (açılan / kapanan, oran %)',
     overdue: 'Geciken işler',
@@ -72,13 +74,15 @@ export const describeSchedule = (s: Pick<ReportSchedule, 'cadence' | 'weekday' |
 const scopeTasks = (project: Pick<Project, 'tasks'>, fixVersion?: string): Task[] =>
     fixVersion ? project.tasks.filter(t => t.fixVersion && norm(t.fixVersion) === norm(fixVersion)) : project.tasks;
 
-/** Günlük ölçüm: rapordaki "önceki rapora göre" farkı bundan hesaplanır */
-export const progressSnapshot = (project: Pick<Project, 'tasks' | 'progressModel'>, now: Date, fixVersion?: string): ProgressSnapshot => {
+/** Günlük ölçüm: rapordaki "önceki rapora göre" farkı bundan hesaplanır (PoC verisi varsa Bugün skoru da) */
+export const progressSnapshot = (project: Pick<Project, 'tasks' | 'progressModel'> & Partial<Pick<Project, 'poc' | 'jiraSync'>>, now: Date, fixVersion?: string): ProgressSnapshot => {
     const tasks = scopeTasks(project, fixVersion);
     const p = progressOf(tasks, project.progressModel);
+    const poc = fixVersion ? undefined : pocSnapshotValue(project);
     return {
         day: trClock(now).day, pct: p.pct, done: p.done, total: p.total, open: p.total - p.done,
         bugsOpen: tasks.filter(t => t.issueType === 'bug' && t.status !== DONE).length,
+        ...(poc || {}),
     };
 };
 
@@ -139,7 +143,7 @@ const currentSprintOf = (project: Project, tasks: Task[], now: Date) => {
     return { n, from, to, list, name: project.settings?.sprintNames?.[n] || `Sprint ${n}`, daysLeft: Math.max(0, Math.ceil((to.getTime() - now.getTime()) / DAY)) };
 };
 
-const BLOCK_ORDER: ReportBlockKey[] = ['progress', 'activity', 'bugs', 'overdue', 'sprint', 'milestones', 'teams', 'blockers', 'risks'];
+const BLOCK_ORDER: ReportBlockKey[] = ['progress', 'poc', 'activity', 'bugs', 'overdue', 'sprint', 'milestones', 'teams', 'blockers', 'risks'];
 
 export const buildReport = (project: Project, s: Pick<ReportSchedule, 'name' | 'blocks' | 'fixVersion' | 'note' | 'cadence'>, ctx: ReportContext): BuiltReport => {
     const now = ctx.now;
@@ -165,6 +169,26 @@ export const buildReport = (project: Project, s: Pick<ReportSchedule, 'name' | '
                     `${snap.done} / ${snap.total} kayıt tamamlandı${prev ? ` (${signed(snap.done - prev.done)})` : ''}`,
                     `Açık iş: ${snap.open}${prev ? ` (${signed(snap.open - prev.open)})` : ''}`,
                     `Yöntem: ${p.weighted ? 'durum yüzdeleri' : 'yalnız tamamlanan'}${p.basis === 'effort' ? ', efor ağırlıklı' : ''}`,
+                ],
+            });
+        }
+        if (b === 'poc') {
+            const sc = computePocScores(project);
+            if (!sc) { sections.push({ title: 'PoC skoru', summary: 'Projede PoC test listesi yok (Excel aktarımıyla gelir)', lines: [] }); continue; }
+            const prev = ctx.previous?.poc;
+            const scopeName = sc.scope.map(l => l.replace(/^[^:]*:\s*/, '')).join(' + ') || 'kapsam';
+            const byTask = new Map(project.tasks.map(t => [t.id, t]));
+            const linked = new Set((project.poc?.tests || []).map(testTaskId));
+            // Dönemde durumu değişen PoC maddeleri (skora etkisi katsayıdan)
+            const moved = [...linked].map(id => byTask.get(id)).filter((t): t is Task => !!t && (t.statusLog || []).some(c => inPeriod(c.at)));
+            sections.push({
+                title: 'PoC skoru',
+                summary: `Bugün ${pocPct(sc.today)}${prev !== undefined ? ` (önceki ölçüm ${pocPct(prev)}, ${signedPoints(sc.today - prev)} puan)` : ''} · Jira verisi: ${syncLabel(sc.syncAt)}`,
+                lines: [
+                    `İlk ${pocPct(sc.initial)} · Doğrulanmış ${pocPct(sc.verified)} · Bugün ${pocPct(sc.today)} · Olası (${scopeName}) ${pocPct(sc.possible)}`,
+                    `Zorunlu açık madde: ${sc.mandatoryOpen}`,
+                    ...(sc.contributions.length ? [`Kalan açık (${signedPoints(100 - sc.possible)} puan): ${sc.contributions.map(c => `${c.name} ${signedPoints(c.value)}`).join(' · ')}`] : []),
+                    ...moved.slice(0, 6).map(t => `• ${keyOf(t)} ${t.name}: ${statusOf(t)} (k ${num(pocCoefficient(t, project.poc?.settings), 2)})`),
                 ],
             });
         }

@@ -5,6 +5,18 @@ buradan alır (`.github/workflows/exe.yml`).
 
 ## Yayımlanmamış
 
+**GİB PoC skoru: Jira'dan her an üretilen rapor**
+- **Test listesi saklanır**: Excel aktarımı Test Kalemleri'nin tamamını (göreve dönüşmeyen karşılanmış ve değerlendirme dışı testler dahil) projeye yazar. Skorun paydası ve sonuç dağılımları (ör. 238 test: 47 / 28 / 163) yeniden hesaplanabilir.
+- **Dört skor**: İlk (GİB PoC sonucu), Doğrulanmış (Güncel Sonuç ile), Bugün (görevin son Jira eşitlemesindeki durumu × süreç katsayısı) ve Olası (seçilen kapsamdaki maddeler tamamlanmış sayılır). Test puanı p = b + (1 − b) · k.
+- **Süreç katsayısı**: Proje ayarları › PoC skoru'nda her Jira durumuna 0–1 katsayı girilir (ör. Testte 0,7). Ayrıntılı durum kategoriden önce gelir. Değerlendirilmemiş testlerin paydaya girme kuralı ve Olası skorun kapsamı da burada seçilir.
+- **Planlama kategorileri**: aktarım "Planlama: Aralık 2026 / GİB netleştirme / Müşteri sonrası / Proje ekibi" etiketlerini teslim sayfalarının alt kümelerinden üretir (128 / 22 / 9 / 13). Kategoriler yalnız etiket ve filtredir; katkı hesabı sıradan bağımsızdır, katkıların toplamı 100 − Olası'dır.
+- **Öncelik boyutları**: "Kademe: N", "Öncelik puanı: X" (8 ile 7,5 ayrı kalır) ve "CR: CR-NN" etiketleri; filtre, kırılım ve çapraz tabloda kullanılır.
+- **Jira eşitlemesi**: PoC projesinde her eşitleme son eşitleme zamanını, "PoC skoru" ve "Zorunlu açık madde" göstergelerinin ölçümünü ve günlük ilerleme ölçümündeki PoC skorunu yazar. Excel yeniden aktarılmadan skor güncel kalır.
+- **Dashboard**: "PoC skoru ve katkılar" bileşeni dört skoru ve kalan açığın kategorilere dağılımını (katkı köprüsü) gösterir; PoC şablonuna planlama kategorisi × önem ve kapsam maddeleri başlık bazında eklendi.
+- **Zamanlanmış rapor**: yeni "PoC skoru" bölümü: dört skor, önceki ölçüme göre fark, Jira verisinin tarihi, kategori katkıları ve dönemde durumu değişen PoC maddeleri.
+- **GİB raporu sunumu**: PoC bileşeninden **GİB raporu (PPTX)**: kapak, ilk değerlendirme ve sonuç dağılımı, bugün ve olası skor, başlık bazında kapsam, kategoriler ve katkılar, yöntem.
+- Kontrol değerleri için `utils/gibPoc.control.test.ts` (gerçek Excel'in yolu `GIB_XLSX` ile verilince çalışır). Başkanlık (TÜBİTAK) gereksinim seti ayrı faza bırakıldı.
+
 **Asistan: kişisel hafıza, odaklı tarama, kısa yanıt**
 - **Hafıza belgesi (hafiza.md)**: Üslup (hitap, yazım tarzı, yanıt uzunluğu), Tercihler, Notlar ve Arşiv bölümleri. Belge panelde düzenlenir, `.md` olarak indirilir ve yüklenir. Notlar her soruda yalnız ilgili olanlarla (en çok 6) asistana gider. Notun ağırlığı 30 günlük yarı ömürle azalır (önemli notlarda 90 gün); 6 aydan eski notlar arşive iner ve taranmaz. `Anahtar: değer` biçimli yeni satır eskisinin yerini alır. `/hafiza` ve `/uslup` komutları eklendi. Eski hafıza notları Tercihler'e taşınır. Ayrıntı: [docs/ASISTAN_HAFIZA.md](docs/ASISTAN_HAFIZA.md).
 - **Odaklı araç seçimi**: her soruda yalnız ilgili araç grupları gönderilir. Eksik grubu model `arac_ac` ile açar. Ölçüm setinde istek başına araç sayısı ortalama 47'den 14'e indi, kapsama %100.

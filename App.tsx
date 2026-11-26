@@ -1,6 +1,6 @@
 
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { View, Task, Resource, TaskStatus, Note, CustomerRequest, Objective, Project, Person, WorkspaceData, RagStatus, ProjectStatus, UserRole, PlanLockStatus, WorkPackage, UiStyle, ModernTheme, ColorMode, PermissionKey, EstimateLogEntry, JiraSyncSettings, ReleasePlan, GoldenItem, EvalRun, ModelEvalRun, BoardConfig, ProjectScheme, WorkflowConfig, TransitionRule, ProjectComponent, ProjectVersion, ProjectRoleDef, AutomationRule, ReportSchedule } from './types';
+import { View, Task, Resource, TaskStatus, Note, CustomerRequest, Objective, Project, Person, WorkspaceData, RagStatus, ProjectStatus, UserRole, PlanLockStatus, WorkPackage, UiStyle, ModernTheme, ColorMode, PermissionKey, EstimateLogEntry, JiraSyncSettings, ReleasePlan, GoldenItem, EvalRun, ModelEvalRun, BoardConfig, ProjectScheme, WorkflowConfig, TransitionRule, ProjectComponent, ProjectVersion, ProjectRoleDef, AutomationRule, ReportSchedule, PocScoreSettings } from './types';
 import { INITIAL_TASKS, INITIAL_RESOURCES, INITIAL_OBJECTIVES } from './constants';
 import {
   WORKSPACE_STORAGE_KEY,
@@ -84,6 +84,8 @@ import DataHealthModal from './components/DataHealthModal';
 import AuditLogModal from './components/AuditLogModal';
 import GibImportModal, { GibImportChoice } from './components/GibImportModal';
 import { applyGibImport, formatPercent, GibImportPackage } from './utils/gibFindings';
+import { hasPocData } from './utils/gibPoc';
+import { refreshPocKpis } from './utils/gibPocKpi';
 import { CommandItem } from './components/CommandPalette';
 import { AssistantProvider } from './components/assistant/AssistantContext';
 import { dialogProblem, DIALOGS, resolveScreen, SCREENS, UiCommand, UiEnv, UiResult } from './utils/ai/uiActions';
@@ -1505,7 +1507,7 @@ const App: React.FC = () => {
     });
   }, [updateWorkspace]);
   // Projenin bileşen ve sürüm listeleri: proje sahibi ya da admin (görev başvurularıyla birlikte)
-  const handleSaveProjectLists = useCallback((projectId: string, patch: { components: ProjectComponent[]; versions: ProjectVersion[]; tasks: Task[]; roleMembers?: Project['roleMembers']; progressModel?: Project['progressModel'] }, summary: string) => {
+  const handleSaveProjectLists = useCallback((projectId: string, patch: { components: ProjectComponent[]; versions: ProjectVersion[]; tasks: Task[]; roleMembers?: Project['roleMembers']; progressModel?: Project['progressModel']; pocSettings?: PocScoreSettings | null }, summary: string) => {
     updateWorkspace(ws => {
       const project = ws.projects.find(p => p.id === projectId);
       const who = identityOf(ws);
@@ -1516,7 +1518,17 @@ const App: React.FC = () => {
         const n = byId.get(t.id);
         return n && (JSON.stringify(n.components) !== JSON.stringify(t.components) || n.fixVersion !== t.fixVersion) ? { ...t, components: n.components, fixVersion: n.fixVersion } : t;
       });
-      const next = { ...ws, projects: ws.projects.map(p => (p.id === projectId ? { ...p, components: patch.components, versions: patch.versions, roleMembers: patch.roleMembers, progressModel: patch.progressModel, tasks, updatedAt: new Date().toISOString() } : p)) };
+      const now = new Date();
+      const nextProject = (p: Project): Project => {
+        let out: Project = { ...p, components: patch.components, versions: patch.versions, roleMembers: patch.roleMembers, progressModel: patch.progressModel, tasks, updatedAt: now.toISOString() };
+        // PoC skor modeli (katsayı, kapsam) değişince gösterge yeni katsayıyla ölçülür
+        if (patch.pocSettings !== undefined && out.poc) {
+          const { settings: _old, ...rest } = out.poc;
+          out = refreshPocKpis({ ...out, poc: { ...rest, ...(patch.pocSettings ? { settings: patch.pocSettings } : {}) } }, trClock(now).day, 'Skor modeli değişti');
+        }
+        return out;
+      };
+      const next = { ...ws, projects: ws.projects.map(p => (p.id === projectId ? nextProject(p) : p)) };
       return appendAudit(next, 'config.update', `"${project.name}" proje ayarları: ${summary} · ${patch.components.length} bileşen, ${patch.versions.length} sürüm`, projectId);
     });
   }, [updateWorkspace]);
@@ -1658,7 +1670,7 @@ const App: React.FC = () => {
     updateWorkspace(ws => {
       const project = ws.projects.find(p => p.id === projectId);
       if (!project || !canEditProjectContent(ws, identityOf(ws), projectId)) return ws;
-      const next = { ...ws, projects: ws.projects.map(p => (p.id === projectId ? { ...p, jiraSync: settings, jiraProjectKey: p.jiraProjectKey || settings.projectKey, updatedAt: new Date().toISOString() } : p)) };
+      const next = { ...ws, projects: ws.projects.map(p => (p.id === projectId ? { ...p, jiraSync: { ...settings, ...(p.jiraSync?.lastSyncAt ? { lastSyncAt: p.jiraSync.lastSyncAt } : {}) }, jiraProjectKey: p.jiraProjectKey || settings.projectKey, updatedAt: new Date().toISOString() } : p)) };
       return appendAudit(next, 'data.import', `"${project.name}" · Jira eşitleme ayarı: ${sourceLabel(settings) || 'yalnız bağlı açık kayıtlar'}${settings.discover ? ', yeni kayıtlar eklenir' : ''}, otomatik ${settings.autoMinutes ? `${settings.autoMinutes} dk` : 'kapalı'}`, projectId);
     });
   }, [updateWorkspace]);
@@ -1674,12 +1686,22 @@ const App: React.FC = () => {
       const ppl = syncSettings?.autoPeople ? ensureJiraPeople(ws.people, project.resources, tasks, issues) : null;
       const peopleChanged = !!ppl && (ppl.people !== ws.people || ppl.resources !== project.resources);
       const tasksChanged = JSON.stringify(tasks) !== JSON.stringify(project.tasks);
-      if (!tasksChanged && !peopleChanged) return ws;
+      // PoC projesi: "Bugün" skorunun dayandığı eşitleme zamanı, gösterge ölçümü ve günlük ölçüm (dönem eşitlemesi hariç)
+      const pocSync = hasPocData(project) && !!project.jiraSync && !settings;
+      if (!tasksChanged && !peopleChanged && !pocSync) return ws;
+      const nowDate = new Date();
+      let updatedProject: Project = { ...project, tasks, ...(ppl ? { resources: ppl.resources } : {}), updatedAt: nowDate.toISOString() };
+      if (pocSync) {
+        updatedProject = { ...updatedProject, jiraSync: { ...updatedProject.jiraSync!, lastSyncAt: nowDate.toISOString() } };
+        updatedProject = refreshPocKpis(updatedProject, trClock(nowDate).day, `Jira eşitlemesi (${label})`);
+        updatedProject = { ...updatedProject, progressSnapshots: withSnapshot(updatedProject.progressSnapshots, progressSnapshot(updatedProject, nowDate)) };
+      }
       const next = {
         ...ws,
         ...(ppl ? { people: ppl.people } : {}),
-        projects: ws.projects.map(p => (p.id === projectId ? { ...p, tasks, ...(ppl ? { resources: ppl.resources } : {}), updatedAt: new Date().toISOString() } : p)),
+        projects: ws.projects.map(p => (p.id === projectId ? updatedProject : p)),
       };
+      if (!tasksChanged && !peopleChanged) return next; // yalnız eşitleme damgası: denetim günlüğüne yazılmaz
       const parts = [
         `${r.updated} güncellenen${r.closed ? ` (${r.closed} kapanan)` : ''}, ${r.added} yeni kayıt`,
         pushed?.done.length ? `Jira'ya yazılan: ${pushed.done.map(d => d.key).slice(0, 10).join(', ')}${pushed.done.length > 10 ? '…' : ''}` : '',
