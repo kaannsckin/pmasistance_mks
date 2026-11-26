@@ -9,6 +9,8 @@ import {
 import { WB_TEMPLATE_BY_KEY } from '../../../utils/whiteboard/templates';
 import { Icon, IconName } from '../icons';
 import { NodeEnv, PEN_COLORS, penPath, WbNodeBody } from './WbNodeView';
+import { changedSnap, currentSnap, initials, ItemSnap, restoreSnap, snapIsEmpty, WbPeer } from '../../../utils/whiteboard/collab';
+import type { LiveRect } from './useWhiteboardCollab';
 import { PaletteAction, WbPalette } from './WbPalette';
 
 /**
@@ -87,17 +89,30 @@ export interface WhiteboardEditorProps {
     actor: string;
     /** Oylamada kişi anahtarı */
     voter: string;
-    onCommit: (b: Whiteboard, newTasks?: Task[]) => void;
+    /** Değişiklik: yeni hâl, değişikliğin dayandığı hâl (eş zamanlı birleştirme farkı buna göre alır) */
+    onCommit: (next: Whiteboard, prev: Whiteboard, newTasks?: Task[]) => void;
     onViewTask: (t: Task) => void;
+    /** Eş zamanlı düzenleme: diğer katılımcılar ve canlı sinyaller */
+    collab?: EditorCollab;
 }
 
-const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ board, project, canEdit, actor, voter, onCommit, onViewTask }) => {
+export interface EditorCollab {
+    peers: WbPeer[];
+    live: Record<string, LiveRect>;
+    cursor: (x: number, y: number) => void;
+    presence: (p: { selection?: string[]; editing?: string | null; cursor?: { x: number; y: number } | null }) => void;
+    liveMove: (nodes: { id: string; x: number; y: number; w: number; h: number }[]) => void;
+}
+
+const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ board, project, canEdit, actor, voter, onCommit, onViewTask, collab }) => {
     const [doc, setDoc] = useState<Whiteboard>(board);
     const docRef = useRef(doc);
     docRef.current = doc;
     const committed = useRef<Whiteboard>(board);
-    const past = useRef<Whiteboard[]>([]);
-    const future = useRef<Whiteboard[]>([]);
+    // Geçmiş: yalnız bu kişinin dokunduğu öğelerin önceki hâli (başkalarının değişikliği geri alınmaz)
+    const past = useRef<ItemSnap[]>([]);
+    const future = useRef<ItemSnap[]>([]);
+    const [following, setFollowing] = useState<string | null>(null);
 
     const viewport = useRef<HTMLDivElement>(null);
     // Kayıtlı görünüm (bu cihazda); yoksa ilk çizimde içeriğe sığdırılır
@@ -117,7 +132,10 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ board, project, can
     const [interaction, setInteractionState] = useState<Interaction | null>(null);
     const interactionRef = useRef<Interaction | null>(null);
     const setInteraction = (i: Interaction | null) => { interactionRef.current = i; setInteractionState(i); };
-    const [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
+    const [editing, setEditingState] = useState<{ id: string; text: string } | null>(null);
+    // Düzenleme durumu ayrıca eşzamanlı tutulur: Esc + odak kaybı aynı düzenlemeyi iki kez bitirmesin
+    const editingRef = useRef<{ id: string; text: string } | null>(null);
+    const setEditing = (v: { id: string; text: string } | null) => { editingRef.current = v; setEditingState(v); };
     const editRef = useRef<HTMLTextAreaElement | HTMLInputElement | null>(null);
     const [palette, setPalette] = useState<{ at: Pt; board: Pt; mode: 'insert' | 'reference' } | null>(null);
     const [votePanel, setVotePanel] = useState(false);
@@ -141,26 +159,61 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ board, project, can
     const env: NodeEnv = { project, tasksById, onViewTask, voter, votingActive: !!doc.voting?.active, showVotes: !!doc.voting && !doc.voting.active };
 
     // ---- kayıt ve geçmiş
-    const commit = useCallback((next: Whiteboard, prev: Whiteboard = docRef.current, newTasks?: Task[]) => {
+    // Yeni eklenip hemen yazılan nesne: ilk yazı oluşturmayla tek geri alma adımıdır
+    const fresh = useRef<Set<string>>(new Set());
+    const commit = useCallback((next: Whiteboard, prev: Whiteboard = docRef.current, newTasks?: Task[], record = true) => {
         if (next === prev && !newTasks) return;
-        past.current.push(prev);
-        if (past.current.length > 100) past.current.shift();
-        future.current = [];
+        const snap = changedSnap(prev, next);
+        if (record && !snapIsEmpty(snap)) {
+            past.current.push(snap);
+            if (past.current.length > 100) past.current.shift();
+            future.current = [];
+            fresh.current = new Set();
+        }
+        committed.current = next;
+        docRef.current = next;
+        setDoc(next);
+        onCommit(next, prev, newTasks);
+    }, [onCommit]);
+    const step = (from: React.MutableRefObject<ItemSnap[]>, to: React.MutableRefObject<ItemSnap[]>) => {
+        const s = from.current.pop();
+        if (!s) return;
+        const cur = docRef.current;
+        to.current.push(currentSnap(cur, s));
+        const next = restoreSnap(cur, s);
         committed.current = next;
         setDoc(next);
-        onCommit(next, newTasks);
-    }, [onCommit]);
-    const undo = () => { const p = past.current.pop(); if (!p) return; future.current.push(docRef.current); committed.current = p; setDoc(p); onCommit(p); };
-    const redo = () => { const n = future.current.pop(); if (!n) return; past.current.push(docRef.current); committed.current = n; setDoc(n); onCommit(n); };
+        onCommit(next, cur);
+    };
+    const undo = () => step(past, future);
+    const redo = () => step(future, past);
 
-    // Dışarıdan gelen değişiklik (bulut eşitlemesi, başka sekme): etkileşim yoksa alınır
+    // Dışarıdan gelen değişiklik (başka kişi, başka sekme): sürükleme sürerken bekler, bitince alınır.
+    // Yazarken de alınır: düzenlenen metin ayrı tutulur, kaybolmaz.
     useEffect(() => {
-        if (board === committed.current || interactionRef.current || editing) return;
+        if (board === committed.current || interactionRef.current) return;
         committed.current = board;
         setDoc(board);
-    }, [board, editing]);
+    }, [board, interaction]);
 
     useEffect(() => { try { localStorage.setItem(viewKey(board.id), JSON.stringify(view)); } catch { /* özel pencere */ } }, [view, board.id]);
+
+    // ---- eş zamanlı: seçim / düzenleme varlığı, takip
+    const collabRef = useRef(collab);
+    collabRef.current = collab;
+    useEffect(() => { collabRef.current?.presence({ selection, editing: editing?.id || null }); }, [selection, editing?.id]);
+    const peers = collab?.peers || [];
+    const editingBy = useMemo(() => new Map(peers.filter(p => p.editing).map(p => [p.editing!, p])), [peers]);
+    const followed = following ? peers.find(p => p.client === following) : undefined;
+    useEffect(() => {
+        // Takip edilen kişinin imleci ekranın ortasında tutulur
+        if (!followed?.cursor) return;
+        const r = viewport.current?.getBoundingClientRect();
+        if (!r) return;
+        const c = followed.cursor;
+        setView(v => ({ ...v, x: r.width / 2 - c.x * v.zoom, y: r.height / 2 - c.y * v.zoom }));
+    }, [followed?.cursor?.x, followed?.cursor?.y]);
+    useEffect(() => { if (following && !followed) setFollowing(null); }, [following, followed]);
 
     // ---- koordinatlar
     const toBoard = (clientX: number, clientY: number): Pt => {
@@ -205,6 +258,7 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ board, project, can
         const onWheel = (e: WheelEvent) => {
             if ((e.target as HTMLElement).closest('[data-ui]')) return;
             e.preventDefault();
+            setFollowing(null);
             const r = el.getBoundingClientRect();
             if (e.ctrlKey || e.metaKey) zoomAt(Math.exp(-e.deltaY * 0.01), { x: e.clientX - r.left, y: e.clientY - r.top });
             else setView(v => ({ ...v, x: v.x - (e.shiftKey && !e.deltaX ? e.deltaY : e.deltaX), y: v.y - (e.shiftKey && !e.deltaX ? 0 : e.deltaY) }));
@@ -227,6 +281,7 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ board, project, can
     // ---- nesne oluşturma
     const place = (nodes: WbNode[], edges: WbEdge[] = [], newTasks?: Task[]) => {
         commit(addNodes(docRef.current, nodes, edges), docRef.current, newTasks);
+        fresh.current = new Set(nodes.map(n => n.id));
         setSelection(nodes.filter(n => n.type !== 'section' || nodes.length === 1).map(n => n.id));
         setEdgeSel(null);
     };
@@ -243,11 +298,13 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ board, project, can
     };
     const startEdit = (n: WbNode) => {
         if (!canEdit || !EDITABLE.has(n.type) || n.locked) return;
+        const other = editingBy.get(n.id);
+        if (other) { setToast(`${other.name} bu nesneyi düzenliyor.`); return; }
         setSelection([n.id]);
         setEditing({ id: n.id, text: n.text || '' });
     };
     const finishEdit = (then?: (b: Whiteboard) => void) => {
-        const e = editing;
+        const e = editingRef.current;
         if (!e) return;
         setEditing(null);
         setPalette(p => (p?.mode === 'reference' ? null : p));
@@ -256,7 +313,9 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ board, project, can
         let next = docRef.current;
         if (n.type === 'text' && !e.text.trim()) next = removeNodes(next, [n.id]);
         else if ((n.text || '') !== e.text) next = updateNodes(next, [n.id], { text: e.text });
-        commit(next);
+        const amend = fresh.current.has(n.id);
+        commit(next, docRef.current, undefined, !amend);
+        fresh.current = new Set();
         then?.(next);
     };
 
@@ -279,6 +338,7 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ board, project, can
         const target = e.target as HTMLElement;
         if (target.closest('[data-ui]') || target.closest('[data-editing]')) return;
         viewport.current?.focus({ preventScroll: true });
+        if (following) setFollowing(null);
         if (editing) finishEdit();
         if (palette) setPalette(null);
         const p = toBoard(e.clientX, e.clientY);
@@ -336,6 +396,7 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ board, project, can
         const it = interactionRef.current;
         const p = toBoard(e.clientX, e.clientY);
         lastPointer.current = p;
+        collab?.cursor(p.x, p.y);
         if (!it) return;
         switch (it.kind) {
             case 'pan': setView(v => ({ ...v, x: it.vx + e.clientX - it.sx, y: it.vy + e.clientY - it.sy })); break;
@@ -343,7 +404,11 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ board, project, can
                 const dx = p.x - it.start.x, dy = p.y - it.start.y;
                 if (!it.moved && Math.hypot(dx, dy) * view.zoom < 3) return;
                 it.moved = true;
-                setDoc(moveNodes(it.base, it.ids, dx, dy));
+                const moved = moveNodes(it.base, it.ids, dx, dy);
+                setDoc(moved);
+                // Başkaları sürüklemeyi canlı görür (kalıcı kayıt bırakınca)
+                const set = new Set(it.ids.slice(0, 60));
+                collab?.liveMove(moved.nodes.filter(n => set.has(n.id)).map(n => ({ id: n.id, x: n.x, y: n.y, w: n.w, h: n.h })));
                 break;
             }
             case 'resize': {
@@ -352,6 +417,7 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ board, project, can
                 let w = Math.max(40, o.w + p.x - it.start.x), h = Math.max(30, o.h + p.y - it.start.y);
                 if (keep || e.shiftKey) { const k = Math.max(w / o.w, h / o.h); w = Math.max(30, o.w * k); h = Math.max(30, o.h * k); }
                 setDoc(updateNodes(it.base, [o.id], { w: Math.round(w), h: Math.round(h) }));
+                collab?.liveMove([{ id: o.id, x: o.x, y: o.y, w: Math.round(w), h: Math.round(h) }]);
                 break;
             }
             case 'marquee': {
@@ -401,6 +467,7 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ board, project, can
                 if (from && Math.hypot(it.cur.x - (from.x + from.w / 2), it.cur.y - (from.y + from.h / 2)) > 80) {
                     const n = createAt('sticky', it.cur);
                     commit(addEdge(addNodes(docRef.current, [n]), it.from, n.id));
+                    fresh.current = new Set([n.id]);
                     setSelection([n.id]);
                     setEditing({ id: n.id, text: '' });
                 }
@@ -417,7 +484,8 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ board, project, can
     };
 
     const onDoubleClick = (e: React.MouseEvent) => {
-        const target = e.target as HTMLElement;
+        // İşaretçi yakalandığı için olay tuvale yönlenir: hedef imlecin altındaki öğedir
+        const target = (document.elementFromPoint(e.clientX, e.clientY) || e.target) as HTMLElement;
         if (target.closest('[data-ui]') || target.closest('[data-editing]')) return;
         const node = nodeAtTarget(target);
         const edgeEl = target.closest('[data-edge-id]') as HTMLElement | null;
@@ -540,7 +608,7 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ board, project, can
             commit(r.board); setSelection(r.ids); return;
         }
         if ((k === 'Delete' || k === 'Backspace') && canEdit) { e.preventDefault(); removeSelection(); return; }
-        if (k === 'Escape') { setSelection([]); setEdgeSel(null); setTool('select'); return; }
+        if (k === 'Escape') { setSelection([]); setEdgeSel(null); setTool('select'); setFollowing(null); return; }
         if (k === 'Enter' && selection.length === 1) { const n = byId.get(selection[0]); if (n) { e.preventDefault(); startEdit(n); } return; }
         if (k.startsWith('Arrow') && canEdit && selection.length) {
             e.preventDefault();
@@ -624,6 +692,8 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ board, project, can
     // ---- çizim
     const nodes = drawOrder(doc.nodes);
     const selSet = new Set(selection);
+    const remoteSel = new Map<string, WbPeer>();
+    peers.forEach(p => (p.selection || []).forEach(id => { if (!remoteSel.has(id)) remoteSel.set(id, p); }));
     const selBounds = boundsOf(selectedNodes);
     const single = selectedNodes.length === 1 ? selectedNodes[0] : undefined;
     const timer = timerLeft(doc);
@@ -657,6 +727,7 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ board, project, can
                         const src = b.nodes.find(x => x.id === n.id) || n;
                         const nn = makeNode('sticky', src.x + src.w + 24, src.y, { color: src.color, w: src.w, h: src.h, author: actor });
                         commit(addNodes(b, [nn]), b);
+                        fresh.current = new Set([nn.id]);
                         setSelection([nn.id]);
                         setEditing({ id: nn.id, text: '' });
                     });
@@ -697,18 +768,29 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ board, project, can
             <div className="absolute left-0 top-0" style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.zoom})`, transformOrigin: '0 0' }}>
                 {nodes.map(n => {
                     const sel = selSet.has(n.id);
+                    // Başkasının sürüklediği nesne canlı konumunda çizilir
+                    const lv = !interaction ? collab?.live[n.id] : undefined;
+                    const r = lv || n;
+                    const otherSel = !sel ? remoteSel.get(n.id) : undefined;
+                    const otherEdit = editingBy.get(n.id);
+                    const ring = sel ? `${2 * sw}px solid #2563eb` : otherEdit ? `${2 * sw}px solid ${otherEdit.color}` : otherSel ? `${2 * sw}px dashed ${otherSel.color}` : lv ? `${2 * sw}px dashed ${lv.color}` : undefined;
                     return (
                         <div key={n.id} data-node-id={n.id}
                             className="absolute"
                             style={{
-                                left: n.x, top: n.y, width: Math.max(1, n.w), height: Math.max(1, n.h),
+                                left: r.x, top: r.y, width: Math.max(1, r.w), height: Math.max(1, r.h),
                                 pointerEvents: n.type === 'pen' ? 'none' : undefined,
-                                outline: sel ? `${2 * sw}px solid #2563eb` : undefined,
-                                outlineOffset: sel ? 3 * sw : undefined,
+                                outline: ring,
+                                outlineOffset: ring ? 3 * sw : undefined,
                                 borderRadius: n.type === 'section' ? 16 : 6,
+                                transition: lv ? 'left 60ms linear, top 60ms linear' : undefined,
                             }}>
                             <WbNodeBody n={n} env={env} editor={editor(n)} />
                             {n.locked && <span className="absolute -top-3 -left-3 w-6 h-6 rounded-full grid place-items-center m-surface shadow m-text-3" title="Kilitli"><Icon name="lock" size={12} /></span>}
+                            {otherEdit && (
+                                <span className="absolute left-0 top-0 whitespace-nowrap px-2 py-0.5 rounded-md text-white text-[12px] font-semibold pointer-events-none"
+                                    style={{ background: otherEdit.color, transform: `translateY(-100%) scale(${sw})`, transformOrigin: '0 100%' }}>{otherEdit.name} yazıyor…</span>
+                            )}
                         </div>
                     );
                 })}
@@ -761,6 +843,16 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ board, project, can
                         background: 'rgba(37,99,235,0.08)', border: `${sw}px solid #2563eb`,
                     }} />
                 )}
+                {/* Diğer katılımcıların imleçleri (yakınlaştırmadan bağımsız boyut) */}
+                {peers.filter(p => p.cursor).map(p => (
+                    <div key={p.client} className="absolute pointer-events-none" style={{ left: p.cursor!.x, top: p.cursor!.y, transform: `scale(${sw})`, transformOrigin: '0 0', transition: 'left 80ms linear, top 80ms linear', zIndex: 5 }}>
+                        <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" style={{ filter: 'drop-shadow(0 1px 1px rgba(0,0,0,.3))' }}>
+                            <path d="M4 3l7.5 18 2.6-7.4L21.5 11z" fill={p.color} stroke="#fff" strokeWidth="1.6" strokeLinejoin="round" />
+                        </svg>
+                        <span className="absolute left-4 top-5 whitespace-nowrap px-2 py-0.5 rounded-full text-white text-[12px] font-semibold shadow" style={{ background: p.color }}>{p.name}</span>
+                    </div>
+                ))}
+
                 {interaction?.kind === 'create' && (interaction.type === 'section' || interaction.type === 'shape') && (
                     <div className="absolute pointer-events-none rounded-xl" style={{
                         left: Math.min(interaction.start.x, interaction.cur.x), top: Math.min(interaction.start.y, interaction.cur.y),
@@ -834,6 +926,30 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ board, project, can
                     </div>
                 );
             })()}
+
+            {/* Sol üst: panodaki diğer katılımcılar (tıkla: takip et) */}
+            {peers.length > 0 && (
+                <div data-ui className="absolute top-3 left-3 z-20 flex items-center gap-2" onPointerDown={e => e.stopPropagation()}>
+                    <div className="flex -space-x-2">
+                        {peers.slice(0, 8).map(p => (
+                            <button key={p.client} type="button" onClick={() => setFollowing(f => (f === p.client ? null : p.client))}
+                                title={`${p.name}${following === p.client ? ' · takibi bırak' : ' · takip et'}`} aria-label={`${p.name} kişisini ${following === p.client ? 'takibi bırak' : 'takip et'}`}
+                                className="w-9 h-9 rounded-full grid place-items-center text-white text-[12.5px] font-bold border-2 cursor-pointer shadow"
+                                style={{ background: p.color, borderColor: following === p.client ? '#111' : 'var(--wb-canvas, #fff)' }}>
+                                {initials(p.name)}
+                            </button>
+                        ))}
+                        {peers.length > 8 && <span className="w-9 h-9 rounded-full grid place-items-center m-surface m-text-2 text-[12px] font-semibold border-2 shadow" style={{ borderColor: 'var(--wb-canvas, #fff)' }}>+{peers.length - 8}</span>}
+                    </div>
+                    {followed && (
+                        <span className="inline-flex items-center gap-2 h-9 pl-3 pr-1 rounded-xl text-white text-[13px] font-semibold shadow" style={{ background: followed.color }}>
+                            {followed.name} takip ediliyor
+                            <button type="button" aria-label="Takibi bırak" className="w-7 h-7 rounded-lg border-0 cursor-pointer grid place-items-center" style={{ background: 'rgba(255,255,255,0.2)', color: '#fff' }} onClick={() => setFollowing(null)}><Icon name="x" size={14} /></button>
+                        </span>
+                    )}
+                </div>
+            )}
+            {followed && <div className="absolute inset-0 pointer-events-none rounded-2xl" style={{ boxShadow: `inset 0 0 0 3px ${followed.color}` }} />}
 
             {/* Sağ üst: oturum ve yakınlaştırma */}
             <div data-ui className="absolute top-3 right-3 z-20 flex flex-wrap items-center justify-end gap-2" onPointerDown={e => e.stopPropagation()}>

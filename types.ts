@@ -1085,6 +1085,8 @@ export interface WbNode {
   points?: number[];
   /** Metin boyutu (px); yoksa türün varsayılanı */
   fontSize?: number;
+  /** Katman sırası (büyük üstte; yoksa 0, eşitlikte eklenme sırası) */
+  z?: number;
   /** Damga (emoji) */
   stamp?: string;
   /** Görsel (küçültülmüş data URL) */

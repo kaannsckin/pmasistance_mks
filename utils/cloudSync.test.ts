@@ -155,6 +155,19 @@ describe('proje satırları ve değişiklik planı', () => {
         expect(plan.coreChanged).toBe(true);
     });
 
+    it('panolar proje satırına yazılmaz (pano değişikliği gönderim tetiklemez); çekimde yerel pano önbelleği korunur', () => {
+        const ws = buildWs();
+        const board = { id: 'wb1', name: 'Retro', nodes: [], edges: [], createdAt: '2026-11-26T10:00:00Z', updatedAt: '2026-11-26T10:00:00Z' };
+        const withBoard = { ...ws, projects: [{ ...ws.projects[0], whiteboards: [board] }, ws.projects[1]] };
+        expect(splitWorkspaceDoc(withBoard).projects[0].whiteboards).toBeUndefined();
+        const synced = { projectVersions: Object.fromEntries(ws.projects.map(p => [p.id, 1])), ...syncedHashes(ws) };
+        expect(planPush(withBoard, synced).upserts).toEqual([]);
+        const { core, privateDoc, projects } = splitWorkspaceDoc(ws);
+        const pulled = mergeWorkspaceDoc(withBoard, core as Partial<WorkspaceData>, privateDoc, projects);
+        expect(pulled.projects[0].whiteboards).toEqual([board]);
+        expect(pulled.projects[1].whiteboards).toBeUndefined();
+    });
+
     it('içerik özeti kararlı ve değişikliğe duyarlı', () => {
         expect(contentHash({ a: 1, b: [1, 2] })).toBe(contentHash({ a: 1, b: [1, 2] }));
         expect(contentHash({ a: 1, b: [1, 2] })).not.toBe(contentHash({ a: 1, b: [2, 1] }));

@@ -2,7 +2,7 @@
 
 Her projenin **Whiteboard** sekmesinde (modern arayüz) istediğiniz kadar pano açılır. Pano FigJam'i örnek alır: sonsuz tuval, yapışkan not, şekil, bağlantı, bölüm, kalem, damga ve görsel. Farkı, projenin kayıtlarına bağlı olmasıdır: `/` ile görev, sprint, iş paketi, risk ve sürüm kart olarak eklenir. Kartlar içeriği her çizimde projeden okur; Jira eşitlemesiyle durum, atanan ve termin güncel kalır.
 
-Panolar projeyle birlikte saklanır ve bulutla eşitlenir. Düzenleme proje içeriğini düzenleyebilenlere açıktır; diğerleri panoyu görür, kaydırır ve yakınlaştırır.
+Panolar **eş zamanlı düzenlenir**: aynı panodaki herkes birbirinin imlecini, seçimini ve değişikliklerini anında görür (aşağıda). Düzenleme proje içeriğini düzenleyebilenlere açıktır; diğerleri panoyu canlı izler, kaydırır ve yakınlaştırır.
 
 ## Proje kayıtlarını bağlamak
 
@@ -35,6 +35,29 @@ Genel: Ctrl+Z / Ctrl+Shift+Z geri al / yinele, Ctrl+D çoğalt, Ctrl+C / Ctrl+V 
 
 Seçim araç çubuğu: renk, şekil, yazı boyutu, göreve dönüştür, görevlerini ekle, öne getir, arkaya gönder, kilitle, çoğalt, sil. Kilitli nesne taşınmaz ve silinmez.
 
+## Eş zamanlı düzenleme
+
+| Ne | Nasıl görünür |
+|---|---|
+| Katılımcılar | Tuvalin sol üstünde avatarlar; pano sekmesinde renkli noktalar; üst çubukta "Canlı" durumu ve kimlerin açık olduğu |
+| İmleçler | Her katılımcının imleci adı ve rengiyle |
+| Seçim | Başkasının seçtiği nesne onun renginde kesik çerçeveyle |
+| Yazma | Başkasının düzenlediği nesnede "<ad> yazıyor…" etiketi; o nesne bu sırada sizde düzenlemeye açılmaz |
+| Sürükleme | Başkasının sürüklediği nesne bırakılmadan canlı hareket eder |
+| Takip | Avatara tıklayınca o kişinin imleci ekranın ortasında tutulur (FigJam'deki gibi). Tuvali kaydırınca, tıklayınca ya da Esc ile bırakılır. |
+
+**Birleştirme.** Pano bağımsız öğelerden oluşur: pano bilgisi (ad, oylama, zamanlayıcı), her nesne, her bağlantı ve her kişinin oyu. Her öğe "son yazan kazanır" kuralıyla ayrı birleşir. Farklı nesnelerde aynı anda çalışan kişiler birbirini ezmez, oylar kişi bazında toplanır. Aynı nota aynı anda yazmak, yazıyor kilidiyle önlenir.
+
+**Geri alma.** Ctrl+Z yalnız sizin değişikliklerinizi geri alır. Başkasının arada yaptığı değişiklik korunur. Yeni not ekleyip hemen yazdığınızda ekleme ve yazı tek adımda geri alınır.
+
+**Bağlantı.**
+- **Bulut bağlıysa:** Değişiklikler Supabase Realtime'ın özel kanalından anında iletilir ve `workspace_whiteboard_items` tablosunda öğe bazında saklanır.
+  - Kanala yalnız projeye erişen üyeler katılır; panoya yalnız projeyi düzenleyebilenler yazar.
+  - Panolar proje satırına yazılmaz, bu yüzden aynı panoda çalışmak proje sürüm çakışması doğurmaz.
+  - Panoyu sonradan açan kişi tablodan güncel hâli yükler.
+  - Bunun için [supabase/schema.sql](../supabase/schema.sql) yeniden çalıştırılmalıdır (bkz. [KURULUM](../supabase/KURULUM.md)).
+- **Bulut yoksa ya da tablo kurulmamışsa:** Aynı tarayıcıdaki sekmeler arasında canlıdır; pano projeyle birlikte cihazda saklanır. Üst çubuktaki durum etiketi hangi kipte olunduğunu söyler.
+
 ## Toplantı araçları
 
 - **Oylama**: kişi başına oy hakkı (1, 3, 5, 10) seçilerek başlatılır. Nota tıklayan oy verir, Alt + tık geri alır. Oylama sürerken herkes yalnız kendi oyunu görür; **Bitir** deyince toplamlar ve sıralı sonuç listesi görünür.
@@ -60,7 +83,8 @@ Yeniden adlandır (sekmeye çift tık da olur), çoğalt, özeti Markdown olarak
 
 ## Bu sürümde olmayanlar
 
-- Eş zamanlı düzenleme ve canlı imleçler: pano bulut eşitlemesiyle paylaşılır, aynı anda iki kişinin değişikliği birleştirilmez (son kaydeden kazanır).
+- Aynı notun metninde karakter düzeyinde birleştirme yok (aynı nota aynı anda yazma kilitle önlenir).
+- Çevrimdışı yapılan ve bulutta da değişmiş bir nesnenin değişikliği, yeniden bağlanınca buluttaki hâline bırakılır. Yalnız bulutta olmayan yeni nesneler ve panolar yüklenir.
 - Yorum dizileri, sesli görüşme, spotlight, AI ile pano üretme ve PNG / PDF dışa aktarma.
 
-Kod: [`utils/whiteboard/model.ts`](../utils/whiteboard/model.ts) (saf işlemler), [`utils/whiteboard/templates.ts`](../utils/whiteboard/templates.ts), [`components/modern/whiteboard/`](../components/modern/whiteboard/). Testler: [`utils/whiteboard/model.test.ts`](../utils/whiteboard/model.test.ts).
+Kod: [`utils/whiteboard/model.ts`](../utils/whiteboard/model.ts) (saf işlemler), [`utils/whiteboard/collab.ts`](../utils/whiteboard/collab.ts) (op'lar ve birleştirme), [`utils/whiteboard/transport.ts`](../utils/whiteboard/transport.ts) (Realtime / sekmeler arası iletim), [`utils/whiteboard/cloudStore.ts`](../utils/whiteboard/cloudStore.ts), [`utils/whiteboard/templates.ts`](../utils/whiteboard/templates.ts), [`components/modern/whiteboard/`](../components/modern/whiteboard/). Testler: [`utils/whiteboard/model.test.ts`](../utils/whiteboard/model.test.ts), [`utils/whiteboard/collab.test.ts`](../utils/whiteboard/collab.test.ts).

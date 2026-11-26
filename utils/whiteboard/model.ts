@@ -169,16 +169,26 @@ export const duplicateNodes = (b: Whiteboard, ids: string[], offset = 24): { boa
     return { board: addNodes(b, c.nodes, c.edges), ids: c.nodes.map(n => n.id) };
 };
 
-/** Öne / arkaya: dizideki sıra çizim sırasıdır */
+/**
+ * Öne / arkaya: nesnenin z değeri değişir (dizi sırası değil). Eş zamanlı
+ * düzenlemede her nesne ayrı birleştiği için sıra nesnenin kendi alanında tutulur.
+ */
 export const reorder = (b: Whiteboard, ids: string[], where: 'front' | 'back'): Whiteboard => {
     const set = new Set(ids);
-    const moving = b.nodes.filter(n => set.has(n.id));
-    const rest = b.nodes.filter(n => !set.has(n.id));
-    return touch({ ...b, nodes: where === 'front' ? [...rest, ...moving] : [...moving, ...rest] });
+    const zs = b.nodes.filter(n => !set.has(n.id)).map(n => n.z || 0);
+    const edge = where === 'front' ? Math.max(0, ...zs) + 1 : Math.min(0, ...zs) - 1;
+    // Seçilenlerin kendi aralarındaki sırası korunur
+    const moving = drawOrder(b.nodes).filter(n => set.has(n.id));
+    const zOf = new Map(moving.map((n, i) => [n.id, where === 'front' ? edge + i : edge - (moving.length - 1 - i)]));
+    return touch({ ...b, nodes: b.nodes.map(n => (zOf.has(n.id) ? { ...n, z: zOf.get(n.id) } : n)) });
 };
 
-/** Bölümler her zaman arkada çizilir (içerikleri üstte kalsın) */
-export const drawOrder = (nodes: WbNode[]): WbNode[] => [...nodes.filter(n => n.type === 'section'), ...nodes.filter(n => n.type !== 'section')];
+/** Çizim sırası: bölümler her zaman arkada; sonra z, eşitlikte eklenme sırası */
+export const drawOrder = (nodes: WbNode[]): WbNode[] => {
+    const idx = new Map(nodes.map((n, i) => [n.id, i]));
+    const by = (a: WbNode, b: WbNode) => (a.z || 0) - (b.z || 0) || idx.get(a.id)! - idx.get(b.id)!;
+    return [...nodes.filter(n => n.type === 'section').sort(by), ...nodes.filter(n => n.type !== 'section').sort(by)];
+};
 
 export const addEdge = (b: Whiteboard, from: string, to: string, style: WbEdge['style'] = 'arrow'): Whiteboard => {
     if (from === to || b.edges.some(e => e.from === from && e.to === to)) return b;

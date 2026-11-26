@@ -90,8 +90,15 @@ export const checkCloudConnection = async ({ url, anonKey }: CloudConnection, si
 // Belge ayırma / birleştirme (saf — test edilir)
 // ---------------------------------------------------------------------------
 
-/** Buluta giden proje: özel alanlar boşaltılmış */
-const sharedProject = (p: Project): Project => ({ ...p, notes: [], customerRequests: [] });
+/**
+ * Buluta giden proje: özel alanlar boşaltılmış. Panolar (whiteboard) proje
+ * satırına yazılmaz: öğe bazında `workspace_whiteboard_items` tablosunda eş
+ * zamanlı birleşir (aynı panoda çalışanlar proje sürüm çakışması yaşamasın).
+ */
+const sharedProject = (p: Project): Project => {
+    const { whiteboards: _wb, ...rest } = p;
+    return { ...rest, notes: [], customerRequests: [] };
+};
 
 export const splitWorkspaceDoc = (ws: WorkspaceData): { core: Record<string, unknown>; privateDoc: PrivateDoc; projects: Project[] } => {
     const privateDoc: PrivateDoc = { notes: {}, customerRequests: {} };
@@ -163,10 +170,13 @@ export const mergeWorkspaceDoc = (
     }
     const { projectOrder: _order, ...coreRest } = core;
     void _order;
+    // Panolar proje satırında gelmez: yerel önbellek korunur (güncel hâli pano tablosundan)
+    const localBoards = new Map(local.projects.filter(p => p.whiteboards?.length).map(p => [p.id, p.whiteboards!]));
     const projects = source.map(p => ({
         ...p,
         notes: privateDoc?.notes?.[p.id] || [],
         customerRequests: privateDoc?.customerRequests?.[p.id] || [],
+        ...(!p.whiteboards?.length && localBoards.has(p.id) ? { whiteboards: localBoards.get(p.id) } : {}),
     }));
     return normalizeWorkspace({
         ...coreRest,

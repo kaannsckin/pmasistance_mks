@@ -508,3 +508,104 @@ grant update (content, version) on public.assistant_memory to authenticated;
 drop trigger if exists assistant_memory_touch on public.assistant_memory;
 create trigger assistant_memory_touch before update on public.assistant_memory
     for each row execute function public.touch_updated_at();
+
+-- ---------------------------------------------------------------------------
+-- Whiteboard (FigJam tarzı proje panoları): eş zamanlı düzenleme.
+-- Her öğe ayrı satır: pano bilgisi (item_id 'meta'), nesne ('n:<id>'),
+-- bağlantı ('e:<id>'), oy ('v:<nesne>:<kişi>'). Sürüm (rev_t, rev_by) istemcinin
+-- karma mantıksal saatidir; tetikleyici yalnız daha yeni sürümü yazar (son
+-- yazan kazanır). Silme, deleted = true ile mezar taşıdır (geç gelen yazım
+-- silinen öğeyi diriltmesin). Panolar proje satırına yazılmaz: aynı panoda
+-- çalışan kişiler proje sürüm çakışması yaşamaz.
+-- Okuma: projeye erişen üyeler. Yazma: projeyi düzenleyebilenler (proje
+-- satırıyla aynı kural).
+-- ---------------------------------------------------------------------------
+create table if not exists public.workspace_whiteboard_items (
+    workspace_id uuid not null references public.workspaces(id) on delete cascade,
+    project_id text not null,
+    board_id text not null,
+    item_id text not null,
+    kind text not null check (kind in ('meta', 'node', 'edge', 'vote')),
+    data jsonb,
+    deleted boolean not null default false,
+    rev_t bigint not null,
+    rev_by text not null,
+    updated_at timestamptz not null default now(),
+    updated_by uuid default auth.uid(),
+    primary key (workspace_id, board_id, item_id),
+    constraint wb_item_ids check (char_length(board_id) between 1 and 100 and char_length(item_id) between 1 and 250 and char_length(rev_by) between 1 and 100),
+    -- Görsel nesneleri küçültülmüş data URL taşır; tek öğe en çok ~1,5 MB
+    constraint wb_item_size check (pg_column_size(data) <= 1500000)
+);
+create index if not exists workspace_whiteboard_items_project on public.workspace_whiteboard_items (workspace_id, project_id);
+
+create or replace function public.can_edit_workspace_whiteboard(ws uuid, project text)
+returns boolean language sql stable security definer set search_path = '' as $$
+    select public.can_edit_workspace_project(ws, project,
+        (select p.data->>'pmPersonId' from public.workspace_projects p where p.workspace_id = ws and p.project_id = project))
+$$;
+
+-- Son yazan kazanır: eski sürümlü güncelleme satırı değiştirmez; kimlik alanları sabit
+create or replace function public.whiteboard_item_lww()
+returns trigger language plpgsql as $$
+begin
+    if (new.rev_t, new.rev_by collate "C") <= (old.rev_t, old.rev_by collate "C") then
+        return null;
+    end if;
+    new.workspace_id = old.workspace_id;
+    new.project_id = old.project_id;
+    new.board_id = old.board_id;
+    new.item_id = old.item_id;
+    new.updated_at = now();
+    new.updated_by = auth.uid();
+    return new;
+end;
+$$;
+
+drop trigger if exists whiteboard_item_lww on public.workspace_whiteboard_items;
+create trigger whiteboard_item_lww before update on public.workspace_whiteboard_items
+    for each row execute function public.whiteboard_item_lww();
+
+alter table public.workspace_whiteboard_items enable row level security;
+
+drop policy if exists "wb_items_select" on public.workspace_whiteboard_items;
+create policy "wb_items_select" on public.workspace_whiteboard_items
+    for select using (public.can_access_workspace_project(workspace_id, project_id));
+
+drop policy if exists "wb_items_insert" on public.workspace_whiteboard_items;
+create policy "wb_items_insert" on public.workspace_whiteboard_items
+    for insert with check (public.can_edit_workspace_whiteboard(workspace_id, project_id));
+
+drop policy if exists "wb_items_update" on public.workspace_whiteboard_items;
+create policy "wb_items_update" on public.workspace_whiteboard_items
+    for update using (public.can_edit_workspace_whiteboard(workspace_id, project_id))
+    with check (public.can_edit_workspace_whiteboard(workspace_id, project_id));
+
+revoke all on public.workspace_whiteboard_items from anon;
+grant select, insert, update on public.workspace_whiteboard_items to authenticated;
+
+-- Canlı kanal (Supabase Realtime, özel kanal): konu 'wb:<çalışma alanı>:<proje>'.
+-- İmleç, varlık ve op yayını yalnız projeye erişen üyelere açık. Kalıcı yazım
+-- yukarıdaki tablodan (düzenleme yetkisiyle) geçer.
+create or replace function public.can_join_whiteboard_topic(topic text)
+returns boolean language plpgsql stable security definer set search_path = '' as $$
+declare
+    ws_text text := split_part(topic, ':', 2);
+    project text := substr(topic, char_length('wb:') + char_length(split_part(topic, ':', 2)) + 2);
+begin
+    if split_part(topic, ':', 1) <> 'wb' or ws_text !~* '^[0-9a-f-]{36}$' or project = '' then
+        return false;
+    end if;
+    return public.can_access_workspace_project(ws_text::uuid, project);
+end;
+$$;
+
+do $$
+begin
+    if to_regclass('realtime.messages') is not null then
+        execute 'drop policy if exists "wb_realtime_read" on realtime.messages';
+        execute 'create policy "wb_realtime_read" on realtime.messages for select to authenticated using (public.can_join_whiteboard_topic(realtime.topic()))';
+        execute 'drop policy if exists "wb_realtime_write" on realtime.messages';
+        execute 'create policy "wb_realtime_write" on realtime.messages for insert to authenticated with check (public.can_join_whiteboard_topic(realtime.topic()))';
+    end if;
+end $$;

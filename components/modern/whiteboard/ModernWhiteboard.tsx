@@ -4,6 +4,8 @@ import { addNodes, boardOutline, cloneNodes, createBoard } from '../../../utils/
 import { WB_TEMPLATES, WB_TEMPLATE_BY_KEY } from '../../../utils/whiteboard/templates';
 import { Icon, IconName } from '../icons';
 import WhiteboardEditor from './WhiteboardEditor';
+import { useWhiteboardCollab } from './useWhiteboardCollab';
+import { initials } from '../../../utils/whiteboard/collab';
 
 /**
  * Proje whiteboard'u (FigJam tarzı): projeye ait panolar, şablondan pano,
@@ -29,7 +31,9 @@ const ModernWhiteboard: React.FC<{
     onUpdateProject: (updater: (p: Project) => Project) => void;
     onViewTask: (t: Task) => void;
 }> = ({ project, canEdit, actor, voter, onUpdateProject, onViewTask }) => {
-    const boards = project.whiteboards || [];
+    // Panolar eş zamanlı düzenleme kancasından gelir (proje kaydı önbellek)
+    const collab = useWhiteboardCollab({ project, actor, canEdit, onUpdateProject });
+    const boards = collab.boards;
     const [activeId, setActiveId] = useState<string | null>(() => { try { return localStorage.getItem(activeKey(project.id)); } catch { return null; } });
     const active = boards.find(b => b.id === activeId) || boards[0];
     const [menu, setMenu] = useState<'new' | 'board' | null>(null);
@@ -51,36 +55,36 @@ const ModernWhiteboard: React.FC<{
         return () => document.removeEventListener('pointerdown', close);
     }, [menu]);
 
-    const saveBoards = useCallback((fn: (list: Whiteboard[]) => Whiteboard[], newTasks?: Task[]) => {
-        onUpdateProject(p => ({ ...p, whiteboards: fn(p.whiteboards || []), ...(newTasks?.length ? { tasks: [...p.tasks, ...newTasks] } : {}), updatedAt: new Date().toISOString() }));
-    }, [onUpdateProject]);
-
-    const onCommit = useCallback((b: Whiteboard, newTasks?: Task[]) => saveBoards(list => list.map(x => (x.id === b.id ? b : x)), newTasks), [saveBoards]);
+    const { commitBoard, setPresence } = collab;
+    const onCommit = useCallback((next: Whiteboard, prev: Whiteboard, newTasks?: Task[]) => commitBoard(next.id, prev, next, newTasks), [commitBoard]);
+    // Varlık: hangi panodayım (diğerleri sekmede ve tuvalde görür)
+    useEffect(() => { setPresence({ board: active?.id, selection: [], editing: null }); }, [active?.id, setPresence]);
+    useEffect(() => () => setPresence({ board: undefined }), [setPresence]);
 
     const create = (templateKey?: string) => {
         setMenu(null);
         const t = templateKey ? WB_TEMPLATE_BY_KEY.get(templateKey) : undefined;
         let b = createBoard(t ? t.label : `Pano ${boards.length + 1}`, new Date(), actor);
         if (t) { const built = t.build(project, { x: 0, y: 0 }); b = addNodes(b, built.nodes, built.edges); }
-        saveBoards(list => [...list, b]);
+        commitBoard(b.id, undefined, b);
         setActiveId(b.id);
     };
     const rename = (b: Whiteboard, name: string) => {
         setRenaming(null);
         const n = name.trim();
-        if (n && n !== b.name) saveBoards(list => list.map(x => (x.id === b.id ? { ...x, name: n, updatedAt: new Date().toISOString() } : x)));
+        if (n && n !== b.name) commitBoard(b.id, b, { ...b, name: n, updatedAt: new Date().toISOString() });
     };
     const duplicate = (b: Whiteboard) => {
         setMenu(null);
         const c = cloneNodes(b.nodes, b.edges, 0, 0);
         const copy = { ...createBoard(`${b.name} (kopya)`, new Date(), actor), nodes: c.nodes, edges: c.edges };
-        saveBoards(list => [...list, copy]);
+        commitBoard(copy.id, undefined, copy);
         setActiveId(copy.id);
     };
     const remove = (b: Whiteboard) => {
         setMenu(null);
         if (!window.confirm(`"${b.name}" panosu silinsin mi? Panodaki notlar ve çizimler silinir; bağlı görevler projede kalır.`)) return;
-        saveBoards(list => list.filter(x => x.id !== b.id));
+        commitBoard(b.id, b, undefined);
         setActiveId(boards.find(x => x.id !== b.id)?.id || null);
     };
     const copyOutline = async (b: Whiteboard) => {
@@ -148,6 +152,7 @@ const ModernWhiteboard: React.FC<{
                                 className={`h-9 px-3 rounded-xl border-0 cursor-pointer text-[14px] whitespace-nowrap max-w-[240px] truncate ${b.id === active?.id ? 'm-surface shadow-sm font-semibold m-text' : 'bg-transparent m-text-2 hover:m-fill-2'}`}
                                 onClick={() => setActiveId(b.id)} onDoubleClick={() => canEdit && setRenaming(b.id)}>
                                 {b.name}
+                                {collab.peers.some(p => p.board === b.id) && <span className="inline-flex ml-1.5 align-middle -space-x-1">{collab.peers.filter(p => p.board === b.id).slice(0, 3).map(p => <span key={p.client} className="w-2.5 h-2.5 rounded-full border" style={{ background: p.color, borderColor: 'var(--m-surface, #fff)' }} />)}</span>}
                             </button>
                     ))}
                 </div>
@@ -159,6 +164,11 @@ const ModernWhiteboard: React.FC<{
                 )}
                 <span className="flex-1" />
                 {copied && <span role="status" className="text-[13px] m-ink-ok">Pano özeti panoya kopyalandı</span>}
+                <span className="inline-flex items-center gap-2 h-9 px-3 rounded-xl m-fill-2 text-[13px] m-text-2" title={collab.info.detail}>
+                    <span className="w-2 h-2 rounded-full" style={{ background: collab.info.status === 'live' ? (collab.info.mode === 'cloud' ? '#16a34a' : '#ca8a04') : collab.info.status === 'error' ? '#dc2626' : '#a1a1aa' }} />
+                    {collab.info.mode === 'cloud' ? (collab.info.status === 'live' ? 'Canlı' : collab.info.status === 'error' ? 'Canlı bağlantı yok' : 'Bağlanıyor…') : collab.info.mode === 'local' ? 'Canlı (bu tarayıcı)' : 'Canlı kapalı'}
+                    {collab.peers.length > 0 && <span className="flex -space-x-1.5">{collab.peers.slice(0, 5).map(p => <span key={p.client} title={`${p.name}${p.board ? ` · ${boards.find(b => b.id === p.board)?.name || ''}` : ''}`} className="w-6 h-6 rounded-full grid place-items-center text-white text-[10.5px] font-bold border-2" style={{ background: p.color, borderColor: 'var(--m-surface, #fff)' }}>{initials(p.name)}</span>)}</span>}
+                </span>
                 {active && (
                     <div className="relative" data-wb-menu>
                         <button type="button" className="m-btn m-btn-gray !min-h-[36px] !px-3 text-[14px]" aria-haspopup="menu" aria-expanded={menu === 'board'} onClick={() => setMenu(m => (m === 'board' ? null : 'board'))}><Icon name="more" size={16} />Pano</button>
@@ -179,7 +189,14 @@ const ModernWhiteboard: React.FC<{
             <div className="relative" style={{ height: full ? 'calc(100vh - 80px)' : 'max(560px, calc(100vh - 300px))' }}>
                 {active && (
                     <WhiteboardEditor key={active.id} board={active} project={project} canEdit={canEdit} actor={actor} voter={voter}
-                        onCommit={onCommit} onViewTask={onViewTask} />
+                        onCommit={onCommit} onViewTask={onViewTask}
+                        collab={{
+                            peers: collab.peersOn(active.id),
+                            live: collab.liveOn(active.id),
+                            cursor: (x, y) => collab.sendCursor(active.id, x, y),
+                            presence: p => setPresence(p),
+                            liveMove: nodes => collab.sendLive(active.id, nodes),
+                        }} />
                 )}
             </div>
             {!full && <p className="m-0 text-[12.5px] m-text-3">
