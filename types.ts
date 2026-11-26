@@ -216,6 +216,84 @@ export interface ProjectRoleDef {
   description?: string;
 }
 
+// ---------------------------------------------------------------- Kural setleri (otomasyon)
+
+/**
+ * Otomasyon kuralı: tetikleyici → koşullar → eylemler. Görev değişince
+ * (elle, toplu, Jira eşitlemesi, asistan) ya da günlük zamanlamada çalışır.
+ * Örn. "Durum Çözüldü olduğunda ve atanan X ise → durumu Testte yap".
+ */
+export type AutomationTrigger =
+  /** Durum değişti; to/from boşsa her geçiş (iş akışı anahtarları) */
+  | { kind: 'status'; to?: string[]; from?: string[] }
+  | { kind: 'created' }
+  /** Bu alanlardan biri değişti */
+  | { kind: 'field'; fields: AutomationField[] }
+  /** Günde bir kez: koşula uyan açık görevler */
+  | { kind: 'schedule' };
+
+export type AutomationField =
+  | 'status' | 'fromStatus' | 'category' | 'assignee' | 'role' | 'unit' | 'component' | 'issueType' | 'priority'
+  | 'label' | 'fixVersion' | 'sprint' | 'effort' | 'dueInDays' | 'overdue' | 'resolution' | 'name';
+
+export type AutomationOp = 'eq' | 'neq' | 'in' | 'notIn' | 'contains' | 'notContains' | 'empty' | 'notEmpty' | 'gt' | 'lt';
+
+export interface AutomationCondition {
+  field: AutomationField;
+  op: AutomationOp;
+  value?: string | number | string[];
+}
+
+export interface AutomationGroup {
+  join: 'and' | 'or';
+  items: (AutomationCondition | AutomationGroup)[];
+}
+
+export type AutomationAction =
+  | { kind: 'setStatus'; status: string }
+  /** Kişi adı, 'none' (atamayı kaldır) ya da 'componentLead' (bileşen sorumlusu) */
+  | { kind: 'assign'; to: string }
+  | { kind: 'setPriority'; priority: Task['priority'] }
+  | { kind: 'setFixVersion'; version: string }
+  /** Sprint numarası ya da 'next' (bir sonraki sprint) */
+  | { kind: 'setSprint'; sprint: number | 'next' }
+  /** Bugünden N gün sonra ya da 'clear' */
+  | { kind: 'setDueDate'; days: number | 'clear' }
+  | { kind: 'addLabels'; labels: string[] }
+  | { kind: 'removeLabels'; labels: string[] }
+  | { kind: 'setResolution'; resolution: string }
+  | { kind: 'comment'; text: string }
+  /** assignee: atanan; role: proje rolü üyeleri; teams: Teams kanalı */
+  | { kind: 'notify'; to: 'assignee' | 'role' | 'teams'; roleId?: string; text?: string };
+
+export interface AutomationRule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  /** Arayüz kipi: basit (tek cümle) ya da ileri (gruplar, çok eylem) */
+  mode: 'simple' | 'advanced';
+  trigger: AutomationTrigger;
+  conditions?: AutomationGroup;
+  actions: AutomationAction[];
+  /** Durum, öncelik, termin, çözüm ve yorum Jira'daki kayda da yazılır */
+  writeToJira?: boolean;
+  createdAt: string;
+  updatedAt: string;
+  /** Zamanlanmış kural en son hangi gün çalıştı (YYYY-AA-GG) */
+  lastRunDay?: string;
+  runs?: number;
+  lastRunAt?: string;
+}
+
+export interface AutomationLogEntry {
+  at: string;
+  ruleId: string;
+  ruleName: string;
+  taskId: string;
+  taskKey?: string;
+  summary: string;
+}
+
 /** Projenin bileşeni (Jira "Component"): modül/alan; sorumlusu varsayılan atanan olabilir */
 export interface ProjectComponent {
   id: string;
@@ -898,6 +976,9 @@ export interface Project {
   roleMembers?: Record<string, string[]>; // Proje rolü → havuz kişi kimlikleri
   /** Durum yüzdeleriyle ilerleme (yoksa yalnız Tamamlandı %100) */
   progressModel?: ProjectProgressModel;
+  /** Kural setleri (otomasyon) ve son çalışmaları (en yeni sonda, en çok 200) */
+  automationRules?: AutomationRule[];
+  automationLog?: AutomationLogEntry[];
   /** Proje dashboard'unun varsayılan düzeni (PY kaydeder; kişisel düzeni olmayan herkes bunu görür) */
   dashboard?: DashboardLayout;
   /** Projeye özel göstergeler (ör. PoC skoru): elle girilir ya da aktarımla güncellenir, geçmişiyle */
