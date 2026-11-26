@@ -875,3 +875,18 @@ Linear karşılaştırması:
 5. GitHub webhook'ları ve GitHub App (bot kimliği), anlık eşitleme.
 6. "Yönetim brifi": orchestrator'ın oturum başı okumasını küçülten kısa özet.
 7. K'ya özel alanlar için istemci tarafı alan şifrelemesi (gerekirse).
+
+## Codex inceleme notları
+
+26 Kasım 2026 · Claude’un plan revizyonu için · İncelenen belge sürümü `f4a5e73`
+
+**Planın sahibi.** Ürün sahibi planı Claude’un hazırlayacağını belirtti. §0 ve F0 şu anda planı yazma ve commit etme görevini Codex’e veriyor. Uygulama öncesinde bu görev dağılımının netleşmesi gerekiyor.
+
+| İlgili gereksinim | Eksik veya riskli nokta |
+|---|---|
+| **G-11 · Lee verisinin gizliliği** | §8.2 okuma işlemlerinde mevcut entegrasyon yetkisini kullanıyor. Bu kontrol Supabase’de herhangi bir çalışma alanına üyeliği kabul ediyor. Paylaşılan dağıtımda başka bir üyenin Lee issue, yorum ve dosyalarına erişiminin engellendiğini gösteren kabul testi eksik. Ayrıca §8.2 yerel sürüme yazma istisnası tanırken §14 `none` kipinde koşulsuz 403 bekliyor. Yerel ve paylaşılan kurulumun beklenen sonuçları ayrı tarif edilmeli. [Mevcut yetki kontrolü](https://github.com/kaannsckin/pmasistance_mks/blob/eab6112521398fc329a3b54fe0b41abe5a9def86/server/ai/auth.ts#L45) |
+| **G-04 · İnsan kararının kaynağı** | Lee’nin gelen kutusu alıcıyı kontrol ediyor ve gönderen adını yorum metninden okuyor. Mesajın biçimini doğru çözmek, belirli kararı K’nın onayladığını doğrulamıyor. Lee tarafında hedef issue, kararın sürümü ve doğrulanabilir insan onayı eşleşmeden karar kaydına geçilmemeli. Bu, iki depoyu kapsayan bir kabul koşulu. [Lee gelen kutusu](https://github.com/kaannsckin/Lee/blob/a17869e3a1f3d50d94f18354ac4506a1665fa3ab/.claude/scripts/plan_loop.py#L383) |
+| **G-04/G-05 · Yinelenen veya yarım gönderim** | §8.3’te son 50 yorumu taramak, iki sekme aynı anda gönderdiğinde veya önceki yorum bu pencerenin dışında kaldığında tek teslimi garanti etmiyor. Issue yorumu başarıp gelen kutusu teslimi başarısız olabilir. Kabul testinde aynı karar kimliğiyle yeniden denemenin yalnız eksik adımı tamamladığı ve değişmiş bir etiketi ezmediği görülmeli. |
+| **G-01 · Görev kimliği ve ilerleme** | v3.7.0 birleştirme kodunu örnek girdilerle çalıştırdım. `durum:draft` → `ToDo` çıktı. Görünen anahtar `GH-412` iken `LEE-LOCAL-086` olarak değişince iki görev oluştu. `Done` ve “Yapılmayacak” çözümü verilen iptal kaydı %100 ilerleme gösterdi. Repo ve issue numarasıyla kalıcı eşleşme, taslak durumu ve iptalin teslim göstergesine etkisi ayrı kabul örnekleri gerektiriyor. [Jira birleştirmesi](https://github.com/kaannsckin/pmasistance_mks/blob/eab6112521398fc329a3b54fe0b41abe5a9def86/utils/planning/jiraImport.ts#L145) · [İlerleme hesabı](https://github.com/kaannsckin/pmasistance_mks/blob/eab6112521398fc329a3b54fe0b41abe5a9def86/utils/progress.ts#L20) |
+| **G-03/G-08 · 48 saatlik karar süresi** | F4’te `updated_at` üzerinden yeniden hesaplama her yeni yorumla son tarihi ileri taşıyabilir. Karar talebinin açılma anı veya bir kez kaydedilen ilk gözlem esas alınmalı. Yerel uygulama kapalıyken yeni kritik talep algılanmıyor. F8’de bildirimin hangi kurulumda ve ne zaman ulaşacağı açık olmalı. |
+| **G-07/G-09 · AI harcamasının görünürlüğü** | Ürün sahibi yazılımı AI ajanlarının geliştireceğini belirtti. Geliştirme bütçesi ajanların kullandığı abonelik kotası, ek kredi veya gerçekleşen API ücretiyle ifade edilmeli. Köprünün model çağrısı sıfır olsa da ajanların kodlama, inceleme, tekrar ve iletilen mesajı okuma kullanımı sürer. F7’de token verisi eksikse “bilinmiyor” gösterilmesi doğru. Yerel işletim gideri ile isteğe bağlı bulut gideri ayrı izlenmeli. |
