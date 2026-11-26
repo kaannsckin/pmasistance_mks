@@ -33,7 +33,8 @@ interface ModernProjectHeaderProps {
     exec: boolean;
     aiEnabled: boolean;
     onStatusReport: () => void;
-    onNewTask: () => void;
+    /** Yoksa (projeyi düzenleme yetkisi yok) "Yeni görev" düğmesi gösterilmez */
+    onNewTask?: () => void;
     onOpenWorkPackages: () => void;
     /** Kural setleri (otomasyon) */
     onOpenAutomation?: () => void;
@@ -50,6 +51,7 @@ const TABS: Tab[] = [
     { view: View.Tasks, label: 'Liste', section: 'list' },
     { view: View.Kanban, label: 'Zaman çizelgesi', section: 'timeline' },
     { view: View.Planning, label: 'Planlama', section: 'planning' },
+    { view: View.Whiteboard, label: 'Whiteboard', section: 'whiteboard' },
     { view: View.Risks, label: 'Riskler', section: 'risks' },
     { view: View.Resources, label: 'Ekip', section: 'team' },
 ];
@@ -103,10 +105,12 @@ const ModernProjectHeader: React.FC<ModernProjectHeaderProps> = ({ project, owne
                             <Icon name="report" size={18} />
                             Durum raporu
                         </button>
-                        <button type="button" className="m-btn m-btn-primary" onClick={onNewTask}>
-                            <Icon name="plus" size={18} strokeWidth={2.2} />
-                            Yeni görev
-                        </button>
+                        {onNewTask && (
+                            <button type="button" className="m-btn m-btn-primary" onClick={onNewTask}>
+                                <Icon name="plus" size={18} strokeWidth={2.2} />
+                                Yeni görev
+                            </button>
+                        )}
                     </div>
                 </div>
             </div>

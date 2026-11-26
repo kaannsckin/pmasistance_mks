@@ -1,6 +1,6 @@
 
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { View, Task, Resource, TaskStatus, Note, CustomerRequest, Objective, Project, Person, WorkspaceData, RagStatus, ProjectStatus, UserRole, PlanLockStatus, WorkPackage, UiStyle, ModernTheme, ColorMode, PermissionKey, EstimateLogEntry, JiraSyncSettings, ReleasePlan, GoldenItem, EvalRun, ModelEvalRun, BoardConfig, ProjectScheme, WorkflowConfig, TransitionRule, ProjectComponent, ProjectVersion, ProjectRoleDef, AutomationRule, ReportSchedule } from './types';
+import { View, Task, Resource, TaskStatus, Note, CustomerRequest, Objective, Project, Person, WorkspaceData, RagStatus, ProjectStatus, UserRole, PlanLockStatus, WorkPackage, UiStyle, ModernTheme, ColorMode, PermissionKey, EstimateLogEntry, JiraSyncSettings, ReleasePlan, GoldenItem, EvalRun, ModelEvalRun, BoardConfig, ProjectScheme, WorkflowConfig, TransitionRule, ProjectComponent, ProjectVersion, ProjectRoleDef, AutomationRule, ReportSchedule, PocScoreSettings } from './types';
 import { INITIAL_TASKS, INITIAL_RESOURCES, INITIAL_OBJECTIVES } from './constants';
 import {
   WORKSPACE_STORAGE_KEY,
@@ -14,7 +14,7 @@ import {
 } from './utils/workspace';
 import { canEditPool, createAllocation, EffortField, getPlanLockStatus, ROLE_LABELS, setAllocationCell, upsertPlanLock } from './utils/allocations';
 import { applyPoolImport, PoolImportResult } from './utils/poolImporter';
-import { canCreateProject, canEditProjectContent, identityFor, identityOf, identityNeedsPerson as computeNeedsPerson, keepScopedWorkspaceEdits, managedDepartmentCode, ownsProject, visibleProjectIds } from './utils/rbac';
+import { canApplyProjectChange, canAssignProjectOwner, canCreateProject, canEditProjectContent, identityFor, identityOf, identityNeedsPerson as computeNeedsPerson, keepScopedWorkspaceEdits, managedDepartmentCode, ownsProject, visibleProjectIds } from './utils/rbac';
 import { can, isConsoleRole, isManagementRole, PERMISSION_BY_KEY, resetRolePermissions, setRolePermission } from './utils/permissions';
 import { applyPreset, projectPassesView, resetRoleView, roleViewOf, sectionOfView, taskPassesView, updateRoleView, VIEW_PRESETS, ViewPresetKey } from './utils/viewConfig';
 import { AdminSection, ADMIN_SECTIONS } from './components/modern/adminSections';
@@ -41,6 +41,7 @@ import { describeNotify, fetchIntegrationHealth, fetchJiraSyncPage, JiraIssueRec
 import { boardForProject, DEFAULT_SCHEME_ID, effectiveScheme, migrateTasksToWorkflow, schemeOf, schemeUsage, validateProjectWorkflow, validateScheme } from './utils/projectScheme';
 import ProjectWorkflowSheet from './components/modern/ProjectWorkflowSheet';
 import ProjectListsSheet from './components/modern/ProjectListsSheet';
+import ModernWhiteboard from './components/modern/whiteboard/ModernWhiteboard';
 import { cleanRoleMembers, projectRolesOf } from './utils/projectRoles';
 import { listId } from './utils/projectLists';
 import { BulkTaskPatch, previewBulkTaskEdit } from './utils/bulkTaskEdit';
@@ -70,6 +71,7 @@ import RoadmapView from './components/RoadmapView';
 import SettingsModal from './components/SettingsModal';
 import NotesView from './components/NotesView';
 import AboutModal from './components/AboutModal';
+import AboutSheet from './components/modern/AboutSheet';
 import CustomerRequestsView from './components/CustomerRequestsView';
 import AIAssistant from './components/AIAssistant';
 import GoalsView from './components/GoalsView';
@@ -84,6 +86,8 @@ import DataHealthModal from './components/DataHealthModal';
 import AuditLogModal from './components/AuditLogModal';
 import GibImportModal, { GibImportChoice } from './components/GibImportModal';
 import { applyGibImport, formatPercent, GibImportPackage } from './utils/gibFindings';
+import { hasPocData } from './utils/gibPoc';
+import { refreshPocKpis } from './utils/gibPocKpi';
 import { CommandItem } from './components/CommandPalette';
 import { AssistantProvider } from './components/assistant/AssistantContext';
 import { dialogProblem, DIALOGS, resolveScreen, SCREENS, UiCommand, UiEnv, UiResult } from './utils/ai/uiActions';
@@ -183,7 +187,9 @@ const createSampleProject = (): Project =>
   });
 
 /** Modern arayüzde proje başlığının gösterildiği ekranlar */
-const MODERN_PROJECT_VIEWS: View[] = [View.Dashboard, View.Overview, View.Roadmap, View.Tasks, View.Kanban, View.Planning, View.Risks, View.Resources, View.Goals, View.Requests, View.Notes, View.AI];
+const MODERN_PROJECT_VIEWS: View[] = [View.Dashboard, View.Whiteboard, View.Overview, View.Roadmap, View.Tasks, View.Kanban, View.Planning, View.Risks, View.Resources, View.Goals, View.Requests, View.Notes, View.AI];
+
+const PROJECT_EDIT_DENIED = "Bu projeyi yalnız projenin PY'si düzenleyebilir; değişiklik kaydedilmedi.";
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<View>(View.Portfolio);
@@ -272,7 +278,8 @@ const App: React.FC = () => {
     setWorkspace(empty);
   }, [cacheClearedWorkspace, clearCloudViews]);
   const openProfile = useCallback(() => {
-    if (loadCloudConfig()?.workspaceId) setIsCloudModalOpen(true);
+    // Bulutta rol üyelikten gelir; demo hesabı (tüm roller) profil seçer
+    if (loadCloudConfig()?.workspaceId && !workspaceRef.current?.cloudMembership?.allRoles) setIsCloudModalOpen(true);
     else setIsProfileOpen(true);
   }, []);
 
@@ -706,6 +713,11 @@ const App: React.FC = () => {
 
   const storeProjectChange = useCallback((ws: WorkspaceData, previous: Project, input: Project, now = new Date()) => {
     if (previous === input) return ws;
+    // Son kontrol: düzenleme düğmesi açık kalmış bir ekran da başkasının projesini değiştiremez
+    if (!canApplyProjectChange(ws, identityOf(ws), previous, input)) {
+      setFlowNotice(PROJECT_EDIT_DENIED);
+      return ws;
+    }
     let next = input;
     let raw = next.tasks;
     // Kural setleri: değişen görevlere olay kuralları (zincir ve döngü koruması motorda). Yaşam döngüsü
@@ -765,6 +777,7 @@ const App: React.FC = () => {
   const handleUpdateActiveRisks = useCallback((risks: Risk[]) => {
     updateWorkspace(ws => {
       const proj = ws.projects.find(p => p.id === ws.activeProjectId);
+      if (proj && !canEditProjectContent(ws, identityOf(ws), proj.id)) { setFlowNotice(PROJECT_EDIT_DENIED); return ws; }
       let next: WorkspaceData = {
         ...ws,
         projects: ws.projects.map(p => p.id === ws.activeProjectId ? { ...p, risks, updatedAt: new Date().toISOString() } : p),
@@ -842,6 +855,7 @@ const App: React.FC = () => {
   const handleSetProjectOwner = useCallback((projectId: string, personId: string | undefined) => {
     updateWorkspace(ws => {
       const project = ws.projects.find(p => p.id === projectId);
+      if (!canAssignProjectOwner(ws, identityOf(ws), projectId)) { setFlowNotice(PROJECT_EDIT_DENIED); return ws; }
       const ownerName = personId ? (() => { const o = ws.people.find(p => p.id === personId); return o ? `${o.firstName} ${o.lastName}`.trim() : personId; })() : 'boş';
       const next = {
         ...ws,
@@ -886,7 +900,9 @@ const App: React.FC = () => {
   const handleDeleteProject = useCallback((projectId: string) => {
     const snapshot = workspaceRef.current;
     const removed = snapshot?.projects.find(p => p.id === projectId);
+    if (!snapshot || !canAssignProjectOwner(snapshot, identityOf(snapshot), projectId)) { setFlowNotice(PROJECT_EDIT_DENIED); return; }
     updateWorkspace(ws => {
+      if (!canAssignProjectOwner(ws, identityOf(ws), projectId)) return ws;
       const projects = ws.projects.filter(p => p.id !== projectId);
       const next = {
         ...ws,
@@ -899,7 +915,7 @@ const App: React.FC = () => {
   }, [updateWorkspace, showUndo]);
 
   const handleRenameProject = useCallback((projectId: string, name: string) => {
-    updateWorkspace(ws => ({
+    updateWorkspace(ws => !canEditProjectContent(ws, identityOf(ws), projectId) ? ws : ({
       ...ws,
       projects: ws.projects.map(p => p.id === projectId ? { ...p, name, updatedAt: new Date().toISOString() } : p),
     }));
@@ -908,6 +924,7 @@ const App: React.FC = () => {
   const handleSetProjectRag = useCallback((projectId: string, rag: RagStatus | undefined, ragNote?: string) => {
     updateWorkspace(ws => {
       const prev = ws.projects.find(p => p.id === projectId);
+      if (!canEditProjectContent(ws, identityOf(ws), projectId)) return ws;
       const next = {
         ...ws,
         projects: ws.projects.map(p => p.id === projectId ? { ...p, rag, ragNote: ragNote ?? p.ragNote, updatedAt: new Date().toISOString() } : p),
@@ -922,7 +939,7 @@ const App: React.FC = () => {
   }, [updateWorkspace]);
 
   const handleSetProjectStatus = useCallback((projectId: string, status: ProjectStatus) => {
-    updateWorkspace(ws => ({
+    updateWorkspace(ws => !canAssignProjectOwner(ws, identityOf(ws), projectId) ? ws : ({
       ...ws,
       projects: ws.projects.map(p => p.id === projectId ? { ...p, status, updatedAt: new Date().toISOString() } : p),
     }));
@@ -930,7 +947,7 @@ const App: React.FC = () => {
 
   // ---- Kimlik / RBAC ----
   const handleChangeIdentity = useCallback((role: UserRole, personId?: string) => {
-    if (loadCloudConfig()?.workspaceId) return;
+    if (loadCloudConfig()?.workspaceId && !workspaceRef.current?.cloudMembership?.allRoles) return;
     updateWorkspace(ws => {
       const next = { ...ws, currentRole: role, currentPersonId: personId };
       // Kapsam değişince görünmeyen bir proje aktifse ilk görünür projeye/portföye geç
@@ -1505,7 +1522,7 @@ const App: React.FC = () => {
     });
   }, [updateWorkspace]);
   // Projenin bileşen ve sürüm listeleri: proje sahibi ya da admin (görev başvurularıyla birlikte)
-  const handleSaveProjectLists = useCallback((projectId: string, patch: { components: ProjectComponent[]; versions: ProjectVersion[]; tasks: Task[]; roleMembers?: Project['roleMembers']; progressModel?: Project['progressModel'] }, summary: string) => {
+  const handleSaveProjectLists = useCallback((projectId: string, patch: { components: ProjectComponent[]; versions: ProjectVersion[]; tasks: Task[]; roleMembers?: Project['roleMembers']; progressModel?: Project['progressModel']; pocSettings?: PocScoreSettings | null }, summary: string) => {
     updateWorkspace(ws => {
       const project = ws.projects.find(p => p.id === projectId);
       const who = identityOf(ws);
@@ -1516,7 +1533,17 @@ const App: React.FC = () => {
         const n = byId.get(t.id);
         return n && (JSON.stringify(n.components) !== JSON.stringify(t.components) || n.fixVersion !== t.fixVersion) ? { ...t, components: n.components, fixVersion: n.fixVersion } : t;
       });
-      const next = { ...ws, projects: ws.projects.map(p => (p.id === projectId ? { ...p, components: patch.components, versions: patch.versions, roleMembers: patch.roleMembers, progressModel: patch.progressModel, tasks, updatedAt: new Date().toISOString() } : p)) };
+      const now = new Date();
+      const nextProject = (p: Project): Project => {
+        let out: Project = { ...p, components: patch.components, versions: patch.versions, roleMembers: patch.roleMembers, progressModel: patch.progressModel, tasks, updatedAt: now.toISOString() };
+        // PoC skor modeli (katsayı, kapsam) değişince gösterge yeni katsayıyla ölçülür
+        if (patch.pocSettings !== undefined && out.poc) {
+          const { settings: _old, ...rest } = out.poc;
+          out = refreshPocKpis({ ...out, poc: { ...rest, ...(patch.pocSettings ? { settings: patch.pocSettings } : {}) } }, trClock(now).day, 'Skor modeli değişti');
+        }
+        return out;
+      };
+      const next = { ...ws, projects: ws.projects.map(p => (p.id === projectId ? nextProject(p) : p)) };
       return appendAudit(next, 'config.update', `"${project.name}" proje ayarları: ${summary} · ${patch.components.length} bileşen, ${patch.versions.length} sürüm`, projectId);
     });
   }, [updateWorkspace]);
@@ -1658,7 +1685,7 @@ const App: React.FC = () => {
     updateWorkspace(ws => {
       const project = ws.projects.find(p => p.id === projectId);
       if (!project || !canEditProjectContent(ws, identityOf(ws), projectId)) return ws;
-      const next = { ...ws, projects: ws.projects.map(p => (p.id === projectId ? { ...p, jiraSync: settings, jiraProjectKey: p.jiraProjectKey || settings.projectKey, updatedAt: new Date().toISOString() } : p)) };
+      const next = { ...ws, projects: ws.projects.map(p => (p.id === projectId ? { ...p, jiraSync: { ...settings, ...(p.jiraSync?.lastSyncAt ? { lastSyncAt: p.jiraSync.lastSyncAt } : {}) }, jiraProjectKey: p.jiraProjectKey || settings.projectKey, updatedAt: new Date().toISOString() } : p)) };
       return appendAudit(next, 'data.import', `"${project.name}" · Jira eşitleme ayarı: ${sourceLabel(settings) || 'yalnız bağlı açık kayıtlar'}${settings.discover ? ', yeni kayıtlar eklenir' : ''}, otomatik ${settings.autoMinutes ? `${settings.autoMinutes} dk` : 'kapalı'}`, projectId);
     });
   }, [updateWorkspace]);
@@ -1674,12 +1701,22 @@ const App: React.FC = () => {
       const ppl = syncSettings?.autoPeople ? ensureJiraPeople(ws.people, project.resources, tasks, issues) : null;
       const peopleChanged = !!ppl && (ppl.people !== ws.people || ppl.resources !== project.resources);
       const tasksChanged = JSON.stringify(tasks) !== JSON.stringify(project.tasks);
-      if (!tasksChanged && !peopleChanged) return ws;
+      // PoC projesi: "Bugün" skorunun dayandığı eşitleme zamanı, gösterge ölçümü ve günlük ölçüm (dönem eşitlemesi hariç)
+      const pocSync = hasPocData(project) && !!project.jiraSync && !settings;
+      if (!tasksChanged && !peopleChanged && !pocSync) return ws;
+      const nowDate = new Date();
+      let updatedProject: Project = { ...project, tasks, ...(ppl ? { resources: ppl.resources } : {}), updatedAt: nowDate.toISOString() };
+      if (pocSync) {
+        updatedProject = { ...updatedProject, jiraSync: { ...updatedProject.jiraSync!, lastSyncAt: nowDate.toISOString() } };
+        updatedProject = refreshPocKpis(updatedProject, trClock(nowDate).day, `Jira eşitlemesi (${label})`);
+        updatedProject = { ...updatedProject, progressSnapshots: withSnapshot(updatedProject.progressSnapshots, progressSnapshot(updatedProject, nowDate)) };
+      }
       const next = {
         ...ws,
         ...(ppl ? { people: ppl.people } : {}),
-        projects: ws.projects.map(p => (p.id === projectId ? { ...p, tasks, ...(ppl ? { resources: ppl.resources } : {}), updatedAt: new Date().toISOString() } : p)),
+        projects: ws.projects.map(p => (p.id === projectId ? updatedProject : p)),
       };
+      if (!tasksChanged && !peopleChanged) return next; // yalnız eşitleme damgası: denetim günlüğüne yazılmaz
       const parts = [
         `${r.updated} güncellenen${r.closed ? ` (${r.closed} kapanan)` : ''}, ${r.added} yeni kayıt`,
         pushed?.done.length ? `Jira'ya yazılan: ${pushed.done.map(d => d.key).slice(0, 10).join(', ')}${pushed.done.length > 10 ? '…' : ''}` : '',
@@ -1808,7 +1845,7 @@ const App: React.FC = () => {
   const handleSetUiStyle = useCallback((uiStyle: UiStyle) => {
     updateWorkspace(ws => ({ ...ws, settings: { ...ws.settings, uiStyle } }));
     // Genel bakış yalnız modern arayüzde var
-    if (uiStyle === 'classic') setCurrentView(v => (v === View.Overview || v === View.Dashboard ? View.Roadmap : v));
+    if (uiStyle === 'classic') setCurrentView(v => (v === View.Overview || v === View.Dashboard || v === View.Whiteboard ? View.Roadmap : v));
   }, [updateWorkspace]);
 
   // Görünüm (modern tema, gündüz/gece): ayarlar penceresinde seçildiği an uygulanır
@@ -1834,7 +1871,8 @@ const App: React.FC = () => {
         theme: newTheme,
       },
     }));
-    if (activeProject) {
+    // Sprint süresi ve başlangıç proje ayarıdır: yalnız projenin PY'si değiştirir
+    if (activeProject && workspace && canEditProjectContent(workspace, identityOf(workspace), activeProject.id)) {
       updateActiveProject(p => ({
         ...p,
         settings: {
@@ -2436,6 +2474,7 @@ const App: React.FC = () => {
         onOpenAutomation={canEditProjectContent(workspace, identity, activeProject.id) ? () => setAutomationSheetProject(activeProject.id) : undefined}
         onOpenWorkflow={activeScheme.allowProjectWorkflow && canEditProjectContent(workspace, identity, activeProject.id) ? () => setWorkflowSheetProject(activeProject.id) : undefined}
         canConfigure={activeScheme.allowProjectBoard && canEditProjectContent(workspace, identity, activeProject.id)}
+        readOnly={!canEditProjectContent(workspace, identity, activeProject.id)}
         onSaveConfig={cfg => handleSaveBoardConfig(activeProject.id, cfg)}
         onMoveTask={moveBoardTask}
         onStatusChange={changeTaskStatus}
@@ -2490,11 +2529,11 @@ const App: React.FC = () => {
         <ModernTimeline
           key={activeProject.id}
           // Salt okunur zaman çizelgesi admin'in öncelik süzgecini izler; düzenlenebilirde tüm görevler (otomatik plan gizlileri kaybetmesin)
-          project={isManagementRole(identity.role) && roleView.minTaskPriority !== 'Low' ? { ...activeProject, tasks: activeProject.tasks.filter(t => taskPassesView(roleView, t)) } : activeProject}
+          project={!canEditProjectContent(workspace, identity, activeProject.id) && roleView.minTaskPriority !== 'Low' ? { ...activeProject, tasks: activeProject.tasks.filter(t => taskPassesView(roleView, t)) } : activeProject}
           people={workspace.people}
           leaves={workspace.leaves || []}
           identity={identity}
-          canEdit={!isManagementRole(identity.role)}
+          canEdit={canEditProjectContent(workspace, identity, activeProject.id)}
           onMoveTask={(id: string, v: number) => setTasks(prev => prev.map(t => t.id === id ? { ...t, version: v } : t))}
           onPlanGenerated={setTasks}
           onInsertSprint={insertSprint}
@@ -2572,7 +2611,7 @@ const App: React.FC = () => {
           resources={resources}
           tasks={tasks}
           people={workspace.people}
-          canEdit={!isManagementRole(identity.role)}
+          canEdit={canEditProjectContent(workspace, identity, activeProject.id)}
           onUpdate={(rs: Resource[], ts?: Task[]) => updateActiveProject(p => ({ ...p, resources: rs, tasks: ts ?? p.tasks }))}
           setResources={setResources}
           titleCosts={ps.titleCosts || {}}
@@ -2591,7 +2630,7 @@ const App: React.FC = () => {
         <ModernGoals
           objectives={objectives}
           tasks={tasks}
-          canEdit={!isManagementRole(identity.role)}
+          canEdit={canEditProjectContent(workspace, identity, activeProject.id)}
           onUpdateObjectives={setObjectives}
           onViewTask={viewTask}
           onNavigate={setCurrentView}
@@ -2626,7 +2665,7 @@ const App: React.FC = () => {
         <ModernRequests
           requests={customerRequests}
           tasks={tasks}
-          readOnly={!!identity.projectIds && !canEditProjectContent(workspace, identity, activeProject.id)}
+          readOnly={!canEditProjectContent(workspace, identity, activeProject.id)}
           onChange={(next: CustomerRequest[]) => setCustomerRequests(next)}
           onConvert={convertRequest}
           onViewTask={viewTask}
@@ -2660,6 +2699,22 @@ const App: React.FC = () => {
         />
       );
     }
+    if (isModern && currentView === View.Whiteboard) {
+      return (
+        <ModernWhiteboard
+          key={activeProject.id}
+          project={activeProject}
+          canEdit={canEditProjectContent(workspace, identity, activeProject.id)}
+          viewerPersonId={identity.personId}
+          people={workspace.people}
+          onSwitchProfile={openProfile}
+          actor={currentActorName}
+          voter={identity.personId || identity.role}
+          onUpdateProject={updateActiveProject}
+          onViewTask={viewTask}
+        />
+      );
+    }
     if (isModern && currentView === View.Overview) {
       return (
         <ModernProjectOverview
@@ -2668,7 +2723,7 @@ const App: React.FC = () => {
           canEdit={canEditProjectContent(workspace, identity, activeProject.id)}
           onNavigate={setCurrentView}
           onViewTask={viewTask}
-          onNewTask={newTask}
+          onNewTask={canEditProjectContent(workspace, identity, activeProject.id) ? newTask : undefined}
           onSetRag={handleSetProjectRag}
           onCelebrate={celebrate}
           sections={roleView.projectSections}
@@ -2691,6 +2746,7 @@ const App: React.FC = () => {
             onClose={() => setIsRecordOpen(false)} />
         )}
         <ModernTaskList
+          readOnly={!canAddRecord}
           onNewRecord={canAddRecord ? () => setIsRecordOpen(true) : undefined}
           key={activeProject.id}
           projectId={activeProject.id}
@@ -2779,6 +2835,7 @@ const App: React.FC = () => {
           </div>
         );
       case View.Dashboard:
+      case View.Whiteboard: // whiteboard yalnız modern arayüzde
       case View.Overview: // klasik arayüzde karşılığı pano
       case View.Roadmap:
         return (
@@ -3110,7 +3167,7 @@ const App: React.FC = () => {
                   exec={isManagementRole(identity.role)}
                   aiEnabled={isAIChatEnabled}
                   onStatusReport={() => setIsStatusReportOpen(true)}
-                  onNewTask={() => { setEditingTask(null); setIsFormModalOpen(true); }}
+                  onNewTask={canEditProjectContent(workspace, identity, activeProject.id) ? () => { setEditingTask(null); setIsFormModalOpen(true); } : undefined}
                   onOpenWorkPackages={() => setIsWpManagerOpen(true)}
                   onOpenAutomation={() => setAutomationSheetProject(activeProject.id)}
                   onOpenReports={() => setReportSheetProject(activeProject.id)}
@@ -3204,7 +3261,7 @@ const App: React.FC = () => {
           task={liveViewingTask}
           project={activeProject}
           authorName={currentActorName}
-          canEdit={!isManagementRole(identity.role)}
+          canEdit={canEditProjectContent(workspace, identity, activeProject.id)}
           onClose={() => setIsDetailModalOpen(false)}
           onEdit={(t: Task) => { setIsDetailModalOpen(false); setEditingTask(t); setIsFormModalOpen(true); }}
           onSave={handleUpdateTask}
@@ -3235,7 +3292,11 @@ const App: React.FC = () => {
           onSave={handleSaveSettings} onClose={() => setIsSettingsModalOpen(false)} onResetData={handleResetData}
         />
       )}
-      {isAboutModalOpen && <AboutModal onClose={() => setIsAboutModalOpen(false)} />}
+      {isAboutModalOpen && (isModern
+        ? <AboutSheet onClose={() => setIsAboutModalOpen(false)} cloudLinked={!!loadCloudConfig()?.workspaceId} lastSyncAt={loadCloudConfig()?.lastSyncAt}
+            projectCount={visibleProjects.length} peopleCount={workspace?.people.length || 0} who={currentActorName} role={ROLE_LABELS[identity.role]}
+            onOpenCloud={() => setIsCloudModalOpen(true)} onOpenSettings={() => setIsSettingsModalOpen(true)} />
+        : <AboutModal onClose={() => setIsAboutModalOpen(false)} />)}
       {isCloudModalOpen && workspace && (
         <CloudSyncModal
           workspace={workspace}
@@ -3300,7 +3361,7 @@ const App: React.FC = () => {
           onClose={() => setIsAuditModalOpen(false)}
         />
       )}
-      {isProfileOpen && workspace && !loadCloudConfig()?.workspaceId && (() => {
+      {isProfileOpen && workspace && (!loadCloudConfig()?.workspaceId || workspace.cloudMembership?.allRoles) && (() => {
         const sheet = <ProfileSwitcherSheet workspace={workspace} onSelect={handleChangeIdentity} onClose={() => setIsProfileOpen(false)} />;
         // Klasik arayüzde modern pencere kendi stil kabında açılır
         return isModern ? sheet : <div className={modernScope}>{sheet}</div>;

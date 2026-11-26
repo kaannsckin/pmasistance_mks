@@ -13,7 +13,7 @@ import { foldTr } from '../rag/text';
 
 export type ToolGroup =
     | 'temel' | 'bilgi' | 'risk' | 'ekip' | 'maliyet' | 'plan' | 'gorev_degisiklik'
-    | 'jira' | 'veri_havuzu' | 'dosya' | 'ekran' | 'yonetim';
+    | 'jira' | 'veri_havuzu' | 'dosya' | 'ekran' | 'yonetim' | 'whiteboard';
 
 export const TOOL_GROUPS: Record<ToolGroup, { label: string; when: string; tools: string[] }> = {
     temel: {
@@ -76,6 +76,11 @@ export const TOOL_GROUPS: Record<ToolGroup, { label: string; when: string; tools
         when: 'departman karnesi, veri sağlığı, portföy sağlığı',
         tools: ['departman_karnesi', 'veri_sagligi'],
     },
+    whiteboard: {
+        label: 'Whiteboard',
+        when: 'panoya çiz, ekran görüntüsünde işaretle, ekran taslağı, akış şeması, notları grupla',
+        tools: ['panoya_ciz'],
+    },
 };
 
 export const ALL_GROUPS = Object.keys(TOOL_GROUPS) as ToolGroup[];
@@ -98,6 +103,7 @@ const RULES: { group: ToolGroup; re: RegExp }[] = [
     { group: 'veri_havuzu', re: /veri havuzu|unvan|personel (ekle|kayd|listesi)|bolum (ekle|kayd|kodu)|aylik maliyet|sicil/ },
     { group: 'dosya', re: /excel|xlsx|csv|word|docx|pdf|powerpoint|pptx|sunum|slayt|dosya|indir|rapor (hazirla|olustur|ver|yap)|analiz|incele|pivot|kirilim|dagilim|grafik|tablo(ya|lastir)/ },
     { group: 'ekran', re: /\b(ac|acar misin|goster|git|gotur|getir)\b|ekran(a|i)|sayfa(ya|yi)|pencere/ },
+    { group: 'whiteboard', re: /whiteboard|panoya|\bciz|isaretle|taslag|taslak|wireframe|akis (sema|diyagram)|ekran goruntusu|notlari grupla/ },
     { group: 'yonetim', re: /departman|bolum karne|karne|veri sagli|eksik veri|tutarsiz|portfoy sagli|saglik puan/ },
 ];
 
@@ -116,6 +122,7 @@ const VIEW_GROUPS: Partial<Record<View, ToolGroup[]>> = {
     [View.Roadmap]: ['plan'],
     [View.WeeklyReport]: ['plan'],
     [View.Executive]: ['yonetim', 'maliyet'],
+    [View.Whiteboard]: ['whiteboard'],
 };
 
 /** Yetenek (oyun kitabı) → ihtiyaç duyduğu gruplar */

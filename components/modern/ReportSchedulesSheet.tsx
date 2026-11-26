@@ -16,9 +16,11 @@ import { Sheet, ToggleSwitch } from './ui';
 
 const BLOCKS = Object.keys(BLOCK_LABELS) as ReportBlockKey[];
 
-const blank = (): ReportSchedule => {
+const blank = (withPoc = false): ReportSchedule => {
     const now = new Date().toISOString();
-    return { id: newScheduleId(), name: 'Günlük ilerleme raporu', enabled: true, cadence: 'weekdays', hour: 9, channels: { teams: true }, blocks: [...DEFAULT_BLOCKS], createdAt: now, updatedAt: now };
+    // PoC test listesi olan projede PoC bölümü ilerlemenin hemen ardından gelir
+    const blocks: ReportBlockKey[] = withPoc ? ['progress', 'poc', ...DEFAULT_BLOCKS.filter(b => b !== 'progress')] : [...DEFAULT_BLOCKS];
+    return { id: newScheduleId(), name: 'Günlük ilerleme raporu', enabled: true, cadence: 'weekdays', hour: 9, channels: { teams: true }, blocks, createdAt: now, updatedAt: now };
 };
 
 const ReportSchedulesSheet: React.FC<{
@@ -89,7 +91,7 @@ const ReportSchedulesSheet: React.FC<{
                             )}
                         </div>
                     ))}
-                    {canEdit && <button type="button" className="m-btn m-btn-primary !min-h-[36px] self-start" onClick={() => setEditing(blank())}><Icon name="plus" size={15} />Yeni rapor</button>}
+                    {canEdit && <button type="button" className="m-btn m-btn-primary !min-h-[36px] self-start" onClick={() => setEditing(blank(!!project.poc?.tests?.length))}><Icon name="plus" size={15} />Yeni rapor</button>}
                 </div>
             )}
         </Sheet>

@@ -36,6 +36,7 @@ export const WIDGETS: WidgetDef[] = [
     { type: 'jiraBottlenecks', label: 'Jira darboğazları', description: 'Durumda ortanca ve ortalama çalışma saati, yeniden açılan ve değişen kayıtlar', icon: 'clock', group: 'Göstergeler', size: 2 },
     { type: 'effortStatus', label: 'Efor durumu', description: 'Jira tahmini, tamamlanma tahmini (EAC) ve en çok aşan kayıtlar', icon: 'gauge', group: 'Göstergeler', size: 2 },
     { type: 'activity', label: 'Son değişiklikler', description: 'Durum geçişleri ve kapanışlar', icon: 'history', group: 'Listeler', size: 2, config: { limit: 8 } },
+    { type: 'pocScore', label: 'PoC skoru ve katkılar', description: 'İlk, Doğrulanmış, Bugün (son Jira eşitlemesi) ve Olası skor; kalan açığın planlama kategorilerine dağılımı', icon: 'target', group: 'Göstergeler', size: 4 },
     { type: 'note', label: 'Not', description: 'Serbest metin: karar, uyarı, bağlantı, açıklama', icon: 'pen', group: 'Diğer', size: 2, config: { text: '' } },
 ];
 
@@ -91,15 +92,21 @@ export const TEMPLATES: Template[] = [
         build: project => {
             const ms = familyPrefix(project.tasks, /^ms$/i) || 'MS';
             const poc = familyPrefix(project.tasks, /^poc:$/i);
+            const planning = familyPrefix(project.tasks, /^planlama:$/i);
+            const scope = planning ? labelFamilies(project.tasks).find(f => f.prefix === planning)?.values.find(v => /aral[ıi]k/i.test(v)) : undefined;
             const kpis = project.kpis || [];
             const score = kpis.find(k => /poc/i.test(k.name)) || kpis[0];
             const mandatory = kpis.find(k => /zorunlu/i.test(k.name));
             return [
+                ...(project.poc?.tests?.length ? [w('pocScore', 4, undefined, 'PoC skoru · Bugün ve Olası')] : []),
                 ...(score ? [w('kpi', 2, { kpiId: score.id })] : [w('metric', 1, { metric: 'progress' }), w('metric', 1, { metric: 'effortProgress' })]),
                 ...(mandatory ? [w('kpi', 1, { kpiId: mandatory.id })] : [w('metric', 1, { metric: 'overdue' })]),
                 w('metric', 1, { metric: 'progress' }, 'Sonuçlanan madde'),
                 w('milestones', 4, { dim: { kind: 'labels', prefix: ms }, measure: 'count' }, 'Milestone planı'),
                 ...(hasLabels(project.tasks, IMPORTANCE) ? [w('pivot', 4, { dim: { kind: 'labels', values: IMPORTANCE }, dim2: { kind: 'status' }, measure: 'count' }, 'Önem × durum')] : []),
+                // Planlama kategorileri yalnız etiket: büyüklük ve önem dağılımı, Aralık kapsamı başlık bazında
+                ...(planning ? [w('pivot', 4, { dim: { kind: 'labels', prefix: planning }, dim2: { kind: 'labels', values: IMPORTANCE }, measure: 'count' }, 'Planlama kategorisi × önem')] : []),
+                ...(scope ? [w('breakdown', 2, { dim: { kind: 'workPackage' }, filter: { labels: [scope] }, measure: 'count', chart: 'bar' }, `${scope.replace(/^[^:]*:\s*/, '')} maddeleri – başlık bazında`)] : []),
                 w('workPackages', 4, { measure: 'effort' }, 'Epic durumu ve planı'),
                 ...(poc ? [w('breakdown', 2, { dim: { kind: 'labels', prefix: poc }, measure: 'count', chart: 'bar' }, 'PoC sonucuna göre')] : []),
                 ...(hasLabels(project.tasks, ['Rapor 5.1']) ? [w('breakdown', 2, { dim: { kind: 'labels', prefix: ms }, filter: { labels: ['Rapor 5.1'] }, measure: 'count', chart: 'bar' }, 'Rapor 5.1 bulguları – MS')] : []),
@@ -145,7 +152,7 @@ export const TEMPLATE_BY_KEY = new Map(TEMPLATES.map(t => [t.key, t]));
 
 /** Kayıtlı düzen yoksa: MS etiketleri ya da projeye özel gösterge varsa PoC şablonu, yoksa genel */
 export const defaultLayout = (project: Project): DashboardLayout => {
-    const poc = (project.kpis?.length || 0) > 0 || labelFamilies(project.tasks).some(f => /^ms$/i.test(f.prefix));
+    const poc = (project.kpis?.length || 0) > 0 || !!project.poc?.tests?.length || labelFamilies(project.tasks).some(f => /^ms$/i.test(f.prefix));
     return { widgets: TEMPLATE_BY_KEY.get(poc ? 'poc' : 'genel')!.build(project) };
 };
 

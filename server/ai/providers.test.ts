@@ -276,3 +276,21 @@ describe('OpenAI-uyumlu ağ geçidi ayarları (ör. BİLGEM AI API)', () => {
         expect(evs).toEqual([{ type: 'delta', text: 'Yanıt' }, { type: 'done', stopReason: 'stop' }]);
     });
 });
+
+describe('görsel (ekran görüntüsü) içeren mesaj', () => {
+    const img = { mime: 'image/png' as const, data: 'iVBORw0KGgo=' };
+    const withImage = { messages: [{ role: 'user' as const, content: 'işaretle', images: [img] }] };
+    it('OpenAI uyumlu: metin + data URL', () => {
+        const body = JSON.parse(buildUpstreamRequest(cfg({ AI_PROVIDER: 'openai' }), withImage).body);
+        expect(body.messages[0].content).toEqual([{ type: 'text', text: 'işaretle' }, { type: 'image_url', image_url: { url: `data:image/png;base64,${img.data}` } }]);
+    });
+    it('Anthropic: base64 görsel bloğu', () => {
+        const body = JSON.parse(buildUpstreamRequest(cfg({ AI_PROVIDER: 'anthropic' }), withImage).body);
+        expect(body.messages[0].content[0]).toEqual({ type: 'image', source: { type: 'base64', media_type: 'image/png', data: img.data } });
+        expect(body.messages[0].content[1]).toEqual({ type: 'text', text: 'işaretle' });
+    });
+    it('Gemini: inlineData', () => {
+        const body = JSON.parse(buildUpstreamRequest(cfg({ AI_PROVIDER: 'gemini' }), withImage).body);
+        expect(body.contents[0].parts).toEqual([{ inlineData: { mimeType: 'image/png', data: img.data } }, { text: 'işaretle' }]);
+    });
+});

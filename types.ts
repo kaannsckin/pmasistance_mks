@@ -219,7 +219,7 @@ export interface ProjectRoleDef {
 // ---------------------------------------------------------------- Rapor otomasyonu
 
 /** Zamanlanmış rapordaki bölümler (sırasıyla) */
-export type ReportBlockKey = 'progress' | 'activity' | 'bugs' | 'overdue' | 'sprint' | 'milestones' | 'teams' | 'blockers' | 'risks';
+export type ReportBlockKey = 'progress' | 'poc' | 'activity' | 'bugs' | 'overdue' | 'sprint' | 'milestones' | 'teams' | 'blockers' | 'risks';
 
 /**
  * Zamanlanmış proje raporu: seçilen periyotta (TR saati) Teams, Slack, Notion
@@ -256,6 +256,10 @@ export interface ProgressSnapshot {
   total: number;
   open: number;
   bugsOpen: number;
+  /** PoC "Bugün" skoru (0–100); proje PoC test listesi taşıyorsa */
+  poc?: number;
+  /** PoC skorunun dayandığı son Jira eşitlemesi (ISO) */
+  pocSyncAt?: string;
 }
 
 // ---------------------------------------------------------------- Kural setleri (otomasyon)
@@ -659,6 +663,7 @@ export enum View {
   Admin, // Yönetici (admin): rol yetkileri ve profiller
   Planning, // Planlama asistanı: yeni kayıt tahmini ve plan simülasyonu (modern arayüz)
   Dashboard, // Proje dashboard'u: kişiselleştirilebilir bileşenler (modern arayüzde projenin ilk ekranı)
+  Whiteboard, // Proje whiteboard'u: FigJam tarzı serbest çalışma alanı (modern arayüz)
 }
 
 export interface UnitLoad {
@@ -719,6 +724,8 @@ export interface CloudMembership {
   personId: string | null;
   projectIds: string[] | null;
   accessAdmin: boolean;
+  /** Demo / eğitim hesabı: bulutta da tüm rollere ve kişilere geçebilir (profil değiştir) */
+  allRoles?: boolean;
 }
 
 /** Rol bazlı özellik yetkileri (katalog ve varsayılanlar: utils/permissions.ts) */
@@ -732,7 +739,7 @@ export type PermissionKey =
 export type RolePermissions = Partial<Record<UserRole, PermissionKey[]>>;
 
 /** Proje içi sekmeler (admin rol bazında gizleyebilir; genel bakış her zaman açık) */
-export type ProjectSectionKey = 'dashboard' | 'overview' | 'board' | 'list' | 'timeline' | 'planning' | 'risks' | 'team' | 'goals' | 'workPackages' | 'assistant';
+export type ProjectSectionKey = 'dashboard' | 'overview' | 'board' | 'list' | 'timeline' | 'planning' | 'risks' | 'team' | 'goals' | 'workPackages' | 'assistant' | 'whiteboard';
 /** Yönetim ekranı kartları (admin rol bazında gizleyebilir) */
 export type ExecSectionKey = 'summary' | 'kpis' | 'expectations' | 'meetings' | 'health' | 'attention' | 'approvals' | 'risks' | 'departments' | 'changes';
 export type TaskSortKey = 'smart' | 'priority' | 'due' | 'name';
@@ -881,6 +888,8 @@ export interface JiraSyncSettings {
   fields?: Partial<Record<JiraSyncFieldId, JiraSyncDirection>>;
   /** Jira'daki atanan kişiler Veri Havuzu'na ve proje ekibine otomatik eklensin mi */
   autoPeople?: boolean;
+  /** Son başarılı eşitlemenin zamanı (ISO); PoC "Bugün" skoru bu ana dayanır */
+  lastSyncAt?: string;
 }
 
 /** Eşitlenebilen alanlar (uygulama ↔ Jira) */
@@ -910,6 +919,7 @@ export type DashboardWidgetType =
   | 'jiraBottlenecks' // Jira durum süreleri ve değişiklik sayıları
   | 'effortStatus'  // Jira tahmini, kalan süre ve gerçekleşen efor
   | 'activity'      // son değişiklikler
+  | 'pocScore'      // PoC skoru: İlk · Doğrulanmış · Bugün · Olası ve kategori katkıları
   | 'note';         // serbest not
 
 /** Gruplama boyutu; labels: bir etiket ailesi (önek, ör. "MS") ya da seçilen etiketler */
@@ -957,6 +967,8 @@ export interface DashboardWidgetConfig {
   progressWeights?: DashboardProgressWeights;
   /** kpi: projedeki gösterge */
   kpiId?: string;
+  /** pocScore: Olası skorun kapsamı (etiketler); boşsa proje PoC ayarı */
+  pocScope?: string[];
   /** note: metin */
   text?: string;
   limit?: number;
@@ -1000,6 +1012,150 @@ export interface ProjectKpi {
   note?: string;
 }
 
+/**
+ * Müşteri PoC test kalemi (ör. GİB "Test Kalemleri" sayfası). Göreve
+ * dönüşmeyen (karşılanmış, değerlendirme dışı) testler de saklanır; skorun
+ * paydası ve sonuç dağılımları bunlardan yeniden hesaplanır. Test, görevine
+ * `gib-<Test No>` kimliğiyle bağlanır.
+ */
+export interface PocTestItem {
+  testNo: string;
+  area?: string;
+  /** Zorunlu · Olması beklenen · İsteğe bağlı */
+  importance: string;
+  /** Ağırlık (Zorunlu 3, Olması beklenen 2, İsteğe bağlı 1) */
+  weight: number;
+  /** Müşterinin ilk değerlendirmesi (ham metin: Karşılandı, Kısmen karşılandı …) */
+  pocResult: string;
+  /** Müşterinin yeniden test edip verdiği güncel sonuç (Genel Liste "Güncel Sonuç") */
+  currentResult?: string;
+  /** Bağlı görevin kimliği; verilmezse `gib-<Test No>` */
+  taskId?: string;
+}
+
+/** PoC skor modeli ayarları (PY girer) */
+export interface PocScoreSettings {
+  /**
+   * Süreç katsayısı k: Jira durum kategorisi ya da ayrıntılı Jira durumu
+   * başına 0–100 (k × 100). Ayrıntılı durum kategoriden önce gelir. Boşsa
+   * yalnız Tamamlandı = 100.
+   */
+  coefficients?: DashboardProgressWeights;
+  /** Değerlendirilmemiş testler: k = 1 olunca paydaya 1 puanla girer (varsayılan) ya da hiç girmez */
+  unevaluated?: 'whenComplete' | 'never';
+  /** Olası skorun kapsamı: bu etiketlerden birini taşıyan maddeler tamamlanmış sayılır */
+  scopeLabels?: string[];
+  /** Planlama kategorisi etiket ailesi (varsayılan "Planlama:") */
+  categoryPrefix?: string;
+}
+
+export interface ProjectPoc {
+  tests: PocTestItem[];
+  importedAt?: string;
+  /** Aktarılan dosyanın adı */
+  source?: string;
+  settings?: PocScoreSettings;
+}
+
+// ---------------------------------------------------------------------------
+// Whiteboard (FigJam tarzı): projeye özel panolar
+// ---------------------------------------------------------------------------
+
+/**
+ * Pano nesnesi. Konum ve boyut pano koordinatında (piksel, yakınlaştırma 1).
+ * Bağlı kartlar (görev, sprint, iş paketi, risk, sürüm) yalnız kimlik tutar;
+ * içerik her çizimde projeden okunur, böylece kart Jira eşitlemesiyle güncel kalır.
+ */
+export type WbNodeType = 'sticky' | 'text' | 'shape' | 'section' | 'stamp' | 'pen' | 'image'
+  | 'task' | 'sprint' | 'workPackage' | 'risk' | 'version';
+export type WbShape = 'rect' | 'ellipse' | 'diamond' | 'triangle';
+
+export interface WbNode {
+  id: string;
+  type: WbNodeType;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  text?: string;
+  /** Renk anahtarı (yellow, green, blue …) */
+  color?: string;
+  shape?: WbShape;
+  /** Bağlı kayıt: görev kimliği, sprint numarası, iş paketi / risk / sürüm kimliği */
+  ref?: string;
+  /** Kalem çizgisi: nesneye göre [x0, y0, x1, y1, …] */
+  points?: number[];
+  /** Metin boyutu (px); yoksa türün varsayılanı */
+  fontSize?: number;
+  /** Katman sırası (büyük üstte; yoksa 0, eşitlikte eklenme sırası) */
+  z?: number;
+  /** Damga (emoji) */
+  stamp?: string;
+  /** Görsel (küçültülmüş data URL) */
+  src?: string;
+  locked?: boolean;
+  /** Ekleyen kişi (görünen ad) */
+  author?: string;
+  /** Oylama: kişi anahtarı → oy sayısı */
+  votes?: Record<string, number>;
+  /** Şekil: içi boş, kalın kenarlı (işaretleme çerçevesi) */
+  hollow?: boolean;
+}
+
+export interface WbEdge {
+  id: string;
+  from: string;
+  to: string;
+  label?: string;
+  /** arrow: tek yönlü ok (varsayılan) · line: oksuz çizgi */
+  style?: 'arrow' | 'line';
+}
+
+export interface WbVoting {
+  active: boolean;
+  /** Kişi başına oy hakkı */
+  perPerson: number;
+  startedAt: string;
+  endedAt?: string;
+  /** Oylanan soru (ör. "Önce hangisini çözelim?") */
+  title?: string;
+  /** Yalnız bu bölümün içindekiler oylanır (bölüm nesnesinin kimliği) */
+  scope?: string;
+  /** Bir nesneye kişi başına en fazla oy (yoksa sınır yok) */
+  maxPerNode?: number;
+  /** Süreli oylama: bu anda kendiliğinden biter */
+  endsAt?: string;
+}
+
+/** Pano erişim düzeyi: görmez · görüntüler · düzenler */
+export type WbAccessLevel = 'none' | 'view' | 'edit';
+
+/**
+ * Pano erişimi: projeyi gören herkes için varsayılan düzey ve kişi bazında
+ * istisnalar (kişi kimliği → düzey). Sahip ve projenin PY'si her zaman yönetir.
+ */
+export interface WbAccess {
+  everyone: WbAccessLevel;
+  people?: Record<string, WbAccessLevel>;
+}
+
+export interface Whiteboard {
+  id: string;
+  name: string;
+  /** Panoyu açan kişi (Veri Havuzu kişi kimliği); erişimi o ve projenin PY'si yönetir */
+  ownerId?: string;
+  /** Yoksa: projeyi gören herkes görüntüler, PY düzenler (eski panolar) */
+  access?: WbAccess;
+  nodes: WbNode[];
+  edges: WbEdge[];
+  voting?: WbVoting;
+  /** Ortak geri sayım */
+  timer?: { endsAt: string; seconds: number };
+  createdAt: string;
+  updatedAt: string;
+  createdBy?: string;
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -1028,6 +1184,10 @@ export interface Project {
   dashboard?: DashboardLayout;
   /** Projeye özel göstergeler (ör. PoC skoru): elle girilir ya da aktarımla güncellenir, geçmişiyle */
   kpis?: ProjectKpi[];
+  /** Müşteri PoC test listesi ve skor modeli (GİB PoC skoru) */
+  poc?: ProjectPoc;
+  /** FigJam tarzı panolar (fikir, planlama, retro, inceleme) */
+  whiteboards?: Whiteboard[];
   risks?: Risk[];
   pestelItems?: PestelItem[]; // PESTEL dış çevre analizi
   swotItems?: SwotItem[]; // SWOT stratejik analizi

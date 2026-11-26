@@ -4,6 +4,7 @@ import {
     JiraSyncFieldId,
     JiraSyncSettings,
     Person,
+    PocTestItem,
     Project,
     ProjectAiProfile,
     ProjectKpi,
@@ -19,6 +20,10 @@ import { EXCEL_TRACKING_FIELDS, fieldPolicy, hasFieldPolicy } from './planning/j
 import { foldTr } from './rag/text';
 import { createProject } from './workspace';
 import { addKpiPoint, upsertKpi } from './dashboard/kpi';
+import { DEFAULT_CATEGORY_PREFIX, POC_CATEGORIES } from './gibPoc';
+import { GIB_KPI_IDS, withPocKpis } from './gibPocKpi';
+
+export { GIB_KPI_IDS };
 
 /**
  * "PoC Bulgu Takip" Excel'i (GİB PoC çalışması) → PlanAsistan projesi.
@@ -30,7 +35,8 @@ import { addKpiPoint, upsertKpi } from './dashboard/kpi';
  *  - EMS Çalışması (öncül işler)            → görev öncülü
  *  - GİB rapor ve toplantı çıktıları        → müşteri istekleri (PY'ye özel alan)
  *  - MS, önem, PoC sonucu, güncel sonuç      → etiketler (filtre ve pano)
- *  - Test Kalemleri                         → PoC skoru ve zorunlu açık (önizleme ve günlük)
+ *  - Test Kalemleri                         → proje PoC test listesi (skor her an Jira durumundan hesaplanır)
+ *  - Aralık Teslimi / Aralık Sonrası / GİB yanıtı → "Planlama: …" kategori etiketleri
  *
  * Excel'deki formül sütunları (Sorumlu, Epic, İş Kodu, İlerleme …) dosyada
  * hesaplanmış değer olmadan da gelebilir; bu yüzden hepsi burada ham
@@ -85,7 +91,7 @@ export interface GibImportSummary {
     pocInitialScore?: number;
     mandatoryOpen?: number;
     testItems?: number;
-    /** Teslim planı ve GİB yanıtı sayfalarından: sayfa adı → madde sayısı */
+    /** Planlama kategorileri ve GİB yanıtı: etiket → madde sayısı */
     plans: Record<string, number>;
 }
 
@@ -104,6 +110,8 @@ export interface GibImportPackage {
     /** Milestone sayfasındaki MS tarihleri (proje sürümü olarak) */
     milestones?: ProjectVersion[];
     tagColors: Record<string, string>;
+    /** Test Kalemleri (göreve dönüşmeyenler dahil); skorun paydası ve dağılımlar */
+    pocTests?: PocTestItem[];
     summary: GibImportSummary;
     warnings: string[];
 }
@@ -463,18 +471,48 @@ const readMeetingRequests = (rows: SheetMatrix | undefined, customer: string, no
  * Bu sayfalardaki diğer sütunlar Genel Liste'den formülle gelir; yalnız elle
  * girilen sütunlar okunur.
  */
-interface PlanEntry { label: string; lines: string[] }
+interface PlanEntry { label: string; subset: string; lines: string[] }
+
+export const AWAITING_LABEL = 'GİB yanıtı bekleniyor';
 
 const PLAN_SHEETS: { names: string[]; label: string }[] = [
     { names: ['Aralık Teslimi'], label: 'Aralık teslimi' },
     { names: ['Aralık Sonrası Teslim'], label: 'Aralık sonrası teslim' },
-    { names: ['GİB’den Yanıt Beklenenler', "GİB'den Yanıt Beklenenler", 'GİB den Yanıt'], label: 'GİB yanıtı bekleniyor' },
+    { names: ['GİB’den Yanıt Beklenenler', "GİB'den Yanıt Beklenenler", 'GİB den Yanıt'], label: AWAITING_LABEL },
 ];
 
+/** Planlama kategorileri (etiket ailesi "Planlama:"); yalnız etiket ve filtre, sıraları yoktur */
+export const PLANNING = {
+    december: `${DEFAULT_CATEGORY_PREFIX} ${POC_CATEGORIES[0]}`,
+    clarify: `${DEFAULT_CATEGORY_PREFIX} ${POC_CATEGORIES[1]}`,
+    customer: `${DEFAULT_CATEGORY_PREFIX} ${POC_CATEGORIES[2]}`,
+    team: `${DEFAULT_CATEGORY_PREFIX} ${POC_CATEGORIES[3]}`,
+} as const;
 export const PLAN_TAG_COLORS: Record<string, string> = {
-    'Aralık teslimi': '#16a34a',
-    'Aralık sonrası teslim': '#7c3aed',
-    'GİB yanıtı bekleniyor': '#d97706',
+    [PLANNING.december]: '#16a34a',
+    [PLANNING.clarify]: '#d97706',
+    [PLANNING.customer]: '#7c3aed',
+    [PLANNING.team]: '#0891b2',
+    [AWAITING_LABEL]: '#b45309',
+};
+
+/**
+ * Teslim sayfalarından planlama kategorisi:
+ *  - Aralık 2026: "Aralık Teslimi", alt kümesi "Dahil edilmeye çalışılacak" olanlar hariç
+ *  - Proje ekibi: "Aralık Sonrası" 1 · Proje ekibi kısıtı + Aralık "Dahil edilmeye çalışılacak"
+ *  - Müşteri sonrası: "Aralık Sonrası" 2 · GİB'in ilk teslimat sonrası talebi
+ *  - GİB netleştirme: "Aralık Sonrası" 3 · Müşteri ile iletişime geçilecek + GİB'den yanıt beklenenler (Aralık planında olmayanlar)
+ */
+export const planningCategory = (december: PlanEntry | undefined, after: PlanEntry | undefined, awaiting: PlanEntry | undefined): string | undefined => {
+    if (december) return /dahil edilmeye/.test(fold(december.subset)) ? PLANNING.team : PLANNING.december;
+    if (after) {
+        const f = fold(after.subset);
+        if (/^1\b/.test(f) || f.includes('proje ekibi')) return PLANNING.team;
+        if (/^2\b/.test(f) || f.includes('teslimat sonrasi')) return PLANNING.customer;
+        if (/^3\b/.test(f) || f.includes('iletisim')) return PLANNING.clarify;
+        return undefined;
+    }
+    return awaiting ? PLANNING.clarify : undefined;
 };
 
 const readPlanSheet = (rows: SheetMatrix | undefined, label: string): Map<string, PlanEntry> => {
@@ -503,7 +541,7 @@ const readPlanSheet = (rows: SheetMatrix | undefined, label: string): Map<string
             text(at(r, cNote)) ? `Toplantı notu: ${text(at(r, cNote))}` : '',
             answer ? `GİB yanıtı: ${answer}` : '',
         ].filter(Boolean);
-        out.set(test, { label, lines });
+        out.set(test, { label, subset: text(at(r, cSubset)), lines });
     }
     return out;
 };
@@ -525,19 +563,21 @@ const readImpacts = (rows: SheetMatrix | undefined): Map<string, string> => {
     return out;
 };
 
-/** Test Kalemleri: ağırlıklı PoC skoru (güncel sonuç varsa o) ve zorunlu açık */
+/** Test Kalemleri: ağırlıklı PoC skoru (güncel sonuç varsa o), zorunlu açık ve saklanacak test listesi */
 const computePocScore = (
     rows: SheetMatrix | undefined,
     currentResult: Map<string, string>,
-): { score: number; initialScore: number; mandatoryOpen: number; items: number } | undefined => {
+): { score: number; initialScore: number; mandatoryOpen: number; items: number; tests: PocTestItem[] } | undefined => {
     if (!rows) return undefined;
     const h = findHeaderRow(rows, ['Test No', 'Ağırlık', 'PoC Sonucu']);
     if (h < 0) return undefined;
     const col = columnIndex(rows[h]);
     const cTest = col('Test No');
+    const cArea = col('Alan');
     const cImp = col('Önem');
     const cWeight = col('Ağırlık');
     const cPoc = col('PoC Sonucu');
+    const tests: PocTestItem[] = [];
     let weighted = 0;
     let evaluated = 0;
     let weighted0 = 0;
@@ -552,13 +592,21 @@ const computePocScore = (
         const result = current && RESULT_CLASSES.has(foldTr(current)) ? foldTr(current) : fold(at(rows[i], cPoc));
         const score = RESULT_SCORE[result];
         const w = num(at(rows[i], cWeight));
+        tests.push({
+            testNo: test,
+            ...(text(at(rows[i], cArea)) ? { area: text(at(rows[i], cArea)) } : {}),
+            importance: text(at(rows[i], cImp)),
+            weight: w,
+            pocResult: text(at(rows[i], cPoc)),
+            ...(current && RESULT_CLASSES.has(foldTr(current)) ? { currentResult: current } : {}),
+        });
         if (score !== undefined) { weighted += w * score; evaluated += w; }
         // İlk skor: müşterinin PoC değerlendirmesi (güncel sonuçlar hesaba katılmadan)
         const first = RESULT_SCORE[fold(at(rows[i], cPoc))];
         if (first !== undefined) { weighted0 += w * first; evaluated0 += w; }
         if (fold(at(rows[i], cImp)) === 'zorunlu' && (result === 'karsilanmadi' || result === 'kismen karsilandi')) mandatoryOpen++;
     }
-    return { score: evaluated > 0 ? weighted / evaluated : 0, initialScore: evaluated0 > 0 ? weighted0 / evaluated0 : 0, mandatoryOpen, items };
+    return { score: evaluated > 0 ? weighted / evaluated : 0, initialScore: evaluated0 > 0 ? weighted0 / evaluated0 : 0, mandatoryOpen, items, tests };
 };
 
 // ---------------------------------------------------------------------------
@@ -639,6 +687,12 @@ export const parseGibWorkbook = (wb: WorkbookMatrices, opts: { now?: string; cus
     const impacts = readImpacts(findSheet(wb, 'Öncelikli Bulgular'));
 
     const dataRows = main.slice(h + 1).filter(r => text(at(r, C.test)));
+    /** Maddenin bağlı olduğu CR (ör. CR-05): CR Listesi kırılımından */
+    const crRowFor = (testNo: string): string => {
+        const row = crList.byTest.get(testNo);
+        const cr = row?.cr || '';
+        return /^CR-\d+$/i.test(cr) ? cr.toUpperCase() : '';
+    };
     // CR düzeyinde verilen efor, ona bağlanan maddelere eşit bölünür (Excel'deki kural)
     const sourceCount = new Map<string, number>();
     dataRows.forEach(r => {
@@ -693,6 +747,10 @@ export const parseGibWorkbook = (wb: WorkbookMatrices, opts: { now?: string; cus
         if (statusText && mapped === undefined) warnings.push(`${testNo}: "${statusText}" durumu tanınmadı; Bekleyen sayıldı.`);
         if (statusText) explicitStatusIds.push(`gib-${testNo}`);
 
+        const [decPlan, afterPlan, awaitPlan] = plans.map(p => p.get(testNo));
+        const category = planningCategory(decPlan, afterPlan, awaitPlan);
+        if (afterPlan && !category) warnings.push(`${testNo}: "Aralık Sonrası Teslim" alt kümesi "${afterPlan.subset}" tanınmadı; planlama kategorisi verilmedi.`);
+        const scoreNum = num(at(r, C.score));
         const labels = [
             ms,
             tier === 1 ? 'Rapor 5.1' : '',
@@ -701,9 +759,14 @@ export const parseGibWorkbook = (wb: WorkbookMatrices, opts: { now?: string; cus
             current,
             cancelled ? 'İptal / Kapsam dışı' : '',
             ...(teams.length > 1 ? teams : []),
-            ...plans.map(p => p.get(testNo)?.label || ''),
+            category || '',
+            awaitPlan ? AWAITING_LABEL : '',
+            // Öncelik boyutları etiket ailesi olarak: filtre, kırılım ve çapraz tablo
+            tier > 0 ? `Kademe: ${tier}` : '',
+            scoreNum ? `Öncelik puanı: ${String(scoreNum).replace('.', ',')}` : '',
+            crRowFor(testNo) ? `CR: ${crRowFor(testNo)}` : '',
         ].filter(Boolean);
-        plans.forEach(p => { const e = p.get(testNo); if (e) summary.plans[e.label] = (summary.plans[e.label] || 0) + 1; });
+        [category, awaitPlan ? AWAITING_LABEL : ''].forEach(l => { if (l) summary.plans[l] = (summary.plans[l] || 0) + 1; });
 
         const effortLine = teams.length
             ? `${teams.map(t => `${t} ${String(effort[t]).replace('.', ',')}`).join(' · ')}${srcRow ? ` (kaynak: ${src})` : ''}`
@@ -721,7 +784,7 @@ export const parseGibWorkbook = (wb: WorkbookMatrices, opts: { now?: string; cus
             text(at(r, C.questions)) ? `Müşteriye soru: ${text(at(r, C.questions))}` : '',
             text(at(r, C.action)) ? `Aksiyon / çözüm planı: ${text(at(r, C.action))}` : '',
             text(at(r, C.msNote)) ? `${ms || 'MS'} notu: ${text(at(r, C.msNote))}` : '',
-            num(at(r, C.score)) ? `Öncelik puanı: ${String(num(at(r, C.score))).replace('.', ',')}` : '',
+            scoreNum ? `Öncelik puanı: ${String(scoreNum).replace('.', ',')}` : '',
             `Efor (gün): ${effortLine}`,
             assignees.length > 1 ? `Atananlar: ${assignees.join(', ')}` : '',
             statusText ? `Excel durumu: ${statusText}` : '',
@@ -738,7 +801,7 @@ export const parseGibWorkbook = (wb: WorkbookMatrices, opts: { now?: string; cus
             id,
             name: `${testNo} · ${title}`,
             availability: total > 0,
-            priority: priorityOf(num(at(r, C.score)), tier),
+            priority: priorityOf(scoreNum, tier),
             version: 0,
             predecessor: null,
             unit: primary || 'Genel',
@@ -817,6 +880,11 @@ export const parseGibWorkbook = (wb: WorkbookMatrices, opts: { now?: string; cus
         summary.mandatoryOpen = poc.mandatoryOpen;
         summary.testItems = poc.items;
     }
+    if (poc && dataRows.length) {
+        const known = new Set(poc.tests.map(t => t.testNo));
+        const orphan = tasks.filter(t => /^gib-/.test(t.id) && !known.has(t.id.slice(4))).length;
+        if (orphan) warnings.push(`${orphan} madde Test Kalemleri'nde yok; PoC skoruna girmez.`);
+    }
 
     // Jira proje anahtarı: anahtarların en sık öneki (MPS-6608 → MPS)
     const prefixCount = new Map<string, number>();
@@ -855,6 +923,7 @@ export const parseGibWorkbook = (wb: WorkbookMatrices, opts: { now?: string; cus
         jiraSync: { ...(jiraProjectKey ? { projectKey: jiraProjectKey } : {}), discover: false, autoMinutes: 0, fields: { ...EXCEL_TRACKING_FIELDS }, autoPeople: true },
         projectStartDate: readStartDate(findSheet(wb, 'Milestone')),
         milestones: readMilestones(findSheet(wb, 'Milestone')),
+        ...(poc ? { pocTests: poc.tests } : {}),
         tagColors: Object.fromEntries(Object.entries({ ...MS_TAG_COLORS, ...PLAN_TAG_COLORS }).filter(([k]) => tasks.some(t => t.labels?.includes(k)))),
         summary,
         warnings,
@@ -886,6 +955,8 @@ export interface GibApplyOptions {
     pmPersonId?: string;
     newPmName?: string;
     now?: Date;
+    /** Aktarılan dosyanın adı (PoC test listesinin kaynağı) */
+    source?: string;
 }
 
 export interface GibApplyResult {
@@ -964,10 +1035,11 @@ const upsertBy = <T,>(list: T[], incoming: T[], key: (x: T) => string): T[] => {
     return [...map.values()];
 };
 
-/** Paketi çalışma alanına uygular: PY (gerekirse havuza eklenir) + proje (yeni ya da güncelleme) */
-/** Dashboard göstergeleri: PoC skoru ve zorunlu açık; her aktarım bir ölçüm ekler (aynı gün yerine geçer) */
-export const GIB_KPI_IDS = { score: 'gib-kpi-poc', mandatory: 'gib-kpi-zorunlu' } as const;
-
+/**
+ * Dashboard göstergeleri (test listesi olmayan eski paketler için): aktarım
+ * özetindeki PoC skoru ve zorunlu açık. Test listesi varsa `withPocKpis`
+ * kullanılır (skor Jira durumundan her an yeniden hesaplanır).
+ */
 export const withGibKpis = (project: Project, summary: Pick<GibImportSummary, 'pocScore' | 'pocInitialScore' | 'mandatoryOpen' | 'findings'>, day: string): Project => {
     let p = project;
     const note = `Excel aktarımı · ${summary.findings} madde takipte`;
@@ -1073,7 +1145,14 @@ export const applyGibImport = (ws: WorkspaceData, pkg: GibImportPackage, opts: G
         };
     }
 
-    project = withGibKpis(withMilestoneVersions(project, pkg.milestones), pkg.summary, nowIso.slice(0, 10));
+    project = withMilestoneVersions(project, pkg.milestones);
+    if (pkg.pocTests?.length) {
+        // Test listesi saklanır; PY'nin skor ayarları (katsayı, kapsam) korunur
+        project = { ...project, poc: { ...(project.poc?.settings ? { settings: project.poc.settings } : {}), tests: pkg.pocTests, importedAt: nowIso, ...(opts.source ? { source: opts.source } : {}) } };
+        project = withPocKpis(project, nowIso.slice(0, 10), 'Excel aktarımı');
+    } else {
+        project = withGibKpis(project, pkg.summary, nowIso.slice(0, 10));
+    }
     const projects = target ? ws.projects.map(p => (p.id === target.id ? project : p)) : [...ws.projects, project];
     return {
         workspace: { ...ws, people, projects, activeProjectId: project.id },

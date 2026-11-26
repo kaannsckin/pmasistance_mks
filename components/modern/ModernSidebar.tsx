@@ -1,4 +1,5 @@
-import React, { useRef, useState } from 'react';
+import React, { useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { RagStatus, UserRole, View } from '../../types';
 import { ROLE_LABELS } from '../../utils/allocations';
 import { useAssistantOptional } from '../assistant/AssistantContext';
@@ -104,8 +105,16 @@ const NavItem: React.FC<{ icon: IconName; label: string; active: boolean; onClic
     </button>
 );
 
+/** Proje kısaltması: iki kelimenin baş harfleri ("GİB PoC" → "GP"), tek kelimede ilk iki harf */
+export const projectInitials = (name: string): string => {
+    const words = name.trim().split(/[\s\-_/·.]+/).filter(w => /[\p{L}\p{N}]/u.test(w));
+    if (!words.length) return '?';
+    const pick = words.length > 1 ? words[0][0] + words[1][0] : words[0].slice(0, 2);
+    return pick.toLocaleUpperCase('tr-TR');
+};
+
 /** "Diğer" menüsü: yedek, bulut, veri sağlığı, denetim ve arayüz (profil seçimi ayrı pencerede) */
-const ToolsMenu: React.FC<Pick<ModernSidebarProps, 'onSwitchToClassic' | 'onSaveBackup' | 'onLoadBackup' | 'cloudLinked' | 'onOpenCloud' | 'healthAlerts' | 'onOpenHealth' | 'onOpenAudit' | 'onOpenAbout' | 'onOpenProfile' | 'consoleMode'> & { onDone: () => void; onPickBackup: () => void }> = (p) => {
+const ToolsMenu: React.FC<Pick<ModernSidebarProps, 'onSwitchToClassic' | 'onSaveBackup' | 'onLoadBackup' | 'cloudLinked' | 'onOpenCloud' | 'healthAlerts' | 'onOpenHealth' | 'onOpenAudit' | 'onOpenAbout' | 'onOpenProfile' | 'consoleMode'> & { onDone: () => void; onPickBackup: () => void; style?: React.CSSProperties; floating?: boolean }> = (p) => {
     const item = (icon: IconName, label: string, run: () => void, trailing?: React.ReactNode) => (
         <button type="button" role="menuitem" onClick={() => { run(); p.onDone(); }} className="m-row-link w-full flex items-center gap-3 min-h-[44px] px-3.5 text-[15px]">
             <span className="m-text-3"><Icon name={icon} size={18} /></span>
@@ -114,7 +123,8 @@ const ToolsMenu: React.FC<Pick<ModernSidebarProps, 'onSwitchToClassic' | 'onSave
         </button>
     );
     return (
-        <div role="menu" aria-label="Diğer araçlar" className="absolute bottom-full left-2 right-2 mb-2 m-surface m-pop rounded-2xl py-1.5 z-50 max-h-[70vh] overflow-y-auto">
+        <div role="menu" aria-label="Diğer araçlar" style={p.style}
+            className={`${p.floating ? 'fixed w-[280px]' : 'absolute bottom-full left-2 right-2 mb-2'} m-surface m-pop rounded-2xl py-1.5 z-[90] max-h-[70vh] overflow-y-auto`}>
             {item('userCog', p.cloudLinked ? 'Bulut hesabı' : 'Profil değiştir', p.onOpenProfile)}
             <div className="border-t m-sep my-1"></div>
             {p.onSaveBackup && item('download', 'Yedeği indir', p.onSaveBackup)}
@@ -124,7 +134,8 @@ const ToolsMenu: React.FC<Pick<ModernSidebarProps, 'onSwitchToClassic' | 'onSave
             {item('cloud', 'Bulut veritabanı', p.onOpenCloud, p.cloudLinked ? <span className="text-[13px] m-ink-ok font-semibold">Bağlı</span> : undefined)}
             {p.onOpenHealth && item('activity', 'Veri sağlığı', p.onOpenHealth, p.healthAlerts > 0 ? <span className="text-[13px] font-semibold m-ink-warn">{p.healthAlerts}</span> : undefined)}
             {p.onOpenAudit && item('history', 'Denetim günlüğü', p.onOpenAudit)}
-            {item('info', 'Hakkında', p.onOpenAbout)}
+            <div className="border-t m-sep my-1"></div>
+            {item('info', 'PlanAsistan hakkında', p.onOpenAbout)}
             {!p.consoleMode && <div className="border-t m-sep my-1"></div>}
             {!p.consoleMode && item('swap', 'Klasik arayüze dön', p.onSwitchToClassic)}
         </div>
@@ -137,6 +148,15 @@ const ModernSidebar: React.FC<ModernSidebarProps> = (props) => {
     // Dar şerit yalnız çekmece kapalıyken (geniş ekran); dar ekranda açılan çekmece her zaman tam genişlikte
     const compact = !!props.collapsed && !isOpen;
     const [menuOpen, setMenuOpen] = useState(false);
+    // Dar şeritte menü şeridin sağına açılır (şerit taşmayı kestiği için sayfa köküne çizilir)
+    const moreRef = useRef<HTMLButtonElement>(null);
+    const [menuPos, setMenuPos] = useState<React.CSSProperties | undefined>();
+    useLayoutEffect(() => {
+        if (!menuOpen || !compact) { setMenuPos(undefined); return; }
+        const r = moreRef.current?.getBoundingClientRect();
+        if (r) setMenuPos({ left: r.right + 10, bottom: Math.max(8, window.innerHeight - r.bottom) });
+    }, [menuOpen, compact]);
+    const portalHost = typeof document !== 'undefined' ? (document.querySelector('.ui-modern') as HTMLElement | null) || document.body : null;
     // Yedek dosyası seçici menünün dışında: menü kapanınca (öğe tıklanınca) kaldırılırsa seçilen dosya okunmuyordu
     const backupRef = useRef<HTMLInputElement>(null);
     const assistant = useAssistantOptional();
@@ -155,10 +175,10 @@ const ModernSidebar: React.FC<ModernSidebarProps> = (props) => {
             >
                 <div className="m-sidebar-head flex items-center justify-between gap-1">
                     <span className="m-sidebar-logo"><RocketLogo onLaunch={onLogoLaunch} onHyperdrive={onHyperdrive} /></span>
-                    {onToggleCollapsed && (
-                        <button type="button" className="m-icon-btn m-sidebar-collapse" aria-controls="modern-sidebar" aria-expanded={!compact}
-                            aria-label={compact ? 'Menüyü genişlet' : 'Menüyü daralt'} title={compact ? 'Menüyü genişlet' : 'Menüyü daralt'} onClick={onToggleCollapsed}>
-                            <Icon name={compact ? 'chevronRight' : 'chevronLeft'} size={18} strokeWidth={2.2} />
+                    {onToggleCollapsed && !compact && (
+                        <button type="button" className="m-icon-btn m-sidebar-collapse" aria-controls="modern-sidebar" aria-expanded="true"
+                            aria-label="Menüyü daralt" title="Menüyü daralt" onClick={onToggleCollapsed}>
+                            <Icon name="panelLeft" size={19} />
                         </button>
                     )}
                     <button type="button" className="m-icon-btn lg:hidden" aria-label="Menüyü kapat" onClick={onClose}><Icon name="x" /></button>
@@ -209,7 +229,7 @@ const ModernSidebar: React.FC<ModernSidebarProps> = (props) => {
                             </button>
                         )}
                     </div>
-                    {compact && <div className="border-t m-sep my-1" aria-hidden="true"></div>}
+                    {compact && <div className="m-sidebar-sep" aria-hidden="true"></div>}
                     {projects.length === 0 && <p className="m-nav-label px-2.5 py-2 text-[14px] m-text-3">Kapsamınızda proje yok.</p>}
                     {sidebarProjects(projects, hasActiveProject ? activeProjectId : null).map(p => {
                         const active = hasActiveProject && p.id === activeProjectId;
@@ -223,8 +243,9 @@ const ModernSidebar: React.FC<ModernSidebarProps> = (props) => {
                                 title={compact ? p.name : undefined}
                                 className={`m-nav-item m-nav-project relative w-full flex items-center gap-3 min-h-[44px] px-2.5 rounded-[10px] text-[15px] text-left ${active ? 'm-accent-tint font-semibold' : 'm-row-link m-text'}`}
                             >
-                                <span aria-hidden="true" className="m-project-dot w-2.5 h-2.5 rounded-full flex-none" style={{ background: RAG_DOT[p.rag || 'none'] }}></span>
-                                {compact && <span aria-hidden="true" className="m-project-initials text-[13px] font-semibold">{p.name.trim().slice(0, 2).toLocaleUpperCase('tr-TR')}</span>}
+                                {compact
+                                    ? <span aria-hidden="true" className="m-project-tile" style={p.rag ? { boxShadow: `inset 0 0 0 2px ${RAG_DOT[p.rag]}` } : undefined}>{projectInitials(p.name)}</span>
+                                    : <span aria-hidden="true" className="m-project-dot w-2.5 h-2.5 rounded-full flex-none" style={{ background: RAG_DOT[p.rag || 'none'] }}></span>}
                                 <span className="m-nav-label flex-1 min-w-0 truncate">{p.name}</span>
                                 {p.openTasks > 0 && <span className="m-nav-label text-[13px] m-text-3 m-tabular" aria-label={`${p.openTasks} açık görev`}>{p.openTasks}</span>}
                             </button>
@@ -242,39 +263,47 @@ const ModernSidebar: React.FC<ModernSidebarProps> = (props) => {
                 </>}
                 </div>
 
-                <div className="mt-auto flex flex-col gap-1.5">
+                <div className="mt-auto flex flex-col gap-0.5">
                     {assistant?.chatEnabled && !consoleMode && (
-                        <button type="button" onClick={() => { assistant.setOpen(true); onClose(); }} title={compact ? 'Asistan' : undefined} aria-label={compact ? 'Asistan' : undefined}
-                            className="m-nav-item m-row-link w-full flex items-center gap-3 min-h-[44px] px-2.5 rounded-[10px] text-[15px] font-medium">
-                            <span className="m-text-3"><Icon name="message" /></span>
-                            <span className="m-nav-label">Asistan</span>
-                        </button>
+                        <NavItem compact={compact} icon="sparkles" label="Asistan" active={!!assistant.isOpen} onClick={() => { assistant.setOpen(true); onClose(); }} />
                     )}
-                    <div className="m-sidebar-footer relative flex items-center gap-1 pt-2 border-t m-sep">
+                    <NavItem compact={compact} icon="sliders" label="Ayarlar" active={false} onClick={() => { onOpenSettings(); onClose(); }} />
+                    {onToggleCollapsed && compact && (
+                        <NavItem compact icon="panelLeft" label="Menüyü genişlet" active={false} onClick={onToggleCollapsed} />
+                    )}
+                    <div className="m-sidebar-footer relative flex items-center gap-1 mt-1.5 pt-2 border-t m-sep">
                         <button
                             type="button"
                             onClick={() => { onOpenProfile(); onClose(); }}
                             aria-haspopup="dialog"
-                            title={props.cloudLinked ? 'Bulut hesabı' : 'Profil değiştir'}
+                            aria-label={compact ? `${person ? person.name : ROLE_LABELS[currentRole]} · ${props.cloudLinked ? 'Bulut hesabı' : 'Profil değiştir'}` : undefined}
+                            title={compact ? `${person ? `${person.name} · ` : ''}${ROLE_LABELS[currentRole]}` : props.cloudLinked ? 'Bulut hesabı' : 'Profil değiştir'}
                             className="m-sidebar-profile m-row-link flex-1 min-w-0 flex items-center gap-2.5 min-h-[52px] px-2 rounded-xl"
                         >
-                            <span className="w-9 h-9 rounded-full m-fill flex items-center justify-center text-[13px] font-semibold flex-none" aria-hidden="true">
+                            <span className={`relative w-9 h-9 rounded-full flex items-center justify-center text-[13px] font-semibold flex-none ${needsPerson ? 'm-tone-warn' : 'm-fill'}`} aria-hidden="true">
                                 {person ? person.initials : ROLE_LABELS[currentRole].charAt(0)}
+                                {props.cloudLinked && <span className="m-sidebar-cloud" title="Bulut hesabı"><Icon name="cloud" size={10} strokeWidth={2.4} /></span>}
                             </span>
                             <span className="m-nav-label flex-1 min-w-0 flex flex-col leading-tight">
                                 <span className="text-[15px] font-semibold truncate">{person ? person.name : ROLE_LABELS[currentRole]}</span>
                                 <span className={`text-[13px] truncate ${needsPerson ? 'm-ink-warn font-semibold' : 'm-text-3'}`}>
-                                    {props.cloudLinked ? 'Bulut hesabı' : needsPerson ? 'Kişi seçin' : person ? ROLE_LABELS[currentRole] : 'Profil değiştir'}
+                                    {needsPerson ? 'Kişi seçin' : person ? ROLE_LABELS[currentRole] : props.cloudLinked ? 'Bulut hesabı' : 'Profil değiştir'}
                                 </span>
                             </span>
                         </button>
-                        <button type="button" className="m-icon-btn" aria-label="Diğer araçlar" aria-haspopup="menu" aria-expanded={menuOpen} onClick={() => setMenuOpen(o => !o)}><Icon name="more" /></button>
-                        <button type="button" className="m-icon-btn" aria-label="Ayarlar" onClick={() => { onOpenSettings(); onClose(); }}><Icon name="sliders" /></button>
-                        {menuOpen && (
+                        <button ref={moreRef} type="button" className="m-icon-btn m-sidebar-more" aria-label="Diğer araçlar" title="Diğer araçlar" aria-haspopup="menu" aria-expanded={menuOpen} onClick={() => setMenuOpen(o => !o)}><Icon name="more" /></button>
+                        {menuOpen && !compact && (
                             <>
                                 <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} aria-hidden="true"></div>
                                 <ToolsMenu {...props} onOpenProfile={() => { onOpenProfile(); onClose(); }} onDone={() => setMenuOpen(false)} onPickBackup={() => backupRef.current?.click()} />
                             </>
+                        )}
+                        {menuOpen && compact && menuPos && portalHost && createPortal(
+                            <>
+                                <div className="fixed inset-0 z-[85]" onClick={() => setMenuOpen(false)} aria-hidden="true"></div>
+                                <ToolsMenu {...props} floating style={menuPos} onOpenProfile={() => { onOpenProfile(); onClose(); }} onDone={() => setMenuOpen(false)} onPickBackup={() => backupRef.current?.click()} />
+                            </>,
+                            portalHost,
                         )}
                     </div>
                 </div>

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Person, Project, ProjectComponent, ProjectProgressModel, ProjectRoleDef, ProjectVersion, Task, WorkflowConfig } from '../../types';
+import { Person, PocScoreSettings, Project, ProjectComponent, ProjectProgressModel, ProjectRoleDef, ProjectVersion, Task, WorkflowConfig } from '../../types';
+import PocSettingsPanel, { cleanPocSettings, pocSettingsInvalid } from './PocSettingsPanel';
 import { hasProgressWeights, isProgressPercent, progressOf } from '../../utils/progress';
 import { ProgressWeightsEditor } from './dashboard/DashboardSettings';
 import {
@@ -20,15 +21,20 @@ const ProjectListsSheet: React.FC<{
     people: string[];
     canEdit: boolean;
     onClose: () => void;
-    onSave: (patch: { components: ProjectComponent[]; versions: ProjectVersion[]; tasks: Task[]; roleMembers?: Project['roleMembers']; progressModel?: ProjectProgressModel }, summary: string) => void;
+    onSave: (patch: { components: ProjectComponent[]; versions: ProjectVersion[]; tasks: Task[]; roleMembers?: Project['roleMembers']; progressModel?: ProjectProgressModel; pocSettings?: PocScoreSettings | null }, summary: string) => void;
     /** Projenin iş akışı (ilerleme yüzdeleri durum başına girilir) */
     workflow?: WorkflowConfig;
     /** Proje rolleri: tanımlar (yönetici) ve üye seçilecek havuz */
     roleDefs?: ProjectRoleDef[];
     pool?: Person[];
-    initialTab?: 'components' | 'versions' | 'roles' | 'progress';
+    initialTab?: 'components' | 'versions' | 'roles' | 'progress' | 'poc';
 }> = ({ project, people, canEdit, onClose, onSave, roleDefs = [], pool = [], workflow, initialTab }) => {
-    const [tab, setTab] = useState<'components' | 'versions' | 'roles' | 'progress'>(initialTab || 'versions');
+    const [tab, setTab] = useState<'components' | 'versions' | 'roles' | 'progress' | 'poc'>(initialTab || 'versions');
+    const hasPoc = !!project.poc?.tests?.length;
+    const [pocSettings, setPocSettings] = useState<PocScoreSettings | undefined>(() => project.poc?.settings && JSON.parse(JSON.stringify(project.poc.settings)));
+    const cleanPoc = cleanPocSettings(pocSettings);
+    const pocChanged = hasPoc && JSON.stringify(cleanPoc || null) !== JSON.stringify(project.poc?.settings || null);
+    const invalidPoc = pocSettingsInvalid(pocSettings);
     const [progressModel, setProgressModel] = useState<ProjectProgressModel | undefined>(() => project.progressModel && JSON.parse(JSON.stringify(project.progressModel)));
     const cleanModel: ProjectProgressModel | undefined = (() => {
         const m: ProjectProgressModel = { ...(hasProgressWeights(progressModel?.weights) ? { weights: progressModel!.weights } : {}), ...(progressModel?.basis === 'effort' ? { basis: 'effort' as const } : {}) };
@@ -88,7 +94,7 @@ const ProjectListsSheet: React.FC<{
     const visibleVersions = versions.filter(v => showArchived || v.status !== 'archived');
     const cleanMembers: Record<string, string[]> = Object.fromEntries((Object.entries(members) as [string, string[]][]).filter(([, v]) => v.length));
     const membersChanged = JSON.stringify(cleanMembers) !== JSON.stringify(Object.fromEntries((Object.entries(project.roleMembers || {}) as [string, string[]][]).filter(([, v]) => v.length)));
-    const dirty = log.length > 0 || membersChanged || modelChanged || JSON.stringify(components) !== JSON.stringify(project.components || []) || JSON.stringify(versions) !== JSON.stringify(project.versions || []);
+    const dirty = log.length > 0 || membersChanged || modelChanged || pocChanged || JSON.stringify(components) !== JSON.stringify(project.components || []) || JSON.stringify(versions) !== JSON.stringify(project.versions || []);
 
     return (
         <Sheet xl title={`Proje ayarları: ${project.name}`} subtitle="Jira'daki gibi: sürüm = görevlerin hedef sürümü ve yayın planı, bileşen = projenin modülü (sorumlusu olabilir), rol = bu projede kimin hangi ekipte olduğu (geçiş kuralları ve bildirimler role göre çalışır)."
@@ -97,11 +103,11 @@ const ProjectListsSheet: React.FC<{
                 <>
                     {errors.length ? <span role="alert" className="flex-1 text-[13px] m-ink-bad">{errors[0]}</span> : <span className="flex-1 text-[13px] m-text-3">{log.length ? `Bekleyen: ${log.join('; ')}` : 'Değişiklikler "Kaydet" ile görevlerle birlikte yazılır.'}</span>}
                     <button type="button" className="m-btn m-btn-gray" onClick={onClose}>Vazgeç</button>
-                    <button type="button" className="m-btn m-btn-primary" disabled={!!errors.length || !dirty || invalidWeights} onClick={() => onSave({ components, versions, tasks, roleMembers: Object.keys(cleanMembers).length ? cleanMembers : undefined, progressModel: cleanModel }, [...log, ...(membersChanged ? ['rol üyeleri güncellendi'] : []), ...(modelChanged ? ['ilerleme modeli güncellendi'] : [])].join('; ') || 'liste güncellendi')}><Icon name="check" size={16} />Kaydet</button>
+                    <button type="button" className="m-btn m-btn-primary" disabled={!!errors.length || !dirty || invalidWeights || invalidPoc} onClick={() => onSave({ components, versions, tasks, roleMembers: Object.keys(cleanMembers).length ? cleanMembers : undefined, progressModel: cleanModel, ...(pocChanged ? { pocSettings: cleanPoc || null } : {}) }, [...log, ...(membersChanged ? ['rol üyeleri güncellendi'] : []), ...(modelChanged ? ['ilerleme modeli güncellendi'] : []), ...(pocChanged ? ['PoC skor modeli güncellendi'] : [])].join('; ') || 'liste güncellendi')}><Icon name="check" size={16} />Kaydet</button>
                 </>
             ) : undefined}>
             <div role="tablist" className="flex gap-1 p-1 rounded-xl m-fill-2 self-start">
-                {([['versions', `Sürümler (${versions.length})`], ['components', `Bileşenler (${components.length})`], ['roles', `Roller (${Object.values(cleanMembers).reduce((n: number, l: string[]) => n + l.length, 0)} üye)`], ...(workflow ? [['progress', 'İlerleme'] as const] : [])] as const).map(([k, l]) => (
+                {([['versions', `Sürümler (${versions.length})`], ['components', `Bileşenler (${components.length})`], ['roles', `Roller (${Object.values(cleanMembers).reduce((n: number, l: string[]) => n + l.length, 0)} üye)`], ...(workflow ? [['progress', 'İlerleme'] as const] : []), ...(workflow && hasPoc ? [['poc', 'PoC skoru'] as const] : [])] as const).map(([k, l]) => (
                     <button key={k} type="button" role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
                         className={`h-8 px-3 rounded-lg border-0 cursor-pointer text-[14px] ${tab === k ? 'm-surface font-semibold m-text' : 'bg-transparent m-text-2'}`}>{l}</button>
                 ))}
@@ -225,6 +231,10 @@ const ProjectListsSheet: React.FC<{
                     </div>
                 );
             })()}
+
+            {tab === 'poc' && workflow && (
+                <PocSettingsPanel project={project} workflow={workflow} value={pocSettings} canEdit={canEdit} onChange={setPocSettings} />
+            )}
 
             {tab === 'components' && (
                 <div className="flex flex-col gap-2">

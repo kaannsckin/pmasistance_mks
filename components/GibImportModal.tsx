@@ -17,6 +17,8 @@ export interface GibImportChoice {
     projectName: string;
     pmPersonId?: string;
     newPmName?: string;
+    /** Dosya adı (PoC test listesinin kaynağı) */
+    source?: string;
 }
 
 interface Props {
@@ -53,6 +55,7 @@ const GibImportModal: React.FC<Props> = ({
     const [projectName, setProjectName] = useState(defaultProjectName);
     const [pm, setPm] = useState<string>(NEW);
     const [newPmName, setNewPmName] = useState(defaultPmName);
+    const [fileName, setFileName] = useState<string>('');
 
     const editable = useMemo(() => projects.filter(p => editableProjectIds.has(p.id)), [projects, editableProjectIds]);
     const sortedPeople = useMemo(() => [...people].sort((a, b) => fullName(a).localeCompare(fullName(b), 'tr')), [people]);
@@ -66,6 +69,7 @@ const GibImportModal: React.FC<Props> = ({
             if (!isGibWorkbook(Object.keys(wb))) throw new Error('"Genel Liste" sayfası bulunamadı — PoC Bulgu Takip Excel\'i seçin.');
             const parsed = parseGibWorkbook(wb);
             setPkg(parsed);
+            setFileName(file.name);
             // Önceden aktarılmış proje ya da aynı adlı proje varsa onu güncellemeyi öner
             const prior = findImportedProject(editable, parsed)
                 || editable.find(p => foldTr(p.name) === foldTr(defaultProjectName));
@@ -124,7 +128,9 @@ const GibImportModal: React.FC<Props> = ({
                                 {chip(`${s.mandatory} zorunlu`)}
                                 {chip(`${s.epics} epic · ${s.crs} CR`)}
                                 {chip(`${fmt(s.totalEffortDays)} gün efor`)}
-                                {s.pocScore !== undefined && chip(`PoC skoru ${formatPercent(s.pocScore)}`, true)}
+                                {s.pocInitialScore !== undefined && chip(`İlk skor ${formatPercent(s.pocInitialScore)}`)}
+                                {s.pocScore !== undefined && chip(`Doğrulanmış ${formatPercent(s.pocScore)}`, true)}
+                                {s.testItems !== undefined && chip(`${s.testItems} test kalemi saklanır`)}
                                 {s.mandatoryOpen !== undefined && chip(`${s.mandatoryOpen} zorunlu açık`)}
                                 <button onClick={() => setPkg(null)} className="ml-auto text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"><i aria-hidden="true" className="fa-solid fa-rotate-left mr-1"></i>Başka dosya</button>
                             </div>
@@ -217,6 +223,7 @@ const GibImportModal: React.FC<Props> = ({
                                     projectId: target === NEW ? undefined : target,
                                     projectName: projectName.trim(),
                                     ...(pm === NEW ? { newPmName: newPmName.trim() } : { pmPersonId: pm }),
+                                    ...(fileName ? { source: fileName } : {}),
                                 });
                                 onClose();
                             }}

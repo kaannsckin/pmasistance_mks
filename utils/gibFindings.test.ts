@@ -218,7 +218,11 @@ describe('parseGibWorkbook', () => {
 
     it('etiketler, tarihler ve atananlar', () => {
         const t = byId.get('gib-I-01')!;
-        expect(t.labels).toEqual(['MS0', 'Rapor 5.1', 'Zorunlu', 'PoC: Karşılanmadı', 'Hızlı aksiyon', 'EMS', 'İstemci', 'Aralık teslimi']);
+        expect(t.labels).toEqual(['MS0', 'Rapor 5.1', 'Zorunlu', 'PoC: Karşılanmadı', 'Hızlı aksiyon', 'EMS', 'İstemci', 'Planlama: Aralık 2026', 'Kademe: 1', 'Öncelik puanı: 10', 'CR: CR-01']);
+        // Öncelik puanı 8 ile 7,5 ayrı değerler olarak kalır (görev önceliğinde ikisi de Orta)
+        expect(byId.get('gib-D-04')!.labels).toContain('Öncelik puanı: 8');
+        expect(byId.get('gib-D-05')!.labels).toContain('Öncelik puanı: 7,5');
+        expect(byId.get('gib-D-05')!.labels).toContain('CR: CR-02');
         expect(t.dueDate).toBe('2026-11-24');
         expect(t.issueType).toBe('bug');
         const two = byId.get('gib-I-02')!;
@@ -283,15 +287,17 @@ describe('parseGibWorkbook', () => {
     it('teslim planı, GİB yanıtı ve olası etki: etiket + not; Genel Liste\'de olmayan madde bildirilir', () => {
         const i01 = pkg.tasks.find(t => t.id === 'gib-I-01')!;
         const d04 = pkg.tasks.find(t => t.id === 'gib-D-04')!;
-        expect(i01.labels).toContain('Aralık teslimi');
+        expect(i01.labels).toContain('Planlama: Aralık 2026');
+        expect(i01.labels).not.toContain('Aralık teslimi');
         expect(i01.notes).toContain('Olası etki: Kaba kuvvet saldırısına açık.');
         expect(i01.notes).toContain('Aralık teslimi: Aralık planı · karar: Geliştirme planı (MS0) · Slayt 4 · Parola');
         expect(i01.notes).toContain('Toplantı notu: Aralık teslimatında.');
         expect(d04.labels).toContain('GİB yanıtı bekleniyor');
+        expect(d04.labels).toContain('Planlama: GİB netleştirme'); // Aralık planında değil → GİB netleştirme
         expect(d04.notes).toContain('GİB yanıtı: Bekleniyor');
-        expect(pkg.summary.plans).toEqual({ 'Aralık teslimi': 1, 'GİB yanıtı bekleniyor': 1 });
+        expect(pkg.summary.plans).toEqual({ 'Planlama: Aralık 2026': 1, 'Planlama: GİB netleştirme': 1, 'GİB yanıtı bekleniyor': 1 });
         expect(pkg.warnings.some(w => w.includes('Z-99'))).toBe(true);
-        expect(pkg.tagColors['Aralık teslimi']).toBeDefined();
+        expect(pkg.tagColors['Planlama: Aralık 2026']).toBeDefined();
     });
 
     it('Jira eşitleme önerisi: Jira No önekinden proje, Excel alanlarını ezmeyen alan seçimi, kişiler otomatik', () => {
@@ -414,5 +420,100 @@ describe('applyGibImport', () => {
         const res = applyGibImport(ws, pkg, { projectName: 'GİB', newPmName: 'MKS', now });
         expect(res.workspace.projects[0]).toBe(other);
         expect(res.workspace.projects).toHaveLength(2);
+    });
+});
+
+describe('planlama kategorileri ve PoC test listesi', () => {
+    // Genel Liste başlığıyla küçük satırlar: yalnız Test No, Önem, Başlık, PoC Sonucu dolu
+    const header = GENEL[1] as string[];
+    const col = (name: string) => header.indexOf(name);
+    const row = (test: string, importance: string, poc: string, current = '') => {
+        const r: unknown[] = header.map(() => null);
+        r[col('Test No')] = test;
+        r[col('Önem')] = importance;
+        r[col('Başlık')] = `${test} başlık`;
+        r[col('PoC Sonucu')] = poc;
+        r[col('Güncel Sonuç')] = current;
+        return r;
+    };
+    const genel = [GENEL[0], header,
+        row('A-01', 'Zorunlu', 'Karşılanmadı'),
+        row('A-02', 'Olması beklenen', 'Kısmen karşılandı'),
+        row('B-01', 'Zorunlu', 'Karşılanmadı'),
+        row('B-02', 'İsteğe bağlı', 'Test edilemedi'),
+        row('B-03', 'Zorunlu', 'Karşılanmadı', 'Kısmen karşılandı'),
+        row('L-01', 'Olması beklenen', 'Karşılanmadı'),
+        row('L-02', 'Zorunlu', 'Karşılanmadı'),
+    ];
+    const aralik = [['Aralık teslimi'], ['Test No', 'Önem Kademesi', 'Başlık', 'Alt küme', 'Karar kaynağı'],
+        ['A-01', null, null, 'Aralık planı', ''],
+        ['A-02', null, null, 'Dahil edilmeye çalışılacak', ''],
+        ['L-02', null, null, 'Aralık planı', ''],
+    ];
+    const sonrasi = [['Aralık sonrası'], ['Test No', 'Başlık', 'Alt küme', 'Karar kaynağı'],
+        ['B-01', null, '1 · Proje ekibi kısıtı', ''],
+        ['B-02', null, '2 · GİB’in ilk teslimat sonrası talebi', ''],
+        ['B-03', null, '3 · Müşteri ile iletişime geçilecek', ''],
+    ];
+    const yanit = [['Yanıt'], ['Test No', 'Başlık', 'Alt küme', 'Yanıt durumu'],
+        ['L-01', null, 'Yanıta bağlı', 'Bekleniyor'],
+        ['L-02', null, 'Yanıta bağlı', 'Bekleniyor'], // Aralık planında: Aralık 2026 kalır
+    ];
+    const tests = [['PoC Test Prosedürü'], ['Test No', 'Alan', 'Önem', 'Ağırlık', 'Adımlar', 'Beklenen', 'PoC Sonucu'],
+        ['A-01', 'A', 'Zorunlu', 3, '', '', 'Karşılanmadı'],
+        ['A-02', 'A', 'Olması beklenen', 2, '', '', 'Kısmen karşılandı'],
+        ['B-01', 'B', 'Zorunlu', 3, '', '', 'Karşılanmadı'],
+        ['B-02', 'B', 'İsteğe bağlı', 1, '', '', 'Test edilemedi'],
+        ['B-03', 'B', 'Zorunlu', 3, '', '', 'Karşılanmadı'],
+        ['L-01', 'L', 'Olması beklenen', 2, '', '', 'Karşılanmadı'],
+        ['L-02', 'L', 'Zorunlu', 3, '', '', 'Karşılanmadı'],
+        ['Z-01', 'Z', 'Zorunlu', 3, '', '', 'Karşılandı'], // göreve dönüşmeyen test
+        ['Z-02', 'Z', 'Olması beklenen', 2, '', '', 'Değerlendirme dışı'],
+    ];
+    const wb: WorkbookMatrices = {
+        'Genel Liste': genel, 'Aralık Teslimi': aralik, 'Aralık Sonrası Teslim': sonrasi, 'GİB’den Yanıt Beklenenler': yanit, 'Test Kalemleri': tests,
+    };
+    const pkg = parseGibWorkbook(wb, { now: NOW });
+    const cat = (id: string) => pkg.tasks.find(t => t.id === `gib-${id}`)!.labels!.filter(l => l.startsWith('Planlama:'));
+
+    it('Aralık 2026: Aralık sayfası, "Dahil edilmeye çalışılacak" hariç; GİB yanıtı beklense de Aralık planında kalır', () => {
+        expect(cat('A-01')).toEqual(['Planlama: Aralık 2026']);
+        expect(cat('L-02')).toEqual(['Planlama: Aralık 2026']);
+        expect(pkg.tasks.find(t => t.id === 'gib-L-02')!.labels).toContain('GİB yanıtı bekleniyor');
+    });
+
+    it('Proje ekibi: alt küme 1 ve Aralık "Dahil edilmeye çalışılacak"; Müşteri sonrası: 2; GİB netleştirme: 3 ve yanıt beklenenler', () => {
+        expect(cat('A-02')).toEqual(['Planlama: Proje ekibi']);
+        expect(cat('B-01')).toEqual(['Planlama: Proje ekibi']);
+        expect(cat('B-02')).toEqual(['Planlama: Müşteri sonrası']);
+        expect(cat('B-03')).toEqual(['Planlama: GİB netleştirme']);
+        expect(cat('L-01')).toEqual(['Planlama: GİB netleştirme']);
+        expect(pkg.summary.plans).toMatchObject({ 'Planlama: Aralık 2026': 2, 'Planlama: Proje ekibi': 2, 'Planlama: Müşteri sonrası': 1, 'Planlama: GİB netleştirme': 2 });
+    });
+
+    it('Test Kalemleri saklanır: göreve dönüşmeyenler dahil, Güncel Sonuç ile', () => {
+        expect(pkg.pocTests).toHaveLength(9);
+        expect(pkg.pocTests!.find(t => t.testNo === 'Z-01')).toMatchObject({ importance: 'Zorunlu', weight: 3, pocResult: 'Karşılandı' });
+        expect(pkg.pocTests!.find(t => t.testNo === 'B-03')!.currentResult).toBe('Kısmen karşılandı');
+        expect(pkg.pocTests!.find(t => t.testNo === 'A-01')!.currentResult).toBeUndefined();
+    });
+
+    it('aktarım projeye test listesini yazar; PoC göstergesi canlı skordan; yeniden aktarım PY ayarlarını korur', () => {
+        const now = new Date('2026-11-26T10:00:00.000Z');
+        const first = applyGibImport(createEmptyWorkspace(), pkg, { projectName: 'GİB', newPmName: 'MKS', now, source: 'takip.xlsx' });
+        let project = first.workspace.projects.find(p => p.id === first.projectId)!;
+        expect(project.poc).toMatchObject({ source: 'takip.xlsx', importedAt: now.toISOString() });
+        expect(project.poc!.tests).toHaveLength(9);
+        const kpi = project.kpis!.find(k => k.id === 'gib-kpi-poc')!;
+        // Payda: değerlendirilmiş testler (B-02 test edilemedi, Z-02 değerlendirme dışı hariç) 3+2+3+3+2+3+3 = 19
+        // Bugün (tüm görevler açık) = Doğrulanmış = (3·1 [Z-01] + 2·0,5 [A-02] + 3·0,5 [B-03]) / 19
+        expect(kpi.points.at(-1)!.value).toBeCloseTo(100 * 5.5 / 19, 1);
+        // İlk = (3 + 1) / 19
+        expect(kpi.baseline).toBeCloseTo(100 * 4 / 19, 1);
+
+        const ws = { ...first.workspace, projects: first.workspace.projects.map(p => (p.id === project.id ? { ...p, poc: { ...p.poc!, settings: { scopeLabels: ['Planlama: Aralık 2026'] } } } : p)) };
+        const again = applyGibImport(ws, pkg, { projectId: project.id, projectName: 'GİB', pmPersonId: first.pmPersonId, now });
+        project = again.workspace.projects.find(p => p.id === project.id)!;
+        expect(project.poc!.settings).toEqual({ scopeLabels: ['Planlama: Aralık 2026'] });
     });
 });

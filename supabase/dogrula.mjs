@@ -105,6 +105,7 @@ const run = async () => {
     const t4 = await checkTable('workspace_projects');
     // Asistan hafızası (isteğe bağlı): yoksa yalnız hafıza bulut eşitlemesi çalışmaz
     if (!(await checkTable('assistant_memory'))) info('assistant_memory yok: asistan hafızası buluta eşitlenmez (schema.sql\'i yeniden çalıştırın)');
+    if (!(await checkTable('workspace_whiteboard_items'))) info('workspace_whiteboard_items yok: whiteboard panoları buluta eşitlenmez ve eş zamanlı düzenleme yalnız aynı tarayıcıda çalışır (schema.sql\'i yeniden çalıştırın)');
     const schemaReady = t1 && t2 && t3 && t4;
     // app_settings: istemciye kapalı olmalı (RLS açık, politika yok) → anonim okuma boş döner
     const st = await get('/rest/v1/app_settings?select=id&limit=1');

@@ -42,6 +42,8 @@ interface ProjectBoardProps {
     onDeleteTask: (id: string) => void;
     onNotifyTask?: (task: Task) => void;
     onNewTask: () => void;
+    /** Projeyi düzenleme yetkisi yok: sürükleme, yeni görev ve görev işlemleri kapalı */
+    readOnly?: boolean;
     onCelebrate?: (message: string) => void;
     sprintNames?: Record<number, string>;
     /** Oturumdaki kişinin adı ("Sadece benim işlerim") */
@@ -74,7 +76,7 @@ const TYPE_ICON: Record<string, { icon: string; label: string; color: string }> 
 
 const Card: React.FC<{
     t: Task; done: boolean; columnName: string; workflow?: WorkflowConfig;
-    onView: () => void; onDragStart: (e: React.DragEvent) => void; menu: React.ReactNode;
+    onView: () => void; onDragStart?: (e: React.DragEvent) => void; menu: React.ReactNode;
 }> = ({ t, done, columnName, workflow, onView, onDragStart, menu }) => {
     const late = daysLate(t);
     const prio = PRIORITY_META[t.priority];
@@ -84,8 +86,8 @@ const Card: React.FC<{
     // Ayrıntılı durum kolon adından farklıysa kartta gösterilir (ör. Devam Ediyor kolonunda "Analizde")
     const showJira = !!t.jiraStatus && statusLabel.toLocaleLowerCase('tr-TR') !== columnName.toLocaleLowerCase('tr-TR');
     return (
-        <article draggable onDragStart={onDragStart}
-            className="m-surface rounded-[10px] flex items-start gap-1 pl-3 pr-1 py-1 cursor-grab active:cursor-grabbing"
+        <article draggable={!!onDragStart} onDragStart={onDragStart}
+            className={`m-surface rounded-[10px] flex items-start gap-1 pl-3 pr-1 py-1 ${onDragStart ? 'cursor-grab active:cursor-grabbing' : ''}`}
             style={{ boxShadow: `inset 3px 0 0 ${bar || 'transparent'}, var(--m-shadow-sm, 0 1px 2px rgba(0,0,0,.06))` }}>
             <button type="button" onClick={onView} className="flex-1 min-w-0 flex flex-col gap-1.5 py-2 text-left bg-transparent border-0 p-0 cursor-pointer" style={{ font: 'inherit' }}>
                 <span className="flex items-center gap-2 flex-wrap text-[12.5px]">
@@ -125,7 +127,7 @@ const Card: React.FC<{
 };
 
 const ProjectBoard: React.FC<ProjectBoardProps> = ({
-    tasks, config, canConfigure, onSaveConfig, onMoveTask, onStatusChange, onWorkflowChange, workflow, boardSource, schemeName, onOpenWorkflow, onOpenLists, onOpenAutomation, onViewTask, onEditTask, onDeleteTask, onNotifyTask, onNewTask, onCelebrate,
+    tasks, config, canConfigure, onSaveConfig, onMoveTask, onStatusChange, onWorkflowChange, workflow, boardSource, schemeName, onOpenWorkflow, onOpenLists, onOpenAutomation, onViewTask, onEditTask, onDeleteTask, onNotifyTask, onNewTask, onCelebrate, readOnly = false,
     sprintNames, me, wpNames, minPriority = 'Low' as TaskPriority, sortKey = 'smart' as TaskSortKey,
 }) => {
     const cfg = useMemo(() => boardConfigOf(config, workflow), [config, workflow]);
@@ -254,7 +256,7 @@ const ProjectBoard: React.FC<ProjectBoardProps> = ({
                         <span aria-hidden="true" className="flex-1 h-1.5 rounded-full m-fill overflow-hidden"><span className="block h-full rounded-full" style={{ width: `${pct}%`, background: 'var(--m-ok)' }}></span></span>
                         <span className="text-[13px] m-text-2 whitespace-nowrap"><b className="m-tabular">{doneCount}/{mappedTotal}</b> tamam</span>
                     </span>
-                    <button type="button" className="m-btn m-btn-primary !min-h-[36px] !px-3 text-[14px]" onClick={onNewTask}><Icon name="plus" size={15} />Görev</button>
+                    {!readOnly && <button type="button" className="m-btn m-btn-primary !min-h-[36px] !px-3 text-[14px]" onClick={onNewTask}><Icon name="plus" size={15} />Görev</button>}
                     {schemeName && <span className="hidden lg:inline-flex items-center gap-1 h-7 px-2.5 rounded-full m-fill-2 text-[12.5px] m-text-2" title={`Yönetici tarafından atanan proje yapılandırması${boardSource === 'project' ? ' · bu projeye özel pano' : ''}`}><Icon name="sliders" size={12} />{schemeName}{boardSource === 'project' ? ' · özel pano' : ''}</span>}
                     {onOpenLists && <button type="button" className="m-btn m-btn-gray !min-h-[36px] !px-3 text-[14px]" onClick={onOpenLists} title="Projenin sürümleri, bileşenleri ve rol üyeleri"><Icon name="grid" size={15} />Proje ayarları</button>}
                     {onOpenAutomation && <button type="button" className="m-btn m-btn-gray !min-h-[36px] !px-3 text-[14px]" onClick={onOpenAutomation} title="Kural setleri: durum değişince ya da her gün otomatik işlem"><Icon name="refresh" size={15} />Kurallar</button>}
@@ -349,15 +351,15 @@ const ProjectBoard: React.FC<ProjectBoardProps> = ({
                                                 <div key={c.id}
                                                     className={`flex flex-col gap-2 rounded-xl p-1.5 min-h-[72px] transition-colors ${dragOver === zone ? 'm-accent-tint' : 'm-fill-2'}`}
                                                     style={{ background: dragOver === zone ? undefined : 'color-mix(in srgb, var(--m-fill-2, #f2f2f7) 55%, transparent)' }}
-                                                    onDragOver={e => { e.preventDefault(); if (dragOver !== zone) setDragOver(zone); }}
+                                                    onDragOver={e => { if (readOnly) return; e.preventDefault(); if (dragOver !== zone) setDragOver(zone); }}
                                                     onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(null); }}
-                                                    onDrop={e => { e.preventDefault(); setDragOver(null); const id = e.dataTransfer.getData('text/plain'); if (id) drop(c, id); }}>
+                                                    onDrop={e => { e.preventDefault(); setDragOver(null); const id = e.dataTransfer.getData('text/plain'); if (id && !readOnly) drop(c, id); }}>
                                                     {list.map(t => (
                                                         <Card key={t.id} t={t} done={done} columnName={c.name}
                                                             onView={() => onViewTask(t)}
-                                                            onDragStart={e => { e.dataTransfer.setData('text/plain', t.id); e.dataTransfer.effectAllowed = 'move'; }}
+                                                            onDragStart={readOnly ? undefined : e => { e.dataTransfer.setData('text/plain', t.id); e.dataTransfer.effectAllowed = 'move'; }}
                                                             workflow={workflow}
-                                                            menu={<TaskActionsMenu task={t} onStatusChange={onStatusChange} onWorkflowChange={onWorkflowChange} workflowTasks={tasks} workflow={workflow} onEdit={onEditTask} onDelete={onDeleteTask} onNotify={onNotifyTask} />} />
+                                                            menu={readOnly ? null : <TaskActionsMenu task={t} onStatusChange={onStatusChange} onWorkflowChange={onWorkflowChange} workflowTasks={tasks} workflow={workflow} onEdit={onEditTask} onDelete={onDeleteTask} onNotify={onNotifyTask} />} />
                                                     ))}
                                                 </div>
                                             );

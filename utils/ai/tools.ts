@@ -70,7 +70,7 @@ export interface ToolDef {
     /** Yalnız bu yetkiyi taşıyan rollere sunulur (ör. denetim günlüğü, veri sağlığı) */
     permission?: PermissionKey;
     /** Tarayıcı çalışma zamanı gerektirir: ui (ajan gezinmesi) ya da jira (sunucuda Jira bağlantısı) */
-    requires?: 'ui' | 'jira' | 'files' | 'memory' | 'toolGroups';
+    requires?: 'ui' | 'jira' | 'files' | 'memory' | 'toolGroups' | 'whiteboard';
     run: (args: Args, ctx: ToolContext) => unknown | Promise<unknown>;
 }
 
@@ -1298,6 +1298,31 @@ const AGENT_TOOLS: ToolDef[] = [
             return uiRun(ctx, { type: 'dialog', dialog });
         },
     },
+    {
+        label: 'Panoya çizildi',
+        requires: 'whiteboard',
+        spec: {
+            name: 'panoya_ciz',
+            description: 'Ekranda açık Whiteboard panosuna çizer: yapışkan not, metin, şekil, bölüm, ok, akış şeması, ekran taslağı (wireframe); seçili notları gruplar. Seçili bir ekran görüntüsü varsa görseli görür, istenen değişiklikleri görselin üstünde çerçeve ve numarayla işaretler, istenirse yanına yeni ekranın taslağını çizer. Kullanıcı panoya bir şey çizmeni, işaretlemeni, taslak çıkarmanı ya da notları düzenlemeni istediğinde kullan; isteği ayrıntılarıyla (kullanıcının sözleriyle) "istek" alanına yaz. Çizim hemen panoya eklenir; kullanıcı Ctrl+Z ile geri alabilir.',
+            parameters: S.obj({
+                istek: S.str('Çizim isteği: ne çizilecek, hangi değişiklikler işaretlenecek (kullanıcının talebi, ayrıntılı).'),
+            }, ['istek']),
+        },
+        run: async (a, ctx) => {
+            if (!ctx.whiteboard) throw new ToolError('Açık ve düzenlenebilir bir pano yok: önce projede Whiteboard ekranını açın.');
+            const istek = str(a.istek);
+            if (!istek) throw new ToolError('Çizim isteği boş.');
+            const r = await ctx.whiteboard.draw(istek);
+            return {
+                tamam: true,
+                ozet: r.summary,
+                eklenen_nesne: r.added,
+                ...(r.moved ? { tasinan_nesne: r.moved } : {}),
+                ...(r.noImage ? { not: 'Seçili görsel modele gönderilemedi; çizim yalnız açıklamaya göre yapıldı.' } : {}),
+                pano: ctx.whiteboard.describe(),
+            };
+        },
+    },
 ];
 
 // ---------------------------------------------------------------------------
@@ -2287,7 +2312,7 @@ export const toolKind = (name: string): 'read' | 'propose' | 'ui' | 'jira' | 'fi
     if (t.requires === 'files') return t.spec.name === 'dosya_olustur' ? 'file' : 'read';
     if (t.requires === 'memory') return 'memory';
     if (t.requires === 'toolGroups') return 'read';
-    if (t.requires === 'ui') return 'ui';
+    if (t.requires === 'ui' || t.requires === 'whiteboard') return 'ui';
     // Onay isteyen öneriler (ör. oner_jira_esitle) Jira'ya bağlı olsa da öneri sayılır
     if (t.writeOnly || t.poolWrite) return 'propose';
     return t.requires === 'jira' ? 'jira' : 'read';

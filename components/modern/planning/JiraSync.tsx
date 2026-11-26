@@ -72,7 +72,11 @@ const JiraSync: React.FC<Props> = ({ project, period, onSaveSettings, onApply, o
     const setField = (id: JiraSyncFieldId, d: JiraSyncDirection) => setFields({ ...shownFields, [id]: d });
     const invalid = (!!projectKey.trim() && !KEY_RE.test(projectKey.trim())) || labelList.some(l => !LABEL_RE.test(l)) || (!!filterId.trim() && !/^\d{1,12}$/.test(filterId.trim()));
     const needsSource = (!!period || discover) && !sourceOf(draft);
-    const dirty = JSON.stringify(draft) !== JSON.stringify(saved || { discover: false, autoMinutes: 0 });
+    // Son eşitleme zamanı ayar değil: karşılaştırmaya girmez
+    const dirty = useMemo(() => {
+        const { lastSyncAt: _at, ...rest } = saved || { discover: false, autoMinutes: 0 };
+        return JSON.stringify(draft) !== JSON.stringify(rest);
+    }, [draft, saved]);
     const linked = useMemo(() => linkedSyncKeys(project.tasks, draft).length, [project.tasks, draft]);
     const candidate = { ...project, jiraSync: draft };
     const canRun = !!health?.jira && !invalid && !needsSource && busy === null && (!!period || hasSyncWork(candidate));

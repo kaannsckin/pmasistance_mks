@@ -337,7 +337,7 @@ export interface JiraFullSync extends JiraSyncRun {
  * kayıtları döner. Görevlere yazmak çağıranın işidir.
  */
 export const runFullSync = async (
-    project: { tasks: Task[]; resources: { unit?: string }[]; jiraSync?: JiraSyncSettings },
+    project: { tasks: Task[]; resources: { unit?: string }[]; jiraSync?: JiraSyncSettings; poc?: { tests: unknown[] } },
     fetchPage: FetchPage,
     update: Parameters<typeof executePushes>[1] | null,
     onProgress?: (done: number) => void,
@@ -349,7 +349,8 @@ export const runFullSync = async (
     const waiting = r.pushes.length && !update ? `${r.pushes.length} kayıt Jira'ya yazılmayı bekliyor (sunucuda JIRA_ALLOW_UPDATE kapalı)` : '';
     const errors = pushed?.errors.length ? `hata: ${pushed.errors.slice(0, 3).map(e => `${e.key} ${e.message}`).join('; ')}` : '';
     const text = [syncSummary(r.preview, r.fetched, { pushed: pushed?.done.length, pushErrors: pushed?.errors.length }), waiting, errors].filter(Boolean).join(' · ');
-    const shouldApply = !!(r.preview.added || r.preview.updated || pushed?.done.length || project.jiraSync?.autoPeople);
+    // PoC projesinde değişiklik olmasa da uygulanır: son eşitleme zamanı ve günlük PoC ölçümü yazılır
+    const shouldApply = !!(r.preview.added || r.preview.updated || pushed?.done.length || project.jiraSync?.autoPeople || project.poc?.tests?.length);
     return { ...r, issues, pushed, shouldApply, text };
 };
 
