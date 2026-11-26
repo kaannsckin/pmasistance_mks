@@ -2,6 +2,7 @@ import { Project, Task, TaskStatus } from '../types';
 import { buildSprintWindows } from './taskToAllocation';
 import { daysLate, missingEstimate, sprintLabel } from '../components/modern/taskMeta';
 import { riskScore } from './risks';
+import { progressOf } from './progress';
 
 /**
  * Modern proje "Genel bakış" sekmesinin veri katmanı. PM projeye girdiğinde
@@ -35,7 +36,7 @@ export const overviewStats = (project: Project, now: Date = new Date()): Overvie
         done,
         overdue: tasks.filter(t => daysLate(t, now) > 0).length,
         missingEstimate: tasks.filter(missingEstimate).length,
-        progressPct: tasks.length ? Math.round((done / tasks.length) * 100) : 0,
+        progressPct: progressOf(tasks, project.progressModel).pct,
         openRisks: risks.length,
         highRisks: risks.filter(r => riskScore(r) >= 15).length,
     };
@@ -75,7 +76,7 @@ export const currentSprint = (project: Project, now: Date = new Date()): Current
         total: inSprint.length,
         done,
         inProgress: inSprint.filter(t => t.status === TaskStatus.InProgress).length,
-        progressPct: Math.round((done / inSprint.length) * 100),
+        progressPct: progressOf(inSprint, project.progressModel).pct,
         start: window.start,
         end: window.end,
         daysLeft: Math.round((dayStart(window.end) - dayStart(now)) / DAY),

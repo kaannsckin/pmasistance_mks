@@ -1,5 +1,5 @@
 import React, { useId, useMemo, useState } from 'react';
-import { DashboardDim, DashboardFilter, DashboardMeasure, DashboardProgressWeights, DashboardWidget, DashboardWidgetType, Project, ProjectKpi, Task, WorkflowConfig } from '../../../types';
+import { DashboardDim, DashboardFilter, DashboardMeasure, DashboardProgressWeights, DashboardWidget, DashboardWidgetType, Project, ProjectKpi, Task, TaskStatus, WorkflowConfig } from '../../../types';
 import { DIM_LABELS, labelCounts, labelFamilies, MEASURE_LABELS } from '../../../utils/dashboard/data';
 import { addKpiPoint, defaultProgressPercent, formatKpi, isProgressPercent, KPI_UNIT_LABELS, METRICS, newKpiId } from '../../../utils/dashboard/metrics';
 import { TEMPLATES, WIDGET_BY_TYPE, WIDGETS } from '../../../utils/dashboard/model';
@@ -162,13 +162,17 @@ const ProgressPercentInput = ({ label, value, fallback, onChange }: {
     );
 };
 
-const ProgressWeightsEditor = ({ project, workflow, value, onChange }: {
-    project: Project;
+export const ProgressWeightsEditor = ({ project, workflow, value, onChange, hint, title = 'Duruma göre ilerleme (%)' }: {
+    project: Pick<Project, 'tasks'>;
     workflow: WorkflowConfig;
     value?: DashboardProgressWeights;
     onChange: (weights: DashboardProgressWeights | undefined) => void;
+    hint?: string;
+    title?: string;
 }) => {
-    const groups = useMemo(() => workflowOptions(project.tasks, workflow), [project.tasks, workflow]);
+    // Tamamlanan iş her zaman %100: yalnız yoldaki durumlar ayarlanır
+    const groups = useMemo(() => workflowOptions(project.tasks, workflow).filter(g => g.category !== TaskStatus.Done), [project.tasks, workflow]);
+    const categories = CATEGORY_ORDER.filter(c => c !== TaskStatus.Done);
     const occurrences = new Map<string, number>();
     for (const { statuses } of groups) {
         for (const { label } of statuses) occurrences.set(label, (occurrences.get(label) || 0) + 1);
@@ -186,10 +190,10 @@ const ProgressWeightsEditor = ({ project, workflow, value, onChange }: {
     };
     return (
         <fieldset className="m-0 p-0 border-0 flex flex-col gap-3">
-            <legend className="text-[15px] font-semibold m-text mb-1">Duruma göre ilerleme (%)</legend>
-            <p className="m-0 text-[13px] m-text-3">Kart, görevlerin yüzdelerinin ortalamasını gösterir. Ayrıntılı durum boşsa kategori yüzdesi kullanılır.</p>
-            <div className="grid gap-2 grid-cols-2 sm:grid-cols-4">
-                {CATEGORY_ORDER.map(category => (
+            <legend className="text-[15px] font-semibold m-text mb-1">{title}</legend>
+            <p className="m-0 text-[13px] m-text-3">{hint || 'Kart, görevlerin yüzdelerinin ortalamasını gösterir. Ayrıntılı durum boşsa kategori yüzdesi kullanılır. Boş bırakılırsa projenin ilerleme modeli kullanılır.'}</p>
+            <div className="grid gap-2 grid-cols-3">
+                {categories.map(category => (
                     <div key={category} className="min-w-0">
                         <ProgressPercentInput label={CATEGORY_LABELS[category]} value={value?.categories?.[category]}
                             fallback={defaultProgressPercent(category)} onChange={percent => setPercent('categories', category, percent)} />

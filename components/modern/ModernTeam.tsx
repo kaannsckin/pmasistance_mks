@@ -1,5 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { Person, Resource, Task } from '../../types';
+import { Person, Project, ProjectRoleDef, Resource, Task } from '../../types';
+import TeamAnalytics from './TeamAnalytics';
 import { exportResourcePlanToExcel } from '../../utils/exporter';
 import {
     createResource, hasResourceNamed, MONTHS_SHORT, personToResourceFields, resourceTaskCounts, rowsToResourcePlan, setMonthlyValue, unitPlans, updateResource,
@@ -27,9 +28,15 @@ interface ModernTeamProps {
     titleCosts: Record<string, number>;
     setTitleCosts: React.Dispatch<React.SetStateAction<Record<string, number>>>;
     costTableColor: string;
+    /** Takım / bileşen analizi (proje rolleri ve bileşenler) */
+    project?: Project;
+    roleDefs?: ProjectRoleDef[];
+    onViewTask?: (task: Task) => void;
+    /** Proje ayarlarını aç: rol üyeleri ya da bileşenler */
+    onEditSetup?: (tab: 'roles' | 'components') => void;
 }
 
-type Tab = 'team' | 'plan' | 'cost';
+type Tab = 'team' | 'teams' | 'components' | 'plan' | 'cost';
 const PALETTE = ['#0066D6', '#1F7A35', '#E07800', '#D70015', '#7C3AED', '#DB2777', '#475569'];
 
 const PersonSheet: React.FC<{
@@ -103,7 +110,7 @@ const PersonSheet: React.FC<{
     );
 };
 
-const ModernTeam: React.FC<ModernTeamProps> = ({ resources, tasks, people, canEdit, onUpdate, setResources, titleCosts, setTitleCosts, costTableColor }) => {
+const ModernTeam: React.FC<ModernTeamProps> = ({ resources, tasks, people, canEdit, onUpdate, setResources, titleCosts, setTitleCosts, costTableColor, project, roleDefs = [], onViewTask, onEditSetup }) => {
     const [tab, setTab] = useState<Tab>('team');
     const [sheet, setSheet] = useState<{ resource?: Resource } | null>(null);
     const [notice, setNotice] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
@@ -148,7 +155,7 @@ const ModernTeam: React.FC<ModernTeamProps> = ({ resources, tasks, people, canEd
         <div className="flex flex-col gap-5">
             <div className="flex flex-wrap items-center gap-2.5">
                 <div className="m-segmented" role="group" aria-label="Ekip görünümü">
-                    {([['team', 'Ekip'], ['plan', 'Adam/ay planı'], ['cost', 'Maliyet']] as [Tab, string][]).map(([k, l]) => (
+                    {([['team', 'Ekip'], ...(project ? [['teams', 'Takımlar'], ['components', 'Bileşenler']] : []), ['plan', 'Adam/ay planı'], ['cost', 'Maliyet']] as [Tab, string][]).map(([k, l]) => (
                         <button key={k} type="button" className="m-segment" aria-pressed={tab === k} onClick={() => setTab(k)}>{l}</button>
                     ))}
                 </div>
@@ -174,6 +181,11 @@ const ModernTeam: React.FC<ModernTeamProps> = ({ resources, tasks, people, canEd
                     <span className="flex-1 text-[15px]">{notice.text}</span>
                     <button type="button" className="m-icon-btn" aria-label="Kapat" onClick={() => setNotice(null)}><Icon name="x" size={18} /></button>
                 </div>
+            )}
+
+            {(tab === 'teams' || tab === 'components') && project && (
+                <TeamAnalytics project={project} roles={roleDefs} people={people} mode={tab === 'teams' ? 'team' : 'component'}
+                    onViewTask={t => onViewTask?.(t)} onEditSetup={onEditSetup ? () => onEditSetup(tab === 'teams' ? 'roles' : 'components') : undefined} />
             )}
 
             {tab === 'team' && (resources.length === 0 ? (

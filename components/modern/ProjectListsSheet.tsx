@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { Person, Project, ProjectComponent, ProjectRoleDef, ProjectVersion, Task } from '../../types';
+import { Person, Project, ProjectComponent, ProjectProgressModel, ProjectRoleDef, ProjectVersion, Task, WorkflowConfig } from '../../types';
+import { hasProgressWeights, isProgressPercent, progressOf } from '../../utils/progress';
+import { ProgressWeightsEditor } from './dashboard/DashboardSettings';
 import {
     componentUsage, listId, listProblems, listSuggestions, releaseVersion, renameComponentInTasks, renameVersionInTasks, VERSION_STATUS_LABELS, versionProgress,
 } from '../../utils/projectLists';
@@ -18,12 +20,22 @@ const ProjectListsSheet: React.FC<{
     people: string[];
     canEdit: boolean;
     onClose: () => void;
-    onSave: (patch: { components: ProjectComponent[]; versions: ProjectVersion[]; tasks: Task[]; roleMembers?: Project['roleMembers'] }, summary: string) => void;
+    onSave: (patch: { components: ProjectComponent[]; versions: ProjectVersion[]; tasks: Task[]; roleMembers?: Project['roleMembers']; progressModel?: ProjectProgressModel }, summary: string) => void;
+    /** Projenin iş akışı (ilerleme yüzdeleri durum başına girilir) */
+    workflow?: WorkflowConfig;
     /** Proje rolleri: tanımlar (yönetici) ve üye seçilecek havuz */
     roleDefs?: ProjectRoleDef[];
     pool?: Person[];
-}> = ({ project, people, canEdit, onClose, onSave, roleDefs = [], pool = [] }) => {
-    const [tab, setTab] = useState<'components' | 'versions' | 'roles'>('versions');
+    initialTab?: 'components' | 'versions' | 'roles' | 'progress';
+}> = ({ project, people, canEdit, onClose, onSave, roleDefs = [], pool = [], workflow, initialTab }) => {
+    const [tab, setTab] = useState<'components' | 'versions' | 'roles' | 'progress'>(initialTab || 'versions');
+    const [progressModel, setProgressModel] = useState<ProjectProgressModel | undefined>(() => project.progressModel && JSON.parse(JSON.stringify(project.progressModel)));
+    const cleanModel: ProjectProgressModel | undefined = (() => {
+        const m: ProjectProgressModel = { ...(hasProgressWeights(progressModel?.weights) ? { weights: progressModel!.weights } : {}), ...(progressModel?.basis === 'effort' ? { basis: 'effort' as const } : {}) };
+        return Object.keys(m).length ? m : undefined;
+    })();
+    const modelChanged = JSON.stringify(cleanModel || null) !== JSON.stringify(project.progressModel || null);
+    const invalidWeights = [...Object.values(progressModel?.weights?.categories || {}), ...Object.values(progressModel?.weights?.statuses || {})].some(v => !isProgressPercent(v));
     const [members, setMembers] = useState<Record<string, string[]>>(() => JSON.parse(JSON.stringify(project.roleMembers || {})));
     const personName = (id: string) => { const p = pool.find(x => x.id === id); return p ? `${p.firstName} ${p.lastName}`.trim() : id; };
     const [components, setComponents] = useState<ProjectComponent[]>(() => JSON.parse(JSON.stringify(project.components || [])));
@@ -76,7 +88,7 @@ const ProjectListsSheet: React.FC<{
     const visibleVersions = versions.filter(v => showArchived || v.status !== 'archived');
     const cleanMembers: Record<string, string[]> = Object.fromEntries((Object.entries(members) as [string, string[]][]).filter(([, v]) => v.length));
     const membersChanged = JSON.stringify(cleanMembers) !== JSON.stringify(Object.fromEntries((Object.entries(project.roleMembers || {}) as [string, string[]][]).filter(([, v]) => v.length)));
-    const dirty = log.length > 0 || membersChanged || JSON.stringify(components) !== JSON.stringify(project.components || []) || JSON.stringify(versions) !== JSON.stringify(project.versions || []);
+    const dirty = log.length > 0 || membersChanged || modelChanged || JSON.stringify(components) !== JSON.stringify(project.components || []) || JSON.stringify(versions) !== JSON.stringify(project.versions || []);
 
     return (
         <Sheet xl title={`Proje ayarları: ${project.name}`} subtitle="Jira'daki gibi: sürüm = görevlerin hedef sürümü ve yayın planı, bileşen = projenin modülü (sorumlusu olabilir), rol = bu projede kimin hangi ekipte olduğu (geçiş kuralları ve bildirimler role göre çalışır)."
@@ -85,11 +97,11 @@ const ProjectListsSheet: React.FC<{
                 <>
                     {errors.length ? <span role="alert" className="flex-1 text-[13px] m-ink-bad">{errors[0]}</span> : <span className="flex-1 text-[13px] m-text-3">{log.length ? `Bekleyen: ${log.join('; ')}` : 'Değişiklikler "Kaydet" ile görevlerle birlikte yazılır.'}</span>}
                     <button type="button" className="m-btn m-btn-gray" onClick={onClose}>Vazgeç</button>
-                    <button type="button" className="m-btn m-btn-primary" disabled={!!errors.length || !dirty} onClick={() => onSave({ components, versions, tasks, roleMembers: Object.keys(cleanMembers).length ? cleanMembers : undefined }, [...log, ...(membersChanged ? ['rol üyeleri güncellendi'] : [])].join('; ') || 'liste güncellendi')}><Icon name="check" size={16} />Kaydet</button>
+                    <button type="button" className="m-btn m-btn-primary" disabled={!!errors.length || !dirty || invalidWeights} onClick={() => onSave({ components, versions, tasks, roleMembers: Object.keys(cleanMembers).length ? cleanMembers : undefined, progressModel: cleanModel }, [...log, ...(membersChanged ? ['rol üyeleri güncellendi'] : []), ...(modelChanged ? ['ilerleme modeli güncellendi'] : [])].join('; ') || 'liste güncellendi')}><Icon name="check" size={16} />Kaydet</button>
                 </>
             ) : undefined}>
             <div role="tablist" className="flex gap-1 p-1 rounded-xl m-fill-2 self-start">
-                {([['versions', `Sürümler (${versions.length})`], ['components', `Bileşenler (${components.length})`], ['roles', `Roller (${Object.values(cleanMembers).reduce((n: number, l: string[]) => n + l.length, 0)} üye)`]] as const).map(([k, l]) => (
+                {([['versions', `Sürümler (${versions.length})`], ['components', `Bileşenler (${components.length})`], ['roles', `Roller (${Object.values(cleanMembers).reduce((n: number, l: string[]) => n + l.length, 0)} üye)`], ...(workflow ? [['progress', 'İlerleme'] as const] : [])] as const).map(([k, l]) => (
                     <button key={k} type="button" role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
                         className={`h-8 px-3 rounded-lg border-0 cursor-pointer text-[14px] ${tab === k ? 'm-surface font-semibold m-text' : 'bg-transparent m-text-2'}`}>{l}</button>
                 ))}
@@ -121,8 +133,8 @@ const ProjectListsSheet: React.FC<{
                     </div>
                     {visibleVersions.length === 0 && <p className="m-0 py-3 text-[14px] m-text-3">Henüz sürüm yok.</p>}
                     {visibleVersions.map(v => {
-                        const pr = versionProgress(tasks, v);
-                        const pct = pr.total ? Math.round((pr.done / pr.total) * 100) : 0;
+                        const pr = versionProgress(tasks, v, undefined, cleanModel);
+                        const pct = pr.pct;
                         return (
                             <div key={v.id} className="grid gap-2 items-center py-1.5 border-t m-sep" style={{ gridTemplateColumns: 'minmax(140px,1.2fr) 130px 130px minmax(160px,1fr) 110px auto', borderTopStyle: 'solid', borderTopWidth: 1 }}>
                                 <input aria-label="Sürüm adı" className="m-input !h-9 !py-0 text-[14px]" value={v.name} disabled={!canEdit} maxLength={60}
@@ -131,7 +143,7 @@ const ProjectListsSheet: React.FC<{
                                 <input type="date" aria-label="Yayın tarihi" className={`m-input !h-9 !py-0 text-[13px] ${pr.late ? 'm-ink-bad' : ''}`} value={v.releaseDate || ''} disabled={!canEdit} onChange={e => setV(v.id, { releaseDate: e.target.value || undefined })} />
                                 <span className="flex items-center gap-2 text-[12.5px] m-text-2" title={`${pr.done} tamamlandı, ${pr.open} açık`}>
                                     <span className="flex-1 h-1.5 rounded-full m-fill overflow-hidden"><span className="block h-full rounded-full" style={{ width: `${pct}%`, background: 'var(--m-ok)' }}></span></span>
-                                    <span className="m-tabular whitespace-nowrap">{pr.done}/{pr.total}</span>
+                                    <span className="m-tabular whitespace-nowrap">{cleanModel?.weights ? `%${pct} · ` : ''}{pr.done}/{pr.total}</span>
                                     {pr.late && <span className="m-ink-bad font-semibold">gecikti</span>}
                                 </span>
                                 <span className={`inline-flex items-center justify-center h-6 px-2 rounded-full text-[12px] font-semibold ${STATUS_TONE[v.status]}`}>{VERSION_STATUS_LABELS[v.status]}</span>
@@ -184,6 +196,35 @@ const ProjectListsSheet: React.FC<{
                     <p className="m-0 text-[12.5px] m-text-3">Rol tanımlarını yönetici yapar; üyeleri her projede ayrıca atanır. Örn. "Testte → Çözüldü" geçişi yalnız <b>Test</b> rolüne açıksa, bu projede yalnız buraya eklenen kişiler yapabilir.</p>
                 </div>
             )}
+
+            {tab === 'progress' && workflow && (() => {
+                const before = progressOf(project.tasks, project.progressModel);
+                const after = progressOf(project.tasks, cleanModel);
+                return (
+                    <div className="flex flex-col gap-4">
+                        <p className="m-0 text-[14px] m-text-2">Varsayılan ilerleme yalnız <b>Tamamlandı</b> durumunu sayar. Burada yoldaki her duruma tamamlanma yüzdesi verin (ör. geliştirme bitip <b>Testte</b> olan iş %75). Proje genel bakışı, sprint ve sürüm ilerlemesi, dashboard, raporlar ve asistan bu yüzdeleri kullanır.</p>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                            <div className="rounded-xl m-fill-2 p-3">
+                                <div className="text-[12.5px] m-text-3">Proje ilerlemesi</div>
+                                <div className="text-[22px] font-bold m-tabular m-text">%{before.pct}{after.pct !== before.pct && <span className="m-accent"> → %{after.pct}</span>}</div>
+                                <div className="text-[12.5px] m-text-3">{after.done} / {after.total} kayıt tamamlandı</div>
+                            </div>
+                            <fieldset className="m-0 rounded-xl m-fill-2 p-3 border-0 flex flex-col gap-1.5">
+                                <legend className="sr-only">Ağırlık</legend>
+                                <span className="text-[12.5px] m-text-3">Her kayıt</span>
+                                <label className="flex items-center gap-2 text-[14px]"><input type="radio" name="progress-basis" disabled={!canEdit} checked={progressModel?.basis !== 'effort'} onChange={() => setProgressModel(m => ({ ...m, basis: undefined }))} />eşit sayılır (adet)</label>
+                                <label className="flex items-center gap-2 text-[14px]"><input type="radio" name="progress-basis" disabled={!canEdit} checked={progressModel?.basis === 'effort'} onChange={() => setProgressModel(m => ({ ...m, basis: 'effort' }))} />eforuyla ağırlıklı (büyük iş daha çok sayar)</label>
+                            </fieldset>
+                        </div>
+                        <fieldset disabled={!canEdit} className="m-0 p-0 border-0">
+                            <ProgressWeightsEditor project={project} workflow={workflow} value={progressModel?.weights} title="Durum yüzdeleri"
+                                hint="Ayrıntılı durum yüzdesi boşsa kategori yüzdesi kullanılır. Tamamlanan iş her zaman %100."
+                                onChange={weights => setProgressModel(m => ({ ...m, weights }))} />
+                        </fieldset>
+                        {invalidWeights && <p role="alert" className="m-0 text-[13px] m-ink-bad">Yüzdeler 0 ile 100 arasında olmalı.</p>}
+                    </div>
+                );
+            })()}
 
             {tab === 'components' && (
                 <div className="flex flex-col gap-2">

@@ -228,6 +228,7 @@ const App: React.FC = () => {
   const [workflowSheetProject, setWorkflowSheetProject] = useState<string | null>(null);
   // Bileşen ve sürüm listeleri penceresi (proje kimliği)
   const [listsSheetProject, setListsSheetProject] = useState<string | null>(null);
+  const [listsSheetTab, setListsSheetTab] = useState<'roles' | 'components' | 'progress' | undefined>(undefined);
   useEffect(() => { if (!flowNotice) return; const id = window.setTimeout(() => setFlowNotice(null), 6000); return () => window.clearTimeout(id); }, [flowNotice]);
   const [storageFull, setStorageFull] = useState(false);
   const [storageWarnClosed, setStorageWarnClosed] = useState(false);
@@ -1414,7 +1415,7 @@ const App: React.FC = () => {
     });
   }, [updateWorkspace]);
   // Projenin bileşen ve sürüm listeleri: proje sahibi ya da admin (görev başvurularıyla birlikte)
-  const handleSaveProjectLists = useCallback((projectId: string, patch: { components: ProjectComponent[]; versions: ProjectVersion[]; tasks: Task[]; roleMembers?: Project['roleMembers'] }, summary: string) => {
+  const handleSaveProjectLists = useCallback((projectId: string, patch: { components: ProjectComponent[]; versions: ProjectVersion[]; tasks: Task[]; roleMembers?: Project['roleMembers']; progressModel?: Project['progressModel'] }, summary: string) => {
     updateWorkspace(ws => {
       const project = ws.projects.find(p => p.id === projectId);
       const who = identityOf(ws);
@@ -1425,7 +1426,7 @@ const App: React.FC = () => {
         const n = byId.get(t.id);
         return n && (JSON.stringify(n.components) !== JSON.stringify(t.components) || n.fixVersion !== t.fixVersion) ? { ...t, components: n.components, fixVersion: n.fixVersion } : t;
       });
-      const next = { ...ws, projects: ws.projects.map(p => (p.id === projectId ? { ...p, components: patch.components, versions: patch.versions, roleMembers: patch.roleMembers, tasks, updatedAt: new Date().toISOString() } : p)) };
+      const next = { ...ws, projects: ws.projects.map(p => (p.id === projectId ? { ...p, components: patch.components, versions: patch.versions, roleMembers: patch.roleMembers, progressModel: patch.progressModel, tasks, updatedAt: new Date().toISOString() } : p)) };
       return appendAudit(next, 'config.update', `"${project.name}" proje ayarları: ${summary} · ${patch.components.length} bileşen, ${patch.versions.length} sürüm`, projectId);
     });
   }, [updateWorkspace]);
@@ -2406,6 +2407,10 @@ const App: React.FC = () => {
           titleCosts={ps.titleCosts || {}}
           setTitleCosts={setTitleCosts}
           costTableColor={ps.costTableColor || '#10b981'}
+          project={activeProject}
+          roleDefs={projectRolesOf(workspace)}
+          onViewTask={viewTask}
+          onEditSetup={canEditProjectContent(workspace, identity, activeProject.id) ? tab => { setListsSheetTab(tab); setListsSheetProject(activeProject.id); } : undefined}
         />
       );
     }
@@ -3183,10 +3188,10 @@ const App: React.FC = () => {
         const p = workspace.projects.find(x => x.id === listsSheetProject);
         if (!p) return null;
         const sheet = (
-          <ProjectListsSheet project={p} roleDefs={projectRolesOf(workspace)} pool={[...workspace.people].sort((a, b) => `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`, 'tr'))} canEdit={can(identity, 'screen.admin') || canEditProjectContent(workspace, identity, p.id)}
+          <ProjectListsSheet project={p} roleDefs={projectRolesOf(workspace)} workflow={effectiveScheme(workspace, p).workflow} initialTab={listsSheetTab} pool={[...workspace.people].sort((a, b) => `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`, 'tr'))} canEdit={can(identity, 'screen.admin') || canEditProjectContent(workspace, identity, p.id)}
             people={[...new Set([...p.resources.map(r => r.name), ...workspace.people.map(x => `${x.firstName} ${x.lastName}`.trim())])].filter(Boolean).sort((a, b) => a.localeCompare(b, 'tr'))}
-            onClose={() => setListsSheetProject(null)}
-            onSave={(patch, summary) => { handleSaveProjectLists(p.id, patch, summary); setListsSheetProject(null); }} />
+            onClose={() => { setListsSheetProject(null); setListsSheetTab(undefined); }}
+            onSave={(patch, summary) => { handleSaveProjectLists(p.id, patch, summary); setListsSheetProject(null); setListsSheetTab(undefined); }} />
         );
         return isModern ? sheet : <div className={modernScope}>{sheet}</div>;
       })()}

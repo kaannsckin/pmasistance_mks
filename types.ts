@@ -815,6 +815,17 @@ export interface DashboardProgressWeights {
   statuses?: Record<string, number>;
 }
 
+/**
+ * Projenin ilerleme modeli: durum başına tamamlanma yüzdesi (ör. Testte = %75)
+ * ve ilerlemenin kayıt adedine mi efora mı göre ağırlıklandığı. Pano, genel
+ * bakış, sprint ve sürüm ilerlemesi, raporlar ve asistan aynı modeli kullanır.
+ */
+export interface ProjectProgressModel {
+  weights?: DashboardProgressWeights;
+  /** count: her kayıt eşit (varsayılan); effort: olası süreyle ağırlıklı */
+  basis?: 'count' | 'effort';
+}
+
 export interface DashboardWidgetConfig {
   filter?: DashboardFilter;
   dim?: DashboardDim;
@@ -885,6 +896,8 @@ export interface Project {
   components?: ProjectComponent[]; // Projenin bileşen listesi
   versions?: ProjectVersion[]; // Projenin sürüm listesi (görevlerin hedef sürümü)
   roleMembers?: Record<string, string[]>; // Proje rolü → havuz kişi kimlikleri
+  /** Durum yüzdeleriyle ilerleme (yoksa yalnız Tamamlandı %100) */
+  progressModel?: ProjectProgressModel;
   /** Proje dashboard'unun varsayılan düzeni (PY kaydeder; kişisel düzeni olmayan herkes bunu görür) */
   dashboard?: DashboardLayout;
   /** Projeye özel göstergeler (ör. PoC skoru): elle girilir ya da aktarımla güncellenir, geçmişiyle */

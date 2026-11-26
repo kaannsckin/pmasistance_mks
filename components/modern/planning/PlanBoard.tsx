@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { hasProgressWeights, progressOf } from '../../../utils/progress';
 import { Leave, Person, Project, ReleaseMilestone, ReleasePlan, Task, TaskStatus } from '../../../types';
 import { calendarLabel, sprintCalendar } from '../../../utils/sprintCalendar';
 import { isInSprint } from '../../../utils/sprintSpan';
@@ -147,6 +148,7 @@ const PlanBoard: React.FC<Props> = ({ project, canEdit, me, initialTaskIds, onSa
     const currentTasks = board.rows.flatMap(r => r.tasks).filter(t => isInSprint(t, board.current));
     const currentOpen = currentTasks.filter(t => t.status !== TaskStatus.Done);
     const rowKey = (r: BoardRow) => r.milestone?.id || NO_MS;
+    const weighted = hasProgressWeights(project.progressModel?.weights);
     const columns = [0, ...board.sprints.map(s => s.version)];
     const gridCols = `minmax(190px, 220px) repeat(${columns.length}, minmax(168px, 1fr))`;
 
@@ -308,7 +310,7 @@ const PlanBoard: React.FC<Props> = ({ project, canEdit, me, initialTaskIds, onSa
                                         </>
                                     ) : <span className="text-[14px] font-semibold m-text">{m ? m.name : 'Taşsız işler'}</span>}
                                     <span className={`text-[12px] font-semibold ${st.tone}`}>{st.label}</span>
-                                    <span className="text-[12px] m-text-3">{r.done}/{r.tasks.length} bitti · {num(r.effort)} g · {r.note}</span>
+                                    <span className="text-[12px] m-text-3">{weighted && r.tasks.length ? `%${progressOf(r.tasks, project.progressModel).pct} · ` : ''}{r.done}/{r.tasks.length} bitti · {num(r.effort)} g · {r.note}</span>
                                     {m && canEdit && !r.tasks.length && <button type="button" className="m-btn m-btn-plain !min-h-[28px] self-start text-[12px]" onClick={() => save({ ...plan, milestones: plan.milestones.filter(x => x.id !== m.id) })}><Icon name="trash" size={14} />Taşı sil</button>}
                                 </div>
                                 {columns.map(v => cell(r, v))}

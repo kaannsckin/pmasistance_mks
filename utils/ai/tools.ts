@@ -1,4 +1,7 @@
 import { IssueType, PermissionKey, ProjectStatus, RagStatus, RiskStatus, Task, TaskStatus } from '../../types';
+import { projectRolesOf } from '../projectRoles';
+import { componentAnalytics, GroupStats, teamAnalytics } from '../teamAnalytics';
+import { describeProgressModel, progressOf } from '../progress';
 import { normalizeEnumArgs } from './enumAliases';
 import { inMonthEstimates, InMonthEstimate } from '../inMonthActual';
 import { getPlanLockStatus, inferAllocationRole, MONTH_INDEXES, ROLE_LABELS, summarizeByProject } from '../allocations';
@@ -234,6 +237,7 @@ export const AI_TOOLS: ToolDef[] = [
                         toplam: p.tasks.length,
                         tamamlanan: p.tasks.filter(t => t.status === TaskStatus.Done).length,
                         geciken: p.tasks.filter(t => isOverdue(t, ctx.now)).length,
+                        ilerleme_yuzde: progressOf(p.tasks, p.progressModel).pct,
                     },
                     acik_risk: (p.risks || []).filter(r => r.status !== 'closed').length,
                     // Plan kilidi öneri denenmeden görünsün (B-014): kilitliyse yalnız gerçekleşen değişir
@@ -305,6 +309,7 @@ export const AI_TOOLS: ToolDef[] = [
                 proje_yoneticisi: projectPmName(ctx, p.pmPersonId),
                 baslangic: p.settings.projectStartDate,
                 surum_suresi_hafta: p.settings.sprintDuration,
+                ilerleme: { yuzde: progressOf(p.tasks, p.progressModel).pct, yontem: describeProgressModel(p.progressModel) },
                 saglik: !isHealthScored(p) ? { skor: null, not: 'Teklif aşamasında skorlanmaz.' } : {
                     skor: h.score, bant: h.band, guven: h.confidence, kapsam: h.coverage, spi: r2(h.spi), cpi: r2(h.cpi), nedenler: h.reasons,
                     // Skorun girdileri: normalize değer (0-1, null = veri yok), ağırlık ve skordan düşürdüğü puan
@@ -1992,6 +1997,33 @@ const measuresArg = (v: unknown): Measure[] => listArg(v).filter((x): x is Args 
 
 // Analiz araçları sohbet çalışma zamanına (files) bağlıdır: tarayıcı sohbetinde sunulur, temel istek
 // (MCP — orada Claude kendi analizini yapar) büyümez.
+/** Ekip analizi (asistan): Ekip › Takımlar / Bileşenler ekranıyla aynı hesap */
+const teamAnalysisTool: ToolDef = {
+    label: 'Ekip analizi',
+    requires: 'files',
+    spec: {
+        name: 'ekip_analizi',
+        description: 'Takım (proje rolü) ya da bileşen kırılımı: ilerleme %, açık/geciken, dönemde biten, açık efor, hata açılan/kapanan, kapanma süresi, tahmin sapması, kişi yükü ve bulgular.',
+        parameters: S.obj({ proje: P.project, kirilim: S.str('', ['takim', 'bilesen']), gun: S.int('Dönem (varsayılan 30)') }),
+    },
+    run: (a, ctx) => {
+        const project = resolveProject(ctx, a.proje);
+        const gun = typeof a.gun === 'number' && a.gun >= 7 && a.gun <= 365 ? Math.round(a.gun) : 30;
+        const fn = str(a.kirilim) === 'bilesen' ? componentAnalytics : teamAnalytics;
+        const r = fn(project, projectRolesOf(ctx.ws), ctx.ws.people, { now: ctx.now, periodDays: gun });
+        if (!r.groups.length) return { proje: project.name, not: str(a.kirilim) === 'bilesen' ? 'Bileşen yok.' : 'Proje rollerinde üye yok (Proje ayarları › Roller).' };
+        const row = (g: GroupStats) => ({
+            ad: g.name, kisi: g.members.length, ilerleme_yuzde: g.progressPct, toplam: g.total, acik: g.open, surecte: g.inProgress, geciken: g.overdue, blocker: g.blockers,
+            biten_donem: g.doneInPeriod, biten_efor_gun: g.effortDoneInPeriod, acik_efor_gun: g.openEffort,
+            hata: { acik: g.bugsOpen, acilan: g.bugsOpened, kapanan: g.bugsClosed, pay_yuzde: Math.round(g.bugShare * 100) },
+            kapanma_gun_ortanca: g.leadTimeDays, gerceklesen_tahmin_orani: g.estimateRatio, haftalik_biten_8: g.weekly,
+            kisiler: g.memberStats.slice(0, 8).map(m => ({ ad: m.name, acik: m.open, geciken: m.overdue, biten: m.doneInPeriod, acik_efor: m.openEffort })),
+            ...(g.lead ? { sorumlu: g.lead } : {}), ...(g.teams?.length ? { takimlar: g.teams } : {}),
+        });
+        return { proje: project.name, donem_gun: gun, ilerleme_yontemi: describeProgressModel(project.progressModel), gruplar: r.groups.map(row), ...(r.outside ? { disarida: row(r.outside) } : {}), bulgular: r.insights.map(i => i.text) };
+    },
+};
+
 /** Plan optimizasyonu (asistan): Plan ekranındaki "Optimize et" ile aynı motor */
 const planOptimizeTool: ToolDef = {
     label: 'Plan optimizasyonu',
@@ -2059,6 +2091,7 @@ const planOptimizeTool: ToolDef = {
 
 const ANALYSIS_TOOLS: ToolDef[] = [
     planOptimizeTool,
+    teamAnalysisTool,
     {
         label: 'Veri analizi',
         requires: 'files',

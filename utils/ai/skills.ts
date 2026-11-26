@@ -137,7 +137,7 @@ Korelasyonu nedensellik gibi sunma; kanıtı zayıf hipotezi "olası" diye işar
         when: 'Kim ne kadar dolu, kapasite aşımı, adam-ay, işgücü, maliyet, kaynak dengesi, "kime iş verebilirim".',
         triggers: [/kapasite|doluluk|adam[- ]?ay|\bAA\b|iş ?gücü|kaynak|tahsis|yük|müsait|uygun kişi|maliyet|worklog|saat/i],
         playbook: `Oyun kitabı — Kapasite ve kaynak
-1. Veri: doluluk_analizi, kapasite_talep, tahsis_ozeti, is_yuku_ongorusu, uygun_kisi_bul, is_gucu_raporu, maliyet_raporu, departman_karnesi. Sprint düzeyinde (kim hangi hafta dolu, iş kaydırma) sürüm planı varsa plan_optimizasyonu (kisi_degisikligi=true) kullan.
+1. Veri: doluluk_analizi, kapasite_talep, tahsis_ozeti, is_yuku_ongorusu, uygun_kisi_bul, is_gucu_raporu, maliyet_raporu, departman_karnesi. Sprint düzeyinde (kim hangi hafta dolu, iş kaydırma) sürüm planı varsa plan_optimizasyonu (kisi_degisikligi=true) kullan. Takım ya da bileşen karşılaştırması (hız, hata, gecikme, darboğaz kişi) için ekip_analizi (kirilim takim|bilesen).
 2. Arz-talep dengesini kur: dönem başına kapasite vs talep (AA), açık/fazla; aşım > %100 olan kişi-ay sayısı; %70 altı atıl kapasite.
 3. Yoğunlaşma ve kırılganlık: işin/maliyetin kaçta kaçı kaç kişide (veri_analiz ozet + pay %); tek kişiye bağlı kritik işler.
 4. Eğilim: önümüzdeki 3 ayda aşım büyüyor mu (trend)?

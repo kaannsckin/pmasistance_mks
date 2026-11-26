@@ -1,3 +1,4 @@
+import { hasProgressWeights } from '../../utils/progress';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Project, ProjectSectionKey, RagStatus, Task, View, WorkspaceData } from '../../types';
 import { actorLabel } from '../../utils/audit';
@@ -105,7 +106,7 @@ const ModernProjectOverview: React.FC<ModernProjectOverviewProps> = ({ workspace
             key: 'progress',
             label: 'İlerleme',
             value: complete ? <span className="inline-flex items-center gap-2">%100 <span className="m-accent"><Icon name="rocket" size={26} /></span></span> : `%${stats.progressPct}`,
-            note: stats.total ? `${stats.done} / ${stats.total} görev tamamlandı` : 'Henüz görev yok',
+            note: stats.total ? `${stats.done} / ${stats.total} görev tamamlandı${hasProgressWeights(project.progressModel?.weights) ? ' · durum yüzdeleriyle' : ''}` : 'Henüz görev yok',
             noteTone: complete ? 'm-ink-ok' : 'm-text-3',
             // Bitmiş projede küçük bir sürpriz: kutlama
             run: complete ? () => onCelebrate('Proje tamamlandı! Tebrikler.') : linkable(View.Roadmap) ? () => onNavigate(View.Roadmap) : undefined,

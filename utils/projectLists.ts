@@ -1,4 +1,5 @@
-import { Project, ProjectComponent, ProjectVersion, ReleasePlan, Task, TaskStatus } from '../types';
+import { Project, ProjectComponent, ProjectProgressModel, ProjectVersion, ReleasePlan, Task, TaskStatus } from '../types';
+import { progressOf } from './progress';
 
 /**
  * Projeye özel bileşen ve sürüm listeleri (Jira "Components" ve
@@ -87,9 +88,11 @@ export interface VersionProgress {
     open: number;
     /** Yayın tarihi geçmiş ve yayınlanmamış */
     late: boolean;
+    /** Durum yüzdeleriyle ilerleme (0–100; model yoksa tamamlanan oranı) */
+    pct: number;
 }
 
-export const versionProgress = (tasks: Task[], v: ProjectVersion, now: Date = new Date()): VersionProgress => {
+export const versionProgress = (tasks: Task[], v: ProjectVersion, now: Date = new Date(), model?: ProjectProgressModel): VersionProgress => {
     const list = tasks.filter(t => t.fixVersion && norm(t.fixVersion) === norm(v.name));
     const done = list.filter(t => t.status === TaskStatus.Done).length;
     return {
@@ -97,6 +100,7 @@ export const versionProgress = (tasks: Task[], v: ProjectVersion, now: Date = ne
         done,
         open: list.length - done,
         late: v.status === 'unreleased' && !!v.releaseDate && v.releaseDate < now.toISOString().slice(0, 10),
+        pct: progressOf(list, model).pct,
     };
 };
 
