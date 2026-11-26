@@ -3,7 +3,7 @@
 Her sürümün başlığı `## vX.Y.Z` biçimindedir; GitHub sürüm sayfası bu bölümü
 buradan alır (`.github/workflows/exe.yml`).
 
-## Yayımlanmamış
+## v3.7.0
 
 **Sol menü ve "Hakkında"**
 - Daraltılmış menü: logo görünür, projeler baş harfli kutucuk (RAG rengi halka) olarak gösterilir, "Diğer" menüsü şeridin sağına açılır, genişletme düğmesi alta taşındı; profil, Asistan ve Ayarlar tek sütunda.
