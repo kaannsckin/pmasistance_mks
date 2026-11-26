@@ -584,7 +584,7 @@ const AssistantChat: React.FC<Props> = ({ variant, suggestions, onClose, onExpan
               </button>
             )}
           </div>
-          <p className="text-[10px] text-gray-400 mt-1.5 text-center">Asistan ekranları sizin yerinize açabilir; veri değişikliklerini yalnızca önerir — siz "Uygula" demeden hiçbir veri değişmez. Ekler yalnız bu sohbette kullanılır.</p>
+          <p className="text-[10px] text-gray-400 mt-1.5 text-center">Asistan ekranları sizin yerinize açabilir; veri değişikliklerini yalnızca önerir — siz "Uygula" demeden hiçbir veri değişmez. İstediğinizde açık Whiteboard'a doğrudan çizer (Ctrl+Z ile geri alınır). Ekler yalnız bu sohbette kullanılır.</p>
         </div>
       )}
     </div>

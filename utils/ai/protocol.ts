@@ -39,8 +39,16 @@ export interface ToolSpec {
 
 export type ChatRole = 'user' | 'assistant' | 'tool';
 
+/** Kullanıcı mesajına eklenen görsel (base64, data: öneki olmadan). Ad maskelemesi görsele uygulanamaz. */
+export interface ChatImage {
+    mime: 'image/png' | 'image/jpeg' | 'image/webp';
+    data: string;
+}
+
+export const CHAT_IMAGE_MIMES: readonly ChatImage['mime'][] = ['image/png', 'image/jpeg', 'image/webp'];
+
 export type ChatMessage =
-    | { role: 'user'; content: string }
+    | { role: 'user'; content: string; images?: ChatImage[] }
     | { role: 'assistant'; content: string; toolCalls?: ToolCall[] }
     | { role: 'tool'; toolCallId: string; name: string; content: string };
 
@@ -116,6 +124,10 @@ export const AI_LIMITS = {
     maxToolCallsPerMessage: 16,
     /** Araç tanımı / argüman / meta JSON'u için üst sınır (karakter) */
     maxToolJsonChars: 20_000,
+    /** İstek başına görsel (ör. Whiteboard asistanına gönderilen ekran görüntüsü) */
+    maxImages: 2,
+    /** Görsel başına base64 karakter (~1,1 MB) */
+    maxImageChars: 1_500_000,
     maxEmbedTexts: 64,
     maxEmbedChars: 8_000,
 };

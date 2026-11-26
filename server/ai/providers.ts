@@ -70,6 +70,15 @@ const openaiMessages = (req: ChatRequestBody) => [
                 tool_calls: m.toolCalls.map(c => ({ id: c.id, type: 'function', function: { name: c.name, arguments: JSON.stringify(c.arguments || {}) } })),
             };
         }
+        if (m.role === 'user' && m.images?.length) {
+            return {
+                role: 'user',
+                content: [
+                    { type: 'text', text: m.content },
+                    ...m.images.map(i => ({ type: 'image_url', image_url: { url: `data:${i.mime};base64,${i.data}` } })),
+                ],
+            };
+        }
         return { role: m.role, content: m.content };
     }),
 ];
@@ -91,6 +100,15 @@ const anthropicMessages = (req: ChatRequestBody) =>
                 content: [
                     ...(m.content.trim() ? [{ type: 'text', text: m.content }] : []),
                     ...m.toolCalls.map(c => ({ type: 'tool_use', id: c.id, name: c.name, input: c.arguments || {} })),
+                ],
+            };
+        }
+        if (m.role === 'user' && m.images?.length) {
+            return {
+                role: 'user',
+                content: [
+                    ...m.images.map(i => ({ type: 'image', source: { type: 'base64', media_type: i.mime, data: i.data } })),
+                    { type: 'text', text: m.content },
                 ],
             };
         }
@@ -122,7 +140,8 @@ const geminiContents = (req: ChatRequestBody) =>
             });
             return { role: 'model', parts: parts.length ? parts : [{ text: ' ' }] };
         }
-        return { role: 'user', parts: [{ text: m.content }] };
+        const images = m.role === 'user' ? m.images || [] : [];
+        return { role: 'user', parts: [...images.map(i => ({ inlineData: { mimeType: i.mime, data: i.data } })), { text: m.content }] };
     });
 
 const findCall = (messages: ChatMessage[], id: string): ToolCall | undefined => {

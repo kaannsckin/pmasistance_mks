@@ -90,8 +90,15 @@ export const checkCloudConnection = async ({ url, anonKey }: CloudConnection, si
 // Belge ayırma / birleştirme (saf — test edilir)
 // ---------------------------------------------------------------------------
 
-/** Buluta giden proje: özel alanlar boşaltılmış */
-const sharedProject = (p: Project): Project => ({ ...p, notes: [], customerRequests: [] });
+/**
+ * Buluta giden proje: özel alanlar boşaltılmış. Panolar (whiteboard) proje
+ * satırına yazılmaz: öğe bazında `workspace_whiteboard_items` tablosunda eş
+ * zamanlı birleşir (aynı panoda çalışanlar proje sürüm çakışması yaşamasın).
+ */
+const sharedProject = (p: Project): Project => {
+    const { whiteboards: _wb, ...rest } = p;
+    return { ...rest, notes: [], customerRequests: [] };
+};
 
 export const splitWorkspaceDoc = (ws: WorkspaceData): { core: Record<string, unknown>; privateDoc: PrivateDoc; projects: Project[] } => {
     const privateDoc: PrivateDoc = { notes: {}, customerRequests: {} };
@@ -163,10 +170,13 @@ export const mergeWorkspaceDoc = (
     }
     const { projectOrder: _order, ...coreRest } = core;
     void _order;
+    // Panolar proje satırında gelmez: yerel önbellek korunur (güncel hâli pano tablosundan)
+    const localBoards = new Map(local.projects.filter(p => p.whiteboards?.length).map(p => [p.id, p.whiteboards!]));
     const projects = source.map(p => ({
         ...p,
         notes: privateDoc?.notes?.[p.id] || [],
         customerRequests: privateDoc?.customerRequests?.[p.id] || [],
+        ...(!p.whiteboards?.length && localBoards.has(p.id) ? { whiteboards: localBoards.get(p.id) } : {}),
     }));
     return normalizeWorkspace({
         ...coreRest,
@@ -271,25 +281,34 @@ export const getCloudMembership = async (workspaceId: string, signal = AbortSign
     if (!userId) return { membership: null, error: sessionError?.message };
     const { data, error } = await c
         .from('workspace_members')
-        .select('role, person_id, project_ids, access_admin')
+        // Tüm sütunlar: eski şemada all_roles yoksa sorgu yine çalışır
+        .select('*')
         .eq('workspace_id', workspaceId)
         .eq('user_id', userId)
         .abortSignal(signal)
         .maybeSingle();
     if (error) return { membership: null, error: cloudError(error) };
-    return { userId, membership: data ? { role: data.role, personId: data.person_id, projectIds: data.project_ids, accessAdmin: data.access_admin } : null };
+    return { userId, membership: data ? { role: data.role, personId: data.person_id, projectIds: data.project_ids, accessAdmin: data.access_admin, ...(data.all_roles ? { allRoles: true } : {}) } : null };
 };
 
 export interface CloudWorkspaceOption { id: string; name: string }
 export interface CloudMember extends CloudMembership { id: string; email: string; owner: boolean }
 export const sameCloudMembership = (a?: CloudMembership | null, b?: CloudMembership | null): boolean =>
-    a?.role === b?.role && a?.personId === b?.personId && a?.accessAdmin === b?.accessAdmin
+    a?.role === b?.role && a?.personId === b?.personId && a?.accessAdmin === b?.accessAdmin && !!a?.allRoles === !!b?.allRoles
     && JSON.stringify(a?.projectIds) === JSON.stringify(b?.projectIds);
 
-export const applyCloudMembership = (workspace: WorkspaceData, membership: CloudMembership, workspaceId: string): WorkspaceData => ({
-    ...workspace, cloudMembership: membership, cloudWorkspaceId: workspaceId, currentRole: membership.role,
-    currentPersonId: membership.personId ?? undefined,
-});
+/**
+ * Üyeliği çalışma alanına uygular: rol ve kişi üyelikten gelir. Demo hesabı
+ * (allRoles) cihazda seçtiği rolü ve kişiyi korur; seçmediyse üyelikteki başlar.
+ */
+export const applyCloudMembership = (workspace: WorkspaceData, membership: CloudMembership, workspaceId: string): WorkspaceData => {
+    const keepLocal = !!membership.allRoles && !!workspace.currentRole;
+    return {
+        ...workspace, cloudMembership: membership, cloudWorkspaceId: workspaceId,
+        currentRole: keepLocal ? workspace.currentRole : membership.role,
+        currentPersonId: keepLocal ? workspace.currentPersonId : membership.personId ?? undefined,
+    };
+};
 
 const schemaMissing = (code?: string) => ['42P01', '42883', 'PGRST202', 'PGRST205'].includes(code || '');
 export const CLOUD_SCHEMA_MESSAGE = 'Supabase projesinde PlanAsistan şeması eksik veya eski. Kurulum SQL’ini çalıştırıp tekrar deneyin.';

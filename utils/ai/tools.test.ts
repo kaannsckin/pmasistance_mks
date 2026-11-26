@@ -513,3 +513,16 @@ describe('Jira araçları', () => {
         expect(ok.uygulama_baglantilari).toEqual([{ proje: 'ALTAY Sistemi', jira_proje: 'ALT' }]);
     });
 });
+
+describe('panoya_ciz (Whiteboard)', () => {
+    it('pano açık değilse sunulmaz; açıkken isteği panoya iletir', async () => {
+        const ctx = buildToolContext(buildWs(), NOW);
+        expect(toolSpecsFor(ctx).some(t => t.name === 'panoya_ciz')).toBe(false);
+        const draw = vi.fn(async () => ({ summary: '3 değişiklik işaretlendi', added: 6, moved: 0, noImage: false }));
+        ctx.whiteboard = { describe: () => '"Ekran" panosu, 1 nesne seçili (ekran görüntüsü dahil)', draw };
+        expect(toolSpecsFor(ctx).some(t => t.name === 'panoya_ciz')).toBe(true);
+        const out = await executeTool({ name: 'panoya_ciz', arguments: { istek: 'Kaydet düğmesini sağa al' } }, ctx);
+        expect(draw).toHaveBeenCalledWith('Kaydet düğmesini sağa al');
+        expect(JSON.parse(out.content)).toMatchObject({ tamam: true, ozet: '3 değişiklik işaretlendi', eklenen_nesne: 6 });
+    });
+});

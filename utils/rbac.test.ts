@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-    canAddAllocationToProject, canCreateProject, canEditActualCell, canEditAllocationCell,
+    canAddAllocationToProject, canApplyProjectChange, canCreateProject, canEditActualCell, canEditAllocationCell,
     canEditPlanCell, canEditProjectContent, Identity, identityNeedsPerson, identityOf, keepScopedWorkspaceEdits,
     managesPerson, ownsProject, seesAllProjects, visiblePersonIds, visibleProjectIds,
 } from './rbac';
@@ -145,5 +145,46 @@ describe('tahsis hücresi düzenleme', () => {
         expect(canAddAllocationToProject(ws, py('pm1'), ws.projects[1].id)).toBe(false);
         expect(canAddAllocationToProject(ws, bolum('pm1'), ws.projects[0].id)).toBe(true);
         expect(canAddAllocationToProject(ws, { role: 'mudur' }, ws.projects[0].id)).toBe(false);
+    });
+});
+
+
+describe('demo hesabı (tüm roller)', () => {
+    const base = { ...createEmptyWorkspace(), currentRole: 'mudur' as const, currentPersonId: 'k9' };
+    it('kimlik cihazdaki profil seçiminden gelir ve tam bulut erişimlidir', () => {
+        const ws = { ...base, cloudMembership: { role: 'pyb_destek' as const, personId: null, projectIds: null, accessAdmin: true, allRoles: true } };
+        expect(identityOf(ws)).toMatchObject({ role: 'mudur', personId: 'k9', fullCloudProjectAccess: true });
+        expect(identityOf(ws).projectIds).toBeUndefined();
+    });
+    it('demo değilse rol ve kişi üyelikten gelir', () => {
+        const ws = { ...base, cloudMembership: { role: 'pyb_destek' as const, personId: 'k1', projectIds: null, accessAdmin: true } };
+        expect(identityOf(ws)).toMatchObject({ role: 'pyb_destek', personId: 'k1' });
+    });
+});
+
+describe('başkasının projesi', () => {
+    it('bulutta "Tüm projeler" kapsamlı PY yalnız kendi projelerini görür ve düzenler', () => {
+        const ws = buildWs();
+        ws.cloudMembership = { role: 'py', personId: 'pm1', projectIds: null, accessAdmin: true };
+        const id = identityOf(ws);
+        expect([...visibleProjectIds(ws, id)]).toEqual([ws.projects[0].id]);
+        expect(canEditProjectContent(ws, id, ws.projects[1].id)).toBe(false);
+    });
+    it('admin PY rolüne "Tüm projeleri görür" verirse portföyü salt okunur görür', () => {
+        const ws = buildWs();
+        ws.rolePermissions = { py: ['portfolio.viewAll', 'project.create', 'notes.private', 'ai.use'] };
+        ws.cloudMembership = { role: 'py', personId: 'pm1', projectIds: null, accessAdmin: false };
+        const id = identityOf(ws);
+        expect(visibleProjectIds(ws, id).size).toBe(2);
+        expect(canEditProjectContent(ws, id, ws.projects[1].id)).toBe(false);
+    });
+    it('son kontrol: sahibi olmayan içerik değiştiremez, panolar kendi kuralıyla açık kalır', () => {
+        const ws = buildWs();
+        const other = ws.projects[1];
+        expect(canApplyProjectChange(ws, py('pm1'), other, { ...other, tasks: [] , name: 'x' })).toBe(false);
+        expect(canApplyProjectChange(ws, py('pm1'), other, { ...other, risks: [] })).toBe(false);
+        expect(canApplyProjectChange(ws, py('pm1'), other, { ...other, whiteboards: [], updatedAt: 'now' })).toBe(true);
+        expect(canApplyProjectChange(ws, py('pm2'), other, { ...other, name: 'x' })).toBe(true);
+        expect(canApplyProjectChange(ws, { role: 'pyb_destek' }, other, { ...other, name: 'x' })).toBe(false);
     });
 });

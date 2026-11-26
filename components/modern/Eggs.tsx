@@ -400,7 +400,7 @@ export const RocketLogo: React.FC<{ onLaunch: () => void; onHyperdrive: () => vo
                 </span>
                 {phase === 'launching' && <span className="m-trail" aria-hidden="true"></span>}
             </span>
-            <span className="flex flex-col leading-tight">
+            <span className="m-nav-label flex flex-col leading-tight">
                 <span className="text-[17px] font-semibold m-text">PlanAsistan</span>
                 <span className="text-[13px] m-text-3">{phase === 'igniting' ? 'Ateşleniyor…' : phase === 'launching' ? 'Kalkış!' : 'MKS çalışma alanı'}</span>
             </span>

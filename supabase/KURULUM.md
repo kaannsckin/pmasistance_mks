@@ -3,7 +3,7 @@
 ## Kurulum ve güncelleme
 
 1. [Supabase](https://supabase.com/dashboard) panelinde PlanAsistan için kullandığınız projeyi açın. Supabase’i ilk kez kullanıyorsanız bir proje oluşturun. **Connect** ekranındaki proje adresini ve **Publishable** anahtarını alın. Eski projelerde **anon public** anahtarı da kullanılabilir.
-2. Supabase **SQL Editor** ekranında [schema.sql](./schema.sql) dosyasını bir kez çalıştırın. Mevcut PlanAsistan şemasını da aynı dosyayla güncelleyebilirsiniz; asistan hafızasının bulut eşitlemesi (`assistant_memory` tablosu) için bu güncelleme gerekir. Şema eksikse uygulama SQL dosyasını indirme ve SQL Editor’ı açma seçeneklerini gösterir.
+2. Supabase **SQL Editor** ekranında [schema.sql](./schema.sql) dosyasını bir kez çalıştırın. Mevcut PlanAsistan şemasını da aynı dosyayla güncelleyebilirsiniz; asistan hafızasının bulut eşitlemesi (`assistant_memory` tablosu) için bu güncelleme gerekir. Whiteboard panolarının bulutta saklanması ve eş zamanlı düzenleme (`workspace_whiteboard_items` tablosu ve `wb:` Realtime kanal yetkileri) için de gerekir. Eş zamanlı düzenleme Supabase Realtime'ın özel kanallarını kullanır; Dashboard → Realtime → Settings'te özel kanallara (Realtime Authorization) izin verildiğinden emin olun. Şema eksikse uygulama SQL dosyasını indirme ve SQL Editor’ı açma seçeneklerini gösterir.
 3. Supabase **Authentication → Email Templates** bölümünde **Magic Link** ve **Confirm signup** şablonlarına e-posta kodunu ekleyin. Örneğin HTML içeriği `<p>PlanAsistan giriş kodunuz: <strong>{{ .Token }}</strong></p>` olabilir. Giriş sırasında kullanıcı bu kodu uygulamaya yazar. Birden fazla gerçek kullanıcıya kod göndermek için Supabase’de kurumunuzun SMTP servisini tanımlayın.
 4. PlanAsistan’da **Bulut veritabanı** ekranını açın. İlk bağlantıda adres ve anahtarı girip **Bağlantıyı doğrula** deyin. **Kod gönder** düğmesini kullanın, e-postaya gelen kodu girin ve **Kodu doğrula** deyin.
 5. Verileriniz Supabase’deyse girişten sonra mevcut çalışma alanınızı listeden açın. İlk veri aktarımında **Bu cihazdaki verileri buluta taşı → Verileri aktar ve bağlan** ile yerel projeleriniz ve özel notlarınız yeni bir çalışma alanına kaydedilir.
@@ -32,3 +32,13 @@ Her kullanıcı e-postasına gelen tek kullanımlık kodla giriş yapar. Çalı�
 - Aynı projede ya da ortak veride eşzamanlı düzenleme varsa uygulama sürüm çakışmasını bildirir. Farklı proje satırları ayrı sürümler taşır.
 
 Kurulumu komut satırından denetlemek için Node.js ile `node supabase/dogrula.mjs PROJE_ADRESI PUBLIC_ANAHTAR` çalıştırılabilir. `--e2e` geçici bir test alanıyla veritabanı politikalarını denetler. E-posta teslimatını ve kod girişini uygulama üzerinden doğrulayın.
+
+## Demo / eğitim hesabı (tüm roller)
+
+Bulutta her kullanıcının rolü üyelikten gelir ve uygulamada değiştirilemez. Demo ya da eğitim için bir hesabın tüm rollere ve kişilere geçebilmesi gerekiyorsa üyeliğinde `all_roles` işaretlenir. İşaretli hesapta "Profil değiştir" bulutta da açılır; seçilen rol ve kişi o cihazda uygulanır. Sunucu tarafında bu hesap erişim yöneticisi gibi tam yetkilidir.
+
+1. Hesap uygulamada e-posta koduyla bir kez giriş yapar.
+2. SQL Editor'de [demo_tum_roller.sql](./demo_tum_roller.sql) çalıştırılır (dosyadaki e-postayı gerekirse değiştirin).
+3. Uygulamada çalışma alanı yeniden açılır (Bulut › çalışma alanını aç) ya da sayfa yenilenir.
+
+Gerçek kullanıcı hesaplarında bu işaret açılmamalıdır: hesap tüm projeleri görür ve düzenler.

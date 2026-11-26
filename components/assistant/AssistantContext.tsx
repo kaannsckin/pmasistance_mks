@@ -15,9 +15,10 @@ import { createMemoryStore, MemoryItem, memoryKey, MemorySection } from '../../u
 import { routeToolGroups } from '../../utils/ai/toolRouting';
 import { MemorySyncStatus, useMemorySync } from './useMemorySync';
 import { AiError, configureMasking, embedTexts, fetchAiStatus, hasCredentials, saveAccessToken, streamChat } from '../../utils/ai/client';
+import { getWhiteboardBridge } from '../../utils/whiteboard/bridge';
 import { buildMasker, collectMaskEntries, Masker } from '../../utils/ai/masking';
 import { aiPolicyOf } from '../../utils/ai/policy';
-import { AiStatus, ChatMessage } from '../../utils/ai/protocol';
+import { AiStatus, ChatImage, ChatMessage } from '../../utils/ai/protocol';
 import { buildToolContext } from '../../utils/ai/scope';
 import { buildSystemPrompt, ScreenFocus, skillsForTurn } from '../../utils/ai/systemPrompt';
 import type { DataTable } from '../../utils/ai/dataAnalysis';
@@ -128,7 +129,8 @@ interface AssistantApi {
   syncMemoryNow: () => Promise<void>;
   setMemoryAutoSync: (auto: boolean) => void;
   /** Tek seferlik AI tamamlama (araçsız) — ekranlara gömülü özellikler için */
-  complete: (system: string, prompt: string, signal?: AbortSignal) => Promise<string>;
+  /** Tek seferlik çağrı; `images` görseli modele gösterir (görsel okuyabilen modellerde) */
+  complete: (system: string, prompt: string, signal?: AbortSignal, opts?: { images?: ChatImage[] }) => Promise<string>;
 }
 
 const Ctx = createContext<AssistantApi | null>(null);
@@ -281,6 +283,19 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, sessionSco
         },
       };
     }
+    // Ekranda açık Whiteboard: asistan panoya çizebilir (çizim turu aynı AI ayarları ve maskelemeyle)
+    const board = getWhiteboardBridge();
+    if (board && status) {
+      const authMode = status.authMode;
+      ctx.whiteboard = {
+        describe: board.describe,
+        draw: request => board.draw(request, async (system, prompt, opts) => {
+          const r = await streamChat({ system, messages: [{ role: 'user', content: prompt, ...(opts?.images?.length ? { images: opts.images } : {}) }] }, { authMode, signal });
+          if (!r.text.trim()) throw new AiError('Model boş yanıt döndü; tekrar deneyin.', 'upstream');
+          return r.text;
+        }),
+      };
+    }
     if (integrations?.jira) {
       const mode = integrations.authMode;
       const email = ws.people.find(person => person.id === ctx.identity.personId)?.email?.trim().toLowerCase();
@@ -301,7 +316,7 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, sessionSco
       };
     }
     return ctx;
-  }, [getWorkspace, onUiCommand, integrations]);
+  }, [getWorkspace, onUiCommand, integrations, status]);
 
   // Panel açılıp asistan hazır olunca dizin arka planda kurulur (ilk soruyu bekletmesin)
   useEffect(() => {
@@ -643,7 +658,7 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, sessionSco
       : m)));
   }, [onApplyActions]);
 
-  const complete = useCallback(async (system: string, prompt: string, signal?: AbortSignal): Promise<string> => {
+  const complete = useCallback(async (system: string, prompt: string, signal?: AbortSignal, opts?: { images?: ChatImage[] }): Promise<string> => {
     if (!enabled) throw new AiError('Yapay zekâ asistanı Ayarlar\'dan kapatılmış.', 'config');
     let s = phase === 'ready' ? status : null;
     if (!s) {
@@ -659,7 +674,7 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, sessionSco
       }
       setPhase('ready');
     }
-    const r = await streamChat({ system, messages: [{ role: 'user', content: prompt }] }, { authMode: s.authMode, signal });
+    const r = await streamChat({ system, messages: [{ role: 'user', content: prompt, ...(opts?.images?.length ? { images: opts.images } : {}) }] }, { authMode: s.authMode, signal });
     if (!r.text.trim()) throw new AiError('Model boş yanıt döndü; tekrar deneyin.', 'upstream');
     return r.text;
   }, [enabled, phase, status]);

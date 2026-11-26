@@ -92,6 +92,14 @@ export interface ToolContext {
      * araçlar sunulur.
      */
     toolGroups?: Set<ToolGroup>;
+    /**
+     * Ekranda açık, düzenlenebilir Whiteboard panosu (tarayıcı bağlar). Yoksa
+     * panoya_ciz sunulmaz. Çizim panoya yazılır (tek adımda geri alınabilir).
+     */
+    whiteboard?: {
+        describe: () => string;
+        draw: (request: string) => Promise<{ summary: string; added: number; moved: number; noImage: boolean }>;
+    };
 }
 
 export const buildToolContext = (ws: WorkspaceData, now: Date = new Date()): ToolContext => {

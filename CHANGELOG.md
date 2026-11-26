@@ -3,7 +3,40 @@
 Her sürümün başlığı `## vX.Y.Z` biçimindedir; GitHub sürüm sayfası bu bölümü
 buradan alır (`.github/workflows/exe.yml`).
 
-## Yayımlanmamış
+## v3.7.0
+
+**Sol menü ve "Hakkında"**
+- Daraltılmış menü: logo görünür, projeler baş harfli kutucuk (RAG rengi halka) olarak gösterilir, "Diğer" menüsü şeridin sağına açılır, genişletme düğmesi alta taşındı; profil, Asistan ve Ayarlar tek sütunda.
+- Asistan ve Ayarlar menünün altında ayrı satırlar; profil satırında rol artık kesilmiyor.
+- "Hakkında" penceresi yenilendi: sürüm, bu oturumun kimliği, verinin nerede tutulduğu (bulut / bu tarayıcı), kapsamdaki proje ve kişi sayısı, yapay zekâ durumu, sürüm notlarından son yenilikler ve kısayollar. Eski GitHub Pages rehberi ve "veriler yalnız tarayıcıda" notu kaldırıldı.
+
+**Yetki düzeltmesi: PY başkasının projesini düzenleyemez**
+- Kanban/zaman çizelgesi, Pano, Liste, Ekip, Hedefler, görev ayrıntısı, müşteri istekleri ve "Yeni görev" düğmeleri yalnız projenin PY'sine açık. Önceden yönetim rolü olmayan herkese (PY, bölüm sorumlusu, PYB Destek) açıktı; başka bir PY'nin projesinde görev, ekip ve hedef değiştirilebiliyordu.
+- Kayıt anında son kontrol: düzenleme hangi ekrandan gelirse gelsin, sahibi olmayanın proje değişikliği kaydedilmez ve uyarı gösterilir. Panoların (Whiteboard) kendi erişim kuralı vardır. Proje adı, RAG, durum, sahip ve silme işlemleri de işlem anında yetkiyle doğrulanır.
+- Bulutta "Tüm projeler" kapsamı artık yalnız veri sınırıdır: PY portföyde yalnız kendi projelerini görür. PY'lerin tüm portföyü salt okunur görmesi için admin, Yönetici ekranında PY rolüne "Tüm projeleri görür" yetkisini verir; belirli projeler için Bulut erişimi › Proje kapsamı › seçili projeler kullanılır.
+- Sunucu (RLS): erişim yöneticiliği (`access_admin`) yalnız üyelikleri yönetir, başkasının projesini yazma yetkisi vermez. Proje satırını projenin PY'si, tüm kapsamlı PYB Destek ve demo hesabı yazar. Mevcut kurulumlarda `supabase/schema.sql` yeniden çalıştırılmalı.
+
+**Whiteboard: FigJam tarzı proje panosu**
+- Projede yeni **Whiteboard** sekmesi (modern arayüz): sonsuz tuval, yapışkan not, metin, şekil, bölüm, bağlantı, kalem, damga ve görsel. Seçim, çoğaltma, kilit, katman sırası, geri al / yinele ve klavye kısayolları FigJam'deki gibi.
+- **"/" komutları**: görev, sprint, iş paketi, risk ve sürüm kart olarak eklenir; kartlar Jira eşitlemesiyle güncel kalır. Sprint ya da iş paketi görevleriyle birlikte bir bölüm içinde eklenebilir.
+- **Notta "//"**: görev referansı eklenir ve notta görev kodu düğmesi olarak görünür.
+- **Göreve dönüştür**: seçili notlardan görev açılır (Yapılacak, havuzda, "Whiteboard" etiketiyle).
+- **Toplantı araçları**: kişi başına oy haklı gizli oylama ve ortak zamanlayıcı.
+- **Şablonlar**: retrospektif, sprint planlama, önceliklendirme matrisi, UI/UX inceleme panosu, Kanban, risk değerlendirme, akış şeması.
+- **Eş zamanlı düzenleme**: aynı panodaki herkesin imleci, seçimi, yazıyor durumu ve sürüklemesi canlı görünür; avatara tıklayınca o kişi takip edilir. Nesne, bağlantı ve oylar ayrı ayrı "son yazan kazanır" kuralıyla birleşir; geri alma yalnız kendi değişikliğini geri alır. Bulutta Supabase Realtime özel kanalı ve yeni `workspace_whiteboard_items` tablosu kullanılır; panolar proje satırına yazılmaz (proje sürüm çakışması olmaz). Bulut yoksa aynı tarayıcının sekmeleri arasında canlıdır. Mevcut kurulumlarda `supabase/schema.sql` yeniden çalıştırılmalı.
+- **Pano erişimi**:
+  - Projeyi gören ve profilinde kişi seçili olan herkes pano açar ve panonun sahibi olur.
+  - Sahip ve projenin PY'si "Erişim" penceresinden projeyi gören herkes için varsayılan düzeyi (göremez / görüntüler / düzenler) ve kişi bazında görüntüleme / düzenleme yetkisini belirler.
+  - Bulutta kural sunucuda (RLS) zorlanır. Özel panonun satırları ve canlı kanalı yalnız yetkililere açıktır; erişimi değiştirmek ve silmek yöneticiye özeldir.
+- **Oylama**: kurulum penceresinde soru, kişi başına oy, "bir nota en fazla 1 oy", kapsam (tüm pano ya da seçili bölüm) ve süre seçilir.
+  - Sürerken üst şeritte kalan hak ve katılım görünür. Oy rozetine tıklayınca oy geri alınır.
+  - Görüntüleyenler de oy verir; bulutta RLS bunu yalnız kişinin kendi oy satırı için ve yalnız oylama sürerken kabul eder.
+  - Bitince sonuç paneli herkeste açılır (sıralama, çubuklar); en çok oy alanlar seçilebilir, sonuç panoya not olarak yazılabilir.
+- **Asistan**: uygulamanın asistanı panoya çizer (yeni `panoya_ciz` aracı; panodaki Asistan düğmesi ya da sohbetten "panoya çiz").
+  - Seçili ekran görüntüsünde değişiklik talebini görselin üstünde çerçeve ve numarayla işaretler, açıklamaları not olarak yazar, istenirse yeni ekranın tel kafes taslağını çizer.
+  - Çizim tek adımda geri alınır.
+  - AI proxy'si artık kullanıcı mesajında görsel taşır (OpenAI, Azure, Anthropic, Gemini; istek başına en çok 2 görsel). Görsel maskelenmez.
+- Pano özeti Markdown olarak kopyalanır ya da indirilir; pano JSON olarak indirilir. Ayrıntı: [docs/WHITEBOARD.md](docs/WHITEBOARD.md).
 
 **GİB PoC skoru: Jira'dan her an üretilen rapor**
 - **Test listesi saklanır**: Excel aktarımı Test Kalemleri'nin tamamını (göreve dönüşmeyen karşılanmış ve değerlendirme dışı testler dahil) projeye yazar. Skorun paydası ve sonuç dağılımları (ör. 238 test: 47 / 28 / 163) yeniden hesaplanabilir.
