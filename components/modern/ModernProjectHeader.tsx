@@ -35,6 +35,10 @@ interface ModernProjectHeaderProps {
     onStatusReport: () => void;
     onNewTask: () => void;
     onOpenWorkPackages: () => void;
+    /** Kural setleri (otomasyon) */
+    onOpenAutomation?: () => void;
+    /** Rapor otomasyonu (zamanlanmış rapor) */
+    onOpenReports?: () => void;
     /** Rolün görebildiği sekmeler (admin görünüm ayarı); yoksa hepsi */
     sections?: ReadonlySet<ProjectSectionKey>;
 }
@@ -56,7 +60,7 @@ const fmt = (iso?: string) => {
     return isNaN(d.getTime()) ? '' : d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric' });
 };
 
-const ModernProjectHeader: React.FC<ModernProjectHeaderProps> = ({ project, ownerName, currentView, onNavigate, onBack, exec, aiEnabled, onStatusReport, onNewTask, onOpenWorkPackages, sections }) => {
+const ModernProjectHeader: React.FC<ModernProjectHeaderProps> = ({ project, ownerName, currentView, onNavigate, onBack, exec, aiEnabled, onStatusReport, onNewTask, onOpenWorkPackages, onOpenAutomation, onOpenReports, sections }) => {
     const [moreOpen, setMoreOpen] = useState(false);
     const shows = (s?: ProjectSectionKey) => !s || !sections || sections.has(s);
     const tabs = TABS.filter(t => shows(t.section));
@@ -68,6 +72,8 @@ const ModernProjectHeader: React.FC<ModernProjectHeaderProps> = ({ project, owne
             { key: 'notes', label: 'Günlük', icon: 'pen' as IconName, view: View.Notes },
         ] : []),
         { key: 'wp', label: 'İş paketleri', icon: 'briefcase', run: onOpenWorkPackages, section: 'workPackages' },
+        ...(onOpenAutomation && !exec ? [{ key: 'rules', label: 'Kural setleri', icon: 'refresh' as IconName, run: onOpenAutomation }] : []),
+        ...(onOpenReports && !exec ? [{ key: 'reports', label: 'Rapor otomasyonu', icon: 'send' as IconName, run: onOpenReports }] : []),
         ...(aiEnabled ? [{ key: 'ai', label: 'Asistan (tam ekran)', icon: 'message' as IconName, view: View.AI, section: 'assistant' as ProjectSectionKey }] : []),
     ] as MoreItem[]).filter(m => shows(m.section));
     const moreActive = more.find(m => m.view === currentView);

@@ -5,6 +5,8 @@ import { Env, resolveAuthMode } from '../ai/config.js';
 import { createRateLimiter } from '../ai/rateLimit.js';
 import { describeNetworkError, extraCaFor, upstreamFetch } from '../ai/tls.js';
 import { withIntegrationSettings } from './settings.js';
+import { parseSections, reportCronConfigured, runReportCron, sendNotion, sendSlack, type ReportChannels } from './reports.js';
+import { reportText, type ReportSection } from '../../utils/reportAutomation.js';
 import { addDays, DayRange, isDayRange, isIsoDay } from '../../utils/calendarRange.js';
 import type { JiraAgileBoard, JiraAgileList, JiraSprint } from '../../types.js';
 
@@ -24,9 +26,10 @@ import type { JiraAgileBoard, JiraAgileList, JiraSprint } from '../../types.js';
  *   SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM, SMTP_SECURE
  *   NOTIFY_ALLOWED_DOMAINS                  (alıcı alan adları; yoksa SMTP_FROM'un alanı)
  *   REPORT_REMINDER_TO, APP_URL, CRON_SECRET (haftalık hatırlatma)
+ *   SLACK_WEBHOOK_URL, NOTION_TOKEN + NOTION_PARENT_PAGE_ID (rapor otomasyonu kanalları; bkz. reports.ts)
  */
 
-export type IntegrationRoute = 'health' | 'jira-worklogs' | 'jira-history' | 'jira-issues' | 'jira-create' | 'jira-sync' | 'notify' | 'cron-reminder';
+export type IntegrationRoute = 'health' | 'jira-worklogs' | 'jira-history' | 'jira-issues' | 'jira-create' | 'jira-sync' | 'notify' | 'cron-reminder' | 'cron-report';
 
 export interface Mailer {
     sendMail: (m: { from: string; to?: string; bcc?: string; subject: string; text: string; html?: string }) => Promise<unknown>;
@@ -55,6 +58,10 @@ export interface IntegrationStatus {
     teams: boolean;
     email: boolean;
     reminder: boolean;
+    slack: boolean;
+    notion: boolean;
+    /** Zamanlanmış raporları sunucu gönderir (cron + bulut verisi); değilse tarayıcı yedeği */
+    reportCron: boolean;
 }
 
 const jiraConfigured = (env: Env) => !!clean(env.JIRA_BASE_URL) && (!!clean(env.JIRA_TOKEN) || (!!clean(env.JIRA_EMAIL) && !!clean(env.JIRA_API_TOKEN)));
@@ -66,7 +73,27 @@ export const integrationStatus = (env: Env): IntegrationStatus => ({
     teams: !!clean(env.TEAMS_WEBHOOK_URL),
     email: !!clean(env.SMTP_HOST) && !!clean(env.SMTP_FROM),
     reminder: !!clean(env.CRON_SECRET) && (!!clean(env.TEAMS_WEBHOOK_URL) || (!!clean(env.SMTP_HOST) && !!clean(env.REPORT_REMINDER_TO))),
+    slack: !!clean(env.SLACK_WEBHOOK_URL),
+    notion: !!clean(env.NOTION_TOKEN) && !!clean(env.NOTION_PARENT_PAGE_ID),
+    reportCron: reportCronConfigured(env),
 });
+
+const attempt = async (fn: () => Promise<unknown>): Promise<string> => { try { await fn(); return 'sent'; } catch (e) { return (e as Error).message; } };
+
+/** Rapor/bildirim kanallarına gönderim (zamanlanmış rapor ve notify ortak) */
+const deliverReport = async (env: Env, status: IntegrationStatus, ch: ReportChannels, subject: string, text: string, sections: ReportSection[] | undefined, opts: { fetchImpl?: typeof fetch; mailer?: Mailer }): Promise<Record<string, string>> => {
+    const out: Record<string, string> = {};
+    if (ch.teams) out.teams = status.teams ? await attempt(() => sendTeams(env, subject, text, opts.fetchImpl)) : 'not_configured';
+    if (ch.slack) out.slack = status.slack ? await attempt(() => sendSlack(env, subject, sections, text, opts.fetchImpl)) : 'not_configured';
+    if (ch.notion) out.notion = status.notion ? await attempt(() => sendNotion(env, subject, sections, text, opts.fetchImpl)) : 'not_configured';
+    if (ch.email?.length) {
+        const to = checkRecipients(ch.email, env);
+        if (to.rejected.length) out.rejected = to.rejected.join(', ');
+        const plain = sections?.length ? reportText(sections, 'plain', clean(env.APP_URL)) : text.replace(/\*\*(.+?)\*\*/g, '$1');
+        out.email = !status.email ? 'not_configured' : !to.ok.length ? 'Geçerli alıcı yok.' : await attempt(() => sendEmail(env, { bcc: to.ok, subject, text: plain }, opts.mailer));
+    }
+    return out;
+};
 
 // ---------------------------------------------------------------- Jira
 
@@ -1217,6 +1244,18 @@ export const handleIntegrationRequest = async (request: Request, rawEnv: Env, op
         return json(200, { ok: true, ...result });
     }
 
+    // Zamanlanmış rapor (Vercel cron): bulut verisinden zamanı gelen raporlar
+    if (opts.route === 'cron-report') {
+        const secret = clean(env.CRON_SECRET);
+        if (!secret) return json(503, { error: 'CRON_SECRET tanımlı değil.', code: 'config' });
+        if ((request.headers.get('authorization') || '') !== `Bearer ${secret}`) return json(401, { error: 'Yetkisiz.', code: 'auth' });
+        const r = await runReportCron(env, {
+            now: opts.now || new Date(), fetchImpl: opts.fetchImpl,
+            deliver: (ch, subject, text, sections) => deliverReport(env, status, ch, subject, text, sections, opts),
+        });
+        return json(r.status, r.body);
+    }
+
     if (request.method === 'OPTIONS') return new Response(null, { status: 204 });
     const method = opts.route === 'jira-history' ? 'GET' : 'POST';
     if (request.method !== method) return json(405, { error: `Yalnızca ${method}.`, code: 'bad_request' });
@@ -1429,7 +1468,13 @@ export const handleIntegrationRequest = async (request: Request, rawEnv: Env, op
     const text = String(body.text || '').trim().slice(0, 50000);
     const html = typeof body.html === 'string' ? body.html.slice(0, 200000) : undefined;
     if (!subject || !text) return json(400, { error: 'Konu ve metin gerekli.', code: 'bad_request' });
-    const result: { teams?: string; email?: string; rejected?: string[] } = {};
+    const result: { teams?: string; email?: string; slack?: string; notion?: string; rejected?: string[] } = {};
+    // Rapor kanalları: Slack ve Notion (bölümlerle biçimlenir; yoksa metinden)
+    if (body.slack || body.notion) {
+        const r = await deliverReport(env, status, { slack: !!body.slack, notion: !!body.notion }, subject, text, parseSections(body.sections), opts);
+        if (r.slack) result.slack = r.slack;
+        if (r.notion) result.notion = r.notion;
+    }
     if (body.teams) {
         if (!status.teams) result.teams = 'not_configured';
         else {

@@ -19,6 +19,9 @@ describe('sprint tamamlama', () => {
         expect(newlyCompletedSprints(tasks, done(tasks, 'havuz'))).toEqual([]);
         // Sprinte bitmiş görev eklemek, önceden bitmemiş/boş sprinti "tamamlandı" yapmaz
         expect(newlyCompletedSprints([], [task('x', 3, TaskStatus.Done)])).toEqual([]);
+        // Açık işi başka sprinte taşımak (plan, devir) kalan bitmiş işlerin sprintini "tamamlandı" yapmaz
+        const moved = tasks.map(t => (t.id === 'b' ? { ...t, version: 2 } : t));
+        expect(newlyCompletedSprints(tasks, moved)).toEqual([]);
     });
 
     it('sprintler arası görev bitmeden iki sprinti de tamamlanmış saymaz', () => {

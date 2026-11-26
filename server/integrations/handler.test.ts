@@ -16,12 +16,12 @@ const jsonRes = (status: number, body: unknown) => new Response(JSON.stringify(b
 describe('durum ve yardımcılar', () => {
     it('hangi entegrasyonun yapılandırıldığını gizli bilgi vermeden söyler', async () => {
         const env = { JIRA_BASE_URL: 'https://jira.kurum.gov.tr', JIRA_TOKEN: 'x', TEAMS_WEBHOOK_URL: 'https://hook', SMTP_HOST: 'smtp', SMTP_FROM: 'pa@kurum.gov.tr' };
-        expect(integrationStatus(env)).toEqual({ jira: true, jiraCreate: false, jiraUpdate: false, teams: true, email: true, reminder: false });
+        expect(integrationStatus(env)).toEqual({ jira: true, jiraCreate: false, jiraUpdate: false, teams: true, email: true, reminder: false, slack: false, notion: false, reportCron: false });
         expect(integrationStatus({ ...env, JIRA_ALLOW_CREATE: '1' }).jiraCreate).toBe(true);
         expect(integrationStatus({ JIRA_ALLOW_CREATE: '1' }).jiraCreate).toBe(false); // Jira yoksa açma da yok
         const res = await handleIntegrationRequest(new Request('http://x/api/integrations/health'), env, { route: 'health' });
         const body = await res.json();
-        expect(body).toEqual({ jira: true, jiraCreate: false, jiraUpdate: false, teams: true, email: true, reminder: false, authMode: 'none' });
+        expect(body).toEqual({ jira: true, jiraCreate: false, jiraUpdate: false, teams: true, email: true, reminder: false, slack: false, notion: false, reportCron: false, authMode: 'none' });
         expect(JSON.stringify(body)).not.toContain('jira.kurum');
     });
 

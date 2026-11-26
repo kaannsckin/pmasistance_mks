@@ -2,7 +2,7 @@ import { Project, ProjectData, ProjectSettings, WorkspaceData } from '../types';
 import { migrateRolePermissions, PERMISSIONS_REV } from './permissions';
 import { migrateReleaseVersions } from './projectLists';
 
-export const APP_VERSION = '3.5.0';
+export const APP_VERSION = '3.6.0';
 export const WORKSPACE_SCHEMA_VERSION = 3; // 3: veri havuzu + tahsis + plan kilidi
 
 /** v2 çalışma alanı anahtarı */
@@ -77,7 +77,7 @@ export const legacyToProject = (legacy: ProjectData, name: string): Project => {
             tagColors: s.tagColors || {},
             titleCosts: s.titleCosts || {},
             sprintNames: s.sprintNames || {},
-            globalTestDays: s.globalTestDays || 4,
+            globalTestDays: typeof s.globalTestDays === 'number' ? s.globalTestDays : 4,
             manMonthTableColor: s.manMonthTableColor,
             costTableColor: s.costTableColor,
         },

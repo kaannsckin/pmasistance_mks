@@ -17,6 +17,10 @@
     {
       "path": "/api/integrations/cron-reminder",
       "schedule": "0 7 * * 4"
+    },
+    {
+      "path": "/api/integrations/cron-reminder?route=report",
+      "schedule": "0 5 * * *"
     }
   ]
 }

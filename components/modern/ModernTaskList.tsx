@@ -11,6 +11,7 @@ import { ViewFilterNote } from './ui';
 import TaskActionsMenu from './TaskActionsMenu';
 import TaskQueryPicker from './TaskQueryPicker';
 import BulkTaskEditSheet from './BulkTaskEditSheet';
+import BulkTaskDeleteSheet from './BulkTaskDeleteSheet';
 import { taskStatusLabel } from '../../utils/workflow';
 import { MIN_PRIORITY_OPTIONS, taskComparator, TaskPriority, taskPassesView } from '../../utils/viewConfig';
 import { BoardColumn, celebrationFor, COLUMN_META, columnOf, daysLate, initialsOf, missingEstimate, PRIORITY_META, shortDate, sprintLabel, uniq } from './taskMeta';
@@ -39,11 +40,15 @@ interface ModernTaskListProps {
     /** Admin görünüm ayarı: en düşük öncelik ve sıralama */
     minPriority?: TaskPriority;
     sortKey?: TaskSortKey;
+    /** Tahminli yeni kayıt panelini açar (benzer kayıtlardan süre/efor önerisi) */
+    onNewRecord?: () => void;
     bulkEdit?: {
         people: Person[];
         versions?: ProjectVersion[];
         requiredFields: ProjectScheme['requiredFields'];
         onApply: (selected: ReadonlySet<string>, patch: BulkTaskPatch) => { changed: number } | { error: string };
+        /** Seçili görevleri siler (yalnız silme yetkisi olanlara verilir) */
+        onDelete?: (selected: ReadonlySet<string>) => { deleted: number } | { error: string };
     };
 }
 
@@ -53,12 +58,13 @@ const lower = (s: string) => s.toLocaleLowerCase('tr-TR');
 
 type ImportKind = 'excel' | 'jira' | 'csv';
 
-const ModernTaskList: React.FC<ModernTaskListProps> = ({ projectId, initialQuery, onPlanSprint, onPlanRelease, tasks, resources, sprintNames, workPackages, me, onStatusChange, onWorkflowChange, workflow, onViewTask, onEditTask, onDeleteTask, onNotifyTask, onDataImport, onCelebrate, minPriority = 'Low' as TaskPriority, sortKey = 'smart' as TaskSortKey, bulkEdit }) => {
+const ModernTaskList: React.FC<ModernTaskListProps> = ({ projectId, initialQuery, onPlanSprint, onPlanRelease, tasks, resources, sprintNames, workPackages, me, onStatusChange, onWorkflowChange, workflow, onViewTask, onEditTask, onDeleteTask, onNotifyTask, onDataImport, onCelebrate, minPriority = 'Low' as TaskPriority, sortKey = 'smart' as TaskSortKey, bulkEdit, onNewRecord }) => {
     const [query, setQuery] = useState('');
     const [queryOpen, setQueryOpen] = useState(!!initialQuery);
     const [querySeed, setQuerySeed] = useState(initialQuery || '');
     const [selection, setSelection] = useState<ReadonlySet<string>>(() => new Set());
     const [bulkOpen, setBulkOpen] = useState(false);
+    const [deleteOpen, setDeleteOpen] = useState(false);
     const [filterBySelection, setFilterBySelection] = useState(false);
     const [status, setStatus] = useState<string>('all');
     const [person, setPerson] = useState<string>('all');
@@ -125,6 +131,11 @@ const ModernTaskList: React.FC<ModernTaskListProps> = ({ projectId, initialQuery
     const bulkAction = bulkEdit && selected.size > 0 && (
         <button ref={bulkButton} type="button" className="m-btn m-btn-primary !min-h-[36px]" onClick={() => setBulkOpen(true)}>
             <Icon name="pencil" size={16} />Toplu düzenle
+        </button>
+    );
+    const deleteAction = bulkEdit?.onDelete && selected.size > 0 && (
+        <button type="button" className="m-btn m-btn-gray !min-h-[36px]" onClick={() => setDeleteOpen(true)}>
+            <Icon name="trash" size={16} />Sil
         </button>
     );
     const planActions = selected.size > 0 && (
@@ -242,7 +253,8 @@ const ModernTaskList: React.FC<ModernTaskListProps> = ({ projectId, initialQuery
                         </select>}
                     </>
                 )}
-                <div className="relative ml-auto">
+                <div className="relative ml-auto flex flex-wrap gap-2">
+                    {onNewRecord && <button type="button" className="m-btn m-btn-gray" onClick={onNewRecord} title="Benzer kapanmış kayıtlardan süre, efor ve önem önerisiyle yeni kayıt"><Icon name="sparkles" size={18} />Tahminli yeni kayıt</button>}
                     <button type="button" className="m-btn m-btn-gray" aria-haspopup="menu" aria-expanded={ioOpen} disabled={busy} onClick={() => setIoOpen(o => !o)}>
                         <Icon name="download" size={18} />
                         {busy ? 'Yükleniyor…' : 'İçe / dışa aktar'}
@@ -295,6 +307,7 @@ const ModernTaskList: React.FC<ModernTaskListProps> = ({ projectId, initialQuery
                         <>
                             <span className="text-[14px] m-text-2 px-1" aria-live="polite">{selected.size} görev seçili</span>
                             {bulkAction}
+                            {deleteAction}
                             {planActions}
                             <button type="button" className="m-btn m-btn-plain !min-h-[36px]" onClick={() => { setSelection(new Set()); setFilterBySelection(false); }}>Seçimi temizle</button>
                         </>
@@ -416,6 +429,23 @@ const ModernTaskList: React.FC<ModernTaskListProps> = ({ projectId, initialQuery
                         if ('error' in result) return result.error;
                         setNotice({ kind: 'ok', text: `${result.changed} görev güncellendi.` });
                         closeBulk();
+                        return undefined;
+                    }}
+                />
+            )}
+            {bulkEdit?.onDelete && deleteOpen && (
+                <BulkTaskDeleteSheet
+                    project={{ tasks: viewTasks }}
+                    ids={selected}
+                    onView={onViewTask}
+                    onClose={() => setDeleteOpen(false)}
+                    onConfirm={() => {
+                        const result = bulkEdit.onDelete!(selected);
+                        if ('error' in result) return result.error;
+                        setNotice({ kind: 'ok', text: `${result.deleted} görev silindi.` });
+                        setSelection(new Set());
+                        setFilterBySelection(false);
+                        setDeleteOpen(false);
                         return undefined;
                     }}
                 />

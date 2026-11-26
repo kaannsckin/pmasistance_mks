@@ -1,6 +1,6 @@
 
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { View, Task, Resource, TaskStatus, Note, CustomerRequest, Objective, Project, Person, WorkspaceData, RagStatus, ProjectStatus, UserRole, PlanLockStatus, WorkPackage, UiStyle, ModernTheme, ColorMode, PermissionKey, EstimateLogEntry, JiraSyncSettings, ReleasePlan, GoldenItem, EvalRun, ModelEvalRun, BoardConfig, ProjectScheme, WorkflowConfig, TransitionRule, ProjectComponent, ProjectVersion, ProjectRoleDef } from './types';
+import { View, Task, Resource, TaskStatus, Note, CustomerRequest, Objective, Project, Person, WorkspaceData, RagStatus, ProjectStatus, UserRole, PlanLockStatus, WorkPackage, UiStyle, ModernTheme, ColorMode, PermissionKey, EstimateLogEntry, JiraSyncSettings, ReleasePlan, GoldenItem, EvalRun, ModelEvalRun, BoardConfig, ProjectScheme, WorkflowConfig, TransitionRule, ProjectComponent, ProjectVersion, ProjectRoleDef, AutomationRule, ReportSchedule } from './types';
 import { INITIAL_TASKS, INITIAL_RESOURCES, INITIAL_OBJECTIVES } from './constants';
 import {
   WORKSPACE_STORAGE_KEY,
@@ -30,6 +30,10 @@ import { resetReportGuide, saveDepartmentGuide, saveReportGuide } from './utils/
 import { setReportExemplar } from './utils/ai/reportExamples';
 import { applyRuleAction, RuleAction, ruleActionLabel } from './utils/ai/reportRules';
 import { stampLifecycle } from './utils/planning/lifecycle';
+import { AutomationEffect, recordAutomation, runAutomation, runScheduledAutomation } from './utils/automation';
+import AutomationRulesSheet from './components/modern/AutomationRulesSheet';
+import ReportSchedulesSheet from './components/modern/ReportSchedulesSheet';
+import { buildReport, isReportDue, previousSnapshot, progressSnapshot, trClock, withSnapshot } from './utils/reportAutomation';
 import { canTransition, DEFAULT_WORKFLOW, resolveTransition, taskStatusLabel, taskWorkflow, workflowKey, workflowOptions, WorkflowStatus } from './utils/workflow';
 import { applyTransition, conditionProblem, needsInput, ruleFor, TransitionActor, TransitionEffect, TransitionInput, TransitionNeeds, transitionNeeds } from './utils/transitions';
 import TransitionDialog from './components/modern/TransitionDialog';
@@ -40,6 +44,9 @@ import ProjectListsSheet from './components/modern/ProjectListsSheet';
 import { cleanRoleMembers, projectRolesOf } from './utils/projectRoles';
 import { listId } from './utils/projectLists';
 import { BulkTaskPatch, previewBulkTaskEdit } from './utils/bulkTaskEdit';
+import { describeTaskDelete, previewTaskDelete, removeTasks } from './utils/taskDelete';
+import { SprintChange } from './utils/planning/planBoard';
+import { applyPlanChanges } from './utils/planning/planOptimizer';
 import type { DayRange } from './utils/calendarRange';
 import { moveSprintTasks } from './utils/planning/period';
 import { applyJiraSprintTransfer, JiraSprintTransfer } from './utils/planning/jiraSprintImport';
@@ -95,6 +102,7 @@ import ModernSidebar from './components/modern/ModernSidebar';
 import MobileDock from './components/modern/MobileDock';
 import ModernProjectHeader from './components/modern/ModernProjectHeader';
 import ModernPlanning from './components/modern/ModernPlanning';
+import NewRecordPanel from './components/modern/planning/NewRecordPanel';
 import { appendEstimateLog } from './utils/planning/estimateLog';
 import { applyCommit, CommitResult } from './utils/planning/releasePlan';
 import { appendEvalRun } from './utils/planning/evaluation';
@@ -180,7 +188,7 @@ const MODERN_PROJECT_VIEWS: View[] = [View.Dashboard, View.Overview, View.Roadma
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<View>(View.Portfolio);
   const [projectPeriods, setProjectPeriods] = useState(() => new Map<string, DayRange>());
-  const [planningEntry, setPlanningEntry] = useState<{ projectId: string; query?: string; jiraPeriod?: DayRange; releaseTasks?: string[]; sprintTasks?: string[]; sprint?: number } | null>(null);
+  const [planningEntry, setPlanningEntry] = useState<{ projectId: string; query?: string; jiraPeriod?: DayRange; releaseTasks?: string[]; sprintTasks?: string[]; sprint?: number; planningMode?: 'plan' | 'record' | 'release' | 'simulate' | 'jira-sprints' } | null>(null);
   useEffect(() => { if (planningEntry) setPlanningEntry(null); }, [planningEntry]);
   const [workspace, setWorkspace] = useState<WorkspaceData | null>(null);
 
@@ -207,6 +215,14 @@ const App: React.FC = () => {
   const [isGibImportOpen, setIsGibImportOpen] = useState(false);
   // Modern arayüz: dar ekranda kenar çubuğu çekmecesi, "yeni proje" isteği, sürprizler
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  // Görevler: tahminli yeni kayıt paneli (eski Planlama › Yeni kayıt)
+  const [isRecordOpen, setIsRecordOpen] = useState(false);
+  // Geniş ekranda sol menünün dar (yalnız simge) hâli; tercih bu tarayıcıda saklanır
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => { try { return localStorage.getItem('pm-sidebar-collapsed') === '1'; } catch { return false; } });
+  const toggleSidebarCollapsed = useCallback(() => setIsSidebarCollapsed(v => {
+    try { localStorage.setItem('pm-sidebar-collapsed', v ? '0' : '1'); } catch { /* gizli pencere */ }
+    return !v;
+  }), []);
   const [newProjectRequest, setNewProjectRequest] = useState(0);
   const [egg, setEgg] = useState<EggEvent | null>(null);
   const [undo, setUndo] = useState<{ message: string; snapshot: WorkspaceData } | null>(null);
@@ -216,6 +232,9 @@ const App: React.FC = () => {
   const [workflowSheetProject, setWorkflowSheetProject] = useState<string | null>(null);
   // Bileşen ve sürüm listeleri penceresi (proje kimliği)
   const [listsSheetProject, setListsSheetProject] = useState<string | null>(null);
+  const [listsSheetTab, setListsSheetTab] = useState<'roles' | 'components' | 'progress' | undefined>(undefined);
+  const [automationSheetProject, setAutomationSheetProject] = useState<string | null>(null);
+  const [reportSheetProject, setReportSheetProject] = useState<string | null>(null);
   useEffect(() => { if (!flowNotice) return; const id = window.setTimeout(() => setFlowNotice(null), 6000); return () => window.clearTimeout(id); }, [flowNotice]);
   const [storageFull, setStorageFull] = useState(false);
   const [storageWarnClosed, setStorageWarnClosed] = useState(false);
@@ -640,10 +659,67 @@ const App: React.FC = () => {
     })();
   }, [workspace]);
 
-  const storeProjectChange = useCallback((ws: WorkspaceData, previous: Project, next: Project, now = new Date()) => {
-    if (previous === next) return ws;
+  // Kural setleri (otomasyon): bildirim ve Jira'ya yazma yan etkileri; güncelleyici iki kez çalışabilir, anahtarla tekilleşir
+  const automationQueue = useRef<AutomationEffect[]>([]);
+  const automationSent = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const pending: AutomationEffect[] = [...new Map<string, AutomationEffect>(automationQueue.current.filter(e => !automationSent.current.has(e.key)).map(e => [e.key, e])).values()];
+    automationQueue.current = [];
+    if (!pending.length) return;
+    pending.forEach(e => automationSent.current.add(e.key));
+    if (automationSent.current.size > 1000) automationSent.current = new Set([...automationSent.current].slice(-500));
+    (async () => {
+      let health;
+      try { health = await fetchIntegrationHealth(); } catch { return; }
+      for (const e of pending) {
+        const ws = workspaceRef.current;
+        if (!ws) return;
+        if (e.kind === 'notify') {
+          const emails = [...new Set(e.to.map(n => ws.people.find(p => `${p.firstName} ${p.lastName}`.trim().toLocaleLowerCase('tr-TR') === n.trim().toLocaleLowerCase('tr-TR'))?.email).filter((x): x is string => !!x))];
+          const byEmail = health.email && emails.length > 0;
+          const byTeams = health.teams && (e.teams || !byEmail);
+          if (!byEmail && !byTeams) { setFlowNotice(`Kural bildirimi gönderilemedi (${e.to.join(', ') || 'Teams'}): e-posta/Teams sunucuda yapılandırılmadı ya da alıcının e-postası yok.`); continue; }
+          try {
+            const r = await sendNotification({ subject: e.subject, text: e.text, ...(byEmail ? { email: { to: emails } } : {}), ...(byTeams ? { teams: true } : {}) }, health.authMode);
+            const d = describeNotify(r);
+            if (!d.ok) setFlowNotice(`Kural bildirimi: ${d.text}`);
+          } catch (err) { setFlowNotice(`Kural bildirimi gönderilemedi: ${(err as Error).message}`); }
+          continue;
+        }
+        if (!canEditProjectContent(ws, identityOf(ws), e.projectId)) continue;
+        if (!health.jira || !health.jiraUpdate) { setFlowNotice(`${e.jiraId}: kural Jira'ya yazamadı (sunucuda Jira güncelleme kapalı).`); continue; }
+        try {
+          const st = e.status;
+          const r = await updateJiraIssue(e.jiraId, {
+            ...(st ? { status: st.category === TaskStatus.Done ? 'done' : st.category === TaskStatus.InProgress ? 'indeterminate' : 'new', statusName: st.key } : {}),
+            ...(e.priority ? { priority: e.priority } : {}),
+            ...(e.dueDate !== undefined ? { dueDate: e.dueDate } : {}),
+            ...(e.resolution ? { resolution: e.resolution } : {}),
+            ...(e.comment ? { comment: e.comment } : {}),
+          }, health.authMode);
+          if (r.errors.length) setFlowNotice(`Jira (${e.jiraId}, kural): ${r.errors.map(x => x.message).join('; ')}`);
+          if (r.applied.length) updateWorkspace(w => appendAudit(w, 'data.export', `${e.jiraId} kuralla Jira'ya yazıldı: ${r.applied.join(', ')}`, e.projectId));
+        } catch (err) { setFlowNotice(`${e.jiraId}: kural Jira'ya yazamadı: ${(err as Error).message}`); }
+      }
+    })();
+  }, [workspace, updateWorkspace]);
+
+  const storeProjectChange = useCallback((ws: WorkspaceData, previous: Project, input: Project, now = new Date()) => {
+    if (previous === input) return ws;
+    let next = input;
+    let raw = next.tasks;
+    // Kural setleri: değişen görevlere olay kuralları (zincir ve döngü koruması motorda). Yaşam döngüsü
+    // damgası kuralın sonucuna basılır: Çözüldü → (kural) Testte geçişi "kapandı" sayılmaz.
+    if (raw !== previous.tasks && next.automationRules?.some(r => r.enabled)) {
+      const r = runAutomation(next, previous.tasks, raw, { now, workflow: effectiveScheme(ws, next).workflow, people: ws.people, roleDefs: projectRolesOf(ws) });
+      if (r.log.length) {
+        raw = r.tasks;
+        next = recordAutomation(next, r, now);
+        automationQueue.current.push(...r.effects);
+      }
+    }
     // Yerel görev değişikliklerinde yaşam döngüsü damgaları ve bildirim şeması uygulanır.
-    const tasks = next.tasks !== previous.tasks ? stampLifecycle(previous.tasks, next.tasks, now) : next.tasks;
+    const tasks = raw !== previous.tasks ? stampLifecycle(previous.tasks, raw, now) : raw;
     const project = { ...next, tasks, updatedAt: now.toISOString() };
     if (tasks !== previous.tasks) queueNotifications(ws, project, previous.tasks, tasks);
     return { ...ws, projects: ws.projects.map(p => p.id === previous.id ? project : p) };
@@ -657,6 +733,33 @@ const App: React.FC = () => {
     });
   }, [storeProjectChange, updateWorkspace]);
   const updateActiveProject = useCallback((updater: (p: Project) => Project) => updateProjectById(null, updater), [updateProjectById]);
+
+  // Kural setleri: günlük (zamanlanmış) kurallar açılışta ve uygulama açıkken yarım saatte bir denetlenir
+  const runDailyRules = useCallback(() => {
+    const day = new Date().toISOString().slice(0, 10);
+    const due = (ws: WorkspaceData, p: Project) => !!p.automationRules?.some(r => r.enabled && r.trigger.kind === 'schedule' && r.lastRunDay !== day) && canEditProjectContent(ws, identityOf(ws), p.id);
+    const current = workspaceRef.current;
+    if (!current || !current.projects.some(p => due(current, p))) return;
+    updateWorkspace(ws => {
+      let out = ws;
+      for (const p of ws.projects) {
+        if (!due(ws, p)) continue;
+        const now = new Date();
+        const r = runScheduledAutomation(p, { now, workflow: effectiveScheme(out, p).workflow, people: out.people, roleDefs: projectRolesOf(out) });
+        if (!r) continue;
+        automationQueue.current.push(...r.effects);
+        out = storeProjectChange(out, p, recordAutomation({ ...p, tasks: r.tasks }, r, now, r.rules), now);
+      }
+      return out;
+    });
+  }, [updateWorkspace, storeProjectChange]);
+  const hasWorkspace = !!workspace;
+  useEffect(() => {
+    if (!hasWorkspace) return;
+    runDailyRules();
+    const id = window.setInterval(runDailyRules, 30 * 60 * 1000);
+    return () => window.clearInterval(id);
+  }, [hasWorkspace, runDailyRules]);
 
   // Risk güncellemesi + "Ne değişti?" günlüğü: eklenen/kapatılan riskleri yakalar
   const handleUpdateActiveRisks = useCallback((risks: Risk[]) => {
@@ -966,7 +1069,7 @@ const App: React.FC = () => {
   const handleLoadProject = useCallback((file: File) => {
     const current = workspaceRef.current;
     if (!current || !can(identityOf(current), 'app.backup')) return;
-    if (!file || file.type !== 'application/json') {
+    if (!file || (file.type !== 'application/json' && !/\.json$/i.test(file.name))) {
       alert('Lütfen geçerli bir JSON yedek dosyası seçin.');
       return;
     }
@@ -1402,7 +1505,7 @@ const App: React.FC = () => {
     });
   }, [updateWorkspace]);
   // Projenin bileşen ve sürüm listeleri: proje sahibi ya da admin (görev başvurularıyla birlikte)
-  const handleSaveProjectLists = useCallback((projectId: string, patch: { components: ProjectComponent[]; versions: ProjectVersion[]; tasks: Task[]; roleMembers?: Project['roleMembers'] }, summary: string) => {
+  const handleSaveProjectLists = useCallback((projectId: string, patch: { components: ProjectComponent[]; versions: ProjectVersion[]; tasks: Task[]; roleMembers?: Project['roleMembers']; progressModel?: Project['progressModel'] }, summary: string) => {
     updateWorkspace(ws => {
       const project = ws.projects.find(p => p.id === projectId);
       const who = identityOf(ws);
@@ -1413,10 +1516,90 @@ const App: React.FC = () => {
         const n = byId.get(t.id);
         return n && (JSON.stringify(n.components) !== JSON.stringify(t.components) || n.fixVersion !== t.fixVersion) ? { ...t, components: n.components, fixVersion: n.fixVersion } : t;
       });
-      const next = { ...ws, projects: ws.projects.map(p => (p.id === projectId ? { ...p, components: patch.components, versions: patch.versions, roleMembers: patch.roleMembers, tasks, updatedAt: new Date().toISOString() } : p)) };
+      const next = { ...ws, projects: ws.projects.map(p => (p.id === projectId ? { ...p, components: patch.components, versions: patch.versions, roleMembers: patch.roleMembers, progressModel: patch.progressModel, tasks, updatedAt: new Date().toISOString() } : p)) };
       return appendAudit(next, 'config.update', `"${project.name}" proje ayarları: ${summary} · ${patch.components.length} bileşen, ${patch.versions.length} sürüm`, projectId);
     });
   }, [updateWorkspace]);
+  const handleSaveAutomationRules = useCallback((projectId: string, rules: AutomationRule[], summary: string) => {
+    updateWorkspace(ws => {
+      const project = ws.projects.find(p => p.id === projectId);
+      const who = identityOf(ws);
+      if (!project || !(can(who, 'screen.admin') || canEditProjectContent(ws, who, projectId))) return ws;
+      const next = { ...ws, projects: ws.projects.map(p => (p.id === projectId ? { ...p, automationRules: rules.length ? rules : undefined, updatedAt: new Date().toISOString() } : p)) };
+      return appendAudit(next, 'config.update', `"${project.name}" kural setleri: ${summary} · ${rules.filter(r => r.enabled).length}/${rules.length} kural açık`, projectId);
+    });
+    // Yeni günlük kural kaydedildiği gün çalışır
+    window.setTimeout(() => runDailyRules(), 0);
+  }, [updateWorkspace, runDailyRules]);
+  // ---- Rapor otomasyonu: kaydet, gönder, tarayıcı yedek göndericisi (sunucu zamanlayıcısı yoksa)
+  const handleSaveReportSchedules = useCallback((projectId: string, schedules: ReportSchedule[], summary: string) => {
+    updateWorkspace(ws => {
+      const project = ws.projects.find(p => p.id === projectId);
+      const who = identityOf(ws);
+      if (!project || !(can(who, 'screen.admin') || canEditProjectContent(ws, who, projectId))) return ws;
+      const next = { ...ws, projects: ws.projects.map(p => (p.id === projectId ? { ...p, reportSchedules: schedules.length ? schedules : undefined, progressSnapshots: withSnapshot(p.progressSnapshots, progressSnapshot(p, new Date())), updatedAt: new Date().toISOString() } : p)) };
+      return appendAudit(next, 'config.update', `"${project.name}" rapor otomasyonu: ${summary}`, projectId);
+    });
+  }, [updateWorkspace]);
+  /** Raporu hesaplayıp kanallara gönderir; zamanlanmış gönderimde son gönderim ve ölçüm kaydedilir */
+  const sendScheduledReport = useCallback(async (projectId: string, s: ReportSchedule, scheduled: boolean): Promise<string> => {
+    const ws = workspaceRef.current;
+    const project = ws?.projects.find(p => p.id === projectId);
+    if (!ws || !project) return 'Proje bulunamadı.';
+    const now = new Date();
+    const r = buildReport(project, s, { now, previous: previousSnapshot(project.progressSnapshots, now), since: s.lastSentAt ? new Date(s.lastSentAt) : undefined, people: ws.people, roleDefs: projectRolesOf(ws), appUrl: window.location.origin });
+    let text: string;
+    try {
+      const health = await fetchIntegrationHealth();
+      const res = await sendNotification({
+        subject: r.subject, text: r.text, sections: r.sections,
+        ...(s.channels.teams ? { teams: true } : {}), ...(s.channels.slack ? { slack: true } : {}), ...(s.channels.notion ? { notion: true } : {}),
+        ...(s.channels.email?.length ? { email: { bcc: s.channels.email } } : {}),
+      }, health.authMode);
+      text = describeNotify(res).text || 'Gönderildi.';
+    } catch (e) {
+      text = `Gönderilemedi: ${(e as Error).message}`;
+    }
+    const at = now.toISOString();
+    updateWorkspace(w => ({
+      ...w,
+      projects: w.projects.map(p => (p.id !== projectId ? p : {
+        ...p,
+        progressSnapshots: withSnapshot(p.progressSnapshots, r.snapshot),
+        reportSchedules: (p.reportSchedules || []).map(x => (x.id !== s.id ? x : scheduled ? { ...x, lastSentDay: trClock(now).day, lastSentAt: at, lastResult: text } : { ...x, lastResult: `Deneme: ${text}` })),
+      })),
+    }));
+    return text;
+  }, [updateWorkspace]);
+  const runDueReports = useCallback(async () => {
+    const ws = workspaceRef.current;
+    if (!ws) return;
+    const now = new Date();
+    const mine = ws.projects.filter(p => p.reportSchedules?.some(s => s.enabled) && canEditProjectContent(ws, identityOf(ws), p.id));
+    if (!mine.length) return;
+    // Günlük ölçüm (önceki rapora göre fark için)
+    const day = trClock(now).day;
+    if (mine.some(p => !(p.progressSnapshots || []).some(x => x.day === day))) {
+      updateWorkspace(w => ({ ...w, projects: w.projects.map(p => (mine.some(m => m.id === p.id) && !(p.progressSnapshots || []).some(x => x.day === day) ? { ...p, progressSnapshots: withSnapshot(p.progressSnapshots, progressSnapshot(p, now)) } : p)) }));
+    }
+    const due = mine.flatMap(p => (p.reportSchedules || []).filter(s => isReportDue(s, now)).map(s => ({ p, s })));
+    if (!due.length) return;
+    let health;
+    try { health = await fetchIntegrationHealth(); } catch { return; }
+    if (health.unreachable || health.reportCron) return; // sunucu gönderiyor (ya da ulaşılamıyor)
+    for (const { p, s } of due) {
+      // Aynı tarayıcıda açık iki sekme aynı raporu göndermesin
+      const lock = `pm-report-sent:${p.id}:${s.id}:${day}`;
+      try { if (localStorage.getItem(lock)) continue; localStorage.setItem(lock, '1'); } catch { /* depolama yoksa yine gönder */ }
+      await sendScheduledReport(p.id, s, true);
+    }
+  }, [updateWorkspace, sendScheduledReport]);
+  useEffect(() => {
+    if (!hasWorkspace) return;
+    const first = window.setTimeout(() => { void runDueReports(); }, 5000);
+    const id = window.setInterval(() => { void runDueReports(); }, 10 * 60 * 1000);
+    return () => { window.clearTimeout(first); window.clearInterval(id); };
+  }, [hasWorkspace, runDueReports]);
   // Proje rolü tanımları (admin): silinen rolün üyelikleri projelerden temizlenir
   const handleSaveProjectRoles = useCallback((defs: ProjectRoleDef[]) => {
     updateWorkspace(ws => {
@@ -1839,6 +2022,38 @@ const App: React.FC = () => {
     return { changed: preview.changes.length };
   }, [storeProjectChange, updateWorkspace]);
 
+  /** Görev silme (tekli, toplu, asistan önerisi): yetki, öncül bağı temizliği ve denetim kaydı */
+  const handleDeleteTasks = useCallback((projectId: string, ids: ReadonlySet<string>): { deleted: number } | { error: string } => {
+    const ws0 = workspaceRef.current;
+    const project0 = ws0?.projects.find(p => p.id === projectId);
+    if (!ws0 || !project0 || !canEditProjectContent(ws0, identityOf(ws0), projectId)) return { error: 'Bu projenin görevlerini silme yetkiniz yok.' };
+    const preview = previewTaskDelete(project0, ids);
+    if ('error' in preview) return preview;
+    if (!preview.tasks.length) return { error: 'Silinecek görev bulunamadı (başka bir yerde silinmiş olabilir).' };
+    const now = new Date();
+    updateWorkspace(ws => {
+      const project = ws.projects.find(p => p.id === projectId);
+      if (!project || !canEditProjectContent(ws, identityOf(ws), projectId)) return ws;
+      const tasks = removeTasks(project.tasks, ids, now);
+      if (tasks === project.tasks) return ws;
+      return appendAudit(storeProjectChange(ws, project, { ...project, tasks }, now), 'task.delete',
+        `${project.name} · ${describeTaskDelete(preview)}`, projectId);
+    });
+    return { deleted: preview.tasks.length };
+  }, [storeProjectChange, updateWorkspace]);
+
+  /** Plan ekranı: sürükle-bırak, otomatik dağıtım ve devirle görevlerin sprintini değiştirir */
+  const handleSetTaskSprints = useCallback((projectId: string, changes: SprintChange[], label: string) => {
+    if (!changes.length) return;
+    updateWorkspace(ws => {
+      const project = ws.projects.find(p => p.id === projectId);
+      if (!project || !canEditProjectContent(ws, identityOf(ws), projectId)) return ws;
+      const next = applyPlanChanges(project, changes, new Date());
+      if (next === project) return ws;
+      return appendAudit(storeProjectChange(ws, project, next), 'task.bulkEdit', `${project.name} · plan: ${label}`, projectId);
+    });
+  }, [storeProjectChange, updateWorkspace]);
+
   const handleBulkSprint = useCallback((projectId: string, ids: ReadonlySet<string>, sprint: number) => {
     updateWorkspace(ws => {
       const project = ws.projects.find(p => p.id === projectId);
@@ -2092,7 +2307,6 @@ const App: React.FC = () => {
             workspace.people.find(person => person.id === identity.personId))), onRefresh: handleRefreshWorklogs }}
           allocations={workspace.allocations}
           people={workspace.people}
-          departmentLeadIds={departmentLeads}
           projects={workspace.projects}
           planLocks={workspace.planLocks}
           leaves={workspace.leaves || []}
@@ -2219,6 +2433,7 @@ const App: React.FC = () => {
         workflow={wf}
         schemeName={activeScheme.id === DEFAULT_SCHEME_ID && activeScheme.workflowSource !== 'project' ? undefined : `${activeScheme.name}${activeScheme.workflowSource === 'project' ? ' · özel akış' : ''}`}
         onOpenLists={canEditProjectContent(workspace, identity, activeProject.id) ? () => setListsSheetProject(activeProject.id) : undefined}
+        onOpenAutomation={canEditProjectContent(workspace, identity, activeProject.id) ? () => setAutomationSheetProject(activeProject.id) : undefined}
         onOpenWorkflow={activeScheme.allowProjectWorkflow && canEditProjectContent(workspace, identity, activeProject.id) ? () => setWorkflowSheetProject(activeProject.id) : undefined}
         canConfigure={activeScheme.allowProjectBoard && canEditProjectContent(workspace, identity, activeProject.id)}
         onSaveConfig={cfg => handleSaveBoardConfig(activeProject.id, cfg)}
@@ -2240,7 +2455,11 @@ const App: React.FC = () => {
     );
     const viewTask = (t: Task) => { setViewingTask(t); setIsDetailModalOpen(true); };
     const editTask = (t: Task) => { setEditingTask(t); setIsFormModalOpen(true); };
-    const deleteTask = (taskId: string) => { if (window.confirm('Emin misiniz?')) setTasks(prev => prev.filter(t => t.id !== taskId)); };
+    const deleteTask = (taskId: string) => {
+      if (!window.confirm('Emin misiniz?')) return;
+      const r = handleDeleteTasks(activeProject.id, new Set([taskId]));
+      if ('error' in r) window.alert(r.error);
+    };
     const notifyTask = (t: Task) => { setTeamsTask(t); setIsTeamsModalOpen(true); };
     const newTask = () => { setEditingTask(null); setIsFormModalOpen(true); };
     const celebrate = (message: string) => setEgg({ kind: 'celebrate', message });
@@ -2341,6 +2560,9 @@ const App: React.FC = () => {
           onLinkJira={(key, links) => handleLinkJira(activeProject.id, key, links)}
           onSaveJiraSync={settings => handleSetJiraSync(activeProject.id, settings)}
           onApplyJiraSync={(issues, opts, addNew, label, pushed, settings) => handleApplyJiraSync(activeProject.id, issues, opts, addNew, label, pushed, settings)}
+          onSetSprints={(changes: SprintChange[], label: string) => handleSetTaskSprints(activeProject.id, changes, label)}
+          onUpdateCalendar={(c: CalendarSettings) => updateActiveProject(p => ({ ...p, settings: { ...p.settings, ...c } }))}
+          initialMode={entry?.planningMode}
         />
       );
     }
@@ -2356,6 +2578,11 @@ const App: React.FC = () => {
           titleCosts={ps.titleCosts || {}}
           setTitleCosts={setTitleCosts}
           costTableColor={ps.costTableColor || '#10b981'}
+          project={activeProject}
+          roleDefs={projectRolesOf(workspace)}
+          workflow={activeScheme.workflow}
+          onViewTask={viewTask}
+          onEditSetup={canEditProjectContent(workspace, identity, activeProject.id) ? tab => { setListsSheetTab(tab); setListsSheetProject(activeProject.id); } : undefined}
         />
       );
     }
@@ -2452,8 +2679,19 @@ const App: React.FC = () => {
     }
     if (isModern && currentView === View.Roadmap) return renderProjectBoard();
     if (isModern && currentView === View.Tasks) {
+      const canAddRecord = canEditProjectContent(workspace, identity, activeProject.id);
       return (
+        <div className="flex flex-col gap-5">
+        {isRecordOpen && canAddRecord && (
+          <NewRecordPanel project={activeProject} workspace={workspace} visibleProjectIds={visibleProjectIdSet} canEdit={canAddRecord}
+            onAddTask={(t: Task, log: EstimateLogEntry) => {
+              updateActiveProject(p => ({ ...p, tasks: [...p.tasks, t] }));
+              updateWorkspace(ws => ({ ...ws, estimateLog: appendEstimateLog(ws.estimateLog, log) }));
+            }}
+            onClose={() => setIsRecordOpen(false)} />
+        )}
         <ModernTaskList
+          onNewRecord={canAddRecord ? () => setIsRecordOpen(true) : undefined}
           key={activeProject.id}
           projectId={activeProject.id}
           initialQuery={entry?.query}
@@ -2469,6 +2707,7 @@ const App: React.FC = () => {
             versions: activeProject.versions,
             requiredFields: activeScheme.requiredFields,
             onApply: (selected, patch) => handleBulkEditTasks(activeProject.id, selected, patch),
+            onDelete: selected => handleDeleteTasks(activeProject.id, selected),
           } : undefined}
           sprintNames={ps.sprintNames}
           workPackages={activeProject.workPackages}
@@ -2485,6 +2724,7 @@ const App: React.FC = () => {
           minPriority={roleView.minTaskPriority}
           sortKey={roleView.taskSort}
         />
+        </div>
       );
     }
 
@@ -2496,7 +2736,7 @@ const App: React.FC = () => {
             tasks={tasks} resources={resources}
             onEditTask={(t) => { setEditingTask(t); setIsFormModalOpen(true); }} onViewTask={(t) => { setViewingTask(t); setIsDetailModalOpen(true); }}
             onNotifyTask={(t) => { setTeamsTask(t); setIsTeamsModalOpen(true); }} onNewTask={() => { setEditingTask(null); setIsFormModalOpen(true); }}
-            onDeleteTask={(taskId) => { if(window.confirm('Emin misiniz?')) setTasks(prev => prev.filter(t => t.id !== taskId)); }}
+            onDeleteTask={deleteTask}
             onDataImport={(nt, nr) => { setTasks(prev => [...prev, ...nt]); setResources(prev => [...prev, ...nr]); }}
             onTaskStatusChange={(id, s) => setTasks(prev => prev.map(t => t.id === id ? { ...t, status: s } : t))}
           />
@@ -2526,7 +2766,7 @@ const App: React.FC = () => {
             tasks={tasks} resources={resources}
             sprintDuration={ps.sprintDuration} projectStartDate={ps.projectStartDate}
             sprintNames={ps.sprintNames || {}} setSprintNames={setSprintNames}
-            globalTestDays={ps.globalTestDays || 4} parallelTest={ps.parallelTest} setGlobalTestDays={setGlobalTestDays as React.Dispatch<React.SetStateAction<number>>}
+            globalTestDays={ps.globalTestDays ?? 4} parallelTest={ps.parallelTest} setGlobalTestDays={setGlobalTestDays as React.Dispatch<React.SetStateAction<number>>}
             onPlanGenerated={setTasks} onTaskSprintChange={(id, v) => setTasks(prev => prev.map(t => t.id === id ? { ...t, version: v } : t))}
             onTaskStatusChange={(id, s) => setTasks(prev => prev.map(t => t.id === id ? { ...t, status: s } : t))}
             onInsertSprint={insertSprint}
@@ -2549,7 +2789,7 @@ const App: React.FC = () => {
             onNewTask={() => { setEditingTask(null); setIsFormModalOpen(true); }}
             onViewTask={(t) => { setViewingTask(t); setIsDetailModalOpen(true); }}
             onEditTask={(t) => { setEditingTask(t); setIsFormModalOpen(true); }}
-            onDeleteTask={(taskId) => { if(window.confirm('Emin misiniz?')) setTasks(prev => prev.filter(t => t.id !== taskId)); }}
+            onDeleteTask={deleteTask}
           />
         );
       case View.Goals:
@@ -2847,6 +3087,8 @@ const App: React.FC = () => {
             onOpenAbout={() => setIsAboutModalOpen(true)}
             onLogoLaunch={() => setCurrentView(inProjectView ? View.Dashboard : View.Portfolio)}
             onHyperdrive={() => setEgg({ kind: 'hyper' })}
+            collapsed={isSidebarCollapsed}
+            onToggleCollapsed={toggleSidebarCollapsed}
           />
           <div className="flex-1 min-w-0 flex flex-col">
             <div className="m-mobile-bar lg:hidden sticky top-0 z-30 m-surface border-b m-sep flex items-center gap-1 px-1.5 h-14">
@@ -2870,6 +3112,8 @@ const App: React.FC = () => {
                   onStatusReport={() => setIsStatusReportOpen(true)}
                   onNewTask={() => { setEditingTask(null); setIsFormModalOpen(true); }}
                   onOpenWorkPackages={() => setIsWpManagerOpen(true)}
+                  onOpenAutomation={() => setAutomationSheetProject(activeProject.id)}
+                  onOpenReports={() => setReportSheetProject(activeProject.id)}
                   sections={roleView.projectSections}
                 />
               )}
@@ -3118,10 +3362,34 @@ const App: React.FC = () => {
         const p = workspace.projects.find(x => x.id === listsSheetProject);
         if (!p) return null;
         const sheet = (
-          <ProjectListsSheet project={p} roleDefs={projectRolesOf(workspace)} pool={[...workspace.people].sort((a, b) => `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`, 'tr'))} canEdit={can(identity, 'screen.admin') || canEditProjectContent(workspace, identity, p.id)}
+          <ProjectListsSheet project={p} roleDefs={projectRolesOf(workspace)} workflow={effectiveScheme(workspace, p).workflow} initialTab={listsSheetTab} pool={[...workspace.people].sort((a, b) => `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`, 'tr'))} canEdit={can(identity, 'screen.admin') || canEditProjectContent(workspace, identity, p.id)}
             people={[...new Set([...p.resources.map(r => r.name), ...workspace.people.map(x => `${x.firstName} ${x.lastName}`.trim())])].filter(Boolean).sort((a, b) => a.localeCompare(b, 'tr'))}
-            onClose={() => setListsSheetProject(null)}
-            onSave={(patch, summary) => { handleSaveProjectLists(p.id, patch, summary); setListsSheetProject(null); }} />
+            onClose={() => { setListsSheetProject(null); setListsSheetTab(undefined); }}
+            onSave={(patch, summary) => { handleSaveProjectLists(p.id, patch, summary); setListsSheetProject(null); setListsSheetTab(undefined); }} />
+        );
+        return isModern ? sheet : <div className={modernScope}>{sheet}</div>;
+      })()}
+      {reportSheetProject && workspace && (() => {
+        const p = workspace.projects.find(x => x.id === reportSheetProject);
+        if (!p) return null;
+        const sheet = (
+          <ReportSchedulesSheet project={p} people={workspace.people} roleDefs={projectRolesOf(workspace)}
+            canEdit={can(identity, 'screen.admin') || canEditProjectContent(workspace, identity, p.id)}
+            onClose={() => setReportSheetProject(null)}
+            onSave={(list, summary) => { handleSaveReportSchedules(p.id, list, summary); setReportSheetProject(null); }}
+            onSendNow={s => sendScheduledReport(p.id, s, false)} />
+        );
+        return isModern ? sheet : <div className={modernScope}>{sheet}</div>;
+      })()}
+      {automationSheetProject && workspace && (() => {
+        const p = workspace.projects.find(x => x.id === automationSheetProject);
+        if (!p) return null;
+        const sheet = (
+          <AutomationRulesSheet project={p} workflow={effectiveScheme(workspace, p).workflow} people={workspace.people} roleDefs={projectRolesOf(workspace)}
+            canEdit={can(identity, 'screen.admin') || canEditProjectContent(workspace, identity, p.id)} jiraConnected={!!p.jiraProjectKey || p.tasks.some(t => !!t.jiraId)}
+            onClose={() => setAutomationSheetProject(null)}
+            onSave={(rules, summary) => { handleSaveAutomationRules(p.id, rules, summary); setAutomationSheetProject(null); }}
+            onViewTask={t => { setAutomationSheetProject(null); setViewingTask(t); setIsDetailModalOpen(true); }} />
         );
         return isModern ? sheet : <div className={modernScope}>{sheet}</div>;
       })()}

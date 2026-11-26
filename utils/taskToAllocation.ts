@@ -1,4 +1,5 @@
 import { Project, WorkspaceData } from '../types';
+import { sprintCalendar } from './sprintCalendar';
 import { calculatePertFuzzyPert } from './timeline';
 import { createAllocationId, MONTH_INDEXES } from './allocations';
 
@@ -59,8 +60,7 @@ export interface SprintWindow {
 }
 
 export const buildSprintWindows = (project: Project, maxSprint: number): SprintWindow[] => {
-    const weeks = project.settings.sprintDuration || 3;
-    const testDays = project.settings.globalTestDays || 4;
+    const { weeks, testDays, parallelTest } = sprintCalendar(project.settings);
     const parts = (project.settings.projectStartDate || new Date().toISOString().split('T')[0]).split('-').map(Number);
     let cursor = getFirstWorkday(new Date(parts[0], (parts[1] || 1) - 1, parts[2] || 1));
 
@@ -76,11 +76,12 @@ export const buildSprintWindows = (project: Project, maxSprint: number): SprintW
             workdaysByMonth.set(key, (workdaysByMonth.get(key) || 0) + 1);
             total++;
         }
-        const testStart = getNextWorkday(end);
-        const testEnd = addWorkdays(testStart, testDays);
+        // Test sprint içindeyse (0 gün) ayrı test dönemi yok: test penceresi sprint sonuna denk gelir
+        const testStart = testDays > 0 ? getNextWorkday(end) : new Date(end);
+        const testEnd = testDays > 0 ? addWorkdays(testStart, testDays) : new Date(end);
         windows.push({ sprint: s, start, end, testStart, testEnd, workdaysByMonth, totalWorkdays: total });
         // Paralel testte sonraki sprint bu sprintin testini beklemez.
-        cursor = getNextWorkday(project.settings.parallelTest ? end : testEnd);
+        cursor = getNextWorkday(parallelTest ? end : testEnd);
     }
     return windows;
 };

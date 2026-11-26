@@ -944,6 +944,8 @@ Tam liste: [`.env.example`](.env.example) · [docs/AI_KURULUM.md](docs/AI_KURULU
 |---|---|
 | [docs/AI_KURULUM.md](docs/AI_KURULUM.md) | Kurumsal AI asistanı kurulumu, araçlar, kapsam kuralları |
 | [docs/MCP_KURULUM.md](docs/MCP_KURULUM.md) | Claude Desktop / Claude Code bağlantısı |
+| [docs/PLAN_OPTIMIZASYONU.md](docs/PLAN_OPTIMIZASYONU.md) | Plan ekranı optimizasyonu: kapasite modeli, çizelgeleme kuralları, kurtarma senaryoları |
+| [docs/OTOMASYON.md](docs/OTOMASYON.md) | İlerleme modeli (durum yüzdeleri), ekip/bileşen analizi, kural setleri, rapor otomasyonu (Teams, Slack, Notion) |
 | [docs/ASISTAN_YETENEKLERI.md](docs/ASISTAN_YETENEKLERI.md) | Asistanın analiz ve rapor yetenekleri: oyun kitapları, hesap motoru, analitik dosyalar |
 | [docs/RAPOR_AI.md](docs/RAPOR_AI.md) | Haftalık rapor AI asistanı |
 | [docs/RAPOR_AI_PLANI.md](docs/RAPOR_AI_PLANI.md) | Rapor AI geliştirme planı |

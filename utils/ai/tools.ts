@@ -1,4 +1,7 @@
 import { IssueType, PermissionKey, ProjectStatus, RagStatus, RiskStatus, Task, TaskStatus } from '../../types';
+import { projectRolesOf } from '../projectRoles';
+import { componentAnalytics, GroupStats, teamAnalytics } from '../teamAnalytics';
+import { describeProgressModel, progressOf } from '../progress';
 import { normalizeEnumArgs } from './enumAliases';
 import { inMonthEstimates, InMonthEstimate } from '../inMonthActual';
 import { getPlanLockStatus, inferAllocationRole, MONTH_INDEXES, ROLE_LABELS, summarizeByProject } from '../allocations';
@@ -32,6 +35,9 @@ import {
     groupBy, Measure, outliers, PERIODS, Period, pivot, profile, topRows, trend,
 } from './dataAnalysis';
 import { SKILLS, skillById } from './skills';
+import { DEFAULT_OPTIONS, describeMetrics, optimizePlan, rescueScenarios } from '../planning/planOptimizer';
+import { buildHistory, calibrator } from '../planning/history';
+import { calendarLabel, sprintCalendar } from '../sprintCalendar';
 import { JsonSchema, ToolCall, ToolSpec } from './protocol';
 import { knownWorkflow, taskStatusLabel } from '../workflow';
 import { effectiveScheme } from '../projectScheme';
@@ -231,6 +237,7 @@ export const AI_TOOLS: ToolDef[] = [
                         toplam: p.tasks.length,
                         tamamlanan: p.tasks.filter(t => t.status === TaskStatus.Done).length,
                         geciken: p.tasks.filter(t => isOverdue(t, ctx.now)).length,
+                        ilerleme_yuzde: progressOf(p.tasks, p.progressModel).pct,
                     },
                     acik_risk: (p.risks || []).filter(r => r.status !== 'closed').length,
                     // Plan kilidi öneri denenmeden görünsün (B-014): kilitliyse yalnız gerçekleşen değişir
@@ -302,6 +309,7 @@ export const AI_TOOLS: ToolDef[] = [
                 proje_yoneticisi: projectPmName(ctx, p.pmPersonId),
                 baslangic: p.settings.projectStartDate,
                 surum_suresi_hafta: p.settings.sprintDuration,
+                ilerleme: { yuzde: progressOf(p.tasks, p.progressModel).pct, yontem: describeProgressModel(p.progressModel) },
                 saglik: !isHealthScored(p) ? { skor: null, not: 'Teklif aşamasında skorlanmaz.' } : {
                     skor: h.score, bant: h.band, guven: h.confidence, kapsam: h.coverage, spi: r2(h.spi), cpi: r2(h.cpi), nedenler: h.reasons,
                     // Skorun girdileri: normalize değer (0-1, null = veri yok), ağırlık ve skordan düşürdüğü puan
@@ -1011,6 +1019,30 @@ const PROPOSAL_TOOLS: ToolDef[] = [
                 return c;
             });
             return withSkipped(propose(ctx, { type: 'gorev_guncelle', projectId: project.id, changes: ok }), skipped);
+        },
+    },
+    {
+        label: 'Görev silme önerisi',
+        writeOnly: true,
+        spec: {
+            name: 'oner_gorev_sil',
+            description: 'Görev silmeyi ÖNERİR (onaysız silinmez). Yalnız açık istekte; tümü TEK çağrıda.',
+            parameters: S.obj({
+                proje: P.project,
+                gorevler: { type: 'array', items: S.str('Ad/anahtar') },
+                gerekce: S.str(''),
+            }, ['gorevler']),
+        },
+        run: (a, ctx) => {
+            const project = resolveProject(ctx, a.proje);
+            const { ok, skipped } = eachRow(listArg(a.gorevler).map(g => ({ gorev: String(g ?? "") })), r => {
+                const hits = matchByText(project.tasks, str(r.gorev), t => [t.name, t.jiraId]);
+                if (!hits.length) throw new ToolError(`"${str(r.gorev)}" ${project.name} projesinde yok.`);
+                if (hits.length > 1) throw new ToolError(`"${str(r.gorev)}" birden çok görevle eşleşti: ${hits.slice(0, 5).map(t => t.jiraId || t.name).join(', ')}; Jira anahtarıyla belirtin.`);
+                return hits[0].id;
+            });
+            if (!ok.length) throw new ToolError(`Silinecek görev bulunamadı: ${skipped.join(' ')}`);
+            return withSkipped(propose(ctx, { type: 'gorev_sil', projectId: project.id, taskIds: [...new Set(ok)], reason: str(a.gerekce) || undefined }), skipped);
         },
     },
     {
@@ -1965,7 +1997,101 @@ const measuresArg = (v: unknown): Measure[] => listArg(v).filter((x): x is Args 
 
 // Analiz araçları sohbet çalışma zamanına (files) bağlıdır: tarayıcı sohbetinde sunulur, temel istek
 // (MCP — orada Claude kendi analizini yapar) büyümez.
+/** Ekip analizi (asistan): Ekip › Takımlar / Bileşenler ekranıyla aynı hesap */
+const teamAnalysisTool: ToolDef = {
+    label: 'Ekip analizi',
+    requires: 'files',
+    spec: {
+        name: 'ekip_analizi',
+        description: 'Takım (proje rolü) ya da bileşen kırılımı: ilerleme %, açık/geciken, dönemde biten, açık efor, hata açılan/kapanan, kapanma süresi, tahmin sapması, kişi yükü ve bulgular.',
+        parameters: S.obj({ proje: P.project, kirilim: S.str('', ['takim', 'bilesen']), gun: S.int('Dönem (varsayılan 30)') }),
+    },
+    run: (a, ctx) => {
+        const project = resolveProject(ctx, a.proje);
+        const gun = typeof a.gun === 'number' && a.gun >= 7 && a.gun <= 365 ? Math.round(a.gun) : 30;
+        const fn = str(a.kirilim) === 'bilesen' ? componentAnalytics : teamAnalytics;
+        const r = fn(project, projectRolesOf(ctx.ws), ctx.ws.people, { now: ctx.now, periodDays: gun });
+        if (!r.groups.length) return { proje: project.name, not: str(a.kirilim) === 'bilesen' ? 'Bileşen yok.' : 'Proje rollerinde üye yok (Proje ayarları › Roller).' };
+        const row = (g: GroupStats) => ({
+            ad: g.name, kisi: g.members.length, ilerleme_yuzde: g.progressPct, toplam: g.total, acik: g.open, surecte: g.inProgress, geciken: g.overdue, blocker: g.blockers,
+            biten_donem: g.doneInPeriod, biten_efor_gun: g.effortDoneInPeriod, acik_efor_gun: g.openEffort,
+            hata: { acik: g.bugsOpen, acilan: g.bugsOpened, kapanan: g.bugsClosed, pay_yuzde: Math.round(g.bugShare * 100) },
+            kapanma_gun_ortanca: g.leadTimeDays, gerceklesen_tahmin_orani: g.estimateRatio, haftalik_biten_8: g.weekly,
+            kisiler: g.memberStats.slice(0, 8).map(m => ({ ad: m.name, acik: m.open, geciken: m.overdue, biten: m.doneInPeriod, acik_efor: m.openEffort })),
+            ...(g.lead ? { sorumlu: g.lead } : {}), ...(g.teams?.length ? { takimlar: g.teams } : {}),
+        });
+        return { proje: project.name, donem_gun: gun, ilerleme_yontemi: describeProgressModel(project.progressModel), gruplar: r.groups.map(row), ...(r.outside ? { disarida: row(r.outside) } : {}), bulgular: r.insights.map(i => i.text) };
+    },
+};
+
+/** Plan optimizasyonu (asistan): Plan ekranındaki "Optimize et" ile aynı motor */
+const planOptimizeTool: ToolDef = {
+    label: 'Plan optimizasyonu',
+    requires: 'files',
+    spec: {
+        name: 'plan_optimizasyonu',
+        description: 'Sürüm planını (kilometre taşı × sprint) optimize eder: taş tahminleri önce/sonra, kapasite, hız kontrolü, gecikmeye kurtarma senaryoları ve gerekçeli değişiklikler. "Taşa yetişir miyiz, nasıl yetiştiririz, planı düzelt" sorularında. oner=true (ve senaryo) ile hesaplanan değişiklikler onaylı öneri kartı olur.',
+        parameters: S.obj({
+            proje: P.project,
+            surum: S.str('Sürüm planı adı (yoksa son taslak)'),
+            hedef_doluluk: S.int('% (varsayılan 85)'),
+            kisi_degisikligi: S.bool('Aynı birimde kişi değişikliği'),
+            bol: S.bool('Büyük işi böl (varsayılan açık)'),
+            bastan: S.bool('Baştan dağıt'),
+            gecmis_sapma: S.bool('Eforu geçmiş sapmayla düzelt'),
+            senaryo: S.str('Önerilecek senaryo kimliği (önceki sonuçtan)'),
+            oner: S.bool('Öneri kartı hazırla'),
+        }),
+    },
+    run: (a, ctx) => {
+        const project = resolveProject(ctx, a.proje);
+        const plans = (project.releasePlans || []).filter(p => p.mode === 'manual');
+        if (!plans.length) throw new ToolError(`${project.name} projesinde sürüm planı yok. Planlama › Plan ekranında görevleri seçip bir sürüm oluşturun.`);
+        const want = str(a.surum).toLocaleLowerCase('tr-TR');
+        const plan = (want ? plans.find(p => p.name.toLocaleLowerCase('tr-TR').includes(want)) : undefined)
+            || [...plans].sort((x, y) => Number(y.status === 'draft') - Number(x.status === 'draft') || y.updatedAt.localeCompare(x.updatedAt))[0];
+        const hist = a.gecmis_sapma === true ? calibrator(buildHistory(ctx.scoped.projects)) : undefined;
+        const load = typeof a.hedef_doluluk === 'number' && a.hedef_doluluk >= 30 && a.hedef_doluluk <= 100 ? a.hedef_doluluk / 100 : DEFAULT_OPTIONS.targetLoad;
+        const base = optimizePlan(project, plan, {
+            mode: a.bastan === true ? 'fresh' : 'stable', targetLoad: load, split: a.bol !== false, reassign: a.kisi_degisikligi === true,
+            useRemaining: true, people: ctx.ws.people, leaves: ctx.ws.leaves || [], now: ctx.now,
+            ...(hist ? { calibrate: (t: Task) => hist({ unit: t.unit, issueType: t.issueType })?.median } : {}),
+        });
+        const scenarios = rescueScenarios(project, plan, base);
+        const pick = str(a.senaryo) ? scenarios.find(x => x.id === str(a.senaryo)) : undefined;
+        if (str(a.senaryo) && !pick) throw new ToolError(`"${str(a.senaryo)}" senaryosu yok. Senaryolar: ${scenarios.map(x => x.id).join(', ') || 'yok (gecikme yok)'}.`);
+        const shown = pick?.result || base;
+        const names = project.settings.sprintNames || {};
+        const sl = (v: number) => (v === 0 ? 'Havuz' : names[v] || `Sprint ${v}`);
+        const keyOf = (id: string) => { const t = project.tasks.find(x => x.id === id); return t ? t.jiraId || t.name : id; };
+        const out: Args = {
+            surum: plan.name,
+            takvim: calendarLabel(sprintCalendar(project.settings)),
+            secenekler: { hedef_doluluk: `%${Math.round(shown.options.targetLoad * 100)}`, kisi_degisikligi: shown.options.reassign, bol: shown.options.split, kip: shown.options.mode === 'stable' ? 'yalnız gerekeni değiştir' : 'baştan' },
+            once: describeMetrics(shown.before),
+            sonra: describeMetrics(shown.after),
+            taslar: shown.after.milestones.map(m => ({ tas: m.name, hedef: m.target, simdi: shown.before.milestones.find(x => x.id === m.id)?.forecast, optimize: m.forecast, durum: m.status })),
+            ...(shown.velocity ? { hiz: { gun_sprint: shown.velocity.perSprint, sprint: shown.velocity.sprints, plan_varsayimi: shown.velocity.planned, ...(shown.velocity.recommendedLoad ? { onerilen_doluluk: `%${Math.round(shown.velocity.recommendedLoad * 100)}` } : {}) } } : {}),
+            uyarilar: shown.warnings.slice(0, 8).map(w => w.message),
+            senaryolar: scenarios.map(x => ({ id: x.id, ad: x.label, aciklama: x.detail, sonuc: x.retarget ? 'plan değişmez, hedef güncellenir' : describeMetrics(x.result.after), degisiklik: x.result.changes.length })),
+            degisiklik_sayisi: shown.changes.length,
+            degisiklikler: shown.changes.slice(0, 25).map(c => ({ gorev: keyOf(c.taskId), sprint: `${sl(c.from)} → ${sl(c.to)}`, ...(c.toSpan !== undefined ? { sprint_sayisi: c.toSpan } : {}), ...(c.toResource !== undefined ? { kisi: `${c.fromResource || 'atanmamış'} → ${c.toResource || 'atanmamış'}` } : {}), neden: c.reason })),
+            yontem: 'Kapasite: katılım × iş günü (tatil, izin düşülür) × hedef doluluk; bu sprintte yalnız kalan günler. Sıra: taş → Blocker → kritik zincir → öncelik → termin; öncül bittiği sprintten sonra ardıl başlar. Sezgisel yöntem: en iyiyi garanti etmez.',
+        };
+        if (a.oner === true) {
+            if (!ctx.canWrite) throw new ToolError('Bu rol plan değişikliği öneremez; Planlama › Plan › Optimize et ekranını projenin PY\'si kullanır.');
+            out.oneri = propose(ctx, {
+                type: 'plan_uygula', projectId: project.id, planId: plan.id, label: pick ? pick.label : `optimize (${shown.changes.length} değişiklik)`,
+                changes: shown.changes, ...(pick?.descope ? { descope: pick.descope } : {}), ...(pick?.retarget ? { retarget: pick.retarget } : {}),
+            });
+        }
+        return out;
+    },
+};
+
 const ANALYSIS_TOOLS: ToolDef[] = [
+    planOptimizeTool,
+    teamAnalysisTool,
     {
         label: 'Veri analizi',
         requires: 'files',

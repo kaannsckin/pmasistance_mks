@@ -27,7 +27,7 @@ describe('bileşen ve sürüm listeleri', () => {
     });
 
     it('sürüm ilerlemesi ve gecikme', () => {
-        expect(versionProgress(tasks, v('1', '2.1', { releaseDate: '2026-11-01' }), new Date('2026-11-19'))).toEqual({ total: 2, done: 1, open: 1, late: true });
+        expect(versionProgress(tasks, v('1', '2.1', { releaseDate: '2026-11-01' }), new Date('2026-11-19'))).toEqual({ total: 2, done: 1, open: 1, late: true, pct: 50 });
         expect(versionProgress(tasks, v('1', '2.1', { status: 'released', releaseDate: '2026-11-01' }), new Date('2026-11-19')).late).toBe(false);
     });
 

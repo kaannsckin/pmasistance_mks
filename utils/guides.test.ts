@@ -18,6 +18,7 @@ describe('sayfa rehberleri', () => {
     it('"?" açık kipin adımından başlar', () => {
         const g = GUIDES.planning;
         expect(startStepFor(g)).toBe(0);
+        expect(g.steps[startStepFor(g, 'plan')].id).toBe('plan');
         expect(g.steps[startStepFor(g, 'release')].id).toBe('release');
         expect(g.steps[startStepFor(g, 'simulate')].id).toBe('simulate');
         expect(g.steps[startStepFor(g, 'record')].id).toBe('record');

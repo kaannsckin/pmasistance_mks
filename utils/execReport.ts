@@ -1,4 +1,5 @@
 import { PlanLockStatus, ProjectStatus, RagStatus, TaskStatus, UserRole, WorkspaceData } from '../types';
+import { progressOf } from './progress';
 import {
     EffortField, findOverAllocations, getPlanLockStatus, MONTH_INDEXES, MONTHS_TR,
     MonthlySummaryRow, OverAllocation, summarizeByDepartment, summarizeByPerson,
@@ -96,7 +97,7 @@ export const buildExecReport = (ws: WorkspaceData, year: number): ExecReport => 
             ragNote: p.ragNote,
             taskCount: p.tasks.length,
             taskDone: done,
-            progressPct: p.tasks.length > 0 ? Math.round((done / p.tasks.length) * 100) : 0,
+            progressPct: progressOf(p.tasks, p.progressModel).pct,
             planAA,
             actualAA,
             varianceAA: round2(actualAA - planAA),

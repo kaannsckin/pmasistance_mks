@@ -3,6 +3,35 @@
 Her sürümün başlığı `## vX.Y.Z` biçimindedir; GitHub sürüm sayfası bu bölümü
 buradan alır (`.github/workflows/exe.yml`).
 
+## v3.6.0
+
+**İlerleme, ekip analizi ve otomasyon**
+- **Ayarlanabilir ilerleme**: Proje ayarları › İlerleme'de iş akışındaki her duruma tamamlanma yüzdesi verilir (ör. geliştirme bitip Testte olan iş %75). İlerleme adet ya da efor ağırlıklı hesaplanabilir. Genel bakış, sprint ve sürüm ilerlemesi, Plan'daki taşlar, dashboard, yönetici raporu, zamanlanmış raporlar ve asistan aynı modeli kullanır.
+- **Ekip › Takımlar ve Bileşenler**: takımlar (proje rolleri) ve bileşenler yan yana karşılaştırılır. Göstergeler: ilerleme %, açık ve geciken iş, dönemde biten, açık efor, açılan/kapanan hata, kapanma süresi, tahmin sapması ve 8 haftalık eğilim. Gecikme, darboğaz kişi, hata birikmesi, düşük tahmin ve Blocker için otomatik bulgular çıkar. Satır ayrıntısında kişi yükü ve açık işler var. Asistanda `ekip_analizi` aracı.
+- **Kural setleri**: tetikleyici → koşul → eylem.
+  - Örnek: Çözüldü olan ve atananı X olan işi Testte yap.
+  - Basit kip tek cümleden oluşur.
+  - İleri kipte VE/VEYA grupları, çok eylem ve alan tetikleyicisi var.
+  - Tetikleyiciler: durum değişince, görev oluşturulunca, alan değişince, her gün.
+  - Eylemler: durum, atama (bileşen sorumlusu dahil), öncelik, sprint, sürüm, termin, etiket, çözüm, yorum, bildirim.
+  - Kural başına "Jira'ya da uygula" seçeneği var.
+  - Elle, toplu, Jira eşitlemesi ve asistan değişikliklerinin hepsinde çalışır.
+  - Zincir en çok 3 adımdır ve döngü oluşmaz. Ayrıca önizleme, hazır kurallar ve çalışma geçmişi var.
+- **Rapor otomasyonu**: proje ilerlemesi seçilen periyotta (her gün, hafta içi, haftalık; Türkiye saati) Teams, Slack, Notion ve/veya e-postaya gönderilir. İçerik: ilerleme % ve önceki ölçüme göre fark, dönemde biten/yeni işler, açılan/kapanan hata ve hata oranı %, geciken işler, sprint, kilometre taşları, takım bazında durum, Blocker ve yüksek riskler. Sunucu zamanlayıcısı (cron + bulut verisi) tanımlıysa uygulama kapalıyken de gider; değilse uygulama açıkken tarayıcı gönderir. Yönetici › Entegrasyonlar'a Slack webhook ve Notion jetonu/sayfası eklendi. Ayrıntı: [docs/OTOMASYON.md](docs/OTOMASYON.md).
+
+**Planlama**
+- **Plan optimizasyonu** (Plan › Optimize et, asistanda `plan_optimizasyonu`): kapasite artık tatil, izin, bugünkü sprintin kalan günleri ve hedef doluluk tamponuyla hesaplanıyor; sıralama kilometre taşı → Blocker → kritik zincir → öncelik. Seçenekler: yalnız gerekeni değiştir (kararlı) / baştan dağıt, büyük işleri böl, aynı birimde kişi değişikliği (yalnız en az bir sprint kazandırırsa), Jira kalan süresi, geçmiş sapma düzeltmesi. Önce/sonra metrikleri, hız kontrolü (plan geçmiş hızın üstündeyse uyarı ve önerilen doluluk), geciken taşlar için kurtarma senaryoları (kişi değişikliği, bölme, tamponsuz, kapsam daraltma, yeni hedef). Asistan aynı motorla senaryoları açıklar ve onaylı öneri kartı hazırlar. Ayrıntı: [docs/PLAN_OPTIMIZASYONU.md](docs/PLAN_OPTIMIZASYONU.md).
+- Planlama'nın ana ekranı artık **Plan**: sürüm → kilometre taşları → sprintler. Satırlar kilometre taşları (hedef tarih sırasıyla), sütunlar sprint takvimindeki sprintler; kartlar sürükle-bırakla ya da "Taşı" penceresiyle başka sprinte veya taşa alınır. Her taşın tahmini bitişi hedefiyle karşılaştırılır (yolunda / riskli / gecikiyor / planlanmamış iş). Sprint başlığında yük/kapasite, hedef tarih ızgarada işaretli.
+- **Otomatik dağıt**: sürümün açık işleri kilometre taşı sırası, öncül, öncelik ve kişi kapasitesine göre bugünkü sprintten itibaren dağıtılır; sürüm dışı işlerin yükü düşülür, devam eden işler yerinde kalır. Önce önizleme (değişen sprintler, taş tahminleri, kapasite ve gecikme uyarıları), sonra uygulama.
+- **Sıkı takip**: bu sprintin yükü ve kapasite aşımı, biten sprintte kalan işler için "Bu sprinte devret", son sprintlerin hızıyla bitiş tahmini. Görev listesinde "Sürüm planına al" seçili görevleri Plan'a getirir.
+- Sprint takvimi tek kaynak ve yapılandırılabilir: test günü 0 olabilir (test sprint içinde; eskiden 0 yazılınca 4 gün sayılıyordu ve haftalık sprintte kişi kapasitesi 1 güne düşüyordu). Hazır ritimler: Sürekli geliştirme (1 hafta), İki haftalık (paralel test), Klasik. Yol haritası, otomatik plan ve Plan aynı takvimi kullanır.
+- Planlama sekmeleri: Plan · Sürüm sihirbazı · Plan simülasyonu · Jira sprintleri. Tahminli yeni kayıt Görevler ekranına taşındı ("Tahminli yeni kayıt").
+- Düzeltmeler: modern menüde "Yedekten yükle" seçilen dosyayı okumuyordu (dosya seçici menüyle birlikte kapanıyordu). Açık bir işi başka sprinte taşımak, kalan işleri bitmiş sprint için yanlışlıkla "sprint tamamlandı" kutlaması gösteriyordu.
+- Görevler listesinde seçili görevler topluca silinebilir: onay penceresi silinecek görevleri ve öncül bağı kaldırılacak görevleri gösterir; Jira kayıtları silinmez. Tekli silme de aynı kuralla çalışır (ardılların öncül bağı temizlenir) ve denetim günlüğüne yazılır.
+- Asistan görev silmeyi önerebilir (`oner_gorev_sil`): ad ya da Jira anahtarıyla bulunan görevler tek öneri kartında listelenir, kullanıcı onaylamadan silinmez ve uygulandıktan sonra geri alınabilir.
+- Modern arayüzde sol menü daraltılıp yalnız simgelerden oluşan dar şeride indirilebilir; tercih tarayıcıda hatırlanır.
+- Asistan paneli küçültülebilir: sağ altta küçük AI simgesi olarak çalışmayı sürdürür. Simge çalışırken dönen ışık halkası ve o anki adımı, yanıt hazır olunca yeşil işaret, boşta yavaş bir parıltı gösterir; tıklanınca panel açılır.
+
 ## v3.5.0
 
 **Asistan: analiz ve rapor yetenekleri**

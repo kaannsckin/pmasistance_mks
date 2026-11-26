@@ -21,6 +21,10 @@ export interface IntegrationHealth {
     teams: boolean;
     email: boolean;
     reminder: boolean;
+    /** Rapor otomasyonu kanalları ve sunucu zamanlayıcısı (eski sunucularda yok) */
+    slack?: boolean;
+    notion?: boolean;
+    reportCron?: boolean;
     authMode: AiAuthMode;
     unreachable?: boolean;
 }
@@ -304,11 +308,13 @@ export const updateJiraIssue = (key: string, changes: JiraUpdateChanges, authMod
 export interface NotifyResult {
     teams?: string; // 'sent' | 'not_configured' | hata metni
     email?: string;
+    slack?: string;
+    notion?: string;
     rejected?: string[];
 }
 
 export const sendNotification = (
-    o: { subject: string; text: string; html?: string; teams?: boolean; email?: { to?: string[]; bcc?: string[] } },
+    o: { subject: string; text: string; html?: string; teams?: boolean; email?: { to?: string[]; bcc?: string[] }; slack?: boolean; notion?: boolean; sections?: { title: string; summary?: string; lines: string[] }[] },
     authMode: AiAuthMode,
 ): Promise<NotifyResult> => post<NotifyResult>('notify', o, authMode);
 
@@ -323,6 +329,8 @@ export const describeNotify = (r: NotifyResult): { ok: boolean; text: string } =
         else { ok = false; parts.push(`${label} gönderilemedi: ${v}`); }
     };
     one('Teams', r.teams);
+    one('Slack', r.slack);
+    one('Notion', r.notion);
     one('E-posta', r.email);
     if (r.rejected?.length) parts.push(`kurum dışı adresler atlandı: ${r.rejected.join(', ')}`);
     return { ok, text: parts.length ? `${parts.join('; ')}.` : 'Gönderilecek kanal seçilmedi.' };

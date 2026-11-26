@@ -1,4 +1,5 @@
 import { Project, ProjectSettings, Task, TaskStatus } from '../types';
+import { sprintCalendar } from './sprintCalendar';
 import { calculatePertFuzzyPert } from './timeline';
 import { buildSprintWindows } from './taskToAllocation';
 import { isInSprint, lastSprintOf, sprintSpanOf } from './sprintSpan';
@@ -58,9 +59,7 @@ export const shiftSprintSettings = (settings: ProjectSettings, at: number, direc
 
 /** Bir sprintte birim başına kapasite (gün): (hafta×5 − test günü) × katılım */
 export const unitCapacities = (project: Project): Map<string, number> => {
-    const weeks = project.settings.sprintDuration || 3;
-    const testDays = project.settings.globalTestDays || 4;
-    const net = Math.max(0, weeks * 5 - testDays);
+    const net = sprintCalendar(project.settings).netDays;
     const caps = new Map<string, number>();
     project.resources.forEach(r => {
         const unit = r.unit || UNASSIGNED;

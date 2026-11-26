@@ -394,6 +394,7 @@ export const ModernChat: React.FC<{
                 {a.messages.length > 0 && <button type="button" className="m-icon-btn" aria-label="Yeni sohbet" title="Yeni sohbet (bu sohbet geçmişte kalır)" onClick={a.clear}><Icon name="plus" size={18} /></button>}
                 <button type="button" className="m-icon-btn" aria-label={`Sohbetler (${a.chats.length})`} aria-expanded={historyOpen} title="Sohbet geçmişi" onClick={() => { setHistoryOpen(o => !o); setMemoryOpen(false); }}><Icon name="history" size={18} /></button>
                 {onExpand && <button type="button" className="m-icon-btn" aria-label="Tam ekranda aç" title="Tam ekranda aç" onClick={onExpand}><Icon name="expand" size={18} /></button>}
+                {panel && onClose && <button type="button" className="m-icon-btn" aria-label="Asistanı küçült" title="Küçült: sağ altta küçük simge olarak çalışmaya devam eder" onClick={a.minimize}><Icon name="minimize" /></button>}
                 {onClose && <button type="button" className="m-icon-btn" aria-label="Asistanı kapat" title="Kapat (Esc)" onClick={onClose}><Icon name="x" /></button>}
             </header>
             {historyOpen && <ChatHistory onClose={() => setHistoryOpen(false)} />}
@@ -568,6 +569,34 @@ export const ModernKnowledgeBase: React.FC<{ onClose: () => void }> = ({ onClose
 // ---------------------------------------------------------------- yan panel
 
 /** Sağdan açılan panel (örtüsüz; arkadaki ekran kullanılabilir). Esc ile kapanır. */
+/**
+ * Küçültülmüş asistan: sağ altta küçük AI simgesi. Üç hâl animasyonla ayrılır:
+ * çalışıyor (dönen ışık halkası + o anki adım), yanıt hazır (yeşil işaret, bir kez
+ * zıplar), boşta (yavaş nefes alan parıltı). Tıklanınca panel açılır.
+ */
+const AssistantOrb: React.FC = () => {
+    const a = useAssistant();
+    const working = a.isStreaming;
+    const state: 'working' | 'done' | 'idle' = working ? 'working' : a.hasUnread ? 'done' : 'idle';
+    const last = a.messages[a.messages.length - 1];
+    const step = working && last?.role === 'assistant' ? [...(last.steps || [])].reverse().find(s => s.status === 'running')?.label : undefined;
+    const label = state === 'working' ? `Asistan çalışıyor${step ? `: ${step}` : '…'}` : state === 'done' ? 'Asistanın yanıtı hazır' : 'Asistan boşta';
+    return (
+        <div className={`m-ai-orb-wrap is-${state}`}>
+            <span className="m-ai-orb-label" aria-hidden="true">{label}</span>
+            <button type="button" className="m-ai-orb" onClick={() => a.setOpen(true)} aria-label={`${label}. Asistanı aç`} title={label}>
+                <span className="m-ai-orb-ring" aria-hidden="true"></span>
+                <span className="m-ai-orb-core" aria-hidden="true"><Icon name="sparkles" size={22} /></span>
+                {state === 'done' && <span className="m-ai-orb-badge" aria-hidden="true"><Icon name="check" size={12} strokeWidth={3} /></span>}
+            </button>
+            {!working && (
+                <button type="button" className="m-ai-orb-dismiss" onClick={a.dismissMinimized} aria-label="Asistan simgesini kaldır" title="Kaldır"><Icon name="x" size={12} strokeWidth={2.5} /></button>
+            )}
+            <span className="sr-only" role="status" aria-live="polite">{state === 'idle' ? '' : label}</span>
+        </div>
+    );
+};
+
 export const ModernAssistantPanel: React.FC<{ suggestions: { label: string; prompt: string }[]; hidden?: boolean; onExpand?: () => void }> = ({ suggestions, hidden, onExpand }) => {
     const a = useAssistant();
     useEffect(() => {
@@ -580,6 +609,7 @@ export const ModernAssistantPanel: React.FC<{ suggestions: { label: string; prom
     return (
         <>
             {a.isKbOpen && <ModernKnowledgeBase onClose={() => a.setKbOpen(false)} />}
+            {!hidden && !a.isOpen && (a.isMinimized || a.hasUnread || a.isStreaming) && <AssistantOrb />}
             {!hidden && a.isOpen && (
                 <aside role="dialog" aria-label="Asistan" className="fixed top-0 right-0 z-[60] h-full w-full sm:w-[440px] m-pop border-l m-sep" style={{ borderLeftStyle: 'solid', borderLeftWidth: 1 }}>
                     <ModernChat variant="panel" suggestions={suggestions} onClose={() => a.setOpen(false)} onExpand={onExpand ? () => { a.setOpen(false); onExpand(); } : undefined} />
