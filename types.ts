@@ -1115,9 +1115,25 @@ export interface WbVoting {
   endedAt?: string;
 }
 
+/** Pano erişim düzeyi: görmez · görüntüler · düzenler */
+export type WbAccessLevel = 'none' | 'view' | 'edit';
+
+/**
+ * Pano erişimi: projeyi gören herkes için varsayılan düzey ve kişi bazında
+ * istisnalar (kişi kimliği → düzey). Sahip ve projenin PY'si her zaman yönetir.
+ */
+export interface WbAccess {
+  everyone: WbAccessLevel;
+  people?: Record<string, WbAccessLevel>;
+}
+
 export interface Whiteboard {
   id: string;
   name: string;
+  /** Panoyu açan kişi (Veri Havuzu kişi kimliği); erişimi o ve projenin PY'si yönetir */
+  ownerId?: string;
+  /** Yoksa: projeyi gören herkes görüntüler, PY düzenler (eski panolar) */
+  access?: WbAccess;
   nodes: WbNode[];
   edges: WbEdge[];
   voting?: WbVoting;

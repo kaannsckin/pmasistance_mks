@@ -4,6 +4,38 @@ Her projenin **Whiteboard** sekmesinde (modern arayüz) istediğiniz kadar pano 
 
 Panolar **eş zamanlı düzenlenir**: aynı panodaki herkes birbirinin imlecini, seçimini ve değişikliklerini anında görür (aşağıda). Düzenleme proje içeriğini düzenleyebilenlere açıktır; diğerleri panoyu canlı izler, kaydırır ve yakınlaştırır.
 
+## Pano açma ve erişim
+
+- **Pano açmak:** Projeyi gören ve profilinde kişi seçili olan herkes pano açabilir. Açan kişi panonun **sahibi** olur.
+- **Yönetmek:** Erişimi panonun sahibi ve projenin PY'si yönetir; ikisi de üst çubuktaki **Erişim** düğmesini (ya da Pano › Erişim ve paylaşım) kullanır.
+
+| Ayar | Anlamı |
+|---|---|
+| Projeyi gören herkes | Aşağıda ayrıca eklenmeyen herkes için: **Göremez** (özel pano), **Görüntüler** (varsayılan) ya da **Düzenler** |
+| Kişiler | Kişi bazında istisna (ör. herkes görüntüler, Can düzenler; ya da pano özel, yalnız Ayşe görür) |
+| Sahibi | Erişimi yönetir; sahip değiştirilebilir |
+
+**Kim ne yapar:**
+
+| Yetki | Kim | Ne yapabilir |
+|---|---|---|
+| Yönetir | Sahip, projenin PY'si | İçeriği düzenler, adlandırır, erişimi ve sahibi değiştirir, panoyu siler |
+| Düzenler | Düzenleme yetkisi verilen | İçeriği düzenler, adlandırır, oylamaya katılır |
+| Görüntüler | Görüntüleme yetkisi verilen | Panoyu canlı izler; değişiklik yapamaz |
+| Göremez | Yetkisi olmayan | Pano listede görünmez |
+
+**Görünür işaretler:**
+- Özel panonun sekmesinde kilit, yalnız görüntülenen panoda göz simgesi var.
+- Üst çubuktaki "i" düğmesi o panodaki yetkinizi ve erişim özetini gösterir.
+- Erişimi tanımlanmamış eski panolar: projeyi gören herkes görüntüler, PY yönetir.
+
+**Notları göreve dönüştürmek** proje görevlerini değiştirdiği için yalnız projenin PY'sine açıktır.
+
+**Bulutta erişim sunucuda zorlanır** (RLS):
+- Görme yetkisi olmayan kişi panonun satırlarını okuyamaz ve panonun canlı kanalına katılamaz. Özel panonun içeriği projenin diğer üyelerine yayınlanmaz.
+- Erişimi, sahibi değiştirmek ve panoyu silmek yalnız yöneticiye açıktır.
+- Bulut yokken (aynı tarayıcı) kurallar arayüzde uygulanır.
+
 ## Proje kayıtlarını bağlamak
 
 | Nasıl | Ne olur |
@@ -51,7 +83,7 @@ Seçim araç çubuğu: renk, şekil, yazı boyutu, göreve dönüştür, görevl
 **Geri alma.** Ctrl+Z yalnız sizin değişikliklerinizi geri alır. Başkasının arada yaptığı değişiklik korunur. Yeni not ekleyip hemen yazdığınızda ekleme ve yazı tek adımda geri alınır.
 
 **Bağlantı.**
-- **Bulut bağlıysa:** Değişiklikler Supabase Realtime'ın özel kanalından anında iletilir ve `workspace_whiteboard_items` tablosunda öğe bazında saklanır.
+- **Bulut bağlıysa:** Değişiklikler Supabase Realtime'ın özel kanallarından anında iletilir ve `workspace_whiteboard_items` tablosunda öğe bazında saklanır. Proje kanalı yalnız kimin hangi panoda olduğunu ve pano listesindeki değişikliği taşır; içerik, imleç ve seçim panonun kendi kanalından gider.
   - Kanala yalnız projeye erişen üyeler katılır; panoya yalnız projeyi düzenleyebilenler yazar.
   - Panolar proje satırına yazılmaz, bu yüzden aynı panoda çalışmak proje sürüm çakışması doğurmaz.
   - Panoyu sonradan açan kişi tablodan güncel hâli yükler.
@@ -87,4 +119,4 @@ Yeniden adlandır (sekmeye çift tık da olur), çoğalt, özeti Markdown olarak
 - Çevrimdışı yapılan ve bulutta da değişmiş bir nesnenin değişikliği, yeniden bağlanınca buluttaki hâline bırakılır. Yalnız bulutta olmayan yeni nesneler ve panolar yüklenir.
 - Yorum dizileri, sesli görüşme, spotlight, AI ile pano üretme ve PNG / PDF dışa aktarma.
 
-Kod: [`utils/whiteboard/model.ts`](../utils/whiteboard/model.ts) (saf işlemler), [`utils/whiteboard/collab.ts`](../utils/whiteboard/collab.ts) (op'lar ve birleştirme), [`utils/whiteboard/transport.ts`](../utils/whiteboard/transport.ts) (Realtime / sekmeler arası iletim), [`utils/whiteboard/cloudStore.ts`](../utils/whiteboard/cloudStore.ts), [`utils/whiteboard/templates.ts`](../utils/whiteboard/templates.ts), [`components/modern/whiteboard/`](../components/modern/whiteboard/). Testler: [`utils/whiteboard/model.test.ts`](../utils/whiteboard/model.test.ts), [`utils/whiteboard/collab.test.ts`](../utils/whiteboard/collab.test.ts).
+Kod: [`utils/whiteboard/model.ts`](../utils/whiteboard/model.ts) (saf işlemler), [`utils/whiteboard/collab.ts`](../utils/whiteboard/collab.ts) (op'lar ve birleştirme), [`utils/whiteboard/access.ts`](../utils/whiteboard/access.ts) (pano erişimi), [`utils/whiteboard/transport.ts`](../utils/whiteboard/transport.ts) (Realtime / sekmeler arası iletim), [`utils/whiteboard/cloudStore.ts`](../utils/whiteboard/cloudStore.ts), [`utils/whiteboard/templates.ts`](../utils/whiteboard/templates.ts), [`components/modern/whiteboard/`](../components/modern/whiteboard/). Testler: [`utils/whiteboard/model.test.ts`](../utils/whiteboard/model.test.ts), [`utils/whiteboard/collab.test.ts`](../utils/whiteboard/collab.test.ts).

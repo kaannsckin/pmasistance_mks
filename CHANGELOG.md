@@ -13,6 +13,10 @@ buradan alır (`.github/workflows/exe.yml`).
 - **Toplantı araçları**: kişi başına oy haklı gizli oylama ve ortak zamanlayıcı.
 - **Şablonlar**: retrospektif, sprint planlama, önceliklendirme matrisi, UI/UX inceleme panosu, Kanban, risk değerlendirme, akış şeması.
 - **Eş zamanlı düzenleme**: aynı panodaki herkesin imleci, seçimi, yazıyor durumu ve sürüklemesi canlı görünür; avatara tıklayınca o kişi takip edilir. Nesne, bağlantı ve oylar ayrı ayrı "son yazan kazanır" kuralıyla birleşir; geri alma yalnız kendi değişikliğini geri alır. Bulutta Supabase Realtime özel kanalı ve yeni `workspace_whiteboard_items` tablosu kullanılır; panolar proje satırına yazılmaz (proje sürüm çakışması olmaz). Bulut yoksa aynı tarayıcının sekmeleri arasında canlıdır. Mevcut kurulumlarda `supabase/schema.sql` yeniden çalıştırılmalı.
+- **Pano erişimi**:
+  - Projeyi gören ve profilinde kişi seçili olan herkes pano açar ve panonun sahibi olur.
+  - Sahip ve projenin PY'si "Erişim" penceresinden projeyi gören herkes için varsayılan düzeyi (göremez / görüntüler / düzenler) ve kişi bazında görüntüleme / düzenleme yetkisini belirler.
+  - Bulutta kural sunucuda (RLS) zorlanır. Özel panonun satırları ve canlı kanalı yalnız yetkililere açıktır; erişimi değiştirmek ve silmek yöneticiye özeldir.
 - Pano özeti Markdown olarak kopyalanır ya da indirilir; pano JSON olarak indirilir. Ayrıntı: [docs/WHITEBOARD.md](docs/WHITEBOARD.md).
 
 **GİB PoC skoru: Jira'dan her an üretilen rapor**

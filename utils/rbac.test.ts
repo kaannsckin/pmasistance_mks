@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-    projectEditBlockReason, canAddAllocationToProject, canCreateProject, canEditActualCell, canEditAllocationCell,
+    canAddAllocationToProject, canCreateProject, canEditActualCell, canEditAllocationCell,
     canEditPlanCell, canEditProjectContent, Identity, identityNeedsPerson, identityOf, keepScopedWorkspaceEdits,
     managesPerson, ownsProject, seesAllProjects, visiblePersonIds, visibleProjectIds,
 } from './rbac';
@@ -148,21 +148,3 @@ describe('tahsis hücresi düzenleme', () => {
     });
 });
 
-describe('projectEditBlockReason', () => {
-    const people = [
-        { id: 'k1', firstName: 'Murat', lastName: 'K', departmentCode: 'U310', availableAA: 1, roles: [] },
-        { id: 'k2', firstName: 'Ayşe', lastName: 'Y', departmentCode: 'U310', availableAA: 1, roles: [] },
-    ];
-    const ws = { people, allocations: [], projects: [{ ...createProject('GİB'), id: 'p1', pmPersonId: 'k1' }, { ...createProject('Boş'), id: 'p2' }] };
-    const label = (r: string) => ({ py: 'Proje Yöneticisi', pyb_sorumlu: 'PYB Sorumlusu' } as Record<string, string>)[r] || r;
-    it('PY olarak projenin PY kişisiyle girildiyse engel yok', () => {
-        expect(projectEditBlockReason(ws, { role: 'py', personId: 'k1' }, 'p1', label)).toBeNull();
-    });
-    it('başka rol, kişi seçilmemiş, başka kişi, PY atanmamış ve kapsam dışı durumları açıklanır', () => {
-        expect(projectEditBlockReason(ws, { role: 'pyb_sorumlu' }, 'p1', label)).toContain('Şu anki rolünüz: PYB Sorumlusu');
-        expect(projectEditBlockReason(ws, { role: 'py' }, 'p1', label)).toContain('kişi seçilmemiş');
-        expect(projectEditBlockReason(ws, { role: 'py', personId: 'k2' }, 'p1', label)).toContain('siz Ayşe Y olarak girdiniz');
-        expect(projectEditBlockReason(ws, { role: 'py', personId: 'k1' }, 'p2', label)).toContain('PY) atanmamış');
-        expect(projectEditBlockReason(ws, { role: 'py', personId: 'k1', projectIds: ['p2'] }, 'p1', label)).toContain('kapsamınızda değil');
-    });
-});

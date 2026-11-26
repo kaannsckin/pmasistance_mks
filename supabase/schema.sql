@@ -510,15 +510,21 @@ create trigger assistant_memory_touch before update on public.assistant_memory
     for each row execute function public.touch_updated_at();
 
 -- ---------------------------------------------------------------------------
--- Whiteboard (FigJam tarzı proje panoları): eş zamanlı düzenleme.
+-- Whiteboard (FigJam tarzı proje panoları): eş zamanlı düzenleme ve pano erişimi.
 -- Her öğe ayrı satır: pano bilgisi (item_id 'meta'), nesne ('n:<id>'),
 -- bağlantı ('e:<id>'), oy ('v:<nesne>:<kişi>'). Sürüm (rev_t, rev_by) istemcinin
 -- karma mantıksal saatidir; tetikleyici yalnız daha yeni sürümü yazar (son
 -- yazan kazanır). Silme, deleted = true ile mezar taşıdır (geç gelen yazım
 -- silinen öğeyi diriltmesin). Panolar proje satırına yazılmaz: aynı panoda
 -- çalışan kişiler proje sürüm çakışması yaşamaz.
--- Okuma: projeye erişen üyeler. Yazma: projeyi düzenleyebilenler (proje
--- satırıyla aynı kural).
+--
+-- Erişim (pano bilgisindeki ownerId ve access):
+--   yönetir   : projenin PY'si (proje satırını düzenleyebilen) ve panonun sahibi
+--   düzenler / görüntüler / göremez: kişi bazında istisna, yoksa "herkes" düzeyi
+--   erişimi tanımlanmamış eski pano: herkes görüntüler
+-- Pano açmak: projeye erişen ve üyeliğinde kişi (person_id) tanımlı olan herkes;
+-- açan, panonun sahibi olur. Erişimi, sahibi değiştirmek ve panoyu silmek
+-- yalnız yöneticiye açıktır.
 -- ---------------------------------------------------------------------------
 create table if not exists public.workspace_whiteboard_items (
     workspace_id uuid not null references public.workspaces(id) on delete cascade,
@@ -545,12 +551,71 @@ returns boolean language sql stable security definer set search_path = '' as $$
         (select p.data->>'pmPersonId' from public.workspace_projects p where p.workspace_id = ws and p.project_id = project))
 $$;
 
--- Son yazan kazanır: eski sürümlü güncelleme satırı değiştirmez; kimlik alanları sabit
+-- Kullanıcının panodaki düzeyi: 'manage' | 'edit' | 'view' | 'none' | 'gone' (silinmiş pano)
+create or replace function public.whiteboard_access_level(ws uuid, project text, board text)
+returns text language plpgsql stable security definer set search_path = '' as $$
+declare
+    person text;
+    meta jsonb;
+    meta_deleted boolean;
+    lvl text;
+begin
+    if not public.can_access_workspace_project(ws, project) then
+        return 'none';
+    end if;
+    if public.can_edit_workspace_whiteboard(ws, project) then
+        return 'manage';
+    end if;
+    select m.person_id into person from public.workspace_members m where m.workspace_id = ws and m.user_id = auth.uid();
+    select i.data, i.deleted into meta, meta_deleted from public.workspace_whiteboard_items i
+        where i.workspace_id = ws and i.project_id = project and i.board_id = board and i.item_id = 'meta';
+    if meta_deleted is null then
+        return 'none';             -- pano yok (henüz açılmamış)
+    end if;
+    if meta_deleted or meta is null then
+        return 'gone';             -- silinmiş pano: yalnız mezar taşı görünür (listeden düşsün)
+    end if;
+    if person is not null and meta->>'ownerId' = person then
+        return 'manage';
+    end if;
+    lvl := coalesce(case when person is not null then meta->'access'->'people'->>person end, meta->'access'->>'everyone', 'view');
+    return case lvl when 'edit' then 'edit' when 'view' then 'view' else 'none' end;
+end;
+$$;
+
+-- Yeni pano açma: pano bilgisi satırı henüz yok ve sahibi açan kişi (ya da PY)
+create or replace function public.can_open_whiteboard(ws uuid, project text, board text, data jsonb)
+returns boolean language plpgsql stable security definer set search_path = '' as $$
+declare
+    person text;
+begin
+    if not public.can_access_workspace_project(ws, project) then
+        return false;
+    end if;
+    if exists (select 1 from public.workspace_whiteboard_items i where i.workspace_id = ws and i.board_id = board and i.item_id = 'meta') then
+        return false;
+    end if;
+    if public.can_edit_workspace_whiteboard(ws, project) then
+        return true;
+    end if;
+    select m.person_id into person from public.workspace_members m where m.workspace_id = ws and m.user_id = auth.uid();
+    return person is not null and data->>'ownerId' = person;
+end;
+$$;
+
+-- Son yazan kazanır; kimlik alanları sabit; erişim, sahip ve silme yalnız yöneticide
 create or replace function public.whiteboard_item_lww()
 returns trigger language plpgsql as $$
 begin
     if (new.rev_t, new.rev_by collate "C") <= (old.rev_t, old.rev_by collate "C") then
         return null;
+    end if;
+    if old.item_id = 'meta' and (
+        new.deleted is distinct from old.deleted
+        or (new.data->'access') is distinct from (old.data->'access')
+        or (new.data->>'ownerId') is distinct from (old.data->>'ownerId')
+    ) and public.whiteboard_access_level(old.workspace_id, old.project_id, old.board_id) <> 'manage' then
+        raise exception 'Pano erişimini, sahibini değiştirmek ve panoyu silmek için sahibi ya da projenin PY''si olmalısınız.' using errcode = '42501';
     end if;
     new.workspace_id = old.workspace_id;
     new.project_id = old.project_id;
@@ -569,34 +634,46 @@ create trigger whiteboard_item_lww before update on public.workspace_whiteboard_
 alter table public.workspace_whiteboard_items enable row level security;
 
 drop policy if exists "wb_items_select" on public.workspace_whiteboard_items;
+-- Okuma: panoyu görebilenler. Upsert (INSERT … ON CONFLICT) eklenen satırı okuma
+-- politikasına da sokar: yeni panonun ilk bilgi satırı açılış kuralıyla geçer.
 create policy "wb_items_select" on public.workspace_whiteboard_items
-    for select using (public.can_access_workspace_project(workspace_id, project_id));
+    for select using (public.whiteboard_access_level(workspace_id, project_id, board_id) in ('manage', 'edit', 'view')
+        or (item_id = 'meta' and public.whiteboard_access_level(workspace_id, project_id, board_id) = 'gone')
+        or (item_id = 'meta' and public.can_open_whiteboard(workspace_id, project_id, board_id, data)));
 
 drop policy if exists "wb_items_insert" on public.workspace_whiteboard_items;
 create policy "wb_items_insert" on public.workspace_whiteboard_items
-    for insert with check (public.can_edit_workspace_whiteboard(workspace_id, project_id));
+    for insert with check (
+        public.whiteboard_access_level(workspace_id, project_id, board_id) in ('manage', 'edit')
+        or (item_id = 'meta' and kind = 'meta' and public.can_open_whiteboard(workspace_id, project_id, board_id, data)));
 
 drop policy if exists "wb_items_update" on public.workspace_whiteboard_items;
 create policy "wb_items_update" on public.workspace_whiteboard_items
-    for update using (public.can_edit_workspace_whiteboard(workspace_id, project_id))
-    with check (public.can_edit_workspace_whiteboard(workspace_id, project_id));
+    for update using (public.whiteboard_access_level(workspace_id, project_id, board_id) in ('manage', 'edit'))
+    with check (public.whiteboard_access_level(workspace_id, project_id, board_id) in ('manage', 'edit'));
 
 revoke all on public.workspace_whiteboard_items from anon;
 grant select, insert, update on public.workspace_whiteboard_items to authenticated;
 
--- Canlı kanal (Supabase Realtime, özel kanal): konu 'wb:<çalışma alanı>:<proje>'.
--- İmleç, varlık ve op yayını yalnız projeye erişen üyelere açık. Kalıcı yazım
--- yukarıdaki tablodan (düzenleme yetkisiyle) geçer.
+-- Canlı kanallar (Supabase Realtime, özel kanal):
+--   'wb:<çalışma alanı>:<proje>'          projede kim var ve pano listesi değişti bildirimi (içerik yok)
+--   'wbb:<çalışma alanı>:<proje>:<pano>'  panonun içeriği, imleçler, seçim; yalnız panoyu görebilenler
+-- Kalıcı yazım yukarıdaki tablodan (düzenleme yetkisiyle) geçer.
 create or replace function public.can_join_whiteboard_topic(topic text)
 returns boolean language plpgsql stable security definer set search_path = '' as $$
 declare
-    ws_text text := split_part(topic, ':', 2);
-    project text := substr(topic, char_length('wb:') + char_length(split_part(topic, ':', 2)) + 2);
+    parts text[] := string_to_array(topic, ':');
 begin
-    if split_part(topic, ':', 1) <> 'wb' or ws_text !~* '^[0-9a-f-]{36}$' or project = '' then
+    if coalesce(array_length(parts, 1), 0) < 3 or parts[2] !~* '^[0-9a-f-]{36}$' or parts[3] = '' then
         return false;
     end if;
-    return public.can_access_workspace_project(ws_text::uuid, project);
+    if parts[1] = 'wb' and array_length(parts, 1) = 3 then
+        return public.can_access_workspace_project(parts[2]::uuid, parts[3]);
+    end if;
+    if parts[1] = 'wbb' and array_length(parts, 1) = 4 and parts[4] <> '' then
+        return public.whiteboard_access_level(parts[2]::uuid, parts[3], parts[4]) in ('manage', 'edit', 'view');
+    end if;
+    return false;
 end;
 $$;
 

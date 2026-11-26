@@ -85,6 +85,8 @@ export interface WhiteboardEditorProps {
     board: Whiteboard;
     project: Project;
     canEdit: boolean;
+    /** Nottan görev açabilir (proje içeriğini düzenleyen: projenin PY'si) */
+    canCreateTasks?: boolean;
     /** Ekleyen kişinin görünen adı */
     actor: string;
     /** Oylamada kişi anahtarı */
@@ -104,7 +106,7 @@ export interface EditorCollab {
     liveMove: (nodes: { id: string; x: number; y: number; w: number; h: number }[]) => void;
 }
 
-const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ board, project, canEdit, actor, voter, onCommit, onViewTask, collab }) => {
+const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ board, project, canEdit, canCreateTasks = canEdit, actor, voter, onCommit, onViewTask, collab }) => {
     const [doc, setDoc] = useState<Whiteboard>(board);
     const docRef = useRef(doc);
     docRef.current = doc;
@@ -882,7 +884,7 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ board, project, can
                 const shapes = selectedNodes.filter(n => n.type === 'shape');
                 const texts = selectedNodes.filter(n => n.type === 'text' || n.type === 'sticky' || n.type === 'shape');
                 const pens = selectedNodes.filter(n => n.type === 'pen');
-                const convertible = selectedNodes.filter(n => (n.type === 'sticky' || n.type === 'text' || n.type === 'shape') && n.text?.trim());
+                const convertible = canCreateTasks ? selectedNodes.filter(n => (n.type === 'sticky' || n.type === 'text' || n.type === 'shape') && n.text?.trim()) : [];
                 const linked = single && (single.type === 'sprint' || single.type === 'workPackage' || single.type === 'version') ? single : undefined;
                 const allLocked = selectedNodes.length > 0 && selectedNodes.every(n => n.locked);
                 const vp = viewport.current?.getBoundingClientRect();

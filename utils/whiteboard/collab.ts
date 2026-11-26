@@ -17,7 +17,7 @@ export interface Rev { t: number; by: string }
 /** a, b'den yeni mi (eşitlikte istemci kimliği belirler: herkes aynı sonuca varır) */
 export const revGt = (a: Rev, b: Rev): boolean => a.t > b.t || (a.t === b.t && a.by > b.by);
 
-export type WbMeta = Pick<Whiteboard, 'name' | 'createdAt'> & Partial<Pick<Whiteboard, 'voting' | 'timer' | 'createdBy'>>;
+export type WbMeta = Pick<Whiteboard, 'name' | 'createdAt'> & Partial<Pick<Whiteboard, 'voting' | 'timer' | 'createdBy' | 'ownerId' | 'access'>>;
 
 export type WbOp =
     | { k: 'meta'; board: string; meta: WbMeta | null; rev: Rev }
@@ -45,6 +45,7 @@ export class WbClock {
 export const metaOf = (b: Whiteboard): WbMeta => ({
     name: b.name, createdAt: b.createdAt,
     ...(b.voting ? { voting: b.voting } : {}), ...(b.timer ? { timer: b.timer } : {}), ...(b.createdBy ? { createdBy: b.createdBy } : {}),
+    ...(b.ownerId ? { ownerId: b.ownerId } : {}), ...(b.access ? { access: b.access } : {}),
 });
 
 const stripVotes = (n: WbNode): WbNode => { const { votes: _v, ...rest } = n; return rest; };
@@ -93,7 +94,7 @@ export const newMergeState = (): MergeState => ({ revs: new Map(), deleted: new 
 const emptyBoard = (id: string, meta?: WbMeta): Whiteboard => ({
     id, nodes: [], edges: [], name: meta?.name || 'Pano', createdAt: meta?.createdAt || new Date(0).toISOString(),
     updatedAt: meta?.createdAt || new Date(0).toISOString(),
-    ...(meta?.voting ? { voting: meta.voting } : {}), ...(meta?.timer ? { timer: meta.timer } : {}), ...(meta?.createdBy ? { createdBy: meta.createdBy } : {}),
+    ...(meta ? emptyBoardMeta(meta) : {}),
 });
 
 /**
@@ -115,7 +116,7 @@ export const applyOps = (boards: Whiteboard[], ops: WbOp[], st: MergeState): { b
             if (!op.meta) { st.deleted.add(op.board); byId.delete(op.board); continue; }
             st.deleted.delete(op.board);
             const b = byId.get(op.board);
-            const { voting: _v, timer: _t, createdBy: _c, ...base } = b || emptyBoard(op.board);
+            const { voting: _v, timer: _t, createdBy: _c, ownerId: _o, access: _a, ...base } = b || emptyBoard(op.board);
             byId.set(op.board, { ...base, ...emptyBoardMeta(op.meta), nodes: b?.nodes || [], edges: b?.edges || [], updatedAt: new Date(op.rev.t).toISOString() });
             if (!order.includes(op.board)) order.push(op.board);
             continue;
@@ -151,10 +152,13 @@ export const applyOps = (boards: Whiteboard[], ops: WbOp[], st: MergeState): { b
     return { boards: order.filter(id => byId.has(id)).map(id => byId.get(id)!), applied };
 };
 
-const emptyBoardMeta = (m: WbMeta): Partial<Whiteboard> => ({
-    name: m.name, createdAt: m.createdAt,
-    ...(m.voting ? { voting: m.voting } : {}), ...(m.timer ? { timer: m.timer } : {}), ...(m.createdBy ? { createdBy: m.createdBy } : {}),
-});
+function emptyBoardMeta(m: WbMeta): Partial<Whiteboard> {
+    return {
+        name: m.name, createdAt: m.createdAt,
+        ...(m.voting ? { voting: m.voting } : {}), ...(m.timer ? { timer: m.timer } : {}), ...(m.createdBy ? { createdBy: m.createdBy } : {}),
+        ...(m.ownerId ? { ownerId: m.ownerId } : {}), ...(m.access ? { access: m.access } : {}),
+    };
+}
 
 /** Panonun tamamını op'a çevirir (bulutta olmayan yerel panoyu yüklemek için) */
 export const boardToOps = (b: Whiteboard, rev: () => Rev): WbOp[] => diffBoards(undefined, b, b.id, rev);
@@ -206,7 +210,7 @@ export const restoreSnap = (b: Whiteboard, s: ItemSnap): Whiteboard => {
     const meta = s.meta ? { ...s.meta } : undefined;
     const base: Whiteboard = { ...b, nodes, edges, updatedAt: new Date().toISOString() };
     if (!meta) return base;
-    const { voting: _v, timer: _t, ...rest } = base;
+    const { voting: _v, timer: _t, ownerId: _o, access: _a, ...rest } = base;
     return { ...rest, ...emptyBoardMeta(meta) };
 };
 
@@ -284,4 +288,6 @@ export type WbMessage =
     | { type: 'bye'; from: string }
     | { type: 'hello'; from: string }
     /** Büyük op (görsel) yayınlanmaz; alıcı satırı sunucudan okur */
-    | { type: 'refetch'; from: string; board: string; items: string[] };
+    | { type: 'refetch'; from: string; board: string; items: string[] }
+    /** Pano listesi değişti (açıldı, adı / erişimi değişti, silindi): alıcı pano bilgilerini sunucudan okur */
+    | { type: 'boards'; from: string };
