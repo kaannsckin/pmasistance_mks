@@ -14,7 +14,7 @@ import {
 } from './utils/workspace';
 import { canEditPool, createAllocation, EffortField, getPlanLockStatus, ROLE_LABELS, setAllocationCell, upsertPlanLock } from './utils/allocations';
 import { applyPoolImport, PoolImportResult } from './utils/poolImporter';
-import { canCreateProject, canEditProjectContent, identityFor, identityOf, identityNeedsPerson as computeNeedsPerson, keepScopedWorkspaceEdits, managedDepartmentCode, ownsProject, visibleProjectIds } from './utils/rbac';
+import { canCreateProject, canEditProjectContent, projectEditBlockReason, identityFor, identityOf, identityNeedsPerson as computeNeedsPerson, keepScopedWorkspaceEdits, managedDepartmentCode, ownsProject, visibleProjectIds } from './utils/rbac';
 import { can, isConsoleRole, isManagementRole, PERMISSION_BY_KEY, resetRolePermissions, setRolePermission } from './utils/permissions';
 import { applyPreset, projectPassesView, resetRoleView, roleViewOf, sectionOfView, taskPassesView, updateRoleView, VIEW_PRESETS, ViewPresetKey } from './utils/viewConfig';
 import { AdminSection, ADMIN_SECTIONS } from './components/modern/adminSections';
@@ -2689,6 +2689,8 @@ const App: React.FC = () => {
           key={activeProject.id}
           project={activeProject}
           canEdit={canEditProjectContent(workspace, identity, activeProject.id)}
+          editBlockReason={projectEditBlockReason(workspace, identity, activeProject.id, r => ROLE_LABELS[r])}
+          onSwitchProfile={openProfile}
           actor={currentActorName}
           voter={workspace.currentPersonId || identity.role}
           onUpdateProject={updateActiveProject}

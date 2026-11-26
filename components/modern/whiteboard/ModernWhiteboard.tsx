@@ -23,14 +23,46 @@ const download = (name: string, text: string, type: string) => {
 };
 const safeName = (s: string) => s.replace(/[^\p{L}\p{N}]+/gu, '_').replace(/^_+|_+$/g, '') || 'pano';
 
+const ABOUT = 'FigJam tarzı serbest çalışma alanı: yapışkan not, şekil, bağlantı, bölüm ve kalem. "/" ile projenin görev, sprint, iş paketi, risk ve sürümlerini kart olarak ekleyin; kartlar Jira eşitlemesiyle güncel kalır. Notta "//" ile görev referansı ekleyin. Notları tek tıkla göreve dönüştürün, oylama ve zamanlayıcıyla toplantı yürütün. Aynı panoyu açan herkes değişiklikleri canlı görür.';
+
+/** "i" bilgi düğmesi: açıklama düz metin olarak yazılmaz, tıklayınca (ya da üzerine gelince) açılır */
+const InfoTip: React.FC<{ text: string; label?: string }> = ({ text, label = 'Bilgi' }) => {
+    const [open, setOpen] = useState(false);
+    const ref = useRef<HTMLSpanElement>(null);
+    useEffect(() => {
+        if (!open) return;
+        const close = (e: PointerEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
+        const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+        document.addEventListener('pointerdown', close);
+        document.addEventListener('keydown', esc);
+        return () => { document.removeEventListener('pointerdown', close); document.removeEventListener('keydown', esc); };
+    }, [open]);
+    return (
+        <span ref={ref} className="relative inline-flex">
+            <button type="button" aria-label={label} aria-expanded={open} title={text} onClick={() => setOpen(o => !o)}
+                className="w-7 h-7 rounded-full grid place-items-center border-0 cursor-pointer m-fill-2 m-text-2 hover:m-text">
+                <Icon name="info" size={15} />
+            </button>
+            {open && (
+                <span role="tooltip" className="absolute left-0 top-9 z-50 w-[340px] max-w-[80vw] p-3 rounded-xl m-surface m-pop shadow-xl text-[13.5px] leading-relaxed m-text-2" style={{ border: '1px solid var(--m-sep, #e5e7eb)' }}>
+                    {text}
+                </span>
+            )}
+        </span>
+    );
+};
+
 const ModernWhiteboard: React.FC<{
     project: Project;
     canEdit: boolean;
+    /** Düzenlenemiyorsa nedeni (kullanıcıya gösterilir) */
+    editBlockReason?: string | null;
+    onSwitchProfile?: () => void;
     actor: string;
     voter: string;
     onUpdateProject: (updater: (p: Project) => Project) => void;
     onViewTask: (t: Task) => void;
-}> = ({ project, canEdit, actor, voter, onUpdateProject, onViewTask }) => {
+}> = ({ project, canEdit, editBlockReason, onSwitchProfile, actor, voter, onUpdateProject, onViewTask }) => {
     // Panolar eş zamanlı düzenleme kancasından gelir (proje kaydı önbellek)
     const collab = useWhiteboardCollab({ project, actor, canEdit, onUpdateProject });
     const boards = collab.boards;
@@ -103,7 +135,7 @@ const ModernWhiteboard: React.FC<{
     );
 
     const newMenu = (
-        <div data-wb-menu role="menu" className="absolute z-50 mt-2 w-80 p-1.5 rounded-2xl m-surface shadow-xl" style={{ border: '1px solid var(--m-sep, #e5e7eb)' }}>
+        <div data-wb-menu role="menu" className="absolute z-50 mt-2 w-80 p-1.5 rounded-2xl m-surface m-pop shadow-xl" style={{ border: '1px solid var(--m-sep, #e5e7eb)' }}>
             {menuItem('plus', 'Boş pano', () => create())}
             <div className="px-3 pt-2 pb-1 text-[12px] font-semibold m-text-3">Şablondan</div>
             {WB_TEMPLATES.map(t => (
@@ -115,41 +147,54 @@ const ModernWhiteboard: React.FC<{
         </div>
     );
 
+    const blocked = !canEdit && (
+        <div className="flex items-start gap-3 p-4 rounded-2xl m-surface m-pop shadow-sm max-w-[760px]" role="note">
+            <span className="w-10 h-10 rounded-xl grid place-items-center m-fill-2 m-text-2 flex-none"><Icon name="lock" size={18} /></span>
+            <div className="flex-1 min-w-0">
+                <b className="block text-[15px] m-text">{boards.length ? 'Panoyu yalnız görüntüleyebilirsiniz' : 'Pano açma yetkiniz yok'}</b>
+                <p className="mt-1 mb-0 text-[14px] m-text-2">{editBlockReason || 'Panoyu projenin içeriğini düzenleyebilenler açar ve düzenler.'}</p>
+            </div>
+            {onSwitchProfile && <button type="button" className="m-btn m-btn-primary !min-h-[36px] !px-3 text-[14px] flex-none" onClick={onSwitchProfile}><Icon name="userCog" size={15} />Profil değiştir</button>}
+        </div>
+    );
+
     if (!boards.length) {
         return (
             <div className="flex flex-col gap-5">
-                <div>
+                <div className="flex items-center gap-2">
                     <h2 className="m-0 text-[22px] font-semibold m-text">Whiteboard</h2>
-                    <p className="mt-1 mb-0 text-[14.5px] m-text-3 max-w-[760px]">FigJam tarzı serbest çalışma alanı: yapışkan not, şekil, bağlantı, bölüm ve kalem. "/" ile projenin görev, sprint, iş paketi, risk ve sürümlerini kart olarak ekleyin; kartlar Jira eşitlemesiyle güncel kalır. Notları tek tıkla göreve dönüştürün, oylama ve zamanlayıcıyla toplantı yürütün.</p>
+                    <InfoTip text={ABOUT} label="Whiteboard nedir?" />
                 </div>
                 {canEdit ? (
                     <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-                        <button type="button" className="text-left p-4 rounded-2xl m-surface shadow-sm border-0 cursor-pointer hover:shadow-md flex flex-col gap-2" onClick={() => create()}>
+                        <button type="button" className="text-left p-4 rounded-2xl m-surface m-pop shadow-sm border-0 cursor-pointer hover:shadow-md flex flex-col gap-2" onClick={() => create()}>
                             <span className="w-10 h-10 rounded-xl grid place-items-center m-tone-accent"><Icon name="plus" size={20} /></span>
                             <b className="text-[15px] m-text">Boş pano</b><span className="text-[13px] m-text-3">Sıfırdan başlayın</span>
                         </button>
                         {WB_TEMPLATES.map(t => (
-                            <button key={t.key} type="button" className="text-left p-4 rounded-2xl m-surface shadow-sm border-0 cursor-pointer hover:shadow-md flex flex-col gap-2" onClick={() => create(t.key)}>
+                            <button key={t.key} type="button" className="text-left p-4 rounded-2xl m-surface m-pop shadow-sm border-0 cursor-pointer hover:shadow-md flex flex-col gap-2" onClick={() => create(t.key)}>
                                 <span className="w-10 h-10 rounded-xl grid place-items-center m-fill-2 m-text-2"><Icon name={t.icon as IconName} size={20} /></span>
                                 <b className="text-[15px] m-text">{t.label}</b><span className="text-[13px] m-text-3">{t.description}</span>
                             </button>
                         ))}
                     </div>
-                ) : <p className="m-0 text-[14px] m-text-3">Bu projede henüz pano yok.</p>}
+                ) : blocked}
             </div>
         );
     }
 
     return (
         <div ref={shell} className={`flex flex-col gap-3 ${full ? 'p-3 m-bg' : ''}`} style={full ? { background: 'var(--m-bg, #fff)' } : undefined}>
+            {blocked}
             <div className="flex flex-wrap items-center gap-2">
+                <InfoTip text={ABOUT} label="Whiteboard nedir?" />
                 <div className="flex items-center gap-1 overflow-x-auto max-w-full" role="tablist" aria-label="Panolar">
                     {boards.map(b => (
                         renaming === b.id
                             ? <input key={b.id} autoFocus defaultValue={b.name} aria-label="Pano adı" className="m-input !h-9 !py-0 text-[14px] w-56"
                                 onBlur={e => rename(b, e.target.value)} onKeyDown={e => { if (e.key === 'Enter') rename(b, (e.target as HTMLInputElement).value); if (e.key === 'Escape') setRenaming(null); }} />
                             : <button key={b.id} type="button" role="tab" aria-selected={b.id === active?.id} title={canEdit ? 'Çift tıklayarak yeniden adlandırın' : b.name}
-                                className={`h-9 px-3 rounded-xl border-0 cursor-pointer text-[14px] whitespace-nowrap max-w-[240px] truncate ${b.id === active?.id ? 'm-surface shadow-sm font-semibold m-text' : 'bg-transparent m-text-2 hover:m-fill-2'}`}
+                                className={`h-9 px-3 rounded-xl border-0 cursor-pointer text-[14px] whitespace-nowrap max-w-[240px] truncate ${b.id === active?.id ? 'm-surface m-pop shadow-sm font-semibold m-text' : 'bg-transparent m-text-2 hover:m-fill-2'}`}
                                 onClick={() => setActiveId(b.id)} onDoubleClick={() => canEdit && setRenaming(b.id)}>
                                 {b.name}
                                 {collab.peers.some(p => p.board === b.id) && <span className="inline-flex ml-1.5 align-middle -space-x-1">{collab.peers.filter(p => p.board === b.id).slice(0, 3).map(p => <span key={p.client} className="w-2.5 h-2.5 rounded-full border" style={{ background: p.color, borderColor: 'var(--m-surface, #fff)' }} />)}</span>}
@@ -173,7 +218,7 @@ const ModernWhiteboard: React.FC<{
                     <div className="relative" data-wb-menu>
                         <button type="button" className="m-btn m-btn-gray !min-h-[36px] !px-3 text-[14px]" aria-haspopup="menu" aria-expanded={menu === 'board'} onClick={() => setMenu(m => (m === 'board' ? null : 'board'))}><Icon name="more" size={16} />Pano</button>
                         {menu === 'board' && (
-                            <div data-wb-menu role="menu" className="absolute right-0 z-50 mt-2 w-64 p-1.5 rounded-2xl m-surface shadow-xl" style={{ border: '1px solid var(--m-sep, #e5e7eb)' }}>
+                            <div data-wb-menu role="menu" className="absolute right-0 z-50 mt-2 w-64 p-1.5 rounded-2xl m-surface m-pop shadow-xl" style={{ border: '1px solid var(--m-sep, #e5e7eb)' }}>
                                 {canEdit && menuItem('pencil', 'Yeniden adlandır', () => { setMenu(null); setRenaming(active.id); })}
                                 {canEdit && menuItem('copy', 'Çoğalt', () => duplicate(active))}
                                 {menuItem('list', 'Özeti kopyala (Markdown)', () => { void copyOutline(active); })}
@@ -199,9 +244,12 @@ const ModernWhiteboard: React.FC<{
                         }} />
                 )}
             </div>
-            {!full && <p className="m-0 text-[12.5px] m-text-3">
-                Kısayollar: V seç · H el · S not · T metin · R şekil · Shift+S bölüm · L bağlantı · P kalem · E damga · / ekle · Notta // görev referansı · Çift tık: not / düzenle · Ctrl+Enter: yanına not · Boşluk + sürükle: kaydır · Ctrl + tekerlek: yakınlaştır · Ctrl+Z / Ctrl+Shift+Z · Ctrl+D çoğalt · Görsel yapıştırın ya da sürükleyin.
-            </p>}
+            {!full && canEdit && (
+                <div className="flex items-center gap-2 text-[12.5px] m-text-3">
+                    <InfoTip label="Kısayollar" text="V seç · H el · S not · T metin · R şekil · Shift+S bölüm · L bağlantı · P kalem · E damga · / ekle · Notta // görev referansı · Çift tık: not / düzenle · Ctrl+Enter: yanına not · Boşluk + sürükle: kaydır · Ctrl + tekerlek: yakınlaştır · Ctrl+Z / Ctrl+Shift+Z · Ctrl+D çoğalt · Görsel yapıştırın ya da sürükleyin." />
+                    Kısayollar
+                </div>
+            )}
         </div>
     );
 };

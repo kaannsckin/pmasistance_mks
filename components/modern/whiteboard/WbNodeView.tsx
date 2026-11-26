@@ -60,7 +60,7 @@ const Progress: React.FC<{ tasks: Task[]; project: Project }> = ({ tasks, projec
 const STATUS_STRIPE: Record<string, string> = { Backlog: '#a1a1aa', ToDo: '#eab308', InProgress: '#2563eb', Done: '#16a34a' };
 
 const Card: React.FC<{ stripe: string; children: React.ReactNode }> = ({ stripe, children }) => (
-    <div className="w-full h-full rounded-xl m-surface shadow-md overflow-hidden flex" style={{ border: '1px solid var(--m-sep, #e5e7eb)' }}>
+    <div className="w-full h-full rounded-xl m-surface m-pop shadow-md overflow-hidden flex" style={{ border: '1px solid var(--m-sep, #e5e7eb)' }}>
         <span className="w-1.5 flex-none" style={{ background: stripe }} />
         <div className="flex-1 min-w-0 p-3 flex flex-col gap-1.5 text-left">{children}</div>
     </div>

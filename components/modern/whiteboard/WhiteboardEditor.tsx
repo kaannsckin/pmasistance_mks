@@ -894,7 +894,7 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ board, project, can
                 top = Math.max(8, top);
                 const ids = selection;
                 return (
-                    <div ref={barRef} data-ui className="absolute z-30 flex flex-nowrap items-center gap-0.5 p-1 rounded-2xl m-surface shadow-xl max-w-[calc(100%-16px)] overflow-x-auto" style={{ left, top, border: '1px solid var(--m-sep, #e5e7eb)', visibility: barSize.w ? 'visible' : 'hidden' }} onPointerDown={e => e.stopPropagation()}>
+                    <div ref={barRef} data-ui className="absolute z-30 flex flex-nowrap items-center gap-0.5 p-1 rounded-2xl m-surface m-pop shadow-xl max-w-[calc(100%-16px)] overflow-x-auto" style={{ left, top, border: '1px solid var(--m-sep, #e5e7eb)', visibility: barSize.w ? 'visible' : 'hidden' }} onPointerDown={e => e.stopPropagation()}>
                         {edge && <>
                             <button type="button" className="m-btn m-btn-plain !min-h-[34px] !px-2 text-[13px]" onClick={() => commit({ ...doc, edges: doc.edges.map(x => (x.id === edge.id ? { ...x, style: x.style === 'line' ? undefined : 'line' } : x)), updatedAt: new Date().toISOString() })}>{edge.style === 'line' ? 'Ok yap' : 'Oku kaldır'}</button>
                             <button type="button" className="m-btn m-btn-plain !min-h-[34px] !px-2 text-[13px]" onClick={() => { const l = window.prompt('Bağlantı etiketi', edge.label || ''); if (l !== null) commit({ ...doc, edges: doc.edges.map(x => (x.id === edge.id ? { ...x, label: l.trim() || undefined } : x)), updatedAt: new Date().toISOString() }); }}>Etiket</button>
@@ -954,7 +954,7 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ board, project, can
             {/* Sağ üst: oturum ve yakınlaştırma */}
             <div data-ui className="absolute top-3 right-3 z-20 flex flex-wrap items-center justify-end gap-2" onPointerDown={e => e.stopPropagation()}>
                 {timer !== null && (
-                    <span className={`inline-flex items-center gap-2 h-10 pl-3 pr-1 rounded-xl m-surface shadow-md text-[15px] font-semibold m-tabular ${timer === 0 ? 'm-ink-bad' : 'm-text'}`}>
+                    <span className={`inline-flex items-center gap-2 h-10 pl-3 pr-1 rounded-xl m-surface m-pop shadow-md text-[15px] font-semibold m-tabular ${timer === 0 ? 'm-ink-bad' : 'm-text'}`}>
                         <Icon name="clock" size={16} />{String(Math.floor(timer / 60)).padStart(2, '0')}:{String(timer % 60).padStart(2, '0')}
                         {canEdit && <button type="button" aria-label="Zamanlayıcıyı durdur" className="w-8 h-8 rounded-lg border-0 bg-transparent cursor-pointer m-text-3" onClick={() => commit(stopTimer(doc))}><Icon name="x" size={15} /></button>}
                     </span>
@@ -967,8 +967,8 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ board, project, can
                 )}
                 {canEdit && !doc.voting?.active && (
                     <details className="relative">
-                        <summary className="list-none h-10 px-3 rounded-xl m-surface shadow-md inline-flex items-center gap-1.5 cursor-pointer text-[13.5px] font-semibold m-text"><Icon name="thumbsUp" size={15} />Oylama</summary>
-                        <div className="absolute right-0 mt-2 w-60 p-3 rounded-xl m-surface shadow-xl flex flex-col gap-2 text-[13.5px]" style={{ border: '1px solid var(--m-sep, #e5e7eb)' }}>
+                        <summary className="list-none h-10 px-3 rounded-xl m-surface m-pop shadow-md inline-flex items-center gap-1.5 cursor-pointer text-[13.5px] font-semibold m-text"><Icon name="thumbsUp" size={15} />Oylama</summary>
+                        <div className="absolute right-0 mt-2 w-60 p-3 rounded-xl m-surface m-pop shadow-xl flex flex-col gap-2 text-[13.5px]" style={{ border: '1px solid var(--m-sep, #e5e7eb)' }}>
                             <span className="m-text-2">Kişi başına oy hakkı</span>
                             <div className="flex gap-1.5">{[1, 3, 5, 10].map(n => <button key={n} type="button" className="m-btn m-btn-gray !min-h-[34px] flex-1" onClick={e => { (e.currentTarget.closest('details') as HTMLDetailsElement).open = false; toggleVoting(n); }}>{n}</button>)}</div>
                             {results.length > 0 && <button type="button" className="m-btn m-btn-plain !min-h-[32px]" onClick={() => setVotePanel(true)}>Son sonuçlar</button>}
@@ -978,13 +978,13 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ board, project, can
                 )}
                 {canEdit && (
                     <details className="relative">
-                        <summary className="list-none h-10 w-10 rounded-xl m-surface shadow-md grid place-items-center cursor-pointer m-text" title="Zamanlayıcı" aria-label="Zamanlayıcı"><Icon name="clock" size={16} /></summary>
-                        <div className="absolute right-0 mt-2 p-2 rounded-xl m-surface shadow-xl flex gap-1" style={{ border: '1px solid var(--m-sep, #e5e7eb)' }}>
+                        <summary className="list-none h-10 w-10 rounded-xl m-surface m-pop shadow-md grid place-items-center cursor-pointer m-text" title="Zamanlayıcı" aria-label="Zamanlayıcı"><Icon name="clock" size={16} /></summary>
+                        <div className="absolute right-0 mt-2 p-2 rounded-xl m-surface m-pop shadow-xl flex gap-1" style={{ border: '1px solid var(--m-sep, #e5e7eb)' }}>
                             {[1, 3, 5, 10, 15].map(m => <button key={m} type="button" className="m-btn m-btn-gray !min-h-[34px] !px-3" onClick={e => { (e.currentTarget.closest('details') as HTMLDetailsElement).open = false; commit(startTimer(doc, m * 60)); }}>{m} dk</button>)}
                         </div>
                     </details>
                 )}
-                <span className="inline-flex items-center h-10 rounded-xl m-surface shadow-md">
+                <span className="inline-flex items-center h-10 rounded-xl m-surface m-pop shadow-md">
                     <button type="button" aria-label="Uzaklaş" className="w-9 h-10 border-0 bg-transparent cursor-pointer m-text-2" onClick={() => zoomAt(1 / 1.2)}><Icon name="minus" size={15} /></button>
                     <button type="button" title="Sığdır (Shift+1) · tıkla: %100" className="min-w-[56px] h-10 border-0 bg-transparent cursor-pointer text-[13px] font-semibold m-tabular m-text" onClick={() => (Math.abs(view.zoom - 1) < 0.01 ? fit() : setView(v => ({ ...v, zoom: 1 })))}>%{Math.round(view.zoom * 100)}</button>
                     <button type="button" aria-label="Yakınlaş" className="w-9 h-10 border-0 bg-transparent cursor-pointer m-text-2" onClick={() => zoomAt(1.2)}><Icon name="plus" size={15} /></button>
@@ -994,7 +994,7 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ board, project, can
 
             {/* Oylama sonuçları */}
             {votePanel && results.length > 0 && (
-                <div data-ui className="absolute top-16 right-3 z-30 w-80 max-h-[60%] overflow-y-auto p-3 rounded-2xl m-surface shadow-xl" style={{ border: '1px solid var(--m-sep, #e5e7eb)' }} onPointerDown={e => e.stopPropagation()}>
+                <div data-ui className="absolute top-16 right-3 z-30 w-80 max-h-[60%] overflow-y-auto p-3 rounded-2xl m-surface m-pop shadow-xl" style={{ border: '1px solid var(--m-sep, #e5e7eb)' }} onPointerDown={e => e.stopPropagation()}>
                     <div className="flex items-center gap-2 mb-2"><b className="flex-1 text-[15px] m-text">Oylama sonuçları</b><button type="button" aria-label="Kapat" className="w-8 h-8 rounded-lg border-0 bg-transparent cursor-pointer m-text-3" onClick={() => setVotePanel(false)}><Icon name="x" size={15} /></button></div>
                     <ol className="m-0 pl-5 flex flex-col gap-1.5 text-[14px] m-text">
                         {results.slice(0, 15).map(r => (
@@ -1009,18 +1009,18 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ board, project, can
             {/* Alt araç çubuğu */}
             <div data-ui className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-2" onPointerDown={e => e.stopPropagation()}>
                 {canEdit && tool === 'sticky' && (
-                    <div className="flex gap-1.5 p-2 rounded-2xl m-surface shadow-lg">{WB_COLORS.slice(0, 9).map(c => <button key={c.key} type="button" aria-label={`Not rengi: ${c.label}`} className="w-7 h-7 rounded-md border-2 cursor-pointer" style={{ background: c.fill, borderColor: stickyColor === c.key ? '#2563eb' : c.edge }} onClick={() => setStickyColor(c.key)} />)}</div>
+                    <div className="flex gap-1.5 p-2 rounded-2xl m-surface m-pop shadow-lg">{WB_COLORS.slice(0, 9).map(c => <button key={c.key} type="button" aria-label={`Not rengi: ${c.label}`} className="w-7 h-7 rounded-md border-2 cursor-pointer" style={{ background: c.fill, borderColor: stickyColor === c.key ? '#2563eb' : c.edge }} onClick={() => setStickyColor(c.key)} />)}</div>
                 )}
                 {canEdit && tool === 'shape' && (
-                    <div className="flex gap-1 p-1.5 rounded-2xl m-surface shadow-lg">{SHAPES.map(s => <button key={s.shape} type="button" title={s.label} aria-label={s.label} className={toolbarBtn(shapeKind === s.shape)} onClick={() => setShapeKind(s.shape)}><Icon name={s.icon} size={18} /></button>)}</div>
+                    <div className="flex gap-1 p-1.5 rounded-2xl m-surface m-pop shadow-lg">{SHAPES.map(s => <button key={s.shape} type="button" title={s.label} aria-label={s.label} className={toolbarBtn(shapeKind === s.shape)} onClick={() => setShapeKind(s.shape)}><Icon name={s.icon} size={18} /></button>)}</div>
                 )}
                 {canEdit && tool === 'stamp' && (
-                    <div className="flex gap-1 p-1.5 rounded-2xl m-surface shadow-lg">{STAMPS.map(s => <button key={s} type="button" aria-label={`Damga ${s}`} className={`${toolbarBtn(stamp === s)} text-[20px]`} onClick={() => setStamp(s)}>{s}</button>)}</div>
+                    <div className="flex gap-1 p-1.5 rounded-2xl m-surface m-pop shadow-lg">{STAMPS.map(s => <button key={s} type="button" aria-label={`Damga ${s}`} className={`${toolbarBtn(stamp === s)} text-[20px]`} onClick={() => setStamp(s)}>{s}</button>)}</div>
                 )}
                 {canEdit && tool === 'pen' && (
-                    <div className="flex gap-1.5 p-2 rounded-2xl m-surface shadow-lg">{Object.entries(PEN_COLORS).filter(([k]) => k !== 'white').map(([k, v]) => <button key={k} type="button" aria-label={`Kalem rengi ${k}`} className="w-7 h-7 rounded-full cursor-pointer" style={{ background: v, border: penColor === k ? '3px solid #93c5fd' : '0' }} onClick={() => setPenColor(k)} />)}</div>
+                    <div className="flex gap-1.5 p-2 rounded-2xl m-surface m-pop shadow-lg">{Object.entries(PEN_COLORS).filter(([k]) => k !== 'white').map(([k, v]) => <button key={k} type="button" aria-label={`Kalem rengi ${k}`} className="w-7 h-7 rounded-full cursor-pointer" style={{ background: v, border: penColor === k ? '3px solid #93c5fd' : '0' }} onClick={() => setPenColor(k)} />)}</div>
                 )}
-                <div className="flex items-center gap-0.5 p-1.5 rounded-2xl m-surface shadow-xl" role="toolbar" aria-label="Pano araçları" style={{ border: '1px solid var(--m-sep, #e5e7eb)' }}>
+                <div className="flex items-center gap-0.5 p-1.5 rounded-2xl m-surface m-pop shadow-xl" role="toolbar" aria-label="Pano araçları" style={{ border: '1px solid var(--m-sep, #e5e7eb)' }}>
                     {TOOLS.filter(t => canEdit || t.tool === 'select' || t.tool === 'hand').map(t => (
                         <button key={t.tool} type="button" title={`${t.label} (${t.key})`} aria-label={t.label} aria-pressed={tool === t.tool} className={toolbarBtn(tool === t.tool)} onClick={() => { setTool(t.tool); viewport.current?.focus(); }}>
                             <Icon name={t.icon} size={19} />

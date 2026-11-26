@@ -93,7 +93,7 @@ export const WbPalette: React.FC<{
     const hasTasks = (h: WbSearchHit) => h.kind === 'sprint' || h.kind === 'workPackage' || h.kind === 'version';
 
     return (
-        <div className="absolute z-40 w-[440px] max-w-[calc(100%-16px)] rounded-2xl m-surface shadow-2xl overflow-hidden" style={{ left: at.x, top: at.y, border: '1px solid var(--m-sep, #e5e7eb)' }}
+        <div className="absolute z-40 w-[440px] max-w-[calc(100%-16px)] rounded-2xl m-surface m-pop shadow-2xl overflow-hidden" style={{ left: at.x, top: at.y, border: '1px solid var(--m-sep, #e5e7eb)' }}
             onPointerDown={e => e.stopPropagation()} role="dialog" aria-label={mode === 'reference' ? 'Referans ekle' : 'Panoya ekle'}>
             <div className="flex items-center gap-2 px-3 h-12 border-b m-sep" style={{ borderBottomStyle: 'solid', borderBottomWidth: 1 }}>
                 <Icon name={mode === 'reference' ? 'slash' : 'search'} size={17} className="m-text-3" />

@@ -109,6 +109,24 @@ export const canEditProjectContent = (ws: WsLike, id: Identity, projectId: strin
     return !!project && (!id.projectIds || id.projectIds.includes(projectId)) && ownsProject(project, id);
 };
 
+/**
+ * Proje içeriği neden düzenlenemiyor (kullanıcıya gösterilecek kısa açıklama);
+ * düzenlenebiliyorsa null. İçeriği projenin PY'si düzenler: rol "Proje
+ * Yöneticisi" ve seçili kişi projenin PY'si olmalı.
+ */
+export const projectEditBlockReason = (ws: WsLike, id: Identity, projectId: string, roleLabel: (r: UserRole) => string = r => r): string | null => {
+    const project = ws.projects.find(p => p.id === projectId);
+    if (!project) return 'Proje bulunamadı.';
+    if (canEditProjectContent(ws, id, projectId)) return null;
+    if (id.projectIds && !id.projectIds.includes(projectId)) return 'Bu proje, bulut çalışma alanındaki erişim kapsamınızda değil. Kapsamı çalışma alanı yöneticisi değiştirir.';
+    const name = (personId?: string) => { const p = ws.people.find(x => x.id === personId); return p ? `${p.firstName} ${p.lastName}`.trim() : undefined; };
+    const pm = name(project.pmPersonId);
+    if (!project.pmPersonId || !pm) return 'Bu projeye proje yöneticisi (PY) atanmamış. Önce proje kartından PY atayın; sonra PY olarak giriş yapınca pano açılır.';
+    if (id.role !== 'py') return `Bu projenin içeriğini yalnız projenin PY'si (${pm}) düzenler. Şu anki rolünüz: ${roleLabel(id.role)}. Profil seçiminden "Proje Yöneticisi" rolüne ve ${pm} kişisine geçin.`;
+    if (!id.personId) return `Proje Yöneticisi rolünde kişi seçilmemiş. Profil seçiminden ${pm} kişisini seçin.`;
+    return `Bu projenin PY'si ${pm}; siz ${name(id.personId) || 'başka bir kişi'} olarak girdiniz. Profil seçiminden ${pm} kişisine geçin ya da proje kartından PY'yi değiştirin.`;
+};
+
 export const keepScopedWorkspaceEdits = (before: WorkspaceData, after: WorkspaceData): WorkspaceData => {
     const identity = identityOf(before);
     if (!identity.projectIds) return after;
