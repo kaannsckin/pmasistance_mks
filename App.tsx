@@ -14,7 +14,7 @@ import {
 } from './utils/workspace';
 import { canEditPool, createAllocation, EffortField, getPlanLockStatus, ROLE_LABELS, setAllocationCell, upsertPlanLock } from './utils/allocations';
 import { applyPoolImport, PoolImportResult } from './utils/poolImporter';
-import { canCreateProject, canEditProjectContent, identityFor, identityOf, identityNeedsPerson as computeNeedsPerson, keepScopedWorkspaceEdits, managedDepartmentCode, ownsProject, visibleProjectIds } from './utils/rbac';
+import { canApplyProjectChange, canAssignProjectOwner, canCreateProject, canEditProjectContent, identityFor, identityOf, identityNeedsPerson as computeNeedsPerson, keepScopedWorkspaceEdits, managedDepartmentCode, ownsProject, visibleProjectIds } from './utils/rbac';
 import { can, isConsoleRole, isManagementRole, PERMISSION_BY_KEY, resetRolePermissions, setRolePermission } from './utils/permissions';
 import { applyPreset, projectPassesView, resetRoleView, roleViewOf, sectionOfView, taskPassesView, updateRoleView, VIEW_PRESETS, ViewPresetKey } from './utils/viewConfig';
 import { AdminSection, ADMIN_SECTIONS } from './components/modern/adminSections';
@@ -187,6 +187,8 @@ const createSampleProject = (): Project =>
 
 /** Modern arayüzde proje başlığının gösterildiği ekranlar */
 const MODERN_PROJECT_VIEWS: View[] = [View.Dashboard, View.Whiteboard, View.Overview, View.Roadmap, View.Tasks, View.Kanban, View.Planning, View.Risks, View.Resources, View.Goals, View.Requests, View.Notes, View.AI];
+
+const PROJECT_EDIT_DENIED = "Bu projeyi yalnız projenin PY'si düzenleyebilir; değişiklik kaydedilmedi.";
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<View>(View.Portfolio);
@@ -710,6 +712,11 @@ const App: React.FC = () => {
 
   const storeProjectChange = useCallback((ws: WorkspaceData, previous: Project, input: Project, now = new Date()) => {
     if (previous === input) return ws;
+    // Son kontrol: düzenleme düğmesi açık kalmış bir ekran da başkasının projesini değiştiremez
+    if (!canApplyProjectChange(ws, identityOf(ws), previous, input)) {
+      setFlowNotice(PROJECT_EDIT_DENIED);
+      return ws;
+    }
     let next = input;
     let raw = next.tasks;
     // Kural setleri: değişen görevlere olay kuralları (zincir ve döngü koruması motorda). Yaşam döngüsü
@@ -769,6 +776,7 @@ const App: React.FC = () => {
   const handleUpdateActiveRisks = useCallback((risks: Risk[]) => {
     updateWorkspace(ws => {
       const proj = ws.projects.find(p => p.id === ws.activeProjectId);
+      if (proj && !canEditProjectContent(ws, identityOf(ws), proj.id)) { setFlowNotice(PROJECT_EDIT_DENIED); return ws; }
       let next: WorkspaceData = {
         ...ws,
         projects: ws.projects.map(p => p.id === ws.activeProjectId ? { ...p, risks, updatedAt: new Date().toISOString() } : p),
@@ -846,6 +854,7 @@ const App: React.FC = () => {
   const handleSetProjectOwner = useCallback((projectId: string, personId: string | undefined) => {
     updateWorkspace(ws => {
       const project = ws.projects.find(p => p.id === projectId);
+      if (!canAssignProjectOwner(ws, identityOf(ws), projectId)) { setFlowNotice(PROJECT_EDIT_DENIED); return ws; }
       const ownerName = personId ? (() => { const o = ws.people.find(p => p.id === personId); return o ? `${o.firstName} ${o.lastName}`.trim() : personId; })() : 'boş';
       const next = {
         ...ws,
@@ -890,7 +899,9 @@ const App: React.FC = () => {
   const handleDeleteProject = useCallback((projectId: string) => {
     const snapshot = workspaceRef.current;
     const removed = snapshot?.projects.find(p => p.id === projectId);
+    if (!snapshot || !canAssignProjectOwner(snapshot, identityOf(snapshot), projectId)) { setFlowNotice(PROJECT_EDIT_DENIED); return; }
     updateWorkspace(ws => {
+      if (!canAssignProjectOwner(ws, identityOf(ws), projectId)) return ws;
       const projects = ws.projects.filter(p => p.id !== projectId);
       const next = {
         ...ws,
@@ -903,7 +914,7 @@ const App: React.FC = () => {
   }, [updateWorkspace, showUndo]);
 
   const handleRenameProject = useCallback((projectId: string, name: string) => {
-    updateWorkspace(ws => ({
+    updateWorkspace(ws => !canEditProjectContent(ws, identityOf(ws), projectId) ? ws : ({
       ...ws,
       projects: ws.projects.map(p => p.id === projectId ? { ...p, name, updatedAt: new Date().toISOString() } : p),
     }));
@@ -912,6 +923,7 @@ const App: React.FC = () => {
   const handleSetProjectRag = useCallback((projectId: string, rag: RagStatus | undefined, ragNote?: string) => {
     updateWorkspace(ws => {
       const prev = ws.projects.find(p => p.id === projectId);
+      if (!canEditProjectContent(ws, identityOf(ws), projectId)) return ws;
       const next = {
         ...ws,
         projects: ws.projects.map(p => p.id === projectId ? { ...p, rag, ragNote: ragNote ?? p.ragNote, updatedAt: new Date().toISOString() } : p),
@@ -926,7 +938,7 @@ const App: React.FC = () => {
   }, [updateWorkspace]);
 
   const handleSetProjectStatus = useCallback((projectId: string, status: ProjectStatus) => {
-    updateWorkspace(ws => ({
+    updateWorkspace(ws => !canAssignProjectOwner(ws, identityOf(ws), projectId) ? ws : ({
       ...ws,
       projects: ws.projects.map(p => p.id === projectId ? { ...p, status, updatedAt: new Date().toISOString() } : p),
     }));
@@ -1858,7 +1870,8 @@ const App: React.FC = () => {
         theme: newTheme,
       },
     }));
-    if (activeProject) {
+    // Sprint süresi ve başlangıç proje ayarıdır: yalnız projenin PY'si değiştirir
+    if (activeProject && workspace && canEditProjectContent(workspace, identityOf(workspace), activeProject.id)) {
       updateActiveProject(p => ({
         ...p,
         settings: {
@@ -2460,6 +2473,7 @@ const App: React.FC = () => {
         onOpenAutomation={canEditProjectContent(workspace, identity, activeProject.id) ? () => setAutomationSheetProject(activeProject.id) : undefined}
         onOpenWorkflow={activeScheme.allowProjectWorkflow && canEditProjectContent(workspace, identity, activeProject.id) ? () => setWorkflowSheetProject(activeProject.id) : undefined}
         canConfigure={activeScheme.allowProjectBoard && canEditProjectContent(workspace, identity, activeProject.id)}
+        readOnly={!canEditProjectContent(workspace, identity, activeProject.id)}
         onSaveConfig={cfg => handleSaveBoardConfig(activeProject.id, cfg)}
         onMoveTask={moveBoardTask}
         onStatusChange={changeTaskStatus}
@@ -2514,11 +2528,11 @@ const App: React.FC = () => {
         <ModernTimeline
           key={activeProject.id}
           // Salt okunur zaman çizelgesi admin'in öncelik süzgecini izler; düzenlenebilirde tüm görevler (otomatik plan gizlileri kaybetmesin)
-          project={isManagementRole(identity.role) && roleView.minTaskPriority !== 'Low' ? { ...activeProject, tasks: activeProject.tasks.filter(t => taskPassesView(roleView, t)) } : activeProject}
+          project={!canEditProjectContent(workspace, identity, activeProject.id) && roleView.minTaskPriority !== 'Low' ? { ...activeProject, tasks: activeProject.tasks.filter(t => taskPassesView(roleView, t)) } : activeProject}
           people={workspace.people}
           leaves={workspace.leaves || []}
           identity={identity}
-          canEdit={!isManagementRole(identity.role)}
+          canEdit={canEditProjectContent(workspace, identity, activeProject.id)}
           onMoveTask={(id: string, v: number) => setTasks(prev => prev.map(t => t.id === id ? { ...t, version: v } : t))}
           onPlanGenerated={setTasks}
           onInsertSprint={insertSprint}
@@ -2596,7 +2610,7 @@ const App: React.FC = () => {
           resources={resources}
           tasks={tasks}
           people={workspace.people}
-          canEdit={!isManagementRole(identity.role)}
+          canEdit={canEditProjectContent(workspace, identity, activeProject.id)}
           onUpdate={(rs: Resource[], ts?: Task[]) => updateActiveProject(p => ({ ...p, resources: rs, tasks: ts ?? p.tasks }))}
           setResources={setResources}
           titleCosts={ps.titleCosts || {}}
@@ -2615,7 +2629,7 @@ const App: React.FC = () => {
         <ModernGoals
           objectives={objectives}
           tasks={tasks}
-          canEdit={!isManagementRole(identity.role)}
+          canEdit={canEditProjectContent(workspace, identity, activeProject.id)}
           onUpdateObjectives={setObjectives}
           onViewTask={viewTask}
           onNavigate={setCurrentView}
@@ -2650,7 +2664,7 @@ const App: React.FC = () => {
         <ModernRequests
           requests={customerRequests}
           tasks={tasks}
-          readOnly={!!identity.projectIds && !canEditProjectContent(workspace, identity, activeProject.id)}
+          readOnly={!canEditProjectContent(workspace, identity, activeProject.id)}
           onChange={(next: CustomerRequest[]) => setCustomerRequests(next)}
           onConvert={convertRequest}
           onViewTask={viewTask}
@@ -2708,7 +2722,7 @@ const App: React.FC = () => {
           canEdit={canEditProjectContent(workspace, identity, activeProject.id)}
           onNavigate={setCurrentView}
           onViewTask={viewTask}
-          onNewTask={newTask}
+          onNewTask={canEditProjectContent(workspace, identity, activeProject.id) ? newTask : undefined}
           onSetRag={handleSetProjectRag}
           onCelebrate={celebrate}
           sections={roleView.projectSections}
@@ -2731,6 +2745,7 @@ const App: React.FC = () => {
             onClose={() => setIsRecordOpen(false)} />
         )}
         <ModernTaskList
+          readOnly={!canAddRecord}
           onNewRecord={canAddRecord ? () => setIsRecordOpen(true) : undefined}
           key={activeProject.id}
           projectId={activeProject.id}
@@ -3151,7 +3166,7 @@ const App: React.FC = () => {
                   exec={isManagementRole(identity.role)}
                   aiEnabled={isAIChatEnabled}
                   onStatusReport={() => setIsStatusReportOpen(true)}
-                  onNewTask={() => { setEditingTask(null); setIsFormModalOpen(true); }}
+                  onNewTask={canEditProjectContent(workspace, identity, activeProject.id) ? () => { setEditingTask(null); setIsFormModalOpen(true); } : undefined}
                   onOpenWorkPackages={() => setIsWpManagerOpen(true)}
                   onOpenAutomation={() => setAutomationSheetProject(activeProject.id)}
                   onOpenReports={() => setReportSheetProject(activeProject.id)}
@@ -3245,7 +3260,7 @@ const App: React.FC = () => {
           task={liveViewingTask}
           project={activeProject}
           authorName={currentActorName}
-          canEdit={!isManagementRole(identity.role)}
+          canEdit={canEditProjectContent(workspace, identity, activeProject.id)}
           onClose={() => setIsDetailModalOpen(false)}
           onEdit={(t: Task) => { setIsDetailModalOpen(false); setEditingTask(t); setIsFormModalOpen(true); }}
           onSave={handleUpdateTask}

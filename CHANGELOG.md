@@ -5,6 +5,12 @@ buradan alır (`.github/workflows/exe.yml`).
 
 ## Yayımlanmamış
 
+**Yetki düzeltmesi: PY başkasının projesini düzenleyemez**
+- Kanban/zaman çizelgesi, Pano, Liste, Ekip, Hedefler, görev ayrıntısı, müşteri istekleri ve "Yeni görev" düğmeleri yalnız projenin PY'sine açık. Önceden yönetim rolü olmayan herkese (PY, bölüm sorumlusu, PYB Destek) açıktı; başka bir PY'nin projesinde görev, ekip ve hedef değiştirilebiliyordu.
+- Kayıt anında son kontrol: düzenleme hangi ekrandan gelirse gelsin, sahibi olmayanın proje değişikliği kaydedilmez ve uyarı gösterilir. Panoların (Whiteboard) kendi erişim kuralı vardır. Proje adı, RAG, durum, sahip ve silme işlemleri de işlem anında yetkiyle doğrulanır.
+- Bulutta "Tüm projeler" kapsamı artık yalnız veri sınırıdır: PY portföyde yalnız kendi projelerini görür. PY'lerin tüm portföyü salt okunur görmesi için admin, Yönetici ekranında PY rolüne "Tüm projeleri görür" yetkisini verir; belirli projeler için Bulut erişimi › Proje kapsamı › seçili projeler kullanılır.
+- Sunucu (RLS): erişim yöneticiliği (`access_admin`) yalnız üyelikleri yönetir, başkasının projesini yazma yetkisi vermez. Proje satırını projenin PY'si, tüm kapsamlı PYB Destek ve demo hesabı yazar. Mevcut kurulumlarda `supabase/schema.sql` yeniden çalıştırılmalı.
+
 **Whiteboard: FigJam tarzı proje panosu**
 - Projede yeni **Whiteboard** sekmesi (modern arayüz): sonsuz tuval, yapışkan not, metin, şekil, bölüm, bağlantı, kalem, damga ve görsel. Seçim, çoğaltma, kilit, katman sırası, geri al / yinele ve klavye kısayolları FigJam'deki gibi.
 - **"/" komutları**: görev, sprint, iş paketi, risk ve sürüm kart olarak eklenir; kartlar Jira eşitlemesiyle güncel kalır. Sprint ya da iş paketi görevleriyle birlikte bir bölüm içinde eklenebilir.

@@ -108,10 +108,14 @@ returns boolean language sql stable security definer set search_path = '' as $$
     select exists (select 1 from public.workspace_members m where m.workspace_id = ws and m.user_id = auth.uid() and m.project_ids is null)
 $$;
 
+-- Proje satırını kim yazar: projenin PY'si (person_id = pmPersonId), tüm kapsamlı
+-- PYB Destek (veri sorumlusu: sahip/durum atama) ve demo hesabı (all_roles).
+-- Erişim yöneticiliği (access_admin) yalnız üyelikleri yönetir; başkasının
+-- projesini düzenleme yetkisi vermez.
 create or replace function public.can_edit_workspace_project(ws uuid, project text, pm text)
 returns boolean language sql stable security definer set search_path = '' as $$
     select exists (select 1 from public.workspace_members m where m.workspace_id = ws and m.user_id = auth.uid()
-        and ((m.project_ids is null and (m.access_admin or m.role = 'pyb_destek'))
+        and ((m.project_ids is null and (m.role = 'pyb_destek' or m.all_roles))
             or ((m.project_ids is null or project = any(m.project_ids)) and m.role = 'py' and m.person_id = pm)))
 $$;
 

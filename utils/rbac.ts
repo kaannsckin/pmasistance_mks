@@ -29,7 +29,9 @@ export interface Identity {
     personId?: string;
     /** Rolün geçerli yetkileri (admin değişiklikleriyle); yoksa varsayılanlar */
     perms?: ReadonlySet<PermissionKey>;
+    /** Bulutta seçili projelerle sınırlı üyelik: yalnız bu projeler (salt okunur, sahibi değilse) */
     projectIds?: readonly string[];
+    /** Bulutta "Tüm projeler" kapsamı: sunucu tüm projeleri verir; görünürlüğü yine rol belirler */
     fullCloudProjectAccess?: boolean;
 }
 
@@ -87,7 +89,9 @@ export const managesPerson = (ws: WsLike, id: Identity, personId: string): boole
 /** Görünür proje id kümesi (kapsam) */
 export const visibleProjectIds = (ws: WsLike, id: Identity): Set<string> => {
     if (id.projectIds) return new Set(ws.projects.filter(p => id.projectIds!.includes(p.id)).map(p => p.id));
-    if (id.fullCloudProjectAccess || can(id, 'portfolio.viewAll')) return new Set(ws.projects.map(p => p.id));
+    // Bulutta "Tüm projeler" kapsamı verinin üst sınırıdır; neyin görüneceğini rol belirler
+    // (PY yalnız kendi projeleri; tüm portföy için admin "Tüm projeleri görür" yetkisini verir)
+    if (can(id, 'portfolio.viewAll')) return new Set(ws.projects.map(p => p.id));
     if (id.role === 'py') return new Set(ws.projects.filter(p => ownsProject(p, id)).map(p => p.id));
     if (id.role === 'bolum_sorumlu') {
         const dept = managedDepartmentCode(ws, id);
@@ -111,6 +115,22 @@ export const visiblePersonIds = (ws: WsLike, id: Identity): Set<string> => {
 export const canEditProjectContent = (ws: WsLike, id: Identity, projectId: string): boolean => {
     const project = ws.projects.find(p => p.id === projectId);
     return !!project && (!id.projectIds || id.projectIds.includes(projectId)) && ownsProject(project, id);
+};
+
+/**
+ * Sahibi olmayanın da değiştirebildiği proje alanları: panoların kendi erişim
+ * kuralı vardır (utils/whiteboard/access.ts); updatedAt yalnız damgadır.
+ */
+const OPEN_PROJECT_FIELDS: ReadonlySet<string> = new Set(['whiteboards', 'updatedAt']);
+
+/**
+ * Bir proje değişikliği bu kimlikle uygulanabilir mi? Ekranların düzenleme
+ * düğmelerinden bağımsız son kontrol: proje içeriğini yalnız sahip PY değiştirir.
+ */
+export const canApplyProjectChange = (ws: WsLike, id: Identity, before: Project, after: Project): boolean => {
+    if (before === after || canEditProjectContent(ws, id, before.id)) return true;
+    const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
+    return [...keys].every(k => OPEN_PROJECT_FIELDS.has(k) || (before as unknown as Record<string, unknown>)[k] === (after as unknown as Record<string, unknown>)[k]);
 };
 
 export const keepScopedWorkspaceEdits = (before: WorkspaceData, after: WorkspaceData): WorkspaceData => {

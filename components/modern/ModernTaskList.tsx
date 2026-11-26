@@ -42,6 +42,8 @@ interface ModernTaskListProps {
     sortKey?: TaskSortKey;
     /** Tahminli yeni kayıt panelini açar (benzer kayıtlardan süre/efor önerisi) */
     onNewRecord?: () => void;
+    /** Projeyi düzenleme yetkisi yok: görev işlem menüsü gösterilmez */
+    readOnly?: boolean;
     bulkEdit?: {
         people: Person[];
         versions?: ProjectVersion[];
@@ -58,7 +60,7 @@ const lower = (s: string) => s.toLocaleLowerCase('tr-TR');
 
 type ImportKind = 'excel' | 'jira' | 'csv';
 
-const ModernTaskList: React.FC<ModernTaskListProps> = ({ projectId, initialQuery, onPlanSprint, onPlanRelease, tasks, resources, sprintNames, workPackages, me, onStatusChange, onWorkflowChange, workflow, onViewTask, onEditTask, onDeleteTask, onNotifyTask, onDataImport, onCelebrate, minPriority = 'Low' as TaskPriority, sortKey = 'smart' as TaskSortKey, bulkEdit, onNewRecord }) => {
+const ModernTaskList: React.FC<ModernTaskListProps> = ({ projectId, initialQuery, onPlanSprint, onPlanRelease, tasks, resources, sprintNames, workPackages, me, onStatusChange, onWorkflowChange, workflow, onViewTask, onEditTask, onDeleteTask, onNotifyTask, onDataImport, onCelebrate, minPriority = 'Low' as TaskPriority, sortKey = 'smart' as TaskSortKey, bulkEdit, onNewRecord, readOnly = false }) => {
     const [query, setQuery] = useState('');
     const [queryOpen, setQueryOpen] = useState(!!initialQuery);
     const [querySeed, setQuerySeed] = useState(initialQuery || '');
@@ -405,7 +407,7 @@ const ModernTaskList: React.FC<ModernTaskListProps> = ({ projectId, initialQuery
                                                 <span className="m-text m-tabular text-[14px]">{formatHours(tracking.spent)}</span>
                                                 <span className={`m-tabular text-[14px] ${tracking.overrun ? 'm-ink-bad' : 'm-text'}`}>{tracking.variancePct === undefined ? '—' : (tracking.variancePct / 100).toLocaleString('tr-TR', { style: 'percent', maximumFractionDigits: 1 })}</span>
                                             </>}
-                                            <TaskActionsMenu task={t} onStatusChange={changeStatus} onWorkflowChange={onWorkflowChange} workflowTasks={tasks} workflow={workflow} onEdit={onEditTask} onDelete={onDeleteTask} onNotify={onNotifyTask} />
+                                            {readOnly ? <span /> : <TaskActionsMenu task={t} onStatusChange={changeStatus} onWorkflowChange={onWorkflowChange} workflowTasks={tasks} workflow={workflow} onEdit={onEditTask} onDelete={onDeleteTask} onNotify={onNotifyTask} />}
                                         </div>
                                     );
                                 })}
