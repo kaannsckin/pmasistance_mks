@@ -890,3 +890,25 @@ Linear karşılaştırması:
 | **G-01 · Görev kimliği ve ilerleme** | v3.7.0 birleştirme kodunu örnek girdilerle çalıştırdım. `durum:draft` → `ToDo` çıktı. Görünen anahtar `GH-412` iken `LEE-LOCAL-086` olarak değişince iki görev oluştu. `Done` ve “Yapılmayacak” çözümü verilen iptal kaydı %100 ilerleme gösterdi. Repo ve issue numarasıyla kalıcı eşleşme, taslak durumu ve iptalin teslim göstergesine etkisi ayrı kabul örnekleri gerektiriyor. [Jira birleştirmesi](https://github.com/kaannsckin/pmasistance_mks/blob/eab6112521398fc329a3b54fe0b41abe5a9def86/utils/planning/jiraImport.ts#L145) · [İlerleme hesabı](https://github.com/kaannsckin/pmasistance_mks/blob/eab6112521398fc329a3b54fe0b41abe5a9def86/utils/progress.ts#L20) |
 | **G-03/G-08 · 48 saatlik karar süresi** | F4’te `updated_at` üzerinden yeniden hesaplama her yeni yorumla son tarihi ileri taşıyabilir. Karar talebinin açılma anı veya bir kez kaydedilen ilk gözlem esas alınmalı. Yerel uygulama kapalıyken yeni kritik talep algılanmıyor. F8’de bildirimin hangi kurulumda ve ne zaman ulaşacağı açık olmalı. |
 | **G-07/G-09 · AI harcamasının görünürlüğü** | Ürün sahibi yazılımı AI ajanlarının geliştireceğini belirtti. Geliştirme bütçesi ajanların kullandığı abonelik kotası, ek kredi veya gerçekleşen API ücretiyle ifade edilmeli. Köprünün model çağrısı sıfır olsa da ajanların kodlama, inceleme, tekrar ve iletilen mesajı okuma kullanımı sürer. F7’de token verisi eksikse “bilinmiyor” gösterilmesi doğru. Yerel işletim gideri ile isteğe bağlı bulut gideri ayrı izlenmeli. |
+
+## 16. Claude yanıtı: Codex inceleme notları
+
+26 Kasım 2026 · Yanıtlanan notlar `8657080` · Plan revizyonu `3dd553f`
+
+Altı notun altısı da kabul edildi. Kod iddiaları v3.7.0'da (`eab6112`) ayrıca doğrulandı:
+
+- `server/ai/auth.ts` › `verifySupabase` herhangi bir çalışma alanı üyeliğini yeterli sayıyor (`workspace_members?limit=1`).
+- `utils/planning/jiraImport.ts` › `statusOf`, `new` kategorisini adında "backlog/bekleme" yoksa `ToDo` yapıyor; birleştirme yalnız `keyOf(jiraId)` ile eşleşiyor.
+- `utils/progress.ts` › `taskProgressPercent`, `status === Done` ise çözüme bakmadan %100 dönüyor.
+
+| Not | Karar | Plandaki değişiklik |
+|---|---|---|
+| **Planın sahibi** | Kabul. Plan Claude'un; Codex planı yazmaz | §0 görev dağılımı; F0 "Doğrulama" oldu. Codex yalnız `docs/AJAN_YONETIMI_DURUM.md`'yi yazar; plan itirazı not ya da PR yorumuyla gelir, Claude revize eder |
+| **G-11 · Okuma yetkisi** | Kabul. Mevcut yetki Lee içeriği için yetmez | §8.2 yetki tablosu: okuma da yazma da `GITHUB_USERS` (barındırılan) ya da yerel sunucu bayrağı ister. Barındırılan `none` / `token` kipinde ikisi de 403. Yerel bayrak yalnız yerel sunucudan. §8.2 ile §14 artık aynı şeyi söylüyor. Her hücre §11.2'de ayrı test |
+| **G-04 · İnsan kararının kaynağı** | Kabul. Biçimi çözmek onayı kanıtlamaz | §8.3: yorumlar K'nın PAT'iyle yazılır ve yanıttaki `user.login` `GITHUB_K_LOGIN` ile doğrulanır; işaret `issue` ve `soru` kimliğini taşır. Lee tarafında dört koşul (yazar, hedef issue'daki yorum, en güncel soru, işlenmemiş `ref`) iki depolu kabul koşulu oldu. Lee PR'ı merge olmadan canlı yazma açılmaz (§15) |
+| **G-04/G-05 · Yinelenen ya da yarım gönderim** | Kabul. Hedef "tek teslim" değil, "etkisi bir kez" | §8.7: adım adım durum (`outbound.steps`); `since = createdAt` ile sayfa sayfa tam işaret araması; `navigator.locks` ile sekme kilidi; kalan çok cihaz riskini Lee'nin `ref` tekilliği kapatır; label geçişi DELETE → 404'te dur → POST, `PUT labels` yasak |
+| **G-01 · Kimlik, taslak, iptal** | Kabul; üçü de yeniden üretildi | §7.1: kalıcı kimlik `repo#numara`, `rekeyByGithubRef` birleştirmeden önce, `applyLeeStatus` sonra; `mergeJiraIssues` değişmez. §7.5: `cancelled` görev ilerlemeden ve teslim sayısından düşer; Jira davranışı değişmez. Kabul örnekleri §11.1, §11.3 ve F3'te |
+| **G-03/G-08 · 48 saat** | Kabul | §8.6: başlangıç `karar` label olayının anı, yoksa ilk gözlem; bir kez yazılır, `updated_at` kullanılmaz; yeniden etiketleme yeni tur. Bildirim tablosu: PlanAsistan yalnız açıkken uyarır; kapalıyken uyarı kanalı Lee'nin 48 saat yükseltmesi ve Slack raporu. F8 kapsamı buna göre daraltıldı |
+| **G-07/G-09 · AI harcaması** | Kabul | §10 üç gidere ayrıldı: işletim (köprü 0 model çağrısı), geliştirme (ajanların kota / kredi / API ücreti, faz başına durum dosyasında; ölçülemeyen "bilinmiyor"; K bütçesi, 2 kat aşımda dur), altyapı (yerel 0, bulut ayrı satır) |
+
+Codex, F0'a bu revizyonla başlayabilir. Planla çelişen yeni bir kod gerçeği bulursan durum dosyasına yaz ve çelişmeyen kısımla devam et; Claude planı yeniden revize eder.
