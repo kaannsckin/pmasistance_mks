@@ -10,7 +10,7 @@ import { useAssistant } from './AssistantContext';
 export type EditableSection = Exclude<MemorySection, 'arsiv'>;
 
 export const SECTION_OPTIONS: { value: EditableSection; label: string; hint: string }[] = [
-    { value: 'uslup', label: SECTION_TITLES.uslup, hint: 'Hitap, yazım tarzı, yanıt uzunluğu. Ör. "Hitap: Murat Bey", "Yanıt uzunluğu: kısa"' },
+    { value: 'uslup', label: SECTION_TITLES.uslup, hint: 'Hitap, yazım tarzı, yanıt uzunluğu. Ör. "Hitap: Murat Bey", "Yanıt uzunluğu: soruya göre"' },
     { value: 'tercih', label: SECTION_TITLES.tercih, hint: 'Kalıcı tercih. Ör. "Raporlarda süreyi gün olarak ver"' },
     { value: 'not', label: SECTION_TITLES.not, hint: 'Tarihli bağlam; ilgili sorularda okunur, eskir. Ör. "Ana proje: ATLAS #atlas"' },
 ];
@@ -23,6 +23,16 @@ export const memoryAgeLabel = (m: MemoryItem, now = new Date()): string => {
     if (d < 60) return `${Math.round(d / 7)} hf`;
     return `${Math.round(d / 30)} ay`;
 };
+
+const relativeTime = (iso: string, now = Date.now()): string => {
+    const s = Math.max(0, Math.round((now - Date.parse(iso)) / 1000));
+    if (s < 60) return 'az önce';
+    if (s < 3600) return `${Math.round(s / 60)} dk önce`;
+    if (s < 86_400) return `${Math.round(s / 3600)} sa önce`;
+    return new Date(iso).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' });
+};
+
+export const MEMORY_STORAGE_NOTE = 'Bu tarayıcıda ve bu kimlik için saklanır. Bulut eşitlemesinde yalnız sizin görebildiğiniz bir bulut satırına yazılır (yöneticiler dahil kimse göremez). Asistana her soruda üslup ve tercihler, notlardan ise yalnız soruyla ilgili olanlar gider; notların etkisi yaşla azalır, 6 aydan eski notlar arşive iner.';
 
 export const useMemoryEditor = () => {
     const a = useAssistant();
@@ -81,7 +91,19 @@ export const useMemoryEditor = () => {
         if (window.confirm('Asistanın hafızasındaki tüm satırlar (arşiv dahil) silinsin mi?')) a.clearMemory();
     }, [a]);
 
+    const sync = a.memorySync;
+    const syncText = !sync.available
+        ? 'Bulut bağlı değil (Ayarlar › Bulut eşitleme)'
+        : sync.state === 'syncing'
+            ? 'Eşitleniyor…'
+            : sync.state === 'error'
+                ? sync.message || 'Eşitlenemedi'
+                : sync.lastAt
+                    ? `Son eşitleme ${relativeTime(sync.lastAt)}${sync.message && sync.message !== 'Güncel' ? ` · ${sync.message}` : ''}`
+                    : 'Henüz buluta eşitlenmedi';
+
     return {
+        sync, syncText, syncNow: a.syncMemoryNow, setAutoSync: a.setMemoryAutoSync,
         mode, draft, setDraft, error, section, setSection, text, setText, important, setImportant,
         groups, archived, activeCount, add, startEdit, cancelEdit, saveEdit, download, upload, clear, forget: a.forgetMemory,
         hint: SECTION_OPTIONS.find(o => o.value === section)?.hint || '',

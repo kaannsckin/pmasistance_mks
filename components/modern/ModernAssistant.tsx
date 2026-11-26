@@ -12,7 +12,7 @@ import { addUploadedDoc, indexStatus, listUploadedDocs, onDocsChange, removeUplo
 import { Citation, RAG_SOURCE_LABELS, RagSourceType, UploadedDoc } from '../../utils/rag/sources';
 import { citedSources } from '../assistant/AssistantChat';
 import { useAssistant } from '../assistant/AssistantContext';
-import { EditableSection, memoryAgeLabel, SECTION_OPTIONS, useMemoryEditor } from '../assistant/useMemoryEditor';
+import { EditableSection, memoryAgeLabel, MEMORY_STORAGE_NOTE, SECTION_OPTIONS, useMemoryEditor } from '../assistant/useMemoryEditor';
 import Markdown from '../Markdown';
 import { Icon } from './icons';
 import { rowSep, Sheet } from './ui';
@@ -129,7 +129,13 @@ const MemoryPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 </>
             )}
             {m.error && <p role="alert" className="m-0 text-[13px]" style={{ color: 'var(--m-danger, #dc2626)' }}>{m.error}</p>}
-            <p className="m-0 text-[12px] m-text-3">Yalnız bu tarayıcıda ve bu kimlik için saklanır. Asistana her soruda üslup ve tercihler, notlardan ise yalnız soruyla ilgili olanlar gider; notların etkisi yaşla azalır, 6 aydan eski notlar arşive iner.</p>
+            <div className="flex items-center gap-2 text-[13px] border-t m-sep pt-2" style={{ borderTopStyle: 'solid', borderTopWidth: 1 }}>
+                <Icon name={m.sync.state === 'syncing' ? 'refresh' : 'cloud'} size={16} />
+                <span role="status" className={`flex-1 min-w-0 ${m.sync.state === 'error' ? '' : 'm-text-3'}`} style={m.sync.state === 'error' ? { color: 'var(--m-danger, #dc2626)' } : undefined}>{m.syncText}</span>
+                {m.sync.available && <label className="flex items-center gap-1 m-text-2" title="Asistan açılınca, hafıza değişince ve sekmeye dönünce kendiliğinden eşitler"><input type="checkbox" checked={m.sync.auto} onChange={e => m.setAutoSync(e.target.checked)} />Otomatik</label>}
+                <button type="button" className="m-btn m-btn-plain !min-h-[30px] !px-2.5 text-[13px]" onClick={() => void m.syncNow()} disabled={!m.sync.available || m.sync.state === 'syncing'}>Şimdi eşitle</button>
+            </div>
+            <p className="m-0 text-[12px] m-text-3">{MEMORY_STORAGE_NOTE}</p>
         </section>
     );
 };

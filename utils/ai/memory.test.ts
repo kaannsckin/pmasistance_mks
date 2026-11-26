@@ -174,7 +174,9 @@ describe('yaşlandırma ve seçim', () => {
         expect(text).toContain('- (2 ay önce) ATLAS eski karar #atlas');
         expect(text.indexOf('(dün)')).toBeLessThan(text.indexOf('(2 ay önce)'));
         expect(lengthPreference(items)).toBe('ayrintili');
-        expect(lengthPreference([])).toBe('kisa');
+        expect(lengthPreference([])).toBe('uyarlanir');
+        expect(lengthPreference([{ ...note('Yanıt uzunluğu: kısa', 0), section: 'uslup' }])).toBe('kisa');
+        expect(lengthPreference([{ ...note('Yanıt uzunluğu: soruya göre', 0), section: 'uslup' }])).toBe('uyarlanir');
         expect(lengthPreference([{ ...note('Yanıt uzunluğu: orta', 0), section: 'uslup' }])).toBe('orta');
     });
 });
@@ -203,7 +205,7 @@ describe('hafıza araçları', () => {
         expect(prompt).toContain('- Ana proje: ATLAS');
         expect(prompt).toContain('BORA bütçesi onaylandı #bora');
         expect(prompt).not.toContain('Kantin');
-        expect(prompt).toContain('Yanıt uzunluğu: KISA');
+        expect(prompt).toContain('Yanıt uzunluğu: SORUYA GÖRE');
         expect(toolSpecsFor(ctx).map(s => s.name)).toEqual(expect.arrayContaining(['hafiza_kaydet', 'hafiza_sil']));
         const plain = buildToolContext({ ...createEmptyWorkspace(), currentRole: 'py', currentPersonId: 'p1' });
         expect(toolSpecsFor(plain).map(s => s.name)).not.toContain('hafiza_kaydet');

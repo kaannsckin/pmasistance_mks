@@ -40,7 +40,7 @@ export const SECTION_TITLES: Record<MemorySection, string> = {
 };
 
 const SECTION_HINTS: Record<MemorySection, string> = {
-    uslup: 'Her yanıtta uygulanır, eskimez: hitap, yazım tarzı, yanıt uzunluğu (kısa / orta / ayrıntılı).',
+    uslup: 'Her yanıtta uygulanır, eskimez: hitap, yazım tarzı, yanıt uzunluğu (soruya göre / kısa / orta / ayrıntılı; yazılmazsa soruya göre).',
     tercih: 'Her yanıtta uygulanır, eskimez: kalıcı çalışma tercihleri.',
     not: 'Tarihli bağlam. Her soruda yalnız soruyla ilgili olanlar okunur; eskidikçe etkisi azalır, uzun süre sonra Arşiv\'e iner.',
     arsiv: 'Taranmaz ve asistana gitmez. Geri almak için satırı Notlar\'a taşıyın.',
@@ -247,13 +247,23 @@ export const selectMemory = (items: MemoryItem[], query: string, now: Date, max 
 // Saklama
 // ---------------------------------------------------------------------------
 
-const readRaw = (key: string): string | null => {
+/** Hafıza değişince yayınlanan olay (otomatik bulut eşitlemesi dinler); detail.key = hafıza anahtarı */
+export const MEMORY_CHANGE_EVENT = 'planasistan-memory-change';
+
+export const readMemoryRaw = (key: string): string | null => {
     try { return localStorage.getItem(key); } catch { return null; }
 };
 
-const writeRaw = (key: string, value: string): void => {
+/** Belgeyi yazar; notify=false bulut eşitlemesinin kendi yazımı içindir (yeniden eşitleme döngüsü olmasın) */
+export const writeMemoryRaw = (key: string, value: string, notify = true): void => {
     try { localStorage.setItem(key, value); } catch { /* özel pencere ya da kota: bu oturumda bellekte kalır */ }
+    if (notify && typeof window !== 'undefined' && typeof window.dispatchEvent === 'function' && typeof CustomEvent === 'function') {
+        window.dispatchEvent(new CustomEvent(MEMORY_CHANGE_EVENT, { detail: { key } }));
+    }
 };
+
+const readRaw = readMemoryRaw;
+const writeRaw = (key: string, value: string) => writeMemoryRaw(key, value);
 
 /** Eski (v1) düz listeyi yeni belgeye taşır: eski notlar "her yanıtta" davranışını korusun diye Tercihler'e girer */
 const migrateLegacy = (key: string): MemoryItem[] | null => {
@@ -380,12 +390,16 @@ const ageLabel = (days: number): string => {
     return `${Math.round(days / 30)} ay önce`;
 };
 
-/** Üslup satırlarından yanıt uzunluğu tercihi (yoksa kısa) */
-export const lengthPreference = (items: MemoryItem[]): 'kisa' | 'orta' | 'ayrintili' => {
-    const line = items.find(i => i.section === 'uslup' && /uzunlu|ayrıntı|ayrinti|kısa|kisa|detay/i.test(i.text))?.text || '';
+export type LengthPreference = 'uyarlanir' | 'kisa' | 'orta' | 'ayrintili';
+
+/** Üslup satırlarından yanıt uzunluğu tercihi; yoksa soruya göre uyarlanır */
+export const lengthPreference = (items: MemoryItem[]): LengthPreference => {
+    const line = items.find(i => i.section === 'uslup' && /uzunlu|ayrıntı|ayrinti|kısa|kisa|detay|öz\b/i.test(i.text))?.text || '';
+    if (/soruya göre|duruma göre|gerektiği kadar|uyarla/i.test(line)) return 'uyarlanir';
     if (/ayrıntılı|ayrintili|detaylı|detayli|uzun\b/i.test(line)) return 'ayrintili';
     if (/\borta\b/i.test(line)) return 'orta';
-    return 'kisa';
+    if (/kısa|kisa|öz\b/i.test(line)) return 'kisa';
+    return 'uyarlanir';
 };
 
 export const MEMORY_WRITE_RULE = 'Hafızaya yazma: kullanıcı açıkça "hatırla", "hafızaya ekle", "bundan sonra", "her zaman", "unutma" derse ya da kalıcı bir tercih belirtirse hafiza_kaydet ile kısa, genel bir satır yaz. bolum: hitap, yazım tarzı, yanıt uzunluğu → uslup; kalıcı çalışma tercihi → tercih; geçici bağlam ya da olgu (ör. "ATLAS teslimi Ocak sonuna kaydı") → not. Değişebilecek bilgiyi "Anahtar: değer" biçiminde yaz (ör. "Ana proje: ATLAS") ki yenisi eskisinin yerini alsın. Tek seferlik istekleri, uygulamadaki veri değerlerini ve hassas bilgiyi kaydetme. "Unut" derse hafiza_sil kullan. Kaydettiğini ya da sildiğini tek cümleyle söyle.';

@@ -11,7 +11,7 @@ Panelde: Asistan › Hafıza (kalem simgesi) › Düzenle / İndir / Yükle.
 ```markdown
 ## Üslup
 - [2026-11-01] Hitap: Murat Bey
-- [2026-11-01] Yanıt uzunluğu: kısa
+- [2026-11-01] Yanıt uzunluğu: soruya göre
 - [2026-11-01] Yazım tarzı: maddeli, önce sonuç
 
 ## Tercihler
@@ -28,7 +28,7 @@ Panelde: Asistan › Hafıza (kalem simgesi) › Düzenle / İndir / Yükle.
 
 | Bölüm | Ne yazılır | Asistana ne zaman gider | Eskir mi |
 |---|---|---|---|
-| Üslup | Hitap, yazım tarzı, yanıt uzunluğu (`kısa` / `orta` / `ayrıntılı`) | Her yanıtta | Hayır |
+| Üslup | Hitap, yazım tarzı, yanıt uzunluğu (`soruya göre` / `kısa` / `orta` / `ayrıntılı`) | Her yanıtta | Hayır |
 | Tercihler | Kalıcı çalışma tercihleri | Her yanıtta | Hayır |
 | Notlar | Tarihli bağlam, olgular, kararlar | Yalnız soruyla ilgili olanlar, en çok 6 | Evet |
 | Arşiv | Eskiyen notlar | Hiç (taranmaz) | — |
@@ -87,7 +87,30 @@ notları güncel veriyle doğrula." Uygulamanın güncel verisi her zaman notun 
 - `/unut atlas` ile satır silinir.
 - Belgeyi `.md` olarak indirip başka bir tarayıcıya yükleyebilirsiniz.
 
-Hafıza yalnız bu tarayıcıda ve bu kimlik (rol + kişi) için saklanır; buluta gitmez.
+## Bulut eşitlemesi
+
+Hafıza önce bu tarayıcıda, bu kimlik (rol + kişi) için saklanır. Bulut bağlıysa (Ayarlar › Bulut
+eşitleme) aynı hafıza başka cihazlarla da eşitlenir.
+
+| Kip | Ne zaman eşitlenir |
+|---|---|
+| Elle | Hafıza panelindeki **Şimdi eşitle** düğmesiyle |
+| Otomatik (panelde **Otomatik** kutusu) | Asistan açılınca (son dakikada yapılmadıysa), hafıza değişince (3 saniye sonra, toplu) ve sekmeye dönülünce (2 dakikadan eskiyse) |
+
+Otomatik eşitleme cihaz ayarıdır ve varsayılan olarak kapalıdır; açıldığı anda bir kez eşitler.
+
+- **Gizlilik:** bulutta `assistant_memory` tablosunda kullanıcı başına ayrı satır tutulur. RLS
+  kuralıyla satırı yalnız sahibi okur ve yazar; yöneticiler dahil başka hiçbir kullanıcı göremez.
+  Yazmak için çalışma alanı üyeliği gerekir.
+- **Birleştirme:** her cihaz son eşitlemedeki belgeyi taban olarak saklar ve üç yönlü birleştirme yapar.
+  - İki cihazda ayrı eklenen satırların ikisi de kalır.
+  - Bir cihazda silinen satır, öbür cihaz eşitleyince geri gelmez.
+  - Aynı anahtarlı iki satırdan ("Ana proje: …") yenisi kalır.
+  - Aynı satırın tarihi ve önem işareti birleşir.
+- **Çakışma:** buluta sürüm numarasıyla yazılır. Araya başka bir cihaz girerse belge yeniden okunur
+  ve birleştirilir; satır kaybolmaz.
+- **Kurulum:** tablo `supabase/schema.sql` içindedir. Mevcut kurulumda dosyayı SQL Editor'da yeniden
+  çalıştırmak yeterli; diğer veriler korunur. Tablo yoksa panel bunu söyler.
 
 ## Alakasız tarama ve uzun yanıt
 
@@ -105,10 +128,19 @@ getirdiği veriyi yeniden çekmez.
 **Önceki turun verisi.** Bir önceki yanıtın araç sonuçlarının kısa bir özeti (en çok 3 000 karakter)
 sonraki tura taşınır. "Şimdi bunu kişiye göre kır" denince veri baştan çekilmez.
 
-**Yanıt uzunluğu.** Varsayılan kısadır: ilk cümle cevap, en çok ~120 kelime ya da 5 madde, tablo en
-çok 8 satır. Giriş, kapanış ve yöntem anlatımı yazılmaz. Üslup'a "Yanıt uzunluğu: orta" ya da
-"ayrıntılı" yazarak değiştirirsiniz. Mesajda "ayrıntılı", "rapor" ya da "tam analiz" derseniz sınır o
-yanıt için kalkar.
+**Yanıt uzunluğu.** Varsayılan **soruya göre**dir:
+
+- Tek bir sayı, olgu ya da kısa durum sorusunda yanıt kısa olur (1-4 cümle).
+- Karşılaştırma, çok parçalı soru, "neden", plan ya da adım adım tarifte gerektiği kadar uzun olur:
+  her parça yanıtlanır, başlık ve tablo kullanılır.
+- Analiz, rapor, yönetici özeti istendiğinde ya da "ayrıntılı" denince yanıt eksiksiz olur.
+- "Kısaca" ya da "özetle" denince o yanıt kısa tutulur.
+
+Her durumda dolgu yazılmaz: soru tekrarı, giriş/kapanış cümlesi ve aynı bilginin ikinci kez verilmesi
+yoktur. Kısaltmak için de istenen bir parça atlanmaz.
+
+Üslup'a "Yanıt uzunluğu: kısa", "orta" ya da "ayrıntılı" yazarak varsayılanı değiştirebilirsiniz. Kısa
+tercihte bile çok parçalı soru ya da açık ayrıntı isteği tam yanıtlanır.
 
 **Yetenek tetikleyicileri.** Çok genel sözcükler ("yük", "saat", "etki", "excel", "özetle",
 "hangisi") artık ağır analiz yönergesini açmıyor. "Görevleri Excel'e aktar" bir veri dökümüdür ve rapor

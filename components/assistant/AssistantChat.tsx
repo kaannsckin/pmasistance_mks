@@ -6,7 +6,7 @@ import { AiProposal } from '../../utils/ai/actions';
 import { browserSettingsExpired } from '../../utils/ai/client';
 import { Citation, RAG_SOURCE_LABELS } from '../../utils/rag/sources';
 import { useAssistant } from './AssistantContext';
-import { EditableSection, memoryAgeLabel, SECTION_OPTIONS, useMemoryEditor } from './useMemoryEditor';
+import { EditableSection, memoryAgeLabel, MEMORY_STORAGE_NOTE, SECTION_OPTIONS, useMemoryEditor } from './useMemoryEditor';
 import { ATTACHMENT_EXTENSIONS } from '../../utils/ai/attachments';
 import { toolKind } from '../../utils/ai/tools';
 import { AiDocument, DOC_FORMAT_LABELS, documentStats, documentSummary } from '../../utils/export/aiDocument';
@@ -128,7 +128,13 @@ const MemoryPanel: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         </>
       )}
       {m.error && <p role="alert" className="text-[11px] text-red-600">{m.error}</p>}
-      <p className="text-[10px] text-gray-400">Yalnız bu tarayıcıda ve bu kimlik için saklanır. Asistana her soruda üslup ve tercihler, notlardan ise yalnız soruyla ilgili olanlar gider; notların etkisi yaşla azalır, 6 aydan eski notlar arşive iner.</p>
+      <div className="flex items-center gap-2 text-[11px] border-t border-indigo-100 dark:border-gray-700 pt-2">
+        <i aria-hidden="true" className={`fa-solid ${m.sync.state === 'syncing' ? 'fa-rotate fa-spin' : 'fa-cloud'} ${m.sync.state === 'error' ? 'text-red-500' : 'text-indigo-400'}`}></i>
+        <span role="status" className={`flex-1 min-w-0 ${m.sync.state === 'error' ? 'text-red-600' : 'text-gray-500'}`}>{m.syncText}</span>
+        {m.sync.available && <label className="flex items-center gap-1 text-gray-600 dark:text-gray-300" title="Asistan açılınca, hafıza değişince ve sekmeye dönünce kendiliğinden eşitler"><input type="checkbox" checked={m.sync.auto} onChange={e => m.setAutoSync(e.target.checked)} />Otomatik</label>}
+        <button onClick={() => void m.syncNow()} disabled={!m.sync.available || m.sync.state === 'syncing'} className="font-semibold text-indigo-600 hover:text-indigo-800 disabled:opacity-40">Şimdi eşitle</button>
+      </div>
+      <p className="text-[10px] text-gray-400">{MEMORY_STORAGE_NOTE}</p>
     </section>
   );
 };

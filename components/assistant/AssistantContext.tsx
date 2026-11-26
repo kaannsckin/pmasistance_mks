@@ -13,6 +13,7 @@ import { expandSlash, SlashContext, slashSkillFor } from '../../utils/ai/slashCo
 import { chatOwner, chatTitle, ChatSummary, deleteChat, listChats, loadChat, newChatId, saveChat, StoredMessage, summarize, toStored } from '../../utils/ai/chatStore';
 import { createMemoryStore, MemoryItem, memoryKey, MemorySection } from '../../utils/ai/memory';
 import { routeToolGroups } from '../../utils/ai/toolRouting';
+import { MemorySyncStatus, useMemorySync } from './useMemorySync';
 import { AiError, configureMasking, embedTexts, fetchAiStatus, hasCredentials, saveAccessToken, streamChat } from '../../utils/ai/client';
 import { buildMasker, collectMaskEntries, Masker } from '../../utils/ai/masking';
 import { aiPolicyOf } from '../../utils/ai/policy';
@@ -122,6 +123,10 @@ interface AssistantApi {
   memoryMarkdown: () => string;
   /** Elle düzenlenen belgeyi kaydeder; hata varsa açıklamasını döner */
   saveMemoryMarkdown: (md: string) => string | null;
+  /** Hafızanın bulut eşitlemesi: durum, elle tetikleme, otomatik aç/kapat */
+  memorySync: MemorySyncStatus;
+  syncMemoryNow: () => Promise<void>;
+  setMemoryAutoSync: (auto: boolean) => void;
   /** Tek seferlik AI tamamlama (araçsız) — ekranlara gömülü özellikler için */
   complete: (system: string, prompt: string, signal?: AbortSignal) => Promise<string>;
 }
@@ -244,6 +249,11 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, sessionSco
     refreshMemory();
     return null;
   }, [memoryStore, refreshMemory]);
+  const memoryKeyNow = useCallback(() => {
+    const ws = getWorkspace();
+    return ws ? memoryKey(ws.currentRole || 'py', ws.currentPersonId) : null;
+  }, [getWorkspace]);
+  const { status: memorySync, syncNow: syncMemoryNow, setAuto: setMemoryAutoSync } = useMemorySync(memoryKeyNow, refreshMemory, isOpen);
   const memoryMarkdown = useCallback(() => memoryStore()?.markdown() || '', [memoryStore]);
   const saveMemoryMarkdown = useCallback((md: string): string | null => {
     const r = memoryStore()?.setMarkdown(md);
@@ -656,9 +666,9 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, sessionSco
 
   const api = useMemo<AssistantApi>(() => ({
     enabled, chatEnabled: enabled && chat, embeddedEnabled: enabled && embedded, phase, status, authError, messages, isStreaming, isOpen, setOpen, isMinimized, minimize, dismissMinimized, hasUnread,
-    ensureReady, recheck, send, ask, stop, clear, saveToken, isKbOpen, setKbOpen, refreshIndex, navigate, resolveProposal, resolveAllProposals, memory, forgetMemory, clearMemory, addMemory, memoryMarkdown, saveMemoryMarkdown, chats, currentChatId, openChat, removeChat, askAbout, pinned, unpin, complete,
+    ensureReady, recheck, send, ask, stop, clear, saveToken, isKbOpen, setKbOpen, refreshIndex, navigate, resolveProposal, resolveAllProposals, memory, forgetMemory, clearMemory, addMemory, memoryMarkdown, saveMemoryMarkdown, memorySync, syncMemoryNow, setMemoryAutoSync, chats, currentChatId, openChat, removeChat, askAbout, pinned, unpin, complete,
     jiraEnabled: !!integrations?.jira,
-  }), [enabled, chat, embedded, phase, status, authError, messages, isStreaming, isOpen, isMinimized, minimize, dismissMinimized, hasUnread, ensureReady, recheck, send, ask, stop, clear, saveToken, isKbOpen, refreshIndex, navigate, resolveProposal, resolveAllProposals, memory, forgetMemory, clearMemory, addMemory, memoryMarkdown, saveMemoryMarkdown, chats, currentChatId, openChat, removeChat, askAbout, pinned, unpin, complete, integrations]);
+  }), [enabled, chat, embedded, phase, status, authError, messages, isStreaming, isOpen, isMinimized, minimize, dismissMinimized, hasUnread, ensureReady, recheck, send, ask, stop, clear, saveToken, isKbOpen, refreshIndex, navigate, resolveProposal, resolveAllProposals, memory, forgetMemory, clearMemory, addMemory, memoryMarkdown, saveMemoryMarkdown, memorySync, syncMemoryNow, setMemoryAutoSync, chats, currentChatId, openChat, removeChat, askAbout, pinned, unpin, complete, integrations]);
 
   return <Ctx.Provider value={api}>{children}</Ctx.Provider>;
 };
