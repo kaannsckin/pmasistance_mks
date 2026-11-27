@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ModernTheme } from '../../types';
-import { createRapidClickDetector, EGG_CATALOG, EggTrigger, prefersReducedMotion } from '../../utils/easterEggs';
+import { EGG_CATALOG, EggTrigger, prefersReducedMotion } from '../../utils/easterEggs';
 import { MODERN_THEMES } from '../../utils/theme';
 import type { SprintCompletionSummary } from '../../utils/sprintCompletion';
 import { Icon, IconName } from './icons';
@@ -355,55 +355,22 @@ export const EggGuide: React.FC<{ theme: ModernTheme; onTry: (id: EggTrigger) =>
     );
 };
 
-/**
- * Logo: koyu kare içinde roket. Tık → roket ateşlenir ve fırlar, sonra
- * onLaunch (ana ekrana dönüş). 2 sn içinde 5 tık → hiper sürüş.
- */
-export const RocketLogo: React.FC<{ onLaunch: () => void; onHyperdrive: () => void }> = ({ onLaunch, onHyperdrive }) => {
-    const [phase, setPhase] = useState<'idle' | 'igniting' | 'launching'>('idle');
-    const rapid = useRef(createRapidClickDetector(5, 2000));
-    const timers = useRef<number[]>([]);
-    useEffect(() => () => timers.current.forEach(t => window.clearTimeout(t)), []);
-
-    const handleClick = () => {
-        if (rapid.current()) {
-            onHyperdrive();
-            return;
-        }
-        if (phase !== 'idle') return;
-        if (prefersReducedMotion()) {
-            onLaunch();
-            return;
-        }
-        setPhase('igniting');
-        timers.current.push(window.setTimeout(() => setPhase('launching'), 450));
-        timers.current.push(window.setTimeout(() => {
-            setPhase('idle');
-            onLaunch();
-        }, 1250));
-    };
-
-    return (
-        <button
-            type="button"
-            onClick={handleClick}
-            className="m-logo flex items-center gap-2.5 min-h-[44px] px-2 rounded-xl text-left"
-            aria-label="PlanAsistan — ana ekrana dön"
-            title="PlanAsistan"
-        >
-            <span
-                className="relative w-9 h-9 rounded-[10px] flex items-center justify-center flex-none overflow-visible"
-                style={{ background: 'var(--m-label)', color: 'var(--m-bg)' }}
-            >
-                <span className={`m-rocket inline-flex ${phase === 'igniting' ? 'is-igniting' : phase === 'launching' ? 'is-launching' : ''}`}>
-                    <Icon name="rocket" size={19} strokeWidth={1.9} />
-                </span>
-                {phase === 'launching' && <span className="m-trail" aria-hidden="true"></span>}
-            </span>
-            <span className="m-nav-label flex flex-col leading-tight">
-                <span className="text-[17px] font-semibold m-text">PlanAsistan</span>
-                <span className="text-[13px] m-text-3">{phase === 'igniting' ? 'Ateşleniyor…' : phase === 'launching' ? 'Kalkış!' : 'MKS çalışma alanı'}</span>
-            </span>
-        </button>
-    );
-};
+export const RocketLogo: React.FC<{ onOpenGuide: () => void }> = ({ onOpenGuide }) => (
+    <button
+        type="button"
+        onClick={onOpenGuide}
+        className="m-logo flex items-center gap-2.5 min-h-[44px] px-2 rounded-xl text-left"
+        aria-label="Kullanım kılavuzu için tıklayın"
+        aria-haspopup="dialog"
+        title="Kullanım kılavuzu için tıklayın"
+    >
+        <span className="w-9 h-9 rounded-[10px] flex items-center justify-center flex-none"
+            style={{ background: 'var(--m-label)', color: 'var(--m-bg)' }}>
+            <span className="m-rocket inline-flex"><Icon name="rocket" size={19} strokeWidth={1.9} /></span>
+        </span>
+        <span className="m-nav-label flex flex-col leading-tight">
+            <span className="text-[17px] font-semibold m-text">PlanAsistan</span>
+            <span className="text-[13px] m-text-3">MKS çalışma alanı</span>
+        </span>
+    </button>
+);

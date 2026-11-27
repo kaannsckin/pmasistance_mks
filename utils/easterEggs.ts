@@ -5,7 +5,6 @@ import { ModernTheme, Task, TaskStatus } from '../types';
  * "hareketi azalt" tercihine saygı duyar — animasyon yerine kısa bir mesaj
  * gösterilir.
  *
- *  - Logo (roket): tek tık → fırlatma; 5 hızlı tık → hiper sürüş
  *  - Konami kodu (↑↑↓↓←→←→BA) → uzay modu
  *  - Komut paletinde "roket" → fırlatma
  *  - Bir sprintin/projenin son görevi tamamlanınca → kutlama
@@ -118,8 +117,7 @@ export interface EggInfo {
 }
 
 export const EGG_CATALOG: EggInfo[] = [
-    { id: 'rocket', title: 'Roket kalkışı', how: 'Sol üstteki logoya tıklayın.', tryable: false },
-    { id: 'hyper', title: 'Hiper sürüş', how: 'Logoya 2 saniye içinde 5 kez tıklayın ya da komut paletinde "roket" arayın.', tryable: true },
+    { id: 'hyper', title: 'Hiper sürüş', how: 'Komut paletinde "roket" arayın.', tryable: true },
     { id: 'space', title: 'Uzay modu', how: 'Klavyede ↑ ↑ ↓ ↓ ← → ← → B A.', tryable: true },
     { id: 'celebrate', title: 'Kutlama', how: 'Bir sürümün ya da projenin son görevini tamamlayın.', tryable: true },
     { id: 'sprint', title: 'Sprint tamamlandı', how: 'Bir sprintin son açık görevini tamamlayın; görev sayısı, efor ve sprint sonuna göre zamanlama gösterilir.', tryable: true },

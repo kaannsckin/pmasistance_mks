@@ -1,0 +1,202 @@
+.guide-book {
+  --paper: #fffaf0;
+  --ink: #202a39;
+  --muted: #596372;
+  --rule: #e4d8c5;
+  --nav: #142838;
+  --gold: #f2c483;
+  position: fixed;
+  inset: 0;
+  width: min(1160px, calc(100vw - 48px));
+  height: min(850px, calc(100dvh - 56px));
+  max-width: none;
+  max-height: none;
+  margin: auto;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  border-radius: 17px;
+  color: var(--ink);
+  background: var(--paper);
+  box-shadow: 0 5px 0 -2px #c8b89e, 0 10px 0 -4px #e4d4b7, 0 36px 85px #060e19a8;
+  transform-origin: 10% 50%;
+  animation: guide-open .55s cubic-bezier(.18, .82, .28, 1) both;
+}
+.guide-book::backdrop {
+  background: #0b1527bf;
+  backdrop-filter: blur(5px);
+  animation: guide-fade .3s ease both;
+}
+.guide-layout {
+  height: 100%;
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(210px, 24%) minmax(0, 1fr);
+  overflow: hidden;
+  border-radius: inherit;
+}
+.guide-contents {
+  overflow: auto;
+  padding: 32px 20px;
+  color: #edf1f6;
+  background: linear-gradient(145deg, #23465a, var(--nav) 58%);
+  border-right: 1px solid #0b1d2b;
+}
+.guide-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px;
+  font-size: 19px;
+  font-weight: 700;
+}
+.guide-brand svg { color: var(--gold); }
+.guide-contents h2 {
+  margin: 38px 10px 12px;
+  color: #bfcbd4;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .11em;
+  text-transform: uppercase;
+}
+.guide-contents button {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  border-left: 2px solid transparent;
+  border-radius: 5px;
+  padding: 9px 10px;
+  text-align: left;
+  font-size: 14px;
+  line-height: 1.35;
+}
+.guide-contents button:hover,
+.guide-contents button[aria-current] { background: #ffffff17; }
+.guide-contents button[aria-current] { color: var(--gold); border-color: var(--gold); }
+.guide-contents .guide-notes { margin-top: 14px; }
+.guide-chapter-select { display: none; }
+.guide-paper {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  background: linear-gradient(90deg, #ab886624, transparent 26px), var(--paper);
+}
+.guide-toolbar,
+.guide-pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 9px clamp(18px, 4vw, 58px);
+  color: var(--muted);
+  font-size: 13px;
+}
+.guide-toolbar { border-bottom: 1px solid var(--rule); }
+.guide-pagination { border-top: 1px solid var(--rule); font-variant-numeric: tabular-nums; }
+.guide-pagination button,
+.guide-close {
+  min-height: 38px;
+  border-radius: 8px;
+  padding: 0 10px;
+  color: var(--ink);
+}
+.guide-pagination button:disabled { opacity: .35; }
+.guide-pagination button:hover:not(:disabled),
+.guide-close:hover { background: #b9986330; }
+.guide-close { display: grid; min-width: 38px; place-items: center; }
+.guide-book :is(button, a, select):focus-visible { outline: 2px solid #b87927; outline-offset: 2px; }
+.guide-scroll { overflow: auto; overscroll-behavior: contain; }
+.guide-page {
+  max-width: 880px;
+  margin: auto;
+  padding: clamp(20px, 4vw, 52px) clamp(18px, 5vw, 68px) 42px;
+  animation: guide-leaf .32s ease-out both;
+  transform-origin: 0 50%;
+  font-size: 15px;
+  line-height: 1.7;
+}
+.guide-page h1,
+.guide-page :is(h3, h4, h5) {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-weight: 700;
+  line-height: 1.18;
+}
+.guide-page h1 { font-size: clamp(30px, 4vw, 54px); margin: 0 0 22px; }
+.guide-page h1:focus { outline: none; }
+.guide-page :is(h3, h4, h5) { font-size: 25px; margin-top: 25px; }
+.guide-page a { color: #235a78; text-underline-offset: .15em; }
+.guide-page blockquote { border-color: #b87927; color: var(--muted); }
+.guide-page code:not(pre code) { background: #00000009; }
+.guide-page table { font-size: .9em; border-color: var(--rule); }
+.guide-page th { background: #f2eadb; }
+.guide-page :is(th, td) { padding: 8px 10px; border-color: var(--rule); }
+.guide-page tr { border-color: var(--rule); }
+.guide-figure {
+  display: block;
+  position: relative;
+  width: 100%;
+  margin: 16px 0;
+  padding: 5px;
+  border: 1px solid #d5c5ad;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 4px 14px #44311714;
+  cursor: zoom-in;
+}
+.guide-figure img { width: 100%; height: auto; border-radius: 5px; }
+.guide-figure span {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  padding: 8px;
+  border-radius: 6px;
+  background: #142838;
+  color: white;
+}
+.guide-version { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; font-weight: 600; }
+.guide-version select { border: 1px solid #baaa91; background: #fff; padding: 5px 8px; border-radius: 6px; }
+.guide-zoom {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  padding: 50px 12px 12px;
+  background: #101b2aee;
+  animation: guide-fade .18s ease both;
+}
+.guide-zoom-image { height: 100%; display: grid; place-items: center; overflow: auto; }
+.guide-zoom img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.guide-zoom .guide-close { position: absolute; top: 8px; right: 10px; color: white; }
+
+@keyframes guide-open {
+  from { opacity: 0; transform: perspective(1600px) rotateY(-22deg) translateX(-24px) scale(.93); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes guide-leaf {
+  from { opacity: 0; transform: perspective(1300px) rotateY(-6deg) translateX(-8px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes guide-fade { from { opacity: 0; } to { opacity: 1; } }
+
+@media (max-width: 680px) {
+  .guide-book { width: calc(100vw - 16px); height: calc(100dvh - 24px); }
+  .guide-layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .guide-contents { padding: 8px 12px; border-right: none; }
+  .guide-contents :is(.guide-brand, h2, button) { display: none; }
+  .guide-chapter-select {
+    display: block;
+    width: 100%;
+    min-height: 38px;
+    padding: 6px 10px;
+    border: 1px solid #ffffff38;
+    border-radius: 6px;
+    color: #fff;
+    background: var(--nav);
+  }
+  .guide-paper { background: var(--paper); }
+  .guide-zoom-image { display: block; }
+  .guide-zoom img { width: 860px; max-width: none; max-height: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .guide-book, .guide-book::backdrop, .guide-page, .guide-zoom { animation: none; }
+}

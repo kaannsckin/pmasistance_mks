@@ -74,6 +74,7 @@ import RoadmapView from './components/RoadmapView';
 import SettingsModal from './components/SettingsModal';
 import NotesView from './components/NotesView';
 import AboutModal from './components/AboutModal';
+import UserGuide from './components/UserGuide';
 import AboutSheet from './components/modern/AboutSheet';
 import CustomerRequestsView from './components/CustomerRequestsView';
 import AIAssistant from './components/AIAssistant';
@@ -212,6 +213,7 @@ const App: React.FC = () => {
   const [isTeamsModalOpen, setIsTeamsModalOpen] = useState(false);
   const [teamsTask, setTeamsTask] = useState<Task | null>(null);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [isUserGuideOpen, setIsUserGuideOpen] = useState(false);
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
   const [isCloudModalOpen, setIsCloudModalOpen] = useState(false);
   const [viewingPersonId, setViewingPersonId] = useState<string | null>(null);
@@ -3196,8 +3198,7 @@ const App: React.FC = () => {
             onOpenHealth={canDataHealth ? () => setIsHealthModalOpen(true) : undefined}
             onOpenAudit={canAudit ? () => setIsAuditModalOpen(true) : undefined}
             onOpenAbout={() => setIsAboutModalOpen(true)}
-            onLogoLaunch={() => setCurrentView(inProjectView ? View.Dashboard : View.Portfolio)}
-            onHyperdrive={() => setEgg({ kind: 'hyper' })}
+            onOpenGuide={() => setIsUserGuideOpen(true)}
             collapsed={isSidebarCollapsed}
             onToggleCollapsed={toggleSidebarCollapsed}
           />
@@ -3240,6 +3241,7 @@ const App: React.FC = () => {
         <>
         <Header
           currentView={currentView} setCurrentView={setCurrentView}
+          onOpenGuide={() => setIsUserGuideOpen(true)}
           onOpenSettings={() => setIsSettingsModalOpen(true)}
           onSaveProject={canBackup ? handleSaveProject : undefined}
           onLoadProject={canBackup ? handleLoadProject : undefined}
@@ -3436,6 +3438,7 @@ const App: React.FC = () => {
           onExpand={activeProject ? () => setCurrentView(View.AI) : undefined}
         />
       )}
+      {isUserGuideOpen && <UserGuide onClose={() => setIsUserGuideOpen(false)} />}
       {egg?.kind === 'hyper' && <HyperdriveOverlay onDone={() => setEgg(null)} />}
       {egg?.kind === 'space' && <SpaceMode onDone={() => setEgg(null)} />}
       {egg?.kind === 'celebrate' && <Celebration message={egg.message} onDone={() => setEgg(null)} />}
