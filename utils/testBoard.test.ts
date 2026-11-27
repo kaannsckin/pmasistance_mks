@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { TestBoardItem } from '../types';
+import { buildTestReport, reportHtml, reportMarkdown, testHealth } from './testReport';
 import {
-    columnOf, defaultTestSettings, distributeItems, lastWeekClose, makeSnapshot, reportText, ruleContext, snapshotDue, weekIdOf, weekReport, withSnapshot,
+    columnOf, defaultTestSettings, distributeItems, lastWeekClose, makeSnapshot, ruleContext, snapshotDue, weekIdOf, weekReport, withSnapshot,
 } from './testBoard';
 
 const ctx = ruleContext(
@@ -71,7 +72,7 @@ describe('haftalık rapor', () => {
         const prevItems = [item('A', { status: 'Resolved', category: 'indeterminate', assignee: 'Vedat Kaya' }), item('B', { status: 'Resolved', assignee: 'Vedat Kaya' })];
         const prev = makeSnapshot(settings, prevItems, ctx, new Date('2026-11-20T17:00:00Z'), { week: '2026-W47' });
         const items = [
-            item('A', { status: 'Closed', category: 'done', created: '2026-11-01T00:00:00Z', transitions: [{ at: '2026-11-24T10:00:00Z', from: 'Resolved', to: 'Closed', fc: 'indeterminate', tc: 'done' }] }),
+            item('A', { status: 'Closed', category: 'done', created: '2026-11-01T00:00:00Z', transitions: [{ at: '2026-11-24T10:00:00Z', by: 'Ayşe Test', from: 'Resolved', to: 'Closed', fc: 'indeterminate', tc: 'done' }] }),
             item('B', { status: 'Resolved', category: 'indeterminate', assignee: 'Vedat Kaya', created: '2026-11-01T00:00:00Z', transitions: [{ at: '2026-11-18T10:00:00Z', from: 'Open', to: 'Resolved', fc: 'new', tc: 'indeterminate' }] }),
             item('C', { priority: 'Blocker', created: '2026-11-23T09:00:00Z' }),
             item('D', { priority: 'Medium', reporter: 'Can Dev', created: '2026-11-25T09:00:00Z' }),
@@ -87,11 +88,92 @@ describe('haftalık rapor', () => {
         expect(r.newChanges.map(x => x.key)).toEqual(['E']);
         expect(r.reopened.map(x => x.key)).toEqual(['F']);
         expect(r.columns.find(c => c.id === 'waiting')).toMatchObject({ now: 1, before: 2 });
-        expect(r.waiting).toEqual([{ key: 'B', name: 'Kayıt B', days: 9 }]);
-        const text = reportText(r, 'GİB');
-        expect(text).toContain('48. hafta test raporu');
-        expect(text).toContain('• Test edilip onaylanan: 1 madde (A)');
-        expect(text).toContain('• Açılan hata: 2 (Engelleyici 1, Orta 1); 1 tanesi test ekibinden');
-        expect(text).toContain('• Test bekliyor: 1 (geçen hafta 2, -1); en uzun bekleyen B 9 gün');
+        expect(r.waiting).toEqual([{ key: 'B', name: 'Kayıt B', days: 9, assignee: 'Vedat Kaya' }]);
+        expect(r.openBugs.map(b => [b.key, b.priority])).toEqual([['C', 'Blocker'], ['B', 'High'], ['F', 'High'], ['D', 'Medium']]);
+        expect([r.openBugsBefore, r.total, r.testerRoleDefined, r.reporterMissing]).toEqual([2, 6, true, 0]);
+        expect(testHealth(r)).toEqual({ level: 'Riskli', reason: '1 engelleyici öncelikli hata açık.' });
+
+        // Haftalık değişim ve kişiler
+        expect([r.remaining, r.remainingBefore, r.approvedTotal, r.approvedTotalBefore, r.queue, r.queueBefore, r.criticalBefore]).toEqual([5, 2, 1, 0, 1, 2, 2]);
+        expect(r.newByType).toEqual([{ type: 'Bug', n: 2 }, { type: 'Change Request', n: 1 }]);
+        expect(r.closers).toEqual([{ name: 'Ayşe Test', n: 1 }]); // A'yı Jira'da kapatan (geçiş yazarı)
+        expect(r.closersFromHistory).toBe(1);
+        expect(r.bugReporters).toEqual([{ name: 'Ayşe Test', n: 1, critical: 1 }, { name: 'Can Dev', n: 1, critical: 0 }]);
+        expect(r.openByAssignee[0]).toEqual({ name: 'Can Dev', n: 3, critical: 2 });
+
+        const meta = { project: 'GİB', filter: 'gib_testset', generatedAt: '2026-11-27T17:00:00Z' };
+        const exec = buildTestReport(r, meta, 'executive');
+        expect(exec.title).toBe('GİB · Test Durumu — Yönetici Özeti');
+        expect(exec.subtitle).toBe('48. Hafta · 20 Kasım – 27 Kasım 2026');
+        const md = reportMarkdown(exec);
+        expect(md).toContain('## GİB · Test Durumu — Yönetici Özeti');
+        expect(md).toContain('> 🔴 **Genel durum: Riskli** — 1 engelleyici öncelikli hata açık.');
+        expect(md).toContain('| Gösterge | Geçen hafta | Bu hafta | Değişim |\n| --- | ---: | ---: | ---: |');
+        expect(md).toContain('| Kalan test maddesi (onaylanmamış) | 2 | 5 | +3 |');
+        expect(md).toContain('| Toplam onaylanan (kümülatif) | 0 | 1 | +1 |');
+        expect(md).toContain('Bu hafta **3 kayıt** açıldı: **2 hata** (1 engelleyici, 1 orta), **1 değişiklik talebi**.');
+        expect(md).toContain('- **1 madde** test edilerek onaylandı; en çok kapatan **Ayşe Test** (1).');
+        expect(md).toContain('- **2 bug kaydı** açıldı; en çok kayıt açan **Ayşe Test** (1, 1 kritik).');
+        expect(md).toContain('### Haftanın kişileri');
+        expect(md).toContain('| En çok test maddesi kapatan | En çok bug kaydı açan (Reporter) |');
+        expect(md).toContain('| Ayşe Test (1) | Ayşe Test (1, 1 kritik) |');
+        expect(md).toContain('|   | Can Dev (1) |');
+        expect(md).not.toContain('Açık hataların sahibi');
+
+        const det = buildTestReport(r, meta, 'detailed');
+        const dmd = reportMarkdown(det);
+        expect(dmd).toContain('### 4. Kişiler');
+        expect(dmd).toContain('| En çok test maddesi kapatan (kapatan kişi) | Kapatılan |');
+        expect(dmd).toContain('| Ayşe Test | 1 |');
+        expect(dmd).toContain('| En çok bug kaydı açan (Reporter) | Açılan bug | Kritik |');
+        expect(dmd).toContain('| Açık hataların atananı (Assignee) | Açık hata | Kritik |');
+        expect(dmd).toContain('| Kayıt | Başlık | Öncelik | Durum | Kaydı açan | Atanan |');
+        expect(dmd).toContain('Tanımlar: kaydı açan = Jira\'da kaydı oluşturan kişi (Reporter)');
+
+        // Kapatanı bilinmeyen kayıt atanana yazılmaz; açanı bilinmeyen bug sayılmaz
+        const noHistory = items.map(i => (i.key === 'A' ? { ...i, assignee: 'Vedat Kaya', transitions: i.transitions.map(t => ({ ...t, by: undefined })) } : i.key === 'D' ? { ...i, reporter: '' } : i));
+        const r2 = weekReport(makeSnapshot(settings, noHistory, ctx, new Date('2026-11-27T17:00:00Z'), { week: '2026-W48' }), prev, noHistory, ctx);
+        expect(r2.closers).toEqual([]);
+        expect(r2.closersFromHistory).toBe(0);
+        expect(r2.bugReporters).toEqual([{ name: 'Ayşe Test', n: 1, critical: 1 }]);
+        const md2 = reportMarkdown(buildTestReport(r2, meta, 'executive'));
+        expect(md2).not.toContain('Vedat Kaya (1)');
+        expect(md2).toContain('1 onaylanan kaydı Jira\'da kimin kapattığı okunamadı');
+        expect(md2).toContain('1 bug kaydını kimin açtığı Jira\'dan gelmedi');
+        expect(dmd).toContain('### 5. Açık kritik hatalar');
+        expect(dmd).toContain('| C | Kayıt C | Engelleyici | Open | Can Dev |');
+        // Hücre içi | kaçışlı; HTML'de Jira metni kaçışlı, **kalın** korunur
+        const evil = { ...det, blocks: [{ kind: 'table' as const, table: { columns: ['Kayıt', 'Başlık'], rows: [['A', 'a|b <img src=x onerror=alert(1)>']], more: 0 } }, { kind: 'p' as const, text: '**kalın** <b>x</b>' }] };
+        expect(reportMarkdown(evil)).toContain('| A | a\\|b <img src=x onerror=alert(1)> |');
+        const html = reportHtml(evil);
+        expect(html).toContain('a|b &lt;img src=x onerror=alert(1)&gt;');
+        expect(html).toContain('<b>kalın</b> &lt;b&gt;x&lt;/b&gt;');
+        expect(html).not.toContain('<img');
+
+        // Test rolü tanımsız: test ekibi Jira geçmişinden (onaylayan / yeniden açan) bulunur
+        const noRole = ruleContext({ roleMembers: {}, components: [] }, []);
+        const bare = weekReport(cur, undefined, items, noRole);
+        expect([bare.testerSource, bare.testers, bare.bugsFromTesters]).toEqual(['history', ['Ayşe Test'], 1]);
+        const d2 = reportMarkdown(buildTestReport(bare, { project: 'GİB' }, 'detailed'));
+        expect(d2).toContain('Açılan hataların **1** tanesi test ekibince bildirildi.');
+        expect(d2).toContain('Test ekibi Jira geçmişinden belirlendi (kayıt onaylayan ya da yeniden açan kişiler): Ayşe Test.');
+        expect(d2).toContain('Önceki haftanın görüntüsü bulunmadığından');
+        expect(d2).toContain('| Kalan test maddesi (onaylanmamış) | — | 5 | — |');
+        // Kişi bazında aktivite: onaylama, yeniden açma (geçiş yazarı) ve açılan bug
+        expect(r.activity).toEqual([
+            { name: 'Ayşe Test', approved: 1, reopened: 0, bugs: 1, critical: 1 },
+            { name: 'Can Dev', approved: 0, reopened: 0, bugs: 1, critical: 0 },
+        ]);
+        expect(dmd).toContain('| Kişi bazında test aktivitesi | Onayladı (kapattı) | Yeniden açtı | Bug açtı | Kritik bug |');
+        const withReopener = items.map(i => (i.key === 'F' ? { ...i, transitions: i.transitions.map(t => ({ ...t, by: 'Mert Ok' })) } : i));
+        const r3 = weekReport(makeSnapshot(settings, withReopener, ctx, new Date('2026-11-27T17:00:00Z'), { week: '2026-W48' }), prev, withReopener, ctx);
+        expect(r3.rejectors).toEqual([{ name: 'Mert Ok', n: 1 }]);
+        expect(reportMarkdown(buildTestReport(r3, meta, 'executive'))).toContain('; en çok yeniden açan **Mert Ok** (1);');
+        // Ne rol ne geçiş yazarı: test ekibi belirlenemez, sayı yerine not
+        const none = weekReport(makeSnapshot(settings, noHistory, noRole, new Date('2026-11-27T17:00:00Z'), { week: '2026-W48' }), undefined, noHistory, noRole);
+        expect(none.testerSource).toBe('none');
+        const d3 = reportMarkdown(buildTestReport(none, { project: 'GİB' }, 'detailed'));
+        expect(d3).not.toContain('test ekibince bildirildi');
+        expect(d3).toContain('Test ekibi belirlenemedi');
     });
 });

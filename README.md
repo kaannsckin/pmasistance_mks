@@ -20,6 +20,12 @@ PERT ve Bulanık PERT ile görev planlama · çoklu proje portföyü · adam/ay 
 
 ---
 
+## Kullanım kılavuzu
+
+Projenin hangi ihtiyaçları karşıladığını ve günlük iş akışlarını modern arayüzden alınmış ekran görüntüleriyle keşfedin. [PlanAsistan Kullanım Kılavuzu](docs/kullanim/README.md)
+
+---
+
 ## 📑 İçindekiler
 
 1. [Bir bakışta](#-bir-bakışta)

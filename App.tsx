@@ -74,6 +74,7 @@ import RoadmapView from './components/RoadmapView';
 import SettingsModal from './components/SettingsModal';
 import NotesView from './components/NotesView';
 import AboutModal from './components/AboutModal';
+import UserGuide from './components/UserGuide';
 import AboutSheet from './components/modern/AboutSheet';
 import CustomerRequestsView from './components/CustomerRequestsView';
 import AIAssistant from './components/AIAssistant';
@@ -117,7 +118,9 @@ import { appendModelEval } from './utils/planning/ml/estimateModel';
 import { JiraImportOptions, mergeJiraIssues } from './utils/planning/jiraImport';
 import { linkJiraKeys } from './utils/planning/jiraExport';
 import { departmentLeadIds } from './utils/staffing';
-import { applyJiraSync, JiraPushOutcome, pullIssueIntoTasks, runFullSync, sourceLabel, writeSyncState } from './utils/planning/jiraSync';
+import { applyJiraSync, hasSyncWork, JiraPushOutcome, pullIssueIntoTasks, readSyncState, runFullSync, sourceLabel, writeSyncState } from './utils/planning/jiraSync';
+import { syncProjectNow } from './components/modern/planning/syncNow';
+import { relativeTime } from './utils/recentChanges';
 import { markPushed } from './utils/planning/jiraFieldSync';
 import { ensureJiraPeople } from './utils/planning/jiraPeople';
 import { reportEvmSnapshot } from './utils/evm';
@@ -210,6 +213,7 @@ const App: React.FC = () => {
   const [isTeamsModalOpen, setIsTeamsModalOpen] = useState(false);
   const [teamsTask, setTeamsTask] = useState<Task | null>(null);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [isUserGuideOpen, setIsUserGuideOpen] = useState(false);
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
   const [isCloudModalOpen, setIsCloudModalOpen] = useState(false);
   const [viewingPersonId, setViewingPersonId] = useState<string | null>(null);
@@ -2519,6 +2523,10 @@ const App: React.FC = () => {
         onNewTask={newTask}
         onCelebrate={celebrate}
         sprintNames={ps.sprintNames || {}}
+        onJiraSync={canEditProjectContent(workspace, identity, activeProject.id) && hasSyncWork(activeProject)
+          ? () => { const p = workspaceRef.current?.projects.find(x => x.id === activeProject.id); return p ? syncProjectNow(p, handleApplyJiraSync, 'pano') : Promise.reject(new Error('Proje bulunamadı.')); }
+          : undefined}
+        jiraSyncHint={(() => { const st = readSyncState(activeProject.id); return st ? `son eşitleme ${relativeTime(st.at)}${st.ok ? '' : ' (hata)'}` : undefined; })()}
         me={boardMe}
         wpNames={new Map(activeProject.workPackages.map(w => [w.id, w.name]))}
         minPriority={roleView.minTaskPriority}
@@ -3191,8 +3199,7 @@ const App: React.FC = () => {
             onOpenHealth={canDataHealth ? () => setIsHealthModalOpen(true) : undefined}
             onOpenAudit={canAudit ? () => setIsAuditModalOpen(true) : undefined}
             onOpenAbout={() => setIsAboutModalOpen(true)}
-            onLogoLaunch={() => setCurrentView(inProjectView ? View.Dashboard : View.Portfolio)}
-            onHyperdrive={() => setEgg({ kind: 'hyper' })}
+            onOpenGuide={() => setIsUserGuideOpen(true)}
             collapsed={isSidebarCollapsed}
             onToggleCollapsed={toggleSidebarCollapsed}
           />
@@ -3235,6 +3242,7 @@ const App: React.FC = () => {
         <>
         <Header
           currentView={currentView} setCurrentView={setCurrentView}
+          onOpenGuide={() => setIsUserGuideOpen(true)}
           onOpenSettings={() => setIsSettingsModalOpen(true)}
           onSaveProject={canBackup ? handleSaveProject : undefined}
           onLoadProject={canBackup ? handleLoadProject : undefined}
@@ -3431,6 +3439,7 @@ const App: React.FC = () => {
           onExpand={activeProject ? () => setCurrentView(View.AI) : undefined}
         />
       )}
+      {isUserGuideOpen && <UserGuide onClose={() => setIsUserGuideOpen(false)} />}
       {egg?.kind === 'hyper' && <HyperdriveOverlay onDone={() => setEgg(null)} />}
       {egg?.kind === 'space' && <SpaceMode onDone={() => setEgg(null)} />}
       {egg?.kind === 'celebrate' && <Celebration message={egg.message} onDone={() => setEgg(null)} />}

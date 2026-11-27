@@ -69,7 +69,7 @@ export const itemFromIssue = (i: JiraIssueRecord): TestBoardItem => ({
     ...(i.resolved ? { resolved: i.resolved } : {}),
     ...(i.updated ? { updated: i.updated } : {}),
     ...(i.parentKey ? { parentKey: i.parentKey } : {}),
-    transitions: i.transitions.slice(-MAX_TRANSITIONS).map(t => ({ at: t.at, from: t.from, to: t.to, fc: t.fromCategory, tc: t.toCategory })),
+    transitions: i.transitions.slice(-MAX_TRANSITIONS).map(t => ({ at: t.at, ...(t.by ? { by: t.by } : {}), from: t.from, to: t.to, fc: t.fromCategory, tc: t.toCategory })),
 });
 
 // ---------------------------------------------------------------- kurallar
@@ -242,7 +242,52 @@ export interface TestWeekReport {
     columns: { id: string; name: string; meaning?: TestColumnMeaning; now: number; before: number | null }[];
     unmatched: number;
     /** Test bekleyenler, en uzun bekleyen önce (gün) */
-    waiting: { key: string; name: string; days: number | null }[];
+    waiting: { key: string; name: string; days: number | null; assignee: string }[];
+    /** Testte olanlar, en uzun süredir testte olan önce */
+    testing: { key: string; name: string; days: number | null; assignee: string }[];
+    /** Görüntü anında açık (onaylanmamış) hata kayıtları, en kritik önce */
+    openBugs: { key: string; name: string; priority: 'Blocker' | 'High' | 'Medium' | 'Low'; status: string; assignee: string }[];
+    /** Önceki görüntüde açık hata sayısı */
+    openBugsBefore: number | null;
+    /** Görüntüdeki toplam kayıt */
+    total: number;
+    /** Test ekibi biliniyor mu (Test rolü ya da Jira geçmişinden): değilse "test ekibinden" sayısı anlamsızdır */
+    testerRoleDefined: boolean;
+    /** Test ekibinin kaynağı: projedeki Test rolü, Jira geçmişi (onaylayan / yeniden açan kişiler) ya da bilinmiyor */
+    testerSource: 'role' | 'history' | 'none';
+    /** Jira geçmişinden belirlenen test ekibi (kayıt onaylayan ya da yeniden açan kişiler) */
+    testers: string[];
+    /** Dönemde kayıt yeniden açan (testi reddeden) kişiler, en çok önce */
+    rejectors: { name: string; n: number }[];
+    /** Kişi bazında dönem aktivitesi (Jira geçmişinden): onayladığı, yeniden açtığı, açtığı bug ve kritik bug */
+    activity: { name: string; approved: number; reopened: number; bugs: number; critical: number }[];
+    /** Açan bilgisi gelmeyen yeni hata (eski sunucu ya da gizli alan) */
+    reporterMissing: number;
+    /** Kalan (onaylanmamış) madde: bu görüntü / önceki */
+    remaining: number;
+    remainingBefore: number | null;
+    /** Toplam onaylanan (kümülatif): bu görüntü / önceki */
+    approvedTotal: number;
+    approvedTotalBefore: number | null;
+    /** Test kuyruğu (testte + test bekleyen): bu görüntü / önceki */
+    queue: number;
+    queueBefore: number | null;
+    /** Kritik açık hata (engelleyici + yüksek): önceki görüntüde */
+    criticalBefore: number | null;
+    /** Dönemde açılan tüm kayıtlar (tür adına göre, en çok önce) */
+    newByType: { type: string; n: number }[];
+    /**
+     * Dönemde onaylananları kapatan kişiler, en çok önce. Kapatan, Jira'da kaydı
+     * tamamlandı durumuna geçiren kişidir (değişiklik geçmişinin yazarı); atanan
+     * DEĞİLDİR. Kapatanı bilinmeyen kayıt bu listeye girmez.
+     */
+    closers: { name: string; n: number }[];
+    /** Kapatanı Jira geçmişinden okunabilen onaylanan kayıt sayısı */
+    closersFromHistory: number;
+    /** Dönemde bug kaydı açan kişiler (Jira Reporter; atanan değil): toplam ve kritik, en çok önce */
+    bugReporters: { name: string; n: number; critical: number }[];
+    /** Açık hataların atananlara dağılımı: toplam ve kritik, en çok önce */
+    openByAssignee: { name: string; n: number; critical: number }[];
 }
 
 const DAY = 86_400_000;
@@ -255,6 +300,8 @@ const enteredStatusAt = (i: TestBoardItem | undefined, status: string, at: numbe
     return Number.isFinite(ts) ? ts : null;
 };
 
+const REOPEN = /reopen|yeniden a[cç]/i;
+
 export const weekReport = (cur: TestSnapshot, prev: TestSnapshot | undefined, items: TestBoardItem[], ctx: TestRuleContext): TestWeekReport => {
     const to = Date.parse(cur.at);
     const from = prev ? Date.parse(prev.at) : to - 7 * DAY;
@@ -266,14 +313,64 @@ export const weekReport = (cur: TestSnapshot, prev: TestSnapshot | undefined, it
     const createdIn = (kind: string) => items.filter(i => kindOfJiraType(i.type) === kind && within(i.created, from, to));
     const newBugs = createdIn('bug');
     const prio = (['Blocker', 'High', 'Medium', 'Low'] as const).map(p => ({ priority: p, n: newBugs.filter(b => mapJiraPriority(b.priority) === p).length }));
-    const testers = newBugs.filter(b => conditionMatches({ field: 'reporterRole', values: ['test'] }, b, ctx) && !!b.reporter).length;
+    // Test ekibi: Test rolü tanımlıysa o; değilse Jira geçmişinde kayıt onaylayan (tamamlandıya geçiren)
+    // ya da yeniden açan kişiler. Böylece rol elle doldurulmadan da "test ekibinin açtığı hata" bulunur.
+    const isApprove = (t: TestBoardItem['transitions'][number]) => t.fc !== 'done' && t.tc === 'done';
+    const isReject = (t: TestBoardItem['transitions'][number]) => (t.fc === 'done' && t.tc !== 'done') || (REOPEN.test(t.to) && !REOPEN.test(t.from));
+    const historyTesters = [...new Set(items.flatMap(i => i.transitions.filter(t => t.by && (isApprove(t) || isReject(t))).map(t => t.by!.trim())))].sort((a, b) => a.localeCompare(b, 'tr'));
+    const roleDefined = (ctx.roleMembers.test || []).length > 0;
+    const testerSource: TestWeekReport['testerSource'] = roleDefined ? 'role' : historyTesters.length ? 'history' : 'none';
+    const testerSet = new Set(historyTesters.map(x => norm(x)));
+    const isTester = (name: string) => (roleDefined ? rolesOf(name, ctx).includes('test') : testerSet.has(norm(name)));
+    const testers = newBugs.filter(b => !!b.reporter && isTester(b.reporter)).length;
+    // Dönem içi geçişler: onaylayan ve yeniden açan
+    const events = items.flatMap(i => i.transitions.filter(t => t.by && within(t.at, from, to)).map(t => ({ i, t })));
     const reopened = items.filter(i => reopenedAt(i).some(at => within(at, from, to)));
     const count = (s: TestSnapshot | undefined, id: string) => (s ? s.rows.filter(r => r.c === id).length : null);
-    const waiting = cur.rows.filter(r => meaning.get(r.c) === 'waiting').map(r => {
+    const queue = (m: TestColumnMeaning) => cur.rows.filter(r => meaning.get(r.c) === m).map(r => {
         const since = enteredStatusAt(byKey.get(r.k), r.s, to);
-        return { key: r.k, name: r.n, days: since === null ? null : Math.max(0, Math.floor((to - since) / DAY)) };
+        return { key: r.k, name: r.n, days: since === null ? null : Math.max(0, Math.floor((to - since) / DAY)), assignee: r.a };
     }).sort((a, b) => (b.days ?? -1) - (a.days ?? -1));
+    const RANK = { Blocker: 0, High: 1, Medium: 2, Low: 3 } as const;
+    // Açık hata: hata türünde ve onaylananlar kolonunda değil (güncel görüntüde Jira'da kapanmış olanlar da sayılmaz)
+    const openOf = (snap: TestSnapshot, mean: Map<string, TestColumnMeaning | undefined>) => snap.rows.filter(r =>
+        kindOfJiraType(r.t) === 'bug' && mean.get(r.c) !== 'approved' && (snap !== cur || byKey.get(r.k)?.category !== 'done'));
+    const openBugs = openOf(cur, meaning)
+        .map(r => ({ key: r.k, name: r.n, priority: mapJiraPriority(r.p), status: r.s, assignee: r.a }))
+        .sort((a, b) => RANK[a.priority] - RANK[b.priority] || a.key.localeCompare(b.key, 'tr', { numeric: true }));
+    const prevMean = prevMeaning;
+    const notApproved = (snap: TestSnapshot, mean: Map<string, TestColumnMeaning | undefined>) => snap.rows.filter(r => mean.get(r.c) !== 'approved').length;
+    const inQueue = (snap: TestSnapshot, mean: Map<string, TestColumnMeaning | undefined>) => snap.rows.filter(r => mean.get(r.c) === 'testing' || mean.get(r.c) === 'waiting').length;
+    const critOf = (rows: { priority: string }[]) => rows.filter(b => b.priority === 'Blocker' || b.priority === 'High').length;
+    const tally = <T,>(list: T[], key: (x: T) => string, crit?: (x: T) => boolean) => {
+        const m = new Map<string, { name: string; n: number; critical: number }>();
+        list.forEach(x => { const k = key(x).trim() || 'Atanmamış'; const e = m.get(k) || { name: k, n: 0, critical: 0 }; e.n++; if (crit?.(x)) e.critical++; m.set(k, e); });
+        return [...m.values()].sort((a, b) => b.n - a.n || b.critical - a.critical || a.name.localeCompare(b.name, 'tr'));
+    };
+    // Kapatan: tamamlandı kategorisine geçişi yapan kişi (Jira geçmişi). Atanan kullanılmaz:
+    // atanan kaydın sahibidir, kapatan değil; bilinmeyen kapatan sayılmaz, raporda not düşülür.
+    const closerOf = (r: TestSnapshotRow) =>
+        [...(byKey.get(r.k)?.transitions || [])].reverse().find(x => x.tc === 'done' && x.fc !== 'done' && Date.parse(x.at) <= to && !!x.by)?.by || '';
+    const known = approved.map(r => closerOf(r)).filter(Boolean);
+    const fromHistory = known.length;
+    const closers = tally(known, x => x).map(({ name, n }) => ({ name, n }));
+    const types = new Map<string, number>();
+    items.filter(i => within(i.created, from, to)).forEach(i => types.set(i.type || 'Türsüz', (types.get(i.type || 'Türsüz') || 0) + 1));
+    const prevOpen = prev ? openOf(prev, prevMean) : null;
     return {
+        remaining: notApproved(cur, meaning),
+        remainingBefore: prev ? notApproved(prev, prevMean) : null,
+        approvedTotal: cur.rows.length - notApproved(cur, meaning),
+        approvedTotalBefore: prev ? prev.rows.length - notApproved(prev, prevMean) : null,
+        queue: inQueue(cur, meaning),
+        queueBefore: prev ? inQueue(prev, prevMean) : null,
+        criticalBefore: prevOpen ? critOf(prevOpen.map(r => ({ priority: mapJiraPriority(r.p) }))) : null,
+        newByType: [...types].map(([type, n]) => ({ type, n })).sort((a, b) => b.n - a.n),
+        closers,
+        closersFromHistory: fromHistory,
+        // Açan (Reporter) bilinmeyen kayıt sayılmaz; atanan açan yerine kullanılmaz
+        bugReporters: tally(newBugs.filter(b => b.reporter.trim()), b => b.reporter, b => ['Blocker', 'High'].includes(mapJiraPriority(b.priority))),
+        openByAssignee: tally(openBugs, b => b.assignee, b => b.priority === 'Blocker' || b.priority === 'High'),
         week: cur.week,
         from: new Date(from).toISOString(),
         to: cur.at,
@@ -286,29 +383,22 @@ export const weekReport = (cur: TestSnapshot, prev: TestSnapshot | undefined, it
         reopened,
         columns: cur.columns.map(c => ({ ...c, now: count(cur, c.id)!, before: prev ? count(prev, c.id) : null })),
         unmatched: count(cur, '')!,
-        waiting,
+        waiting: queue('waiting'),
+        testing: queue('testing'),
+        openBugs,
+        openBugsBefore: prev ? openOf(prev, prevMeaning).length : null,
+        total: cur.rows.length,
+        testerRoleDefined: testerSource !== 'none',
+        testerSource,
+        testers: historyTesters,
+        rejectors: tally(events.filter(e => isReject(e.t)).map(e => e.t.by!), x => x).map(({ name, n }) => ({ name, n })),
+        activity: (() => {
+            const m = new Map<string, { name: string; approved: number; reopened: number; bugs: number; critical: number }>();
+            const get = (name: string) => { const k = norm(name); if (!m.has(k)) m.set(k, { name: name.trim(), approved: 0, reopened: 0, bugs: 0, critical: 0 }); return m.get(k)!; };
+            events.forEach(e => { if (isApprove(e.t)) get(e.t.by!).approved++; else if (isReject(e.t)) get(e.t.by!).reopened++; });
+            newBugs.filter(b => b.reporter.trim()).forEach(b => { const x = get(b.reporter); x.bugs++; if (['Blocker', 'High'].includes(mapJiraPriority(b.priority))) x.critical++; });
+            return [...m.values()].sort((a, b) => (b.approved + b.reopened + b.bugs) - (a.approved + a.reopened + a.bugs) || a.name.localeCompare(b.name, 'tr'));
+        })(),
+        reporterMissing: newBugs.filter(b => !b.reporter).length,
     };
-};
-
-const PRIO_TR: Record<string, string> = { Blocker: 'Engelleyici', High: 'Yüksek', Medium: 'Orta', Low: 'Düşük' };
-const fmt = (iso: string) => new Date(iso).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', timeZone: 'Europe/Istanbul' });
-const delta = (now: number, before: number | null) => (before === null ? '' : now === before ? ' (değişmedi)' : ` (geçen hafta ${before}, ${now > before ? '+' : ''}${now - before})`);
-
-/** Kopyalanabilir rapor metni */
-export const reportText = (r: TestWeekReport, title: string): string => {
-    const lines = [
-        `${weekNumber(r.week)}. hafta test raporu · ${title} (${fmt(r.from)} – ${fmt(r.to)})`,
-        '',
-        `• Test edilip onaylanan: ${r.approved.length} madde${r.approved.length ? ` (${r.approved.slice(0, 15).map(x => x.k).join(', ')}${r.approved.length > 15 ? '…' : ''})` : ''}`,
-        `• Açılan hata: ${r.newBugs.length}${r.newBugs.length ? ` (${r.bugsByPriority.filter(p => p.n).map(p => `${PRIO_TR[p.priority]} ${p.n}`).join(', ')}); ${r.bugsFromTesters} tanesi test ekibinden` : ''}`,
-        `• Açılan değişiklik talebi: ${r.newChanges.length}${r.newChanges.length ? ` (${r.newChanges.slice(0, 10).map(x => x.key).join(', ')})` : ''}`,
-        `• Yeniden açılan: ${r.reopened.length}${r.reopened.length ? ` (${r.reopened.slice(0, 10).map(x => x.key).join(', ')})` : ''}`,
-        ...r.columns.filter(c => c.meaning === 'waiting').map(c => `• ${c.name}: ${c.now}${delta(c.now, c.before)}${r.waiting[0]?.days ? `; en uzun bekleyen ${r.waiting.slice(0, 3).filter(w => w.days !== null).map(w => `${w.key} ${w.days} gün`).join(', ')}` : ''}`),
-        '',
-        'Kolonlar:',
-        ...r.columns.map(c => `  ${c.name}: ${c.now}${delta(c.now, c.before)}`),
-        ...(r.unmatched ? [`  Eşleşmeyen: ${r.unmatched}`] : []),
-        ...(!r.hasPrevious ? ['', 'Not: Önceki haftanın görüntüsü yok; aralık son 7 gün sayıldı.'] : []),
-    ];
-    return lines.join('\n');
 };

@@ -5,9 +5,10 @@ import { issueKind } from '../../../utils/issueTypeMeta';
 import { mapJiraIssueType, mapJiraPriority } from '../../../utils/planning/jiraFields';
 import { relativeTime } from '../../../utils/recentChanges';
 import {
-    describeCondition, distributeItems, makeSnapshot, reportText, ruleContext, TestRuleContext, TestWeekReport, weekNumber, weekReport, withSnapshot,
+    describeCondition, distributeItems, makeSnapshot, ruleContext, TestRuleContext, TestWeekReport, weekNumber, weekReport, withSnapshot,
 } from '../../../utils/testBoard';
 import { fetchTestItems } from '../../../utils/testBoardFetch';
+import { buildTestReport, reportHtml, reportMarkdown } from '../../../utils/testReport';
 import { Icon } from '../icons';
 import IssueTypeChip from '../IssueTypeChip';
 import { initialsOf, PRIORITY_META } from '../taskMeta';
@@ -69,7 +70,7 @@ const TestCard: React.FC<{ i: TestBoardItem; done: boolean; tasks: Map<string, T
             {i.parentKey && <span className="flex items-center gap-1.5 text-[12px] m-text-3"><Icon name="subtask" size={12} />Üst görev <KeyRef k={i.parentKey} tasks={tasks} onViewTask={onViewTask} /></span>}
             <span className="flex items-center gap-2 text-[12px] m-text-3 w-full min-w-0">
                 {(prio === 'Blocker' || prio === 'High') && <span className={`inline-flex items-center gap-0.5 font-semibold flex-none ${pm.ink}`}><Icon name="flag" size={12} strokeWidth={2.2} />{pm.label}</span>}
-                {i.reporter && <span className="truncate" title={`Açan: ${i.reporter}`}>Açan: {i.reporter}</span>}
+                {i.reporter && <span className="truncate" title={`Kaydı açan (Reporter): ${i.reporter}`}>Kaydı açan: {i.reporter}</span>}
                 {i.assignee
                     ? <span title={`Atanan: ${i.assignee}`} aria-label={`Atanan: ${i.assignee}`} className="ml-auto w-7 h-7 rounded-full m-accent-bg flex items-center justify-center text-[11px] font-bold flex-none">{initialsOf(i.assignee)}</span>
                     : <span className="ml-auto w-7 h-7 rounded-full m-fill-2 m-text-3 flex items-center justify-center flex-none" title="Atanmamış"><Icon name="users" size={13} /></span>}
@@ -270,6 +271,7 @@ const TestReportView: React.FC<{ project: Project; items: TestBoardItem[]; weekl
     const sorted = useMemo(() => [...weekly].sort((a, b) => b.at.localeCompare(a.at)), [weekly]);
     const [pick, setPick] = useState<string>(sorted[0]?.id || 'live');
     const [copied, setCopied] = useState(false);
+    const [view, setView] = useState<'executive' | 'detailed' | 'overview'>('executive');
     const report: TestWeekReport | null = useMemo(() => {
         const settings = project.testBoard!.settings;
         if (pick === 'live') {
@@ -282,9 +284,44 @@ const TestReportView: React.FC<{ project: Project; items: TestBoardItem[]; weekl
         return weekReport(sorted[idx], sorted[idx + 1], items, ctx);
     }, [pick, sorted, items, ctx, project.testBoard]);
     const waitingCol = report?.columns.find(c => c.meaning === 'waiting');
+    const doc = useMemo(() => {
+        if (!report) return null;
+        const settings = project.testBoard!.settings;
+        return buildTestReport(report, { project: project.name, filter: settings.filterName || `#${settings.filterId}`, generatedAt: pick === 'live' ? new Date().toISOString() : report.to }, view === 'detailed' ? 'detailed' : 'executive');
+    }, [report, project.name, project.testBoard, pick, view]);
+    const html = useMemo(() => (doc ? reportHtml(doc) : ''), [doc]);
+    const md = useMemo(() => (doc ? reportMarkdown(doc) : ''), [doc]);
+    /** Kopyalama: biçimli (Teams, Outlook, Word tabloları korur) + Markdown düz metin; biçimli desteklenmezse yalnız Markdown */
     const copy = async () => {
-        if (!report) return;
-        try { await navigator.clipboard.writeText(reportText(report, project.name)); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { /* izin yok */ }
+        if (!doc) return;
+        const text = md;
+        try {
+            if (typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
+                await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([text], { type: 'text/plain' }) })]);
+            } else await navigator.clipboard.writeText(text);
+            setCopied(true); setTimeout(() => setCopied(false), 2000);
+        } catch {
+            try { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { /* izin yok */ }
+        }
+    };
+    const download = () => {
+        if (!doc) return;
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([md], { type: 'text/markdown;charset=utf-8' }));
+        a.download = `${project.name} ${doc.subtitle.split(' · ')[0]} ${doc.kind === 'executive' ? 'yonetici ozeti' : 'test raporu'}.md`.replace(/[\\/:*?"<>|]+/g, '-');
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    };
+    const print = () => {
+        if (!doc) return;
+        const w = window.open('', '_blank');
+        if (!w) return;
+        w.document.write(`<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>${doc.title.replace(/</g, '&lt;')} · ${doc.subtitle.replace(/</g, '&lt;')}</title><style>@page{margin:16mm}body{margin:24px}</style></head><body>${html}</body></html>`);
+        w.document.close();
+        w.focus();
+        w.print();
     };
     return (
         <div className="flex flex-col gap-3">
@@ -293,15 +330,31 @@ const TestReportView: React.FC<{ project: Project; items: TestBoardItem[]; weekl
                     <option value="live">Bu hafta (şu ana kadar)</option>
                     {sorted.map(s => <option key={s.id} value={s.id}>{weekNumber(s.week)}. hafta · {dateTime(s.at)}{s.late ? ' (geç alındı)' : ''}</option>)}
                 </select>
-                {report && <button type="button" className="m-btn m-btn-gray !min-h-[36px] !px-3 text-[14px]" onClick={copy}><Icon name={copied ? 'check' : 'copy'} size={15} />{copied ? 'Kopyalandı' : 'Metni kopyala'}</button>}
+                {report && (
+                    <div className="m-segmented" role="group" aria-label="Görünüm">
+                        <button type="button" className="m-segment" aria-pressed={view === 'executive'} onClick={() => setView('executive')}>Yönetici özeti</button>
+                        <button type="button" className="m-segment" aria-pressed={view === 'detailed'} onClick={() => setView('detailed')}>Detaylı rapor</button>
+                        <button type="button" className="m-segment" aria-pressed={view === 'overview'} onClick={() => setView('overview')}>Göstergeler</button>
+                    </div>
+                )}
+                {report && view !== 'overview' && <>
+                    <button type="button" className="m-btn m-btn-gray !min-h-[36px] !px-3 text-[14px]" onClick={copy} title="Teams, Outlook ya da Word'e tablolarıyla yapıştırılır; düz metin alan yerlere Markdown olarak gider"><Icon name={copied ? 'check' : 'copy'} size={15} />{copied ? 'Kopyalandı' : 'Kopyala'}</button>
+                    <button type="button" className="m-btn m-btn-gray !min-h-[36px] !px-3 text-[14px]" onClick={download} title="Markdown dosyası (.md) olarak indir"><Icon name="download" size={15} />.md indir</button>
+                    <button type="button" className="m-btn m-btn-gray !min-h-[36px] !px-3 text-[14px]" onClick={print} title="Yazdır ya da PDF olarak kaydet"><Icon name="printer" size={15} />Yazdır / PDF</button>
+                </>}
                 {report && <span className="text-[13px] m-text-3">{dateTime(report.from)} – {dateTime(report.to)}{report.hasPrevious ? '' : ' · önceki haftalık görüntü yok, son 7 gün sayıldı'}</span>}
             </div>
             {!report && <p className="m-0 py-6 text-center text-[15px] m-text-3">{weekly.length ? 'Seçilen görüntü bulunamadı.' : 'İlk haftalık görüntü Cuma 20:00\'de alınır. O zamana kadar "Bu hafta" raporu için önce Jira\'dan yenileyin.'}</p>}
-            {report && (
+            {report && view !== 'overview' && (
+                <div className="rounded-2xl px-6 py-5 overflow-x-auto" style={{ background: '#ffffff', border: '1px solid var(--m-sep, #e5e7eb)' }}
+                    // Rapor HTML'i uygulamanın ürettiği, tüm Jira metinleri kaçışlı (utils/testReport.ts › esc)
+                    dangerouslySetInnerHTML={{ __html: html }} />
+            )}
+            {report && view === 'overview' && (
                 <>
                     <div className="flex flex-wrap gap-3">
                         <Tile label="Test edilip onaylanan" value={report.approved.length} tone="m-ink-ok" />
-                        <Tile label="Açılan hata" value={report.newBugs.length} sub={`${report.bugsFromTesters} tanesi test ekibinden`} tone={report.newBugs.length ? 'm-ink-bad' : undefined} />
+                        <Tile label="Açılan hata" value={report.newBugs.length} sub={report.testerRoleDefined ? `${report.bugsFromTesters} tanesi test ekibinden${report.testerSource === 'history' ? ' (Jira geçmişine göre)' : ''}` : 'test ekibi belirlenemedi'} tone={report.newBugs.length ? 'm-ink-bad' : undefined} />
                         <Tile label="Açılan değişiklik talebi" value={report.newChanges.length} />
                         <Tile label="Yeniden açılan" value={report.reopened.length} tone={report.reopened.length ? 'm-ink-warn' : undefined} />
                         {waitingCol && <Tile label={waitingCol.name} value={waitingCol.now} sub={waitingCol.before === null ? undefined : `geçen hafta ${waitingCol.before} (${waitingCol.now - waitingCol.before >= 0 ? '+' : ''}${waitingCol.now - waitingCol.before})`} />}
@@ -371,7 +424,7 @@ const TestSnapshotsView: React.FC<{ snapshots: TestSnapshot[]; canEdit: boolean;
                                                 <span key={r.k} className={`m-surface ${kindClass(r.t)} rounded-lg px-2 py-1.5 flex flex-col gap-0.5`}>
                                                     <span className="flex items-center gap-1.5 text-[12px]"><IssueTypeChip t={typeView(r.t)} /><KeyRef k={r.k} tasks={tasks} onViewTask={onViewTask} /></span>
                                                     <span className="text-[13px] m-text leading-snug">{r.n}</span>
-                                                    <span className="text-[11.5px] m-text-3">{r.s}{r.a ? ` · ${r.a}` : ''}</span>
+                                                    <span className="text-[11.5px] m-text-3">{r.s}{r.a ? ` · Atanan: ${r.a}` : ''}</span>
                                                 </span>
                                             ))}
                                         </div>

@@ -1215,8 +1215,8 @@ export interface TestBoardItem {
   resolved?: string;
   updated?: string;
   parentKey?: string;
-  /** Durum geçişleri (en yeni sonda, en çok 30): at, from, to, kategoriler */
-  transitions: { at: string; from: string; to: string; fc: TestBoardItem['category']; tc: TestBoardItem['category'] }[];
+  /** Durum geçişleri (en yeni sonda, en çok 30): an, yapan kişi, from, to, kategoriler */
+  transitions: { at: string; by?: string; from: string; to: string; fc: TestBoardItem['category']; tc: TestBoardItem['category'] }[];
 }
 /** Anlık görüntüde bir kayıt: anahtar, kolon kimliği ('' eşleşmeyen), durum, öncelik, tür, atanan, başlık */
 export interface TestSnapshotRow { k: string; c: string; s: string; p: string; t: string; a: string; n: string }
