@@ -150,6 +150,9 @@ Panodaki **Asistan** düğmesi (alt araç çubuğu) ya da bir görsel seçiliyke
 **Ne yapabilir:**
 - Resim ve illüstrasyon (çiçek, bulut, kişi, cihaz, sahne …) için tek parça, renkli bir SVG çizimi ekler; çizim görsel olarak taşınır ve boyutlandırılır.
 - Küçük sembol ve süsleme için emoji öğe, organik kontur için dolgulu serbest yol çizer.
+- Akış şeması, süreç ve karar ağacını Mermaid olarak yazar; uygulama yerleşimi otomatik yapar (dagre) ve sonuç düzenlenebilir kutu ve oklardır. Desteklenen: `flowchart` / `graph` (TB, LR …), düğüm biçimleri `[işlem]`, `([başla/bitir])`, `{karar}`, `[(veri)]`, `[/girdi/]`, `{{hazırlık}}`, etiketli oklar, `subgraph` (bölüm olur).
+- Mimari, sistem ve kullanıcı yolculuğu çizimlerinde ikon kullanır: ~2000 Lucide ikonundan adıyla seçer (Türkçe ad da olur: "veri tabanı", "sunucu"), istenen renkte koyar, altına etiket yazar.
+- Bulamadığı ikonu, geçersiz SVG'yi ya da okunamayan şemayı özette bildirir.
 - Not, metin, şekil (dikdörtgen, elips, karar, üçgen, altıgen, paralelkenar, veri tabanı, blok ok, konuşma balonu, bulut, yıldız, kalp), bölüm, düz ya da kıvrımlı ok, işaretleme çerçevesi ve numara ekler. Renkler hazır paletten ya da serbest (#rrggbb).
 - Seçili notları taşıyarak gruplar. Silmez.
 
@@ -165,7 +168,8 @@ Panodaki **Asistan** düğmesi (alt araç çubuğu) ya da bir görsel seçiliyke
 
 ## Öğeler ve notlardan görev
 
-- Alt araç çubuğundaki **Öğeler** (ızgara simgesi) Canva'daki gibi bir panel açar: 12 şekil ve gruplanmış hazır çizimler (tepki, iş ve proje, insanlar, doğa, nesneler, semboller). Tıklanan öğe görünen alanın ortasına eklenir.
+- Alt araç çubuğundaki **Öğeler** (ızgara simgesi) Canva'daki gibi bir panel açar: 12 şekil, gruplanmış hazır çizimler (tepki, iş ve proje, insanlar, doğa, nesneler, semboller) ve aranabilir **İkonlar** (Lucide, renk seçilebilir). Tıklanan öğe görünen alanın ortasına eklenir.
+- İkon verisi ve şema yerleşimi yalnız ilk kullanıldığında yüklenir (ayrı parça).
 - Seçim çubuğundaki gökkuşağı daire serbest renk seçer (not, şekil, bölüm, metin, kalem).
 - Bir bağlantı seçiliyken **Kıvrımlı** / **Düz** ve **Ters kıvrım** ile çizginin biçimi değişir.
 - Birden çok not seçiliyken:
@@ -173,6 +177,14 @@ Panodaki **Asistan** düğmesi (alt araç çubuğu) ya da bir görsel seçiliyke
   - **Ayrı görevler (n)**: her not ayrı görev olur ve notun yerine görev kartı gelir (önceki davranış).
   - **Asistanla grupla**: asistan karar verir (yukarıya bakın).
 - Geri alma (Ctrl+Z) panodaki kartı geri alır; açılan görev projede kalır, gerekirse görev listesinden silinir.
+
+## Canlı bağlantı göstergesi
+
+Pano başlığındaki gösterge canlı ortak düzenlemenin durumudur:
+- **Canlı**: aynı panodaki herkes değişiklikleri ve imleçleri anında görür (Supabase Realtime, WebSocket).
+- **Bağlanıyor…**: kanal açılıyor (en çok 15 sn).
+- **Canlı yok · 20 sn'de bir yenilenir**: kanal açılamadı. Çoğunlukla ağ (kurum güvenlik duvarı ya da vekil sunucu) `wss://<proje>.supabase.co` WebSocket bağlantısına izin vermiyordur. Değişiklikler yine buluta kaydedilir; açık pano 20 saniyede bir buluttan yenilenir.
+- **Canlı (bu tarayıcı)**: bulut bağlı değil; yalnız aynı tarayıcıdaki sekmeler arasında canlı.
 
 ## Pano menüsü
 

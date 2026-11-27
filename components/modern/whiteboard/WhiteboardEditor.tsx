@@ -19,6 +19,7 @@ import { changedSnap, currentSnap, initials, ItemSnap, restoreSnap, snapIsEmpty,
 import type { LiveRect } from './useWhiteboardCollab';
 import { PaletteAction, WbPalette } from './WbPalette';
 import { ALL_SHAPES, ShapePreview, WbElements } from './WbElements';
+import { svgDataUrl } from '../../../utils/whiteboard/svg';
 
 /**
  * FigJam tarzı tuval: sonsuz alan (kaydır / yakınlaştır), araçlar (seç, el,
@@ -1185,7 +1186,8 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ board, project, can
                 {canEdit && elementsOpen && (
                     <WbElements onClose={() => setElementsOpen(false)}
                         onShape={shape => { const c = viewportCenter(); const n = makeNode('shape', c.x - 90, c.y - 55, { shape, color: 'blue', author: actor }); place([n]); setSelection([n.id]); }}
-                        onEmoji={emoji => { const c = viewportCenter(); const n = makeNode('stamp', c.x - 40, c.y - 40, { stamp: emoji, w: 80, h: 80, author: actor }); place([n]); setSelection([n.id]); }} />
+                        onEmoji={emoji => { const c = viewportCenter(); const n = makeNode('stamp', c.x - 40, c.y - 40, { stamp: emoji, w: 80, h: 80, author: actor }); place([n]); setSelection([n.id]); }}
+                        onIcon={(svg, name) => { const c = viewportCenter(); const n = makeNode('image', c.x - 36, c.y - 36, { src: svgDataUrl(svg), text: name, w: 72, h: 72, author: actor }); place([n]); setSelection([n.id]); }} />
                 )}
                 {canEdit && tool === 'pen' && (
                     <div className="flex gap-1.5 p-2 rounded-2xl m-surface m-pop shadow-lg">{Object.entries(PEN_COLORS).filter(([k]) => k !== 'white').map(([k, v]) => <button key={k} type="button" aria-label={`Kalem rengi ${k}`} className="w-7 h-7 rounded-full cursor-pointer" style={{ background: v, border: penColor === k ? '3px solid #93c5fd' : '0' }} onClick={() => setPenColor(k)} />)}</div>

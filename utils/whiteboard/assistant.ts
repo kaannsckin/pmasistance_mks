@@ -2,6 +2,10 @@ import type { Project, WbEdge, WbNode, WbShape, Whiteboard } from '../../types';
 import { extractJson } from '../ai/json';
 import { HEX_RE, makeNode, Rect, WB_COLOR, wbId } from './model';
 import { MAX_SVG, sanitizeSvg, svgDataUrl } from './svg';
+import { iconSvg, IconLib, loadIconLib, resolveIconName } from './icons';
+import { Dagre, layoutMermaid, parseMermaid } from './mermaid';
+/** Çizimde gerektiğinde yüklenen kütüphaneler (ikonlar, şema yerleşimi) */
+export interface WbAiLibs { icons?: IconLib; dagre?: Dagre }
 
 /**
  * Whiteboard asistanı: kullanıcının isteğini (ör. "Kaydet düğmesini sağ üste
@@ -74,13 +78,16 @@ Yanıtın YALNIZ şu JSON olsun (açıklama yazma):
 - Resim / illüstrasyon / doğa / nesne / karakter / logo benzeri çizim (çiçek, bulut, ağaç, araba, kişi, bilgisayar, sahne …) → "svg". Elips ve dikdörtgenleri üst üste koyarak resim ÇİZME; tek bir özenli SVG üret.
 - Küçük sembol, tepki, süsleme → "emoji" (gerçek emoji karakteri, büyük boyut serbest).
 - Not, fikir, liste → "sticky". Başlık, açıklama → "text".
-- Diyagram, akış şeması, süreç, mimari → "shape" + "arrow" (düzenlenebilir kalsın). Karar adımı diamond, veri tabanı cylinder, başla/bitir ellipse.
+- Akış şeması, süreç, karar ağacı, onay akışı → "mermaid" (yerleşimi uygulama yapar, kutular ve oklar düzenlenebilir kalır). Elle shape + arrow yalnız birkaç kutuluk basit çizimlerde.
+- Mimari, sistem, altyapı, kullanıcı yolculuğu, kavram haritası → "icon" (ikon + altında etiket) ve aralarında "arrow"; gerekirse "section" ile grupla.
 - Ekran taslağı (wireframe) → "section" içinde "shape" ve "text".
 - Serbest el çizgisi, vurgu çizgisi, organik kontur → "path".
 
 items öğeleri:
 - {"id": "a1", "type": "svg", "x": 0, "y": 0, "w": 320, "h": 320, "text": "Çiçek", "svg": "<svg viewBox='0 0 320 320'>…</svg>"}
 - {"id": "a2", "type": "emoji", "x": 0, "y": 0, "size": 96, "emoji": "🌸"}
+- {"id": "i1", "type": "icon", "name": "database", "x": 0, "y": 0, "size": 64, "color": "#7c3aed", "text": "Veri tabanı"}  → Lucide ikon adı (kebab-case İngilizce: server, database, user, users, cloud, laptop, smartphone, shield-check, lock, mail, file-text, folder, settings, bug, rocket, globe, network, bot, chart-column, calendar, clock, bell, search, house, car, flower, tree-pine, sun …); "text" ikonun altına etiket olur
+- {"id": "m1", "type": "mermaid", "x": 0, "y": 0, "code": "flowchart LR\n  A([Başla]) --> B[Talep gir]\n  B --> C{Onay?}\n  C -->|Evet| D[(Kaydet)]\n  C -->|Hayır| B"}  → flowchart/graph (TB, LR …); biçimler: [işlem] ([başla/bitir]) {karar} [(veri)] [/girdi/] {{hazırlık}}; subgraph Ad … end bölüm olur. Şemanın düğümüne okla bağlanmak için "m1.C" gibi yaz
 - {"id": "a3", "type": "sticky", "x": 0, "y": 0, "w": 200, "h": 200, "text": "…", "color": "yellow"}
 - {"id": "a4", "type": "text", "x": 0, "y": 0, "w": 300, "h": 40, "text": "Başlık", "fontSize": 28, "color": "#1f2937"}
 - {"id": "a5", "type": "shape", "shape": "rect|ellipse|diamond|triangle|star|hexagon|heart|cloud|callout|arrowRight|cylinder|parallelogram", "x": 0, "y": 0, "w": 160, "h": 60, "text": "Kaydet", "color": "blue", "fontSize": 14}
@@ -90,6 +97,9 @@ items öğeleri:
 - {"id": "a9", "type": "marker", "on": "image", "x": 300, "y": 50, "text": "1", "color": "red"}  → numaralı daire
 - {"type": "arrow", "from": "a9", "to": "a3", "label": "…", "curve": 60}  → iki öğe ya da mevcut nesne (n1…) arasında ok; "curve" kıvrımlı ok (px, eksi değer diğer yöne), "line": true oksuz çizgi
 
+SVG örnekleri (bu kalitede çiz):
+Çiçek: <svg viewBox='0 0 200 260'><path d='M100 120 C96 170 104 210 100 255' stroke='#15803d' stroke-width='6' fill='none' stroke-linecap='round'/><path d='M100 195 C72 178 54 186 46 204 C70 214 88 208 100 195Z' fill='#4ade80'/><g fill='#f9a8d4' stroke='#db2777' stroke-width='2'><ellipse cx='100' cy='62' rx='22' ry='36'/><ellipse cx='100' cy='62' rx='22' ry='36' transform='rotate(72 100 100)'/><ellipse cx='100' cy='62' rx='22' ry='36' transform='rotate(144 100 100)'/><ellipse cx='100' cy='62' rx='22' ry='36' transform='rotate(216 100 100)'/><ellipse cx='100' cy='62' rx='22' ry='36' transform='rotate(288 100 100)'/></g><circle cx='100' cy='100' r='17' fill='#fbbf24' stroke='#d97706' stroke-width='2'/></svg>
+Bulut: <svg viewBox='0 0 220 130'><path d='M55 115 C22 115 14 78 42 68 C38 36 78 22 98 44 C112 14 162 18 166 56 C196 54 206 96 182 112 C176 115 170 115 165 115Z' fill='#e0f2fe' stroke='#7dd3fc' stroke-width='3'/><path d='M60 102 C90 108 140 108 170 100' stroke='#bae6fd' stroke-width='6' fill='none' stroke-linecap='round'/></svg>
 SVG kuralları: viewBox kullan, öznitelikleri TEK tırnakla yaz ('…'), yalnız path/circle/ellipse/rect/polygon/line/g/linearGradient/radialGradient kullan; script, image, dış bağlantı, CSS dosyası yok. Renkli, yumuşak, düzgün oranlı ve özenli çiz (yaprak ve taç yapraklarında path eğrileri, gölge için yarı saydam şekil, gradyan serbest). 12 KB'ı geçme. Birden çok resim istenirse her biri ayrı "svg" öğesi olsun.
 
 Kurallar:
@@ -145,7 +155,7 @@ export interface WbAiResult {
  * Model yanıtını pano nesnelerine çevirir. Bilinmeyen tür, geçersiz sayı ve
  * renk atılır ya da varsayılana döner; hiçbir şey çizilemiyorsa hata fırlatır.
  */
-export const parseWbAiResult = (text: string, frame: WbAiFrame, author = 'Asistan'): WbAiResult => {
+export const parseWbAiResult = (text: string, frame: WbAiFrame, author = 'Asistan', libs: WbAiLibs = {}): WbAiResult => {
     let raw: unknown;
     try { raw = extractJson(text); } catch { raw = null; }
     const obj = (Array.isArray(raw) ? { items: raw } : raw) as { summary?: unknown; items?: unknown; moves?: unknown } | null;
@@ -162,6 +172,8 @@ export const parseWbAiResult = (text: string, frame: WbAiFrame, author = 'Asista
     const arrows: { from: string; to: string; label: string; curve: number; line: boolean }[] = [];
     let z = 0;
     let badSvg = 0;
+    const missing: string[] = [];
+    const extraEdges: WbEdge[] = [];
 
     for (const it of items as Record<string, unknown>[]) {
         if (!it || typeof it !== 'object') continue;
@@ -173,7 +185,30 @@ export const parseWbAiResult = (text: string, frame: WbAiFrame, author = 'Asista
         const size = (dw: number, dh: number) => ({ w: round(num(it.w, 8, 4000, dw) * sc), h: round(num(it.h, 8, 4000, dh) * sc) });
         let node: WbNode | null = null;
         const base = { author, z: ++z };
-        if (type === 'svg') {
+        if (type === 'icon') {
+            const name = libs.icons ? resolveIconName(libs.icons, str(it.name, 60)) : null;
+            const svg = name && libs.icons ? iconSvg(libs.icons, name, optColor(it.color)?.startsWith('#') ? optColor(it.color) : '#334155') : null;
+            if (!svg) { missing.push(str(it.name, 40) || '?'); continue; }
+            const d = round(num(it.size ?? it.w, 20, 400, 64) * sc);
+            node = makeNode('image', p.x, p.y, { ...base, w: d, h: d, src: svgDataUrl(svg), text: str(it.text, 80) || name! });
+            const label = str(it.text, 80).trim();
+            if (label) {
+                const fs = 14;
+                const lw = Math.max(d, Math.min(220, label.length * fs * 0.6 + 16));
+                nodes.push(makeNode('text', p.x + d / 2 - lw / 2, p.y + d + 6, { ...base, z: ++z, w: round(lw), h: 24, text: label, fontSize: fs }));
+            }
+        } else if (type === 'mermaid') {
+            const code = str(it.code, 8000);
+            if (!libs.dagre || !code.trim()) { missing.push('akış şeması'); continue; }
+            const g = parseMermaid(code);
+            if (!g.nodes.size) { missing.push('akış şeması'); continue; }
+            const r = layoutMermaid(g, libs.dagre, p, author);
+            r.nodes.forEach(n => nodes.push(n.type === 'section' ? n : { ...n, z: ++z }));
+            extraEdges.push(...r.edges);
+            const iid = str(it.id, 40);
+            if (iid) r.ids.forEach((boardId, mmId) => local.set(`${iid}.${mmId}`, boardId));
+            continue;
+        } else if (type === 'svg') {
             const sz = size(320, 320);
             const clean = sanitizeSvg(str(it.svg, MAX_SVG), sz.w, sz.h);
             if (clean) node = makeNode('image', p.x, p.y, { ...base, ...sz, src: svgDataUrl(clean), text: str(it.text, 80) || 'Çizim' });
@@ -216,11 +251,11 @@ export const parseWbAiResult = (text: string, frame: WbAiFrame, author = 'Asista
         nodes.push(node);
     }
 
-    const edges: WbEdge[] = arrows
+    const edges: WbEdge[] = [...extraEdges, ...arrows
         .map(a => ({ ...a, from: local.get(a.from), to: local.get(a.to) }))
         .filter((a): a is { from: string; to: string; label: string; curve: number; line: boolean } => !!a.from && !!a.to && a.from !== a.to)
         .slice(0, MAX_ITEMS)
-        .map(a => ({ id: wbId('e'), from: a.from, to: a.to, ...(a.label ? { label: a.label } : {}), ...(a.curve ? { curve: a.curve } : {}), ...(a.line ? { style: 'line' as const } : {}) }));
+        .map(a => ({ id: wbId('e'), from: a.from, to: a.to, ...(a.label ? { label: a.label } : {}), ...(a.curve ? { curve: a.curve } : {}), ...(a.line ? { style: 'line' as const } : {}) }))];
 
     const moves = (Array.isArray(obj.moves) ? obj.moves : []).slice(0, MAX_ITEMS).flatMap(m => {
         const r = m as Record<string, unknown>;
@@ -231,8 +266,20 @@ export const parseWbAiResult = (text: string, frame: WbAiFrame, author = 'Asista
 
     if (!nodes.length && !moves.length) throw new Error('Asistan çizilecek bir şey döndürmedi; isteği biraz daha açık yazıp tekrar deneyin.');
     const summary = (str(obj.summary, 400).trim() || `${nodes.length} öğe eklendi.`)
-        + (badSvg ? ` (${badSvg} çizim geçersiz ya da çok büyük SVG olduğu için eklenmedi; tekrar isteyin.)` : '');
+        + (badSvg ? ` (${badSvg} çizim geçersiz ya da çok büyük SVG olduğu için eklenmedi; tekrar isteyin.)` : '')
+        + (missing.length ? ` (Eklenemeyen: ${[...new Set(missing)].slice(0, 6).join(', ')}.)` : '');
     return { summary, nodes, edges, moves };
+};
+
+/** Yanıtta ikon ya da akış şeması varsa kütüphaneleri yükleyip çözer (yükleme başarısızsa o öğeler atlanır) */
+export const resolveWbAiResult = async (text: string, frame: WbAiFrame, author = 'Asistan'): Promise<WbAiResult> => {
+    const needIcons = /"type"\s*:\s*"icon"/.test(text);
+    const needDagre = /"type"\s*:\s*"mermaid"/.test(text);
+    const [icons, dagre] = await Promise.all([
+        needIcons ? loadIconLib().catch(() => undefined) : Promise.resolve(undefined),
+        needDagre ? import('@dagrejs/dagre').then(m => (m as unknown as { default?: Dagre }).default || (m as unknown as Dagre)).catch(() => undefined) : Promise.resolve(undefined),
+    ]);
+    return parseWbAiResult(text, frame, author, { icons, dagre });
 };
 
 /** Sonucu panoya uygular (tek değişiklik: tek geri alma adımı); yeni bölümler alta çizilsin diye en alttaki z'nin altına iner */

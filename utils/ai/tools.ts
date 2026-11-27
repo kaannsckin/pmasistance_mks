@@ -1303,7 +1303,7 @@ const AGENT_TOOLS: ToolDef[] = [
         requires: 'whiteboard',
         spec: {
             name: 'panoya_ciz',
-            description: 'Ekranda açık Whiteboard panosuna çizer: yapışkan not, metin, şekil, bölüm, ok, akış şeması, ekran taslağı (wireframe); seçili notları gruplar. Seçili bir ekran görüntüsü varsa görseli görür, istenen değişiklikleri görselin üstünde çerçeve ve numarayla işaretler, istenirse yanına yeni ekranın taslağını çizer. Kullanıcı panoya bir şey çizmeni, işaretlemeni, taslak çıkarmanı ya da notları düzenlemeni istediğinde kullan; isteği ayrıntılarıyla (kullanıcının sözleriyle) "istek" alanına yaz. Çizim hemen panoya eklenir; kullanıcı Ctrl+Z ile geri alabilir.',
+            description: 'Ekranda açık Whiteboard panosuna çizer: illüstrasyon (SVG), ikonlu mimari / sistem çizimi, otomatik yerleşimli akış şeması (Mermaid), yapışkan not, metin, şekil, bölüm, ok, ekran taslağı (wireframe); seçili notları gruplar. Seçili bir ekran görüntüsü varsa görseli görür, istenen değişiklikleri görselin üstünde çerçeve ve numarayla işaretler, istenirse yanına yeni ekranın taslağını çizer. Kullanıcı panoya bir şey çizmeni, işaretlemeni, taslak çıkarmanı ya da notları düzenlemeni istediğinde kullan; isteği ayrıntılarıyla (kullanıcının sözleriyle) "istek" alanına yaz. Çizim hemen panoya eklenir; kullanıcı Ctrl+Z ile geri alabilir.',
             parameters: S.obj({
                 istek: S.str('Çizim isteği: ne çizilecek, hangi değişiklikler işaretlenecek (kullanıcının talebi, ayrıntılı).'),
             }, ['istek']),

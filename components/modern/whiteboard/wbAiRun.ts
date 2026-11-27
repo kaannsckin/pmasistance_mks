@@ -1,7 +1,7 @@
 import { WbNode, Whiteboard, Project } from '../../../types';
 import { ChatImage } from '../../../utils/ai/protocol';
 import { AiError } from '../../../utils/ai/client';
-import { buildFrame, buildWbAiPrompt, containRect, parseWbAiResult, WB_AI_SYSTEM, WbAiResult } from '../../../utils/whiteboard/assistant';
+import { buildFrame, buildWbAiPrompt, containRect, resolveWbAiResult, WB_AI_SYSTEM, WbAiResult } from '../../../utils/whiteboard/assistant';
 import { WbComplete } from '../../../utils/whiteboard/bridge';
 import { Rect } from '../../../utils/whiteboard/model';
 
@@ -61,7 +61,7 @@ export const runWbAssistant = async (opts: {
         }
     }
     const frame = buildFrame({ board, selection, image, visible });
-    const once = async (withImage: boolean) => parseWbAiResult(
+    const once = async (withImage: boolean) => resolveWbAiResult(
         await complete(WB_AI_SYSTEM, buildWbAiPrompt(frame, request, { board, project, imageSent: withImage }), withImage && prepared ? { images: [prepared] } : undefined),
         frame,
     );
