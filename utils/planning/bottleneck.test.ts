@@ -78,6 +78,15 @@ describe('planBottleneck', () => {
         expect(balanced.reassignments.some(r => r.to.includes('Osman'))).toBe(false);
     });
 
+    it('küçük iş bölünmez: her parça en az 1 gün', () => {
+        // Üç geliştiricinin de son sürüm haftasında 0,4 gün boşluğu var: 1 günlük iş tek kişiye sığmaz,
+        // ama üçe bölünse (0,33 g) sığardı. Parça 1 günün altına düşeceği için bölünmez.
+        const devs = ['Ali', 'Ayşe', 'Can'];
+        const tasks = [...devs.map(n => task({ days: 19.6, resourceName: n, status: TaskStatus.InProgress })), task({ id: 'small', days: 1, resourceName: 'Ali' })];
+        const r = planBottleneck({ project: { tasks, resources: [...devs.map(n => res(n, 'EMS')), res('Osman', 'EMS'), res('Test1', 'Destek')] }, settings: settings({ fixers: { EMS: 'Osman' } }), scenario: 'balanced' });
+        expect(r.tasks.find(t => t.taskId === 'small')!.people).toHaveLength(1);
+    });
+
     it('devam eden iş dengeli senaryoda sahibinde kalır', () => {
         const tasks = [task({ days: 10, resourceName: 'Ali', status: TaskStatus.InProgress }), task({ days: 10, resourceName: 'Ali', status: TaskStatus.InProgress })];
         const r = planBottleneck({ project: { tasks, resources: team }, settings: settings(), scenario: 'balanced' });

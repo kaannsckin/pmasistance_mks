@@ -355,9 +355,9 @@ const run = (ctx: Ctx, infos: TaskInfo[], fixers: Record<string, string[]>, bala
                 .sort((a, b) => a.w - b.w || (a.n === owner ? -1 : b.n === owner ? 1 : 0))[0];
             const single = pick(days, new Set());
             if (single) assignees = [{ name: single.n, part: days }];
-            // Tek kişiye sığmıyorsa böl (dengeli senaryolarda)
+            // Tek kişiye sığmıyorsa böl (dengeli senaryolarda); her parça en az 1 gün
             if (balance && single && single.w > lastRelease && maxSplit > 1) {
-                for (let k = 2; k <= Math.min(maxSplit, teamPool.length); k++) {
+                for (let k = 2; k <= Math.min(maxSplit, teamPool.length, Math.floor(days)); k++) {
                     const chosen: string[] = [];
                     let worst = -1;
                     for (let j = 0; j < k; j++) {
