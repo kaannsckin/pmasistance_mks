@@ -5,6 +5,9 @@ buradan alır (`.github/workflows/exe.yml`).
 
 ## Yayımlanmadı
 
+**Uygulama içi kullanım kılavuzu**
+- Roket simgesinden ekran görüntülü kılavuz ve sürüm geçmişi açılır. Bölümler kitap düzeninde gezilebilir, ekran görüntüleri büyütülebilir.
+
 **Pano: Jira ile eşitle**
 - Proje panosunda **Jira ile eşitle** düğmesi: projenin kayıtlı eşitleme ayarıyla (kaynak, alan yönleri, Jira'ya yazma) hemen eşitler, sonucu panoda gösterir; ipucunda son eşitleme zamanı. Otomatik eşitleme de aynı yolu kullanır.
 

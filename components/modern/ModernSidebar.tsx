@@ -65,8 +65,7 @@ interface ModernSidebarProps {
     onOpenAudit?: () => void;
     onOpenAbout: () => void;
     // Sürprizler
-    onLogoLaunch: () => void;
-    onHyperdrive: () => void;
+    onOpenGuide: () => void;
     /** Geniş ekranda yalnız simgelerden oluşan dar şerit (tercih tarayıcıda saklanır) */
     collapsed?: boolean;
     onToggleCollapsed?: () => void;
@@ -144,7 +143,7 @@ const ToolsMenu: React.FC<Pick<ModernSidebarProps, 'onSwitchToClassic' | 'onSave
 
 const ModernSidebar: React.FC<ModernSidebarProps> = (props) => {
     const { consoleMode, adminSection, onAdminSection } = props;
-    const { isOpen, onClose, currentView, hasActiveProject, onNavigate, exec, canAdmin, onOpenProfile, expectationBadge, reportBadge, meetingBadge, projects, activeProjectId, onOpenProject, canCreateProject, onNewProject, onOpenSearch, currentRole, currentPersonId, people, needsPerson, onOpenSettings, onLogoLaunch, onHyperdrive, onToggleCollapsed } = props;
+    const { isOpen, onClose, currentView, hasActiveProject, onNavigate, exec, canAdmin, onOpenProfile, expectationBadge, reportBadge, meetingBadge, projects, activeProjectId, onOpenProject, canCreateProject, onNewProject, onOpenSearch, currentRole, currentPersonId, people, needsPerson, onOpenSettings, onOpenGuide, onToggleCollapsed } = props;
     // Dar şerit yalnız çekmece kapalıyken (geniş ekran); dar ekranda açılan çekmece her zaman tam genişlikte
     const compact = !!props.collapsed && !isOpen;
     const [menuOpen, setMenuOpen] = useState(false);
@@ -174,7 +173,7 @@ const ModernSidebar: React.FC<ModernSidebarProps> = (props) => {
                 className={`m-sidebar m-surface border-r m-sep h-screen lg:sticky top-0 flex flex-col gap-5 px-3 py-4 overflow-y-auto ${isOpen ? 'is-open' : ''} ${compact ? 'is-collapsed' : ''}`}
             >
                 <div className="m-sidebar-head flex items-center justify-between gap-1">
-                    <span className="m-sidebar-logo"><RocketLogo onLaunch={onLogoLaunch} onHyperdrive={onHyperdrive} /></span>
+                    <span className="m-sidebar-logo"><RocketLogo onOpenGuide={onOpenGuide} /></span>
                     {onToggleCollapsed && !compact && (
                         <button type="button" className="m-icon-btn m-sidebar-collapse" aria-controls="modern-sidebar" aria-expanded="true"
                             aria-label="Menüyü daralt" title="Menüyü daralt" onClick={onToggleCollapsed}>

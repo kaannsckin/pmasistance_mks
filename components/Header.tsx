@@ -20,6 +20,7 @@ export interface HeaderPersonSummary {
 interface HeaderProps {
   currentView: View;
   setCurrentView: (view: View) => void;
+  onOpenGuide: () => void;
   onOpenSettings: () => void;
   /** Yedek al / yükle (yalnız app.backup yetkisiyle verilir) */
   onSaveProject?: () => void;
@@ -268,106 +269,34 @@ const IdentitySwitcher: React.FC<{
   );
 };
 
-const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenSettings, onSaveProject, onLoadProject, isAIEnabled = true, onOpenAbout, projects, activeProjectId, onSelectProject, currentRole, currentPersonId, people, identityNeedsPerson, onOpenProfile, canExecutive, hidePrivate, cloudLinked, onOpenCloudSync, todoItems, onTodoNavigate, onOpenStatusReport, dataHealthAlerts, onOpenDataHealth, onOpenAuditLog, onOpenCommandPalette, onOpenWorkPackages }) => {
+const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, onOpenGuide, onOpenSettings, onSaveProject, onLoadProject, isAIEnabled = true, onOpenAbout, projects, activeProjectId, onSelectProject, currentRole, currentPersonId, people, identityNeedsPerson, onOpenProfile, canExecutive, hidePrivate, cloudLinked, onOpenCloudSync, todoItems, onTodoNavigate, onOpenStatusReport, dataHealthAlerts, onOpenDataHealth, onOpenAuditLog, onOpenCommandPalette, onOpenWorkPackages }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
-
-  // Roket animasyonu (korunuyor — uygulamanın imzası)
-  const [status, setStatus] = useState<'idle' | 'igniting' | 'launching'>('idle');
-  const [showVFX, setShowVFX] = useState(false);
-  const [isShaking, setIsShaking] = useState(false);
-
   const showProjectBar = !!activeProjectId;
 
-  const handleLaunch = () => {
-    if (status !== 'idle') return;
-    setStatus('igniting');
-    setTimeout(() => {
-      setStatus('launching');
-      setShowVFX(true);
-      setIsShaking(true);
-      setTimeout(() => {
-        setCurrentView(activeProjectId ? View.Kanban : View.Portfolio);
-        setStatus('idle');
-        setShowVFX(false);
-        setIsShaking(false);
-      }, 1400);
-    }, 1000);
-  };
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (status !== 'idle') return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    setMousePos({ x: (e.clientX - rect.left - rect.width / 2) / 10, y: (e.clientY - rect.top - rect.height / 2) / 10 });
-  };
-
   return (
-    <header className={`bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl sticky top-0 z-50 border-b border-gray-200 dark:border-gray-700 shadow-sm transition-all duration-300 ${isShaking ? '[animation:hyper-screen-shake_0.4s_ease-in-out]' : ''}`}>
-
-      {/* FULL SCREEN VFX LAYER */}
-      {showVFX && (
-        <div className="fixed inset-0 z-[1000] pointer-events-none overflow-hidden flex items-center justify-center">
-          <div className="absolute inset-0 bg-white [animation:hyper-flash_0.7s_ease-out_forwards] z-10"></div>
-          <div className="absolute w-20 h-20 border-primary rounded-full [animation:hyper-shockwave_1.2s_cubic-bezier(0.22,1,0.36,1)_forwards]" style={{ borderColor: 'var(--app-primary)' }}></div>
-          {[...Array(60)].map((_, i) => (
-            <div
-              key={i}
-              className="absolute w-[2px] h-[120px] bg-white opacity-50 rounded-full"
-              style={{
-                animation: `star-fly 0.9s cubic-bezier(0.4, 0, 1, 1) forwards`,
-                '--tx': `${Math.random() * 2500 - 1250}px`,
-                '--ty': `${Math.random() * 2500 - 1250}px`,
-                animationDelay: `${Math.random() * 0.4}s`,
-              } as React.CSSProperties}
-            ></div>
-          ))}
-        </div>
-      )}
-
+    <header className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl sticky top-0 z-50 border-b border-gray-200 dark:border-gray-700 shadow-sm">
       {/* ---- Üst satır: logo · çalışma alanı sekmeleri · genel eylemler ---- */}
       <div className="container mx-auto px-4 lg:px-6">
         <div className="flex items-center justify-between h-16 gap-3">
 
-          <div
-            className="flex items-center group cursor-pointer select-none relative flex-none"
-            onMouseMove={handleMouseMove}
-            onMouseLeave={() => setMousePos({ x: 0, y: 0 })}
-            onClick={handleLaunch}
+          <button
+            type="button"
+            className="flex items-center group flex-none text-left rounded-xl"
+            onClick={onOpenGuide}
+            aria-label="Kullanım kılavuzu için tıklayın"
+            aria-haspopup="dialog"
+            title="Kullanım kılavuzu için tıklayın"
           >
-            <div
-              className="relative"
-              style={{ transform: status === 'idle' ? `translate(${mousePos.x}px, ${mousePos.y}px)` : undefined, transition: 'transform 0.1s ease-out' }}
-            >
-              <div className={`absolute -inset-6 bg-primary rounded-full blur-[32px] transition-all duration-700 ${status === 'igniting' ? 'opacity-100 scale-150 animate-pulse' : 'opacity-10 group-hover:opacity-30'}`} style={{ backgroundColor: 'var(--app-primary)' }}></div>
-              <div
-                className={`relative w-11 h-11 bg-primary rounded-xl shadow-lg z-10 flex items-center justify-center overflow-visible transition-all duration-300
-                  ${status === 'igniting' ? '[animation:hyper-rumble_0.2s_infinite]' : 'group-hover:scale-105'}`}
-                style={{ backgroundColor: 'var(--app-primary)', boxShadow: `0 12px 24px -8px var(--app-ring), inset 0 2px 4px rgba(255,255,255,0.4)` }}
-              >
-                <div className={`relative flex items-center justify-center transition-all duration-200 ${status === 'launching' ? '[animation:hyper-launch_0.8s_cubic-bezier(0.6,0,1,1)_forwards]' : ''}`}>
-                  <i aria-hidden="true" className={`fa-solid fa-rocket text-white text-xl drop-shadow-lg transition-transform duration-700 ${status === 'idle' ? 'rotate-0' : 'rotate-[-45deg]'}`}></i>
-                  {status !== 'idle' && (
-                    <div className="absolute top-[80%] left-1/2 -translate-x-1/2 flex flex-col items-center">
-                      <div className="absolute top-0 w-6 h-6 bg-white blur-md rounded-full animate-pulse"></div>
-                      <div
-                        className={`absolute top-0 w-14 bg-gradient-to-b from-white via-primary to-transparent rounded-b-full ${status === 'launching' ? '[animation:hyper-exhaust_0.8s_ease-out_forwards]' : 'h-24 opacity-100'}`}
-                        style={{ '--tw-gradient-via': 'var(--app-accent)' } as React.CSSProperties}
-                      ></div>
-                      <div className="w-1 h-48 bg-gradient-to-b from-white to-transparent opacity-60 rounded-full"></div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-            <div className="ml-3.5 hidden sm:flex flex-col justify-center">
-              <h1 className="text-lg font-bold tracking-tight leading-none text-gray-800 dark:text-white">
+            <span className="w-11 h-11 rounded-xl shadow-lg flex items-center justify-center" style={{ backgroundColor: 'var(--app-primary)' }}>
+              <i aria-hidden="true" className="fa-solid fa-rocket text-white text-xl motion-safe:transition-transform motion-safe:group-hover:-rotate-12"></i>
+            </span>
+            <span className="ml-3.5 hidden sm:flex flex-col justify-center">
+              <span className="text-lg font-bold tracking-tight leading-none text-gray-800 dark:text-white">
                 Plan<span style={{ color: 'var(--app-primary)' }}>Asistan</span>
-              </h1>
-              <span className={`text-[10px] font-medium tracking-[0.3em] leading-none mt-1 transition-colors ${status !== 'idle' ? '' : 'text-gray-400'}`} style={status !== 'idle' ? { color: 'var(--app-primary)' } : {}}>
-                {status === 'igniting' ? 'ATEŞLENİYOR…' : status === 'launching' ? 'MAKS HIZ' : 'MKS'}
               </span>
-            </div>
-          </div>
+              <span className="text-[10px] font-medium tracking-[0.3em] leading-none mt-1 text-gray-400">MKS</span>
+            </span>
+          </button>
 
           <nav className="hidden md:flex items-center gap-1 bg-gray-100/60 dark:bg-gray-900/40 p-1 rounded-xl border border-gray-200/60 dark:border-gray-700/60">
             {canExecutive && <WorkspaceNavItem view={View.Executive} currentView={currentView} setCurrentView={setCurrentView} icon="fa-gauge-high" label="Yönetim" />}
