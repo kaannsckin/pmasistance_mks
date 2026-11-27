@@ -896,7 +896,7 @@ const PROPOSAL_TOOLS: ToolDef[] = [
         writeOnly: true,
         spec: {
             name: 'oner_gorev_ekle',
-            description: 'Projeye yeni görev eklemeyi ÖNERİR (onaysız uygulanmaz).',
+            description: 'Projeye yeni görev eklemeyi ÖNERİR (onaysız uygulanmaz). Whiteboard panosundaki notlardan kayıt açılacaksa bunun yerine panodan_gorev_ac kullan.',
             parameters: S.obj({
                 proje: P.project,
                 ad: S.str('Görev adı.'),
@@ -1321,6 +1321,22 @@ const AGENT_TOOLS: ToolDef[] = [
                 ...(r.noImage ? { not: 'Seçili görsel modele gönderilemedi; çizim yalnız açıklamaya göre yapıldı.' } : {}),
                 pano: ctx.whiteboard.describe(),
             };
+        },
+    },
+    {
+        label: 'Panodan kayıt açıldı',
+        requires: 'whiteboard',
+        spec: {
+            name: 'panodan_gorev_ac',
+            description: 'Ekranda açık Whiteboard panosundaki seçili (seçim yoksa görünen) yapışkan notlardan proje kaydı (görev) açar. Notları iş birimine göre AKILLICA gruplar: aynı işin farklı yönlerini anlatan notlar (gereksinim, mevcut ekran, alternatifler, ekip görüşleri, oylama, karar/aksiyon — bir şablonun bölümleri) TEK kayıt olur; bağımsız maddeler (ayrı hatalar, retro aksiyonları) ayrı kayıt olur. Şablonun doldurulmamış yer tutucu notlarını atlar. Kullanıcı panodaki notlardan görev/kayıt/task açmanı istediğinde oner_gorev_ekle yerine BUNU kullan; kullanıcının gruplama isteğini ("hepsi tek kayıt", "her not ayrı") "istek" alanına yaz. Kayıtlar hemen açılır ve kartları notların yanına konur.',
+            parameters: S.obj({
+                istek: S.str('Kullanıcının isteği (gruplama tercihi dahil, ayrıntılı).'),
+            }, ['istek']),
+        },
+        run: async (a, ctx) => {
+            if (!ctx.whiteboard?.createTasks) throw new ToolError('Açık ve düzenlenebilir bir pano yok: önce projede Whiteboard ekranını açın.');
+            const r = await ctx.whiteboard.createTasks(str(a.istek) || 'Bu notlardan kayıt aç.');
+            return { tamam: true, ozet: r.summary, acilan_kayit: r.created.length, kayitlar: r.created.map(c => ({ baslik: c.title, not_sayisi: c.notes })) };
         },
     },
 ];

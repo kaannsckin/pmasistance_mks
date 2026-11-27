@@ -287,13 +287,15 @@ export const AssistantProvider: React.FC<ProviderProps> = ({ enabled, sessionSco
     const board = getWhiteboardBridge();
     if (board && status) {
       const authMode = status.authMode;
+      const complete = async (system: string, prompt: string, opts?: { images?: ChatImage[] }) => {
+        const r = await streamChat({ system, messages: [{ role: 'user', content: prompt, ...(opts?.images?.length ? { images: opts.images } : {}) }] }, { authMode, signal });
+        if (!r.text.trim()) throw new AiError('Model boş yanıt döndü; tekrar deneyin.', 'upstream');
+        return r.text;
+      };
       ctx.whiteboard = {
         describe: board.describe,
-        draw: request => board.draw(request, async (system, prompt, opts) => {
-          const r = await streamChat({ system, messages: [{ role: 'user', content: prompt, ...(opts?.images?.length ? { images: opts.images } : {}) }] }, { authMode, signal });
-          if (!r.text.trim()) throw new AiError('Model boş yanıt döndü; tekrar deneyin.', 'upstream');
-          return r.text;
-        }),
+        draw: request => board.draw(request, complete),
+        createTasks: request => board.createTasks(request, complete),
       };
     }
     if (integrations?.jira) {

@@ -151,22 +151,51 @@ const LinkedBody: React.FC<{ n: WbNode; env: NodeEnv }> = ({ n, env }) => {
     return null;
 };
 
+/** Şeklin dış çizgisi (w×h kutusunda, kenar kalınlığı kadar içeride) */
+export const shapePath = (shape: string | undefined, w: number, h: number, p: number): string => {
+    const W = w - p, H = h - p, cx = w / 2, cy = h / 2;
+    switch (shape) {
+        case 'diamond': return `M${cx} ${p} L${W} ${cy} L${cx} ${H} L${p} ${cy} Z`;
+        case 'triangle': return `M${cx} ${p} L${W} ${H} L${p} ${H} Z`;
+        case 'hexagon': { const q = w * 0.25; return `M${p + q} ${p} L${W - q} ${p} L${W} ${cy} L${W - q} ${H} L${p + q} ${H} L${p} ${cy} Z`; }
+        case 'parallelogram': { const q = w * 0.2; return `M${p + q} ${p} L${W} ${p} L${W - q} ${H} L${p} ${H} Z`; }
+        case 'arrowRight': { const t = Math.min(w * 0.4, h); const y1 = h * 0.28, y2 = h * 0.72; return `M${p} ${y1} L${W - t} ${y1} L${W - t} ${p} L${W} ${cy} L${W - t} ${H} L${W - t} ${y2} L${p} ${y2} Z`; }
+        case 'star': {
+            const pts: string[] = [];
+            for (let i = 0; i < 10; i++) {
+                const a = -Math.PI / 2 + (i * Math.PI) / 5, r = i % 2 ? 0.42 : 1;
+                pts.push(`${cx + Math.cos(a) * (cx - p) * r} ${cy + Math.sin(a) * (cy - p) * r + (h * 0.04)}`);
+            }
+            return `M${pts.join(' L')} Z`;
+        }
+        case 'heart': return `M${cx} ${H} C${w * 0.1} ${h * 0.62} ${p} ${h * 0.38} ${p} ${h * 0.27} C${p} ${h * 0.08} ${w * 0.2} ${p} ${w * 0.3} ${p} C${w * 0.4} ${p} ${w * 0.47} ${h * 0.08} ${cx} ${h * 0.2} C${w * 0.53} ${h * 0.08} ${w * 0.6} ${p} ${w * 0.7} ${p} C${w * 0.8} ${p} ${W} ${h * 0.08} ${W} ${h * 0.27} C${W} ${h * 0.38} ${w * 0.9} ${h * 0.62} ${cx} ${H} Z`;
+        case 'cloud': return `M${w * 0.25} ${H} C${p} ${H} ${p} ${h * 0.55} ${w * 0.18} ${h * 0.5} C${w * 0.12} ${h * 0.22} ${w * 0.38} ${h * 0.12} ${w * 0.45} ${h * 0.28} C${w * 0.52} ${p} ${w * 0.82} ${p} ${w * 0.8} ${h * 0.35} C${W} ${h * 0.35} ${W} ${H} ${w * 0.78} ${H} Z`;
+        case 'callout': { const r = Math.min(12, h * 0.15), b = h * 0.78; return `M${p + r} ${p} L${W - r} ${p} Q${W} ${p} ${W} ${p + r} L${W} ${b - r} Q${W} ${b} ${W - r} ${b} L${w * 0.38} ${b} L${w * 0.22} ${H} L${w * 0.26} ${b} L${p + r} ${b} Q${p} ${b} ${p} ${b - r} L${p} ${p + r} Q${p} ${p} ${p + r} ${p} Z`; }
+        case 'cylinder': { const e = Math.min(h * 0.14, 22); return `M${p} ${p + e} A${cx - p} ${e} 0 0 1 ${W} ${p + e} L${W} ${H - e} A${cx - p} ${e} 0 0 1 ${p} ${H - e} Z M${p} ${p + e} A${cx - p} ${e} 0 0 0 ${W} ${p + e}`; }
+        default: return '';
+    }
+};
+
 const ShapeSvg: React.FC<{ n: WbNode; fill: string; edge: string }> = ({ n, fill, edge }) => {
     const { w, h } = n;
     // İçi boş işaretleme çerçevesi: kalın, doygun renk
     const sw = n.hollow ? 3 : 2;
     const common = n.hollow
-        ? { fill: 'transparent', stroke: PEN_COLORS[n.color || 'red'] || '#dc2626', strokeWidth: sw }
+        ? { fill: 'transparent', stroke: PEN_COLORS[n.color || 'red'] || (n.color && n.color.startsWith('#') ? n.color : '#dc2626'), strokeWidth: sw }
         : { fill, stroke: edge, strokeWidth: sw };
+    const d = shapePath(n.shape, w, h, sw);
     return (
         <svg className="absolute inset-0 overflow-visible" width={w} height={h} aria-hidden="true">
             {n.shape === 'ellipse' && <ellipse cx={w / 2} cy={h / 2} rx={w / 2 - sw} ry={h / 2 - sw} {...common} />}
-            {n.shape === 'diamond' && <path d={`M${w / 2} ${sw} L${w - sw} ${h / 2} L${w / 2} ${h - sw} L${sw} ${h / 2} Z`} {...common} />}
-            {n.shape === 'triangle' && <path d={`M${w / 2} ${sw} L${w - sw} ${h - sw} L${sw} ${h - sw} Z`} {...common} />}
+            {d && <path d={d} strokeLinejoin="round" {...common} />}
             {(!n.shape || n.shape === 'rect') && <rect x={sw / 2} y={sw / 2} width={w - sw} height={h - sw} rx={10} {...common} />}
         </svg>
     );
 };
+
+/** Kalem rengi: kalem paleti anahtarı, pano rengi anahtarı ya da #rrggbb */
+export const penColor = (key: string | undefined): string =>
+    PEN_COLORS[key || 'gray'] || (key && /^#[0-9a-fA-F]{6}$/.test(key) ? key : '#27272a');
 
 export const penPath = (pts: number[]): string => {
     if (pts.length < 4) return pts.length === 2 ? `M${pts[0]} ${pts[1]} l0.1 0` : '';
@@ -200,7 +229,7 @@ export const WbNodeBody: React.FC<{ n: WbNode; env: NodeEnv; editor?: React.Reac
             );
         case 'text':
             return (
-                <div className="relative w-full h-full whitespace-pre-wrap break-words m-text leading-snug" style={{ fontSize: fs || 18, fontWeight: (fs || 18) >= 28 ? 700 : 500 }}>
+                <div className="relative w-full h-full whitespace-pre-wrap break-words m-text leading-snug" style={{ fontSize: fs || 18, fontWeight: (fs || 18) >= 28 ? 700 : 500, ...(n.color ? { color: n.color.startsWith('#') ? n.color : PEN_COLORS[n.color] } : {}) }}>
                     {editor || <RichText text={n.text} env={env} placeholder="Metin" />}
                     <VoteBadge n={n} env={env} />
                 </div>
@@ -229,12 +258,12 @@ export const WbNodeBody: React.FC<{ n: WbNode; env: NodeEnv; editor?: React.Reac
             return <div className="w-full h-full grid place-items-center select-none" style={{ fontSize: Math.min(n.w, n.h) * 0.8, lineHeight: 1 }}>{n.stamp || '👍'}</div>;
         case 'image':
             return n.src
-                ? <img src={n.src} alt={n.text || 'Görsel'} draggable={false} className="w-full h-full object-contain rounded-lg shadow-md select-none bg-white" />
+                ? <img src={n.src} alt={n.text || 'Görsel'} draggable={false} className={`w-full h-full object-contain select-none ${n.src.startsWith('data:image/svg') ? '' : 'rounded-lg shadow-md bg-white'}`} />
                 : <div className="w-full h-full grid place-items-center rounded-lg m-fill-2 m-text-3">Görsel yok</div>;
         case 'pen':
             return (
                 <svg className="absolute inset-0 overflow-visible" width={Math.max(1, n.w)} height={Math.max(1, n.h)} aria-hidden="true">
-                    <path d={penPath(n.points || [])} fill="none" stroke={PEN_COLORS[n.color || 'gray'] || '#27272a'} strokeWidth={n.fontSize || 4} strokeLinecap="round" strokeLinejoin="round" style={{ pointerEvents: 'stroke' }} />
+                    <path d={penPath(n.points || []) + (n.fill ? ' Z' : '')} fill={n.fill ? colorOf(n.fill, 'gray').fill : 'none'} stroke={penColor(n.color)} strokeWidth={n.fontSize ?? 4} strokeLinecap="round" strokeLinejoin="round" style={{ pointerEvents: n.fill ? 'visiblePainted' : 'stroke' }} />
                 </svg>
             );
         default:

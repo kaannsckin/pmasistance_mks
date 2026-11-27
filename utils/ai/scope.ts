@@ -99,6 +99,8 @@ export interface ToolContext {
     whiteboard?: {
         describe: () => string;
         draw: (request: string) => Promise<{ summary: string; added: number; moved: number; noImage: boolean }>;
+        /** Seçili (yoksa görünen) notlardan kayıt açar; notlar iş birimine göre gruplanır */
+        createTasks?: (request: string) => Promise<{ summary: string; created: { title: string; notes: number }[] }>;
     };
 }
 

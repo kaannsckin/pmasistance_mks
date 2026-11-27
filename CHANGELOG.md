@@ -3,7 +3,7 @@
 Her sürümün başlığı `## vX.Y.Z` biçimindedir; GitHub sürüm sayfası bu bölümü
 buradan alır (`.github/workflows/exe.yml`).
 
-## Yayımlanmadı
+## v3.8.0
 
 **Testler: kayıtlı Jira filtresinden test panosu**
 - Projede yeni **Testler** sekmesi (modern arayüz; kurulana kadar "Daha fazla" menüsünde). Kayıtlı bir Jira filtresindeki (ör. gib_testset) açık ve kapalı tüm kayıtlar okunur.
@@ -11,6 +11,12 @@ buradan alır (`.github/workflows/exe.yml`).
 - Her Cuma 20:00'de (Türkiye) pano kayıt kayıt saklanır; o saatte uygulama kapalıysa ilk açılışta "geç alındı" işaretiyle alınır. "Görüntü al" ile ara görüntü de saklanır.
 - Haftalık rapor: iki Cuma görüntüsü ve aradaki Jira geçişleri karşılaştırılır. Test edilip onaylanan, açılan hata (öncelik dağılımı, test ekibinden olanlar), açılan değişiklik talebi, yeniden açılan, test bekleyen kuyruk (değişim ve en uzun bekleyenler) ve kolon farkları; metin kopyalanabilir.
 - Jira kayıtlarında açan kişi (reporter) artık okunuyor.
+
+**Whiteboard: daha iyi çizim, Öğeler paneli, notlardan tek kayıt**
+- Asistan resim ve illüstrasyonu artık tek parça renkli SVG çizimi olarak ekliyor (önceden elips ve dikdörtgen yığını); küçük semboller için emoji öğe, organik konturlar için dolgulu serbest yol, serbest renkler, 8 yeni şekil (altıgen, paralelkenar, veri tabanı, blok ok, konuşma balonu, bulut, yıldız, kalp) ve kıvrımlı ok. SVG, yalnız çizim etiketleri kalacak biçimde temizlenir.
+- Öğeler paneli (Canva gibi): tüm şekiller ve gruplanmış hazır çizimler tek tıkla eklenir. Seçili nesneye serbest renk; bağlantıyı kıvrımlı / düz yapma.
+- Birden çok not seçiliyken **Tek görev**: hepsinden tek görev (başlık gereksinim notundan, açıklama bölüm bölüm). **Ayrı görevler** önceki gibi.
+- Asistanın yeni `panodan_gorev_ac` aracı: notları iş birimine göre gruplar; aynı işi anlatan notlar (bir şablonun bölümleri) tek kayıt, bağımsız maddeler ayrı kayıt. Seçim çubuğunda **Asistanla grupla**.
 
 **Pano**
 - Kayıt türü kartın başında renkli simge ve adla; kart zemini türe göre hafif renkte (Hata, Değişiklik talebi, Hikâye, Görev, Alt görev, Test, İyileştirme, Epic). Jira'daki tür adı görevde saklanır. Tür süzgeci eklendi.

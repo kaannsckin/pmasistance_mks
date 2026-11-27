@@ -525,4 +525,14 @@ describe('panoya_ciz (Whiteboard)', () => {
         expect(draw).toHaveBeenCalledWith('Kaydet düğmesini sağa al');
         expect(JSON.parse(out.content)).toMatchObject({ tamam: true, ozet: '3 değişiklik işaretlendi', eklenen_nesne: 6 });
     });
+
+    it('panodan_gorev_ac: notlardan kayıt açmayı panoya iletir (gruplama isteğiyle)', async () => {
+        const ctx = buildToolContext(buildWs(), NOW);
+        const createTasks = vi.fn(async () => ({ summary: '5 not tek kayıtta birleşti', created: [{ title: 'Toplu onay', notes: 5 }] }));
+        ctx.whiteboard = { describe: () => 'pano', draw: vi.fn(), createTasks };
+        expect(toolSpecsFor(ctx).some(t => t.name === 'panodan_gorev_ac')).toBe(true);
+        const out = await executeTool({ name: 'panodan_gorev_ac', arguments: { istek: 'Bu notlardan kayıt aç' } }, ctx);
+        expect(createTasks).toHaveBeenCalledWith('Bu notlardan kayıt aç');
+        expect(JSON.parse(out.content)).toEqual({ tamam: true, ozet: '5 not tek kayıtta birleşti', acilan_kayit: 1, kayitlar: [{ baslik: 'Toplu onay', not_sayisi: 5 }] });
+    });
 });

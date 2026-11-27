@@ -78,8 +78,8 @@ export const TOOL_GROUPS: Record<ToolGroup, { label: string; when: string; tools
     },
     whiteboard: {
         label: 'Whiteboard',
-        when: 'panoya çiz, ekran görüntüsünde işaretle, ekran taslağı, akış şeması, notları grupla',
-        tools: ['panoya_ciz'],
+        when: 'panoya çiz, ekran görüntüsünde işaretle, ekran taslağı, akış şeması, notları grupla, panodaki notlardan kayıt aç',
+        tools: ['panoya_ciz', 'panodan_gorev_ac'],
     },
 };
 
@@ -103,7 +103,7 @@ const RULES: { group: ToolGroup; re: RegExp }[] = [
     { group: 'veri_havuzu', re: /veri havuzu|unvan|personel (ekle|kayd|listesi)|bolum (ekle|kayd|kodu)|aylik maliyet|sicil/ },
     { group: 'dosya', re: /excel|xlsx|csv|word|docx|pdf|powerpoint|pptx|sunum|slayt|dosya|indir|rapor (hazirla|olustur|ver|yap)|analiz|incele|pivot|kirilim|dagilim|grafik|tablo(ya|lastir)/ },
     { group: 'ekran', re: /\b(ac|acar misin|goster|git|gotur|getir)\b|ekran(a|i)|sayfa(ya|yi)|pencere/ },
-    { group: 'whiteboard', re: /whiteboard|panoya|\bciz|isaretle|taslag|taslak|wireframe|akis (sema|diyagram)|ekran goruntusu|notlari grupla/ },
+    { group: 'whiteboard', re: /whiteboard|panoya|panodaki|\bciz|isaretle|taslag|taslak|wireframe|akis (sema|diyagram)|ekran goruntusu|notlari grupla|(not|post.?it|yapiskan)\w*.{0,40}(gorev|kayit|task)/ },
     { group: 'yonetim', re: /departman|bolum karne|karne|veri sagli|eksik veri|tutarsiz|portfoy sagli|saglik puan/ },
 ];
 

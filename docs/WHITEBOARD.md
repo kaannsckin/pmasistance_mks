@@ -147,7 +147,13 @@ Panodaki **Asistan** düğmesi (alt araç çubuğu) ya da bir görsel seçiliyke
 3. Asistan değişecek alanları görselin üstünde kırmızı çerçeve ve numarayla işaretler, her numaranın açıklamasını yanına not olarak yazar.
 4. İsterseniz yanına "Önerilen ekran" bölümünde yeni ekranın tel kafes taslağını çizer.
 
-**Ne yapabilir:** not, metin, şekil, bölüm, ok, işaretleme çerçevesi, numara ekler; seçili notları taşıyarak gruplar. Silmez.
+**Ne yapabilir:**
+- Resim ve illüstrasyon (çiçek, bulut, kişi, cihaz, sahne …) için tek parça, renkli bir SVG çizimi ekler; çizim görsel olarak taşınır ve boyutlandırılır.
+- Küçük sembol ve süsleme için emoji öğe, organik kontur için dolgulu serbest yol çizer.
+- Not, metin, şekil (dikdörtgen, elips, karar, üçgen, altıgen, paralelkenar, veri tabanı, blok ok, konuşma balonu, bulut, yıldız, kalp), bölüm, düz ya da kıvrımlı ok, işaretleme çerçevesi ve numara ekler. Renkler hazır paletten ya da serbest (#rrggbb).
+- Seçili notları taşıyarak gruplar. Silmez.
+
+**Notlardan kayıt açma:** Notları seçip seçim çubuğundan **Asistanla grupla**'ya basın ya da asistana "bu notlardan kayıt aç" deyin (`panodan_gorev_ac`). Asistan notları iş birimine göre gruplar: aynı işin farklı yönlerini anlatan notlar (gereksinim, mevcut ekran, alternatifler, ekip görüşleri, oylama, karar — bir şablonun bölümleri) tek kayıt olur; bağımsız maddeler (ayrı hatalar, retro aksiyonları) ayrı kayıt olur. Doldurulmamış şablon yer tutucuları atlanır. Kart, grubun notlarının sağına konur; notlar panoda kalır.
 
 **Kurallar:**
 - Asistan seçili nesnelerle çalışır; seçim yoksa görünen alanı görür.
@@ -156,6 +162,17 @@ Panodaki **Asistan** düğmesi (alt araç çubuğu) ya da bir görsel seçiliyke
 - Görsel okuyamayan bir modelde asistan bir kez görselsiz dener ve bunu bildirir.
 - Görsel AI proxy'sine en fazla 1280 piksel JPEG olarak gider. OpenAI, Azure, Anthropic ve Gemini biçimleri desteklenir.
 - Asistan sohbeti kapalı, ekran içi AI açıksa çizim pencerede doğrudan yapılır.
+
+## Öğeler ve notlardan görev
+
+- Alt araç çubuğundaki **Öğeler** (ızgara simgesi) Canva'daki gibi bir panel açar: 12 şekil ve gruplanmış hazır çizimler (tepki, iş ve proje, insanlar, doğa, nesneler, semboller). Tıklanan öğe görünen alanın ortasına eklenir.
+- Seçim çubuğundaki gökkuşağı daire serbest renk seçer (not, şekil, bölüm, metin, kalem).
+- Bir bağlantı seçiliyken **Kıvrımlı** / **Düz** ve **Ters kıvrım** ile çizginin biçimi değişir.
+- Birden çok not seçiliyken:
+  - **Tek görev**: hepsinden tek görev açar. Başlık gereksinim / talep / konu bölümündeki notun ilk satırından (yoksa sıradaki ilk nottan), açıklama bölüm bölüm notlardan oluşur. Notlar panoda kalır, görev kartı yanlarına konur.
+  - **Ayrı görevler (n)**: her not ayrı görev olur ve notun yerine görev kartı gelir (önceki davranış).
+  - **Asistanla grupla**: asistan karar verir (yukarıya bakın).
+- Geri alma (Ctrl+Z) panodaki kartı geri alır; açılan görev projede kalır, gerekirse görev listesinden silinir.
 
 ## Pano menüsü
 
