@@ -76,12 +76,13 @@ const Card: React.FC<{
     const late = daysLate(t);
     const prio = PRIORITY_META[t.priority];
     const bar = PRIORITY_BAR[t.priority];
+    const kind = issueKind(t);
     const statusLabel = taskStatusLabel(t, workflow);
     // Ayrıntılı durum kolon adından farklıysa kartta gösterilir (ör. Devam Ediyor kolonunda "Analizde")
     const showJira = !!t.jiraStatus && statusLabel.toLocaleLowerCase('tr-TR') !== columnName.toLocaleLowerCase('tr-TR');
     return (
         <article draggable={!!onDragStart} onDragStart={onDragStart}
-            className={`m-surface rounded-[10px] flex items-start gap-1 pl-3 pr-1 py-1 ${onDragStart ? 'cursor-grab active:cursor-grabbing' : ''}`}
+            className={`m-surface ${kind && kind !== 'other' ? `m-issue-card m-issue-${kind}` : ''} rounded-[10px] flex items-start gap-1 pl-3 pr-1 py-1 ${onDragStart ? 'cursor-grab active:cursor-grabbing' : ''}`}
             style={{ boxShadow: `inset 3px 0 0 ${bar || 'transparent'}, var(--m-shadow-sm, 0 1px 2px rgba(0,0,0,.06))` }}>
             <button type="button" onClick={onView} className="flex-1 min-w-0 flex flex-col gap-1.5 py-2 text-left bg-transparent border-0 p-0 cursor-pointer" style={{ font: 'inherit' }}>
                 <span className="flex items-center gap-2 flex-wrap text-[12.5px]">
