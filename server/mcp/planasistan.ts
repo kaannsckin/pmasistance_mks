@@ -293,6 +293,7 @@ export const createPlanAsistanMcp = (o: PlanAsistanMcpOptions): McpServerOptions
             ctx.activeProjectId = ctx.scoped.projects[0].id;
         }
         ctx.rag = keywordRag(ctx);
+        ctx.mcp = true;
 
         const readOnly = o.source.readOnlyReason();
         const policy = aiPolicyOf(ws);

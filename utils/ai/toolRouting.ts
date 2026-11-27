@@ -49,7 +49,7 @@ export const TOOL_GROUPS: Record<ToolGroup, { label: string; when: string; tools
     gorev_degisiklik: {
         label: 'Görev değişikliği',
         when: 'görev ekle, güncelle, durum değiştir, kaydır, ata, sil',
-        tools: ['oner_gorev_ekle', 'oner_gorev_durumu', 'oner_gorev_guncelle', 'oner_gorev_sil'],
+        tools: ['oner_gorev_ekle', 'oner_gorev_durumu', 'oner_gorev_guncelle', 'oner_gorev_sil', 'oner_gorev_plani', 'oner_plan_kurallari'],
     },
     jira: {
         label: 'Jira',

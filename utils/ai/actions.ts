@@ -1,4 +1,4 @@
-import { Allocation, IssueType, Project, RagStatus, Resource, RiskLevel, RiskStatus, Task, TaskStatus, WorkspaceData } from '../../types';
+import { Allocation, IssueType, PlanRules, Project, RagStatus, Resource, RiskLevel, RiskStatus, Task, TaskStatus, WorkspaceData } from '../../types';
 import { createAllocation, getPlanLockStatus, inferAllocationRole, personMonthTotal, setAllocationCell } from '../allocations';
 import { linkedSyncKeys, sourceLabel, sourceOf } from '../planning/jiraSync';
 import { fieldPolicy, hasFieldPolicy, JIRA_SYNC_FIELDS } from '../planning/jiraFieldSync';
@@ -57,7 +57,9 @@ export type AiAction =
     | { type: 'gorev_sil'; projectId: string; taskIds: string[]; reason?: string }
     // Plan optimizasyonu sonucu: görevlerin sprinti, sprint sayısı ve (aynı birimde) kişisi; isteğe bağlı
     // kapsam daraltma (görevler taştan çıkar) ya da taş hedef tarihi. Değişiklikleri motor hesaplar, model yazmaz.
-    | { type: 'plan_uygula'; projectId: string; planId: string; label: string; changes: PlanChange[]; descope?: { milestoneId: string; taskIds: string[] }; retarget?: { milestoneId: string; date: string } };
+    | { type: 'plan_uygula'; projectId: string; planId: string; label: string; changes: PlanChange[]; descope?: { milestoneId: string; taskIds: string[] }; retarget?: { milestoneId: string; date: string } }
+    // Darboğaz planı ve otomatik planın proje kuralları (hedef tarih, test ekibi, bulgu sorumlusu, odak, mesai); verilen alanlar değişir
+    | { type: 'plan_kurallari'; projectId: string; rules: PlanRules };
 
 /** Görev alanı değişikliği; verilmeyen alan değişmez. resourceName '' → atama kaldırılır, dueDate '' → termin silinir */
 export interface TaskFieldChange {
@@ -68,6 +70,16 @@ export interface TaskFieldChange {
     time?: { best: number; avg: number; worst: number };
     addLabels?: string[];
     removeLabels?: string[];
+    /** Elle girilen ilerleme (0–100); null → kaldırılır (durumdan otomatik) */
+    progressPct?: number | null;
+    /** Ekip tahmini (serbest metin); '' → kaldırılır */
+    estimateText?: string;
+    /** Başladığı sprint (0 = Havuz) */
+    version?: number;
+    /** Sürdüğü sprint sayısı (1–4) */
+    sprintSpan?: number;
+    /** Süre değişikliğinin kaynağı (varsayılan 'ai'; dışarıdan aktarılan plan 'import') */
+    estimateSource?: Task['estimateSource'];
 }
 
 /** Tek öneride en çok bu kadar görev */
@@ -89,6 +101,10 @@ const taskChangeParts = (t: Task, c: TaskFieldChange): string[] => {
     const rm = (c.removeLabels || []).filter(l => labels.includes(l));
     if (add.length) out.push(`etiket +${add.join(', +')}`);
     if (rm.length) out.push(`etiket −${rm.join(', −')}`);
+    if (c.progressPct !== undefined && (c.progressPct ?? undefined) !== t.progressPct) out.push(`ilerleme: ${t.progressPct !== undefined ? `%${t.progressPct}` : 'otomatik'} → ${c.progressPct === null ? 'otomatik' : `%${c.progressPct}`}`);
+    if (c.estimateText !== undefined && c.estimateText !== (t.estimateText || '')) out.push(`ekip tahmini: ${t.estimateText || '—'} → ${c.estimateText || '—'}`);
+    if (c.version !== undefined && c.version !== (t.version || 0)) out.push(`sprint: ${t.version || 'Havuz'} → ${c.version || 'Havuz'}`);
+    if (c.sprintSpan !== undefined && c.sprintSpan !== (t.sprintSpan || 1)) out.push(`sprint sayısı: ${t.sprintSpan || 1} → ${c.sprintSpan}`);
     return out;
 };
 
@@ -266,8 +282,29 @@ export const validateAction = (ws: WorkspaceData, action: AiAction): string | nu
                 if (c.priority && !PRIORITIES.includes(c.priority)) return `${t.name}: öncelik Blocker, High, Medium ya da Low olmalı.`;
                 if (c.resourceName && !known.has(c.resourceName.trim().toLocaleLowerCase('tr-TR'))) return `${t.name}: "${c.resourceName}" veri havuzunda ya da proje ekibinde yok.`;
                 if (c.time && [c.time.best, c.time.avg, c.time.worst].some(v => !(v >= 0 && v <= 1000))) return `${t.name}: süre 0-1000 gün arasında olmalı.`;
+                if (c.progressPct !== undefined && c.progressPct !== null && !(Number.isInteger(c.progressPct) && c.progressPct >= 0 && c.progressPct <= 100)) return `${t.name}: ilerleme 0-100 arasında tam sayı olmalı.`;
+                if (c.estimateText !== undefined && c.estimateText.length > 60) return `${t.name}: ekip tahmini en çok 60 karakter.`;
+                if (c.version !== undefined && !(Number.isInteger(c.version) && c.version >= 0 && c.version <= 200)) return `${t.name}: sprint 0-200 arasında tam sayı olmalı (0 = Havuz).`;
+                if (c.sprintSpan !== undefined && !(Number.isInteger(c.sprintSpan) && c.sprintSpan >= 1 && c.sprintSpan <= MAX_SPRINT_SPAN)) return `${t.name}: sprint sayısı 1-${MAX_SPRINT_SPAN} olmalı.`;
             }
             if (!action.changes.some(c => taskChangeParts(project.tasks.find(x => x.id === c.taskId)!, c).length)) return 'Görevlerde değişen bir şey yok.';
+            return null;
+        }
+        case 'plan_kurallari': {
+            const r = action.rules;
+            if (!Object.keys(r).length) return 'Değişecek kural verilmedi.';
+            if (r.targetDate !== undefined && !DAY_RE.test(r.targetDate)) return 'Hedef tarih YYYY-AA-GG biçiminde olmalı.';
+            if (r.testUnit && !project.resources.some(x => (x.unit || 'Genel') === r.testUnit)) return `"${r.testUnit}" biriminde proje ekibinden kimse yok.`;
+            if (r.testRatio !== undefined && !(r.testRatio >= 0 && r.testRatio <= 1)) return 'Test oranı %0-100 olmalı.';
+            if (r.focus !== undefined && !(r.focus >= 0.3 && r.focus <= 1)) return 'Odak %30-100 olmalı (fazlası için en yüksek yük kullanılır).';
+            if (r.maxLoad !== undefined && !(r.maxLoad >= 50 && r.maxLoad <= 200)) return 'En yüksek yük %50-200 olmalı.';
+            for (const [unit, name] of Object.entries(r.fixers || {})) {
+                if (name && !project.resources.some(x => sameName(x.name, name) && (x.unit || 'Genel') === unit)) return `Bulgu sorumlusu "${name}" ${unit} biriminde proje ekibinde yok.`;
+            }
+            for (const [name, v] of Object.entries(r.personMaxLoad || {})) {
+                if (!project.resources.some(x => sameName(x.name, name))) return `"${name}" proje ekibinde yok.`;
+                if (!(v >= 50 && v <= 200)) return `${name}: en yüksek yük %50-200 olmalı.`;
+            }
             return null;
         }
         case 'plan_uygula': {
@@ -403,6 +440,23 @@ export const describeAction = (ws: WorkspaceData, action: AiAction): { title: st
                 details: [
                     ...rows.slice(0, 30).map(({ c, t }) => ({ label: t!.jiraId ? `${t!.jiraId} ${t!.name}` : t!.name, value: taskChangeParts(t!, c).join(' · ') })),
                     ...(rows.length > 30 ? [{ label: '…', value: `ve ${rows.length - 30} görev daha` }] : []),
+                ],
+            };
+        }
+        case 'plan_kurallari': {
+            const r = action.rules;
+            const pct = (v: number) => `%${Math.round(v * 100)}`;
+            return {
+                title: `Plan kuralları · ${pName}`,
+                details: [
+                    ...(r.targetDate !== undefined ? [{ label: 'Hedef tarih', value: fmtDay(r.targetDate) }] : []),
+                    ...(r.testUnit !== undefined ? [{ label: 'Test ekibi', value: r.testUnit || 'test adımı yok' }] : []),
+                    ...(r.testRatio !== undefined ? [{ label: 'Test ve bulgu eforu', value: pct(r.testRatio) }] : []),
+                    ...(r.focus !== undefined ? [{ label: 'Odak', value: pct(r.focus) }] : []),
+                    ...(r.maxLoad !== undefined ? [{ label: 'Kişi başı en yüksek yük', value: `%${r.maxLoad}` }] : []),
+                    ...Object.entries(r.fixers || {}).map(([u, n]) => ({ label: `${u} bulgu sorumlusu`, value: n || 'otomatik' })),
+                    ...Object.entries(r.personMaxLoad || {}).map(([n, v]) => ({ label: `${n} en yüksek yük`, value: `%${v}` })),
+                    ...(r.scopeMilestone !== undefined ? [{ label: 'Kapsam', value: `Milestone ${r.scopeMilestone} ve öncesi` }] : []),
                 ],
             };
         }
@@ -691,14 +745,31 @@ export const applyAction = (ws: WorkspaceData, action: AiAction): { ws: Workspac
                         ...(c.dueDate ? { dueDate: c.dueDate } : {}),
                         resourceName: assignee,
                         ...(c.priority ? { priority: c.priority } : {}),
-                        ...(c.time ? { time: c.time, availability: c.time.avg > 0, estimateSource: 'ai' as const } : {}),
+                        ...(c.time ? { time: c.time, availability: c.time.avg > 0, estimateSource: c.estimateSource || ('ai' as const) } : {}),
                         labels,
+                        ...(c.progressPct !== undefined ? { progressPct: c.progressPct === null ? undefined : c.progressPct } : {}),
+                        ...(c.estimateText !== undefined ? { estimateText: c.estimateText || undefined } : {}),
+                        ...(c.version !== undefined ? { version: c.version } : {}),
+                        ...(c.sprintSpan !== undefined ? { sprintSpan: c.sprintSpan > 1 ? c.sprintSpan : undefined } : {}),
                         updatedAt: now,
                     };
                 });
                 return { ...p, tasks, resources };
             });
             summary = `"${project.name}" · ${n} görev güncellendi`;
+            break;
+        }
+        case 'plan_kurallari': {
+            next = touch(ws, project.id, p => {
+                const cur = p.settings.planRules || {};
+                const rules: PlanRules = {
+                    ...cur, ...action.rules,
+                    ...(action.rules.fixers ? { fixers: { ...(cur.fixers || {}), ...action.rules.fixers } } : {}),
+                    ...(action.rules.personMaxLoad ? { personMaxLoad: { ...(cur.personMaxLoad || {}), ...action.rules.personMaxLoad } } : {}),
+                };
+                return { ...p, settings: { ...p.settings, planRules: rules } };
+            });
+            summary = `"${project.name}" · plan kuralları güncellendi`;
             break;
         }
         case 'plan_uygula': {

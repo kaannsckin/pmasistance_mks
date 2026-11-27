@@ -1,4 +1,4 @@
-import { IssueType, PermissionKey, ProjectStatus, RagStatus, RiskStatus, Task, TaskStatus } from '../../types';
+import { IssueType, PermissionKey, PlanRules, Project, ProjectStatus, RagStatus, RiskStatus, Task, TaskStatus } from '../../types';
 import { projectRolesOf } from '../projectRoles';
 import { componentAnalytics, GroupStats, teamAnalytics } from '../teamAnalytics';
 import { describeProgressModel, progressOf } from '../progress';
@@ -70,7 +70,7 @@ export interface ToolDef {
     /** Yalnız bu yetkiyi taşıyan rollere sunulur (ör. denetim günlüğü, veri sağlığı) */
     permission?: PermissionKey;
     /** Tarayıcı çalışma zamanı gerektirir: ui (ajan gezinmesi) ya da jira (sunucuda Jira bağlantısı) */
-    requires?: 'ui' | 'jira' | 'files' | 'memory' | 'toolGroups' | 'whiteboard';
+    requires?: 'ui' | 'jira' | 'files' | 'memory' | 'toolGroups' | 'whiteboard' | 'mcp';
     run: (args: Args, ctx: ToolContext) => unknown | Promise<unknown>;
 }
 
@@ -163,6 +163,56 @@ const evmRow = (e: ProjectEVM) => ({
 // ---------------------------------------------------------------------------
 
 const RAG_TYPES = Object.keys(RAG_SOURCE_LABELS) as RagSourceType[];
+
+/**
+ * oner_gorev_guncelle / oner_gorev_plani satırı → görev alanı değişikliği. İlerleme, ekip
+ * tahmini ve sprint yalnız MCP'deki oner_gorev_plani'nda gelir (uygulama içi asistanın
+ * araç tanımı küçük kalsın).
+ */
+const taskChangeFromRow = (project: Project, ctx: ToolContext, r: Args): TaskFieldChange => {
+    const csv = (v: unknown) => str(v).split(',').map(x => x.trim()).filter(Boolean);
+    const hits = matchByText(project.tasks, str(r.gorev), t => [t.name, t.jiraId]);
+    if (!hits.length) throw new ToolError(`"${str(r.gorev)}" ${project.name} projesinde yok.`);
+    if (hits.length > 1) throw new ToolError(`"${str(r.gorev)}" birden çok görevle eşleşti: ${hits.slice(0, 5).map(t => t.name).join(', ')}.`);
+    const t = hits[0];
+    const c: TaskFieldChange = { taskId: t.id };
+    const due = str(r.bitis);
+    if (due) c.dueDate = /^(yok|sil|-)$/i.test(due) ? '' : due;
+    const shift = Number(r.kaydir_gun);
+    if (r.kaydir_gun !== undefined && r.kaydir_gun !== null && r.kaydir_gun !== '' && Number.isFinite(shift) && shift !== 0) {
+        if (!t.dueDate) throw new ToolError(`${t.name}: termini yok, kaydırılamaz (bitis verin).`);
+        const d = new Date(`${t.dueDate}T00:00:00Z`);
+        d.setUTCDate(d.getUTCDate() + Math.round(shift));
+        c.dueDate = d.toISOString().slice(0, 10);
+    }
+    const who = str(r.atanan);
+    if (who) c.resourceName = /^(yok|kimse|-)$/i.test(who) ? '' : personName(resolvePerson(ctx, who));
+    if (str(r.oncelik)) c.priority = str(r.oncelik) as Task['priority'];
+    const avg = Number(r.sure);
+    if (r.sure !== undefined && r.sure !== null && r.sure !== '' && Number.isFinite(avg) && avg >= 0) {
+        // Yalnız olası süre verildi: iyimser/kötümser mevcut oranla ölçeklenir, yoksa ±%30
+        const base = t.time.avg > 0 ? t.time : { best: avg * 0.7, avg, worst: avg * 1.3 };
+        const k = t.time.avg > 0 ? avg / t.time.avg : 1;
+        c.time = { best: days(base.best * k), avg: days(avg), worst: days(base.worst * k) };
+    }
+    if (csv(r.etiket_ekle).length) c.addLabels = csv(r.etiket_ekle);
+    if (csv(r.etiket_cikar).length) c.removeLabels = csv(r.etiket_cikar);
+    const prog = str(r.ilerleme);
+    if (prog) {
+        if (/^(otomatik|yok|sil|-)$/i.test(prog)) c.progressPct = null;
+        else {
+            const n = Number(prog.replace('%', '').replace(',', '.'));
+            if (!Number.isFinite(n)) throw new ToolError(`${t.name}: ilerleme 0-100 ya da "otomatik" olmalı.`);
+            c.progressPct = Math.round(n);
+        }
+    }
+    const est = str(r.tahmin);
+    if (est) c.estimateText = /^(yok|sil|-)$/i.test(est) ? '' : est;
+    if (r.sprint !== undefined && r.sprint !== null && r.sprint !== '') c.version = Number(r.sprint);
+    if (r.sprint_sayisi !== undefined && r.sprint_sayisi !== null && r.sprint_sayisi !== '') c.sprintSpan = Number(r.sprint_sayisi);
+    if (Object.keys(c).length === 1) throw new ToolError(`${t.name}: değişecek alan verilmedi.`);
+    return c;
+};
 
 export const AI_TOOLS: ToolDef[] = [
     {
@@ -988,38 +1038,81 @@ const PROPOSAL_TOOLS: ToolDef[] = [
         },
         run: (a, ctx) => {
             const project = resolveProject(ctx, a.proje);
-            const csv = (v: unknown) => str(v).split(',').map(x => x.trim()).filter(Boolean);
+            const { ok, skipped } = eachRow(rowsArg(a.gorevler, 'gorevler'), r => taskChangeFromRow(project, ctx, r));
+            return withSkipped(propose(ctx, { type: 'gorev_guncelle', projectId: project.id, changes: ok }), skipped);
+        },
+    },
+    {
+        label: 'Görev planı önerisi',
+        writeOnly: true,
+        // Yalnız MCP: dışarıda hazırlanan planı (sprint, atanan, ilerleme, ekip tahmini) uygulamaya taşır
+        requires: 'mcp',
+        spec: {
+            name: 'oner_gorev_plani',
+            description: 'Görevlerin sprintini, sprint sayısını, atananını, süresini, ilerleme yüzdesini, ekip tahminini ve etiketini birlikte güncellemeyi ÖNERİR (onaysız uygulanmaz). Dışarıda hazırlanan planı uygulamaya taşımak için; tek çağrıda en çok 100 görev, yalnız değişen alanlar.',
+            parameters: S.obj({
+                proje: P.project,
+                gorevler: {
+                    type: 'array',
+                    items: S.obj({
+                        gorev: S.str('Ad ya da Jira anahtarı'),
+                        sprint: S.int('Başladığı sprint (0 = Havuz)'),
+                        sprint_sayisi: S.int('Sürdüğü sprint sayısı (1-4)'),
+                        atanan: S.str('Ad soyad ya da yok'),
+                        sure: S.num('Olası gün'),
+                        ilerleme: S.str('Elle ilerleme 0-100 ya da "otomatik"'),
+                        tahmin: S.str('Ekip tahmini, ör. "2-3 gün"; "yok" kaldırır'),
+                        etiket_ekle: S.str('Virgülle'),
+                        etiket_cikar: S.str('Virgülle'),
+                    }, ['gorev']),
+                },
+            }, ['gorevler']),
+        },
+        run: (a, ctx) => {
+            const project = resolveProject(ctx, a.proje);
+            // Dışarıdan gelen planın süresi aktarım sayılır (AI tahmini değil)
             const { ok, skipped } = eachRow(rowsArg(a.gorevler, 'gorevler'), r => {
-                const hits = matchByText(project.tasks, str(r.gorev), t => [t.name, t.jiraId]);
-                if (!hits.length) throw new ToolError(`"${str(r.gorev)}" ${project.name} projesinde yok.`);
-                if (hits.length > 1) throw new ToolError(`"${str(r.gorev)}" birden çok görevle eşleşti: ${hits.slice(0, 5).map(t => t.name).join(', ')}.`);
-                const t = hits[0];
-                const c: TaskFieldChange = { taskId: t.id };
-                const due = str(r.bitis);
-                if (due) c.dueDate = /^(yok|sil|-)$/i.test(due) ? '' : due;
-                const shift = Number(r.kaydir_gun);
-                if (r.kaydir_gun !== undefined && r.kaydir_gun !== null && r.kaydir_gun !== '' && Number.isFinite(shift) && shift !== 0) {
-                    if (!t.dueDate) throw new ToolError(`${t.name}: termini yok, kaydırılamaz (bitis verin).`);
-                    const d = new Date(`${t.dueDate}T00:00:00Z`);
-                    d.setUTCDate(d.getUTCDate() + Math.round(shift));
-                    c.dueDate = d.toISOString().slice(0, 10);
-                }
-                const who = str(r.atanan);
-                if (who) c.resourceName = /^(yok|kimse|-)$/i.test(who) ? '' : personName(resolvePerson(ctx, who));
-                if (str(r.oncelik)) c.priority = str(r.oncelik) as Task['priority'];
-                const avg = Number(r.sure);
-                if (r.sure !== undefined && r.sure !== null && r.sure !== '' && Number.isFinite(avg) && avg >= 0) {
-                    // Yalnız olası süre verildi: iyimser/kötümser mevcut oranla ölçeklenir, yoksa ±%30
-                    const base = t.time.avg > 0 ? t.time : { best: avg * 0.7, avg, worst: avg * 1.3 };
-                    const k = t.time.avg > 0 ? avg / t.time.avg : 1;
-                    c.time = { best: days(base.best * k), avg: days(avg), worst: days(base.worst * k) };
-                }
-                if (csv(r.etiket_ekle).length) c.addLabels = csv(r.etiket_ekle);
-                if (csv(r.etiket_cikar).length) c.removeLabels = csv(r.etiket_cikar);
-                if (Object.keys(c).length === 1) throw new ToolError(`${t.name}: değişecek alan verilmedi.`);
-                return c;
+                const c = taskChangeFromRow(project, ctx, r);
+                return c.time ? { ...c, estimateSource: 'import' as const } : c;
             });
             return withSkipped(propose(ctx, { type: 'gorev_guncelle', projectId: project.id, changes: ok }), skipped);
+        },
+    },
+    {
+        label: 'Plan kuralları önerisi',
+        writeOnly: true,
+        // Yalnız MCP: uygulamada kurallar Darboğaz penceresinden girilir
+        requires: 'mcp',
+        spec: {
+            name: 'oner_plan_kurallari',
+            description: 'Projenin plan kurallarını (Darboğaz ve Otomatik planla: hedef tarih, test ekibi, test/bulgu oranı, odak, kişi başı en yüksek yük, birim bulgu sorumlusu) güncellemeyi ÖNERİR (onaysız uygulanmaz). Yalnız verilen alanlar değişir. Odak %100 üstü istenirse odak 100 ve en_yuksek_yuk o değer verilir (ör. odak %120 → en_yuksek_yuk 120).',
+            parameters: S.obj({
+                proje: P.project,
+                hedef_tarih: S.str('YYYY-AA-GG'),
+                test_birimi: S.str('Testi yapan birim (ör. Destek); "yok" test adımını kapatır'),
+                test_orani: S.num('Test ve bulgu eforu, geliştirmenin yüzdesi (ör. 20)'),
+                odak: S.num('Odak yüzdesi 30-100'),
+                en_yuksek_yuk: S.num('Kişi başı en yüksek yük yüzdesi 50-200 (100 üstü fazla mesai)'),
+                bulgu_sorumlulari: { type: 'array', items: S.obj({ birim: S.str('Birim (ör. EMS)'), kisi: S.str('Ad soyad; boş = otomatik') }, ['birim']) },
+                kisi_en_yuksek_yuk: { type: 'array', items: S.obj({ kisi: S.str('Ad soyad'), yuzde: S.num('50-200') }, ['kisi', 'yuzde']) },
+            }, []),
+        },
+        run: (a, ctx) => {
+            const project = resolveProject(ctx, a.proje);
+            const rules: PlanRules = {};
+            if (str(a.hedef_tarih)) rules.targetDate = str(a.hedef_tarih);
+            if (str(a.test_birimi)) rules.testUnit = /^(yok|-)$/i.test(str(a.test_birimi)) ? '' : str(a.test_birimi);
+            const num = (v: unknown) => (v === undefined || v === null || v === '' ? undefined : Number(v));
+            if (num(a.test_orani) !== undefined) rules.testRatio = num(a.test_orani)! / 100;
+            if (num(a.odak) !== undefined) rules.focus = num(a.odak)! / 100;
+            if (num(a.en_yuksek_yuk) !== undefined) rules.maxLoad = num(a.en_yuksek_yuk)!;
+            const nameOf = (v: string) => project.resources.find(r => r.name.toLocaleLowerCase('tr-TR') === v.toLocaleLowerCase('tr-TR'))?.name || personName(resolvePerson(ctx, v));
+            const fx = Array.isArray(a.bulgu_sorumlulari) ? a.bulgu_sorumlulari as Record<string, unknown>[] : [];
+            if (fx.length) rules.fixers = Object.fromEntries(fx.map(f => [str(f.birim), str(f.kisi) ? nameOf(str(f.kisi)) : '']));
+            const pl = Array.isArray(a.kisi_en_yuksek_yuk) ? a.kisi_en_yuksek_yuk as Record<string, unknown>[] : [];
+            if (pl.length) rules.personMaxLoad = Object.fromEntries(pl.map(x => [nameOf(str(x.kisi)), Number(x.yuzde)]));
+            if (!Object.keys(rules).length) throw new ToolError('Değişecek kural verilmedi.');
+            return propose(ctx, { type: 'plan_kurallari', projectId: project.id, rules });
         },
     },
     {

@@ -81,6 +81,8 @@ export interface ToolContext {
      * kullanıcı açıkça isterse yapılır, ekteki bir talimat hafızaya yazamaz.
      */
     memory?: { store: MemoryStore; userPrompt: string };
+    /** MCP oturumu (Claude Desktop / Code): yalnız MCP'ye sunulan araçlar açılır (uygulama içi asistanın istek boyutunu büyütmez) */
+    mcp?: boolean;
     /**
      * Bu sohbete eklenen Excel/CSV dosyalarının tabloları (tüm satırlar; modele
      * giden metin kısaltılmış olabilir). veri_analiz bunlar üzerinde hesap yapar.
