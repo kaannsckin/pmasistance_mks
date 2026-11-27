@@ -52,6 +52,7 @@ const TABS: Tab[] = [
     { view: View.Kanban, label: 'Zaman çizelgesi', section: 'timeline' },
     { view: View.Planning, label: 'Planlama', section: 'planning' },
     { view: View.Whiteboard, label: 'Whiteboard', section: 'whiteboard' },
+    { view: View.Tests, label: 'Testler', section: 'tests' },
     { view: View.Risks, label: 'Riskler', section: 'risks' },
     { view: View.Resources, label: 'Ekip', section: 'team' },
 ];
@@ -65,7 +66,8 @@ const fmt = (iso?: string) => {
 const ModernProjectHeader: React.FC<ModernProjectHeaderProps> = ({ project, ownerName, currentView, onNavigate, onBack, exec, aiEnabled, onStatusReport, onNewTask, onOpenWorkPackages, onOpenAutomation, onOpenReports, sections }) => {
     const [moreOpen, setMoreOpen] = useState(false);
     const shows = (s?: ProjectSectionKey) => !s || !sections || sections.has(s);
-    const tabs = TABS.filter(t => shows(t.section));
+    // Testler sekmesi test panosu kurulu projede; kurulmamışsa "Daha fazla" menüsünden açılır
+    const tabs = TABS.filter(t => shows(t.section) && (t.view !== View.Tests || !!project.testBoard || currentView === View.Tests));
 
     const more: MoreItem[] = ([
         { key: 'goals', label: 'Hedefler', icon: 'target', view: View.Goals, section: 'goals' },
@@ -74,6 +76,7 @@ const ModernProjectHeader: React.FC<ModernProjectHeaderProps> = ({ project, owne
             { key: 'notes', label: 'Günlük', icon: 'pen' as IconName, view: View.Notes },
         ] : []),
         { key: 'wp', label: 'İş paketleri', icon: 'briefcase', run: onOpenWorkPackages, section: 'workPackages' },
+        ...(!project.testBoard && !exec ? [{ key: 'tests', label: 'Testler', icon: 'check' as IconName, view: View.Tests, section: 'tests' as ProjectSectionKey }] : []),
         ...(onOpenAutomation && !exec ? [{ key: 'rules', label: 'Kural setleri', icon: 'refresh' as IconName, run: onOpenAutomation }] : []),
         ...(onOpenReports && !exec ? [{ key: 'reports', label: 'Rapor otomasyonu', icon: 'send' as IconName, run: onOpenReports }] : []),
         ...(aiEnabled ? [{ key: 'ai', label: 'Asistan (tam ekran)', icon: 'message' as IconName, view: View.AI, section: 'assistant' as ProjectSectionKey }] : []),

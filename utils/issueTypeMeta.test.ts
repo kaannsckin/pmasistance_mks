@@ -5,8 +5,8 @@ import { JiraIssueRecord } from './integrations';
 
 describe('kayıt türü görünümü', () => {
     it('Jira tür adları ayrı türlere düşer', () => {
-        expect(['Bug', 'Change Request', 'Task', 'Sub-task', 'Story', 'Epic', 'Improvement', 'New Feature', 'Alt Görev', 'Değişiklik Talebi', 'Spike'].map(kindOfJiraType))
-            .toEqual(['bug', 'change', 'task', 'subtask', 'story', 'epic', 'improvement', 'feature', 'subtask', 'change', 'other']);
+        expect(['Bug', 'Change Request', 'Task', 'Sub-task', 'Story', 'Epic', 'Improvement', 'New Feature', 'Alt Görev', 'Değişiklik Talebi', 'Spike', 'Test', 'Doğrulama'].map(kindOfJiraType))
+            .toEqual(['bug', 'change', 'task', 'subtask', 'story', 'epic', 'improvement', 'feature', 'subtask', 'change', 'other', 'test', 'test']);
         expect(kindOfJiraType('')).toBeUndefined();
     });
 

@@ -439,11 +439,14 @@ describe('Jira canlı eşitleme (jira-sync)', () => {
             const m = meta(url);
             if (m) return m;
             const token = new URL(url).searchParams.get('nextPageToken');
-            return token ? jsonRes(200, { issues: [raw('MKS-3')], isLast: true }) : jsonRes(200, { issues: [raw('MKS-1'), raw('MKS-2')], nextPageToken: 't2', isLast: false });
+            return token ? jsonRes(200, { issues: [raw('MKS-3', '3', { reporter: { displayName: 'Ayşe Test' } })], isLast: true }) : jsonRes(200, { issues: [raw('MKS-1'), raw('MKS-2')], nextPageToken: 't2', isLast: false });
         }) as unknown as typeof fetch;
         const c = await (await run({ op: 'search', keys: ['MKS-1', 'MKS-2', 'MKS-3'] }, cloud, cloudEnv)).json() as { issues: JiraIssueRecord[]; missing: string[] };
         expect(c.issues.map(i => i.key)).toEqual(['MKS-1', 'MKS-2', 'MKS-3']);
         expect(c.missing).toEqual([]);
+        // Kaydı açan (test panosunda "testçinin açtığı hata" kuralı için)
+        expect(c.issues[2].reporter).toBe('Ayşe Test');
+        expect('reporter' in c.issues[0]).toBe(false);
     });
 
     it('meta: jeton sahibi, izinli projeler ve sık kullanılan filtreler', async () => {

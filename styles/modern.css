@@ -705,6 +705,7 @@ html:not(.dark) .ui-modern .text-gray-300, html:not(.dark) .ui-modern .text-gray
 .ui-modern .m-issue-improvement { --m-issue: var(--viz-4); }
 .ui-modern .m-issue-task { --m-issue: var(--viz-1); }
 .ui-modern .m-issue-subtask { --m-issue: color-mix(in srgb, var(--viz-1) 50%, var(--viz-3)); }
+.ui-modern .m-issue-test { --m-issue: var(--viz-5); }
 .ui-modern .m-issue-epic { --m-issue: var(--viz-7); }
 .ui-modern .m-surface.m-issue-card {
   background-color: color-mix(in srgb, var(--m-issue) var(--m-issue-mix), var(--m-surface));

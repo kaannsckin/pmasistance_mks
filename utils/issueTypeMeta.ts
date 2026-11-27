@@ -11,7 +11,7 @@ import { foldTr } from './rag/text';
  * düşmüyorsa) uygulamadaki tür esas alınır.
  */
 
-export type IssueKind = 'bug' | 'change' | 'story' | 'feature' | 'improvement' | 'task' | 'subtask' | 'epic' | 'other';
+export type IssueKind = 'bug' | 'change' | 'story' | 'feature' | 'improvement' | 'task' | 'subtask' | 'test' | 'epic' | 'other';
 
 export interface IssueKindMeta {
     kind: IssueKind;
@@ -29,12 +29,13 @@ const META: Record<IssueKind, Omit<IssueKindMeta, 'kind'>> = {
     improvement: { label: 'İyileştirme', icon: 'arrowUp', color: 'var(--viz-4)' },
     task: { label: 'Görev', icon: 'check', color: 'var(--viz-1)' },
     subtask: { label: 'Alt görev', icon: 'subtask', color: 'color-mix(in srgb, var(--viz-1) 50%, var(--viz-3))' },
+    test: { label: 'Test', icon: 'target', color: 'var(--viz-5)' },
     epic: { label: 'Epic', icon: 'zap', color: 'var(--viz-7)' },
     other: { label: 'Diğer', icon: 'circle', color: 'var(--m-label-3)' },
 };
 
 /** Pano süzgecinde türlerin sırası */
-export const ISSUE_KIND_ORDER: IssueKind[] = ['bug', 'change', 'story', 'feature', 'improvement', 'task', 'subtask', 'epic', 'other'];
+export const ISSUE_KIND_ORDER: IssueKind[] = ['bug', 'change', 'story', 'feature', 'improvement', 'task', 'subtask', 'test', 'epic', 'other'];
 
 /** Jira tür adı → görünüm türü */
 export const kindOfJiraType = (raw: string | undefined): IssueKind | undefined => {
@@ -43,6 +44,8 @@ export const kindOfJiraType = (raw: string | undefined): IssueKind | undefined =
     if (/sub.?task|alt.?gorev/.test(s)) return 'subtask';
     if (/change|degisiklik/.test(s)) return 'change';
     if (/epic/.test(s)) return 'epic';
+    // Test senaryosu / doğrulama kaydı ("Test Bug" gibi hata türleri hata sayılır)
+    if (/^(test|test case|test senaryosu|dogrulama|verification|validation)$/.test(s)) return 'test';
     if (/story|hikaye/.test(s)) return 'story';
     const mapped = mapJiraIssueType(raw);
     return mapped && mapped !== 'other' ? mapped : 'other';

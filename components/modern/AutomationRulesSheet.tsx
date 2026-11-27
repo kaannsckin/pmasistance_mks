@@ -322,7 +322,7 @@ const StatusChips: React.FC<{ label: string; value: string[]; ctx: AutomationCon
         <button type="button" className="m-pill" aria-pressed={!value.length} onClick={() => onChange([])}>{anyLabel}</button>
         {ctx.workflow.statuses.map(s => {
             const on = value.includes(s.key);
-            return <button key={s.key} type="button" className={`m-pill ${on ? 'm-tone-accent font-semibold' : ''}`} aria-pressed={on} onClick={() => onChange(on ? value.filter(x => x !== s.key) : [...value, s.key])}>{s.label}</button>;
+            return <button key={s.key} type="button" className={`m-pill ${on ? 'is-active' : ''}`} aria-pressed={on} onClick={() => onChange(on ? value.filter(x => x !== s.key) : [...value, s.key])}>{s.label}</button>;
         })}
     </div>
 );
@@ -355,7 +355,7 @@ const TriggerEditor: React.FC<{ value: AutomationTrigger; advanced: boolean; ctx
                 <div className="flex flex-wrap gap-1.5" role="group" aria-label="Değişen alan">
                     {TRIGGER_FIELDS.map(f => {
                         const on = value.fields.includes(f);
-                        return <button key={f} type="button" className={`m-pill ${on ? 'm-tone-accent font-semibold' : ''}`} aria-pressed={on} onClick={() => onChange({ ...value, fields: on ? value.fields.filter(x => x !== f) : [...value.fields, f] })}>{FIELD_LABELS[f]}</button>;
+                        return <button key={f} type="button" className={`m-pill ${on ? 'is-active' : ''}`} aria-pressed={on} onClick={() => onChange({ ...value, fields: on ? value.fields.filter(x => x !== f) : [...value.fields, f] })}>{FIELD_LABELS[f]}</button>;
                     })}
                 </div>
             )}

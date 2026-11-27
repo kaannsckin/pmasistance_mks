@@ -667,6 +667,7 @@ export enum View {
   Planning, // Planlama asistanı: yeni kayıt tahmini ve plan simülasyonu (modern arayüz)
   Dashboard, // Proje dashboard'u: kişiselleştirilebilir bileşenler (modern arayüzde projenin ilk ekranı)
   Whiteboard, // Proje whiteboard'u: FigJam tarzı serbest çalışma alanı (modern arayüz)
+  Tests, // Testler: kayıtlı Jira filtresinden kural tabanlı test panosu, haftalık görüntü ve rapor (modern arayüz)
 }
 
 export interface UnitLoad {
@@ -742,7 +743,7 @@ export type PermissionKey =
 export type RolePermissions = Partial<Record<UserRole, PermissionKey[]>>;
 
 /** Proje içi sekmeler (admin rol bazında gizleyebilir; genel bakış her zaman açık) */
-export type ProjectSectionKey = 'dashboard' | 'overview' | 'board' | 'list' | 'timeline' | 'planning' | 'risks' | 'team' | 'goals' | 'workPackages' | 'assistant' | 'whiteboard';
+export type ProjectSectionKey = 'dashboard' | 'overview' | 'board' | 'list' | 'timeline' | 'planning' | 'risks' | 'team' | 'goals' | 'workPackages' | 'assistant' | 'whiteboard' | 'tests';
 /** Yönetim ekranı kartları (admin rol bazında gizleyebilir) */
 export type ExecSectionKey = 'summary' | 'kpis' | 'expectations' | 'meetings' | 'health' | 'attention' | 'approvals' | 'risks' | 'departments' | 'changes';
 export type TaskSortKey = 'smart' | 'priority' | 'due' | 'name';
@@ -1142,6 +1143,69 @@ export interface WbAccess {
   people?: Record<string, WbAccessLevel>;
 }
 
+// ---- Testler: kayıtlı Jira filtresinden kural tabanlı pano (bkz. utils/testBoard.ts)
+/** Kolon kuralındaki alanlar */
+export type TestRuleField = 'status' | 'category' | 'type' | 'priority' | 'assignee' | 'assigneeRole' | 'assigneeLead' | 'reporter' | 'reporterRole' | 'component' | 'label' | 'reopened';
+/** Koşul: alan, değerlerden birine uyar (not: uymaz). Boş değer listesi koşulu yok sayar (bileşen lideri: herhangi bileşen). */
+export interface TestRuleCondition { field: TestRuleField; not?: boolean; values: string[] }
+/** Kolonun raporda ne sayıldığı */
+export type TestColumnMeaning = 'bugs' | 'changes' | 'reopened' | 'waiting' | 'testing' | 'approved';
+export interface TestBoardColumn {
+  id: string;
+  name: string;
+  /** Koşulların hepsi (VE) sağlanmalı; kart sıradaki ilk uyan kolona düşer */
+  when: TestRuleCondition[];
+  meaning?: TestColumnMeaning;
+}
+export interface TestBoardSettings {
+  /** Jira kayıtlı filtre kimliği (ör. gib_testset) */
+  filterId: string;
+  filterName?: string;
+  columns: TestBoardColumn[];
+  /** Pano kurulduğu an: bundan önceki hafta kapanışları için görüntü alınmaz */
+  since?: string;
+}
+/** Filtreden çekilen kayıt (açık ve kapalı) */
+export interface TestBoardItem {
+  key: string;
+  summary: string;
+  type: string;
+  status: string;
+  category: 'new' | 'indeterminate' | 'done' | null;
+  priority: string;
+  assignee: string;
+  reporter: string;
+  components: string[];
+  labels: string[];
+  created?: string;
+  resolved?: string;
+  updated?: string;
+  parentKey?: string;
+  /** Durum geçişleri (en yeni sonda, en çok 30): at, from, to, kategoriler */
+  transitions: { at: string; from: string; to: string; fc: TestBoardItem['category']; tc: TestBoardItem['category'] }[];
+}
+/** Anlık görüntüde bir kayıt: anahtar, kolon kimliği ('' eşleşmeyen), durum, öncelik, tür, atanan, başlık */
+export interface TestSnapshotRow { k: string; c: string; s: string; p: string; t: string; a: string; n: string }
+export interface TestSnapshot {
+  id: string;
+  at: string;
+  /** ISO hafta (2026-W48); haftalık görüntü o haftanın Cuma 20:00 kapanışıdır */
+  week: string;
+  /** Elle alınan ara görüntü (haftalık sayılmaz) */
+  manual?: boolean;
+  /** Kapanıştan geç alındı (o saatte uygulama açık değildi) */
+  late?: boolean;
+  by?: string;
+  columns: { id: string; name: string; meaning?: TestColumnMeaning }[];
+  rows: TestSnapshotRow[];
+}
+export interface ProjectTestBoard {
+  settings: TestBoardSettings;
+  items?: TestBoardItem[];
+  fetchedAt?: string;
+  snapshots?: TestSnapshot[];
+}
+
 export interface Whiteboard {
   id: string;
   name: string;
@@ -1191,6 +1255,8 @@ export interface Project {
   poc?: ProjectPoc;
   /** FigJam tarzı panolar (fikir, planlama, retro, inceleme) */
   whiteboards?: Whiteboard[];
+  /** Testler sekmesi: kayıtlı Jira filtresinden kural tabanlı test panosu ve haftalık anlık görüntüler */
+  testBoard?: ProjectTestBoard;
   risks?: Risk[];
   pestelItems?: PestelItem[]; // PESTEL dış çevre analizi
   swotItems?: SwotItem[]; // SWOT stratejik analizi
