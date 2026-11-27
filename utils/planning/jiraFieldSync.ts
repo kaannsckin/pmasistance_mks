@@ -218,6 +218,8 @@ export const applyFieldPolicy = (before: Task, merged: Task, issue: JiraIssueRec
     if (!out.dueDate) delete out.dueDate;
     // Jira'daki açılış anı ve engelleyen kayıt (öncül boşsa) her zaman alınır
     if (merged.createdAt) out.createdAt = merged.createdAt;
+    // Jira'daki tür adı yalnız görünüm içindir (panoda alt görev / değişiklik talebi ayrımı): her zaman alınır
+    if (merged.jiraIssueType) out.jiraIssueType = merged.jiraIssueType;
     if (!before.predecessor && merged.predecessor) out.predecessor = merged.predecessor;
     if (Object.keys(base).length) out.jiraBase = base;
     return { task: out, pulled, conflicts };

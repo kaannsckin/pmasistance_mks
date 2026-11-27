@@ -57,6 +57,7 @@ export interface Task {
   workPackageId?: string;
   // Kayıt yaşam döngüsü (planlama simülasyonu ve AI tahmini için; bkz. utils/planning)
   issueType?: IssueType;
+  jiraIssueType?: string; // Jira'daki tür adı (Bug, Sub-task, Change Request …); panoda türü ayırt etmek için
   createdAt?: string; // ISO; uygulamada açılışta ya da içe aktarılan kaynaktan (Jira "Created")
   importedAt?: string; // içe aktarıldıysa zamanı (açılış tarihi bilinmiyorsa lead time hesaplanmaz)
   startedAt?: string; // ilk kez "Süreçte"ye geçtiği an
