@@ -54,6 +54,10 @@ interface ProjectBoardProps {
     wpNames?: Map<string, string>;
     minPriority?: TaskPriority;
     sortKey?: TaskSortKey;
+    /** Projeyi şimdi Jira ile eşitler (kayıtlı eşitleme ayarıyla); sonuç özeti döner. Verilmezse düğme görünmez */
+    onJiraSync?: () => Promise<string>;
+    /** Son eşitleme bilgisi (düğmenin ipucu) */
+    jiraSyncHint?: string;
 }
 
 const SWIMLANES: { value: BoardSwimlane; label: string }[] = [
@@ -139,8 +143,18 @@ const Card: React.FC<{
 
 const ProjectBoard: React.FC<ProjectBoardProps> = ({
     tasks, config, canConfigure, onSaveConfig, onMoveTask, onStatusChange, onWorkflowChange, workflow, boardSource, schemeName, onOpenWorkflow, onOpenLists, onOpenAutomation, onViewTask, onEditTask, onDeleteTask, onNotifyTask, onNewTask, onCelebrate, readOnly = false,
-    sprintNames, me, wpNames, minPriority = 'Low' as TaskPriority, sortKey = 'smart' as TaskSortKey,
+    sprintNames, me, wpNames, minPriority = 'Low' as TaskPriority, sortKey = 'smart' as TaskSortKey, onJiraSync, jiraSyncHint,
 }) => {
+    const [syncing, setSyncing] = useState(false);
+    const [syncNote, setSyncNote] = useState<{ ok: boolean; text: string } | null>(null);
+    useEffect(() => { if (!syncNote?.ok) return; const id = setTimeout(() => setSyncNote(null), 8000); return () => clearTimeout(id); }, [syncNote]);
+    const runJiraSync = async () => {
+        if (!onJiraSync || syncing) return;
+        setSyncing(true); setSyncNote(null);
+        try { setSyncNote({ ok: true, text: `Jira ile eşitlendi: ${await onJiraSync()}` }); }
+        catch (e) { setSyncNote({ ok: false, text: `Jira eşitlemesi yapılamadı: ${e instanceof Error ? e.message : String(e)}` }); }
+        finally { setSyncing(false); }
+    };
     const cfg = useMemo(() => boardConfigOf(config, workflow), [config, workflow]);
     const [notice, setNotice] = useState<string | null>(null);
     useEffect(() => { if (!notice) return; const id = setTimeout(() => setNotice(null), 5000); return () => clearTimeout(id); }, [notice]);
@@ -282,6 +296,9 @@ const ProjectBoard: React.FC<ProjectBoardProps> = ({
                         <span aria-hidden="true" className="flex-1 h-1.5 rounded-full m-fill overflow-hidden"><span className="block h-full rounded-full" style={{ width: `${pct}%`, background: 'var(--m-ok)' }}></span></span>
                         <span className="text-[13px] m-text-2 whitespace-nowrap"><b className="m-tabular">{doneCount}/{mappedTotal}</b> tamam</span>
                     </span>
+                    {onJiraSync && <button type="button" className="m-btn m-btn-gray !min-h-[36px] !px-3 text-[14px]" disabled={syncing} onClick={runJiraSync} title={`Panodaki görevleri Jira'daki güncel hâliyle eşitler (Planlama › Jira eşitleme ayarıyla)${jiraSyncHint ? ` · ${jiraSyncHint}` : ''}`}>
+                        <Icon name="refresh" size={15} className={syncing ? 'animate-spin' : ''} />{syncing ? 'Eşitleniyor…' : 'Jira ile eşitle'}
+                    </button>}
                     {!readOnly && <button type="button" className="m-btn m-btn-primary !min-h-[36px] !px-3 text-[14px]" onClick={onNewTask}><Icon name="plus" size={15} />Görev</button>}
                     {schemeName && <span className="hidden lg:inline-flex items-center gap-1 h-7 px-2.5 rounded-full m-fill-2 text-[12.5px] m-text-2" title={`Yönetici tarafından atanan proje yapılandırması${boardSource === 'project' ? ' · bu projeye özel pano' : ''}`}><Icon name="sliders" size={12} />{schemeName}{boardSource === 'project' ? ' · özel pano' : ''}</span>}
                     {onOpenLists && <button type="button" className="m-btn m-btn-gray !min-h-[36px] !px-3 text-[14px]" onClick={onOpenLists} title="Projenin sürümleri, bileşenleri ve rol üyeleri"><Icon name="grid" size={15} />Proje ayarları</button>}
@@ -309,6 +326,7 @@ const ProjectBoard: React.FC<ProjectBoardProps> = ({
             )}
 
             {notice && <p role="alert" className="m-0 m-tone-bad rounded-xl px-3 py-2 text-[14px] flex items-center gap-2"><Icon name="alert" size={15} />{notice}</p>}
+            {syncNote && <p role={syncNote.ok ? 'status' : 'alert'} className={`m-0 rounded-xl px-3 py-2 text-[14px] flex items-center gap-2 ${syncNote.ok ? 'm-tone-ok' : 'm-tone-bad'}`}><Icon name={syncNote.ok ? 'check' : 'alert'} size={15} />{syncNote.text}<button type="button" aria-label="Kapat" className="ml-auto bg-transparent border-0 cursor-pointer opacity-70" onClick={() => setSyncNote(null)}><Icon name="x" size={14} /></button></p>}
             {hiddenByView > 0 && <ViewFilterNote text={`Yönetici ayarı: ${MIN_PRIORITY_OPTIONS.find(o => o.value === minPriority)!.label.toLocaleLowerCase('tr-TR')} görevler gösteriliyor · ${hiddenByView} görev gizli`} />}
             {unmapped.length > 0 && (
                 <p role="status" className="m-0 flex items-center gap-2 text-[13.5px] m-ink-warn">

@@ -403,6 +403,8 @@ export type JiraStatusCategory = 'new' | 'indeterminate' | 'done';
 
 export interface JiraTransition {
     at: string; // ISO
+    /** Geçişi yapan kişi (Jira değişiklik geçmişinin yazarı) */
+    by?: string;
     from: string;
     to: string;
     fromCategory: JiraStatusCategory | null;
@@ -583,7 +585,7 @@ export const fetchJiraHistory = async (env: Env, key: string, fetchImpl?: typeof
 const transitionsOf = (histories: JiraHistoryRaw[], categories: Map<string, JiraStatusCategory>): JiraTransition[] => histories
     .flatMap(h => (h.items || [])
         .filter(i => i.field === 'status' || i.fieldId === 'status')
-        .map(i => ({ at: isoOf(h.created), from: str(i.fromString), to: str(i.toString), fromCategory: categories.get(str(i.from)) || null, toCategory: categories.get(str(i.to)) || null })))
+        .map(i => ({ at: isoOf(h.created), ...(str(h.author?.displayName) || str(h.author?.name) ? { by: str(h.author?.displayName) || str(h.author?.name) } : {}), from: str(i.fromString), to: str(i.toString), fromCategory: categories.get(str(i.from)) || null, toCategory: categories.get(str(i.to)) || null })))
     .filter((t): t is JiraTransition => !!t.at)
     .sort((a, b) => a.at.localeCompare(b.at));
 

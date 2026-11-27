@@ -117,7 +117,9 @@ import { appendModelEval } from './utils/planning/ml/estimateModel';
 import { JiraImportOptions, mergeJiraIssues } from './utils/planning/jiraImport';
 import { linkJiraKeys } from './utils/planning/jiraExport';
 import { departmentLeadIds } from './utils/staffing';
-import { applyJiraSync, JiraPushOutcome, pullIssueIntoTasks, runFullSync, sourceLabel, writeSyncState } from './utils/planning/jiraSync';
+import { applyJiraSync, hasSyncWork, JiraPushOutcome, pullIssueIntoTasks, readSyncState, runFullSync, sourceLabel, writeSyncState } from './utils/planning/jiraSync';
+import { syncProjectNow } from './components/modern/planning/syncNow';
+import { relativeTime } from './utils/recentChanges';
 import { markPushed } from './utils/planning/jiraFieldSync';
 import { ensureJiraPeople } from './utils/planning/jiraPeople';
 import { reportEvmSnapshot } from './utils/evm';
@@ -2519,6 +2521,10 @@ const App: React.FC = () => {
         onNewTask={newTask}
         onCelebrate={celebrate}
         sprintNames={ps.sprintNames || {}}
+        onJiraSync={canEditProjectContent(workspace, identity, activeProject.id) && hasSyncWork(activeProject)
+          ? () => { const p = workspaceRef.current?.projects.find(x => x.id === activeProject.id); return p ? syncProjectNow(p, handleApplyJiraSync, 'pano') : Promise.reject(new Error('Proje bulunamadı.')); }
+          : undefined}
+        jiraSyncHint={(() => { const st = readSyncState(activeProject.id); return st ? `son eşitleme ${relativeTime(st.at)}${st.ok ? '' : ' (hata)'}` : undefined; })()}
         me={boardMe}
         wpNames={new Map(activeProject.workPackages.map(w => [w.id, w.name]))}
         minPriority={roleView.minTaskPriority}
