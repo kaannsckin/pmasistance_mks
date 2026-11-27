@@ -84,6 +84,10 @@ export interface Task {
   storyPoints?: number;
   fixVersion?: string; // kaynak sistemdeki hedef sürüm
   jiraStatus?: string; // Jira'daki durum adı (ör. "ANALYSIS"); pano kolon eşlemesinde kullanılır
+  /** Elle girilen ilerleme yüzdesi (0–100; ör. EMS panosundan). Yoksa durumdan otomatik: geliştirmede %50, testte %75. */
+  progressPct?: number;
+  /** Ekibin serbest tahmini (ör. "2-3 gün", "1 hafta"); EMS panosundan gelir */
+  estimateText?: string;
   components?: string[]; // Projenin bileşen listesinden (Jira "Component/s")
   resolution?: string; // Çözüm (Jira "Resolution"): Düzeltildi, Yapılmayacak, Tekrar …
   updatedAt?: string; // son değişiklik (Jira "Updated" ya da panoda taşıma) — "Son güncellenenler" filtresi

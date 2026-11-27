@@ -19,8 +19,17 @@ describe('ilerleme modeli', () => {
         t('d', TaskStatus.ToDo),
     ];
 
-    it('model yoksa yalnız tamamlanan sayılır', () => {
-        expect(progressOf(tasks)).toMatchObject({ pct: 25, done: 1, total: 4, weighted: false });
+    it('model yoksa otomatik yüzde: geliştirmede %50, testte %75', () => {
+        // (100 + 75 + 50 + 0) / 4
+        expect(progressOf(tasks)).toMatchObject({ pct: 56, done: 1, total: 4, weighted: true });
+        expect(progressOf([t('a', TaskStatus.Done), t('d', TaskStatus.ToDo)])).toMatchObject({ pct: 50, weighted: false });
+    });
+
+    it('elle girilen ilerleme yüzdesi durumdan önce gelir', () => {
+        expect(taskProgressPercent(t('x', TaskStatus.InProgress, { progressPct: 90 }))).toBe(90);
+        expect(taskProgressPercent(t('x', TaskStatus.InProgress, { jiraStatus: 'Testte', progressPct: 60 }), weights)).toBe(60);
+        expect(taskProgressPercent(t('x', TaskStatus.Done, { progressPct: 40 }))).toBe(100);
+        expect(taskProgressPercent(t('x', TaskStatus.ToDo, { jiraStatus: 'İncelemede' }))).toBe(75);
     });
 
     it('ayrıntılı durum kategoriyi geçer; tamamlanan her zaman %100', () => {
@@ -45,6 +54,6 @@ describe('ilerleme modeli', () => {
         expect(overviewStats(p).progressPct).toBe(51);
         expect(currentSprint(p)?.progressPct).toBe(51);
         expect(versionProgress(p.tasks, { id: 'v', name: 'R1', status: 'unreleased' }, new Date(), p.progressModel).pct).toBe(51);
-        expect(versionProgress(p.tasks, { id: 'v', name: 'R1', status: 'unreleased' }).pct).toBe(25);
+        expect(versionProgress(p.tasks, { id: 'v', name: 'R1', status: 'unreleased' }).pct).toBe(56); // model yok: otomatik yüzde
     });
 });

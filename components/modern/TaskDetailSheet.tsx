@@ -16,6 +16,7 @@ import { Sheet } from './ui';
 import { Icon } from './icons';
 import { useAssistantOptional } from '../assistant/AssistantContext';
 import { lastSprintOf, sprintSpanOf } from '../../utils/sprintSpan';
+import { isProgressPercent, taskProgressPercent } from '../../utils/progress';
 
 /**
  * Modern görev ayrıntısı: durum hızlı değişir, alt görevler işaretlenir,
@@ -83,6 +84,8 @@ const TaskDetailSheet: React.FC<TaskDetailSheetProps> = ({ task, project, author
         ...(task.resolution ? [['Çözüm', task.resolution] as [string, React.ReactNode]] : []),
         ['Termin', task.dueDate ? <>{shortDate(task.dueDate)}{late > 0 && <span className="ml-2 m-ink-bad font-semibold">{late} gün gecikti</span>}</> : '—'],
         ['Süre', pert > 0 ? `${num(pert)} gün (PERT) · ${task.time.best} / ${task.time.avg} / ${task.time.worst}${task.estimateSource === 'reference' ? ' · geçmiş kayıtlardan' : ''}` : <span className="m-ink-warn">Tahmin yok</span>],
+        ['İlerleme', <>%{taskProgressPercent(task, project.progressModel?.weights)}<span className="m-text-3">{isProgressPercent(task.progressPct) && task.status !== TaskStatus.Done ? ' · elle girildi' : ' · durumdan otomatik'}</span></>],
+        ...(task.estimateText ? [['Ekip tahmini', task.estimateText] as [string, React.ReactNode]] : []),
         ...(task.forecast ? [['Açılış tahmini', <>
             {num(task.forecast.p50Days)}–{num(task.forecast.p80Days)} iş günü <span className="m-text-3">(benzer {task.forecast.n} kayıt)</span>
             {closedIn !== null && <span className={`ml-2 font-semibold ${closedIn <= task.forecast.p80Days ? 'm-ink-ok' : 'm-ink-warn'}`}>{closedIn <= task.forecast.p80Days ? 'aralıkta kapandı' : 'P80 aşıldı'}</span>}

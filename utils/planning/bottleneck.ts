@@ -3,6 +3,7 @@ import { buildSprintWindows } from '../taskToAllocation';
 import { isUnassigned } from './jiraPeople';
 import { remainingEffort } from './capacity';
 import { isWorkday } from './workdays';
+import { isProgressPercent } from '../progress';
 
 /**
  * Darboğaz planı: haftalık sürüm ritminde kişi ve ekip kapasitesine göre plan.
@@ -449,7 +450,10 @@ export const planBottleneck = ({ project, people = [], leaves = [], settings, sc
     const unestimated: string[] = [];
     const infosBase: Omit<TaskInfo, 'movable'>[] = [];
     [...open].sort(taskOrder).forEach(t => {
-        const days = remainingEffort(t, { useRemaining: settings.useRemaining });
+        // Elle girilen ilerleme (ör. panodan %90) kalan eforu düşürür
+        const jiraRemaining = settings.useRemaining && typeof t.remainingEstimateHours === 'number';
+        const done = !jiraRemaining && isProgressPercent(t.progressPct) ? t.progressPct / 100 : 0;
+        const days = remainingEffort(t, { useRemaining: settings.useRemaining }) * (1 - done);
         if (!(days > 0)) { unestimated.push(t.id); return; }
         const owner = isUnassigned(t.resourceName) ? '' : t.resourceName;
         const unit = (t.unit && members.some(m => m.unit === t.unit) ? t.unit : unitOfName.get(owner)) || t.unit || 'Genel';
