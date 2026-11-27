@@ -3,7 +3,7 @@ import { Project, WbNode, Whiteboard } from '../../../types';
 import { useAssistantOptional } from '../../assistant/AssistantContext';
 import { AiError } from '../../../utils/ai/client';
 import { WbAiResult } from '../../../utils/whiteboard/assistant';
-import { setWhiteboardImageConsent } from '../../../utils/whiteboard/bridge';
+import { setWhiteboardImageConsent, WbComplete, WbTaskOutcome } from '../../../utils/whiteboard/bridge';
 import { Rect } from '../../../utils/whiteboard/model';
 import { Icon } from '../icons';
 import { runWbAssistant } from './wbAiRun';
@@ -22,10 +22,16 @@ const SUGGEST_IMAGE = [
     'Değişiklikleri uygulayıp yeni ekranın taslağını yanına çiz',
     'Bu ekrandaki kullanılabilirlik sorunlarını işaretle',
 ];
+/** İstek, notlardan kayıt açmak mı (çizim değil) */
+export const isTaskRequest = (t: string): boolean =>
+    /(g[oö]rev|kay[ıi]t|task|i[sş] kalem)\w*[^.?!]{0,40}(a[cç]|olu[sş]tur|d[oö]n[uü][sş]t[uü]r|[cç]evir)|(a[cç]|olu[sş]tur|d[oö]n[uü][sş]t[uü]r)\w*[^.?!]{0,20}(g[oö]rev|kay[ıi]t|task)/i.test(t);
+
+export const SUGGEST_NOTES = 'Seçili notlardan kayıt aç (aynı işi anlatan notlar tek kayıt)';
 const SUGGEST_BOARD = [
+    SUGGEST_NOTES,
     'Seçili notları temalara göre gruplayıp her grubu bir bölüme al',
     'Bu konu için adım adım akış şeması çiz',
-    'Retrospektif için Başarılar / Sorunlar / Aksiyonlar bölümleri hazırla',
+    'Çiçekli bir bahar sahnesi çiz',
 ];
 
 export const WbAssistant: React.FC<{
@@ -35,11 +41,15 @@ export const WbAssistant: React.FC<{
     /** Görünür alan (pano koordinatı) */
     visible: Rect;
     onApply: (r: WbAiResult) => void;
+    /** Notlardan kayıt açma (gruplayarak); verilmezse yalnız çizim */
+    createTasks?: (request: string, complete: WbComplete) => Promise<WbTaskOutcome>;
+    /** Açılışta kutuya yazılı istek */
+    initialText?: string;
     onUndo: () => void;
     onClose: () => void;
-}> = ({ board, project, selection, visible, onApply, onUndo, onClose }) => {
+}> = ({ board, project, selection, visible, onApply, createTasks, initialText, onUndo, onClose }) => {
     const a = useAssistantOptional();
-    const [text, setText] = useState('');
+    const [text, setText] = useState(initialText || '');
     const [sendImage, setSendImage] = useState(true);
     const [done, setDone] = useState<{ summary: string; noImage: boolean } | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -56,7 +66,7 @@ export const WbAssistant: React.FC<{
         setWhiteboardImageConsent(sendImage);
         if (viaChat) {
             // Uygulamanın asistanı: sohbet paneli açılır, asistan panoya_ciz aracıyla çizer
-            a.ask(`Panoya çiz: ${request.trim()}`);
+            a.ask(createTasks && isTaskRequest(request) ? `Panodaki notlardan kayıt aç: ${request.trim()}` : `Panoya çiz: ${request.trim()}`);
             setText('');
             onClose();
             return;
@@ -65,6 +75,12 @@ export const WbAssistant: React.FC<{
         ctrl.current = c;
         setBusy(true); setError(null); setDone(null);
         try {
+            if (createTasks && isTaskRequest(request)) {
+                const t = await createTasks(request, (s, p, o) => a.complete(s, p, c.signal, o));
+                setDone({ summary: `${t.summary} ${t.created.map(x => `"${x.title}"`).join(', ')}`.trim(), noImage: false });
+                setText('');
+                return;
+            }
             const r = await runWbAssistant({
                 board, project, selection, visible, request, sendImage,
                 complete: (s, p, o) => a.complete(s, p, c.signal, o),

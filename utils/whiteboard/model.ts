@@ -27,9 +27,34 @@ export const WB_COLORS: WbColor[] = [
     { key: 'white', label: 'Beyaz', fill: '#FFFFFF', ink: '#1F1F23', edge: '#D4D4D8' },
 ];
 export const WB_COLOR = new Map(WB_COLORS.map(c => [c.key, c]));
-export const colorOf = (key: string | undefined, fallback = 'yellow'): WbColor => WB_COLOR.get(key || fallback) || WB_COLOR.get(fallback)!;
+export const HEX_RE = /^#[0-9a-fA-F]{6}$/;
+
+const mix = (hex: string, to: number, t: number): string => '#' + [1, 3, 5]
+    .map(i => Math.round(parseInt(hex.slice(i, i + 2), 16) * (1 - t) + to * t).toString(16).padStart(2, '0')).join('');
+const lum = (hex: string): number => {
+    const [r, g, b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255);
+    return 0.299 * r + 0.587 * g + 0.114 * b;
+};
+
+/** Özel renk (#rrggbb): dolgu o renk, kenar koyusu, yazı zemine göre koyu ya da beyaz */
+export const hexColor = (hex: string): WbColor => ({
+    key: hex.toLowerCase(), label: hex, fill: hex, edge: mix(hex, 0, 0.22), ink: lum(hex) > 0.6 ? '#1F1F23' : '#FFFFFF',
+});
+
+export const colorOf = (key: string | undefined, fallback = 'yellow'): WbColor =>
+    (key && HEX_RE.test(key) ? hexColor(key) : WB_COLOR.get(key || fallback)) || WB_COLOR.get(fallback)!;
 
 export const STAMPS = ['👍', '❤️', '✅', '❓', '⭐', '🔥', '🎉', '👀', '⚠️', '💡'];
+
+/** Öğeler panelindeki emoji grupları (Canva'daki gibi hazır çizimler) */
+export const ELEMENT_GROUPS: { label: string; items: string[] }[] = [
+    { label: 'Tepki', items: STAMPS },
+    { label: 'İş ve proje', items: ['📌', '📎', '📝', '📋', '📅', '⏰', '📊', '📈', '📉', '🗂️', '📁', '🔍', '🔒', '🔑', '⚙️', '🛠️', '🧪', '🐞', '🚀', '🎯', '🏁', '🧩', '💬', '📣', '✉️', '☎️'] },
+    { label: 'İnsanlar', items: ['🙂', '😀', '🤔', '😕', '😮', '😴', '🙋', '🙌', '👏', '🤝', '👤', '👥', '🧑‍💻', '👩‍💼', '👨‍🔧', '🧑‍🏫'] },
+    { label: 'Doğa', items: ['🌸', '🌼', '🌻', '🌷', '🌹', '🌱', '🌿', '🍀', '🌳', '🌲', '🍂', '☀️', '🌤️', '⛅', '☁️', '🌧️', '⛈️', '❄️', '🌈', '🌊', '⛰️', '🌙', '⭐'] },
+    { label: 'Nesneler', items: ['💻', '🖥️', '📱', '⌨️', '🖱️', '🗄️', '🏢', '🏠', '🚗', '✈️', '🎁', '☕', '📦', '🧾', '💰', '💳', '🏷️', '🔔', '🔋', '💾'] },
+    { label: 'Semboller', items: ['✔️', '❌', '➕', '➖', '❗', '‼️', '⁉️', '🔴', '🟠', '🟡', '🟢', '🔵', '🟣', '⚫', '⚪', '⬆️', '⬇️', '⬅️', '➡️', '🔁', '🔄', '1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣'] },
+];
 
 export const NODE_SIZE: Record<WbNodeType, { w: number; h: number }> = {
     sticky: { w: 200, h: 200 },
@@ -120,6 +145,16 @@ export const edgeEnds = (a: Rect, b: Rect): { x1: number; y1: number; x2: number
     };
     const p1 = clip(a, ca, cb), p2 = clip(b, cb, ca);
     return { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y };
+};
+
+/** Bağlantının çizgisi: düz ya da kıvrımlı (orta noktası `curve` px sapar); etiket orta noktada */
+export const edgeGeometry = (p: { x1: number; y1: number; x2: number; y2: number }, curve = 0): { d: string; lx: number; ly: number } => {
+    const mx = (p.x1 + p.x2) / 2, my = (p.y1 + p.y2) / 2;
+    if (!curve) return { d: `M${p.x1} ${p.y1} L${p.x2} ${p.y2}`, lx: mx, ly: my };
+    const dx = p.x2 - p.x1, dy = p.y2 - p.y1, len = Math.hypot(dx, dy) || 1;
+    const nx = -dy / len, ny = dx / len;
+    // Kuadratik eğride orta nokta, kontrol noktasının yarısı kadar sapar
+    return { d: `M${p.x1} ${p.y1} Q${mx + nx * curve * 2} ${my + ny * curve * 2} ${p.x2} ${p.y2}`, lx: mx + nx * curve, ly: my + ny * curve };
 };
 
 // ------------------------------------------------------------------ pano işlemleri (saf)
@@ -490,6 +525,53 @@ export const taskFromNode = (node: Pick<WbNode, 'text'>, opts: { now: Date; unit
         createdAt: at,
         updatedAt: at,
     };
+};
+
+/** Nesnenin içinde bulunduğu en küçük bölüm (merkezine göre) */
+export const sectionOfNode = (board: Pick<Whiteboard, 'nodes'>, n: WbNode): WbNode | undefined => {
+    const c = center(n);
+    return board.nodes
+        .filter(s => s.type === 'section' && s.id !== n.id && c.x >= s.x && c.x <= s.x + s.w && c.y >= s.y && c.y <= s.y + s.h)
+        .sort((a, b) => a.w * a.h - b.w * b.h)[0];
+};
+
+const TITLE_SECTION = /gereksinim|talep|ihtiya[cç]|konu|ba[sş]l[iı]k|[oö]zet|requirement|problem|sorun/i;
+
+/**
+ * Birden çok nottan TEK görev: notlar bölümlerine göre (bölüm sırası yukarıdan
+ * aşağı, soldan sağa) gruplanır. Başlık, gereksinim/talep/konu benzeri bir
+ * bölümdeki ilk notun ilk satırı (yoksa sıradaki ilk not); açıklama bölüm
+ * başlıkları altında notların metni.
+ */
+export const taskFromNotes = (board: Pick<Whiteboard, 'nodes'>, nodes: WbNode[], opts: { now: Date; unit: string; boardName: string; author?: string; title?: string }): Task | null => {
+    const notes = nodes.filter(n => n.text?.trim());
+    if (!notes.length) return null;
+    const byPos = (a: Pick<WbNode, 'x' | 'y'>, b: Pick<WbNode, 'x' | 'y'>) => (Math.abs(a.y - b.y) > 40 ? a.y - b.y : a.x - b.x);
+    const groups = new Map<string, { section?: WbNode; items: WbNode[] }>();
+    for (const n of notes) {
+        const s = sectionOfNode(board, n);
+        const k = s?.id || '';
+        if (!groups.has(k)) groups.set(k, { section: s, items: [] });
+        groups.get(k)!.items.push(n);
+    }
+    const ordered = [...groups.values()]
+        .map(g => ({ ...g, items: [...g.items].sort(byPos) }))
+        .sort((a, b) => byPos(a.section || a.items[0], b.section || b.items[0]));
+    const lines = (t: string) => t.split('\n').map(x => x.trim()).filter(Boolean);
+    const titleNote = ordered.find(g => g.section && TITLE_SECTION.test(g.section.text || ''))?.items[0] || ordered[0].items[0];
+    const name = (opts.title?.trim() || lines(titleNote.text || '')[0] || 'Whiteboard kaydı').slice(0, 200);
+    const body: string[] = [];
+    ordered.forEach(g => {
+        if (g.section) body.push(`${g.section.text?.trim() || 'Bölüm'}:`);
+        g.items.forEach(n => {
+            const ls = lines(n.text || '');
+            body.push(`- ${ls[0]}`, ...ls.slice(1).map(l => `  ${l}`));
+        });
+        body.push('');
+    });
+    body.push(`Whiteboard: ${opts.boardName}${opts.author ? ` · ${opts.author}` : ''} · ${notes.length} nottan birleştirildi`);
+    const base = taskFromNode({ text: name }, opts)!;
+    return { ...base, notes: body.join('\n').trim() };
 };
 
 /** Çalışma alanındaki en sık birim (yeni görev için) */

@@ -1072,7 +1072,7 @@ export interface ProjectPoc {
  */
 export type WbNodeType = 'sticky' | 'text' | 'shape' | 'section' | 'stamp' | 'pen' | 'image'
   | 'task' | 'sprint' | 'workPackage' | 'risk' | 'version';
-export type WbShape = 'rect' | 'ellipse' | 'diamond' | 'triangle';
+export type WbShape = 'rect' | 'ellipse' | 'diamond' | 'triangle' | 'star' | 'hexagon' | 'heart' | 'cloud' | 'callout' | 'arrowRight' | 'cylinder' | 'parallelogram';
 
 export interface WbNode {
   id: string;
@@ -1082,9 +1082,11 @@ export interface WbNode {
   w: number;
   h: number;
   text?: string;
-  /** Renk anahtarı (yellow, green, blue …) */
+  /** Renk anahtarı (yellow, green, blue …) ya da #rrggbb */
   color?: string;
   shape?: WbShape;
+  /** Kalem çizgisi: kapalı ve bu renkle (anahtar ya da #rrggbb) dolu çizilir */
+  fill?: string;
   /** Bağlı kayıt: görev kimliği, sprint numarası, iş paketi / risk / sürüm kimliği */
   ref?: string;
   /** Kalem çizgisi: nesneye göre [x0, y0, x1, y1, …] */
@@ -1113,6 +1115,8 @@ export interface WbEdge {
   label?: string;
   /** arrow: tek yönlü ok (varsayılan) · line: oksuz çizgi */
   style?: 'arrow' | 'line';
+  /** Kıvrım: çizginin ortasının düz çizgiden sapması (px; işareti yönü belirler) */
+  curve?: number;
 }
 
 export interface WbVoting {

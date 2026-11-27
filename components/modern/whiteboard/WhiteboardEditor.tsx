@@ -1,22 +1,24 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Project, Task, WbEdge, WbNode, WbNodeType, WbShape, Whiteboard } from '../../../types';
 import {
-    addEdge, addNodes, boundsOf, castVote, cloneNodes, contains, defaultUnit, dragSet, drawOrder, duplicateNodes, edgeEnds, endVoting,
+    addEdge, addNodes, boundsOf, castVote, cloneNodes, contains, defaultUnit, dragSet, drawOrder, duplicateNodes, edgeEnds, edgeGeometry, endVoting,
     clearVoting, insertToken, intersects, makeNode, moveNodes, NODE_SIZE, Rect, removeEdges, removeNodes, reorder, sectionWithTasks,
-    isVotable, sectionChildren, startTimer, startVoting, STAMPS, stopTimer, taskCards, taskFromNode, tasksOfRef, timerLeft, updateNodes, voteRefusal, voteResults,
+    isVotable, sectionChildren, startTimer, startVoting, STAMPS, stopTimer, taskCards, taskFromNode, taskFromNotes, tasksOfRef, timerLeft, updateNodes, voteRefusal, voteResults,
     VotingSetup, votingDue, wantsReference, WB_COLORS, WbRefKind,
 } from '../../../utils/whiteboard/model';
 import { WB_TEMPLATE_BY_KEY } from '../../../utils/whiteboard/templates';
 import { Icon, IconName } from '../icons';
 import { NodeEnv, PEN_COLORS, penPath, WbNodeBody } from './WbNodeView';
 import { VoteBanner, VoteResults, VoteSetup } from './WbVoting';
-import WbAssistant from './WbAssistant';
+import WbAssistant, { SUGGEST_NOTES } from './WbAssistant';
 import { applyWbAiResult, WbAiResult } from '../../../utils/whiteboard/assistant';
-import { clearWhiteboardBridge, setWhiteboardBridge, whiteboardImageConsent, WhiteboardBridge } from '../../../utils/whiteboard/bridge';
+import { clearWhiteboardBridge, setWhiteboardBridge, whiteboardImageConsent, WbComplete, WbTaskOutcome, WhiteboardBridge } from '../../../utils/whiteboard/bridge';
+import { buildTaskPrompt, isNoteLike, MAX_NOTES, parseTaskDrafts, WB_TASK_SYSTEM } from '../../../utils/whiteboard/taskAssist';
 import { runWbAssistant } from './wbAiRun';
 import { changedSnap, currentSnap, initials, ItemSnap, restoreSnap, snapIsEmpty, WbPeer } from '../../../utils/whiteboard/collab';
 import type { LiveRect } from './useWhiteboardCollab';
 import { PaletteAction, WbPalette } from './WbPalette';
+import { ALL_SHAPES, ShapePreview, WbElements } from './WbElements';
 
 /**
  * FigJam tarzı tuval: sonsuz alan (kaydır / yakınlaştır), araçlar (seç, el,
@@ -60,6 +62,20 @@ const SHAPES: { shape: WbShape; icon: IconName; label: string }[] = [
     { shape: 'rect', icon: 'square', label: 'Dikdörtgen' }, { shape: 'ellipse', icon: 'circle', label: 'Elips' },
     { shape: 'diamond', icon: 'diamond', label: 'Karar (eşkenar dörtgen)' }, { shape: 'triangle', icon: 'triangle', label: 'Üçgen' },
 ];
+/** Renk seçici: yalnız seçim tamamlanınca (change) uygular; sürüklerken her adımda kayıt üretmez */
+const ColorPick: React.FC<{ onPick: (hex: string) => void }> = ({ onPick }) => {
+    const ref = useRef<HTMLInputElement>(null);
+    const cb = useRef(onPick);
+    cb.current = onPick;
+    useEffect(() => {
+        const el = ref.current;
+        if (!el) return;
+        const on = () => cb.current(el.value);
+        el.addEventListener('change', on);
+        return () => el.removeEventListener('change', on);
+    }, []);
+    return <input ref={ref} type="color" defaultValue="#3b82f6" className="absolute inset-0 opacity-0 cursor-pointer" />;
+};
 const TEXT_SIZES: [string, number][] = [['S', 14], ['M', 18], ['L', 24], ['XL', 32]];
 
 /** Görseli küçültür (en çok 1200 px) ve data URL'ye çevirir: pano bulutla eşitlenir, boyut sınırlı kalmalı */
@@ -151,6 +167,8 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ board, project, can
     const [votePanel, setVotePanel] = useState(false);
     const [voteSetup, setVoteSetup] = useState(false);
     const [aiOpen, setAiOpen] = useState(false);
+    const [aiText, setAiText] = useState<string | undefined>(undefined);
+    const [elementsOpen, setElementsOpen] = useState(false);
     const [toast, setToast] = useState<string | null>(null);
     const space = useRef(false);
     const lastPointer = useRef<Pt | null>(null);
@@ -627,6 +645,59 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ board, project, can
         setSelection(cards.map(c => c.id));
         setToast(`${created.length} görev oluşturuldu (Yapılacak, havuzda, "Whiteboard" etiketiyle)`);
     };
+    /** Seçili notların hepsinden TEK görev (bölümlerine göre düzenlenmiş açıklama); notlar panoda kalır */
+    const mergeToTask = () => {
+        const nodes = selectedNodes.filter(n => isNoteLike(n) && !n.locked);
+        if (nodes.length < 2) return;
+        const t = taskFromNotes(docRef.current, nodes, { now: new Date(), unit: defaultUnit(project), boardName: doc.name, author: actor });
+        if (!t) return;
+        const area = boundsOf(nodes)!;
+        const card = makeNode('task', area.x + area.w + 40, area.y, { ref: t.id });
+        commit(addNodes(docRef.current, [card]), docRef.current, [t]);
+        setSelection([card.id]);
+        setToast(`"${t.name}" görevi ${nodes.length} nottan oluşturuldu; notlar panoda kaldı.`);
+    };
+
+    /**
+     * Asistanla kayıt açma: seçili (yoksa görünen) notları model iş birimine göre
+     * gruplar; her grup için tek görev açılır, kartı grubun notlarının sağına konur.
+     */
+    const createTasksWithAi = async (request: string, complete: WbComplete): Promise<WbTaskOutcome> => {
+        if (!canCreateTasks) throw new Error('Bu panoda görev açma yetkiniz yok (projenin PY\'si açar).');
+        const d = docRef.current;
+        const sel = selectionRef.current.map(id => d.nodes.find(n => n.id === id)).filter((n): n is WbNode => !!n && isNoteLike(n));
+        const v = visibleRef.current();
+        const pool = (sel.length ? sel : d.nodes.filter(n => isNoteLike(n) && intersects(n, v))).slice(0, MAX_NOTES);
+        if (!pool.length) throw new Error('Seçili ya da görünen alanda yazılı not yok: önce notları seçin.');
+        const refs = pool.map((node, i) => ({ alias: `n${i + 1}`, node }));
+        const byAlias = new Map<string, WbNode>(refs.map(r => [r.alias, r.node]));
+        const { summary, drafts } = parseTaskDrafts(await complete(WB_TASK_SYSTEM, buildTaskPrompt(d, refs, request, projectRef.current)), new Set(byAlias.keys()));
+        const now = Date.now();
+        const unit = defaultUnit(projectRef.current);
+        const tasks: Task[] = [];
+        const cards: WbNode[] = [];
+        const taken: Rect[] = [];
+        drafts.forEach((g, i) => {
+            const base = taskFromNode({ text: g.title }, { now: new Date(now + i), unit, boardName: d.name, author: actor });
+            if (!base) return;
+            const src = g.aliases.map(a => byAlias.get(a)!).filter(Boolean);
+            const task: Task = { ...base, priority: g.priority, issueType: g.issueType, notes: [g.description, base.notes].filter(Boolean).join('\n\n') };
+            const area = boundsOf(src.length ? src : pool)!;
+            const size = NODE_SIZE.task;
+            const r = { x: area.x + area.w + 40, y: area.y, w: size.w, h: size.h };
+            while (taken.some(t => intersects(t, r))) r.y += size.h + 20;
+            taken.push(r);
+            tasks.push(task);
+            cards.push(makeNode('task', r.x, r.y, { ref: task.id }));
+        });
+        if (!tasks.length) throw new Error('Açılacak kayıt çıkmadı.');
+        commit(addNodes(docRef.current, cards), docRef.current, tasks);
+        setSelection(cards.map(c => c.id));
+        return { summary, created: drafts.slice(0, tasks.length).map(g => ({ title: g.title, notes: g.aliases.length })) };
+    };
+    const createTasksRef = useRef(createTasksWithAi);
+    createTasksRef.current = createTasksWithAi;
+
     const expandLinked = (n: WbNode) => {
         const tasks = tasksOfRef(project, n.type as WbRefKind, n.ref || '').filter(t => !existingTaskIds().has(t.id)).slice(0, 30);
         if (!tasks.length) { setToast('Eklenecek görev yok (hepsi panoda ya da kayıt boş).'); return; }
@@ -767,6 +838,7 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ board, project, can
                 applyAiRef.current(r.result);
                 return { summary: r.result.summary, added: r.result.nodes.length, moved: r.result.moves.length, noImage: r.noImage };
             },
+            createTasks: (request, complete) => createTasksRef.current(request, complete),
         };
         setWhiteboardBridge(bridge);
         return () => clearWhiteboardBridge(bridge);
@@ -893,11 +965,12 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ board, project, can
                         if (!a || !b) return null;
                         const p = edgeEnds(a, b);
                         const sel = edgeSel === e.id;
-                        const mx = (p.x1 + p.x2) / 2, my = (p.y1 + p.y2) / 2;
+                        const g = edgeGeometry(p, e.curve);
+                        const mx = g.lx, my = g.ly;
                         return (
                             <g key={e.id} data-edge-id={e.id} style={{ pointerEvents: 'auto', cursor: 'pointer' }}>
-                                <line x1={p.x1} y1={p.y1} x2={p.x2} y2={p.y2} stroke="transparent" strokeWidth={14 * sw} />
-                                <line x1={p.x1} y1={p.y1} x2={p.x2} y2={p.y2} stroke={sel ? '#2563eb' : 'var(--wb-ink, #3f3f46)'} strokeWidth={sel ? 3 : 2} markerEnd={e.style === 'line' ? undefined : `url(#${markerId})`} />
+                                <path d={g.d} fill="none" stroke="transparent" strokeWidth={14 * sw} />
+                                <path d={g.d} fill="none" stroke={sel ? '#2563eb' : 'var(--wb-ink, #3f3f46)'} strokeWidth={sel ? 3 : 2} strokeLinecap="round" markerEnd={e.style === 'line' ? undefined : `url(#${markerId})`} />
                                 {e.label && <text x={mx} y={my - 6} textAnchor="middle" fontSize={14} fontWeight={600} fill="var(--wb-ink, #3f3f46)" stroke="var(--wb-canvas, #f4f4f6)" strokeWidth={5} paintOrder="stroke">{e.label}</text>}
                             </g>
                         );
@@ -968,6 +1041,7 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ board, project, can
                 const shapes = selectedNodes.filter(n => n.type === 'shape');
                 const texts = selectedNodes.filter(n => n.type === 'text' || n.type === 'sticky' || n.type === 'shape');
                 const pens = selectedNodes.filter(n => n.type === 'pen');
+                const textsOnly = selectedNodes.filter(n => n.type === 'text');
                 const convertible = canCreateTasks ? selectedNodes.filter(n => (n.type === 'sticky' || n.type === 'text' || n.type === 'shape') && n.text?.trim()) : [];
                 const linked = single && (single.type === 'sprint' || single.type === 'workPackage' || single.type === 'version') ? single : undefined;
                 const allLocked = selectedNodes.length > 0 && selectedNodes.every(n => n.locked);
@@ -983,12 +1057,19 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ board, project, can
                     <div ref={barRef} data-ui className="absolute z-30 flex flex-nowrap items-center gap-0.5 p-1 rounded-2xl m-surface m-pop shadow-xl max-w-[calc(100%-16px)] overflow-x-auto" style={{ left, top, border: '1px solid var(--m-sep, #e5e7eb)', visibility: barSize.w ? 'visible' : 'hidden' }} onPointerDown={e => e.stopPropagation()}>
                         {edge && <>
                             <button type="button" className="m-btn m-btn-plain !min-h-[34px] !px-2 text-[13px]" onClick={() => commit({ ...doc, edges: doc.edges.map(x => (x.id === edge.id ? { ...x, style: x.style === 'line' ? undefined : 'line' } : x)), updatedAt: new Date().toISOString() })}>{edge.style === 'line' ? 'Ok yap' : 'Oku kaldır'}</button>
+                            <button type="button" className="m-btn m-btn-plain !min-h-[34px] !px-2 text-[13px]" onClick={() => commit({ ...doc, edges: doc.edges.map(x => (x.id === edge.id ? { ...x, curve: x.curve ? undefined : 60 } : x)), updatedAt: new Date().toISOString() })}>{edge.curve ? 'Düz' : 'Kıvrımlı'}</button>
+                            {!!edge.curve && <button type="button" className="m-btn m-btn-plain !min-h-[34px] !px-2 text-[13px]" title="Kıvrımın yönünü çevir" onClick={() => commit({ ...doc, edges: doc.edges.map(x => (x.id === edge.id ? { ...x, curve: -(x.curve || 0) } : x)), updatedAt: new Date().toISOString() })}>Ters kıvrım</button>}
                             <button type="button" className="m-btn m-btn-plain !min-h-[34px] !px-2 text-[13px]" onClick={() => { const l = window.prompt('Bağlantı etiketi', edge.label || ''); if (l !== null) commit({ ...doc, edges: doc.edges.map(x => (x.id === edge.id ? { ...x, label: l.trim() || undefined } : x)), updatedAt: new Date().toISOString() }); }}>Etiket</button>
                         </>}
                         {colorable.length > 0 && WB_COLORS.map(c => (
                             <button key={c.key} type="button" title={c.label} aria-label={`Renk: ${c.label}`} className="w-5 h-5 mx-0.5 flex-none rounded-full border cursor-pointer" style={{ background: c.fill, borderColor: c.edge }}
                                 onClick={() => commit(updateNodes(doc, colorable.map(n => n.id), { color: c.key }))} />
                         ))}
+                        {(colorable.length > 0 || pens.length > 0 || textsOnly.length > 0) && (
+                            <label title="Özel renk" aria-label="Özel renk" className="w-6 h-6 mx-0.5 flex-none rounded-full cursor-pointer overflow-hidden relative" style={{ background: 'conic-gradient(#ef4444, #f59e0b, #22c55e, #3b82f6, #a855f7, #ef4444)' }}>
+                                <ColorPick onPick={v => commit(updateNodes(docRef.current, [...colorable, ...pens, ...textsOnly].map(n => n.id), { color: v }))} />
+                            </label>
+                        )}
                         {pens.length > 0 && Object.entries(PEN_COLORS).slice(0, 7).map(([k, v]) => (
                             <button key={k} type="button" aria-label={`Kalem rengi ${k}`} className="w-6 h-6 rounded-full border-0 cursor-pointer" style={{ background: v }} onClick={() => commit(updateNodes(doc, pens.map(n => n.id), { color: k }))} />
                         ))}
@@ -999,7 +1080,9 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ board, project, can
                         {texts.length > 0 && TEXT_SIZES.map(([l, px]) => (
                             <button key={l} type="button" title={`Yazı ${px}px`} className="w-7 h-8 flex-none rounded-lg border-0 cursor-pointer bg-transparent m-text-2 text-[12px] font-semibold hover:m-fill-2" onClick={() => commit(updateNodes(doc, texts.map(n => n.id), { fontSize: px }))}>{l}</button>
                         ))}
-                        {convertible.length > 0 && <button type="button" className="m-btn m-btn-primary !min-h-[34px] !px-3 text-[13px] flex-none whitespace-nowrap" onClick={convertToTasks} title="Not metninden görev oluşturur ve notu görev kartıyla değiştirir"><Icon name="check" size={14} />Göreve dönüştür{convertible.length > 1 ? ` (${convertible.length})` : ''}</button>}
+                        {convertible.length > 1 && <button type="button" className="m-btn m-btn-primary !min-h-[34px] !px-3 text-[13px] flex-none whitespace-nowrap" onClick={mergeToTask} title="Seçili notların hepsinden TEK görev açar: başlık gereksinim/konu notundan, açıklama bölüm bölüm notlardan; notlar panoda kalır"><Icon name="check" size={14} />Tek görev</button>}
+                        {convertible.length > 0 && <button type="button" className={`m-btn ${convertible.length > 1 ? 'm-btn-gray' : 'm-btn-primary'} !min-h-[34px] !px-3 text-[13px] flex-none whitespace-nowrap`} onClick={convertToTasks} title="Her not için ayrı görev oluşturur ve notu görev kartıyla değiştirir"><Icon name={convertible.length > 1 ? 'list' : 'check'} size={14} />{convertible.length > 1 ? `Ayrı görevler (${convertible.length})` : 'Göreve dönüştür'}</button>}
+                        {convertible.length > 1 && <button type="button" className="m-btn m-btn-gray !min-h-[34px] !px-3 text-[13px] flex-none whitespace-nowrap" onClick={() => { setAiText(SUGGEST_NOTES); setAiOpen(true); }} title="Asistan notları iş birimine göre gruplasın: aynı işi anlatanlar tek kayıt, bağımsız maddeler ayrı kayıt"><Icon name="sparkles" size={14} />Asistanla grupla</button>}
                         {linked && <button type="button" className="m-btn m-btn-gray !min-h-[34px] !px-3 text-[13px] flex-none whitespace-nowrap" onClick={() => expandLinked(linked)}><Icon name="plus" size={14} />Görevlerini ekle</button>}
                         {selectedNodes.some(n => n.type === 'image') && <button type="button" className="m-btn m-btn-gray !min-h-[34px] !px-3 text-[13px] flex-none whitespace-nowrap" onClick={() => setAiOpen(true)} title="Değişiklik talebinizi yazın; asistan görselin üstünde işaretlesin ve yeni ekranı çizsin"><Icon name="sparkles" size={14} />Asistana sor</button>}
                         {selectedNodes.length > 0 && <>
@@ -1094,10 +1177,15 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ board, project, can
                     <div className="flex gap-1.5 p-2 rounded-2xl m-surface m-pop shadow-lg">{WB_COLORS.slice(0, 9).map(c => <button key={c.key} type="button" aria-label={`Not rengi: ${c.label}`} className="w-7 h-7 rounded-md border-2 cursor-pointer" style={{ background: c.fill, borderColor: stickyColor === c.key ? '#2563eb' : c.edge }} onClick={() => setStickyColor(c.key)} />)}</div>
                 )}
                 {canEdit && tool === 'shape' && (
-                    <div className="flex gap-1 p-1.5 rounded-2xl m-surface m-pop shadow-lg">{SHAPES.map(s => <button key={s.shape} type="button" title={s.label} aria-label={s.label} className={toolbarBtn(shapeKind === s.shape)} onClick={() => setShapeKind(s.shape)}><Icon name={s.icon} size={18} /></button>)}</div>
+                    <div className="flex flex-wrap justify-center max-w-[540px] gap-1 p-1.5 rounded-2xl m-surface m-pop shadow-lg">{ALL_SHAPES.map(s => <button key={s.shape} type="button" title={s.label} aria-label={s.label} className={toolbarBtn(shapeKind === s.shape)} onClick={() => setShapeKind(s.shape)}><ShapePreview shape={s.shape} size={20} /></button>)}</div>
                 )}
                 {canEdit && tool === 'stamp' && (
                     <div className="flex gap-1 p-1.5 rounded-2xl m-surface m-pop shadow-lg">{STAMPS.map(s => <button key={s} type="button" aria-label={`Damga ${s}`} className={`${toolbarBtn(stamp === s)} text-[20px]`} onClick={() => setStamp(s)}>{s}</button>)}</div>
+                )}
+                {canEdit && elementsOpen && (
+                    <WbElements onClose={() => setElementsOpen(false)}
+                        onShape={shape => { const c = viewportCenter(); const n = makeNode('shape', c.x - 90, c.y - 55, { shape, color: 'blue', author: actor }); place([n]); setSelection([n.id]); }}
+                        onEmoji={emoji => { const c = viewportCenter(); const n = makeNode('stamp', c.x - 40, c.y - 40, { stamp: emoji, w: 80, h: 80, author: actor }); place([n]); setSelection([n.id]); }} />
                 )}
                 {canEdit && tool === 'pen' && (
                     <div className="flex gap-1.5 p-2 rounded-2xl m-surface m-pop shadow-lg">{Object.entries(PEN_COLORS).filter(([k]) => k !== 'white').map(([k, v]) => <button key={k} type="button" aria-label={`Kalem rengi ${k}`} className="w-7 h-7 rounded-full cursor-pointer" style={{ background: v, border: penColor === k ? '3px solid #93c5fd' : '0' }} onClick={() => setPenColor(k)} />)}</div>
@@ -1110,6 +1198,7 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ board, project, can
                     ))}
                     {canEdit && <>
                         <span className="w-px h-7 m-fill-2 mx-1" />
+                        <button type="button" title="Öğeler: şekiller ve hazır çizimler" aria-label="Öğeler" aria-pressed={elementsOpen} className={toolbarBtn(elementsOpen)} onClick={() => setElementsOpen(o => !o)}><Icon name="grid" size={19} /></button>
                         <button type="button" title="Ekle: görev, sprint, iş paketi, risk, şablon (/)" aria-label="Komut paleti" className="h-10 px-3 rounded-xl border-0 cursor-pointer m-tone-accent inline-flex items-center gap-1.5 text-[14px] font-semibold" onClick={() => openPalette('insert', viewportCenter())}>
                             <Icon name="slash" size={16} />Ekle
                         </button>
@@ -1129,7 +1218,7 @@ const WhiteboardEditor: React.FC<WhiteboardEditorProps> = ({ board, project, can
 
             {aiOpen && canEdit && (
                 <WbAssistant board={doc} project={project} selection={selectedNodes} visible={visibleRect()}
-                    onApply={applyAi} onUndo={undo} onClose={() => { setAiOpen(false); viewport.current?.focus(); }} />
+                    onApply={applyAi} createTasks={canCreateTasks ? (r, c) => createTasksRef.current(r, c) : undefined} initialText={aiText} onUndo={undo} onClose={() => { setAiOpen(false); setAiText(undefined); viewport.current?.focus(); }} />
             )}
 
             {palette && (

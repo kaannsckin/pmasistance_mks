@@ -18,10 +18,18 @@ export interface WbDrawOutcome {
     noImage: boolean;
 }
 
+export interface WbTaskOutcome {
+    summary: string;
+    /** Açılan kayıtlar: başlık ve kaç nottan */
+    created: { title: string; notes: number }[];
+}
+
 export interface WhiteboardBridge {
     /** Pano ve seçim özeti (araç sonucunda ve sistem talimatında) */
     describe: () => string;
     draw: (request: string, complete: WbComplete) => Promise<WbDrawOutcome>;
+    /** Seçili (yoksa görünen) notlardan kayıt açar; model notları iş birimine göre gruplar */
+    createTasks: (request: string, complete: WbComplete) => Promise<WbTaskOutcome>;
 }
 
 let active: WhiteboardBridge | null = null;
