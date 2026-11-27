@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { Project, Task } from '../../../types';
 import { readWorkbookFile } from '../../../utils/gibFindings';
-import { applyBoardImport, BoardField, BoardImportPlan, BoardRow, parseBoardWorkbook, planBoardImport } from '../../../utils/planning/boardImport';
+import { applyBoardImport, BoardChange, BoardField, BoardImportPlan, BoardRow, parseBoardWorkbook, planBoardImport } from '../../../utils/planning/boardImport';
+import { isProgressPercent, taskProgressPercent } from '../../../utils/progress';
 import { Icon } from '../icons';
 import { Sheet } from '../ui';
 import TaskKeyButton from '../TaskKeyButton';
@@ -24,6 +25,7 @@ const FIELDS: { id: BoardField; label: string }[] = [
     { id: 'labels', label: 'Etiketler' },
     { id: 'progress', label: 'İlerleme %' },
     { id: 'estimate', label: 'Tahmin' },
+    { id: 'status', label: 'Durum' },
 ];
 
 const BoardImportSheet: React.FC<Props> = ({ project, onClose, onViewTask, onApply }) => {
@@ -48,14 +50,15 @@ const BoardImportSheet: React.FC<Props> = ({ project, onClose, onViewTask, onApp
         } finally { setBusy(false); }
     };
 
-    const count = (f: BoardField) => plan ? plan.changes.filter(c => f === 'assignee' ? c.assignee : f === 'labels' ? c.labelsAdded.length : f === 'progress' ? c.progress : c.estimate).length : 0;
+    const has = (c: BoardChange, f: BoardField) => !!(f === 'assignee' ? c.assignee : f === 'labels' ? c.labelsAdded.length : f === 'progress' ? c.progress : f === 'estimate' ? c.estimate : c.status);
+    const count = (f: BoardField) => plan ? plan.changes.filter(c => has(c, f)).length : 0;
     const apply = () => {
         if (!plan) return;
         const { tasks, changed } = applyBoardImport(project.tasks, plan.changes, fields);
         onApply(tasks, `Panodan ${changed} görev güncellendi (${FIELDS.filter(f => fields.has(f.id)).map(f => f.label.toLocaleLowerCase('tr-TR')).join(', ')}).`);
         onClose();
     };
-    const shown = plan ? plan.changes.filter(c => (fields.has('assignee') && c.assignee) || (fields.has('labels') && c.labelsAdded.length) || (fields.has('progress') && c.progress) || (fields.has('estimate') && c.estimate)) : [];
+    const shown = plan ? plan.changes.filter(c => FIELDS.some(f => fields.has(f.id) && has(c, f.id))) : [];
 
     return (
         <Sheet
@@ -72,7 +75,7 @@ const BoardImportSheet: React.FC<Props> = ({ project, onClose, onViewTask, onApp
             <label className="m-fill-2 rounded-xl px-4 py-4 flex flex-col items-center gap-1.5 cursor-pointer text-center">
                 <Icon name="upload" size={22} />
                 <span className="text-[15px] font-semibold m-text">{busy ? 'Okunuyor…' : rows ? 'Başka dosya seç' : 'Pano .xlsx dosyasını seçin'}</span>
-                <span className="text-[13px] m-text-3">Alınanlar: sorumlu, etiketler, ilerleme %, tahmin. Puan, zorluk, eklenme ve bitiş tarihi alınmaz; durum değişmez.</span>
+                <span className="text-[13px] m-text-3">Alınanlar: sorumlu, etiketler, ilerleme %, tahmin ve durum (Devam Ediyor → geliştirmede %50, İncelemede → testte %75). Puan, zorluk, eklenme ve bitiş tarihi alınmaz.</span>
                 <input type="file" accept=".xlsx,.xlsm" className="hidden" onChange={e => { read(e.target.files?.[0]); e.target.value = ''; }} />
             </label>
             {problem && <p role="alert" className="m-0 text-[14px] m-ink-bad">{problem}</p>}
@@ -110,6 +113,7 @@ const BoardImportSheet: React.FC<Props> = ({ project, onClose, onViewTask, onApp
                             const t = taskById.get(c.taskId);
                             if (!t) return null;
                             const parts = [
+                                fields.has('status') && c.status ? `${c.status.from} → ${c.status.to}${!(fields.has('progress') && c.progress) && !isProgressPercent(t.progressPct) ? ` (%${taskProgressPercent({ status: c.status.category, jiraStatus: c.status.to })})` : ''}` : '',
                                 fields.has('assignee') && c.assignee ? `${c.assignee.from || 'Atanmamış'} → ${c.assignee.to}${c.unit ? ` (${c.unit.to})` : ''}` : '',
                                 fields.has('progress') && c.progress ? `ilerleme %${c.progress.to}` : '',
                                 fields.has('estimate') && c.estimate ? `tahmin ${c.estimate.text}${c.estimate.days ? ` → ${c.estimate.days.avg.toLocaleString('tr-TR')} g süre` : ''}` : '',

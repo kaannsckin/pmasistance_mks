@@ -1,12 +1,18 @@
 import { Resource, Task, TaskStatus } from '../../types';
 import { isProgressPercent } from '../progress';
+import { withStatus } from './lifecycle';
 
 /**
  * Ekip panosu Excel'i (ör. "EMS Board" dışa aktarımı) → proje görevleri.
  * Görev Jira anahtarıyla ("Task No") eşleşir. Alınanlar: sorumlu, etiketler,
- * ilerleme yüzdesi ve tahmin. Alınmayanlar: puan, zorluk, eklenme / bitiş
- * tarihleri. Durum değiştirilmez; ilerleme yüzdesi görevde elle girilmiş
- * yüzde olarak saklanır (PoC katsayısı ve plan kalan eforu bunu kullanır).
+ * ilerleme yüzdesi, tahmin ve durum. Alınmayanlar: puan, zorluk, eklenme /
+ * bitiş tarihleri. İlerleme yüzdesi görevde elle girilmiş yüzde olarak
+ * saklanır (PoC katsayısı ve plan kalan eforu bunu kullanır).
+ *
+ * Durum: yalnız "Devam Ediyor" (geliştirmede, otomatik %50) ve "İncelemede"
+ * (testte, otomatik %75) aktarılır; Havuz / Yapılacak işi geri almaz,
+ * Tamamlandı işi kapatmaz (kapanış Jira ve doğrulamayla). Tamamlanmış görevin
+ * durumu değişmez.
  */
 
 export type SheetMatrix = unknown[][];
@@ -31,6 +37,8 @@ export interface BoardChange {
     labelsAdded: string[];
     progress?: { from?: number; to: number };
     estimate?: { text: string; days?: { best: number; avg: number; worst: number } };
+    /** Pano durumu: kategori ve ayrıntılı durum adı */
+    status?: { from: string; to: string; category: TaskStatus };
 }
 
 export interface BoardImportPlan {
@@ -45,7 +53,17 @@ export interface BoardImportPlan {
     duplicateKeys: string[];
 }
 
-export type BoardField = 'assignee' | 'labels' | 'progress' | 'estimate';
+export type BoardField = 'assignee' | 'labels' | 'progress' | 'estimate' | 'status';
+
+/** Aktarılan pano durumları (katlanmış ad → kategori ve ayrıntılı durum) */
+const BOARD_STATUS: Record<string, { category: TaskStatus; name: string }> = {
+    'devam ediyor': { category: TaskStatus.InProgress, name: 'Devam Ediyor' },
+    'incelemede': { category: TaskStatus.InProgress, name: 'İncelemede' },
+};
+const CATEGORY_LABEL: Record<TaskStatus, string> = {
+    [TaskStatus.Backlog]: 'Bekleyen', [TaskStatus.ToDo]: 'Yapılacak', [TaskStatus.InProgress]: 'Süreçte', [TaskStatus.Done]: 'Tamamlandı',
+};
+export const boardStatusOf = (raw: string): { category: TaskStatus; name: string } | undefined => BOARD_STATUS[foldTr(raw)];
 
 const foldTr = (v: unknown): string => String(v ?? '').toLocaleLowerCase('tr-TR').normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/ı/g, 'i').replace(/\s+/g, ' ').trim();
 const text = (v: unknown): string => (v === null || v === undefined ? '' : String(v).trim());
@@ -165,7 +183,11 @@ export const planBoardImport = (rows: BoardRow[], tasks: Task[], resources: Pick
         ch.labelsAdded = [...new Set(row.labels)].filter(l => !have.has(foldTr(l)));
         if (row.progress !== undefined && task.status !== TaskStatus.Done && row.progress !== task.progressPct) ch.progress = { from: task.progressPct, to: row.progress };
         if (row.estimate && row.estimate !== task.estimateText) ch.estimate = { text: row.estimate, days: pertZero(task) ? estimateToDays(row.estimate) : undefined };
-        if (ch.assignee || ch.labelsAdded.length || ch.progress || ch.estimate) changes.push(ch);
+        const st = boardStatusOf(row.status);
+        if (st && task.status !== TaskStatus.Done && (task.status !== st.category || foldTr(task.jiraStatus) !== foldTr(st.name))) {
+            ch.status = { from: task.jiraStatus?.trim() || CATEGORY_LABEL[task.status], to: st.name, category: st.category };
+        }
+        if (ch.assignee || ch.labelsAdded.length || ch.progress || ch.estimate || ch.status) changes.push(ch);
     }
     return { rows: rows.length, changes, unmatched, unknownPeople: [...unknown], ambiguousPeople: [...ambiguous], duplicateKeys };
 };
@@ -178,8 +200,13 @@ export const applyBoardImport = (tasks: Task[], changes: BoardChange[], fields: 
     const next = tasks.map(t => {
         const c = byId.get(t.id);
         if (!c) return t;
-        const out: Task = { ...t };
+        let out: Task = { ...t };
         let touched = false;
+        if (fields.has('status') && c.status) {
+            // Kategori değişirse geçiş damgalanır (ilk başlama, geçiş günlüğü)
+            out = { ...withStatus(out, c.status.category), jiraStatus: c.status.to };
+            touched = true;
+        }
         if (fields.has('assignee') && c.assignee) { out.resourceName = c.assignee.to; if (c.unit) out.unit = c.unit.to; touched = true; }
         if (fields.has('labels') && c.labelsAdded.length) { out.labels = [...(t.labels || []), ...c.labelsAdded]; touched = true; }
         if (fields.has('progress') && c.progress && isProgressPercent(c.progress.to)) { out.progressPct = c.progress.to; touched = true; }

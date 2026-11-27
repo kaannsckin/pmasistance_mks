@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Task, TaskStatus } from '../../types';
 import { applyBoardImport, cleanLabel, estimateToDays, matchPerson, parseBoardWorkbook, planBoardImport } from './boardImport';
 import { planBottleneck, DEFAULT_BOTTLENECK } from './bottleneck';
+import { taskProgressPercent } from '../progress';
 
 const task = (id: string, jiraId: string, extra: Partial<Task> = {}): Task => ({
     id, name: id, availability: true, priority: 'Medium', version: 0, predecessor: null, unit: 'EMS', resourceName: 'Begüm SÖZEN',
@@ -87,5 +88,46 @@ describe('pano aktarımı', () => {
         const t = task('b', 'MPS-1', { time: { best: 10, avg: 10, worst: 10 }, status: TaskStatus.InProgress, progressPct: 90 });
         const r = planBottleneck({ project: { tasks: [t], resources: res }, settings, scenario: 'current' });
         expect(r.tasks[0].days).toBe(1);
+    });
+});
+
+describe('pano durumu', () => {
+    const rows = [
+        { key: 'MPS-1', title: '', status: 'Devam Ediyor', labels: [] },
+        { key: 'MPS-2', title: '', status: 'İncelemede', labels: [] },
+        { key: 'MPS-3', title: '', status: 'Havuz', labels: [] },
+        { key: 'MPS-4', title: '', status: 'Tamamlandı', labels: [] },
+        { key: 'MPS-5', title: '', status: 'İncelemede', labels: [] },
+    ];
+    const tasks = [
+        task('a', 'MPS-1', { status: TaskStatus.ToDo }),
+        task('b', 'MPS-2', { status: TaskStatus.InProgress, jiraStatus: 'Devam Ediyor', startedAt: '2026-11-01T00:00:00.000Z' }),
+        task('c', 'MPS-3', { status: TaskStatus.InProgress }),
+        task('d', 'MPS-4', { status: TaskStatus.InProgress }),
+        task('e', 'MPS-5', { status: TaskStatus.Done }),
+    ];
+
+    it('yalnız Devam Ediyor ve İncelemede aktarılır; geri alma ve kapatma yok', () => {
+        const plan = planBoardImport(rows, tasks, team);
+        const st = new Map(plan.changes.filter(c => c.status).map(c => [c.taskId, c.status!]));
+        expect(st.get('a')).toEqual({ from: 'Yapılacak', to: 'Devam Ediyor', category: TaskStatus.InProgress });
+        expect(st.get('b')).toEqual({ from: 'Devam Ediyor', to: 'İncelemede', category: TaskStatus.InProgress });
+        expect(st.has('c')).toBe(false); // Havuz geri almaz
+        expect(st.has('d')).toBe(false); // Tamamlandı kapatmaz
+        expect(st.has('e')).toBe(false); // tamamlanmış görev değişmez
+    });
+
+    it('uygulanınca ilerleme durumdan otomatik: geliştirmede %50, testte %75', () => {
+        const plan = planBoardImport(rows, tasks, team);
+        const { tasks: next } = applyBoardImport(tasks, plan.changes, new Set(['status']));
+        const a = next.find(t => t.id === 'a')!, b = next.find(t => t.id === 'b')!;
+        expect(a).toMatchObject({ status: TaskStatus.InProgress, jiraStatus: 'Devam Ediyor' });
+        expect(a.startedAt).toBeTruthy();
+        expect(a.statusLog?.at(-1)).toMatchObject({ from: TaskStatus.ToDo, to: TaskStatus.InProgress });
+        expect(b).toMatchObject({ status: TaskStatus.InProgress, jiraStatus: 'İncelemede', startedAt: '2026-11-01T00:00:00.000Z' });
+        expect(taskProgressPercent(a)).toBe(50);
+        expect(taskProgressPercent(b)).toBe(75);
+        // Elle girilen ilerleme otomatiği geçer
+        expect(taskProgressPercent({ ...b, progressPct: 90 })).toBe(90);
     });
 });
