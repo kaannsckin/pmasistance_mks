@@ -3,7 +3,7 @@
 Her sürümün başlığı `## vX.Y.Z` biçimindedir; GitHub sürüm sayfası bu bölümü
 buradan alır (`.github/workflows/exe.yml`).
 
-## Yayımlanmadı
+## v3.8.0
 
 **Testler: kayıtlı Jira filtresinden test panosu**
 - Projede yeni **Testler** sekmesi (modern arayüz; kurulana kadar "Daha fazla" menüsünde). Kayıtlı bir Jira filtresindeki (ör. gib_testset) açık ve kapalı tüm kayıtlar okunur.
