@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Resource, Task, TaskStatus } from '../../types';
 import {
-    applyPlanToSprints, applyReassignments, BottleneckSettings, DEFAULT_BOTTLENECK, defaultStartDate, milestoneRank, planBottleneck, testHoursFor,
+    applyPlanToSprints, applyReassignments, BottleneckSettings, DEFAULT_BOTTLENECK, defaultStartDate, milestoneRank, planBottleneck, settingsFromRules, testHoursFor,
 } from './bottleneck';
 
 const res = (name: string, unit: string, participation = 100): Resource => ({ id: name, name, unit, participation, title: '' });
@@ -146,5 +146,36 @@ describe('uygulama', () => {
         expect(changed).toBe(1);
         expect(tasks[0].version).toBe(1);
         expect(tasks[0].sprintSpan).toBe(2);
+    });
+});
+
+describe('fazla mesai ve proje kuralları', () => {
+    it('kişi %100 üstüne çıkabilir; aşan kısım mesai olarak görünür', () => {
+        const tasks = [task({ days: 6, resourceName: 'Ali' })];
+        const normal = planBottleneck({ project: { tasks, resources: team }, settings: settings(), scenario: 'current' });
+        expect(normal.tasks[0].release).toBe(1);
+        const ot = planBottleneck({ project: { tasks, resources: team }, settings: settings({ personMaxLoad: { Ali: 120 } }), scenario: 'current' });
+        const ali = ot.people.find(p => p.name === 'Ali')!;
+        expect(ot.tasks[0].release).toBe(0);
+        expect(ali.maxLoad).toBeCloseTo(1.2);
+        expect(ali.overtime).toBeCloseTo(1);
+        expect(ali.capacity[0]).toBe(5); // normal kapasite değişmez
+        expect(ot.people.find(p => p.name === 'Ayşe')!.maxLoad).toBe(1);
+    });
+
+    it('genel üst sınır herkese uygulanır', () => {
+        const r = planBottleneck({ project: { tasks: [task({ days: 6, resourceName: 'Ayşe' })], resources: team }, settings: settings({ maxLoad: 130 }), scenario: 'current' });
+        expect(r.tasks[0].release).toBe(0);
+    });
+
+    it('proje kurallarından ayar: eksikler varsayılan', () => {
+        const s = settingsFromRules({ targetDate: '2026-12-31', maxLoad: 120, fixers: { EMS: 'Osman' } }, { useJiraRemainingEstimate: true }, {}, new Date(2026, 10, 27));
+        expect(s.startDate).toBe('2026-11-30');
+        expect(s.targetDate).toBe('2026-12-31');
+        expect(s.testUnit).toBe('Destek');
+        expect(s.testRatio).toBe(0.2);
+        expect(s.maxLoad).toBe(120);
+        expect(s.useRemaining).toBe(true);
+        expect(settingsFromRules(undefined, {}, {}, new Date(2026, 10, 27)).targetDate).toBe('2026-12-31');
     });
 });

@@ -821,6 +821,32 @@ export interface ProjectSettings {
   useJiraRemainingEstimate?: boolean;
   manMonthTableColor?: string;
   costTableColor?: string;
+  /** Darboğaz planı ve otomatik plan kuralları (utils/planning/bottleneck.ts) */
+  planRules?: PlanRules;
+}
+
+/**
+ * Haftalık sürüm planının proje kuralları: hedef tarih, test ekibi, test ve
+ * bulgu oranı, odak, bulgu sorumluları ve fazla mesai sınırı. Proje ayarıyla
+ * paylaşılır; otomatik plan ve Darboğaz penceresi aynı kuralları kullanır.
+ */
+export interface PlanRules {
+  /** Hedef bitiş (ISO) */
+  targetDate?: string;
+  /** Test ekibinin birimi; boş metin: test adımı yok */
+  testUnit?: string;
+  /** Test ve bulgu eforu oranı (0–1) */
+  testRatio?: number;
+  /** Odak katsayısı (0,3–1) */
+  focus?: number;
+  /** Birim → bulgu sorumlusu (boş: otomatik) */
+  fixers?: Record<string, string>;
+  /** Kapasite senaryosunda hedeflenen en geç milestone */
+  scopeMilestone?: number;
+  /** Kişi başı en yüksek yük (%); 100 üstü fazla mesai demektir */
+  maxLoad?: number;
+  /** Kişiye özel en yüksek yük (%) */
+  personMaxLoad?: Record<string, number>;
 }
 
 /** Proje risk kaydı — olasılık × etki (1-5), skor 1-25 */

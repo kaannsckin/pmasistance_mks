@@ -1,4 +1,5 @@
-import { Leave, Person, Project, Task, TaskStatus } from '../../types';
+import { Leave, Person, PlanRules, Project, ProjectSettings, Task, TaskStatus } from '../../types';
+import { buildSprintWindows } from '../taskToAllocation';
 import { isUnassigned } from './jiraPeople';
 import { remainingEffort } from './capacity';
 import { isWorkday } from './workdays';
@@ -14,7 +15,8 @@ import { isWorkday } from './workdays';
  *  - Bulgu düzeltme: test haftasında aynı saat kadar ekibin bulgu sorumlusuna
  *    yazılır (geliştirme ekiplerinden birer kişi; seçilmezse açık yükü en az olan).
  *  - Kapasite = haftanın iş günü (TR tatilleri düşülür) × katılım × (1 − o ayın
- *    izin AA'sı) × odak katsayısı.
+ *    izin AA'sı) × odak katsayısı. Kişi en yüksek yük oranına (varsayılan %100)
+ *    kadar yüklenebilir; %100'ü aşan kısım fazla mesaidir.
  *  - Hedef tarih: hedefin düştüğü hafta yalnız son sürümün testi ve düzeltmesi
  *    içindir; son sürüm bir önceki haftanın cumasıdır.
  *
@@ -53,6 +55,10 @@ export interface BottleneckSettings {
     horizonWeeks?: number;
     /** Kapasite senaryosunda hedefe yetişmesi gereken en geç milestone (ör. 1 → Gib-0 ve Gib-1); yoksa tümü */
     scopeMilestone?: number;
+    /** Kişi başı en yüksek yük (%, 50–200); 100 üstü fazla mesai. Varsayılan 100. */
+    maxLoad?: number;
+    /** Kişiye özel en yüksek yük (%) */
+    personMaxLoad?: Record<string, number>;
 }
 
 export interface PlanWeek {
@@ -71,7 +77,12 @@ export interface PersonRow {
     /** Hedefe yetişmek için eklenen sanal kişi */
     virtual: boolean;
     participation: number;
+    /** Normal kapasite (gün, mesai hariç) */
     capacity: number[];
+    /** Bu kişinin en yüksek yük oranı (1 = %100) */
+    maxLoad: number;
+    /** Hedef haftası dahil fazla mesai (gün) */
+    overtime: number;
     load: Record<LoadKind, number[]>;
     /** Tüm ufuktaki iş (gün) */
     demand: number;
@@ -218,7 +229,10 @@ interface Ctx {
     weeks: PlanWeek[];
     members: Member[];
     byUnit: Map<string, string[]>;
+    /** Normal kapasite */
     cap: Map<string, number[]>;
+    /** Planlamada kullanılabilir üst sınır (fazla mesai dahil) */
+    limit: Map<string, number[]>;
     settings: BottleneckSettings;
     targetWeek: number;
     lastRelease: number;
@@ -263,7 +277,7 @@ interface TaskInfo { task: Task; unit: string; owner: string; days: number; test
 const run = (ctx: Ctx, infos: TaskInfo[], fixers: Record<string, string[]>, balance: boolean, maxSplit: number) => {
     const { weeks, byUnit, settings, lastRelease } = ctx;
     const W = weeks.length;
-    const left = new Map([...ctx.cap].map(([k, v]) => [k, [...v]]));
+    const left = new Map([...ctx.limit].map(([k, v]) => [k, [...v]]));
     const cells = new Map<string, { taskId: string; days: number; kind: LoadKind }[]>();
     const load = new Map<string, Record<LoadKind, number[]>>();
     const loadOf = (n: string) => {
@@ -469,10 +483,14 @@ export const planBottleneck = ({ project, people = [], leaves = [], settings, sc
     // Dengeli planda devam eden iş sahibinde kalır; kapasite senaryosunda ona da yardımcı eklenebilir (sahip önceliklidir).
     const infos: TaskInfo[] = infosBase.map(i => ({ ...i, movable: !i.owner || scenario === 'capacity' || (balance && i.task.status !== TaskStatus.InProgress) }));
 
-    const makeCtx = (ms: Member[]): Ctx => ({
-        weeks, members: ms, byUnit: byUnitOf(ms), settings, targetWeek, lastRelease,
-        cap: new Map(ms.map(m => [m.name, personCapacity(m, weeks, settings, from, leaves)])),
-    });
+    const loadLimit = (m: Member) => clampLoad(m.virtual ? 100 : settings.personMaxLoad?.[m.name] ?? settings.maxLoad ?? 100);
+    const makeCtx = (ms: Member[]): Ctx => {
+        const cap = new Map(ms.map(m => [m.name, personCapacity(m, weeks, settings, from, leaves)]));
+        return {
+            weeks, members: ms, byUnit: byUnitOf(ms), settings, targetWeek, lastRelease, cap,
+            limit: new Map(ms.map(m => [m.name, cap.get(m.name)!.map(x => x * loadLimit(m))])),
+        };
+    };
 
     let ms = members;
     let fixerPools: Record<string, string[]> = Object.fromEntries(Object.entries(fixers).map(([u, n]) => [u, [n]]));
@@ -551,10 +569,14 @@ export const planBottleneck = ({ project, people = [], leaves = [], settings, sc
         const cap = ctx.cap.get(m.name)!;
         const l = out.load.get(m.name) || { dev: Array(W).fill(0), test: Array(W).fill(0), fix: Array(W).fill(0) };
         const total = (w: number) => l.dev[w] + l.test[w] + l.fix[w];
-        let demand = 0, spill = 0, lastWeek = -1;
-        for (let w = 0; w < W; w++) { const t = total(w); demand += t; if (w > targetWeek) spill += t; if (t > EPS) lastWeek = w; }
+        let demand = 0, spill = 0, lastWeek = -1, overtime = 0;
+        for (let w = 0; w < W; w++) {
+            const t = total(w); demand += t;
+            if (w > targetWeek) spill += t; else overtime += Math.max(0, t - cap[w]);
+            if (t > EPS) lastWeek = w;
+        }
         return {
-            name: m.name, unit: m.unit, virtual: m.virtual, participation: m.participation,
+            name: m.name, unit: m.unit, virtual: m.virtual, participation: m.participation, maxLoad: loadLimit(m), overtime: round2(overtime),
             role: m.unit === settings.testUnit ? 'test' : fixerNames.has(m.name) ? 'fixer' : 'dev',
             capacity: cap.map(round2), load: { dev: l.dev.map(round2), test: l.test.map(round2), fix: l.fix.map(round2) },
             demand: round2(demand), targetCapacity: round2(cap.slice(0, targetWeek + 1).reduce((a, b) => a + b, 0)), spill: round2(spill), lastWeek,
@@ -630,4 +652,36 @@ export const applyPlanToSprints = (
         return { ...t, version, sprintSpan, updatedAt: now };
     });
     return { tasks: next, changed };
+};
+
+const clampLoad = (pct: number) => Math.max(0.5, Math.min(2, (Number.isFinite(pct) ? pct : 100) / 100));
+
+/** Proje kurallarından hesap ayarı (eksikler varsayılanla) */
+export const settingsFromRules = (
+    rules: PlanRules | undefined,
+    project: Pick<ProjectSettings, 'useJiraRemainingEstimate'>,
+    over: Partial<BottleneckSettings> = {},
+    today = new Date(),
+): BottleneckSettings => ({
+    ...DEFAULT_BOTTLENECK,
+    startDate: defaultStartDate(today),
+    targetDate: rules?.targetDate || defaultTargetDate(today),
+    testUnit: rules?.testUnit ?? DEFAULT_TEST_UNIT,
+    testRatio: rules?.testRatio ?? DEFAULT_BOTTLENECK.testRatio,
+    focus: rules?.focus ?? DEFAULT_BOTTLENECK.focus,
+    fixers: rules?.fixers || {},
+    scopeMilestone: rules?.scopeMilestone,
+    maxLoad: rules?.maxLoad ?? 100,
+    personMaxLoad: rules?.personMaxLoad || {},
+    useRemaining: !!project.useJiraRemainingEstimate,
+    ...over,
+});
+
+/** Tarihi içeren (ya da tarihten sonraki ilk) sprintin numarası; proje takviminden */
+export const sprintOfDate = (project: Project): ((d: Date) => number) => {
+    let windows: ReturnType<typeof buildSprintWindows> | null = null;
+    return d => {
+        windows ??= buildSprintWindows(project, 400);
+        return (windows.find(w => d <= w.end) || windows[windows.length - 1]).sprint;
+    };
 };

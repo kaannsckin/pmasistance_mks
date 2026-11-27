@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { CALENDAR_PRESETS, calendarLabel, sprintCalendar } from '../../utils/sprintCalendar';
-import { Leave, Person, Project, Sprint, Task, TaskStatus } from '../../types';
+import { Leave, Person, PlanRules, Project, Sprint, Task, TaskStatus } from '../../types';
 import { exportSprintPlanToExcel } from '../../utils/exporter';
-import { planTaskVersionsDetailed, PlanWarning } from '../../utils/sprintPlanner';
+import { PlanWarning } from '../../utils/sprintPlanner';
+import { applyPlanToSprints, planBottleneck, settingsFromRules, sprintOfDate } from '../../utils/planning/bottleneck';
 import { calculatePertFuzzyPert } from '../../utils/timeline';
 import { buildLanes, currentLaneVersion, laneRange, lastPlannedSprint, positionPct, segmentPct, SprintLane } from '../../utils/timelinePlan';
 import { DayRange, formatRange, isDayRange, toIsoDay } from '../../utils/calendarRange';
@@ -45,6 +46,8 @@ interface ModernTimelineProps {
     onDeleteSprint: (version: number) => void;
     onRenameSprint: (version: number, name: string) => void;
     onUpdateCalendar: (c: CalendarSettings) => void;
+    /** Plan kurallarını (hedef, test ekibi, bulgu sorumlusu, mesai) proje ayarına yazar */
+    onUpdatePlanRules?: (rules: PlanRules) => void;
     onViewTask: (task: Task) => void;
     onNewTask: () => void;
     period: DayRange | null;
@@ -179,7 +182,7 @@ export const CalendarSheet: React.FC<{ value: CalendarSettings; onClose: () => v
     );
 };
 
-const ModernTimeline: React.FC<ModernTimelineProps> = ({ project, people, leaves, identity, canEdit, onMoveTask, onPlanGenerated, onInsertSprint, onDeleteSprint, onRenameSprint, onUpdateCalendar, onViewTask, onNewTask, period, me, initialSelection, initialSprint, onPeriodChange, onBulkMove, onOpenFilteredList, onOpenPeriodJira, onOpenManualRelease }) => {
+const ModernTimeline: React.FC<ModernTimelineProps> = ({ project, people, leaves, identity, canEdit, onMoveTask, onPlanGenerated, onInsertSprint, onDeleteSprint, onRenameSprint, onUpdateCalendar, onUpdatePlanRules, onViewTask, onNewTask, period, me, initialSelection, initialSprint, onPeriodChange, onBulkMove, onOpenFilteredList, onOpenPeriodJira, onOpenManualRelease }) => {
     const [extra, setExtra] = useState(0);
     const [dates, setDates] = useState<DayRange>(period || { start: '', end: '' });
     const [selection, setSelection] = useState<Set<string> | null>(() => initialSelection ? new Set(initialSelection) : null);
@@ -233,10 +236,20 @@ const ModernTimeline: React.FC<ModernTimelineProps> = ({ project, people, leaves
     const placedOpen = project.tasks.some(t => (t.version || 0) > 0 && t.status !== TaskStatus.Done);
     const runPlan = (tasks: Task[], edited = 0) => {
         try {
-            const r = planTaskVersionsDetailed(tasks, project.resources, weeks, testDays);
-            onPlanGenerated(r.tasks);
+            // Darboğaz planıyla aynı kurallar: haftalık sürüm, kişi kapasitesi (mesai sınırı dahil), test ve bulgu adımı
+            const settings = settingsFromRules(project.settings.planRules, project.settings, { horizonWeeks: 60 });
+            const plan = planBottleneck({ project: { ...project, tasks }, people, leaves, settings, scenario: 'current' });
+            const { tasks: next } = applyPlanToSprints(tasks, plan, sprintOfDate(project));
+            onPlanGenerated(next);
             setExtra(0);
-            setResult({ warnings: r.warnings, text: `${edited ? `${edited} görev güncellendi. ` : ''}${r.stats.plannedTaskCount} görev ${r.stats.sprintCount} sprinte dağıtıldı (${num(r.stats.totalEffortDays)} gün iş).` });
+            const fits = plan.tasks.filter(t => t.fits).length;
+            const byId = new Map(tasks.map(t => [t.id, t]));
+            const warnings: PlanWarning[] = plan.tasks.filter(t => !t.fits).map(t => {
+                const name = byId.get(t.taskId)?.name || t.taskId;
+                return { taskId: t.taskId, taskName: name, type: t.release < 0 ? 'unplaced' : 'oversized', message: `${name}: ${t.reason}` };
+            });
+            const target = new Date(`${settings.targetDate}T00:00:00`).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' });
+            setResult({ warnings, text: `${edited ? `${edited} görev güncellendi. ` : ''}${plan.tasks.length} görev haftalık sürüm planına göre sprintlere dağıtıldı; ${target} hedefine ${fits} görev yetişiyor.${plan.unestimated.length ? ` Efor girilmemiş ${plan.unestimated.length} görev yerinde kaldı.` : ''} Kişi bazında yük için "Darboğaz"ı açın.` });
         } catch (e) {
             if (edited) onPlanGenerated(tasks);
             setResult({ warnings: [], text: e instanceof Error ? e.message : 'Plan oluşturulamadı.' });
@@ -246,7 +259,7 @@ const ModernTimeline: React.FC<ModernTimelineProps> = ({ project, people, leaves
         // Süresi, bileşeni ya da sorumlusu eksik görevler önce gösterilir; pencere yeniden dağıtım uyarısını da içerir.
         const check = checkPlanReadiness(project);
         if (check.rows.length) { setReadiness(check); return; }
-        if (placedOpen && !window.confirm('Otomatik plan, bitmemiş görevlerin sprintlerini öncül ilişkileri ve kapasiteye göre yeniden dağıtır. Devam edilsin mi?')) return;
+        if (placedOpen && !window.confirm('Otomatik plan, bitmemiş görevlerin sprintlerini haftalık sürüm kurallarına göre (kişi kapasitesi, öncül, test ve bulgu adımı) yeniden dağıtır. Devam edilsin mi?')) return;
         runPlan(project.tasks);
     };
     const saveReadinessEdits = (changed: Task[], plan: boolean) => {
@@ -555,6 +568,7 @@ const ModernTimeline: React.FC<ModernTimelineProps> = ({ project, people, leaves
             )}
             {bottleneckOpen && (
                 <BottleneckSheet project={project} people={people} leaves={leaves} canEdit={canEdit}
+                    onSaveRules={canEdit ? onUpdatePlanRules : undefined}
                     onClose={() => setBottleneckOpen(false)}
                     onViewTask={onViewTask}
                     onApply={(tasks, text) => {

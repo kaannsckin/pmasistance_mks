@@ -1,10 +1,9 @@
 import React, { useMemo, useState } from 'react';
-import { Leave, Person, Project, Task } from '../../../types';
+import { Leave, Person, PlanRules, Project, Task } from '../../../types';
 import {
-    applyPlanToSprints, applyReassignments, BottleneckScenario, BottleneckSettings, cellKey, DEFAULT_BOTTLENECK, DEFAULT_TEST_UNIT,
-    defaultStartDate, defaultTargetDate, LoadKind, milestoneRank, PersonRow, planBottleneck, Reassignment,
+    applyPlanToSprints, applyReassignments, BottleneckScenario, cellKey, DEFAULT_TEST_UNIT,
+    defaultStartDate, LoadKind, milestoneRank, PersonRow, planBottleneck, Reassignment, settingsFromRules, sprintOfDate,
 } from '../../../utils/planning/bottleneck';
-import { buildSprintWindows } from '../../../utils/taskToAllocation';
 import { sprintCalendar } from '../../../utils/sprintCalendar';
 import { Icon } from '../icons';
 import { Field, SelectionStrip, Sheet } from '../ui';
@@ -13,7 +12,8 @@ import TaskKeyButton from '../TaskKeyButton';
 /**
  * Darboğaz ve dengeleme: haftalık sürüm ritminde kişi × hafta doluluk ısı
  * haritası. Üç senaryo: mevcut atama, ekip içi dengeleme (öneriler) ve hedefe
- * yetişecek kapasite (ekiplere gereken ek kişi). Hesap utils/planning/bottleneck.ts.
+ * yetişecek kapasite (ekiplere gereken ek kişi). Hesap utils/planning/bottleneck.ts;
+ * kurallar proje ayarında (settings.planRules) ve otomatik planla aynıdır.
  */
 
 interface BottleneckSheetProps {
@@ -25,9 +25,9 @@ interface BottleneckSheetProps {
     onViewTask: (task: Task) => void;
     /** Değişen görev listesinin tamamı ve kısa özet */
     onApply: (tasks: Task[], summary: string) => void;
+    /** Plan kurallarını proje ayarına kaydeder (düzenleme yetkisi yoksa verilmez) */
+    onSaveRules?: (rules: PlanRules) => void;
 }
-
-type Stored = Pick<BottleneckSettings, 'targetDate' | 'testUnit' | 'testRatio' | 'focus' | 'fixers' | 'scopeMilestone'>;
 
 const SCENARIOS: { id: BottleneckScenario; label: string; hint: string }[] = [
     { id: 'current', label: 'Mevcut atama', hint: 'Görevler atandığı kişide; kimin hangi hafta tıkandığı görünür.' },
@@ -39,41 +39,46 @@ const ROLE_LABEL = { dev: '', test: 'Test', fixer: 'Bulgu sorumlusu' } as const;
 const num = (v: number) => v.toLocaleString('tr-TR', { maximumFractionDigits: 1 });
 const pct = (v: number) => `%${Math.round(v * 100)}`;
 const dm = (d: Date) => d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' });
-const toneOf = (ratio: number | null) => ratio === null || ratio < 0.05 ? 'm-fill-2 m-text-3' : ratio >= 0.95 ? 'm-tone-bad' : ratio >= 0.75 ? 'm-tone-warn' : 'm-tone-ok';
-const storageKey = (projectId: string) => `planasistan.bottleneck.${projectId}`;
+/** %100 üstü fazla mesai (mor), %95–100 dolu (kırmızı), %75–95 sarı, altı yeşil */
+const toneOf = (ratio: number | null) => ratio === null || ratio < 0.05 ? 'm-fill-2 m-text-3' : ratio > 1.005 ? 'm-tone-hold' : ratio >= 0.95 ? 'm-tone-bad' : ratio >= 0.75 ? 'm-tone-warn' : 'm-tone-ok';
 
-const readStored = (projectId: string): Partial<Stored> => {
-    try {
-        const raw = localStorage.getItem(storageKey(projectId));
-        const v: unknown = raw ? JSON.parse(raw) : {};
-        return v && typeof v === 'object' ? v as Partial<Stored> : {};
-    } catch { return {}; }
-};
-const writeStored = (projectId: string, v: Stored) => {
-    try { localStorage.setItem(storageKey(projectId), JSON.stringify(v)); } catch { /* özel pencere: ayar yalnız bu oturumda */ }
+/** Sayı alanı: yazarken serbest, alandan çıkınca ya da Enter'da sınırlanıp kaydedilir */
+const NumberInput: React.FC<{ id?: string; value: number | undefined; min: number; max: number; step?: number; placeholder?: string; label?: string; className?: string; onCommit: (v: number | undefined) => void }> = ({ id, value, min, max, step, placeholder, label, className = '', onCommit }) => {
+    const [draft, setDraft] = useState<string | null>(null);
+    const commit = () => {
+        if (draft === null) return;
+        const n = Number(draft.replace(',', '.'));
+        onCommit(draft.trim() === '' ? undefined : Number.isFinite(n) ? Math.max(min, Math.min(max, Math.round(n))) : value);
+        setDraft(null);
+    };
+    return (
+        <input id={id} type="number" inputMode="numeric" min={min} max={max} step={step} aria-label={label} placeholder={placeholder}
+            className={`m-input m-tabular ${className}`} value={draft ?? (value ?? '')}
+            onChange={e => setDraft(e.target.value)} onBlur={commit} onKeyDown={e => { if (e.key === 'Enter') commit(); }} />
+    );
 };
 
-const BottleneckSheet: React.FC<BottleneckSheetProps> = ({ project, people, leaves, canEdit, onClose, onViewTask, onApply }) => {
+const BottleneckSheet: React.FC<BottleneckSheetProps> = ({ project, people, leaves, canEdit, onClose, onViewTask, onApply, onSaveRules }) => {
     const units = useMemo(() => Array.from(new Set<string>(project.resources.map(r => r.unit || 'Genel'))).sort((a, b) => a.localeCompare(b, 'tr')), [project.resources]);
-    const [stored] = useState(() => readStored(project.id));
+    const [rules, setRules] = useState<PlanRules>(() => {
+        const r = project.settings.planRules || {};
+        return r.testUnit === undefined ? { ...r, testUnit: units.includes(DEFAULT_TEST_UNIT) ? DEFAULT_TEST_UNIT : '' } : r;
+    });
     const [startDate, setStartDate] = useState(() => defaultStartDate());
-    const [targetDate, setTargetDate] = useState(stored.targetDate || defaultTargetDate());
-    const [testUnit, setTestUnit] = useState(stored.testUnit ?? (units.includes(DEFAULT_TEST_UNIT) ? DEFAULT_TEST_UNIT : ''));
-    const [testRatio, setTestRatio] = useState(stored.testRatio ?? DEFAULT_BOTTLENECK.testRatio);
-    const [focus, setFocus] = useState(stored.focus ?? DEFAULT_BOTTLENECK.focus);
-    const [fixers, setFixers] = useState<Record<string, string>>(stored.fixers || {});
-    const [scopeMilestone, setScope] = useState<number | undefined>(stored.scopeMilestone);
     const [scenario, setScenario] = useState<BottleneckScenario>('current');
     const [cell, setCell] = useState<{ week: number; person: string } | null>(null);
     const [picked, setPicked] = useState<Set<string>>(new Set());
+    const update = (patch: Partial<PlanRules>) => {
+        const next = { ...rules, ...patch };
+        setRules(next);
+        onSaveRules?.(next);
+    };
 
-    const settings: BottleneckSettings = useMemo(() => ({
-        ...DEFAULT_BOTTLENECK, startDate, targetDate, testUnit, testRatio, focus, fixers, scopeMilestone,
-        useRemaining: !!project.settings.useJiraRemainingEstimate,
-    }), [startDate, targetDate, testUnit, testRatio, focus, fixers, scopeMilestone, project.settings.useJiraRemainingEstimate]);
+    const settings = useMemo(() => settingsFromRules(rules, project.settings, { startDate }), [rules, project.settings, startDate]);
+    const { targetDate, testUnit, testRatio, focus, fixers, scopeMilestone } = settings;
+    const maxLoad = rules.maxLoad ?? 100;
     const valid = !!startDate && !!targetDate && targetDate >= startDate;
     const result = useMemo(() => valid ? planBottleneck({ project, people, leaves, settings, scenario }) : null, [valid, project, people, leaves, settings, scenario]);
-    const save = (patch: Partial<Stored>) => writeStored(project.id, { targetDate, testUnit, testRatio, focus, fixers, scopeMilestone, ...patch });
 
     const taskById = useMemo(() => new Map(project.tasks.map(t => [t.id, t])), [project.tasks]);
     const milestones = useMemo(() => Array.from(new Set<number>(project.tasks.map(t => milestoneRank(t.labels)).filter(r => r < 99))).sort((a, b) => a - b), [project.tasks]);
@@ -100,14 +105,8 @@ const BottleneckSheet: React.FC<BottleneckSheetProps> = ({ project, people, leav
     const usedOf = (p: PersonRow, w: number) => p.load.dev[w] + p.load.test[w] + p.load.fix[w];
     const cellTasks = cell ? result.cells.get(cellKey(cell.week, cell.person)) || [] : [];
 
-    const sprintOf = (() => {
-        let windows: ReturnType<typeof buildSprintWindows> | null = null;
-        return (d: Date) => {
-            windows ??= buildSprintWindows(project, 200);
-            const hit = windows.find(w => d <= w.end) || windows[windows.length - 1];
-            return hit.sprint;
-        };
-    })();
+    const sprintOf = sprintOfDate(project);
+    const overtime = result.people.filter(p => p.overtime > 0.05);
     const weekly = sprintCalendar(project.settings).weeks === 1;
 
     const applyPicked = () => {
@@ -160,25 +159,23 @@ const BottleneckSheet: React.FC<BottleneckSheetProps> = ({ project, people, leav
                         <input id="bn-start" type="date" className="m-input" value={startDate} onChange={e => setStartDate(e.target.value)} />
                     </Field>
                     <Field label="Hedef bitiş" htmlFor="bn-target" hint="Hedefin düştüğü hafta son sürümün testi ve düzeltmesidir.">
-                        <input id="bn-target" type="date" className="m-input" value={targetDate} onChange={e => { setTargetDate(e.target.value); save({ targetDate: e.target.value }); }} />
+                        <input id="bn-target" type="date" className="m-input" value={targetDate} onChange={e => update({ targetDate: e.target.value })} />
                     </Field>
                     <Field label="Test ekibi" htmlFor="bn-test-unit" hint="Sürümden sonraki hafta testi bu birim yapar.">
-                        <select id="bn-test-unit" className="m-input" value={testUnit} onChange={e => { setTestUnit(e.target.value); save({ testUnit: e.target.value }); }}>
+                        <select id="bn-test-unit" className="m-input" value={testUnit} onChange={e => update({ testUnit: e.target.value })}>
                             <option value="">Test adımı yok</option>
                             {units.map(u => <option key={u} value={u}>{u}</option>)}
                         </select>
                     </Field>
                     <Field label="Test ve bulgu eforu (%)" htmlFor="bn-ratio" hint="Geliştirme eforunun oranı; 2 / 4 / 6 saate yuvarlanır.">
-                        <input id="bn-ratio" type="number" min={0} max={100} className="m-input m-tabular" value={Math.round(testRatio * 100)}
-                            onChange={e => { const v = Math.max(0, Math.min(100, Number(e.target.value) || 0)) / 100; setTestRatio(v); save({ testRatio: v }); }} />
+                        <NumberInput id="bn-ratio" min={0} max={100} value={Math.round(testRatio * 100)} onCommit={v => update({ testRatio: (v ?? 20) / 100 })} />
                     </Field>
                     <Field label="Odak (%)" htmlFor="bn-focus" hint="Toplantı ve kesintiler sonrası kullanılabilir oran.">
-                        <input id="bn-focus" type="number" min={30} max={100} className="m-input m-tabular" value={Math.round(focus * 100)}
-                            onChange={e => { const v = Math.max(30, Math.min(100, Number(e.target.value) || 85)) / 100; setFocus(v); save({ focus: v }); }} />
+                        <NumberInput id="bn-focus" min={30} max={100} value={Math.round(focus * 100)} onCommit={v => update({ focus: (v ?? 85) / 100 })} />
                     </Field>
                     {milestones.length > 0 && (
                         <Field label="Hedefe yetişmesi gereken kapsam" htmlFor="bn-scope" hint="Kapasite senaryosu yalnız bu kapsam için ek kişi hesaplar.">
-                            <select id="bn-scope" className="m-input" value={scopeMilestone ?? ''} onChange={e => { const v = e.target.value === '' ? undefined : Number(e.target.value); setScope(v); save({ scopeMilestone: v }); }}>
+                            <select id="bn-scope" className="m-input" value={scopeMilestone ?? ''} onChange={e => update({ scopeMilestone: e.target.value === '' ? undefined : Number(e.target.value) })}>
                                 <option value="">Tüm görevler</option>
                                 {milestones.map(m => <option key={m} value={m}>Milestone {m}{m > milestones[0] ? ` ve öncesi` : ''}</option>)}
                             </select>
@@ -188,14 +185,36 @@ const BottleneckSheet: React.FC<BottleneckSheetProps> = ({ project, people, leav
                         const pool = project.resources.filter(r => (r.unit || 'Genel') === u).map(r => r.name);
                         return (
                             <Field key={u} label={`${u} bulgu sorumlusu`} htmlFor={`bn-fixer-${u}`} hint="Test bulgularını bu kişi düzeltir.">
-                                <select id={`bn-fixer-${u}`} className="m-input" value={fixers[u] || ''} onChange={e => { const next = { ...fixers, [u]: e.target.value }; setFixers(next); save({ fixers: next }); }}>
+                                <select id={`bn-fixer-${u}`} className="m-input" value={fixers[u] || ''} onChange={e => update({ fixers: { ...fixers, [u]: e.target.value } })}>
                                     <option value="">Otomatik ({result.fixers[u]})</option>
                                     {pool.map(n => <option key={n} value={n}>{n}</option>)}
                                 </select>
                             </Field>
                         );
                     })}
+                    <Field label="Kişi başı en yüksek yük (%)" htmlFor="bn-maxload" hint="100 üstü fazla mesai demektir; ör. 120 = haftada yaklaşık 1 gün mesai.">
+                        <NumberInput id="bn-maxload" min={50} max={200} step={5} value={maxLoad} onCommit={v => update({ maxLoad: v ?? 100 })} />
+                    </Field>
                 </div>
+                <details className="pt-3">
+                    <summary className="cursor-pointer text-[14px] font-semibold m-text-2">Kişiye özel en yüksek yük{Object.keys(rules.personMaxLoad || {}).length ? ` (${Object.keys(rules.personMaxLoad || {}).length} kişi)` : ''}</summary>
+                    <p className="m-0 pt-1 text-[13px] m-text-3">Boş bırakılan kişi genel değeri (%{maxLoad}) kullanır. Mesai yapabilecek kişiye ör. 125 yazın.</p>
+                    <div className="grid gap-2 pt-2 sm:grid-cols-3">
+                        {project.resources.map(r => (
+                            <label key={r.id || r.name} className="flex items-center justify-between gap-2 text-[14px] m-text">
+                                <span className="truncate">{r.name}</span>
+                                <NumberInput min={50} max={200} step={5} className="!w-24" label={`${r.name} en yüksek yük yüzdesi`}
+                                    placeholder={String(maxLoad)} value={rules.personMaxLoad?.[r.name]}
+                                    onCommit={v => {
+                                        const next = { ...(rules.personMaxLoad || {}) };
+                                        if (v === undefined) delete next[r.name]; else next[r.name] = v;
+                                        update({ personMaxLoad: next });
+                                    }} />
+                            </label>
+                        ))}
+                    </div>
+                </details>
+                <p className="m-0 pt-3 text-[13px] m-text-3">{onSaveRules ? 'Ayarlar projeye kaydedilir; ekip ve "Otomatik planla" aynı kuralları kullanır. Başlangıç tarihi kaydedilmez.' : 'Görüntüleme: değişiklikler yalnız bu pencerede denenir, projeye kaydedilmez.'}</p>
             </details>
 
             <div className="flex flex-col gap-1.5">
@@ -222,6 +241,7 @@ const BottleneckSheet: React.FC<BottleneckSheetProps> = ({ project, people, leav
                             ? <ul className="m-0 p-0 list-none text-[15px] m-text">{result.extra.map(e => <li key={`${e.unit}-${e.role}`}><strong>{e.unit}</strong> +{e.count} {e.role === 'fixer' ? 'bulgu sorumlusu' : e.role === 'test' ? 'test' : 'geliştirici'}</li>)}</ul>
                             : <div className="text-[15px] m-ink-ok font-semibold">Ek kişi gerekmiyor</div>)
                         : <ul className="m-0 p-0 list-none text-[15px] m-text">{result.teams.filter(t => t.spill > 0.05).map(t => <li key={t.unit}><strong>{t.unit}</strong> {num(t.spill)} gün</li>)}{!result.teams.some(t => t.spill > 0.05) && <li className="m-ink-ok font-semibold">Taşma yok</li>}</ul>}
+                    {overtime.length > 0 && <div className="pt-1 text-[13px] m-text-2">Fazla mesai: {num(overtime.reduce((x, p) => x + p.overtime, 0))} gün · {overtime.length} kişi</div>}
                 </div>
             </div>
 
@@ -230,7 +250,8 @@ const BottleneckSheet: React.FC<BottleneckSheetProps> = ({ project, people, leav
                     <span className="text-[15px] font-semibold m-text">Haftalık doluluk</span>
                     <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded m-tone-ok"></span>%75 altı</span>
                     <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded m-tone-warn"></span>%75–95</span>
-                    <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded m-tone-bad"></span>%95 ve üstü</span>
+                    <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded m-tone-bad"></span>%95–100</span>
+                    <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded m-tone-hold"></span>%100 üstü: fazla mesai</span>
                     <span>Hücreye dokunun: o haftanın görevleri.</span>
                 </div>
                 <div className="overflow-x-auto rounded-xl m-surface">
@@ -263,7 +284,7 @@ const BottleneckSheet: React.FC<BottleneckSheetProps> = ({ project, people, leav
                                                 <th scope="row" className="sticky left-0 z-10 m-surface text-left font-normal px-2 py-1">
                                                     <span className={`block text-[13px] m-text truncate max-w-[150px] sm:max-w-[260px] ${p.virtual ? 'italic' : ''}`} title={p.name}>{p.name}</span>
                                                     <span className={`block text-[11px] m-tabular whitespace-nowrap ${r > 1 ? 'm-ink-bad font-semibold' : 'm-text-3'}`}>
-                                                        {(ROLE_LABEL[p.role] || p.virtual) ? `${p.virtual ? 'eklenen' : ROLE_LABEL[p.role]} · ` : ''}{num(p.demand)} / {num(p.targetCapacity)} g{p.spill > 0.05 ? ` · ${num(p.spill)} taşar` : ''}
+                                                        {(ROLE_LABEL[p.role] || p.virtual) ? `${p.virtual ? 'eklenen' : ROLE_LABEL[p.role]} · ` : ''}{num(p.demand)} / {num(p.targetCapacity)} g{p.maxLoad > 1.005 ? ` · üst %${Math.round(p.maxLoad * 100)}` : ''}{p.overtime > 0.05 ? ` · ${num(p.overtime)} g mesai` : ''}{p.spill > 0.05 ? ` · ${num(p.spill)} taşar` : ''}
                                                     </span>
                                                 </th>
                                                 {shown.map(w => {
@@ -276,7 +297,7 @@ const BottleneckSheet: React.FC<BottleneckSheetProps> = ({ project, people, leav
                                                                 onClick={() => setCell(on ? null : { week: w.index, person: p.name })}
                                                                 aria-pressed={on}
                                                                 aria-label={`${p.name}, H${w.index + 1}: ${num(used)} / ${num(p.capacity[w.index])} gün`}
-                                                                title={`${num(used)} / ${num(p.capacity[w.index])} gün · geliştirme ${num(p.load.dev[w.index])}, test ${num(p.load.test[w.index])}, bulgu ${num(p.load.fix[w.index])}`}
+                                                                title={`${num(used)} / ${num(p.capacity[w.index])} gün · geliştirme ${num(p.load.dev[w.index])}, test ${num(p.load.test[w.index])}, bulgu ${num(p.load.fix[w.index])}${used > p.capacity[w.index] + 0.01 ? ` · fazla mesai ${num((used - p.capacity[w.index]) * 8)} saat` : ''}`}
                                                                 className={`w-full min-w-[46px] min-h-[32px] rounded-md border-0 text-[12px] font-semibold m-tabular ${toneOf(rr)} ${used >= 0.01 ? 'cursor-pointer' : ''}`}
                                                                 style={on ? { boxShadow: 'inset 0 0 0 2px var(--m-accent)' } : w.afterTarget && used >= 0.01 ? { opacity: 0.8 } : undefined}>
                                                                 {rr === null ? '–' : used < 0.01 ? '' : pct(rr)}
