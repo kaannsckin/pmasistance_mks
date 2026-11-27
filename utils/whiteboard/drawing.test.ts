@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { addNodes, colorOf, createBoard, edgeGeometry, makeNode, taskFromNotes } from './model';
-import { buildFrame, parseWbAiResult } from './assistant';
+import { buildFrame, parseWbAiResult, resolveWbAiResult } from './assistant';
+import { iconSvg, loadIconLib, resolveIconName, searchIcons } from './icons';
 import { sanitizeSvg, svgDataUrl } from './svg';
 import { buildTaskPrompt, parseTaskDrafts } from './taskAssist';
 
@@ -43,6 +44,7 @@ describe('asistan çizimi: illüstrasyon, emoji, yol, özel renk, kıvrımlı ok
         expect(shape).toMatchObject({ type: 'shape', shape: 'cloud', color: '#bfdbfe' });
         expect(text).toMatchObject({ type: 'text', color: '#be185d' });
         expect(r.nodes).toHaveLength(5);
+        expect(r.summary).toBe('Bahar sahnesi (1 çizim geçersiz ya da çok büyük SVG olduğu için eklenmedi; tekrar isteyin.)');
         expect(r.edges[0]).toMatchObject({ from: emoji.id, to: shape.id, curve: 50, label: 'kıvrımlı ok' });
     });
 
@@ -52,6 +54,45 @@ describe('asistan çizimi: illüstrasyon, emoji, yol, özel renk, kıvrımlı ok
         expect(colorOf('#zzz', 'blue').key).toBe('blue');
         expect(edgeGeometry({ x1: 0, y1: 0, x2: 100, y2: 0 })).toEqual({ d: 'M0 0 L100 0', lx: 50, ly: 0 });
         expect(edgeGeometry({ x1: 0, y1: 0, x2: 100, y2: 0 }, 30)).toEqual({ d: 'M0 0 Q50 60 100 0', lx: 50, ly: 30 });
+    });
+});
+
+describe('ikonlar ve akış şeması', () => {
+    const frame = buildFrame({ board: createBoard('Mimari'), selection: [], visible: { x: 0, y: 0, w: 1600, h: 900 } });
+
+    it('Lucide ikon adı, Türkçe karşılık ve etiket araması çözülür', async () => {
+        const lib = await loadIconLib();
+        expect(Object.keys(lib.nodes).length).toBeGreaterThan(1500);
+        expect(resolveIconName(lib, 'database')).toBe('database');
+        expect(resolveIconName(lib, 'TreePine')).toBe('tree-pine');
+        expect(resolveIconName(lib, 'veri tabanı')).toBe('database');
+        expect(resolveIconName(lib, 'Sunucu')).toBe('server');
+        expect(resolveIconName(lib, 'qwertyzz')).toBeNull();
+        expect(searchIcons(lib, 'bulut')[0]).toBe('cloud');
+        expect(iconSvg(lib, 'database', '#7c3aed')).toMatch(/^<svg xmlns="http:\/\/www.w3.org\/2000\/svg" viewBox="0 0 24 24"[^>]*stroke="#7c3aed"/);
+    });
+
+    it('asistan yanıtı: ikon + etiket, Mermaid şeması ve şema düğümüne ok; bulunamayan bildirilir', async () => {
+        const r = await resolveWbAiResult(JSON.stringify({
+            summary: 'Mimari',
+            items: [
+                { id: 'u', type: 'icon', name: 'users', x: 0, y: 0, size: 64, color: '#2563eb', text: 'Kullanıcılar' },
+                { id: 'x', type: 'icon', name: 'boyle-bir-ikon-yok' },
+                { id: 'm', type: 'mermaid', x: 200, y: 0, code: 'flowchart LR\n A[API] --> B[(Veri tabanı)]' },
+                { type: 'arrow', from: 'u', to: 'm.A' },
+            ],
+        }), frame);
+        const icon = r.nodes.find(n => n.type === 'image')!;
+        expect(icon).toMatchObject({ w: 64, h: 64, text: 'Kullanıcılar' });
+        expect(decodeURIComponent(icon.src!)).toContain('stroke="#2563eb"');
+        expect(r.nodes.find(n => n.type === 'text')).toMatchObject({ text: 'Kullanıcılar', y: icon.y + 70 });
+        const api = r.nodes.find(n => n.type === 'shape' && n.text === 'API')!;
+        expect(r.nodes.find(n => n.text === 'Veri tabanı')).toMatchObject({ shape: 'cylinder' });
+        expect(r.edges.map(e => [e.from, e.to])).toContainEqual([icon.id, api.id]);
+        expect(r.edges).toHaveLength(2);
+        expect(r.summary).toBe('Mimari (Eklenemeyen: boyle-bir-ikon-yok.)');
+        // Kütüphane verilmeden çözümlenirse öğe atlanır ve bildirilir
+        expect(parseWbAiResult(JSON.stringify({ items: [{ type: 'mermaid', code: 'graph TD; a-->b' }, { type: 'sticky', text: 'x' }] }), frame).summary).toContain('Eklenemeyen: akış şeması');
     });
 });
 

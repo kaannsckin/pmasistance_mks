@@ -230,7 +230,7 @@ const ModernWhiteboard: React.FC<{
                 {copied && <span role="status" className="text-[13px] m-ink-ok">Pano özeti panoya kopyalandı</span>}
                 <span className="inline-flex items-center gap-2 h-9 px-3 rounded-xl m-fill-2 text-[13px] m-text-2" title={collab.info.detail}>
                     <span className="w-2 h-2 rounded-full" style={{ background: collab.info.status === 'live' ? (collab.info.mode === 'cloud' ? '#16a34a' : '#ca8a04') : collab.info.status === 'error' ? '#dc2626' : '#a1a1aa' }} />
-                    {collab.info.mode === 'cloud' ? (collab.info.status === 'live' ? 'Canlı' : collab.info.status === 'error' ? 'Canlı bağlantı yok' : 'Bağlanıyor…') : collab.info.mode === 'local' ? 'Canlı (bu tarayıcı)' : 'Canlı kapalı'}
+                    {collab.info.mode === 'cloud' ? (collab.info.status === 'live' ? 'Canlı' : collab.info.status === 'connecting' ? 'Bağlanıyor…' : 'Canlı yok · 20 sn\'de bir yenilenir') : collab.info.mode === 'local' ? 'Canlı (bu tarayıcı)' : 'Canlı kapalı'}
                     {collab.peers.length > 0 && <span className="flex -space-x-1.5">{collab.peers.slice(0, 5).map(p => <span key={p.client} title={`${p.name}${p.board ? ` · ${boards.find(b => b.id === p.board)?.name || ''}` : ''}`} className="w-6 h-6 rounded-full grid place-items-center text-white text-[10.5px] font-bold border-2" style={{ background: p.color, borderColor: 'var(--m-surface, #fff)' }}>{initials(p.name)}</span>)}</span>}
                 </span>
                 {active && (

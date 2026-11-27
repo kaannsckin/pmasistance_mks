@@ -73,12 +73,17 @@ export const MAX_BROADCAST = 180_000;
 export const projectTopic = (workspaceId: string, projectId: string) => `wb:${workspaceId}:${projectId}`;
 export const boardTopic = (workspaceId: string, projectId: string, boardId: string) => `wbb:${workspaceId}:${projectId}:${boardId}`;
 
+/** Kanala bu sürede katılınamazsa hata bildirilir (WebSocket hiç açılamazsa Realtime sessizce bekler) */
+export const JOIN_TIMEOUT_MS = 15_000;
+export const NO_SOCKET_DETAIL = 'Canlı kanala bağlanılamadı: ağ (kurum güvenlik duvarı ya da vekil sunucu) WebSocket bağlantısına izin vermiyor olabilir. Değişiklikleriniz yine buluta kaydedilir; başkalarının değişiklikleri 20 saniyede bir yenilenir.';
+
 export const cloudTransport = (client: SupabaseClient, topic: string, self: string, h: WbTransportHandlers): WbTransport => {
     let mine: WbPeer | null = null;
     let joined = false;
     let channel: RealtimeChannel | null = null;
     let closed = false;
     h.onStatus('connecting');
+    const timeout = setTimeout(() => { if (!closed && !joined) h.onStatus('error', NO_SOCKET_DETAIL); }, JOIN_TIMEOUT_MS);
     const start = async () => {
         try {
             // Özel kanal: oturum jetonuyla yetkilendirilir (RLS)
@@ -100,10 +105,10 @@ export const cloudTransport = (client: SupabaseClient, topic: string, self: stri
             })
             .subscribe(status => {
                 if (closed) return;
-                if (status === 'SUBSCRIBED') { joined = true; h.onStatus('live'); if (mine) void channel!.track(mine); }
+                if (status === 'SUBSCRIBED') { joined = true; clearTimeout(timeout); h.onStatus('live'); if (mine) void channel!.track(mine); }
                 else if (status === 'CHANNEL_ERROR') h.onStatus('error', 'Canlı kanala bağlanılamadı (yetki ya da Realtime ayarı).');
                 else if (status === 'TIMED_OUT') h.onStatus('error', 'Canlı kanal zaman aşımına uğradı.');
-                else if (status === 'CLOSED') h.onStatus('closed');
+                else if (status === 'CLOSED') { joined = false; h.onStatus('closed'); }
             });
     };
     void start();
@@ -114,6 +119,6 @@ export const cloudTransport = (client: SupabaseClient, topic: string, self: stri
             void channel.send({ type: 'broadcast', event: 'msg', payload: m });
         },
         setPresence: peer => { mine = peer; if (channel && joined) void channel.track(peer); },
-        close: () => { closed = true; if (channel) void client.removeChannel(channel); h.onStatus('closed'); },
+        close: () => { closed = true; clearTimeout(timeout); if (channel) void client.removeChannel(channel); h.onStatus('closed'); },
     };
 };

@@ -3,6 +3,17 @@
 Her sürümün başlığı `## vX.Y.Z` biçimindedir; GitHub sürüm sayfası bu bölümü
 buradan alır (`.github/workflows/exe.yml`).
 
+## v3.9.0
+
+**Whiteboard: ikonlar, otomatik yerleşimli akış şeması, örnekli çizim**
+- Asistan akış şemasını Mermaid olarak yazıyor; uygulama yerleşimi otomatik yapıyor (dagre) ve sonuç düzenlenebilir kutu ve oklar. Karar, veri tabanı, girdi, başla/bitir biçimleri, etiketli oklar ve alt grafikler (bölüm) desteklenir.
+- Mimari ve sistem çizimlerinde ~2000 Lucide ikonu (ISC lisanslı): asistan ikonu adıyla (Türkçe de) seçer, renklendirir, altına etiket yazar. Öğeler panelinde aranabilir **İkonlar** sekmesi.
+- Çizim talimatına örnek SVG'ler eklendi (illüstrasyon kalitesi); bulunamayan ikon, geçersiz SVG ya da okunamayan şema özette bildirilir.
+- İkon verisi ve şema yerleşimi yalnız ilk kullanıldığında yüklenir.
+
+**Düzeltme: "Bağlanıyor…" takılması**
+- Canlı kanal (WebSocket) hiç açılamazsa gösterge sonsuza kadar "Bağlanıyor…" kalıyordu. Artık 15 sn sonra "Canlı yok · 20 sn'de bir yenilenir" yazar, nedenini açıklar; canlı bağlantı yokken açık pano 20 saniyede bir buluttan yenilenir. Değişiklikler her durumda buluta kaydedilir.
+
 ## v3.8.0
 
 **Testler: kayıtlı Jira filtresinden test panosu**
