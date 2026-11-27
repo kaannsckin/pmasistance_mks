@@ -57,6 +57,15 @@ describe('bildirim', () => {
         expect(JSON.parse(String(init.body)).attachments[0].contentType).toBe('application/vnd.microsoft.card.adaptive');
         expect(sent[0]).toMatchObject({ from: 'pa@kurum.gov.tr', to: 'm@kurum.gov.tr', subject: 'Rapor', html: '<p>Metin</p>' });
     });
+
+    it('Teams adresine ulaşılamazsa çıplak "fetch failed" yerine nedeni söyler', async () => {
+        const fetchImpl = vi.fn(async () => { throw new TypeError('fetch failed', { cause: Object.assign(new Error('getaddrinfo'), { code: 'ENOTFOUND' }) }); }) as unknown as typeof fetch;
+        const env = { ...BASE_ENV, TEAMS_WEBHOOK_URL: 'https://hook.example/x' };
+        const r = await handleIntegrationRequest(post('notify', { subject: 'Rapor', text: 'Metin', teams: true }), env, { route: 'notify', fetchImpl });
+        const { teams } = await r.json() as { teams: string };
+        expect(teams).toMatch(/^Teams sunucusuna ulaşılamadı: alan adı çözümlenemedi \(ENOTFOUND\).*TEAMS_WEBHOOK_URL.*HTTPS_PROXY/);
+        expect(teams).not.toMatch(/fetch failed/);
+    });
 });
 
 describe('Jira worklog', () => {

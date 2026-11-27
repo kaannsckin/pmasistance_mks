@@ -5,7 +5,7 @@ import { Env, resolveAuthMode } from '../ai/config.js';
 import { createRateLimiter } from '../ai/rateLimit.js';
 import { describeNetworkError, extraCaFor, upstreamFetch } from '../ai/tls.js';
 import { withIntegrationSettings } from './settings.js';
-import { parseSections, reportCronConfigured, runReportCron, sendNotion, sendSlack, type ReportChannels } from './reports.js';
+import { channelFetch, parseSections, reportCronConfigured, runReportCron, sendNotion, sendSlack, type ReportChannels } from './reports.js';
 import { reportText, type ReportSection } from '../../utils/reportAutomation.js';
 import { addDays, DayRange, isDayRange, isIsoDay } from '../../utils/calendarRange.js';
 import type { JiraAgileBoard, JiraAgileList, JiraSprint } from '../../types.js';
@@ -1185,7 +1185,7 @@ export const teamsCard = (subject: string, text: string, appUrl?: string) => ({
 export const sendTeams = async (env: Env, subject: string, text: string, fetchImpl?: typeof fetch): Promise<void> => {
     const url = clean(env.TEAMS_WEBHOOK_URL)!;
     const f = fetchImpl || upstreamFetch(url, env);
-    const res = await f(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(teamsCard(subject, text, clean(env.APP_URL))) });
+    const res = await channelFetch(f, url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(teamsCard(subject, text, clean(env.APP_URL))) }, 'Teams', 'TEAMS_WEBHOOK_URL');
     if (!res.ok) throw new Error(`Teams iletisi gönderilemedi (HTTP ${res.status}).`);
 };
 

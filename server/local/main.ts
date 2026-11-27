@@ -82,6 +82,10 @@ const ENV_TEMPLATE = `# PlanAsistan yerel ayarları — değişiklikten sonra Pl
 # TÜBİTAK kök sertifikası uygulamada hazırdır. Başka bir kurum sertifikası gerekirse
 # (Jira / AI adresinde TLS hatası) PEM dosyasının yolunu yazın:
 # AI_CA_CERTS_FILE=C:/kurum/kok-sertifika.pem
+# Kurum ağı internete vekil sunucuyla çıkıyorsa (Teams, Slack, Notion, bulut AI'ya
+# "fetch failed" / bağlantı kurulamadı hatası) vekili yazın; kurum içi adresler NO_PROXY'de kalır:
+# HTTPS_PROXY=http://vekil.kurum.gov.tr:8080
+# NO_PROXY=localhost,127.0.0.1,.kurum.gov.tr
 
 # ---- Teams / e-posta (isteğe bağlı) ----
 # TEAMS_WEBHOOK_URL=

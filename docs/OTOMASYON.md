@@ -126,4 +126,9 @@ Böylece her rapor kendi saatinde gider.
 
 Adresler ve jetonlar sunucuda şifreli tutulur; proje verisine yalnız kanal seçimi yazılır.
 
+**"Teams sunucusuna ulaşılamadı" hatası.** Sunucu kanal adresine bağlanamadı. İletide nedeni yazar:
+- *alan adı çözümlenemedi / bağlantı kurulamadı*: Sunucu (çoğunlukla kurum ağındaki yerel sürüm) internete çıkamıyor. Kurum vekil sunucu kullanıyorsa `HTTPS_PROXY` tanımlayın. Kurum içi adresler (ör. Jira) `NO_PROXY` ile doğrudan gider. Vekil kullanılmıyorsa güvenlik duvarında Teams iş akışı adresinin alan adına (ör. `*.logic.azure.com`, `*.powerplatform.com`) izin verilmelidir.
+- *TLS sertifikası doğrulanamadı*: Kurum ağı trafiği kendi sertifikasıyla açıyor. Kurum kök sertifikasını `AI_CA_CERTS` (yerel sürümde `AI_CA_CERTS_FILE`) ile verin.
+- *zamanında yanıt vermedi*: 20 saniye içinde yanıt gelmedi. Adres ve ağ erişimi denetlenmeli.
+
 Kod: `utils/reportAutomation.ts` (tarayıcı ve sunucu ortak), `server/integrations/reports.ts`.

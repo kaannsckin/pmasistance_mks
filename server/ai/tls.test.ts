@@ -1,7 +1,7 @@
 import { X509Certificate } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { TUBITAK_CA_PEM } from './certs';
-import { describeNetworkError, extraCaFor, networkErrorCode, splitPem, upstreamFetch } from './tls';
+import { describeNetworkError, extraCaFor, networkErrorCode, proxySettings, splitPem, upstreamFetch } from './tls';
 
 const BILGEM = 'https://ai-api.bilgem.tubitak.gov.tr/v1/chat/completions';
 
@@ -57,5 +57,31 @@ describe('ağ hatası açıklaması', () => {
         expect(describeNetworkError(fail({ code: 'ENOTFOUND' }))).toMatch(/alan adı çözümlenemedi/);
         expect(describeNetworkError(fail({ code: 'UND_ERR_CONNECT_TIMEOUT' }))).toMatch(/bağlantı kurulamadı/);
         expect(describeNetworkError(new TypeError('fetch failed'))).toMatch(/AI_BASE_URL/);
+    });
+});
+
+describe('vekil sunucu', () => {
+    it('HTTPS_PROXY / HTTP_PROXY ve NO_PROXY yalnız verilen ortamdan okunur', () => {
+        expect(proxySettings({})).toBeNull();
+        expect(proxySettings({ HTTPS_PROXY: '  ' })).toBeNull();
+        expect(proxySettings({ https_proxy: 'http://vekil:8080', NO_PROXY: '.kurum.gov.tr' }))
+            .toEqual({ httpsProxy: 'http://vekil:8080', httpProxy: '', noProxy: '.kurum.gov.tr' });
+    });
+
+    it('vekil tanımlıysa global fetch yerine vekilli fetch döner ve önbelleğe alınır', () => {
+        const env = { HTTPS_PROXY: 'http://vekil.kurum:8080' };
+        const a = upstreamFetch('https://prod.logic.azure.com/x', env);
+        expect(a).not.toBe(fetch);
+        expect(upstreamFetch('https://hooks.slack.com/y', env)).toBe(a);
+        // Ek sertifikayla birlikte ayrı bir fetch
+        expect(upstreamFetch(BILGEM, env)).not.toBe(a);
+    });
+
+    it('hata açıklaması denetlenecek ayarı ve vekil ipucunu söyler; zaman aşımını ayırır', () => {
+        const fail = (cause: unknown) => new TypeError('fetch failed', { cause });
+        expect(describeNetworkError(fail({ code: 'ENOTFOUND' }), 'TEAMS_WEBHOOK_URL')).toMatch(/TEAMS_WEBHOOK_URL.*HTTPS_PROXY/);
+        expect(describeNetworkError(fail({ code: 'ECONNREFUSED' }), 'TEAMS_WEBHOOK_URL')).toMatch(/bağlantı kurulamadı.*HTTPS_PROXY/);
+        expect(describeNetworkError(new TypeError('fetch failed'), 'TEAMS_WEBHOOK_URL')).toMatch(/TEAMS_WEBHOOK_URL/);
+        expect(describeNetworkError(new DOMException('x', 'TimeoutError'), 'TEAMS_WEBHOOK_URL')).toMatch(/zamanında yanıt vermedi/);
     });
 });
