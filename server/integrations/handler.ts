@@ -815,11 +815,22 @@ export const fetchJiraIssuesByKeys = async (env: Env, keys: string[], fetchImpl?
     const missing: string[] = [];
     for (let attempt = 0; rest.length; attempt++) {
         try {
-            const r = await fetchIssuesByJql(env, buildKeysJql(rest), { pageSize: JIRA_PAGE_MAX }, fetchImpl);
-            const got = new Set(r.issues.map(i => i.key.toUpperCase()));
+            // Jira bir sayfada istenenden az kayıt dönebilir (Cloud, değişiklik geçmişi
+            // genişletilince sayfayı küçültür): tüm sayfalar okunmazsa kalan kayıtlar
+            // "bulunamadı" sayılıp eşitlemede güncellenmez. Her sayfa en az bir kayıt
+            // getirdiğinden döngü anahtar sayısını aşmaz.
+            const jql = buildKeysJql(rest);
+            const byKey = new Map<string, JiraIssueRecord>();
+            let cursor: string | undefined;
+            for (let page = 0; page < rest.length; page++) {
+                const r = await fetchIssuesByJql(env, jql, { cursor, pageSize: JIRA_PAGE_MAX }, fetchImpl);
+                r.issues.forEach(i => byKey.set(i.key.toUpperCase(), i));
+                if (!r.next || !r.issues.length) break;
+                cursor = r.next;
+            }
             // Taşınan kayıt yeni anahtarıyla döner: istenen anahtar listede yoksa eksik sayılır
-            missing.push(...rest.filter(k => !got.has(k)));
-            return { issues: r.issues, missing };
+            missing.push(...rest.filter(k => !byKey.has(k)));
+            return { issues: [...byKey.values()], missing };
         } catch (e) {
             const msgs = ((e as { jiraMessages?: string[] }).jiraMessages || []).join(' ').toUpperCase();
             const bad = rest.filter(k => new RegExp(`(^|[^A-Z0-9_-])${k}([^0-9]|$)`).test(msgs));

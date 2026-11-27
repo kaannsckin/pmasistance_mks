@@ -417,6 +417,35 @@ describe('Jira canlı eşitleme (jira-sync)', () => {
         expect(JSON.stringify(body)).not.toContain('pat-gizli');
     });
 
+    it('anahtarla okuma: Jira sayfayı küçültse de tüm sayfalar okunur, kayıtlar "bulunamadı" sayılmaz', async () => {
+        const keys = ['MKS-1', 'MKS-2', 'MKS-3', 'MKS-4', 'MKS-5'];
+        const pages: string[] = [];
+        // Server/DC: istenen 100'e karşın sayfa başına 2 kayıt
+        const fetchImpl = (async (url: string) => {
+            const m = meta(url);
+            if (m) return m;
+            const startAt = Number(new URL(url).searchParams.get('startAt') || 0);
+            pages.push(String(startAt));
+            return jsonRes(200, { issues: keys.slice(startAt, startAt + 2).map(k => raw(k)), total: keys.length });
+        }) as unknown as typeof fetch;
+        const body = await (await run({ op: 'search', keys }, fetchImpl)).json() as { issues: JiraIssueRecord[]; missing: string[] };
+        expect(body.issues.map(i => i.key)).toEqual(keys);
+        expect(body.missing).toEqual([]);
+        expect(pages).toEqual(['0', '2', '4']);
+
+        // Cloud: nextPageToken ile
+        const cloudEnv = { ...env, JIRA_BASE_URL: 'https://kurum.atlassian.net' };
+        const cloud = (async (url: string) => {
+            const m = meta(url);
+            if (m) return m;
+            const token = new URL(url).searchParams.get('nextPageToken');
+            return token ? jsonRes(200, { issues: [raw('MKS-3')], isLast: true }) : jsonRes(200, { issues: [raw('MKS-1'), raw('MKS-2')], nextPageToken: 't2', isLast: false });
+        }) as unknown as typeof fetch;
+        const c = await (await run({ op: 'search', keys: ['MKS-1', 'MKS-2', 'MKS-3'] }, cloud, cloudEnv)).json() as { issues: JiraIssueRecord[]; missing: string[] };
+        expect(c.issues.map(i => i.key)).toEqual(['MKS-1', 'MKS-2', 'MKS-3']);
+        expect(c.missing).toEqual([]);
+    });
+
     it('meta: jeton sahibi, izinli projeler ve sık kullanılan filtreler', async () => {
         const fetchImpl = (async (url: string) => {
             if (url.endsWith('/myself')) return jsonRes(200, { displayName: 'Murat S.' });
