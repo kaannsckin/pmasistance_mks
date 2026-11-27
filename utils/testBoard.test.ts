@@ -150,12 +150,30 @@ describe('haftalık rapor', () => {
         expect(html).toContain('<b>kalın</b> &lt;b&gt;x&lt;/b&gt;');
         expect(html).not.toContain('<img');
 
-        // Test ekibi tanımsız ve önceki görüntü yoksa: sayı yerine not
-        const bare = weekReport(cur, undefined, items, ruleContext({ roleMembers: {}, components: [] }, []));
+        // Test rolü tanımsız: test ekibi Jira geçmişinden (onaylayan / yeniden açan) bulunur
+        const noRole = ruleContext({ roleMembers: {}, components: [] }, []);
+        const bare = weekReport(cur, undefined, items, noRole);
+        expect([bare.testerSource, bare.testers, bare.bugsFromTesters]).toEqual(['history', ['Ayşe Test'], 1]);
         const d2 = reportMarkdown(buildTestReport(bare, { project: 'GİB' }, 'detailed'));
-        expect(d2).not.toContain('test ekibince bildirildi');
-        expect(d2).toContain('Test ekibi projede tanımlı olmadığından');
+        expect(d2).toContain('Açılan hataların **1** tanesi test ekibince bildirildi.');
+        expect(d2).toContain('Test ekibi Jira geçmişinden belirlendi (kayıt onaylayan ya da yeniden açan kişiler): Ayşe Test.');
         expect(d2).toContain('Önceki haftanın görüntüsü bulunmadığından');
         expect(d2).toContain('| Kalan test maddesi (onaylanmamış) | — | 5 | — |');
+        // Kişi bazında aktivite: onaylama, yeniden açma (geçiş yazarı) ve açılan bug
+        expect(r.activity).toEqual([
+            { name: 'Ayşe Test', approved: 1, reopened: 0, bugs: 1, critical: 1 },
+            { name: 'Can Dev', approved: 0, reopened: 0, bugs: 1, critical: 0 },
+        ]);
+        expect(dmd).toContain('| Kişi bazında test aktivitesi | Onayladı (kapattı) | Yeniden açtı | Bug açtı | Kritik bug |');
+        const withReopener = items.map(i => (i.key === 'F' ? { ...i, transitions: i.transitions.map(t => ({ ...t, by: 'Mert Ok' })) } : i));
+        const r3 = weekReport(makeSnapshot(settings, withReopener, ctx, new Date('2026-11-27T17:00:00Z'), { week: '2026-W48' }), prev, withReopener, ctx);
+        expect(r3.rejectors).toEqual([{ name: 'Mert Ok', n: 1 }]);
+        expect(reportMarkdown(buildTestReport(r3, meta, 'executive'))).toContain('; en çok yeniden açan **Mert Ok** (1);');
+        // Ne rol ne geçiş yazarı: test ekibi belirlenemez, sayı yerine not
+        const none = weekReport(makeSnapshot(settings, noHistory, noRole, new Date('2026-11-27T17:00:00Z'), { week: '2026-W48' }), undefined, noHistory, noRole);
+        expect(none.testerSource).toBe('none');
+        const d3 = reportMarkdown(buildTestReport(none, { project: 'GİB' }, 'detailed'));
+        expect(d3).not.toContain('test ekibince bildirildi');
+        expect(d3).toContain('Test ekibi belirlenemedi');
     });
 });

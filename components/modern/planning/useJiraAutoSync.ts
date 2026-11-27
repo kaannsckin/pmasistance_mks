@@ -1,8 +1,9 @@
 import { useEffect, useRef } from 'react';
 import { Project } from '../../../types';
-import { fetchIntegrationHealth, fetchJiraSyncPage, IntegrationHealth, JiraIssueRecord, updateJiraIssue } from '../../../utils/integrations';
+import { fetchIntegrationHealth, IntegrationHealth, JiraIssueRecord } from '../../../utils/integrations';
+import { syncProjectNow } from './syncNow';
 import { JiraImportOptions } from '../../../utils/planning/jiraImport';
-import { hasSyncWork, JiraPushOutcome, readSyncState, runFullSync, syncDue, writeSyncState } from '../../../utils/planning/jiraSync';
+import { hasSyncWork, JiraPushOutcome, readSyncState, syncDue } from '../../../utils/planning/jiraSync';
 
 /**
  * Otomatik Jira eşitleme: aralığı tanımlı (proje ayarı) ve düzenlenebilen
@@ -30,17 +31,9 @@ export const useJiraAutoSync = (
             try {
                 if (!health || Date.now() - health.at > 10 * 60_000) health = { at: Date.now(), value: await fetchIntegrationHealth() };
                 if (!health.value.jira) return;
-                const authMode = health.value.authMode;
                 for (const p of due) {
-                    try {
-                        const update = health.value.jiraUpdate ? (key: string, changes: Parameters<typeof updateJiraIssue>[1]) => updateJiraIssue(key, changes, authMode) : null;
-                        const r = await runFullSync(p, o => fetchJiraSyncPage(o, authMode), update);
-                        if (r.shouldApply) applyRef.current(p.id, r.issues, r.opts, r.addNew, 'otomatik', r.pushed);
-                        writeSyncState(p.id, { at: new Date().toISOString(), ok: true, text: r.text });
-                    } catch (e) {
-                        // Hata da damgalanır: bir sonraki deneme aralık dolunca
-                        writeSyncState(p.id, { at: new Date().toISOString(), ok: false, text: e instanceof Error ? e.message : String(e) });
-                    }
+                    // Hata da damgalanır (syncProjectNow): bir sonraki deneme aralık dolunca
+                    try { await syncProjectNow(p, applyRef.current, 'otomatik'); } catch { /* damgalandı */ }
                 }
             } catch { /* sunucuya ulaşılamadı: sonraki turda */ } finally {
                 running = false;

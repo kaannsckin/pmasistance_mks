@@ -251,8 +251,16 @@ export interface TestWeekReport {
     openBugsBefore: number | null;
     /** Görüntüdeki toplam kayıt */
     total: number;
-    /** Test ekibi (Test rolü) projede tanımlı mı: değilse "test ekibinden" sayısı anlamsızdır */
+    /** Test ekibi biliniyor mu (Test rolü ya da Jira geçmişinden): değilse "test ekibinden" sayısı anlamsızdır */
     testerRoleDefined: boolean;
+    /** Test ekibinin kaynağı: projedeki Test rolü, Jira geçmişi (onaylayan / yeniden açan kişiler) ya da bilinmiyor */
+    testerSource: 'role' | 'history' | 'none';
+    /** Jira geçmişinden belirlenen test ekibi (kayıt onaylayan ya da yeniden açan kişiler) */
+    testers: string[];
+    /** Dönemde kayıt yeniden açan (testi reddeden) kişiler, en çok önce */
+    rejectors: { name: string; n: number }[];
+    /** Kişi bazında dönem aktivitesi (Jira geçmişinden): onayladığı, yeniden açtığı, açtığı bug ve kritik bug */
+    activity: { name: string; approved: number; reopened: number; bugs: number; critical: number }[];
     /** Açan bilgisi gelmeyen yeni hata (eski sunucu ya da gizli alan) */
     reporterMissing: number;
     /** Kalan (onaylanmamış) madde: bu görüntü / önceki */
@@ -292,6 +300,8 @@ const enteredStatusAt = (i: TestBoardItem | undefined, status: string, at: numbe
     return Number.isFinite(ts) ? ts : null;
 };
 
+const REOPEN = /reopen|yeniden a[cç]/i;
+
 export const weekReport = (cur: TestSnapshot, prev: TestSnapshot | undefined, items: TestBoardItem[], ctx: TestRuleContext): TestWeekReport => {
     const to = Date.parse(cur.at);
     const from = prev ? Date.parse(prev.at) : to - 7 * DAY;
@@ -303,7 +313,18 @@ export const weekReport = (cur: TestSnapshot, prev: TestSnapshot | undefined, it
     const createdIn = (kind: string) => items.filter(i => kindOfJiraType(i.type) === kind && within(i.created, from, to));
     const newBugs = createdIn('bug');
     const prio = (['Blocker', 'High', 'Medium', 'Low'] as const).map(p => ({ priority: p, n: newBugs.filter(b => mapJiraPriority(b.priority) === p).length }));
-    const testers = newBugs.filter(b => conditionMatches({ field: 'reporterRole', values: ['test'] }, b, ctx) && !!b.reporter).length;
+    // Test ekibi: Test rolü tanımlıysa o; değilse Jira geçmişinde kayıt onaylayan (tamamlandıya geçiren)
+    // ya da yeniden açan kişiler. Böylece rol elle doldurulmadan da "test ekibinin açtığı hata" bulunur.
+    const isApprove = (t: TestBoardItem['transitions'][number]) => t.fc !== 'done' && t.tc === 'done';
+    const isReject = (t: TestBoardItem['transitions'][number]) => (t.fc === 'done' && t.tc !== 'done') || (REOPEN.test(t.to) && !REOPEN.test(t.from));
+    const historyTesters = [...new Set(items.flatMap(i => i.transitions.filter(t => t.by && (isApprove(t) || isReject(t))).map(t => t.by!.trim())))].sort((a, b) => a.localeCompare(b, 'tr'));
+    const roleDefined = (ctx.roleMembers.test || []).length > 0;
+    const testerSource: TestWeekReport['testerSource'] = roleDefined ? 'role' : historyTesters.length ? 'history' : 'none';
+    const testerSet = new Set(historyTesters.map(x => norm(x)));
+    const isTester = (name: string) => (roleDefined ? rolesOf(name, ctx).includes('test') : testerSet.has(norm(name)));
+    const testers = newBugs.filter(b => !!b.reporter && isTester(b.reporter)).length;
+    // Dönem içi geçişler: onaylayan ve yeniden açan
+    const events = items.flatMap(i => i.transitions.filter(t => t.by && within(t.at, from, to)).map(t => ({ i, t })));
     const reopened = items.filter(i => reopenedAt(i).some(at => within(at, from, to)));
     const count = (s: TestSnapshot | undefined, id: string) => (s ? s.rows.filter(r => r.c === id).length : null);
     const queue = (m: TestColumnMeaning) => cur.rows.filter(r => meaning.get(r.c) === m).map(r => {
@@ -367,7 +388,17 @@ export const weekReport = (cur: TestSnapshot, prev: TestSnapshot | undefined, it
         openBugs,
         openBugsBefore: prev ? openOf(prev, prevMeaning).length : null,
         total: cur.rows.length,
-        testerRoleDefined: (ctx.roleMembers.test || []).length > 0,
+        testerRoleDefined: testerSource !== 'none',
+        testerSource,
+        testers: historyTesters,
+        rejectors: tally(events.filter(e => isReject(e.t)).map(e => e.t.by!), x => x).map(({ name, n }) => ({ name, n })),
+        activity: (() => {
+            const m = new Map<string, { name: string; approved: number; reopened: number; bugs: number; critical: number }>();
+            const get = (name: string) => { const k = norm(name); if (!m.has(k)) m.set(k, { name: name.trim(), approved: 0, reopened: 0, bugs: 0, critical: 0 }); return m.get(k)!; };
+            events.forEach(e => { if (isApprove(e.t)) get(e.t.by!).approved++; else if (isReject(e.t)) get(e.t.by!).reopened++; });
+            newBugs.filter(b => b.reporter.trim()).forEach(b => { const x = get(b.reporter); x.bugs++; if (['Blocker', 'High'].includes(mapJiraPriority(b.priority))) x.critical++; });
+            return [...m.values()].sort((a, b) => (b.approved + b.reopened + b.bugs) - (a.approved + a.reopened + a.bugs) || a.name.localeCompare(b.name, 'tr'));
+        })(),
         reporterMissing: newBugs.filter(b => !b.reporter).length,
     };
 };

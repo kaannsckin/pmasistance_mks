@@ -354,7 +354,7 @@ const TestReportView: React.FC<{ project: Project; items: TestBoardItem[]; weekl
                 <>
                     <div className="flex flex-wrap gap-3">
                         <Tile label="Test edilip onaylanan" value={report.approved.length} tone="m-ink-ok" />
-                        <Tile label="Açılan hata" value={report.newBugs.length} sub={report.testerRoleDefined ? `${report.bugsFromTesters} tanesi test ekibinden` : 'test ekibi rolü tanımlı değil'} tone={report.newBugs.length ? 'm-ink-bad' : undefined} />
+                        <Tile label="Açılan hata" value={report.newBugs.length} sub={report.testerRoleDefined ? `${report.bugsFromTesters} tanesi test ekibinden${report.testerSource === 'history' ? ' (Jira geçmişine göre)' : ''}` : 'test ekibi belirlenemedi'} tone={report.newBugs.length ? 'm-ink-bad' : undefined} />
                         <Tile label="Açılan değişiklik talebi" value={report.newChanges.length} />
                         <Tile label="Yeniden açılan" value={report.reopened.length} tone={report.reopened.length ? 'm-ink-warn' : undefined} />
                         {waitingCol && <Tile label={waitingCol.name} value={waitingCol.now} sub={waitingCol.before === null ? undefined : `geçen hafta ${waitingCol.before} (${waitingCol.now - waitingCol.before >= 0 ? '+' : ''}${waitingCol.now - waitingCol.before})`} />}
