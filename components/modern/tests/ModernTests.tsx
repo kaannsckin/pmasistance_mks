@@ -8,7 +8,7 @@ import {
     describeCondition, distributeItems, makeSnapshot, ruleContext, TestRuleContext, TestWeekReport, weekNumber, weekReport, withSnapshot,
 } from '../../../utils/testBoard';
 import { fetchTestItems } from '../../../utils/testBoardFetch';
-import { buildTestReport, reportHtml, reportPlainText } from '../../../utils/testReport';
+import { buildTestReport, reportHtml, reportMarkdown } from '../../../utils/testReport';
 import { Icon } from '../icons';
 import IssueTypeChip from '../IssueTypeChip';
 import { initialsOf, PRIORITY_META } from '../taskMeta';
@@ -271,7 +271,7 @@ const TestReportView: React.FC<{ project: Project; items: TestBoardItem[]; weekl
     const sorted = useMemo(() => [...weekly].sort((a, b) => b.at.localeCompare(a.at)), [weekly]);
     const [pick, setPick] = useState<string>(sorted[0]?.id || 'live');
     const [copied, setCopied] = useState(false);
-    const [view, setView] = useState<'report' | 'overview'>('report');
+    const [view, setView] = useState<'executive' | 'detailed' | 'overview'>('executive');
     const report: TestWeekReport | null = useMemo(() => {
         const settings = project.testBoard!.settings;
         if (pick === 'live') {
@@ -287,13 +287,14 @@ const TestReportView: React.FC<{ project: Project; items: TestBoardItem[]; weekl
     const doc = useMemo(() => {
         if (!report) return null;
         const settings = project.testBoard!.settings;
-        return buildTestReport(report, { project: project.name, filter: settings.filterName || `#${settings.filterId}`, generatedAt: pick === 'live' ? new Date().toISOString() : report.to });
-    }, [report, project.name, project.testBoard, pick]);
+        return buildTestReport(report, { project: project.name, filter: settings.filterName || `#${settings.filterId}`, generatedAt: pick === 'live' ? new Date().toISOString() : report.to }, view === 'detailed' ? 'detailed' : 'executive');
+    }, [report, project.name, project.testBoard, pick, view]);
     const html = useMemo(() => (doc ? reportHtml(doc) : ''), [doc]);
-    /** Biçimli kopyalama: Outlook, Teams ve Word tabloları korur; desteklenmezse düz metin */
+    const md = useMemo(() => (doc ? reportMarkdown(doc) : ''), [doc]);
+    /** Kopyalama: biçimli (Teams, Outlook, Word tabloları korur) + Markdown düz metin; biçimli desteklenmezse yalnız Markdown */
     const copy = async () => {
         if (!doc) return;
-        const text = reportPlainText(doc);
+        const text = md;
         try {
             if (typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
                 await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([text], { type: 'text/plain' }) })]);
@@ -302,6 +303,16 @@ const TestReportView: React.FC<{ project: Project; items: TestBoardItem[]; weekl
         } catch {
             try { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { /* izin yok */ }
         }
+    };
+    const download = () => {
+        if (!doc) return;
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([md], { type: 'text/markdown;charset=utf-8' }));
+        a.download = `${project.name} ${doc.subtitle.split(' · ')[0]} ${doc.kind === 'executive' ? 'yonetici ozeti' : 'test raporu'}.md`.replace(/[\\/:*?"<>|]+/g, '-');
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     };
     const print = () => {
         if (!doc) return;
@@ -321,16 +332,20 @@ const TestReportView: React.FC<{ project: Project; items: TestBoardItem[]; weekl
                 </select>
                 {report && (
                     <div className="m-segmented" role="group" aria-label="Görünüm">
-                        <button type="button" className="m-segment" aria-pressed={view === 'report'} onClick={() => setView('report')}>Rapor</button>
+                        <button type="button" className="m-segment" aria-pressed={view === 'executive'} onClick={() => setView('executive')}>Yönetici özeti</button>
+                        <button type="button" className="m-segment" aria-pressed={view === 'detailed'} onClick={() => setView('detailed')}>Detaylı rapor</button>
                         <button type="button" className="m-segment" aria-pressed={view === 'overview'} onClick={() => setView('overview')}>Göstergeler</button>
                     </div>
                 )}
-                {report && <button type="button" className="m-btn m-btn-gray !min-h-[36px] !px-3 text-[14px]" onClick={copy} title="Biçimli kopyalar: e-posta, Teams ya da Word'e tablolarıyla yapıştırılır"><Icon name={copied ? 'check' : 'copy'} size={15} />{copied ? 'Kopyalandı' : 'Raporu kopyala'}</button>}
-                {report && <button type="button" className="m-btn m-btn-gray !min-h-[36px] !px-3 text-[14px]" onClick={print} title="Yazdır ya da PDF olarak kaydet"><Icon name="printer" size={15} />Yazdır / PDF</button>}
+                {report && view !== 'overview' && <>
+                    <button type="button" className="m-btn m-btn-gray !min-h-[36px] !px-3 text-[14px]" onClick={copy} title="Teams, Outlook ya da Word'e tablolarıyla yapıştırılır; düz metin alan yerlere Markdown olarak gider"><Icon name={copied ? 'check' : 'copy'} size={15} />{copied ? 'Kopyalandı' : 'Kopyala'}</button>
+                    <button type="button" className="m-btn m-btn-gray !min-h-[36px] !px-3 text-[14px]" onClick={download} title="Markdown dosyası (.md) olarak indir"><Icon name="download" size={15} />.md indir</button>
+                    <button type="button" className="m-btn m-btn-gray !min-h-[36px] !px-3 text-[14px]" onClick={print} title="Yazdır ya da PDF olarak kaydet"><Icon name="printer" size={15} />Yazdır / PDF</button>
+                </>}
                 {report && <span className="text-[13px] m-text-3">{dateTime(report.from)} – {dateTime(report.to)}{report.hasPrevious ? '' : ' · önceki haftalık görüntü yok, son 7 gün sayıldı'}</span>}
             </div>
             {!report && <p className="m-0 py-6 text-center text-[15px] m-text-3">{weekly.length ? 'Seçilen görüntü bulunamadı.' : 'İlk haftalık görüntü Cuma 20:00\'de alınır. O zamana kadar "Bu hafta" raporu için önce Jira\'dan yenileyin.'}</p>}
-            {report && view === 'report' && (
+            {report && view !== 'overview' && (
                 <div className="rounded-2xl px-6 py-5 overflow-x-auto" style={{ background: '#ffffff', border: '1px solid var(--m-sep, #e5e7eb)' }}
                     // Rapor HTML'i uygulamanın ürettiği, tüm Jira metinleri kaçışlı (utils/testReport.ts › esc)
                     dangerouslySetInnerHTML={{ __html: html }} />

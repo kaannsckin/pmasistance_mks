@@ -113,7 +113,8 @@ export interface JiraIssueRecord {
     /** Atanan kişinin e-postası (Jira gizlemiyorsa) */
     assigneeEmail?: string;
     blockedBy: string[];
-    transitions: { at: string; from: string; to: string; fromCategory: JiraIssueRecord['statusCategory']; toCategory: JiraIssueRecord['statusCategory'] }[];
+    /** Durum geçişleri; `by` geçişi yapan kişi (eski sunucu sürümleri göndermeyebilir) */
+    transitions: { at: string; by?: string; from: string; to: string; fromCategory: JiraIssueRecord['statusCategory']; toCategory: JiraIssueRecord['statusCategory'] }[];
     /** Jira'daki termin (duedate, YYYY-AA-GG); eski sunucu sürümleri göndermeyebilir */
     due?: string | null;
     /** Jira'da son güncellenme anı (ISO) */

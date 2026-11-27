@@ -5,9 +5,10 @@ buradan alır (`.github/workflows/exe.yml`).
 
 ## Yayımlanmadı
 
-**Testler: profesyonel haftalık test durum raporu**
-- Rapor artık pano dökümü değil: başlık ve kapsam, gerekçeli genel durum (Riskli / Dikkat / Yolunda), yönetici özeti, geçen haftayla karşılaştırmalı temel göstergeler, öne çıkanlar ve riskler, açık kritik hatalar, onaylananlar, yeni hatalar (önceliğe göre), değişiklik talepleri, yeniden açılanlar, bekleme günleriyle test kuyruğu, pano dağılımı ve veri notları. Tablolarda kayıt başlığı, öncelik, durum, açan ve atanan yer alır.
-- "Raporu kopyala" biçimli kopyalar: Outlook, Teams ve Word'e tablolarıyla yapışır (desteklenmeyen yerde düz metin). "Yazdır / PDF" eklendi. Ekranda rapor önizlemesi ve gösterge görünümü.
+**Testler: Yönetici özeti ve detaylı haftalık test raporu (Markdown)**
+- İki rapor: **Yönetici özeti** (gerekçeli genel durum; geçen hafta → bu hafta: kalan test maddesi, test kuyruğu, açık ve kritik hata, toplam onaylanan; bu hafta açılan kayıtlar türe ve önceliğe göre; öne çıkanlar; kritik açık hatalar) ve **Detaylı rapor** (yukarıdakiler + kişiler: en çok test maddesi kapatan, en çok hata açan, açık hataların sahipleri; kayıt tabloları, bekleme günleriyle test kuyruğu, pano dağılımı, veri notları).
+- Raporlar Markdown'dır: "Kopyala" Teams, Outlook ve Word'e tablolarıyla biçimli yapıştırır, düz metin alan yerlere Markdown gider; ".md indir" ve "Yazdır / PDF".
+- "Kapatan kişi" Jira'da kaydı kapatan kişidir (durum geçişinin yazarı); bilinmiyorsa kaydın atananı esas alınır ve not düşülür. Jira geçişlerinde geçişi yapan kişi artık okunuyor.
 - Test ekibi rolü tanımlı değilse "0 tanesi test ekibinden" yerine bu durum not olarak yazılır; "Açılan hatalar" kolonu ile haftalık yeni hata sayısının farkı açıklanır.
 
 ## v3.9.0
