@@ -3,7 +3,25 @@
 Her sürümün başlığı `## vX.Y.Z` biçimindedir; GitHub sürüm sayfası bu bölümü
 buradan alır (`.github/workflows/exe.yml`).
 
-## Yayımlanmadı
+## v3.10.0
+
+**Sprint planı: darboğaz ısı haritası ve dengeleme**
+- Zaman çizelgesinde **Darboğaz**: haftalık sürüm ritmiyle (her cuma sürüm, sonraki hafta test) kişi × hafta doluluk ısı haritası. Ekip toplamları, son sürüm ve hedef haftası işaretli; hücreye dokununca o haftanın görevleri açılır.
+- Kapasite kişi bazında: haftanın iş günü (resmi tatiller düşülür), katılım, aylık izin ve odak katsayısı. Test ekibi (varsayılan Destek) sürümden sonraki hafta test eder; test ve bulgu eforu geliştirmenin %20'si, 2 / 4 / 6 saate yuvarlanır. Bulgular ekibin **bulgu sorumlusuna** yazılır.
+- Üç senaryo: **Mevcut atama** (kim hangi hafta tıkanıyor), **Ekip içi dengeleme** (işi daha erken bitirebilecek kişiye kaydırma ve tek kişiye sığmayan işi bölme önerileri; seçilenler tek tıkla uygulanır), **Hedefe yetişecek kapasite** (her ekibe kaç geliştirici, test ve bulgu sorumlusu eklenmeli; milestone kapsamı seçilebilir).
+- **Fazla mesai**: kişi başı ve kişiye özel en yüksek yük (%200'e kadar); %100'ü aşan kısım ısı haritasında ayrı renkle ve toplam gün olarak görünür.
+- Plan kuralları (hedef tarih, test ekibi, oranlar, bulgu sorumluları, mesai) proje ayarında saklanır; ekip aynı kuralı görür.
+- **Otomatik planla** artık aynı kuralları kullanır: kişi kapasitesi, öncül, test ve bulgu adımı; hedefe yetişmeyen görevler nedeniyle listelenir. **Planı sprintlere yaz** görevleri hesaplanan sprintlere yerleştirir.
+
+**Görev ilerlemesi**
+- Görevde elle girilen **ilerleme %** ve **ekip tahmini** (ör. "2-3 gün"). Girilmezse durumdan otomatik: geliştirmede %50, testte / incelemede %75, tamamlananda %100. Projede durum yüzdeleri tanımlıysa onlar geçerlidir.
+- Durum yüzdesi tanımlanmamış projelerde ilerleme ve PoC "Bugün" skoru artık devam eden işi kısmi sayar (önceden yalnız tamamlanan sayılıyordu).
+- PoC katsayısı önce görevin elle girilen ilerlemesini, ayar yoksa otomatik ilerlemeyi kullanır. Plan, elle girilen ilerlemeye göre kalan eforu düşürür.
+
+**Panodan aktar (ekip panosu Excel'i)**
+- Zaman çizelgesinde **Panodan aktar**: EMS Board gibi ekip panosu dışa aktarımı Jira anahtarıyla eşleşir. Sorumlu (birimiyle), etiketler, ilerleme %, tahmin ve durum aktarılır; önce değişiklikler gösterilir, alanlar tek tek seçilebilir.
+- Durum: Devam Ediyor → geliştirmede, İncelemede → testte. Havuz / Yapılacak başlamış işi geri almaz, Tamamlandı işi kapatmaz. Puan, zorluk ve tarihler alınmaz.
+- Kısa adlar ("İlker Ba.") ekipteki kişiyle eşleşir; bozuk harfli etiketler düzeltilir ("shared-maılbox" → "shared-mailbox"); eforu olmayan görevin süresi tahminden doldurulur; aynı anahtar iki satırda geçerse birleştirilir.
 
 **Uygulama içi kullanım kılavuzu**
 - Roket simgesinden ekran görüntülü kılavuz ve sürüm geçmişi açılır. Bölümler kitap düzeninde gezilebilir, ekran görüntüleri büyütülebilir.
