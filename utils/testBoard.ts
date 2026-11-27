@@ -268,11 +268,15 @@ export interface TestWeekReport {
     criticalBefore: number | null;
     /** Dönemde açılan tüm kayıtlar (tür adına göre, en çok önce) */
     newByType: { type: string; n: number }[];
-    /** Dönemde onaylananları kapatan kişiler (Jira'da kapanışı yapan; bilinmiyorsa atanan), en çok önce */
+    /**
+     * Dönemde onaylananları kapatan kişiler, en çok önce. Kapatan, Jira'da kaydı
+     * tamamlandı durumuna geçiren kişidir (değişiklik geçmişinin yazarı); atanan
+     * DEĞİLDİR. Kapatanı bilinmeyen kayıt bu listeye girmez.
+     */
     closers: { name: string; n: number }[];
-    /** Kapatan bilgisinin Jira geçmişinden geldiği kayıt sayısı (gerisinde atanan esas alındı) */
+    /** Kapatanı Jira geçmişinden okunabilen onaylanan kayıt sayısı */
     closersFromHistory: number;
-    /** Dönemde hata açan kişiler: toplam ve kritik, en çok önce */
+    /** Dönemde bug kaydı açan kişiler (Jira Reporter; atanan değil): toplam ve kritik, en çok önce */
     bugReporters: { name: string; n: number; critical: number }[];
     /** Açık hataların atananlara dağılımı: toplam ve kritik, en çok önce */
     openByAssignee: { name: string; n: number; critical: number }[];
@@ -322,14 +326,13 @@ export const weekReport = (cur: TestSnapshot, prev: TestSnapshot | undefined, it
         list.forEach(x => { const k = key(x).trim() || 'Atanmamış'; const e = m.get(k) || { name: k, n: 0, critical: 0 }; e.n++; if (crit?.(x)) e.critical++; m.set(k, e); });
         return [...m.values()].sort((a, b) => b.n - a.n || b.critical - a.critical || a.name.localeCompare(b.name, 'tr'));
     };
-    // Kapatan: dönem içinde tamamlandı kategorisine geçişi yapan kişi (Jira geçmişi), yoksa görüntüdeki atanan
-    let fromHistory = 0;
-    const closerOf = (r: TestSnapshotRow) => {
-        const t = [...(byKey.get(r.k)?.transitions || [])].reverse().find(x => x.tc === 'done' && x.fc !== 'done' && Date.parse(x.at) <= to && !!x.by);
-        if (t?.by) { fromHistory++; return t.by; }
-        return r.a;
-    };
-    const closers = tally(approved, closerOf).map(({ name, n }) => ({ name, n }));
+    // Kapatan: tamamlandı kategorisine geçişi yapan kişi (Jira geçmişi). Atanan kullanılmaz:
+    // atanan kaydın sahibidir, kapatan değil; bilinmeyen kapatan sayılmaz, raporda not düşülür.
+    const closerOf = (r: TestSnapshotRow) =>
+        [...(byKey.get(r.k)?.transitions || [])].reverse().find(x => x.tc === 'done' && x.fc !== 'done' && Date.parse(x.at) <= to && !!x.by)?.by || '';
+    const known = approved.map(r => closerOf(r)).filter(Boolean);
+    const fromHistory = known.length;
+    const closers = tally(known, x => x).map(({ name, n }) => ({ name, n }));
     const types = new Map<string, number>();
     items.filter(i => within(i.created, from, to)).forEach(i => types.set(i.type || 'Türsüz', (types.get(i.type || 'Türsüz') || 0) + 1));
     const prevOpen = prev ? openOf(prev, prevMean) : null;
@@ -344,7 +347,8 @@ export const weekReport = (cur: TestSnapshot, prev: TestSnapshot | undefined, it
         newByType: [...types].map(([type, n]) => ({ type, n })).sort((a, b) => b.n - a.n),
         closers,
         closersFromHistory: fromHistory,
-        bugReporters: tally(newBugs, b => b.reporter || 'Bilinmiyor', b => ['Blocker', 'High'].includes(mapJiraPriority(b.priority))).map(x => ({ ...x })),
+        // Açan (Reporter) bilinmeyen kayıt sayılmaz; atanan açan yerine kullanılmaz
+        bugReporters: tally(newBugs.filter(b => b.reporter.trim()), b => b.reporter, b => ['Blocker', 'High'].includes(mapJiraPriority(b.priority))),
         openByAssignee: tally(openBugs, b => b.assignee, b => b.priority === 'Blocker' || b.priority === 'High'),
         week: cur.week,
         from: new Date(from).toISOString(),

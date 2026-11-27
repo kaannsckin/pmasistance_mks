@@ -9,7 +9,7 @@ buradan alır (`.github/workflows/exe.yml`).
 - İki rapor: **Yönetici özeti** (gerekçeli genel durum; geçen hafta → bu hafta: kalan test maddesi, test kuyruğu, açık ve kritik hata, toplam onaylanan; bu hafta açılan kayıtlar türe ve önceliğe göre; öne çıkanlar; kritik açık hatalar) ve **Detaylı rapor** (yukarıdakiler + kişiler: en çok test maddesi kapatan, en çok hata açan, açık hataların sahipleri; kayıt tabloları, bekleme günleriyle test kuyruğu, pano dağılımı, veri notları).
 - En çok bug kaydı açan kişi her iki raporda: yönetici özetinde öne çıkanlarda ve "Haftanın kişileri" tablosunda (en çok kapatan ve en çok bug açan ilk üç kişi), detaylı raporda tam tablo (açılan ve kritik bug sayısıyla).
 - Raporlar Markdown'dır: "Kopyala" Teams, Outlook ve Word'e tablolarıyla biçimli yapıştırır, düz metin alan yerlere Markdown gider; ".md indir" ve "Yazdır / PDF".
-- "Kapatan kişi" Jira'da kaydı kapatan kişidir (durum geçişinin yazarı); bilinmiyorsa kaydın atananı esas alınır ve not düşülür. Jira geçişlerinde geçişi yapan kişi artık okunuyor.
+- Kişiler karışmaz: **kaydı açan** Jira'da kaydı oluşturan kişi (Reporter), **atanan** kaydın sahibi (Assignee), **kapatan** kaydı Jira'da kapatma durumuna geçiren kişi (değişiklik geçmişinin yazarı). Atanan hiçbir zaman açan ya da kapatan yerine kullanılmaz; açanı ya da kapatanı bilinmeyen kayıt sayıma katılmaz ve raporda not düşülür. Tablo başlıkları ve pano kartları bu ayrımı açıkça yazar. Jira geçişlerinde geçişi yapan kişi artık okunuyor.
 - Test ekibi rolü tanımlı değilse "0 tanesi test ekibinden" yerine bu durum not olarak yazılır; "Açılan hatalar" kolonu ile haftalık yeni hata sayısının farkı açıklanır.
 
 ## v3.9.0

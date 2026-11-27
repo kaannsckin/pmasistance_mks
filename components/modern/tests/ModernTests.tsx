@@ -70,7 +70,7 @@ const TestCard: React.FC<{ i: TestBoardItem; done: boolean; tasks: Map<string, T
             {i.parentKey && <span className="flex items-center gap-1.5 text-[12px] m-text-3"><Icon name="subtask" size={12} />Üst görev <KeyRef k={i.parentKey} tasks={tasks} onViewTask={onViewTask} /></span>}
             <span className="flex items-center gap-2 text-[12px] m-text-3 w-full min-w-0">
                 {(prio === 'Blocker' || prio === 'High') && <span className={`inline-flex items-center gap-0.5 font-semibold flex-none ${pm.ink}`}><Icon name="flag" size={12} strokeWidth={2.2} />{pm.label}</span>}
-                {i.reporter && <span className="truncate" title={`Açan: ${i.reporter}`}>Açan: {i.reporter}</span>}
+                {i.reporter && <span className="truncate" title={`Kaydı açan (Reporter): ${i.reporter}`}>Kaydı açan: {i.reporter}</span>}
                 {i.assignee
                     ? <span title={`Atanan: ${i.assignee}`} aria-label={`Atanan: ${i.assignee}`} className="ml-auto w-7 h-7 rounded-full m-accent-bg flex items-center justify-center text-[11px] font-bold flex-none">{initialsOf(i.assignee)}</span>
                     : <span className="ml-auto w-7 h-7 rounded-full m-fill-2 m-text-3 flex items-center justify-center flex-none" title="Atanmamış"><Icon name="users" size={13} /></span>}
@@ -424,7 +424,7 @@ const TestSnapshotsView: React.FC<{ snapshots: TestSnapshot[]; canEdit: boolean;
                                                 <span key={r.k} className={`m-surface ${kindClass(r.t)} rounded-lg px-2 py-1.5 flex flex-col gap-0.5`}>
                                                     <span className="flex items-center gap-1.5 text-[12px]"><IssueTypeChip t={typeView(r.t)} /><KeyRef k={r.k} tasks={tasks} onViewTask={onViewTask} /></span>
                                                     <span className="text-[13px] m-text leading-snug">{r.n}</span>
-                                                    <span className="text-[11.5px] m-text-3">{r.s}{r.a ? ` · ${r.a}` : ''}</span>
+                                                    <span className="text-[11.5px] m-text-3">{r.s}{r.a ? ` · Atanan: ${r.a}` : ''}</span>
                                                 </span>
                                             ))}
                                         </div>

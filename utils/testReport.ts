@@ -123,7 +123,7 @@ const highlights = (r: TestWeekReport, max = 6): string[] => {
     const waiting = col(r, 'waiting');
     return [
         ...(r.approved.length ? [`**${n(r.approved.length)} madde** test edilerek onaylandı${r.closers[0] ? `; en çok kapatan **${r.closers[0].name}** (${n(r.closers[0].n)})` : ''}.`] : ['Bu hafta onaylanan madde yok.']),
-        ...(r.bugReporters[0] && r.bugReporters[0].name !== 'Bilinmiyor' ? [`**${n(r.newBugs.length)} bug kaydı** açıldı; en çok açan **${r.bugReporters[0].name}** (${n(r.bugReporters[0].n)}${r.bugReporters[0].critical ? `, ${n(r.bugReporters[0].critical)} kritik` : ''}).`] : []),
+        ...(r.bugReporters[0] && r.bugReporters[0].name !== 'Bilinmiyor' ? [`**${n(r.newBugs.length)} bug kaydı** açıldı; en çok kayıt açan **${r.bugReporters[0].name}** (${n(r.bugReporters[0].n)}${r.bugReporters[0].critical ? `, ${n(r.bugReporters[0].critical)} kritik` : ''}).`] : []),
         ...(r.remainingBefore !== null ? [`Kalan test maddesi **${fromTo(r.remaining, r.remainingBefore)}** (${diff(r.remaining, r.remainingBefore)}).`] : []),
         ...(crit.length ? [`**${n(crit.length)} kritik hata açık**: ${crit.slice(0, 4).map(b => `${b.key} (${PRIO_TR[b.priority]})`).join(', ')}${crit.length > 4 ? ` ve ${n(crit.length - 4)} kayıt daha` : ''}.`] : []),
         ...(r.reopened.length ? [`**${n(r.reopened.length)} kayıt yeniden açıldı** (${r.reopened.slice(0, 4).map(i => i.key).join(', ')}); düzeltme kalitesi izlenmeli.`] : []),
@@ -138,7 +138,9 @@ const notes = (r: TestWeekReport, detailed: boolean): string[] => [
     ...(detailed ? ['Yeni açılan kayıt sayıları Jira açılış tarihine göredir; panodaki "Açılan hatalar" kolonu ise o an çözülmemiş test hatalarının toplamıdır.'] : []),
     ...(!r.testerRoleDefined && r.newBugs.length ? ['Test ekibi projede tanımlı olmadığından (Proje ayarları › Roller › Test) hataların test ekibince açılıp açılmadığı ayrıştırılamadı.'] : []),
     ...(r.reporterMissing && r.reporterMissing === r.newBugs.length && r.newBugs.length ? ['Jira\'dan kaydı açan bilgisi gelmedi; sunucu güncellendikten sonra "Jira\'dan yenile" yapılmalı.'] : []),
-    ...(detailed && r.approved.length && r.closersFromHistory < r.approved.length ? [`Kapatan kişi ${r.closersFromHistory ? `${n(r.approved.length - r.closersFromHistory)} kayıtta` : ''} Jira geçmişinden okunamadığı için kaydın atananı esas alındı.`.replace('  ', ' ')] : []),
+    ...(r.approved.length && r.closersFromHistory < r.approved.length ? [`${n(r.approved.length - r.closersFromHistory)} onaylanan kaydı Jira'da kimin kapattığı okunamadı; bu kayıtlar "en çok kapatan" sayımına katılmadı (sunucu güncellendikten sonra "Jira'dan yenile" yapılmalı).`] : []),
+    ...(r.reporterMissing && r.reporterMissing < r.newBugs.length ? [`${n(r.reporterMissing)} bug kaydını kimin açtığı Jira'dan gelmedi; bu kayıtlar "en çok bug açan" sayımına katılmadı.`] : []),
+    ...(detailed ? ['Tanımlar: kaydı açan = Jira\'da kaydı oluşturan kişi (Reporter); atanan = kaydın şu anki sahibi (Assignee); kapatan = kaydı Jira\'da kapatma durumuna geçiren kişi. Atanan, açan ya da kapatan yerine kullanılmaz.'] : []),
     ...(detailed && r.unmatched ? [`${n(r.unmatched)} kayıt hiçbir kolon kuralına uymadı; pano kuralları gözden geçirilmeli.`] : []),
 ];
 
@@ -153,7 +155,7 @@ const peopleBrief = (r: TestWeekReport): ReportBlock[] => {
         closers[i] ? `${closers[i].name} (${n(closers[i].n)})` : '',
         reporters[i] ? `${reporters[i].name} (${n(reporters[i].n)}${reporters[i].critical ? `, ${n(reporters[i].critical)} kritik` : ''})` : '',
     ]);
-    return [{ kind: 'h', text: 'Haftanın kişileri' }, { kind: 'table', table: table(['En çok test maddesi kapatan', 'En çok bug kaydı açan'], rows) }];
+    return [{ kind: 'h', text: 'Haftanın kişileri' }, { kind: 'table', table: table(['En çok test maddesi kapatan', 'En çok bug kaydı açan (Reporter)'], rows) }];
 };
 
 const executive = (c: Ctx): ReportBlock[] => {
@@ -204,13 +206,13 @@ const detailed = (c: Ctx): ReportBlock[] => {
         { kind: 'h', text: '3. Öne çıkanlar ve riskler' },
         { kind: 'list', items: highlights(r, 8) },
         { kind: 'h', text: '4. Kişiler' },
-        ...(r.closers.length ? [{ kind: 'table', table: table(['En çok test maddesi kapatan', 'Kapatılan'], r.closers.slice(0, 8).map(x => [x.name, n(x.n)]), [1]) } as ReportBlock] : [{ kind: 'p', text: 'Bu hafta kapatılan madde yok.' } as ReportBlock]),
-        ...(r.bugReporters.length ? [{ kind: 'table', table: table(['En çok bug kaydı açan', 'Açılan bug', 'Kritik'], r.bugReporters.slice(0, 8).map(x => [x.name, n(x.n), n(x.critical)]), [1, 2]) } as ReportBlock] : [{ kind: 'p', text: 'Bu hafta hata açılmadı.' } as ReportBlock]),
-        ...(r.openByAssignee.length ? [{ kind: 'table', table: table(['Açık hataların sahibi (atanan)', 'Açık hata', 'Kritik'], r.openByAssignee.slice(0, 8).map(x => [x.name, n(x.n), n(x.critical)]), [1, 2]) } as ReportBlock] : []),
+        ...(r.closers.length ? [{ kind: 'table', table: table(['En çok test maddesi kapatan (kapatan kişi)', 'Kapatılan'], r.closers.slice(0, 8).map(x => [x.name, n(x.n)]), [1]) } as ReportBlock] : [{ kind: 'p', text: 'Bu hafta kapatılan madde yok.' } as ReportBlock]),
+        ...(r.bugReporters.length ? [{ kind: 'table', table: table(['En çok bug kaydı açan (Reporter)', 'Açılan bug', 'Kritik'], r.bugReporters.slice(0, 8).map(x => [x.name, n(x.n), n(x.critical)]), [1, 2]) } as ReportBlock] : [{ kind: 'p', text: 'Bu hafta hata açılmadı.' } as ReportBlock]),
+        ...(r.openByAssignee.length ? [{ kind: 'table', table: table(['Açık hataların atananı (Assignee)', 'Açık hata', 'Kritik'], r.openByAssignee.slice(0, 8).map(x => [x.name, n(x.n), n(x.critical)]), [1, 2]) } as ReportBlock] : []),
         ...section('5. Açık kritik hatalar', table(['Kayıt', 'Başlık', 'Öncelik', 'Durum', 'Atanan'], crit.map(b => [b.key, b.name, PRIO_TR[b.priority], b.status, b.assignee || '—'])), 'Açık engelleyici ya da yüksek öncelikli hata yok.'),
         ...section('6. Bu hafta test edilip onaylananlar', table(['Kayıt', 'Başlık', 'Tür', 'Atanan'], r.approved.map(a => [a.k, a.n, typeTr(a.t), a.a || '—'])), 'Bu hafta onaylanan madde yok.'),
-        ...section('7. Bu hafta açılan hatalar', table(['Kayıt', 'Başlık', 'Öncelik', 'Durum', 'Açan', 'Atanan'], [...r.newBugs].sort((a, b) => rank(a.priority) - rank(b.priority)).map(b => [b.key, b.summary, PRIO_TR[mapJiraPriority(b.priority)], b.status, b.reporter || '—', b.assignee || '—'])), 'Bu hafta yeni hata açılmadı.'),
-        ...section('8. Değişiklik talepleri', table(['Kayıt', 'Başlık', 'Durum', 'Açan'], r.newChanges.map(x => [x.key, x.summary, x.status, x.reporter || '—'])), 'Bu hafta değişiklik talebi gelmedi.'),
+        ...section('7. Bu hafta açılan hatalar', table(['Kayıt', 'Başlık', 'Öncelik', 'Durum', 'Kaydı açan', 'Atanan'], [...r.newBugs].sort((a, b) => rank(a.priority) - rank(b.priority)).map(b => [b.key, b.summary, PRIO_TR[mapJiraPriority(b.priority)], b.status, b.reporter || '—', b.assignee || '—'])), 'Bu hafta yeni hata açılmadı.'),
+        ...section('8. Değişiklik talepleri', table(['Kayıt', 'Başlık', 'Durum', 'Kaydı açan'], r.newChanges.map(x => [x.key, x.summary, x.status, x.reporter || '—'])), 'Bu hafta değişiklik talebi gelmedi.'),
         ...section('9. Yeniden açılan kayıtlar', table(['Kayıt', 'Başlık', 'Durum', 'Atanan'], r.reopened.map(x => [x.key, x.summary, x.status, x.assignee || '—'])), 'Bu hafta yeniden açılan kayıt yok.'),
         ...(testing || waiting ? section('10. Test kuyruğu', table(['Kayıt', 'Başlık', 'Aşama', 'Bekleme (gün)', 'Atanan'], [
             ...r.waiting.map(x => [x.key, x.name, waiting?.name || 'Test bekliyor', x.days === null ? '—' : n(x.days), x.assignee || '—']),

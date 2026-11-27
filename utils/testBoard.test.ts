@@ -113,9 +113,9 @@ describe('haftalık rapor', () => {
         expect(md).toContain('| Toplam onaylanan (kümülatif) | 0 | 1 | +1 |');
         expect(md).toContain('Bu hafta **3 kayıt** açıldı: **2 hata** (1 engelleyici, 1 orta), **1 değişiklik talebi**.');
         expect(md).toContain('- **1 madde** test edilerek onaylandı; en çok kapatan **Ayşe Test** (1).');
-        expect(md).toContain('- **2 bug kaydı** açıldı; en çok açan **Ayşe Test** (1, 1 kritik).');
+        expect(md).toContain('- **2 bug kaydı** açıldı; en çok kayıt açan **Ayşe Test** (1, 1 kritik).');
         expect(md).toContain('### Haftanın kişileri');
-        expect(md).toContain('| En çok test maddesi kapatan | En çok bug kaydı açan |');
+        expect(md).toContain('| En çok test maddesi kapatan | En çok bug kaydı açan (Reporter) |');
         expect(md).toContain('| Ayşe Test (1) | Ayşe Test (1, 1 kritik) |');
         expect(md).toContain('|   | Can Dev (1) |');
         expect(md).not.toContain('Açık hataların sahibi');
@@ -123,9 +123,23 @@ describe('haftalık rapor', () => {
         const det = buildTestReport(r, meta, 'detailed');
         const dmd = reportMarkdown(det);
         expect(dmd).toContain('### 4. Kişiler');
-        expect(dmd).toContain('| En çok test maddesi kapatan | Kapatılan |');
+        expect(dmd).toContain('| En çok test maddesi kapatan (kapatan kişi) | Kapatılan |');
         expect(dmd).toContain('| Ayşe Test | 1 |');
-        expect(dmd).toContain('| En çok bug kaydı açan | Açılan bug | Kritik |');
+        expect(dmd).toContain('| En çok bug kaydı açan (Reporter) | Açılan bug | Kritik |');
+        expect(dmd).toContain('| Açık hataların atananı (Assignee) | Açık hata | Kritik |');
+        expect(dmd).toContain('| Kayıt | Başlık | Öncelik | Durum | Kaydı açan | Atanan |');
+        expect(dmd).toContain('Tanımlar: kaydı açan = Jira\'da kaydı oluşturan kişi (Reporter)');
+
+        // Kapatanı bilinmeyen kayıt atanana yazılmaz; açanı bilinmeyen bug sayılmaz
+        const noHistory = items.map(i => (i.key === 'A' ? { ...i, assignee: 'Vedat Kaya', transitions: i.transitions.map(t => ({ ...t, by: undefined })) } : i.key === 'D' ? { ...i, reporter: '' } : i));
+        const r2 = weekReport(makeSnapshot(settings, noHistory, ctx, new Date('2026-11-27T17:00:00Z'), { week: '2026-W48' }), prev, noHistory, ctx);
+        expect(r2.closers).toEqual([]);
+        expect(r2.closersFromHistory).toBe(0);
+        expect(r2.bugReporters).toEqual([{ name: 'Ayşe Test', n: 1, critical: 1 }]);
+        const md2 = reportMarkdown(buildTestReport(r2, meta, 'executive'));
+        expect(md2).not.toContain('Vedat Kaya (1)');
+        expect(md2).toContain('1 onaylanan kaydı Jira\'da kimin kapattığı okunamadı');
+        expect(md2).toContain('1 bug kaydını kimin açtığı Jira\'dan gelmedi');
         expect(dmd).toContain('### 5. Açık kritik hatalar');
         expect(dmd).toContain('| C | Kayıt C | Engelleyici | Open | Can Dev |');
         // Hücre içi | kaçışlı; HTML'de Jira metni kaçışlı, **kalın** korunur
