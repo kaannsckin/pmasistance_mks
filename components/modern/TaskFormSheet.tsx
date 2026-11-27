@@ -13,6 +13,7 @@ import { Icon } from './icons';
 import { PRIORITY_META, sprintLabel, TASK_STATUS_LABELS, uniq } from './taskMeta';
 import { Field, Sheet } from './ui';
 import { MAX_SPRINT_SPAN, requestedSprintSpan } from '../../utils/sprintSpan';
+import { taskProgressPercent } from '../../utils/progress';
 
 /**
  * Modern görev formu (ekle/düzenle). Sık kullanılanlar üstte; süre, bağlantılar
@@ -262,6 +263,16 @@ const TaskFormSheet: React.FC<TaskFormSheetProps> = ({ task, tasks, resources, p
                                 onChange={e => set({ remainingEstimateHours: e.target.value === '' ? undefined : Math.min(10000, Math.max(0, e.target.valueAsNumber)) })} />
                         </Field>
                     )}
+                    <div className="grid gap-3 sm:grid-cols-2">
+                        <Field label="İlerleme (%)" htmlFor="tf-progress" hint={`Boşsa durumdan otomatik: şu an %${taskProgressPercent({ status: d.status, jiraStatus: d.jiraStatus })} (geliştirmede %50, testte %75). PoC katsayısı ve plan kalan eforu bunu kullanır.`}>
+                            <input id="tf-progress" type="number" min={0} max={100} step={5} className="m-input m-tabular" placeholder={String(taskProgressPercent({ status: d.status, jiraStatus: d.jiraStatus }))}
+                                value={d.progressPct ?? ''}
+                                onChange={e => set({ progressPct: e.target.value === '' || !Number.isFinite(e.target.valueAsNumber) ? undefined : Math.min(100, Math.max(0, Math.round(e.target.valueAsNumber))) })} />
+                        </Field>
+                        <Field label="Ekip tahmini" htmlFor="tf-estimate-text" hint="Serbest metin (ör. 2-3 gün, 1 hafta); panodan aktarılır.">
+                            <input id="tf-estimate-text" className="m-input" value={d.estimateText ?? ''} onChange={e => set({ estimateText: e.target.value || undefined })} />
+                        </Field>
+                    </div>
                     <div className="flex flex-wrap items-center justify-between gap-2">
                         <span className={`text-[14px] ${timeError ? 'm-ink-bad' : 'm-text-3'}`} role={timeError ? 'alert' : undefined}>
                             {timeError || (pert > 0 ? `PERT süresi ≈ ${pert.toLocaleString('tr-TR', { maximumFractionDigits: 1 })} gün` : 'Tahmin girilmezse planlamada süre 0 sayılır.')}

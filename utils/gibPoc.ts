@@ -1,4 +1,5 @@
 import type { PocScoreSettings, PocTestItem, Project, ProjectPoc, Task, TaskStatus } from '../types';
+import { taskProgressPercent } from './progress.js';
 
 /**
  * Müşteri PoC skoru (GİB PoC Bulgu Takip): test listesinden ve görevlerin son
@@ -77,15 +78,18 @@ const workflowKey = (name: string): string => name.trim().toUpperCase().replace(
  * değerinden önce gelir (ilerleme modeliyle aynı kural). Ayar yoksa yalnız
  * Tamamlandı = 1. İptal edilen madde 0.
  */
-export const pocCoefficient = (task: Pick<Task, 'status' | 'jiraStatus' | 'labels'> | undefined, settings?: PocScoreSettings): number => {
+export const pocCoefficient = (task: Pick<Task, 'status' | 'jiraStatus' | 'labels' | 'progressPct'> | undefined, settings?: PocScoreSettings): number => {
     if (!task) return 0;
     if ((task.labels || []).includes(CANCELLED_LABEL)) return 0;
+    // Görevin elle girilen ilerlemesi (ör. EMS panosundan %90) katsayı olur
+    if (task.status !== DONE && isPercent(task.progressPct)) return task.progressPct / 100;
     const w = settings?.coefficients;
     const specific = task.jiraStatus?.trim() ? w?.statuses?.[workflowKey(task.jiraStatus)] : undefined;
     if (isPercent(specific)) return specific / 100;
     const category = w?.categories?.[task.status];
     if (isPercent(category)) return category / 100;
-    return task.status === DONE ? 1 : 0;
+    // Ayar yoksa görevin otomatik ilerlemesi: geliştirmede %50, testte %75, Tamamlandı %100
+    return taskProgressPercent(task) / 100;
 };
 
 /** Başlangıç puanı: ilk (yalnız PoC sonucu) ya da doğrulanmış (Güncel Sonuç varsa o) */

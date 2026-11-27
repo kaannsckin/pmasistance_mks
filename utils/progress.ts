@@ -10,20 +10,36 @@ const workflowKey = (name: string): string => name.trim().toUpperCase().replace(
  * kısmi ilerleme sayılır. Ayrıntılı durum yüzdesi kategori yüzdesinden önce gelir.
  */
 
-export const defaultProgressPercent = (category: TaskStatus): number => (category === DONE ? 100 : 0);
+const IN_PROGRESS = 'InProgress' as TaskStatus;
+/** Otomatik ilerleme: geliştirmede (Devam eden) %50, testte %75. Proje modeli ve elle girilen yüzde önce gelir. */
+export const AUTO_DEVELOPMENT_PERCENT = 50;
+export const AUTO_TEST_PERCENT = 75;
+const foldTr = (s: string) => s.toLocaleLowerCase('tr-TR').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/ı/g, 'i');
+/** Ayrıntılı durum adı bir test / inceleme aşaması mı (Testte, In Test, İncelemede, Review, QA …) */
+export const isTestStatus = (name: string | undefined): boolean => !!name && /test|incele|review|\bqa\b|dogrula|verif/.test(foldTr(name));
+
+export const defaultProgressPercent = (category: TaskStatus, jiraStatus?: string): number =>
+    category === DONE ? 100 : isTestStatus(jiraStatus) ? AUTO_TEST_PERCENT : category === IN_PROGRESS ? AUTO_DEVELOPMENT_PERCENT : 0;
 export const isProgressPercent = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 100;
 
 export const hasProgressWeights = (w?: DashboardProgressWeights): boolean =>
     !!w && (Object.values(w.categories || {}).some(isProgressPercent) || Object.values(w.statuses || {}).some(isProgressPercent));
 
-/** Görevin tamamlanma yüzdesi (0–100) */
-export const taskProgressPercent = (task: Pick<Task, 'status' | 'jiraStatus'>, weights?: DashboardProgressWeights): number => {
+/**
+ * Görevin tamamlanma yüzdesi (0–100). Sıra: Tamamlandı = 100 → elle girilen
+ * yüzde → projenin durum yüzdeleri (ayrıntılı durum, sonra kategori) → model
+ * tanımlı değilse otomatik: testte %75, geliştirmede %50, diğer 0.
+ */
+export const taskProgressPercent = (task: Pick<Task, 'status' | 'jiraStatus' | 'progressPct'>, weights?: DashboardProgressWeights): number => {
     // Tamamlanmış iş her zaman %100: yüzde yalnız yolda olan işi kısmi sayar
     if (task.status === DONE) return 100;
+    if (isProgressPercent(task.progressPct)) return task.progressPct;
     const specific = task.jiraStatus?.trim() ? weights?.statuses?.[workflowKey(task.jiraStatus)] : undefined;
     if (isProgressPercent(specific)) return specific;
+    // Projede durum yüzdeleri tanımlıysa onlar geçerli; yoksa otomatik (testte %75, geliştirmede %50)
+    if (!hasProgressWeights(weights)) return defaultProgressPercent(task.status, task.jiraStatus);
     const category = weights?.categories?.[task.status];
-    return isProgressPercent(category) ? category : defaultProgressPercent(task.status);
+    return isProgressPercent(category) ? category : task.status === DONE ? 100 : 0;
 };
 
 const effortWeight = (t: Task) => Math.max(0, t.time?.avg || 0);
@@ -43,7 +59,8 @@ export interface ProgressSummary {
 /** Görev listesinin ilerlemesi; model yoksa Tamamlandı adedi ÷ toplam */
 export const progressOf = (tasks: Task[], model?: ProjectProgressModel, override?: DashboardProgressWeights): ProgressSummary => {
     const weights = override && hasProgressWeights(override) ? override : model?.weights;
-    const weighted = hasProgressWeights(weights);
+    // Elle girilen yüzde ya da otomatik (geliştirme / test) yüzde varsa ilerleme kısmidir
+    const weighted = hasProgressWeights(weights) || tasks.some(t => t.status !== DONE && taskProgressPercent(t) > 0);
     let basis: 'count' | 'effort' = model?.basis === 'effort' ? 'effort' : 'count';
     if (basis === 'effort' && !tasks.some(t => effortWeight(t) > 0)) basis = 'count';
     let sum = 0, total = 0, done = 0;

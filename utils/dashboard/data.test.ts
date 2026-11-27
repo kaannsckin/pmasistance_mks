@@ -102,7 +102,8 @@ describe('dashboard verisi', () => {
         const t = taskTotals(p.tasks, NOW, ctx(p));
         expect([t.total, t.done, t.overdue, t.blocked, t.effort]).toEqual([6, 2, 1, 1, 14]);
         const mctx = { ...ctx(p), ws: { ...createEmptyWorkspace(), projects: [p] }, tasks: p.tasks, now: NOW };
-        expect(METRIC_BY_KEY.get('progress')!.compute(mctx)).toMatchObject({ text: '%33', sub: '2 / 6 kayıt tamamlandı' });
+        // 2 tamamlanan + devam eden 1 kayıt otomatik %50
+        expect(METRIC_BY_KEY.get('progress')!.compute(mctx)).toMatchObject({ text: '%42', sub: 'Durum yüzdelerine göre · 2 / 6 kayıt tamamlandı' });
         expect(METRIC_BY_KEY.get('overdue')!.compute(mctx)).toMatchObject({ value: 1, tone: 'bad' });
         // Her hazır gösterge boş projede de hata vermeden hesaplanır
         const empty = createProject('Boş');
@@ -124,7 +125,8 @@ describe('dashboard verisi', () => {
         expect(compute({ ...mctx, tasks: tasks.slice(0, 2) })).toMatchObject({ text: '%38', value: 0.375 });
         expect(compute({ ...mctx, progressWeights: { ...progressWeights, statuses: { TESTING: 0 } } }).value).toBe(0.3125);
         expect(compute({ ...mctx, progressWeights: { ...progressWeights, statuses: { TESTING: 120 } } }).value).toBe(0.375);
-        expect(compute({ ...mctx, progressWeights: undefined })).toMatchObject({ value: 0.25, sub: '1 / 4 kayıt tamamlandı' });
+        // Model yoksa otomatik: testing %75, devam eden %50 → (75 + 50 + 100 + 0) / 4
+        expect(compute({ ...mctx, progressWeights: undefined })).toMatchObject({ value: 0.5625, sub: 'Durum yüzdelerine göre · 1 / 4 kayıt tamamlandı' });
     });
 });
 

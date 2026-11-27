@@ -60,6 +60,11 @@ describe('PoC skor modeli', () => {
         expect(pocCoefficient(task('x', TaskStatus.Done, []), { coefficients: { categories: { [TaskStatus.Done]: 90 } } })).toBe(0.9);
         expect(pocCoefficient(task('x', TaskStatus.Done, ['İptal / Kapsam dışı']), undefined)).toBe(0);
         expect(pocCoefficient(undefined, s)).toBe(0);
+        // Elle girilen görev ilerlemesi katsayı olur; ayar yoksa otomatik yüzde
+        expect(pocCoefficient(task('x', TaskStatus.InProgress, [], 'Testte'), undefined)).toBe(0.75);
+        expect(pocCoefficient(task('x', TaskStatus.InProgress, []), undefined)).toBe(0.5);
+        expect(pocCoefficient({ ...task('x', TaskStatus.InProgress, [], 'Testte'), progressPct: 90 }, s)).toBe(0.9);
+        expect(pocCoefficient({ ...task('x', TaskStatus.InProgress, ['İptal / Kapsam dışı']), progressPct: 90 }, s)).toBe(0);
     });
 
     it('gereksinimdeki örnekler: p = b + (1 − b)·k; değerlendirilmemiş test tamamlanınca 3/3 ile paydaya girer', () => {

@@ -105,7 +105,7 @@ import { analyzeDataHealth, applyHealthFix, HealthFix } from './utils/dataHealth
 import { appendAudit, AUDIT_ACTION_LABELS } from './utils/audit';
 import { riskScore } from './utils/risks';
 import { upsertLeave } from './utils/availability';
-import { AiReportAssessment, ProjectAiProfile, ReportAiLogEntry, ReportEvalRun, ReportGatePolicy, ExpectationStatus, ExpectationUrgency, HealthConfig, MeetingStatus, PestelItem, ReportFlow, ReportSettings, Risk, RoleViewConfig, SwotItem, WeeklyReport } from './types';
+import { AiReportAssessment, ProjectAiProfile, ReportAiLogEntry, ReportEvalRun, ReportGatePolicy, ExpectationStatus, ExpectationUrgency, HealthConfig, MeetingStatus, PestelItem, ReportFlow, ReportSettings, Risk, RoleViewConfig, SwotItem, WeeklyReport, PlanRules } from './types';
 import ModernSidebar from './components/modern/ModernSidebar';
 import MobileDock from './components/modern/MobileDock';
 import ModernProjectHeader from './components/modern/ModernProjectHeader';
@@ -2585,6 +2585,7 @@ const App: React.FC = () => {
             return next;
           })}
           onUpdateCalendar={(c: CalendarSettings) => updateActiveProject(p => ({ ...p, settings: { ...p.settings, ...c } }))}
+          onUpdatePlanRules={(planRules: PlanRules) => updateActiveProject(p => ({ ...p, settings: { ...p.settings, planRules } }))}
           onViewTask={viewTask}
           onNewTask={newTask}
           period={period}

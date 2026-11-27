@@ -46,7 +46,7 @@ describe('overviewStats', () => {
         expect(s.todo).toBe(5); // Backlog da "Yapılacak" sayılır
         expect(s.overdue).toBe(1); // yalnız 'c' (termini 10 Temmuz)
         expect(s.missingEstimate).toBe(1);
-        expect(s.progressPct).toBe(33);
+        expect(s.progressPct).toBe(39); // 3 tamamlanan + devam eden %50 (otomatik) / 9
         expect(s.openRisks).toBe(2);
         expect(s.highRisks).toBe(1);
     });
