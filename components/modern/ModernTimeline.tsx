@@ -15,6 +15,7 @@ import TaskQueryPicker from './TaskQueryPicker';
 import SprintSpanBadge from './SprintSpanBadge';
 import SprintTeamCalendar from './SprintTeamCalendar';
 import PlanReadinessSheet from './planning/PlanReadinessSheet';
+import BottleneckSheet from './planning/BottleneckSheet';
 import { checkPlanReadiness, PlanReadiness } from '../../utils/planning/planReadiness';
 
 /**
@@ -202,6 +203,7 @@ const ModernTimeline: React.FC<ModernTimelineProps> = ({ project, people, leaves
     const [teamCalendarSelection, setTeamCalendarSelection] = useState({ component: '', person: '' });
     const [result, setResult] = useState<{ warnings: PlanWarning[]; text: string } | null>(null);
     const [readiness, setReadiness] = useState<PlanReadiness | null>(null);
+    const [bottleneckOpen, setBottleneckOpen] = useState(false);
     const laneRefs = useRef(new Map<number, HTMLElement>());
     useEffect(() => {
         if (initialSprint) laneRefs.current.get(initialSprint)?.scrollIntoView({ inline: 'start', block: 'nearest' });
@@ -368,6 +370,7 @@ const ModernTimeline: React.FC<ModernTimelineProps> = ({ project, people, leaves
                         setSelection(selection ? null : new Set());
                         setDestination(undefined);
                     }}><Icon name="list" size={18} />Toplu sprint planı</button>}
+                    <button type="button" className="m-btn m-btn-gray" onClick={() => setBottleneckOpen(true)} disabled={!project.tasks.length}><Icon name="gauge" size={18} />Darboğaz</button>
                     <button type="button" className="m-btn m-btn-gray" onClick={exportExcel} disabled={!project.tasks.length}><Icon name="download" size={18} />Excel</button>
                     {canEdit && <button type="button" className="m-btn m-btn-primary" onClick={autoPlan} disabled={!project.tasks.length}><Icon name="rocket" size={18} />Otomatik planla</button>}
                 </div>
@@ -549,6 +552,15 @@ const ModernTimeline: React.FC<ModernTimelineProps> = ({ project, people, leaves
                     onContinue={() => { setReadiness(null); runPlan(project.tasks); }}
                     onViewTask={onViewTask}
                     onSave={saveReadinessEdits} />
+            )}
+            {bottleneckOpen && (
+                <BottleneckSheet project={project} people={people} leaves={leaves} canEdit={canEdit}
+                    onClose={() => setBottleneckOpen(false)}
+                    onViewTask={onViewTask}
+                    onApply={(tasks, text) => {
+                        if (tasks !== project.tasks) onPlanGenerated(tasks);
+                        setResult({ warnings: [], text });
+                    }} />
             )}
             {teamCalendarLane && <SprintTeamCalendar project={project} lane={teamCalendarLane} people={people} leaves={leaves} identity={identity}
                 selection={teamCalendarSelection} onSelection={setTeamCalendarSelection}
