@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { TestBoardItem } from '../types';
+import { buildTestReport, reportHtml, reportPlainText, testHealth } from './testReport';
 import {
-    columnOf, defaultTestSettings, distributeItems, lastWeekClose, makeSnapshot, reportText, ruleContext, snapshotDue, weekIdOf, weekReport, withSnapshot,
+    columnOf, defaultTestSettings, distributeItems, lastWeekClose, makeSnapshot, ruleContext, snapshotDue, weekIdOf, weekReport, withSnapshot,
 } from './testBoard';
 
 const ctx = ruleContext(
@@ -87,11 +88,34 @@ describe('haftalık rapor', () => {
         expect(r.newChanges.map(x => x.key)).toEqual(['E']);
         expect(r.reopened.map(x => x.key)).toEqual(['F']);
         expect(r.columns.find(c => c.id === 'waiting')).toMatchObject({ now: 1, before: 2 });
-        expect(r.waiting).toEqual([{ key: 'B', name: 'Kayıt B', days: 9 }]);
-        const text = reportText(r, 'GİB');
-        expect(text).toContain('48. hafta test raporu');
-        expect(text).toContain('• Test edilip onaylanan: 1 madde (A)');
-        expect(text).toContain('• Açılan hata: 2 (Engelleyici 1, Orta 1); 1 tanesi test ekibinden');
-        expect(text).toContain('• Test bekliyor: 1 (geçen hafta 2, -1); en uzun bekleyen B 9 gün');
+        expect(r.waiting).toEqual([{ key: 'B', name: 'Kayıt B', days: 9, assignee: 'Vedat Kaya' }]);
+        expect(r.openBugs.map(b => [b.key, b.priority])).toEqual([['C', 'Blocker'], ['B', 'High'], ['F', 'High'], ['D', 'Medium']]);
+        expect([r.openBugsBefore, r.total, r.testerRoleDefined, r.reporterMissing]).toEqual([2, 6, true, 0]);
+        expect(testHealth(r)).toEqual({ level: 'Riskli', reason: '1 engelleyici öncelikli hata açık.' });
+
+        const doc = buildTestReport(r, { project: 'GİB', filter: 'gib_testset', generatedAt: '2026-11-27T17:00:00Z' });
+        expect(doc.title).toBe('GİB · Test Durum Raporu');
+        expect(doc.subtitle).toBe('48. Hafta · 20 Kasım – 27 Kasım 2026');
+        expect(doc.summary).toBe('48. haftada (20 Kasım – 27 Kasım 2026) 1 madde test edilerek onaylandı. Aynı dönemde 2 yeni hata kaydı açıldı (1 engelleyici, 1 orta); bunların 1 tanesi test ekibince bildirildi. 1 değişiklik talebi alındı, 1 kayıt düzeltme sonrası yeniden açıldı. Dönem sonunda 0 kayıt testte, 1 kayıt test için bekliyor; açık hata sayısı 4 (3 kritik), geçen haftaya göre +2.');
+        expect(doc.kpis.rows[0]).toEqual(['Test edilip onaylanan madde', '1', '—', '—']);
+        expect(doc.kpis.rows.find(x => x[0] === 'Açık hata (toplam)')).toEqual(['Açık hata (toplam)', '4', '2', '+2']);
+        expect(doc.sections.map(x => x.title)).toEqual(['Öne çıkanlar ve riskler', 'Açık kritik hatalar', 'Bu hafta test edilip onaylananlar', 'Bu hafta açılan hatalar', 'Değişiklik talepleri', 'Yeniden açılan kayıtlar', 'Test kuyruğu', 'Pano dağılımı']);
+        expect(doc.sections[1].table!.rows[0]).toEqual(['C', 'Kayıt C', 'Engelleyici', 'Open', 'Can Dev']);
+        expect(doc.sections[3].table!.rows.map(x => x[0])).toEqual(['C', 'D']); // önceliğe göre
+        const text = reportPlainText(doc);
+        expect(text).toContain('GİB · TEST DURUM RAPORU');
+        expect(text).toContain('GENEL DURUM: RİSKLİ — 1 engelleyici öncelikli hata açık.');
+        expect(text).toContain('2. AÇIK KRİTİK HATALAR');
+        expect(text).not.toContain('Önceki haftanın görüntüsü');
+        const html = reportHtml({ ...doc, sections: [{ title: 'X', table: { columns: ['Kayıt', 'Başlık'], rows: [['A', '<img src=x onerror=alert(1)>']], more: 0 } }] });
+        expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;');
+        expect(html).not.toContain('<img');
+
+        // Test ekibi tanımsız ve önceki görüntü yoksa: sayı yerine not
+        const bare = weekReport(cur, undefined, items, ruleContext({ roleMembers: {}, components: [] }, []));
+        const d2 = buildTestReport(bare, { project: 'GİB' });
+        expect(d2.summary).not.toContain('test ekibince');
+        expect(d2.notes.some(x => x.includes('Test ekibi projede tanımlı olmadığından'))).toBe(true);
+        expect(d2.notes.some(x => x.includes('Önceki haftanın görüntüsü bulunmadığından'))).toBe(true);
     });
 });

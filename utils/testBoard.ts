@@ -242,7 +242,19 @@ export interface TestWeekReport {
     columns: { id: string; name: string; meaning?: TestColumnMeaning; now: number; before: number | null }[];
     unmatched: number;
     /** Test bekleyenler, en uzun bekleyen önce (gün) */
-    waiting: { key: string; name: string; days: number | null }[];
+    waiting: { key: string; name: string; days: number | null; assignee: string }[];
+    /** Testte olanlar, en uzun süredir testte olan önce */
+    testing: { key: string; name: string; days: number | null; assignee: string }[];
+    /** Görüntü anında açık (onaylanmamış) hata kayıtları, en kritik önce */
+    openBugs: { key: string; name: string; priority: 'Blocker' | 'High' | 'Medium' | 'Low'; status: string; assignee: string }[];
+    /** Önceki görüntüde açık hata sayısı */
+    openBugsBefore: number | null;
+    /** Görüntüdeki toplam kayıt */
+    total: number;
+    /** Test ekibi (Test rolü) projede tanımlı mı: değilse "test ekibinden" sayısı anlamsızdır */
+    testerRoleDefined: boolean;
+    /** Açan bilgisi gelmeyen yeni hata (eski sunucu ya da gizli alan) */
+    reporterMissing: number;
 }
 
 const DAY = 86_400_000;
@@ -269,10 +281,17 @@ export const weekReport = (cur: TestSnapshot, prev: TestSnapshot | undefined, it
     const testers = newBugs.filter(b => conditionMatches({ field: 'reporterRole', values: ['test'] }, b, ctx) && !!b.reporter).length;
     const reopened = items.filter(i => reopenedAt(i).some(at => within(at, from, to)));
     const count = (s: TestSnapshot | undefined, id: string) => (s ? s.rows.filter(r => r.c === id).length : null);
-    const waiting = cur.rows.filter(r => meaning.get(r.c) === 'waiting').map(r => {
+    const queue = (m: TestColumnMeaning) => cur.rows.filter(r => meaning.get(r.c) === m).map(r => {
         const since = enteredStatusAt(byKey.get(r.k), r.s, to);
-        return { key: r.k, name: r.n, days: since === null ? null : Math.max(0, Math.floor((to - since) / DAY)) };
+        return { key: r.k, name: r.n, days: since === null ? null : Math.max(0, Math.floor((to - since) / DAY)), assignee: r.a };
     }).sort((a, b) => (b.days ?? -1) - (a.days ?? -1));
+    const RANK = { Blocker: 0, High: 1, Medium: 2, Low: 3 } as const;
+    // Açık hata: hata türünde ve onaylananlar kolonunda değil (güncel görüntüde Jira'da kapanmış olanlar da sayılmaz)
+    const openOf = (snap: TestSnapshot, mean: Map<string, TestColumnMeaning | undefined>) => snap.rows.filter(r =>
+        kindOfJiraType(r.t) === 'bug' && mean.get(r.c) !== 'approved' && (snap !== cur || byKey.get(r.k)?.category !== 'done'));
+    const openBugs = openOf(cur, meaning)
+        .map(r => ({ key: r.k, name: r.n, priority: mapJiraPriority(r.p), status: r.s, assignee: r.a }))
+        .sort((a, b) => RANK[a.priority] - RANK[b.priority] || a.key.localeCompare(b.key, 'tr', { numeric: true }));
     return {
         week: cur.week,
         from: new Date(from).toISOString(),
@@ -286,29 +305,12 @@ export const weekReport = (cur: TestSnapshot, prev: TestSnapshot | undefined, it
         reopened,
         columns: cur.columns.map(c => ({ ...c, now: count(cur, c.id)!, before: prev ? count(prev, c.id) : null })),
         unmatched: count(cur, '')!,
-        waiting,
+        waiting: queue('waiting'),
+        testing: queue('testing'),
+        openBugs,
+        openBugsBefore: prev ? openOf(prev, prevMeaning).length : null,
+        total: cur.rows.length,
+        testerRoleDefined: (ctx.roleMembers.test || []).length > 0,
+        reporterMissing: newBugs.filter(b => !b.reporter).length,
     };
-};
-
-const PRIO_TR: Record<string, string> = { Blocker: 'Engelleyici', High: 'Yüksek', Medium: 'Orta', Low: 'Düşük' };
-const fmt = (iso: string) => new Date(iso).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', timeZone: 'Europe/Istanbul' });
-const delta = (now: number, before: number | null) => (before === null ? '' : now === before ? ' (değişmedi)' : ` (geçen hafta ${before}, ${now > before ? '+' : ''}${now - before})`);
-
-/** Kopyalanabilir rapor metni */
-export const reportText = (r: TestWeekReport, title: string): string => {
-    const lines = [
-        `${weekNumber(r.week)}. hafta test raporu · ${title} (${fmt(r.from)} – ${fmt(r.to)})`,
-        '',
-        `• Test edilip onaylanan: ${r.approved.length} madde${r.approved.length ? ` (${r.approved.slice(0, 15).map(x => x.k).join(', ')}${r.approved.length > 15 ? '…' : ''})` : ''}`,
-        `• Açılan hata: ${r.newBugs.length}${r.newBugs.length ? ` (${r.bugsByPriority.filter(p => p.n).map(p => `${PRIO_TR[p.priority]} ${p.n}`).join(', ')}); ${r.bugsFromTesters} tanesi test ekibinden` : ''}`,
-        `• Açılan değişiklik talebi: ${r.newChanges.length}${r.newChanges.length ? ` (${r.newChanges.slice(0, 10).map(x => x.key).join(', ')})` : ''}`,
-        `• Yeniden açılan: ${r.reopened.length}${r.reopened.length ? ` (${r.reopened.slice(0, 10).map(x => x.key).join(', ')})` : ''}`,
-        ...r.columns.filter(c => c.meaning === 'waiting').map(c => `• ${c.name}: ${c.now}${delta(c.now, c.before)}${r.waiting[0]?.days ? `; en uzun bekleyen ${r.waiting.slice(0, 3).filter(w => w.days !== null).map(w => `${w.key} ${w.days} gün`).join(', ')}` : ''}`),
-        '',
-        'Kolonlar:',
-        ...r.columns.map(c => `  ${c.name}: ${c.now}${delta(c.now, c.before)}`),
-        ...(r.unmatched ? [`  Eşleşmeyen: ${r.unmatched}`] : []),
-        ...(!r.hasPrevious ? ['', 'Not: Önceki haftanın görüntüsü yok; aralık son 7 gün sayıldı.'] : []),
-    ];
-    return lines.join('\n');
 };

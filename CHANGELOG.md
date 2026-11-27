@@ -3,6 +3,13 @@
 Her sürümün başlığı `## vX.Y.Z` biçimindedir; GitHub sürüm sayfası bu bölümü
 buradan alır (`.github/workflows/exe.yml`).
 
+## Yayımlanmadı
+
+**Testler: profesyonel haftalık test durum raporu**
+- Rapor artık pano dökümü değil: başlık ve kapsam, gerekçeli genel durum (Riskli / Dikkat / Yolunda), yönetici özeti, geçen haftayla karşılaştırmalı temel göstergeler, öne çıkanlar ve riskler, açık kritik hatalar, onaylananlar, yeni hatalar (önceliğe göre), değişiklik talepleri, yeniden açılanlar, bekleme günleriyle test kuyruğu, pano dağılımı ve veri notları. Tablolarda kayıt başlığı, öncelik, durum, açan ve atanan yer alır.
+- "Raporu kopyala" biçimli kopyalar: Outlook, Teams ve Word'e tablolarıyla yapışır (desteklenmeyen yerde düz metin). "Yazdır / PDF" eklendi. Ekranda rapor önizlemesi ve gösterge görünümü.
+- Test ekibi rolü tanımlı değilse "0 tanesi test ekibinden" yerine bu durum not olarak yazılır; "Açılan hatalar" kolonu ile haftalık yeni hata sayısının farkı açıklanır.
+
 ## v3.9.0
 
 **Whiteboard: ikonlar, otomatik yerleşimli akış şeması, örnekli çizim**

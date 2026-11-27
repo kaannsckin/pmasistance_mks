@@ -5,9 +5,10 @@ import { issueKind } from '../../../utils/issueTypeMeta';
 import { mapJiraIssueType, mapJiraPriority } from '../../../utils/planning/jiraFields';
 import { relativeTime } from '../../../utils/recentChanges';
 import {
-    describeCondition, distributeItems, makeSnapshot, reportText, ruleContext, TestRuleContext, TestWeekReport, weekNumber, weekReport, withSnapshot,
+    describeCondition, distributeItems, makeSnapshot, ruleContext, TestRuleContext, TestWeekReport, weekNumber, weekReport, withSnapshot,
 } from '../../../utils/testBoard';
 import { fetchTestItems } from '../../../utils/testBoardFetch';
+import { buildTestReport, reportHtml, reportPlainText } from '../../../utils/testReport';
 import { Icon } from '../icons';
 import IssueTypeChip from '../IssueTypeChip';
 import { initialsOf, PRIORITY_META } from '../taskMeta';
@@ -270,6 +271,7 @@ const TestReportView: React.FC<{ project: Project; items: TestBoardItem[]; weekl
     const sorted = useMemo(() => [...weekly].sort((a, b) => b.at.localeCompare(a.at)), [weekly]);
     const [pick, setPick] = useState<string>(sorted[0]?.id || 'live');
     const [copied, setCopied] = useState(false);
+    const [view, setView] = useState<'report' | 'overview'>('report');
     const report: TestWeekReport | null = useMemo(() => {
         const settings = project.testBoard!.settings;
         if (pick === 'live') {
@@ -282,9 +284,33 @@ const TestReportView: React.FC<{ project: Project; items: TestBoardItem[]; weekl
         return weekReport(sorted[idx], sorted[idx + 1], items, ctx);
     }, [pick, sorted, items, ctx, project.testBoard]);
     const waitingCol = report?.columns.find(c => c.meaning === 'waiting');
+    const doc = useMemo(() => {
+        if (!report) return null;
+        const settings = project.testBoard!.settings;
+        return buildTestReport(report, { project: project.name, filter: settings.filterName || `#${settings.filterId}`, generatedAt: pick === 'live' ? new Date().toISOString() : report.to });
+    }, [report, project.name, project.testBoard, pick]);
+    const html = useMemo(() => (doc ? reportHtml(doc) : ''), [doc]);
+    /** Biçimli kopyalama: Outlook, Teams ve Word tabloları korur; desteklenmezse düz metin */
     const copy = async () => {
-        if (!report) return;
-        try { await navigator.clipboard.writeText(reportText(report, project.name)); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { /* izin yok */ }
+        if (!doc) return;
+        const text = reportPlainText(doc);
+        try {
+            if (typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
+                await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([text], { type: 'text/plain' }) })]);
+            } else await navigator.clipboard.writeText(text);
+            setCopied(true); setTimeout(() => setCopied(false), 2000);
+        } catch {
+            try { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { /* izin yok */ }
+        }
+    };
+    const print = () => {
+        if (!doc) return;
+        const w = window.open('', '_blank');
+        if (!w) return;
+        w.document.write(`<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>${doc.title.replace(/</g, '&lt;')} · ${doc.subtitle.replace(/</g, '&lt;')}</title><style>@page{margin:16mm}body{margin:24px}</style></head><body>${html}</body></html>`);
+        w.document.close();
+        w.focus();
+        w.print();
     };
     return (
         <div className="flex flex-col gap-3">
@@ -293,15 +319,27 @@ const TestReportView: React.FC<{ project: Project; items: TestBoardItem[]; weekl
                     <option value="live">Bu hafta (şu ana kadar)</option>
                     {sorted.map(s => <option key={s.id} value={s.id}>{weekNumber(s.week)}. hafta · {dateTime(s.at)}{s.late ? ' (geç alındı)' : ''}</option>)}
                 </select>
-                {report && <button type="button" className="m-btn m-btn-gray !min-h-[36px] !px-3 text-[14px]" onClick={copy}><Icon name={copied ? 'check' : 'copy'} size={15} />{copied ? 'Kopyalandı' : 'Metni kopyala'}</button>}
+                {report && (
+                    <div className="m-segmented" role="group" aria-label="Görünüm">
+                        <button type="button" className="m-segment" aria-pressed={view === 'report'} onClick={() => setView('report')}>Rapor</button>
+                        <button type="button" className="m-segment" aria-pressed={view === 'overview'} onClick={() => setView('overview')}>Göstergeler</button>
+                    </div>
+                )}
+                {report && <button type="button" className="m-btn m-btn-gray !min-h-[36px] !px-3 text-[14px]" onClick={copy} title="Biçimli kopyalar: e-posta, Teams ya da Word'e tablolarıyla yapıştırılır"><Icon name={copied ? 'check' : 'copy'} size={15} />{copied ? 'Kopyalandı' : 'Raporu kopyala'}</button>}
+                {report && <button type="button" className="m-btn m-btn-gray !min-h-[36px] !px-3 text-[14px]" onClick={print} title="Yazdır ya da PDF olarak kaydet"><Icon name="printer" size={15} />Yazdır / PDF</button>}
                 {report && <span className="text-[13px] m-text-3">{dateTime(report.from)} – {dateTime(report.to)}{report.hasPrevious ? '' : ' · önceki haftalık görüntü yok, son 7 gün sayıldı'}</span>}
             </div>
             {!report && <p className="m-0 py-6 text-center text-[15px] m-text-3">{weekly.length ? 'Seçilen görüntü bulunamadı.' : 'İlk haftalık görüntü Cuma 20:00\'de alınır. O zamana kadar "Bu hafta" raporu için önce Jira\'dan yenileyin.'}</p>}
-            {report && (
+            {report && view === 'report' && (
+                <div className="rounded-2xl px-6 py-5 overflow-x-auto" style={{ background: '#ffffff', border: '1px solid var(--m-sep, #e5e7eb)' }}
+                    // Rapor HTML'i uygulamanın ürettiği, tüm Jira metinleri kaçışlı (utils/testReport.ts › esc)
+                    dangerouslySetInnerHTML={{ __html: html }} />
+            )}
+            {report && view === 'overview' && (
                 <>
                     <div className="flex flex-wrap gap-3">
                         <Tile label="Test edilip onaylanan" value={report.approved.length} tone="m-ink-ok" />
-                        <Tile label="Açılan hata" value={report.newBugs.length} sub={`${report.bugsFromTesters} tanesi test ekibinden`} tone={report.newBugs.length ? 'm-ink-bad' : undefined} />
+                        <Tile label="Açılan hata" value={report.newBugs.length} sub={report.testerRoleDefined ? `${report.bugsFromTesters} tanesi test ekibinden` : 'test ekibi rolü tanımlı değil'} tone={report.newBugs.length ? 'm-ink-bad' : undefined} />
                         <Tile label="Açılan değişiklik talebi" value={report.newChanges.length} />
                         <Tile label="Yeniden açılan" value={report.reopened.length} tone={report.reopened.length ? 'm-ink-warn' : undefined} />
                         {waitingCol && <Tile label={waitingCol.name} value={waitingCol.now} sub={waitingCol.before === null ? undefined : `geçen hafta ${waitingCol.before} (${waitingCol.now - waitingCol.before >= 0 ? '+' : ''}${waitingCol.now - waitingCol.before})`} />}
