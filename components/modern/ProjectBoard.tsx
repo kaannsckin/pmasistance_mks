@@ -1,11 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { BoardColumnConfig, BoardConfig, BoardSwimlane, Task, TaskSortKey, TaskStatus, WorkflowConfig } from '../../types';
 import { boardConfigOf, buildLanes, distribute, filterBoardTasks, moveTaskPatch, wipState } from '../../utils/board';
+import { IssueKind, issueKind, issueKindLabel, ISSUE_KIND_ORDER } from '../../utils/issueTypeMeta';
 import { canTransition, taskStatusLabel, taskWorkflow, workflowKey } from '../../utils/workflow';
 import { MIN_PRIORITY_OPTIONS, taskComparator, TaskPriority, taskPassesView } from '../../utils/viewConfig';
 import BoardSettings from './BoardSettings';
+import IssueTypeChip from './IssueTypeChip';
 import { Icon } from './icons';
 import TaskActionsMenu from './TaskActionsMenu';
+import TaskKeyButton from './TaskKeyButton';
 import { celebrationFor, daysLate, initialsOf, PRIORITY_META, shortDate, sprintLabel, uniq } from './taskMeta';
 import { ViewFilterNote } from './ui';
 
@@ -67,61 +70,69 @@ const SWIMLANES: { value: BoardSwimlane; label: string }[] = [
 const UPPER: React.CSSProperties = { textTransform: 'uppercase', letterSpacing: '.03em' };
 
 const PRIORITY_BAR: Record<Task['priority'], string | undefined> = { Blocker: 'var(--m-bad)', High: 'var(--m-warn)', Medium: undefined, Low: undefined };
-const TYPE_ICON: Record<string, { icon: string; label: string; color: string }> = {
-    bug: { icon: 'alert', label: 'Hata', color: 'var(--m-bad)' },
-    feature: { icon: 'sparkles', label: 'Yeni özellik', color: 'var(--m-ok)' },
-    improvement: { icon: 'arrowUp', label: 'İyileştirme', color: 'var(--m-accent)' },
-    task: { icon: 'check', label: 'Görev', color: 'var(--m-accent)' },
-};
-
 const Card: React.FC<{
     t: Task; done: boolean; columnName: string; workflow?: WorkflowConfig;
-    onView: () => void; onDragStart?: (e: React.DragEvent) => void; menu: React.ReactNode;
-}> = ({ t, done, columnName, workflow, onView, onDragStart, menu }) => {
+    /** Üst görev (Jira "parent"): projede varsa görevin kendisi */
+    parent?: Task;
+    onView: () => void; onViewParent?: (p: Task) => void; onDragStart?: (e: React.DragEvent) => void; menu: React.ReactNode;
+}> = ({ t, done, columnName, workflow, parent, onView, onViewParent, onDragStart, menu }) => {
     const late = daysLate(t);
     const prio = PRIORITY_META[t.priority];
-    const type = t.issueType ? TYPE_ICON[t.issueType] : undefined;
     const bar = PRIORITY_BAR[t.priority];
+    const kind = issueKind(t);
+    const parentKey = t.jiraParentKey?.trim();
     const statusLabel = taskStatusLabel(t, workflow);
     // Ayrıntılı durum kolon adından farklıysa kartta gösterilir (ör. Devam Ediyor kolonunda "Analizde")
     const showJira = !!t.jiraStatus && statusLabel.toLocaleLowerCase('tr-TR') !== columnName.toLocaleLowerCase('tr-TR');
     return (
         <article draggable={!!onDragStart} onDragStart={onDragStart}
-            className={`m-surface rounded-[10px] flex items-start gap-1 pl-3 pr-1 py-1 ${onDragStart ? 'cursor-grab active:cursor-grabbing' : ''}`}
+            className={`m-surface ${kind && kind !== 'other' ? `m-issue-card m-issue-${kind}` : ''} rounded-[10px] flex flex-col pl-3 pr-1 py-1 ${onDragStart ? 'cursor-grab active:cursor-grabbing' : ''}`}
             style={{ boxShadow: `inset 3px 0 0 ${bar || 'transparent'}, var(--m-shadow-sm, 0 1px 2px rgba(0,0,0,.06))` }}>
-            <button type="button" onClick={onView} className="flex-1 min-w-0 flex flex-col gap-1.5 py-2 text-left bg-transparent border-0 p-0 cursor-pointer" style={{ font: 'inherit' }}>
-                <span className="flex items-center gap-2 flex-wrap text-[12.5px]">
-                    {t.jiraId && <span className={`m-text-3 m-tabular font-semibold ${done ? 'line-through' : ''}`}>{t.jiraId}</span>}
-                    {showJira && <span title={t.jiraStatus} className="inline-flex items-center h-5 px-1.5 rounded text-[11px] font-bold m-fill-2 m-text-2" style={UPPER}>{statusLabel}</span>}
-                    {late > 0 && <span className="inline-flex items-center h-5 px-1.5 rounded text-[11px] font-semibold m-tone-bad">{late} gün gecikti</span>}
-                </span>
-                <span className={`text-[14.5px] leading-snug ${done ? 'm-text-2' : 'm-text font-medium'}`}>{t.name}</span>
-                {done && t.resolution && <span className="self-start inline-flex items-center h-5 px-1.5 rounded text-[11px] font-semibold m-tone-ok" title="Çözüm">{t.resolution}</span>}
-                {(t.components?.length || t.fixVersion) ? (
-                    <span className="flex flex-wrap gap-1">
-                        {(t.components || []).slice(0, 2).map(c => <span key={c} title="Bileşen" className="inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[11px] font-semibold m-accent-tint"><Icon name="grid" size={10} />{c}</span>)}
-                        {t.fixVersion && <span title="Hedef sürüm" className="inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[11px] font-semibold m-tone-ok"><Icon name="flag" size={10} />{t.fixVersion}</span>}
+            <div className="flex items-start gap-1">
+                <button type="button" onClick={onView} className="flex-1 min-w-0 flex flex-col gap-1.5 py-2 text-left bg-transparent border-0 p-0 cursor-pointer" style={{ font: 'inherit' }}>
+                    <span className="flex items-center gap-2 flex-wrap text-[12.5px]">
+                        <IssueTypeChip t={t} />
+                        {t.jiraId && <span className={`m-text-3 m-tabular font-semibold ${done ? 'line-through' : ''}`}>{t.jiraId}</span>}
+                        {showJira && <span title={t.jiraStatus} className="inline-flex items-center h-5 px-1.5 rounded text-[11px] font-bold m-fill-2 m-text-2" style={UPPER}>{statusLabel}</span>}
+                        {late > 0 && <span className="inline-flex items-center h-5 px-1.5 rounded text-[11px] font-semibold m-tone-bad">{late} gün gecikti</span>}
                     </span>
-                ) : null}
-                {t.labels && t.labels.length > 0 && (
-                    <span className="flex flex-wrap gap-1">
-                        {t.labels.slice(0, 3).map(l => <span key={l} className="inline-flex items-center h-5 px-1.5 rounded text-[11px] m-fill-2 m-text-2">{l}</span>)}
-                        {t.labels.length > 3 && <span className="text-[11px] m-text-3">+{t.labels.length - 3}</span>}
-                    </span>
-                )}
-                <span className="flex items-center gap-2 text-[12.5px] w-full">
-                    {type && <span title={type.label} aria-label={type.label} className="inline-flex" style={{ color: type.color }}><Icon name={type.icon} size={14} strokeWidth={2.2} /></span>}
-                    <span title={`Öncelik: ${prio.label}`} className={`inline-flex items-center gap-0.5 font-semibold ${prio.ink}`}><Icon name="flag" size={13} strokeWidth={2.2} />{t.priority === 'Blocker' || t.priority === 'High' ? prio.label : ''}</span>
-                    {t.storyPoints ? <span title="Story point" className="inline-flex items-center justify-center min-w-[20px] h-5 px-1 rounded-full m-fill-2 m-text-2 text-[11px] font-bold m-tabular">{t.storyPoints}</span> : null}
-                    {t.dueDate && <span className={`ml-auto m-tabular ${late ? 'm-ink-bad font-semibold' : 'm-text-3'}`}>{shortDate(t.dueDate)}</span>}
-                    {t.resourceName ? (
-                        <span title={t.resourceName} aria-label={`Atanan: ${t.resourceName}`} className={`${t.dueDate ? '' : 'ml-auto'} w-7 h-7 rounded-full m-accent-bg flex items-center justify-center text-[11px] font-bold flex-none`}>
-                            {initialsOf(t.resourceName)}
+                    <span className={`text-[14.5px] leading-snug ${done ? 'm-text-2' : 'm-text font-medium'}`}>{t.name}</span>
+                    {done && t.resolution && <span className="self-start inline-flex items-center h-5 px-1.5 rounded text-[11px] font-semibold m-tone-ok" title="Çözüm">{t.resolution}</span>}
+                    {(t.components?.length || t.fixVersion) ? (
+                        <span className="flex flex-wrap gap-1">
+                            {(t.components || []).slice(0, 2).map(c => <span key={c} title="Bileşen" className="inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[11px] font-semibold m-accent-tint"><Icon name="grid" size={10} />{c}</span>)}
+                            {t.fixVersion && <span title="Hedef sürüm" className="inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[11px] font-semibold m-tone-ok"><Icon name="flag" size={10} />{t.fixVersion}</span>}
                         </span>
-                    ) : <span className={`${t.dueDate ? '' : 'ml-auto'} w-7 h-7 rounded-full m-fill-2 m-text-3 flex items-center justify-center flex-none`} title="Atanmamış"><Icon name="users" size={13} /></span>}
-                </span>
-            </button>
-            {menu}
+                    ) : null}
+                    {t.labels && t.labels.length > 0 && (
+                        <span className="flex flex-wrap gap-1">
+                            {t.labels.slice(0, 3).map(l => <span key={l} className="inline-flex items-center h-5 px-1.5 rounded text-[11px] m-fill-2 m-text-2">{l}</span>)}
+                            {t.labels.length > 3 && <span className="text-[11px] m-text-3">+{t.labels.length - 3}</span>}
+                        </span>
+                    )}
+                    <span className="flex items-center gap-2 text-[12.5px] w-full">
+                        <span title={`Öncelik: ${prio.label}`} className={`inline-flex items-center gap-0.5 font-semibold ${prio.ink}`}><Icon name="flag" size={13} strokeWidth={2.2} />{t.priority === 'Blocker' || t.priority === 'High' ? prio.label : ''}</span>
+                        {t.storyPoints ? <span title="Story point" className="inline-flex items-center justify-center min-w-[20px] h-5 px-1 rounded-full m-fill-2 m-text-2 text-[11px] font-bold m-tabular">{t.storyPoints}</span> : null}
+                        {t.dueDate && <span className={`ml-auto m-tabular ${late ? 'm-ink-bad font-semibold' : 'm-text-3'}`}>{shortDate(t.dueDate)}</span>}
+                        {t.resourceName ? (
+                            <span title={t.resourceName} aria-label={`Atanan: ${t.resourceName}`} className={`${t.dueDate ? '' : 'ml-auto'} w-7 h-7 rounded-full m-accent-bg flex items-center justify-center text-[11px] font-bold flex-none`}>
+                                {initialsOf(t.resourceName)}
+                            </span>
+                        ) : <span className={`${t.dueDate ? '' : 'ml-auto'} w-7 h-7 rounded-full m-fill-2 m-text-3 flex items-center justify-center flex-none`} title="Atanmamış"><Icon name="users" size={13} /></span>}
+                    </span>
+                </button>
+                {menu}
+            </div>
+            {parentKey && (
+                <div className="flex items-center gap-1.5 min-w-0 mr-2 mb-1 pt-1.5 border-t m-sep text-[12px] m-text-3" style={{ borderTopStyle: 'solid', borderTopWidth: 1 }}>
+                    <span aria-hidden="true" className="inline-flex flex-none" style={{ color: 'var(--m-issue, currentColor)' }}><Icon name="subtask" size={13} strokeWidth={2.2} /></span>
+                    <span className="flex-none">Üst görev</span>
+                    {parent && onViewParent
+                        ? <TaskKeyButton task={parent} onOpen={() => onViewParent(parent)} className="!min-h-[22px] !px-1.5 !text-[12px] !rounded-md" />
+                        : <span className="flex-none font-semibold m-tabular m-text-2">{parentKey}</span>}
+                    {parent && <span className="truncate m-text-2" title={parent.name}>{parent.name}</span>}
+                </div>
+            )}
         </article>
     );
 };
@@ -137,6 +148,7 @@ const ProjectBoard: React.FC<ProjectBoardProps> = ({
     const [people, setPeople] = useState<Set<string>>(new Set());
     const [query, setQuery] = useState('');
     const [sprint, setSprint] = useState('all');
+    const [kind, setKind] = useState<IssueKind | 'all'>('all');
     const [swimlane, setSwimlane] = useState<BoardSwimlane | null>(null);
     const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
     const [dragOver, setDragOver] = useState<string | null>(null);
@@ -157,13 +169,21 @@ const ProjectBoard: React.FC<ProjectBoardProps> = ({
     const versions = useMemo(() => uniq<number>(tasks.map(t => t.version)).sort((a, b) => a - b), [tasks]);
     const assignees = useMemo(() => uniq<string>(tasks.map(t => t.resourceName).filter(Boolean)).sort((a, b) => a.localeCompare(b, 'tr')), [tasks]);
 
+    // Panodaki türler (süzgeç yalnız birden çok tür varsa gösterilir)
+    const kinds = useMemo(() => {
+        const n = new Map<IssueKind, number>();
+        tasks.forEach(t => { const k = issueKind(t); if (k) n.set(k, (n.get(k) || 0) + 1); });
+        return ISSUE_KIND_ORDER.filter(k => n.has(k)).map(k => ({ kind: k, n: n.get(k)! }));
+    }, [tasks]);
+    // Üst görevler (alt görev kartının altında gösterilir): Jira anahtarıyla
+    const byJiraKey = useMemo(() => new Map(tasks.filter(t => t.jiraId?.trim()).map(t => [t.jiraId!.trim().toUpperCase(), t])), [tasks]);
     const viewTasks = useMemo(() => tasks.filter(t => taskPassesView({ minTaskPriority: minPriority }, t)), [tasks, minPriority]);
     const hiddenByView = tasks.length - viewTasks.length;
     const filtered = useMemo(() => {
         const qf = cfg.quickFilters.filter(f => activeFilters.has(f.id));
         return filterBoardTasks(viewTasks, qf, { me, now, query })
-            .filter(t => (sprint === 'all' || String(t.version) === sprint) && (!people.size || people.has(t.resourceName)));
-    }, [viewTasks, cfg.quickFilters, activeFilters, me, now, query, sprint, people]);
+            .filter(t => (sprint === 'all' || String(t.version) === sprint) && (!people.size || people.has(t.resourceName)) && (kind === 'all' || issueKind(t) === kind));
+    }, [viewTasks, cfg.quickFilters, activeFilters, me, now, query, sprint, people, kind]);
 
     const { columns, unmapped } = useMemo(() => distribute(filtered, cfg, now), [filtered, cfg, now]);
     const cmp = useMemo(() => taskComparator(sortKey), [sortKey]);
@@ -182,7 +202,7 @@ const ProjectBoard: React.FC<ProjectBoardProps> = ({
     const pct = mappedTotal ? Math.round((doneCount / mappedTotal) * 100) : 0;
 
     const toggle = <T,>(set: Set<T>, v: T, apply: (s: Set<T>) => void) => { const n = new Set(set); if (n.has(v)) n.delete(v); else n.add(v); apply(n); };
-    const anyFilter = activeFilters.size > 0 || people.size > 0 || !!query || sprint !== 'all';
+    const anyFilter = activeFilters.size > 0 || people.size > 0 || !!query || sprint !== 'all' || kind !== 'all';
 
     const drop = (col: BoardColumnConfig, id: string) => {
         const task = tasks.find(t => t.id === id);
@@ -248,6 +268,12 @@ const ProjectBoard: React.FC<ProjectBoardProps> = ({
                     <option value="all">Tüm sprintler</option>
                     {versions.map(v => <option key={v} value={String(v)}>{sprintLabel(v, sprintNames)}</option>)}
                 </select>
+                {kinds.length > 1 && (
+                    <select aria-label="Kayıt türü" className={`m-pill ${kind !== 'all' ? 'is-active' : ''}`} value={kind} onChange={e => setKind(e.target.value as IssueKind | 'all')}>
+                        <option value="all">Tüm türler</option>
+                        {kinds.map(k => <option key={k.kind} value={k.kind}>{issueKindLabel(k.kind)} ({k.n})</option>)}
+                    </select>
+                )}
                 <select aria-label="Kulvar" className={`m-pill ${lanesMode !== 'none' ? 'is-active' : ''}`} value={lanesMode} onChange={e => setSwimlane(e.target.value as BoardSwimlane)}>
                     {SWIMLANES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                 </select>
@@ -278,7 +304,7 @@ const ProjectBoard: React.FC<ProjectBoardProps> = ({
                             </button>
                         );
                     })}
-                    {anyFilter && <button type="button" className="h-7 px-2 ml-1 rounded-md text-[13px] border-0 bg-transparent m-text-3 cursor-pointer hover:underline" onClick={() => { setActiveFilters(new Set()); setPeople(new Set()); setQuery(''); setSprint('all'); }}>Süzgeçleri temizle</button>}
+                    {anyFilter && <button type="button" className="h-7 px-2 ml-1 rounded-md text-[13px] border-0 bg-transparent m-text-3 cursor-pointer hover:underline" onClick={() => { setActiveFilters(new Set()); setPeople(new Set()); setQuery(''); setSprint('all'); setKind('all'); }}>Süzgeçleri temizle</button>}
                 </div>
             )}
 
@@ -356,7 +382,8 @@ const ProjectBoard: React.FC<ProjectBoardProps> = ({
                                                     onDrop={e => { e.preventDefault(); setDragOver(null); const id = e.dataTransfer.getData('text/plain'); if (id && !readOnly) drop(c, id); }}>
                                                     {list.map(t => (
                                                         <Card key={t.id} t={t} done={done} columnName={c.name}
-                                                            onView={() => onViewTask(t)}
+                                                            parent={t.jiraParentKey ? byJiraKey.get(t.jiraParentKey.trim().toUpperCase()) : undefined}
+                                                            onView={() => onViewTask(t)} onViewParent={onViewTask}
                                                             onDragStart={readOnly ? undefined : e => { e.dataTransfer.setData('text/plain', t.id); e.dataTransfer.effectAllowed = 'move'; }}
                                                             workflow={workflow}
                                                             menu={readOnly ? null : <TaskActionsMenu task={t} onStatusChange={onStatusChange} onWorkflowChange={onWorkflowChange} workflowTasks={tasks} workflow={workflow} onEdit={onEditTask} onDelete={onDeleteTask} onNotify={onNotifyTask} />} />

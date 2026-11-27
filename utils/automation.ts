@@ -130,7 +130,7 @@ const triggerMatches = (tr: AutomationTrigger, ev: TaskEvent): boolean => {
             if (tr.from?.length && !tr.from.some(k => workflowKey(k) === ev.from)) return false;
             return true;
         case 'field': return !ev.created && tr.fields.some(f => ev.fields.has(f));
-        case 'schedule': return false;
+        case 'schedule': case 'manual': return false;
     }
 };
 
@@ -319,34 +319,53 @@ export const runAutomation = (project: Project, prev: Task[], next: Task[], ctx:
     return { tasks: changed ? out : next, log, effects, fired };
 };
 
-/** Günlük kurallar: bugün çalışmamış zamanlanmış kurallar koşula uyan görevlere uygulanır */
-export const runScheduledAutomation = (project: Project, ctx: AutomationContext): (AutomationResult & { rules: AutomationRule[] }) | null => {
-    const day = ctx.now.toISOString().slice(0, 10);
-    const due = (project.automationRules || []).filter(r => r.enabled && r.trigger.kind === 'schedule' && r.actions.length && r.lastRunDay !== day);
-    if (!due.length) return null;
+/** Kuralları seçilen görevlere bir kez uygular (günlük ve elle çalıştırma) */
+const applyRulesOnce = (project: Project, rules: AutomationRule[], ctx: AutomationContext, pick: (rule: AutomationRule, t: Task) => boolean, keyTag: string): AutomationResult => {
     const log: AutomationLogEntry[] = [];
     const effects: AutomationEffect[] = [];
     const fired = new Map<string, number>();
     let changed = false;
     const tasks = project.tasks.map(task => {
         let cur = task;
-        for (const rule of due) {
-            if (!testGroup(rule.conditions, cur, project, ctx)) continue;
+        for (const rule of rules) {
+            if (!pick(rule, cur)) continue;
             const acc: Applied = { task: cur, notes: [], effects: [], jira: {} };
             for (const a of rule.actions) applyAction(a, acc, rule, project, ctx);
             if (!acc.notes.length) continue;
             cur = acc.task;
             effects.push(...acc.effects);
-            if (rule.writeToJira && cur.jiraId?.trim() && Object.keys(acc.jira).length) effects.push({ kind: 'jira', key: `${rule.id}:${cur.id}:${day}`, projectId: project.id, jiraId: cur.jiraId.trim(), ...acc.jira });
+            if (rule.writeToJira && cur.jiraId?.trim() && Object.keys(acc.jira).length) effects.push({ kind: 'jira', key: `${rule.id}:${cur.id}:${keyTag}`, projectId: project.id, jiraId: cur.jiraId.trim(), ...acc.jira });
             fired.set(rule.id, (fired.get(rule.id) || 0) + 1);
             log.push({ at: ctx.now.toISOString(), ruleId: rule.id, ruleName: rule.name, taskId: cur.id, taskKey: describeTask(cur), summary: acc.notes.join(', ') });
         }
         if (cur !== task) changed = true;
         return cur;
     });
-    const ids = new Set(due.map(r => r.id));
-    const rules = (project.automationRules || []).map(r => (ids.has(r.id) ? { ...r, lastRunDay: day } : r));
-    return { tasks: changed ? tasks : project.tasks, log, effects, fired, rules };
+    return { tasks: changed ? tasks : project.tasks, log, effects, fired };
+};
+
+/** Günlük kurallar: bugün çalışmamış zamanlanmış kurallar koşula uyan görevlere uygulanır */
+export const runScheduledAutomation = (project: Project, ctx: AutomationContext): (AutomationResult & { rules: AutomationRule[] }) | null => {
+    const day = ctx.now.toISOString().slice(0, 10);
+    const due = (project.automationRules || []).filter(r => r.enabled && r.trigger.kind === 'schedule' && r.actions.length && r.lastRunDay !== day);
+    if (!due.length) return null;
+    const r = applyRulesOnce(project, due, ctx, (rule, t) => testGroup(rule.conditions, t, project, ctx), day);
+    const ids = new Set(due.map(x => x.id));
+    const rules = (project.automationRules || []).map(x => (ids.has(x.id) ? { ...x, lastRunDay: day } : x));
+    return { ...r, rules };
+};
+
+/**
+ * Kuralı şimdi çalıştırır (elle): önizlemedeki görevlere — koşula uyan, durum
+ * tetikleyicisinde hedef durumdaki görevler — bir kez uygulanır. Kural
+ * kapalı olsa da çalışır (kullanıcı açıkça istedi).
+ */
+export const runRuleNow = (project: Project, ruleId: string, ctx: AutomationContext): AutomationResult & { matched: number } | null => {
+    const rule = (project.automationRules || []).find(r => r.id === ruleId);
+    if (!rule || !rule.actions.length) return null;
+    const ids = new Set(previewRule(rule, project, ctx).map(t => t.id));
+    const r = applyRulesOnce(project, [rule], ctx, (_, t) => ids.has(t.id), `elle:${ctx.now.toISOString().slice(0, 16)}`);
+    return { ...r, matched: ids.size };
 };
 
 /** Kural sayaçlarını ve günlüğü projeye yazar */
@@ -366,7 +385,7 @@ export const recordAutomation = (project: Project, r: Pick<AutomationResult, 'lo
 export const previewRule = (rule: Pick<AutomationRule, 'trigger' | 'conditions'>, project: Project, ctx: AutomationContext): Task[] =>
     project.tasks.filter(t => {
         if (rule.trigger.kind === 'status' && rule.trigger.to?.length && !rule.trigger.to.some(k => workflowKey(k) === taskWorkflow(t, ctx.workflow).key)) return false;
-        if (rule.trigger.kind === 'schedule' && t.status === TaskStatus.Done && !JSON.stringify(rule.conditions || {}).includes('"category"')) return false;
+        if ((rule.trigger.kind === 'schedule' || rule.trigger.kind === 'manual') && t.status === TaskStatus.Done && !JSON.stringify(rule.conditions || {}).includes('"category"')) return false;
         return testGroup(rule.conditions, t, project, ctx);
     });
 
@@ -410,6 +429,7 @@ export const describeTrigger = (tr: AutomationTrigger, ctx: Pick<AutomationConte
         case 'created': return 'Görev oluşturulduğunda';
         case 'field': return `${tr.fields.map(f => FIELD_LABELS[f]).join(' / ')} değiştiğinde`;
         case 'schedule': return 'Her gün';
+        case 'manual': return 'Elle çalıştırıldığında';
     }
 };
 

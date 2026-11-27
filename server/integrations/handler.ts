@@ -434,6 +434,8 @@ export interface JiraIssueRecord {
     subtaskKeys?: string[];
     storyPoints: number | null;
     assignee: string;
+    /** Kaydı açan (reporter) */
+    reporter?: string;
     /** Atanan kişinin e-postası (Jira gizlemiyorsa) */
     assigneeEmail?: string;
     /** Bu kaydı engelleyen kayıtlar ("is blocked by") */
@@ -585,6 +587,8 @@ const transitionsOf = (histories: JiraHistoryRaw[], categories: Map<string, Jira
     .filter((t): t is JiraTransition => !!t.at)
     .sort((a, b) => a.at.localeCompare(b.at));
 
+const person = (v: unknown): string => str((v as { displayName?: unknown })?.displayName) || str((v as { name?: unknown })?.name);
+
 export const normalizeIssue = (raw: JiraFullIssueRaw, categories: Map<string, JiraStatusCategory>, pointsField: string | null): JiraIssueRecord => {
     const f = raw.fields || {};
     const status = (f.status || {}) as { name?: unknown; id?: unknown; statusCategory?: { key?: unknown } };
@@ -629,6 +633,7 @@ export const normalizeIssue = (raw: JiraFullIssueRaw, categories: Map<string, Ji
         subtaskKeys,
         storyPoints: Number.isFinite(points) && points > 0 ? points : null,
         assignee: str((f.assignee as { displayName?: unknown })?.displayName) || str((f.assignee as { name?: unknown })?.name),
+        ...(person(f.reporter) ? { reporter: person(f.reporter) } : {}),
         ...(str((f.assignee as { emailAddress?: unknown })?.emailAddress) ? { assigneeEmail: str((f.assignee as { emailAddress?: unknown }).emailAddress) } : {}),
         blockedBy: links
             .filter(l => /block|engel/i.test(str(l.type?.name)) && /blocked by|engellen/i.test(str(l.type?.inward)) && str(l.inwardIssue?.key))
@@ -639,7 +644,7 @@ export const normalizeIssue = (raw: JiraFullIssueRaw, categories: Map<string, Ji
     };
 };
 
-const ISSUE_FIELDS = 'summary,description,issuetype,status,priority,created,updated,resolutiondate,duedate,components,labels,fixVersions,timeoriginalestimate,timespent,timeestimate,aggregatetimeoriginalestimate,aggregatetimeestimate,aggregatetimespent,timetracking,parent,subtasks,assignee,issuelinks';
+const ISSUE_FIELDS = 'summary,description,issuetype,status,priority,created,updated,resolutiondate,duedate,components,labels,fixVersions,timeoriginalestimate,timespent,timeestimate,aggregatetimeoriginalestimate,aggregatetimeestimate,aggregatetimespent,timetracking,parent,subtasks,assignee,reporter,issuelinks';
 
 /**
  * Projenin kayıtlarından bir sayfa: alanlar ve durum geçmişi (changelog).
@@ -815,11 +820,22 @@ export const fetchJiraIssuesByKeys = async (env: Env, keys: string[], fetchImpl?
     const missing: string[] = [];
     for (let attempt = 0; rest.length; attempt++) {
         try {
-            const r = await fetchIssuesByJql(env, buildKeysJql(rest), { pageSize: JIRA_PAGE_MAX }, fetchImpl);
-            const got = new Set(r.issues.map(i => i.key.toUpperCase()));
+            // Jira bir sayfada istenenden az kayıt dönebilir (Cloud, değişiklik geçmişi
+            // genişletilince sayfayı küçültür): tüm sayfalar okunmazsa kalan kayıtlar
+            // "bulunamadı" sayılıp eşitlemede güncellenmez. Her sayfa en az bir kayıt
+            // getirdiğinden döngü anahtar sayısını aşmaz.
+            const jql = buildKeysJql(rest);
+            const byKey = new Map<string, JiraIssueRecord>();
+            let cursor: string | undefined;
+            for (let page = 0; page < rest.length; page++) {
+                const r = await fetchIssuesByJql(env, jql, { cursor, pageSize: JIRA_PAGE_MAX }, fetchImpl);
+                r.issues.forEach(i => byKey.set(i.key.toUpperCase(), i));
+                if (!r.next || !r.issues.length) break;
+                cursor = r.next;
+            }
             // Taşınan kayıt yeni anahtarıyla döner: istenen anahtar listede yoksa eksik sayılır
-            missing.push(...rest.filter(k => !got.has(k)));
-            return { issues: r.issues, missing };
+            missing.push(...rest.filter(k => !byKey.has(k)));
+            return { issues: [...byKey.values()], missing };
         } catch (e) {
             const msgs = ((e as { jiraMessages?: string[] }).jiraMessages || []).join(' ').toUpperCase();
             const bad = rest.filter(k => new RegExp(`(^|[^A-Z0-9_-])${k}([^0-9]|$)`).test(msgs));

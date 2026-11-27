@@ -30,7 +30,7 @@ import { resetReportGuide, saveDepartmentGuide, saveReportGuide } from './utils/
 import { setReportExemplar } from './utils/ai/reportExamples';
 import { applyRuleAction, RuleAction, ruleActionLabel } from './utils/ai/reportRules';
 import { stampLifecycle } from './utils/planning/lifecycle';
-import { AutomationEffect, recordAutomation, runAutomation, runScheduledAutomation } from './utils/automation';
+import { AutomationEffect, recordAutomation, runAutomation, runRuleNow, runScheduledAutomation } from './utils/automation';
 import AutomationRulesSheet from './components/modern/AutomationRulesSheet';
 import ReportSchedulesSheet from './components/modern/ReportSchedulesSheet';
 import { buildReport, isReportDue, previousSnapshot, progressSnapshot, trClock, withSnapshot } from './utils/reportAutomation';
@@ -42,6 +42,9 @@ import { boardForProject, DEFAULT_SCHEME_ID, effectiveScheme, migrateTasksToWork
 import ProjectWorkflowSheet from './components/modern/ProjectWorkflowSheet';
 import ProjectListsSheet from './components/modern/ProjectListsSheet';
 import ModernWhiteboard from './components/modern/whiteboard/ModernWhiteboard';
+import ModernTests from './components/modern/tests/ModernTests';
+import { useTestSnapshots } from './components/modern/tests/useTestSnapshots';
+import { makeSnapshot as makeTestSnapshot, ruleContext as testRuleContext, snapshotDue as testSnapshotDue, withSnapshot as withTestSnapshot } from './utils/testBoard';
 import { cleanRoleMembers, projectRolesOf } from './utils/projectRoles';
 import { listId } from './utils/projectLists';
 import { BulkTaskPatch, previewBulkTaskEdit } from './utils/bulkTaskEdit';
@@ -187,7 +190,7 @@ const createSampleProject = (): Project =>
   });
 
 /** Modern arayüzde proje başlığının gösterildiği ekranlar */
-const MODERN_PROJECT_VIEWS: View[] = [View.Dashboard, View.Whiteboard, View.Overview, View.Roadmap, View.Tasks, View.Kanban, View.Planning, View.Risks, View.Resources, View.Goals, View.Requests, View.Notes, View.AI];
+const MODERN_PROJECT_VIEWS: View[] = [View.Dashboard, View.Whiteboard, View.Tests, View.Overview, View.Roadmap, View.Tasks, View.Kanban, View.Planning, View.Risks, View.Resources, View.Goals, View.Requests, View.Notes, View.AI];
 
 const PROJECT_EDIT_DENIED = "Bu projeyi yalnız projenin PY'si düzenleyebilir; değişiklik kaydedilmedi.";
 
@@ -1558,6 +1561,20 @@ const App: React.FC = () => {
     // Yeni günlük kural kaydedildiği gün çalışır
     window.setTimeout(() => runDailyRules(), 0);
   }, [updateWorkspace, runDailyRules]);
+  // Kuralı elle çalıştırır: koşula uyan görevlere şimdi bir kez uygulanır (sonuç kuralın geçmişine yazılır)
+  const handleRunRuleNow = useCallback((projectId: string, ruleId: string) => {
+    updateWorkspace(ws => {
+      const project = ws.projects.find(p => p.id === projectId);
+      if (!project || !canEditProjectContent(ws, identityOf(ws), projectId)) { setFlowNotice(PROJECT_EDIT_DENIED); return ws; }
+      const now = new Date();
+      const r = runRuleNow(project, ruleId, { now, workflow: effectiveScheme(ws, project).workflow, people: ws.people, roleDefs: projectRolesOf(ws) });
+      if (!r || !r.log.length) return ws;
+      automationQueue.current.push(...r.effects);
+      const name = project.automationRules?.find(x => x.id === ruleId)?.name || 'kural';
+      const next = storeProjectChange(ws, project, recordAutomation({ ...project, tasks: r.tasks }, r, now), now);
+      return next === ws ? ws : appendAudit(next, 'config.update', `"${project.name}" · "${name}" kuralı elle çalıştırıldı: ${new Set(r.log.map(e => e.taskId)).size} görev`, projectId);
+    });
+  }, [updateWorkspace, storeProjectChange]);
   // ---- Rapor otomasyonu: kaydet, gönder, tarayıcı yedek göndericisi (sunucu zamanlayıcısı yoksa)
   const handleSaveReportSchedules = useCallback((projectId: string, schedules: ReportSchedule[], summary: string) => {
     updateWorkspace(ws => {
@@ -1739,6 +1756,22 @@ const App: React.FC = () => {
     });
   }, [updateWorkspace]);
 
+  // Testler: Cuma 20:00 haftalık görüntüsü (filtre yeniden okunur; düzenleyebilen kullanıcının uygulamasında)
+  useTestSnapshots(
+    () => { const ws = workspaceRef.current; return ws ? ws.projects.filter(p => p.testBoard?.settings.filterId && canEditProjectContent(ws, identityOf(ws), p.id)) : []; },
+    (projectId, items, due) => {
+      updateWorkspace(ws => {
+        const project = ws.projects.find(p => p.id === projectId);
+        const now = new Date();
+        const d = project && testSnapshotDue(project.testBoard, now);
+        if (!project?.testBoard || !d || d.week !== due.week) return ws; // başka biri almış
+        const snap = makeTestSnapshot(project.testBoard.settings, items, testRuleContext(project, ws.people), now, { week: due.week, late: due.late, by: 'Otomatik' });
+        const tb = { ...project.testBoard, items, fetchedAt: now.toISOString(), snapshots: withTestSnapshot(project.testBoard.snapshots, snap) };
+        return storeProjectChange(ws, project, { ...project, testBoard: tb }, now);
+      });
+    },
+  );
+
   // Otomatik eşitleme: aralığı tanımlı ve bu kullanıcının düzenleyebildiği projeler
   useJiraAutoSync(
     () => { const ws = workspaceRef.current; return ws ? ws.projects.filter(p => (p.jiraSync?.autoMinutes || 0) > 0 && canEditProjectContent(ws, identityOf(ws), p.id)) : []; },
@@ -1845,7 +1878,7 @@ const App: React.FC = () => {
   const handleSetUiStyle = useCallback((uiStyle: UiStyle) => {
     updateWorkspace(ws => ({ ...ws, settings: { ...ws.settings, uiStyle } }));
     // Genel bakış yalnız modern arayüzde var
-    if (uiStyle === 'classic') setCurrentView(v => (v === View.Overview || v === View.Dashboard || v === View.Whiteboard ? View.Roadmap : v));
+    if (uiStyle === 'classic') setCurrentView(v => (v === View.Overview || v === View.Dashboard || v === View.Whiteboard || v === View.Tests ? View.Roadmap : v));
   }, [updateWorkspace]);
 
   // Görünüm (modern tema, gündüz/gece): ayarlar penceresinde seçildiği an uygulanır
@@ -2699,6 +2732,20 @@ const App: React.FC = () => {
         />
       );
     }
+    if (isModern && currentView === View.Tests) {
+      return (
+        <ModernTests
+          key={activeProject.id}
+          project={activeProject}
+          people={workspace.people}
+          roleDefs={projectRolesOf(workspace)}
+          canEdit={canEditProjectContent(workspace, identity, activeProject.id)}
+          actor={currentActorName}
+          onUpdateProject={updateActiveProject}
+          onViewTask={viewTask}
+        />
+      );
+    }
     if (isModern && currentView === View.Whiteboard) {
       return (
         <ModernWhiteboard
@@ -2836,6 +2883,7 @@ const App: React.FC = () => {
         );
       case View.Dashboard:
       case View.Whiteboard: // whiteboard yalnız modern arayüzde
+      case View.Tests: // testler yalnız modern arayüzde
       case View.Overview: // klasik arayüzde karşılığı pano
       case View.Roadmap:
         return (
@@ -3450,6 +3498,7 @@ const App: React.FC = () => {
             canEdit={can(identity, 'screen.admin') || canEditProjectContent(workspace, identity, p.id)} jiraConnected={!!p.jiraProjectKey || p.tasks.some(t => !!t.jiraId)}
             onClose={() => setAutomationSheetProject(null)}
             onSave={(rules, summary) => { handleSaveAutomationRules(p.id, rules, summary); setAutomationSheetProject(null); }}
+            onRunNow={canEditProjectContent(workspace, identity, p.id) ? ruleId => handleRunRuleNow(p.id, ruleId) : undefined}
             onViewTask={t => { setAutomationSheetProject(null); setViewingTask(t); setIsDetailModalOpen(true); }} />
         );
         return isModern ? sheet : <div className={modernScope}>{sheet}</div>;

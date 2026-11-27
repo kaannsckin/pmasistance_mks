@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { AutomationRule, Person, Task, TaskStatus } from '../types';
 import { createProject } from './workspace';
-import { describeRule, previewRule, recordAutomation, ruleProblems, runAutomation, runScheduledAutomation } from './automation';
+import { describeRule, previewRule, recordAutomation, ruleProblems, runAutomation, runRuleNow, runScheduledAutomation } from './automation';
 import { DEFAULT_WORKFLOW } from './workflow';
 import { DEFAULT_PROJECT_ROLES } from './projectRoles';
 
@@ -87,6 +87,26 @@ describe('kural motoru', () => {
         expect(r.rules[0].lastRunDay).toBe('2026-11-26');
         expect(runScheduledAutomation({ ...p, automationRules: r.rules }, ctx)).toBeNull();
         expect(previewRule(late, p, ctx).map(x => x.id)).toEqual(['a']);
+    });
+
+    it('elle çalıştırma: koşula (durum kuralında hedef duruma) uyan görevlere bir kez; "yalnız elle" kural kendiliğinden çalışmaz', () => {
+        const manual = rule({ id: 'm', trigger: { kind: 'manual' }, conditions: { join: 'and', items: [{ field: 'overdue', op: 'eq', value: 'true' }] }, actions: [{ kind: 'addLabels', labels: ['gecikti'] }, { kind: 'setPriority', priority: 'High' }], writeToJira: true });
+        const p = proj([manual, { ...toTest, enabled: false }]);
+        p.tasks = [t('a', { dueDate: '2026-11-20' }), t('b', { dueDate: '2026-12-20' }), t('c', { dueDate: '2026-11-01', status: TaskStatus.Done, jiraStatus: 'DONE' }), t('d', { status: TaskStatus.Done, jiraStatus: 'RESOLVED' })];
+        // Olay ve günlük çalıştırmada tetiklenmez
+        expect(runAutomation(p, p.tasks, p.tasks.map(x => ({ ...x, dueDate: '2026-11-01' })), ctx).log.filter(e => e.ruleId === 'm')).toHaveLength(0);
+        expect(runScheduledAutomation(p, ctx)).toBeNull();
+        const r = runRuleNow(p, 'm', ctx)!;
+        expect(r.matched).toBe(1);
+        expect(r.tasks.map(x => x.labels)).toEqual([['gecikti'], undefined, undefined, undefined]);
+        expect(r.effects).toEqual([expect.objectContaining({ kind: 'jira', jiraId: 'P-a', priority: 'High' })]);
+        expect(recordAutomation({ ...p, tasks: r.tasks }, r, NOW).automationRules![0]).toMatchObject({ runs: 1, lastRunAt: NOW.toISOString() });
+        // Durum kuralı (kapalı olsa da) elle: hedef durumdaki görevlere
+        const s = runRuleNow(p, toTest.id, ctx)!;
+        expect(s.matched).toBe(1);
+        expect(s.tasks[3]).toMatchObject({ jiraStatus: 'TESTING', resourceName: 'Ece Su' });
+        expect(runRuleNow(p, 'yok', ctx)).toBeNull();
+        expect(describeRule(manual, ctx)).toBe("Elle çalıştırıldığında, Gecikmiş = evet ise → etiket ekle: gecikti, önceliği High yap (Jira'ya da)");
     });
 
     it('açıklama ve doğrulama', () => {

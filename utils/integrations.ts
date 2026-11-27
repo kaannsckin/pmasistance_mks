@@ -108,6 +108,8 @@ export interface JiraIssueRecord {
     subtaskKeys?: string[];
     storyPoints: number | null;
     assignee: string;
+    /** Kaydı açan (reporter); eski sunucu sürümleri göndermeyebilir */
+    reporter?: string;
     /** Atanan kişinin e-postası (Jira gizlemiyorsa) */
     assigneeEmail?: string;
     blockedBy: string[];

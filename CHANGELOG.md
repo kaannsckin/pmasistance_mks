@@ -3,6 +3,25 @@
 Her sürümün başlığı `## vX.Y.Z` biçimindedir; GitHub sürüm sayfası bu bölümü
 buradan alır (`.github/workflows/exe.yml`).
 
+## Yayımlanmadı
+
+**Testler: kayıtlı Jira filtresinden test panosu**
+- Projede yeni **Testler** sekmesi (modern arayüz; kurulana kadar "Daha fazla" menüsünde). Kayıtlı bir Jira filtresindeki (ör. gib_testset) açık ve kapalı tüm kayıtlar okunur.
+- Kolonları kurallar belirler: durum, durum kategorisi, kayıt türü, atanan (rolü ya da bileşen lideri olması), açan (rolü), öncelik, bileşen, etiket ve yeniden açılmış olma birleştirilir. Kart sıradaki ilk uyan kolona düşer; hiçbirine uymayan "Eşleşmeyen"de görünür. Varsayılan kolonlar: Açılan hatalar (test ekibinin açtığı), Değişiklik talepleri, Geliştirmede, Yeniden açıldı, Test bekliyor (Resolved + bileşen lideri), Testte, Test edildi/kapandı.
+- Her Cuma 20:00'de (Türkiye) pano kayıt kayıt saklanır; o saatte uygulama kapalıysa ilk açılışta "geç alındı" işaretiyle alınır. "Görüntü al" ile ara görüntü de saklanır.
+- Haftalık rapor: iki Cuma görüntüsü ve aradaki Jira geçişleri karşılaştırılır. Test edilip onaylanan, açılan hata (öncelik dağılımı, test ekibinden olanlar), açılan değişiklik talebi, yeniden açılan, test bekleyen kuyruk (değişim ve en uzun bekleyenler) ve kolon farkları; metin kopyalanabilir.
+- Jira kayıtlarında açan kişi (reporter) artık okunuyor.
+
+**Pano**
+- Kayıt türü kartın başında renkli simge ve adla; kart zemini türe göre hafif renkte (Hata, Değişiklik talebi, Hikâye, Görev, Alt görev, Test, İyileştirme, Epic). Jira'daki tür adı görevde saklanır. Tür süzgeci eklendi.
+- Alt görev kartının altında üst görev (kod ve ad).
+
+**Kural setleri**
+- Her kural için "Çalıştır": koşula uyan görevlere şimdi bir kez uygulanır. Yeni "Yalnız elle" tetikleyicisi.
+
+**Düzeltme**
+- Jira eşitleme: Jira bir sayfada istenenden az kayıt döndüğünde bazı bağlı kayıtlar "bulunamadı" sayılıp güncellenmiyordu; artık tüm sayfalar okunuyor.
+
 ## v3.7.0
 
 **Sol menü ve "Hakkında"**

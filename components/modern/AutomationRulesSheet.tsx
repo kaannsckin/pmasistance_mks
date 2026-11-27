@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
     AutomationAction, AutomationCondition, AutomationField, AutomationGroup, AutomationOp, AutomationRule, AutomationTrigger,
     Person, Project, ProjectRoleDef, Task, TaskStatus, WorkflowConfig,
@@ -83,13 +83,36 @@ const AutomationRulesSheet: React.FC<{
     onClose: () => void;
     onSave: (rules: AutomationRule[], summary: string) => void;
     onViewTask: (t: Task) => void;
-}> = ({ project, workflow, people, roleDefs, canEdit, jiraConnected, onClose, onSave, onViewTask }) => {
+    /** Kaydedilmiş kuralı şimdi çalıştırır (koşula uyan görevlere bir kez); verilmezse düğme görünmez */
+    onRunNow?: (ruleId: string) => void;
+}> = ({ project, workflow, people, roleDefs, canEdit, jiraConnected, onClose, onSave, onViewTask, onRunNow }) => {
     const [rules, setRules] = useState<AutomationRule[]>(() => JSON.parse(JSON.stringify(project.automationRules || [])));
     const [tab, setTab] = useState<'rules' | 'log'>('rules');
     const [editing, setEditing] = useState<Draft | null>(null);
     const [summary, setSummary] = useState<string[]>([]);
     const ctx: AutomationContext = useMemo(() => ({ now: new Date(), workflow, people, roleDefs }), [workflow, people, roleDefs]);
     const dirty = JSON.stringify(rules) !== JSON.stringify(project.automationRules || []);
+    const [runNote, setRunNote] = useState<string | null>(null);
+    // Kural çalışınca sayaçları (çalışma sayısı, son çalışma) projeden gelir: taslağa işlenir ki "kaydedilmemiş değişiklik" sayılmasın
+    useEffect(() => {
+        const saved = new Map<string, AutomationRule>((project.automationRules || []).map(r => [r.id, r]));
+        setRules(rs => rs.map(r => {
+            const p = saved.get(r.id);
+            return p && (p.runs !== r.runs || p.lastRunAt !== r.lastRunAt || p.lastRunDay !== r.lastRunDay) ? { ...r, runs: p.runs, lastRunAt: p.lastRunAt, lastRunDay: p.lastRunDay } : r;
+        }));
+    }, [project.automationRules]);
+    const savedRule = (r: AutomationRule) => {
+        const p = (project.automationRules || []).find(x => x.id === r.id);
+        return !!p && JSON.stringify(p) === JSON.stringify(r);
+    };
+    const runNow = (r: AutomationRule) => {
+        if (!onRunNow) return;
+        const n = previewRule(r, project, { ...ctx, now: new Date() }).length;
+        if (!n) { setRunNote(`"${r.name}": şu an koşula uyan görev yok.`); return; }
+        if (!window.confirm(`"${r.name}" kuralı şu an koşula uyan ${n} göreve uygulansın mı?${r.writeToJira ? " Jira'daki kayıtlara da yazılır." : ''}`)) return;
+        onRunNow(r.id);
+        setRunNote(`"${r.name}" ${n} uygun görevde çalıştırıldı; değişen görevler Geçmiş sekmesinde.`);
+    };
 
     const commit = (d: Draft) => {
         const at = new Date().toISOString();
@@ -104,7 +127,7 @@ const AutomationRulesSheet: React.FC<{
 
     return (
         <Sheet xxl title={`Kural setleri: ${project.name}`}
-            subtitle="Görev değişince (elle, toplu düzenleme, Jira eşitlemesi, asistan) ya da her gün çalışan kurallar. Örn. Çözüldü olan ve atananı X olan işi Testte durumuna al."
+            subtitle={'Görev değişince (elle, toplu düzenleme, Jira eşitlemesi, asistan), her gün ya da "Çalıştır" ile elle çalışan kurallar. Örn. Çözüldü olan ve atananı X olan işi Testte durumuna al.'}
             onClose={onClose}
             footer={editing ? undefined : (
                 <>
@@ -129,6 +152,7 @@ const AutomationRulesSheet: React.FC<{
 
             {!editing && tab === 'rules' && (
                 <div className="flex flex-col gap-3">
+                    {runNote && <p role="status" className="m-0 rounded-xl m-tone-ok px-3 py-2 text-[14px] flex items-center gap-2"><Icon name="check" size={15} />{runNote}</p>}
                     {rules.length === 0 && (
                         <div className="rounded-2xl m-fill-2 px-4 py-6 text-center flex flex-col items-center gap-1.5">
                             <span className="text-[16px] font-semibold m-text">Henüz kural yok</span>
@@ -147,6 +171,12 @@ const AutomationRulesSheet: React.FC<{
                                 <span className="text-[13.5px] m-text-2">{describeRule(r, ctx)}</span>
                                 <span className="text-[12px] m-text-3">{r.runs ? `${r.runs} kez çalıştı · son ${new Date(r.lastRunAt!).toLocaleString('tr-TR', { dateStyle: 'short', timeStyle: 'short' })}` : 'Henüz çalışmadı'}{r.trigger.kind === 'schedule' && r.lastRunDay ? ` · son gün ${r.lastRunDay}` : ''}</span>
                             </span>
+                            {onRunNow && r.actions.length > 0 && (
+                                <button type="button" className="m-btn m-btn-gray !min-h-[32px] !px-2.5 text-[13.5px] flex-none" disabled={!savedRule(r)}
+                                    title={savedRule(r) ? 'Koşula uyan görevlere şimdi bir kez uygula' : 'Önce kaydedin'} onClick={() => runNow(r)}>
+                                    <Icon name="play" size={13} />Çalıştır
+                                </button>
+                            )}
                             {canEdit && (
                                 <span className="flex gap-0.5">
                                     <button type="button" className="m-icon-btn !w-8 !h-8" aria-label={`${r.name} kuralını düzenle`} onClick={() => setEditing(JSON.parse(JSON.stringify(r)))}><Icon name="pencil" size={14} /></button>
@@ -261,7 +291,7 @@ const RuleEditor: React.FC<{
 
             <div className="rounded-xl m-fill-2 p-3 flex flex-col gap-1.5">
                 <span className="text-[14px] font-semibold m-text">Önizleme: şu an {matches.length} görev bu koşullara uyuyor{d.trigger.kind === 'status' ? ' (hedef durumda)' : ''}</span>
-                <span className="text-[12.5px] m-text-3">{d.trigger.kind === 'schedule' ? 'Günlük kural kaydedildiği gün bu görevlere uygulanır.' : 'Kural geriye dönük çalışmaz; bundan sonraki değişikliklerde tetiklenir.'}</span>
+                <span className="text-[12.5px] m-text-3">{d.trigger.kind === 'schedule' ? 'Günlük kural kaydedildiği gün bu görevlere uygulanır.' : d.trigger.kind === 'manual' ? 'Kaydettikten sonra listedeki "Çalıştır" ile bu görevlere uygulanır.' : 'Kendiliğinden geriye dönük çalışmaz, bundan sonraki değişikliklerde tetiklenir; kaydettikten sonra listedeki "Çalıştır" ile bu görevlere şimdi de uygulayabilirsiniz.'}</span>
                 {matches.slice(0, 6).map(t => (
                     <span key={t.id} className="flex items-center gap-2 text-[13.5px]"><TaskKeyButton task={t} onOpen={() => onViewTask(t)} /><span className="truncate m-text-2">{t.name}</span></span>
                 ))}
@@ -292,7 +322,7 @@ const StatusChips: React.FC<{ label: string; value: string[]; ctx: AutomationCon
         <button type="button" className="m-pill" aria-pressed={!value.length} onClick={() => onChange([])}>{anyLabel}</button>
         {ctx.workflow.statuses.map(s => {
             const on = value.includes(s.key);
-            return <button key={s.key} type="button" className={`m-pill ${on ? 'm-tone-accent font-semibold' : ''}`} aria-pressed={on} onClick={() => onChange(on ? value.filter(x => x !== s.key) : [...value, s.key])}>{s.label}</button>;
+            return <button key={s.key} type="button" className={`m-pill ${on ? 'is-active' : ''}`} aria-pressed={on} onClick={() => onChange(on ? value.filter(x => x !== s.key) : [...value, s.key])}>{s.label}</button>;
         })}
     </div>
 );
@@ -300,7 +330,7 @@ const StatusChips: React.FC<{ label: string; value: string[]; ctx: AutomationCon
 const TRIGGER_FIELDS: AutomationField[] = ['assignee', 'priority', 'component', 'label', 'fixVersion', 'sprint', 'dueInDays', 'effort', 'issueType', 'resolution'];
 
 const TriggerEditor: React.FC<{ value: AutomationTrigger; advanced: boolean; ctx: AutomationContext; onChange: (t: AutomationTrigger) => void }> = ({ value, advanced, ctx, onChange }) => {
-    const kinds: [AutomationTrigger['kind'], string][] = [['status', 'Durum değişince'], ['created', 'Görev oluşturulunca'], ...(advanced ? [['field', 'Alan değişince'] as [AutomationTrigger['kind'], string]] : []), ['schedule', 'Her gün (zamanlanmış)']];
+    const kinds: [AutomationTrigger['kind'], string][] = [['status', 'Durum değişince'], ['created', 'Görev oluşturulunca'], ...(advanced ? [['field', 'Alan değişince'] as [AutomationTrigger['kind'], string]] : []), ['schedule', 'Her gün (zamanlanmış)'], ['manual', 'Yalnız elle']];
     return (
         <div className="flex flex-col gap-2">
             <div className="m-segmented self-start flex-wrap" role="group" aria-label="Tetikleyici">
@@ -325,10 +355,11 @@ const TriggerEditor: React.FC<{ value: AutomationTrigger; advanced: boolean; ctx
                 <div className="flex flex-wrap gap-1.5" role="group" aria-label="Değişen alan">
                     {TRIGGER_FIELDS.map(f => {
                         const on = value.fields.includes(f);
-                        return <button key={f} type="button" className={`m-pill ${on ? 'm-tone-accent font-semibold' : ''}`} aria-pressed={on} onClick={() => onChange({ ...value, fields: on ? value.fields.filter(x => x !== f) : [...value.fields, f] })}>{FIELD_LABELS[f]}</button>;
+                        return <button key={f} type="button" className={`m-pill ${on ? 'is-active' : ''}`} aria-pressed={on} onClick={() => onChange({ ...value, fields: on ? value.fields.filter(x => x !== f) : [...value.fields, f] })}>{FIELD_LABELS[f]}</button>;
                     })}
                 </div>
             )}
+            {value.kind === 'manual' && <span className="text-[13px] m-text-3">Kendiliğinden çalışmaz: kural listesindeki "Çalıştır" ile, o an koşula uyan açık görevlere bir kez uygulanır.</span>}
             {value.kind === 'schedule' && <span className="text-[13px] m-text-3">Günde bir kez (uygulama ilk açıldığında ya da açıkken gün dönünce) koşula uyan görevlere uygulanır. Ör. gecikenleri etiketle, terminine 2 gün kalanı bildir.</span>}
             {value.kind === 'created' && <span className="text-[13px] m-text-3">Yeni kayıt, içe aktarma ya da Jira eşitlemesiyle gelen yeni görevlerde.</span>}
         </div>
