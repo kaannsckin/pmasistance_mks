@@ -277,7 +277,9 @@ export type AutomationTrigger =
   /** Bu alanlardan biri değişti */
   | { kind: 'field'; fields: AutomationField[] }
   /** Günde bir kez: koşula uyan açık görevler */
-  | { kind: 'schedule' };
+  | { kind: 'schedule' }
+  /** Yalnız elle ("Çalıştır"): koşula uyan açık görevler */
+  | { kind: 'manual' };
 
 export type AutomationField =
   | 'status' | 'fromStatus' | 'category' | 'assignee' | 'role' | 'unit' | 'component' | 'issueType' | 'priority'

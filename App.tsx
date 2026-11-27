@@ -30,7 +30,7 @@ import { resetReportGuide, saveDepartmentGuide, saveReportGuide } from './utils/
 import { setReportExemplar } from './utils/ai/reportExamples';
 import { applyRuleAction, RuleAction, ruleActionLabel } from './utils/ai/reportRules';
 import { stampLifecycle } from './utils/planning/lifecycle';
-import { AutomationEffect, recordAutomation, runAutomation, runScheduledAutomation } from './utils/automation';
+import { AutomationEffect, recordAutomation, runAutomation, runRuleNow, runScheduledAutomation } from './utils/automation';
 import AutomationRulesSheet from './components/modern/AutomationRulesSheet';
 import ReportSchedulesSheet from './components/modern/ReportSchedulesSheet';
 import { buildReport, isReportDue, previousSnapshot, progressSnapshot, trClock, withSnapshot } from './utils/reportAutomation';
@@ -1558,6 +1558,20 @@ const App: React.FC = () => {
     // Yeni günlük kural kaydedildiği gün çalışır
     window.setTimeout(() => runDailyRules(), 0);
   }, [updateWorkspace, runDailyRules]);
+  // Kuralı elle çalıştırır: koşula uyan görevlere şimdi bir kez uygulanır (sonuç kuralın geçmişine yazılır)
+  const handleRunRuleNow = useCallback((projectId: string, ruleId: string) => {
+    updateWorkspace(ws => {
+      const project = ws.projects.find(p => p.id === projectId);
+      if (!project || !canEditProjectContent(ws, identityOf(ws), projectId)) { setFlowNotice(PROJECT_EDIT_DENIED); return ws; }
+      const now = new Date();
+      const r = runRuleNow(project, ruleId, { now, workflow: effectiveScheme(ws, project).workflow, people: ws.people, roleDefs: projectRolesOf(ws) });
+      if (!r || !r.log.length) return ws;
+      automationQueue.current.push(...r.effects);
+      const name = project.automationRules?.find(x => x.id === ruleId)?.name || 'kural';
+      const next = storeProjectChange(ws, project, recordAutomation({ ...project, tasks: r.tasks }, r, now), now);
+      return next === ws ? ws : appendAudit(next, 'config.update', `"${project.name}" · "${name}" kuralı elle çalıştırıldı: ${new Set(r.log.map(e => e.taskId)).size} görev`, projectId);
+    });
+  }, [updateWorkspace, storeProjectChange]);
   // ---- Rapor otomasyonu: kaydet, gönder, tarayıcı yedek göndericisi (sunucu zamanlayıcısı yoksa)
   const handleSaveReportSchedules = useCallback((projectId: string, schedules: ReportSchedule[], summary: string) => {
     updateWorkspace(ws => {
@@ -3450,6 +3464,7 @@ const App: React.FC = () => {
             canEdit={can(identity, 'screen.admin') || canEditProjectContent(workspace, identity, p.id)} jiraConnected={!!p.jiraProjectKey || p.tasks.some(t => !!t.jiraId)}
             onClose={() => setAutomationSheetProject(null)}
             onSave={(rules, summary) => { handleSaveAutomationRules(p.id, rules, summary); setAutomationSheetProject(null); }}
+            onRunNow={canEditProjectContent(workspace, identity, p.id) ? ruleId => handleRunRuleNow(p.id, ruleId) : undefined}
             onViewTask={t => { setAutomationSheetProject(null); setViewingTask(t); setIsDetailModalOpen(true); }} />
         );
         return isModern ? sheet : <div className={modernScope}>{sheet}</div>;
