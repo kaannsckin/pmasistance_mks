@@ -1,6 +1,6 @@
 import type { Env } from '../ai/config.js';
 import { supabaseBackend, type StoredAiSettings } from '../ai/settingsStore.js';
-import { upstreamFetch } from '../ai/tls.js';
+import { describeNetworkError, upstreamFetch } from '../ai/tls.js';
 import { buildReport, isReportDue, previousSnapshot, progressSnapshot, reportText, trClock, withSnapshot, type ReportSection } from '../../utils/reportAutomation.js';
 import type { Person, ProgressSnapshot, Project, ProjectRoleDef, ReportSchedule } from '../../types.js';
 
@@ -20,6 +20,21 @@ import type { Person, ProgressSnapshot, Project, ProjectRoleDef, ReportSchedule 
 const clean = (v: string | undefined) => v?.trim() || undefined;
 const MAX_TEXT = 1900; // Notion zengin metin sınırı 2000
 
+/** Kanal isteklerinin üst süresi (Teams iş akışı, Slack, Notion) */
+export const CHANNEL_TIMEOUT_MS = 20_000;
+
+/**
+ * Kanala istek: ağ hatasında çıplak "fetch failed" yerine kök nedeni
+ * (DNS, bağlantı, sertifika, zaman aşımı) ve denetlenecek ayarı söyler.
+ */
+export const channelFetch = async (f: typeof fetch, url: string, init: RequestInit, label: string, setting: string): Promise<Response> => {
+    try {
+        return await f(url, { ...init, signal: init.signal || AbortSignal.timeout(CHANNEL_TIMEOUT_MS) });
+    } catch (e) {
+        throw new Error(`${label} sunucusuna ulaşılamadı: ${describeNetworkError(e, setting)}.`);
+    }
+};
+
 export interface ReportChannels { teams?: boolean; slack?: boolean; notion?: boolean; email?: string[] }
 
 /** Gelen bölüm listesini doğrular (istemciden) */
@@ -36,7 +51,7 @@ export const sendSlack = async (env: Env, subject: string, sections: ReportSecti
     const url = clean(env.SLACK_WEBHOOK_URL)!;
     const f = fetchImpl || upstreamFetch(url, env);
     const body = sections?.length ? reportText(sections, 'slack', clean(env.APP_URL)) : text.replace(/\*\*(.+?)\*\*/g, '*$1*');
-    const res = await f(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: `*${subject}*\n\n${body}`.slice(0, 39000) }) });
+    const res = await channelFetch(f, url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: `*${subject}*\n\n${body}`.slice(0, 39000) }) }, 'Slack', 'SLACK_WEBHOOK_URL');
     if (!res.ok) throw new Error(`Slack iletisi gönderilemedi (HTTP ${res.status}).`);
 };
 
@@ -59,11 +74,11 @@ export const sendNotion = async (env: Env, subject: string, sections: ReportSect
     const url = 'https://api.notion.com/v1/pages';
     const f = fetchImpl || upstreamFetch(url, env);
     const secs = sections?.length ? sections : [{ title: subject, lines: text.split('\n').filter(Boolean) }];
-    const res = await f(url, {
+    const res = await channelFetch(f, url, {
         method: 'POST',
         headers: { authorization: `Bearer ${token}`, 'notion-version': '2022-06-28', 'content-type': 'application/json' },
         body: JSON.stringify({ parent: { page_id: parent }, properties: { title: { title: rich(subject) } }, children: notionBlocks(secs, clean(env.APP_URL)) }),
-    });
+    }, 'Notion', 'api.notion.com');
     if (!res.ok) {
         const t = await res.text().catch(() => '');
         const msg = /object_not_found|Could not find/.test(t) ? ': sayfa bulunamadı ya da entegrasyonla paylaşılmadı' : res.status === 401 ? ': jeton geçersiz' : '';

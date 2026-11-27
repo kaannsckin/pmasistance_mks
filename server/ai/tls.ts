@@ -1,5 +1,5 @@
 import * as tls from 'node:tls';
-import { Agent, fetch as undiciFetch } from 'undici';
+import { Agent, EnvHttpProxyAgent, fetch as undiciFetch } from 'undici';
 import { TUBITAK_CA_PEM } from './certs.js';
 import { Env } from './config.js';
 
@@ -43,14 +43,40 @@ const defaultCas = (): string[] => {
 
 const fetchers = new Map<string, typeof fetch>();
 
-/** url'ye istek atarken kullanılacak fetch — ek sertifika gerekmiyorsa global fetch */
+const envValue = (env: Env, ...keys: string[]): string => {
+    for (const k of keys) {
+        const v = env[k]?.trim();
+        if (v) return v;
+    }
+    return '';
+};
+
+/**
+ * Vekil sunucu (HTTPS_PROXY / HTTP_PROXY, NO_PROXY). Kurum ağı internete
+ * vekil sunucuyla çıkıyorsa Teams, Slack, Notion ve bulut AI istekleri ancak
+ * bununla gider; NO_PROXY'deki (ör. kurum içi Jira) adreslere doğrudan gidilir.
+ * Yalnız verilen ortamdan okunur (yerel sürümde planasistan.env de dahil).
+ */
+export const proxySettings = (env: Env): { httpsProxy: string; httpProxy: string; noProxy: string } | null => {
+    const httpsProxy = envValue(env, 'HTTPS_PROXY', 'https_proxy');
+    const httpProxy = envValue(env, 'HTTP_PROXY', 'http_proxy');
+    if (!httpsProxy && !httpProxy) return null;
+    return { httpsProxy, httpProxy, noProxy: envValue(env, 'NO_PROXY', 'no_proxy') };
+};
+
+/** url'ye istek atarken kullanılacak fetch — ek sertifika ve vekil gerekmiyorsa global fetch */
 export const upstreamFetch = (url: string, env: Env): typeof fetch => {
     const extra = extraCaFor(url, env);
-    if (!extra.length) return fetch;
-    const key = extra.join('\n');
+    const proxy = proxySettings(env);
+    if (!extra.length && !proxy) return fetch;
+    const key = JSON.stringify([extra, proxy]);
     let f = fetchers.get(key);
     if (!f) {
-        const dispatcher = new Agent({ connect: { ca: [...defaultCas(), ...extra] } });
+        const tlsOpts = extra.length ? { ca: [...defaultCas(), ...extra] } : undefined;
+        // Boş dize verilir ki undici eksik değeri process.env'den tamamlamasın
+        const dispatcher = proxy
+            ? new EnvHttpProxyAgent({ ...proxy, ...(tlsOpts ? { connect: tlsOpts, requestTls: tlsOpts } : {}) })
+            : new Agent({ connect: tlsOpts });
         f = ((input: string, init?: RequestInit) =>
             undiciFetch(input, { ...(init as object), dispatcher })) as unknown as typeof fetch;
         fetchers.set(key, f);
@@ -79,18 +105,25 @@ export const networkErrorCode = (err: unknown): string | undefined => {
     return undefined;
 };
 
-/** "AI sağlayıcısına ulaşılamadı: …" cümlesinin devamı — anahtar/içerik içermez */
-export const describeNetworkError = (err: unknown): string => {
+/**
+ * "AI sağlayıcısına ulaşılamadı: …" cümlesinin devamı — anahtar/içerik içermez.
+ * setting: kontrol edilecek adres ayarı (ör. TEAMS_WEBHOOK_URL).
+ */
+export const describeNetworkError = (err: unknown, setting = 'AI_BASE_URL'): string => {
+    if ((err as { name?: unknown } | undefined)?.name === 'TimeoutError') {
+        return `sunucu zamanında yanıt vermedi; ${setting} adresini ve ağ erişimini kontrol edin`;
+    }
     const code = networkErrorCode(err);
-    if (!code) return 'ağ hatası; AI_BASE_URL adresini ve sunucunun bu ağdan erişilebilir olduğunu kontrol edin';
+    const proxyHint = 'kurum ağı internete vekil sunucuyla çıkıyorsa HTTPS_PROXY tanımlayın';
+    if (!code) return `ağ hatası; ${setting} adresini ve sunucunun bu ağdan erişilebilir olduğunu kontrol edin`;
     if (CERT_CODES.has(code)) {
         return `sunucunun TLS sertifikası doğrulanamadı (${code}); kurumsal sertifika zinciri için AI_CA_CERTS tanımlayın`;
     }
     if (DNS_CODES.has(code)) {
-        return `alan adı çözümlenemedi (${code}); AI_BASE_URL yanlış olabilir ya da adres yalnızca kurum ağından erişilebilir`;
+        return `alan adı çözümlenemedi (${code}); ${setting} yanlış olabilir, adres yalnızca kurum ağından erişilebilir olabilir ya da ${proxyHint}`;
     }
     if (CONNECT_CODES.has(code)) {
-        return `bağlantı kurulamadı (${code}); sunucu bu ağdan (ör. Vercel'den) erişilebilir olmayabilir — kurum içi ağ ya da güvenlik duvarı`;
+        return `bağlantı kurulamadı (${code}); sunucu bu ağdan (ör. Vercel'den) erişilebilir olmayabilir — kurum içi ağ ya da güvenlik duvarı; ${proxyHint}`;
     }
-    return `ağ hatası (${code}); AI_BASE_URL ve ağ erişimini kontrol edin`;
+    return `ağ hatası (${code}); ${setting} ve ağ erişimini kontrol edin`;
 };
