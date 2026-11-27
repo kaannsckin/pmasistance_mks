@@ -113,14 +113,19 @@ describe('haftalık rapor', () => {
         expect(md).toContain('| Toplam onaylanan (kümülatif) | 0 | 1 | +1 |');
         expect(md).toContain('Bu hafta **3 kayıt** açıldı: **2 hata** (1 engelleyici, 1 orta), **1 değişiklik talebi**.');
         expect(md).toContain('- **1 madde** test edilerek onaylandı; en çok kapatan **Ayşe Test** (1).');
-        expect(md).not.toContain('Kişiler');
+        expect(md).toContain('- **2 bug kaydı** açıldı; en çok açan **Ayşe Test** (1, 1 kritik).');
+        expect(md).toContain('### Haftanın kişileri');
+        expect(md).toContain('| En çok test maddesi kapatan | En çok bug kaydı açan |');
+        expect(md).toContain('| Ayşe Test (1) | Ayşe Test (1, 1 kritik) |');
+        expect(md).toContain('|   | Can Dev (1) |');
+        expect(md).not.toContain('Açık hataların sahibi');
 
         const det = buildTestReport(r, meta, 'detailed');
         const dmd = reportMarkdown(det);
         expect(dmd).toContain('### 4. Kişiler');
         expect(dmd).toContain('| En çok test maddesi kapatan | Kapatılan |');
         expect(dmd).toContain('| Ayşe Test | 1 |');
-        expect(dmd).toContain('| En çok hata açan | Açılan hata | Kritik |');
+        expect(dmd).toContain('| En çok bug kaydı açan | Açılan bug | Kritik |');
         expect(dmd).toContain('### 5. Açık kritik hatalar');
         expect(dmd).toContain('| C | Kayıt C | Engelleyici | Open | Can Dev |');
         // Hücre içi | kaçışlı; HTML'de Jira metni kaçışlı, **kalın** korunur
