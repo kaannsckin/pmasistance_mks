@@ -161,6 +161,7 @@ export const parseWbAiResult = (text: string, frame: WbAiFrame, author = 'Asista
     const nodes: WbNode[] = [];
     const arrows: { from: string; to: string; label: string; curve: number; line: boolean }[] = [];
     let z = 0;
+    let badSvg = 0;
 
     for (const it of items as Record<string, unknown>[]) {
         if (!it || typeof it !== 'object') continue;
@@ -176,6 +177,7 @@ export const parseWbAiResult = (text: string, frame: WbAiFrame, author = 'Asista
             const sz = size(320, 320);
             const clean = sanitizeSvg(str(it.svg, MAX_SVG), sz.w, sz.h);
             if (clean) node = makeNode('image', p.x, p.y, { ...base, ...sz, src: svgDataUrl(clean), text: str(it.text, 80) || 'Çizim' });
+            else badSvg++;
         } else if (type === 'emoji') {
             const e = str(it.emoji, 16).trim();
             const d = round(num(it.size ?? it.w, 24, 600, 96) * sc);
@@ -228,7 +230,8 @@ export const parseWbAiResult = (text: string, frame: WbAiFrame, author = 'Asista
     });
 
     if (!nodes.length && !moves.length) throw new Error('Asistan çizilecek bir şey döndürmedi; isteği biraz daha açık yazıp tekrar deneyin.');
-    const summary = str(obj.summary, 400).trim() || `${nodes.length} öğe eklendi.`;
+    const summary = (str(obj.summary, 400).trim() || `${nodes.length} öğe eklendi.`)
+        + (badSvg ? ` (${badSvg} çizim geçersiz ya da çok büyük SVG olduğu için eklenmedi; tekrar isteyin.)` : '');
     return { summary, nodes, edges, moves };
 };
 

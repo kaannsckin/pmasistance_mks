@@ -43,6 +43,7 @@ describe('asistan çizimi: illüstrasyon, emoji, yol, özel renk, kıvrımlı ok
         expect(shape).toMatchObject({ type: 'shape', shape: 'cloud', color: '#bfdbfe' });
         expect(text).toMatchObject({ type: 'text', color: '#be185d' });
         expect(r.nodes).toHaveLength(5);
+        expect(r.summary).toBe('Bahar sahnesi (1 çizim geçersiz ya da çok büyük SVG olduğu için eklenmedi; tekrar isteyin.)');
         expect(r.edges[0]).toMatchObject({ from: emoji.id, to: shape.id, curve: 50, label: 'kıvrımlı ok' });
     });
 

@@ -31,7 +31,7 @@ export interface CollabInfo {
     self: { client: string; name: string; color: string };
 }
 
-const CURSOR_MS = 50, LIVE_MS = 60, PRESENCE_MS = 150, SAVE_MS = 800, FLUSH_MS = 300;
+const CURSOR_MS = 50, LIVE_MS = 60, PRESENCE_MS = 150, SAVE_MS = 800, FLUSH_MS = 300, POLL_MS = 20_000;
 
 const throttle = <A extends unknown[]>(ms: number, fn: (...a: A) => void) => {
     let last = 0, timer: ReturnType<typeof setTimeout> | null = null, pending: A | null = null;
@@ -315,6 +315,19 @@ export const useWhiteboardCollab = (opts: {
         return () => { closed = true; t.close(); if (boardT.current === t) boardT.current = null; setBoardPeers([]); };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [cloudReady, activeBoard, project.id, client]);
+
+    // Canlı kanal yoksa (WebSocket engelli, Realtime kapalı) açık pano 20 sn'de bir buluttan okunur:
+    // değişiklikler yine kaydedilir, başkalarınınki gecikmeli de olsa görünür
+    useEffect(() => {
+        const c = cloud.current;
+        if (!cloudReady || !c || !activeBoard || info.status === 'live') return;
+        const id = window.setInterval(() => {
+            if (document.hidden) return;
+            void loadProjectItems(c, project.id, { board: activeBoard }).then(r => { if ('ops' in r) applyIncoming(r.ops); });
+        }, POLL_MS);
+        return () => window.clearInterval(id);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [cloudReady, activeBoard, project.id, info.status]);
 
     // Eski imleç ve canlı sürükleme gölgeleri temizlenir
     useEffect(() => {
